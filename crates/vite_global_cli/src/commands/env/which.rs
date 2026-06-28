@@ -18,7 +18,8 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{
-    config::{VERSION_ENV_VAR, get_node_modules_dir, resolve_version},
+    bin_config::{BinConfig, BinSource},
+    config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
@@ -55,8 +56,8 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     }
 
     // Check if this is a global package binary
-    if let Some(metadata) = PackageMetadata::find_by_binary(tool).await? {
-        return execute_package_binary(tool, &metadata).await;
+    if let Some(bin_config) = BinConfig::load(tool).await? {
+        return execute_bin_config_binary(tool, &bin_config).await;
     }
 
     // Unknown tool
@@ -64,6 +65,50 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     eprintln!("Not a core tool (node, npm, npx, corepack) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
+}
+
+async fn execute_bin_config_binary(
+    tool: &str,
+    bin_config: &BinConfig,
+) -> Result<ExitStatus, Error> {
+    match bin_config.source {
+        BinSource::Vp => {
+            if let Some(metadata) = PackageMetadata::load(&bin_config.package).await? {
+                return execute_package_binary(tool, &metadata).await;
+            }
+            output::error(&format!("binary '{}' not found", tool.bold()));
+            eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+            eprintln!("Run 'vp install -g {}' to reinstall.", bin_config.package);
+            Ok(exit_status(1))
+        }
+        BinSource::Npm => execute_npm_link_binary(tool, bin_config).await,
+    }
+}
+
+async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<ExitStatus, Error> {
+    #[cfg(windows)]
+    let binary_path = get_bin_dir()?.join(format!("{tool}.cmd"));
+
+    #[cfg(not(windows))]
+    let binary_path = get_bin_dir()?.join(tool);
+
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        output::error(&format!("binary '{}' not found", tool.bold()));
+        eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+        eprintln!("Run 'npm install -g {}' to recreate the link.", bin_config.package);
+        return Ok(exit_status(1));
+    }
+
+    println!("{}", binary_path.as_path().display());
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Package:".dimmed(),
+        bin_config.package.as_str().bright_blue()
+    );
+    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), "npm install -g".dimmed());
+    println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), bin_config.node_version.bright_green());
+
+    Ok(ExitStatus::default())
 }
 
 async fn execute_package_manager_tool(

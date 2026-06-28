@@ -6,6 +6,12 @@ Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
 > test -L $VP_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist
 link created
 
+> vp env which npm-global-hint-cli # Should report npm-created link
+<vite-plus-home>/bin/npm-global-hint-cli
+  Package:    npm-global-hint-pkg
+  Source:     npm install -g
+  Node:       <semver>
+
 > npm-global-hint-cli # Should be callable via the link
 npm-global-hint-cli works
 
