@@ -11,7 +11,7 @@
       "ignoreOutput": true
     },
     {
-      "command": "cd my-astro-app && sed -i.bak -e '/jsPlugins/d' -e '/rules:/d' -e '/options:/d' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors"
+      "command": "cd my-astro-app && perl -0pi.bak -e 's/\\n  lint: \\{.*?\\n  \\},\\n/\\n/s' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors"
     }
   ]
 }
