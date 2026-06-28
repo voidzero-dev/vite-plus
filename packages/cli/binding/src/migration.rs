@@ -50,9 +50,21 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
     Some(format!(">={major}.0.0 <{}.0.0", major + 1))
 }
 
+/// Return `resolved` only when it satisfies `supported_range`. An unsupported
+/// major (e.g. 21 or 23) resolves to a concrete release of its own major but
+/// must not be returned. Shared by the NAPI entry point and the unit tests so
+/// the resolve-then-verify contract lives in one place.
+fn resolved_if_supported(resolved: String, supported_range: &Range) -> Option<String> {
+    Version::parse(resolved.as_str())
+        .ok()
+        .filter(|version| supported_range.satisfies(version))
+        .map(|_| resolved)
+}
+
 /// Resolve the latest supported Node.js release matching `current`'s major from
 /// an explicit version list, verifying the result against `supported_range`.
-/// Shared by the NAPI entry point and unit tests.
+/// Test-only mirror of [`resolve_supported_node_version`] that takes a fixed
+/// version list instead of hitting the Node.js release index.
 #[cfg(test)]
 fn resolve_supported_node_version_from_list(
     current: &str,
@@ -63,10 +75,7 @@ fn resolve_supported_node_version_from_list(
     let requirement = supported_node_requirement(current, &supported)?;
     let resolved =
         vite_js_runtime::resolve_version_from_list(&requirement, versions).ok()?.to_string();
-    // Verify the resolved version actually satisfies the supported range. An
-    // unsupported major (e.g. 21 or 23) resolves to a concrete release but must
-    // not be returned.
-    Version::parse(resolved.as_str()).ok().filter(|v| supported.satisfies(v)).map(|_| resolved)
+    resolved_if_supported(resolved, &supported)
 }
 
 /// Resolve a Node.js version that is below Vite+'s supported range to the
@@ -115,14 +124,8 @@ pub async fn resolve_supported_node_version(
 
     let provider = NodeProvider::new();
     let latest = provider.resolve_version(&requirement).await.map_err(anyhow::Error::from)?;
-    let latest = latest.to_string();
 
-    // Verify the resolved version is actually supported. An unsupported major
-    // (e.g. 21 or 23) resolves to a concrete release but must not be returned.
-    match Version::parse(latest.as_str()) {
-        Ok(version) if supported.satisfies(&version) => Ok(Some(latest)),
-        _ => Ok(None),
-    }
+    Ok(resolved_if_supported(latest.to_string(), &supported))
 }
 
 /// Stable string label for a [`VersionSource`], used as the `source` field of

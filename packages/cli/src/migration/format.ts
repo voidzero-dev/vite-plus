@@ -58,7 +58,11 @@ function parseNullDelimitedPaths(output: Buffer): string[] {
 
 function isExistingFile(projectRoot: string, relativePath: string): boolean {
   const absolutePath = path.join(projectRoot, relativePath);
-  return fs.existsSync(absolutePath) && fs.statSync(absolutePath).isFile();
+  try {
+    return fs.statSync(absolutePath).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**

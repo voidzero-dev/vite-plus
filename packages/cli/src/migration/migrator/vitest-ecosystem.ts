@@ -513,7 +513,10 @@ export function projectUsesVitestDirectly(
     devDependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
   },
-  requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg),
+  // Lazily computed when omitted, after the cheap ecosystem-dep check below
+  // short-circuits, mirroring the precomputedScans pattern. Avoids the
+  // dependency scan when the project already lists a vitest-ecosystem dep.
+  requiredVitestPeer?: boolean,
   preserveNuxtVitestImports = true,
   // Optional precomputed source-tree scan results. Callers that already computed
   // these for the same `projectPath` at the same point (no source mutation in
@@ -523,7 +526,7 @@ export function projectUsesVitestDirectly(
 ): boolean {
   return (
     projectListsVitestEcosystemDep(pkg) ||
-    requiredVitestPeer ||
+    (requiredVitestPeer ?? projectListsRequiredVitestPeer(projectPath, pkg)) ||
     // Browser packages declared only as peers still become direct installs:
     // rewritePackageJson/reconcileVitePlusBootstrapPackage promote opt-in
     // providers into devDependencies and treat the bundled browser packages as
