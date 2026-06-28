@@ -1456,6 +1456,35 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies.vite).toContain('@voidzero-dev/vite-plus-core');
   });
 
+  it('adds a direct `vite: catalog:` to an already-Vite+ pnpm root on upgrade (#1932)', () => {
+    // Upgrade scenario: the project is already on Vite+ via a pnpm catalog and
+    // depends on `vite-plus` (which bundles the vitest browser ecosystem whose
+    // packages declare a `vite ^8` peer), but the root has NO direct `vite`
+    // edge. Without it, pnpm's autoInstallPeers fabricates a separate upstream
+    // `vite` to satisfy that peer, splitting vite-plus / vite / vitest. The
+    // full-migration path injects a direct vite via ensureDirectViteForPnpm; the
+    // bootstrap/re-pin (upgrade) path must do the same.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    // inserted in sorted position (oxfmt sorts package.json), not appended
+    expect(Object.keys(pkg.devDependencies)).toEqual(['vite', 'vite-plus']);
+  });
+
   it('removes the stale vitest wrapper override for a non-vitest npm project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
