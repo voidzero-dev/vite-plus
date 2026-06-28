@@ -11,7 +11,7 @@ catalog:
   '@clack/core': ^1.0.0
   '@iconify/vue': ^5.0.0
   '@napi-rs/cli': ^3.7.2
-  '@napi-rs/wasm-runtime': ^1.1.5
+  '@napi-rs/wasm-runtime': ^1.1.6
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
@@ -107,7 +107,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.34.1
-  rolldown-plugin-dts: ^0.25.2
+  rolldown-plugin-dts: ^0.26.0
   rollup: ^4.60.4
   semver: ^7.8.0
   serve-static: ^2.0.0
@@ -192,6 +192,7 @@ minimumReleaseAgeExclude:
   - emnapi@1.11.1
   - vite-plus
   - '@rolldown/binding-*'
+  - vitepress-plugin-feedback-tracker@0.2.0-alpha.1
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
