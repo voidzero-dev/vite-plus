@@ -32,7 +32,7 @@ jobs:
         id: check_skip
         # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
         # https://github.com/withgraphite/graphite-ci-action
-        uses: withgraphite/graphite-ci-action@b87de3d800df90082f5f1ba2817f4e1a6f3b0a7b # v0.0.10
+        uses: withgraphite/graphite-ci-action@402a89bc8aa6db18ae1f9c61953d001d5f9d828f # v0.0.11
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
 
