@@ -7,7 +7,7 @@
   - Remove the "volta" field from package.json
 
 > cat .node-version # check .node-version is created from volta.node
-20.5.0
+20.19.0
 
 > grep '"volta"' package.json # check volta field is preserved in package.json (not removed)
   "volta": {

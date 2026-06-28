@@ -5,6 +5,14 @@ import cliPkg from '../../package.json' with { type: 'json' };
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
 
+/**
+ * The Node.js range Vite+ supports, sourced from this package's
+ * `engines.node` field (e.g. `^20.19.0 || ^22.18.0 || >=24.11.0`). This is the
+ * single source of truth: the migrator passes it into the native binding so the
+ * supported range can never drift from `package.json`.
+ */
+export const SUPPORTED_NODE_RANGE: string = cliPkg.engines.node;
+
 export const VITEST_VERSION = '4.1.9';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES

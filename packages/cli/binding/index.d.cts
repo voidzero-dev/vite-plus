@@ -3496,6 +3496,95 @@ export interface PathAccess {
   readDir: boolean;
 }
 
+/** The effective Node.js version pin resolved from a project's configuration. */
+export interface ProjectNodeVersion {
+  /** The pinned version string, exactly as written in the source. */
+  version: string;
+  /**
+   * Which source the pin came from: `"node-version-file"`,
+   * `"dev-engines-runtime"`, or `"engines-node"`.
+   */
+  source: string;
+  /**
+   * Absolute path to the file the pin was read from (the `.node-version`
+   * file or the `package.json`).
+   */
+  sourcePath: string;
+}
+
+/**
+ * Resolve the single effective Node.js version pin for a project, reusing the
+ * shared Rust resolver so the JS migrator does not re-implement source
+ * detection.
+ *
+ * Checks, in priority order (see `rfcs/dev-engines.md`):
+ * 1. `.node-version`
+ * 2. `package.json#devEngines.runtime[name="node"].version`
+ * 3. `package.json#engines.node`
+ *
+ * Does not walk up to parent directories: the migrator operates on the project
+ * root it was given.
+ *
+ * # Arguments
+ *
+ * * `project_path` - Absolute path to the project directory
+ *
+ * # Returns
+ *
+ * * `Some(ProjectNodeVersion)` - the effective pin, its source label, and the
+ *   absolute source path
+ * * `None` - when no version source is found
+ *
+ * # Example
+ *
+ * ```javascript
+ * const pin = await resolveProjectNodeVersion('/path/to/project');
+ * // pin === { version: '24.3.0', source: 'node-version-file', sourcePath: '/path/to/project/.node-version' }
+ * ```
+ */
+export declare function resolveProjectNodeVersion(
+  projectPath: string,
+): Promise<ProjectNodeVersion | null>;
+
+/**
+ * Resolve a Node.js version that is below Vite+'s supported range to the
+ * concrete latest release of the same major.
+ *
+ * Engine-strict installers skip the native optional dependency under an
+ * unsupported Node.js version (causing "Cannot find native binding"), so
+ * `vp migrate` uses this to bump a too-old pin up to a supported release of the
+ * same major line.
+ *
+ * # Arguments
+ *
+ * * `current` - The pinned Node.js version, treated as a semver range so
+ *   partials are accepted (e.g. `24.3.0`, `24.2`, `24`, optionally `v`-prefixed)
+ * * `supported_range` - The Vite+-supported Node.js range, sourced from the
+ *   `engines.node` field in `package.json` (e.g.
+ *   `^20.19.0 || ^22.18.0 || >=24.11.0`). This is the only source of truth for
+ *   what is supported.
+ *
+ * # Returns
+ *
+ * * `Some(latest)` - The concrete latest supported release of `current`'s major
+ *   (e.g. `24.18.0`) when `current`'s range cannot resolve to any supported
+ *   version but its major has a supported release
+ * * `None` - When `current`'s range can already resolve to a supported version
+ *   (e.g. `24`, `24.11`), cannot be parsed (e.g. `lts/*`), or belongs to an
+ *   unsupported major (e.g. `21`, `23`)
+ *
+ * # Example
+ *
+ * ```javascript
+ * const upgraded = await resolveSupportedNodeVersion('24.3.0', '^20.19.0 || ^22.18.0 || >=24.11.0');
+ * // upgraded === '24.18.0' (latest 24.x at the time of resolution)
+ * ```
+ */
+export declare function resolveSupportedNodeVersion(
+  current: string,
+  supportedRange: string,
+): Promise<string | null>;
+
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
  *

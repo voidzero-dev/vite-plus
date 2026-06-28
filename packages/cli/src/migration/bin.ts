@@ -75,6 +75,7 @@ import {
   preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  upgradeUnsupportedNodeVersions,
   warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
   warnPackageLevelEslint,
@@ -1008,6 +1009,17 @@ async function executeMigrationPlan(
     migrateNodeVersionManagerFile(workspaceInfo.rootDir, plan.nodeVersionDetection, report);
   }
 
+  // 3b. Upgrade any Node.js pin below the Vite+ supported range to the latest
+  // release of the same major. Runs independently of the migration above (an
+  // existing .node-version may still be too old) and is best-effort.
+  updateMigrationProgress('Checking Node.js version support');
+  await upgradeUnsupportedNodeVersions(
+    workspaceInfo.rootDir,
+    interactive,
+    report,
+    clearMigrationProgress,
+  );
+
   // 4. Run vp install to ensure the project is ready
   updateMigrationProgress('Installing dependencies');
   const initialInstallSummary = await runViteInstall(
@@ -1456,6 +1468,19 @@ async function main() {
       ) {
         didMigrate = true;
       }
+    }
+
+    // Upgrade any below-range Node.js pin to the latest release of the same
+    // major (independent of the .node-version migration above; best-effort).
+    if (
+      await upgradeUnsupportedNodeVersions(
+        workspaceInfoOptional.rootDir,
+        options.interactive,
+        report,
+      )
+    ) {
+      didMigrate = true;
+      needsInstall = true;
     }
 
     if (convertYarnPnp) {

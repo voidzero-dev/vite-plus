@@ -579,10 +579,10 @@ A successful migration should:
 
 The normal script rules rewrite `vite`, `vitest`, `oxlint`, `oxfmt`, `tsdown`,
 and `lint-staged` to their corresponding `vp` commands. When one of these tools
-is launched through `bunx`, migration preserves `bunx`, removes the `--bun`
-runtime override, and rewrites the inner command. For example,
-`bunx --bun vite build` becomes `bunx vp build` and
-`bunx --bun vitest run` becomes `bunx vp test run`.
+is launched through `bunx`, migration preserves `bunx` and its `--bun` runtime
+override, and rewrites only the inner command. For example,
+`bunx --bun vite build` becomes `bunx --bun vp build` and
+`bunx --bun vitest run` becomes `bunx --bun vp test run`.
 
 The same behavior applies to `eslint` and `prettier` when their optional
 migrations run. Nested launcher forms such as
@@ -624,7 +624,7 @@ When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint
 | `cross-env NODE_ENV=test eslint --cache .` | `cross-env NODE_ENV=test vp lint .`      |
 | `eslint . && vite build`                   | `vp lint . && vite build`                |
 | `if [ -f .eslintrc ]; then eslint .; fi`   | `if [ -f .eslintrc ]; then vp lint . fi` |
-| `bunx --bun eslint .`                      | `bunx vp lint .`                         |
+| `bunx --bun eslint .`                      | `bunx --bun vp lint .`                   |
 | `npx eslint .`                             | `npx eslint .` (unchanged)               |
 
 Stripped ESLint-only flags: `--cache`, `--ext`, `--parser`, `--parser-options`, `--plugin`, `--rulesdir`, `--resolve-plugins-relative-to`, `--output-file`, `--env`, `--no-eslintrc`, `--no-error-on-unmatched-pattern`, `--debug`, `--no-inline-config`
@@ -680,7 +680,7 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 | `prettier --plugin prettier-plugin-tailwindcss .` | `vp fmt .`                           |
 | `cross-env NODE_ENV=test prettier --write .`      | `cross-env NODE_ENV=test vp fmt .`   |
 | `prettier --write . && eslint --fix .`            | `vp fmt . && eslint --fix .`         |
-| `bunx --bun prettier --write .`                   | `bunx vp fmt .`                      |
+| `bunx --bun prettier --write .`                   | `bunx --bun vp fmt .`                |
 | `npx prettier --write .`                          | `npx prettier --write .` (unchanged) |
 
 **Stripped Prettier-only flags**:

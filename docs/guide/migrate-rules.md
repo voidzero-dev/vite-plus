@@ -159,19 +159,36 @@ their arguments: `vite` to `vp dev` or the matching `vp` subcommand, `vitest` to
 `lint-staged` to `vp staged`. When their optional migrations run, `eslint` and
 `prettier` are similarly rewritten to `vp lint` and `vp fmt`.
 
-For commands launched through `bunx`, migration preserves `bunx` and rewrites
-the managed command. It removes `--bun` from rewritten commands so `vp` runs
-through its Node runtime. This also works when `bunx` follows a command-launcher
-delimiter such as `run` or `--`:
+For commands launched through `bunx`, migration preserves `bunx` and its
+`--bun` flag (keeping the user's chosen runtime) and rewrites only the managed
+command. This also works when `bunx` follows a command-launcher delimiter such
+as `run` or `--`:
 
-| Before                                                  | After                                              |
-| ------------------------------------------------------- | -------------------------------------------------- |
-| `bunx --bun vite build`                                 | `bunx vp build`                                    |
-| `bunx --bun vitest run`                                 | `bunx vp test run`                                 |
-| `portless --tailscale run bunx --bun vite`              | `portless --tailscale run bunx vp dev`             |
-| `dotenv -e .env.test -- bunx --bun oxlint --type-aware` | `dotenv -e .env.test -- bunx vp lint --type-aware` |
+| Before                                                  | After                                                    |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| `bunx --bun vite build`                                 | `bunx --bun vp build`                                    |
+| `bunx --bun vitest run`                                 | `bunx --bun vp test run`                                 |
+| `portless --tailscale run bunx --bun vite`              | `portless --tailscale run bunx --bun vp dev`             |
+| `dotenv -e .env.test -- bunx --bun oxlint --type-aware` | `dotenv -e .env.test -- bunx --bun vp lint --type-aware` |
 
 Unrelated `bunx` commands and other package-executor forms remain unchanged.
+
+## Node.js Version Rules
+
+Migration normalizes the project's Node.js pin:
+
+- `.nvmrc` and Volta `volta.node` pins are converted to `.node-version` (the
+  format Vite+ reads). An existing `.node-version` is kept.
+- The effective pin (resolved with the `.node-version` → `devEngines.runtime` →
+  `engines.node` priority) is checked against the Vite+ supported range
+  (`package.json#engines.node`). An exact or `major.minor` pin below that range,
+  for example `24.3.0` or `24.2` (below `>=24.11.0`), is upgraded to the
+  concrete latest release of that major, for example `24.18.0`. An unsupported
+  Node otherwise makes the package manager skip the native binding's optional
+  dependency. A bare major (`24`) or an open range (`^20`, `>=18`) that can
+  still resolve to a supported release is left unchanged.
+- Interactive migration confirms the upgrade (default yes); `--no-interactive`
+  applies it directly.
 
 ## Package-Manager Rules
 

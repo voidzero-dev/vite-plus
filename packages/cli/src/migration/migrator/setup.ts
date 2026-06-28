@@ -4,8 +4,14 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import semver from 'semver';
 
-import { type DownloadPackageManagerResult } from '../../../binding/index.js';
+import {
+  type DownloadPackageManagerResult,
+  resolveProjectNodeVersion,
+  resolveSupportedNodeVersion,
+} from '../../../binding/index.js';
+import { SUPPORTED_NODE_RANGE } from '../../utils/constants.ts';
 import { editJsonFile } from '../../utils/json.ts';
+import { cancelAndExit } from '../../utils/prompts.ts';
 import { detectConfigs } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
 import { warnMigration } from './shared.ts';
@@ -187,5 +193,148 @@ export function migrateNodeVersionManagerFile(
   } else if (detection.voltaPresent) {
     prompts.log.info('You can now remove the "volta" field from package.json manually.');
   }
+  return true;
+}
+
+interface NodePinnedPackageJson {
+  devEngines?: { runtime?: unknown; [key: string]: unknown };
+  engines?: { node?: unknown; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+type NodeRuntimeEntry = { name?: unknown; version?: unknown; [key: string]: unknown };
+
+/**
+ * Locate the `node` entry inside a `devEngines.runtime` value, which may be a
+ * single object or an array of runtime objects. Returns the live object so the
+ * caller can mutate its `version` in place.
+ */
+function findNodeRuntimeEntry(runtime: unknown): NodeRuntimeEntry | undefined {
+  const isNodeEntry = (entry: unknown): entry is NodeRuntimeEntry =>
+    typeof entry === 'object' && entry !== null && (entry as NodeRuntimeEntry).name === 'node';
+
+  if (Array.isArray(runtime)) {
+    return runtime.find(isNodeEntry);
+  }
+  if (isNodeEntry(runtime)) {
+    return runtime;
+  }
+  return undefined;
+}
+
+/**
+ * Write an upgraded Node.js version back to the source it was resolved from
+ * (returned by {@link resolveProjectNodeVersion}):
+ * - `node-version-file` → overwrite the `.node-version` file at `sourcePath`.
+ * - `dev-engines-runtime` → set the `node` runtime entry's `.version` in package.json.
+ * - `engines-node` → set `engines.node` in package.json.
+ *
+ * package.json edits go through {@link editJsonFile} so the file's formatting is
+ * preserved.
+ */
+function writeUpgradedNodeVersion(source: string, sourcePath: string, version: string): void {
+  if (source === 'node-version-file') {
+    fs.writeFileSync(sourcePath, `${version}\n`);
+    return;
+  }
+  if (source === 'dev-engines-runtime') {
+    editJsonFile<NodePinnedPackageJson>(sourcePath, (pkg) => {
+      const entry = findNodeRuntimeEntry(pkg.devEngines?.runtime);
+      if (entry) {
+        entry.version = version;
+      }
+      return pkg;
+    });
+    return;
+  }
+  if (source === 'engines-node') {
+    editJsonFile<NodePinnedPackageJson>(sourcePath, (pkg) => {
+      if (pkg.engines) {
+        pkg.engines.node = version;
+      }
+      return pkg;
+    });
+  }
+}
+
+/**
+ * Bump the project's effective Node.js pin up to the concrete latest release of
+ * the same major when it sits BELOW the Vite+ supported range (sourced from this
+ * package's `engines.node`, e.g. `^20.19.0 || ^22.18.0 || >=24.11.0`). This
+ * fixes "Cannot find native binding" failures caused by engine-strict
+ * installers skipping the native optional dependency under an unsupported
+ * Node.js version.
+ *
+ * The effective pin and its source are read with the shared Rust resolver
+ * {@link resolveProjectNodeVersion}, which checks, in priority order:
+ * `.node-version` → `devEngines.runtime[node]` → `engines.node`. Only that
+ * single effective source is upgraded; shadowed lower-priority pins don't affect
+ * the runtime. `.nvmrc`/Volta pins are converted to `.node-version` by
+ * {@link migrateNodeVersionManagerFile}, which runs first, so they are covered
+ * via the `.node-version` source here.
+ *
+ * Whether the pin is below range (and what to upgrade it to) is decided by the
+ * {@link resolveSupportedNodeVersion} binding via range intersection, so true
+ * ranges, caret unions, and aliases like `lts/*` are left untouched. The binding
+ * calls are best-effort: any failure (e.g. offline) is treated as "nothing to
+ * upgrade".
+ *
+ * In interactive mode the upgrade is confirmed first (default Yes); in
+ * non-interactive mode it proceeds directly.
+ *
+ * @returns true if the pin was rewritten.
+ */
+export async function upgradeUnsupportedNodeVersions(
+  projectPath: string,
+  interactive: boolean,
+  report?: MigrationReport,
+  // Clears the migration progress spinner before the confirm prompt renders so
+  // it does not keep animating underneath the prompt. The caller restarts the
+  // spinner with its next progress update.
+  pauseProgress?: () => void,
+): Promise<boolean> {
+  // 1. Read the effective pin + source via the shared Rust resolver.
+  let resolution: Awaited<ReturnType<typeof resolveProjectNodeVersion>>;
+  try {
+    resolution = await resolveProjectNodeVersion(projectPath);
+  } catch {
+    return false;
+  }
+  if (!resolution) {
+    return false;
+  }
+  const { version: from, source, sourcePath } = resolution;
+
+  // 2. Plan: resolve the supported upgrade target. null = already supported, a
+  // true range/alias, or an unsupported major — nothing to do.
+  let to: string | null;
+  try {
+    to = (await resolveSupportedNodeVersion(from, SUPPORTED_NODE_RANGE)) ?? null;
+  } catch {
+    return false;
+  }
+  if (!to) {
+    return false;
+  }
+
+  // 3. Confirm before writing (default Yes in interactive mode; proceed
+  // directly when non-interactive).
+  if (interactive) {
+    pauseProgress?.();
+    const confirmed = await prompts.confirm({
+      message: `Upgrade Node.js ${from} to ${to}? ${from} is below the Vite+ supported range.`,
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    if (!confirmed) {
+      return false;
+    }
+  }
+
+  // 4. Write the upgrade back to its source.
+  writeUpgradedNodeVersion(source, sourcePath, to);
+  warnMigration(`Upgraded Node.js ${from} to ${to} (below the supported range)`, report);
   return true;
 }

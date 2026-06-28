@@ -61,7 +61,7 @@ pub use platform::{Arch, Os, Platform};
 pub use provider::{
     ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider, ShasumsSignature,
 };
-pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry};
+pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry, resolve_version_from_list};
 pub use runtime::{
     JsRuntime, JsRuntimeType, VersionResolution, VersionSource, download_runtime,
     download_runtime_for_project, download_runtime_with_provider, is_valid_version,

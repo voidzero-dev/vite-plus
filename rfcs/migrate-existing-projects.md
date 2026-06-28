@@ -55,6 +55,20 @@ provider usage, installs the matching `@vitest/browser-<provider>` package and
 framework peer, and then rewrites the import to the equivalent
 `vite-plus/test*` surface.
 
+### Node.js version
+
+`vp migrate` converts `.nvmrc` and Volta `volta.node` pins to `.node-version`,
+then reads the effective Node pin (`.node-version` → `devEngines.runtime` →
+`engines.node`, reusing the Rust runtime resolver rather than re-implementing
+the lookup in JS) and upgrades it when it falls below the Vite+ supported range
+(`package.json#engines.node`). An exact or `major.minor` pin below the range,
+for example `24.3.0` or `24.2` (below `>=24.11.0`), is rewritten to the concrete
+latest release of that major, for example `24.18.0`, so the package manager no
+longer skips the native binding's optional dependency. A bare major (`24`) or an
+open range that still resolves to a supported release is left unchanged.
+Interactive migration confirms the upgrade (default yes); `--no-interactive`
+applies it directly.
+
 ## `@nuxt/test-utils` compatibility
 
 `@nuxt/test-utils`'s transform detects an existing `vi` import only when its module specifier is exactly `vitest`. When a test uses `mockNuxtImport` or `mockComponent`, changing that import to `vite-plus/test` makes the transform inject a second `vi` import and can fail compilation with a duplicate identifier. Requiring users to know which individual files exercise that transform is brittle, so the migration uses one package-level rule instead.
