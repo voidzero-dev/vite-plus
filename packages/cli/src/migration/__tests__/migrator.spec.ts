@@ -1370,10 +1370,8 @@ describe('migrateNodeVersionManagerFile', () => {
     expect(fs.readFileSync(path.join(workflowsDir, 'release.yaml'), 'utf8')).not.toContain(
       '.nvmrc',
     );
-    // The change is surfaced in the report.
-    expect(report.warnings.some((w) => w.includes('ci.yml') || w.includes('.node-version'))).toBe(
-      true,
-    );
+    // The change is surfaced in the report, naming the updated workflow.
+    expect(report.warnings.some((w) => w.includes('ci.yml'))).toBe(true);
   });
 
   it('does not rewrite non-node-version-file .nvmrc mentions in workflows', () => {

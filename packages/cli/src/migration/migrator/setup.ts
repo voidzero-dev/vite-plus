@@ -165,11 +165,9 @@ function rewriteWorkflowNodeVersionFileReferences(projectPath: string): string[]
     const filePath = path.join(workflowsDir, entry);
     try {
       const original = fs.readFileSync(filePath, 'utf8');
-      const rewritten = original.replace(
-        NODE_VERSION_FILE_NVMRC_RE,
-        (_match, prefix: string, quote: string, dotSlash: string | undefined) =>
-          `${prefix}${quote}${dotSlash ?? ''}.node-version${quote}`,
-      );
+      // `$1` key+space, `$2` opening quote (reused as the closing quote),
+      // `$3` optional `./` prefix; only `.nvmrc` becomes `.node-version`.
+      const rewritten = original.replace(NODE_VERSION_FILE_NVMRC_RE, '$1$2$3.node-version$2');
       if (rewritten !== original) {
         fs.writeFileSync(filePath, rewritten);
         updated.push(path.join('.github', 'workflows', entry));
