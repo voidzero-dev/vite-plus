@@ -246,12 +246,17 @@ export function rewritePnpmWorkspaceYaml(
       doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
+    // Snapshot the keys before deleting (mirrors the `keysSnapshot` loop above):
+    // YAMLMap.delete splices `.items`, so iterating the live array would shift
+    // the next entry into the current slot and skip it (two ADJACENT `...>vite`
+    // selectors would leave the second behind).
     const updatedOverrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
-    for (const item of updatedOverrides.items) {
-      if (item.key.value.includes('>')) {
-        const splits = item.key.value.split('>');
+    const updatedOverrideKeys = updatedOverrides.items.map((item) => item.key);
+    for (const key of updatedOverrideKeys) {
+      if (key.value.includes('>')) {
+        const splits = key.value.split('>');
         if (splits[splits.length - 1].trim() === 'vite') {
-          updatedOverrides.delete(item.key);
+          updatedOverrides.delete(key);
         }
       }
     }

@@ -4178,6 +4178,44 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.overrides['unrelated>some-other-pkg']).toBe('1.0.0');
   });
 
+  it('removes ADJACENT `dependency>vite` override selectors from pnpm-workspace.yaml', () => {
+    // A selector like `vite-plugin-svgr>vite` force-installs upstream vite under
+    // that dependency; the migration strips it so vite-plus's own `vite` override
+    // binds it to vite-plus-core instead. Two ADJACENT `...>vite` selectors must
+    // BOTH be removed — deleting one must not let the next shift into the iterated
+    // slot and survive (delete-while-iterating regression).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'overrides:',
+        "  '@vitejs/plugin-react>vite': 'npm:vite@7.0.12'",
+        "  'vite-plugin-svgr>vite': 'npm:vite@7.0.12'",
+        '  some-other-pkg: 1.0.0',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    // BOTH adjacent `...>vite` selectors must be gone. The second one survived
+    // before the fix because the first's deletion shifted it into the slot the
+    // `for...of` had already advanced past.
+    expect(yaml.overrides).not.toHaveProperty('@vitejs/plugin-react>vite');
+    expect(yaml.overrides).not.toHaveProperty('vite-plugin-svgr>vite');
+    // The managed `vite` override stays and unrelated selectors survive.
+    expect(yaml.overrides).toHaveProperty('vite');
+    expect(yaml.overrides['some-other-pkg']).toBe('1.0.0');
+  });
+
   it('adds a direct vitest dep when a vite config enables browser mode', () => {
     // A package whose vite config imports a browser provider but has no direct
     // vitest dep — `@vitest/browser` needs `vitest` resolvable from the package
@@ -5107,6 +5145,50 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     // Auto-fix is silent: a deduped workspace needs no manual-step warning.
     expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(false);
+  });
+
+  it('opts out a yarn workspace that declares vite-plus in `dependencies` (not devDependencies)', () => {
+    // The migration now PRESERVES a pre-existing `vite-plus` under `dependencies`
+    // instead of duplicating it into `devDependencies`. The hoisting opt-out must
+    // therefore key off vite-plus in EITHER group — a workspace declaring it under
+    // `dependencies` still receives the bundled `vitest` family and needs the same
+    // `installConfig.hoistingLimits: none` dedupe to avoid the split-runner crash.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    // A workspace that declares vite-plus directly in `dependencies` (not devDeps).
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', dependencies: { 'vite-plus': '^0.1.0' } }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    rewriteMonorepo(workspaceInfo, true, false);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    // vite-plus stays in `dependencies` and is not duplicated into devDependencies.
+    expect(libPkg.dependencies).toHaveProperty('vite-plus');
+    expect(libPkg.devDependencies ?? {}).not.toHaveProperty('vite-plus');
+    // The hoisting opt-out still runs because vite-plus lives in `dependencies`.
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
   });
 
   it('leaves yarn workspaces alone when nmHoistingLimits does not isolate them', () => {

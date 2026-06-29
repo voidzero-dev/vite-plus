@@ -398,6 +398,22 @@ async function planNodeVersionUpgrades(projectPath: string): Promise<NodeVersion
 }
 
 /**
+ * Whether any Node.js pin (`.node-version`, `devEngines.runtime[node]`, or
+ * `engines.node`) sits BELOW the Vite+ supported range and would be lifted by
+ * {@link upgradeUnsupportedNodeVersions}.
+ *
+ * Detection only: this reuses the exact same {@link planNodeVersionUpgrades}
+ * planner the upgrade itself uses (so the floor logic is never duplicated) and
+ * writes nothing to disk. It exists so the migrate flow's "already using Vite+"
+ * early guard does not fire when the project's only pending work is a below-floor
+ * Node pin. Otherwise the upgrade step would be skipped and pnpm could keep
+ * skipping the native optional binding.
+ */
+export async function hasUnsupportedNodeVersionPin(projectPath: string): Promise<boolean> {
+  return (await planNodeVersionUpgrades(projectPath)).length > 0;
+}
+
+/**
  * Apply gathered Node.js upgrades, preserving each file's formatting. The
  * `.node-version` file is overwritten with the concrete version; the package.json
  * constraint fields are rewritten in a single {@link editJsonFile} pass.

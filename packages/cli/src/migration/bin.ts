@@ -64,6 +64,7 @@ import {
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   hasFrameworkShim,
+  hasUnsupportedNodeVersionPin,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
   installGitHooks,
@@ -471,10 +472,10 @@ function hasExplicitExistingVitePlusSetupRequest(options: MigrationOptions): boo
   );
 }
 
-function hasExistingVitePlusMigrationCandidates(
+async function hasExistingVitePlusMigrationCandidates(
   workspaceInfo: WorkspaceInfoOptional,
   options: MigrationOptions,
-): boolean {
+): Promise<boolean> {
   const eslintProject = detectEslintProject(workspaceInfo.rootDir, workspaceInfo.packages);
   const prettierProject = detectPrettierProject(workspaceInfo.rootDir, workspaceInfo.packages);
   return (
@@ -484,7 +485,12 @@ function hasExistingVitePlusMigrationCandidates(
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
-    getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
+    getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0 ||
+    // A below-floor `.node-version` / `devEngines.runtime` / `engines.node` pin
+    // that `upgradeUnsupportedNodeVersions` (run later) would lift. Without this,
+    // an already-Vite+, otherwise up-to-date project whose only pending work is
+    // such a pin hits the early return below and the upgrade never runs.
+    (await hasUnsupportedNodeVersionPin(workspaceInfo.rootDir))
   );
 }
 
@@ -1343,7 +1349,7 @@ async function main() {
       !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
-      !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
+      !(await hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options))
     ) {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;

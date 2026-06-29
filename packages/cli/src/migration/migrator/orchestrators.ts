@@ -531,7 +531,7 @@ export function rewriteMonorepoProject(
     if (
       yarnHoisting &&
       path.resolve(projectPath) !== yarnHoisting.rootDir &&
-      pkg.devDependencies?.[VITE_PLUS_NAME]
+      hasDirectVitePlusInstallEntry(pkg)
     ) {
       applyYarnWorkspaceHoistingFix(
         pkg,

@@ -42,11 +42,9 @@ catalog:
   vite-plus: <semver>
 
 overrides:
-  '@vitejs/plugin-react>vite': npm:vite@<semver>
   supertest>superagent: <semver>
   react-click-away-listener>react: <semver>
   vite: 'catalog:'
-  '@vitejs/plugin-react-swc>vite': npm:vite@<semver>
 peerDependencyRules:
   allowAny:
     - vite

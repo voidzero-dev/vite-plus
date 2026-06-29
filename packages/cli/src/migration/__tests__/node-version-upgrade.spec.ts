@@ -34,7 +34,8 @@ vi.mock('@voidzero-dev/vite-plus-prompts', async (importOriginal) => {
   return { ...mod, confirm };
 });
 
-const { upgradeUnsupportedNodeVersions } = await import('../migrator/setup.js');
+const { upgradeUnsupportedNodeVersions, hasUnsupportedNodeVersionPin } =
+  await import('../migrator/setup.js');
 
 const tempDirs: string[] = [];
 function makeTempDir() {
@@ -305,5 +306,69 @@ describe('upgradeUnsupportedNodeVersions', () => {
     expect(changed).toBe(false);
     expect(fs.readFileSync(nodeVersionPath, 'utf8')).toBe('24\n');
     expect((readPkg(dir).engines as { node: string }).node).toBe('24.3.0');
+  });
+});
+
+// Reachability guard: an already-Vite+, otherwise up-to-date project whose ONLY
+// pending work is a below-floor Node pin must NOT hit the "already using Vite+"
+// early return in bin.ts. `hasExistingVitePlusMigrationCandidates` gates that
+// early return; it now reuses this side-effect-free detector (the same
+// `planNodeVersionUpgrades` planner the upgrade itself uses) so the otherwise
+// up-to-date project is still routed into the upgrade. Detection must NEVER write
+// to disk (the actual rewrite is left to `upgradeUnsupportedNodeVersions`).
+describe('hasUnsupportedNodeVersionPin', () => {
+  it('detects a below-floor engines.node pin without rewriting it', async () => {
+    const dir = makeTempDir();
+    writePkg(dir, { name: 'x', engines: { node: '>=24' } });
+    resolveSupportedNodeRange.mockReturnValue('>=24.11.0');
+
+    const detected = await hasUnsupportedNodeVersionPin(dir);
+
+    expect(detected).toBe(true);
+    // Detection only: the pin must be left untouched on disk.
+    expect((readPkg(dir).engines as { node: string }).node).toBe('>=24');
+  });
+
+  it('detects a below-floor devEngines.runtime pin without rewriting it', async () => {
+    const dir = makeTempDir();
+    writePkg(dir, { name: 'x', devEngines: { runtime: [{ name: 'node', version: '24' }] } });
+    resolveSupportedNodeRange.mockReturnValue('>=24.11.0');
+
+    const detected = await hasUnsupportedNodeVersionPin(dir);
+
+    expect(detected).toBe(true);
+    expect(
+      (readPkg(dir).devEngines as { runtime: Array<{ version: string }> }).runtime[0].version,
+    ).toBe('24');
+  });
+
+  it('detects a below-floor .node-version pin without rewriting it', async () => {
+    const dir = makeTempDir();
+    const sourcePath = path.join(dir, '.node-version');
+    fs.writeFileSync(sourcePath, '24.2\n');
+    resolveSupportedNodeVersion.mockResolvedValue('24.18.0');
+
+    const detected = await hasUnsupportedNodeVersionPin(dir);
+
+    expect(detected).toBe(true);
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe('24.2\n');
+  });
+
+  it('returns false when the only Node pin is already at/above the supported floor', async () => {
+    const dir = makeTempDir();
+    writePkg(dir, { name: 'x', engines: { node: '>=24.11.0' } });
+    // In-range → both resolvers report no upgrade (defaults already do this).
+    resolveSupportedNodeRange.mockReturnValue(null);
+
+    expect(await hasUnsupportedNodeVersionPin(dir)).toBe(false);
+  });
+
+  it('returns false when the project declares no Node pin at all', async () => {
+    const dir = makeTempDir();
+    writePkg(dir, { name: 'x' });
+
+    expect(await hasUnsupportedNodeVersionPin(dir)).toBe(false);
+    expect(resolveSupportedNodeVersion).not.toHaveBeenCalled();
+    expect(resolveSupportedNodeRange).not.toHaveBeenCalled();
   });
 });
