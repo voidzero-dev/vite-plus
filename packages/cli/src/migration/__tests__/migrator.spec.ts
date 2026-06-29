@@ -1374,6 +1374,37 @@ describe('migrateNodeVersionManagerFile', () => {
     expect(report.warnings.some((w) => w.includes('ci.yml'))).toBe(true);
   });
 
+  it('rewrites node-version-file references to .nvmrc in composite action.yml files', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    // Composite actions live under .github/actions/<name>/action.{yml,yaml},
+    // not .github/workflows, and reference .nvmrc the same way.
+    const actionDir = path.join(tmpDir, '.github', 'actions', 'setup-node');
+    fs.mkdirSync(actionDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(actionDir, 'action.yml'),
+      [
+        'runs:',
+        '  using: composite',
+        '  steps:',
+        '    - uses: actions/setup-node@v4',
+        '      with:',
+        '        node-version-file: .nvmrc',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
+
+    expect(ok).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.nvmrc'))).toBe(false);
+    const actionYml = fs.readFileSync(path.join(actionDir, 'action.yml'), 'utf8');
+    expect(actionYml).toContain('node-version-file: .node-version');
+    expect(actionYml).not.toContain('.nvmrc');
+    // The change is surfaced in the report, naming the updated action file.
+    expect(report.warnings.some((w) => w.includes('action.yml'))).toBe(true);
+  });
+
   it('does not rewrite non-node-version-file .nvmrc mentions in workflows', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
     const workflowsDir = path.join(tmpDir, '.github', 'workflows');

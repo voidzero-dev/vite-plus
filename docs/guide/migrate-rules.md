@@ -187,7 +187,11 @@ Migration normalizes the project's Node.js pins so package managers do not skip
 the native binding's optional dependency:
 
 - `.nvmrc` and Volta `volta.node` pins are converted to `.node-version` (the
-  format Vite+ reads). An existing `.node-version` is kept.
+  format Vite+ reads). An existing `.node-version` is kept. When `.nvmrc` is
+  removed, any `actions/setup-node` `node-version-file: .nvmrc` reference in
+  `.github/workflows/*.{yml,yaml}` and composite actions
+  (`.github/actions/**/action.{yml,yaml}`) is repointed to `.node-version` so CI
+  does not fail with "node version file ... does not exist".
 - Each pin (`.node-version`, `devEngines.runtime`, and `engines.node`) is checked
   independently against the Vite+ supported range (`package.json#engines.node`),
   on its _floor_ (the lowest version it permits). Package managers evaluate the

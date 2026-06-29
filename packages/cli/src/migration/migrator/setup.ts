@@ -135,34 +135,64 @@ export function parseNvmrcVersion(alias: string): string | null {
 const NODE_VERSION_FILE_NVMRC_RE = /(node-version-file:[ \t]*)(['"]?)(\.\/)?\.nvmrc\2(?=\s|$)/gm;
 
 /**
- * After `.nvmrc` is converted to `.node-version`, rewrite any GitHub Actions
- * workflow that still references the removed file via `node-version-file:`,
- * otherwise `actions/setup-node` fails in CI with "The specified node version
- * file at: .../.nvmrc does not exist".
- *
- * Best-effort and narrowly scoped: scans `.github/workflows/*.{yml,yaml}` under
- * the workspace root, only rewrites `node-version-file:` values (preserving the
- * original quoting/indentation), and never fails the migration if the directory
- * is absent or a file cannot be read/written. Returns the relative paths of the
- * workflow files that were updated.
+ * Collect GitHub Actions YAML files that may carry a `node-version-file:`
+ * reference: top-level workflows (`.github/workflows/*.{yml,yaml}`) and composite
+ * action definitions (`.github/actions/**​/action.{yml,yaml}`, nested at any
+ * depth). Returns absolute paths. Best-effort: missing or unreadable directories
+ * are skipped.
  */
-function rewriteWorkflowNodeVersionFileReferences(projectPath: string): string[] {
-  const workflowsDir = path.join(projectPath, '.github', 'workflows');
+function collectGithubActionFiles(projectPath: string): string[] {
+  const files: string[] = [];
 
-  let entries: string[];
+  const workflowsDir = path.join(projectPath, '.github', 'workflows');
   try {
-    entries = fs.readdirSync(workflowsDir);
+    for (const entry of fs.readdirSync(workflowsDir)) {
+      if (/\.ya?ml$/i.test(entry)) {
+        files.push(path.join(workflowsDir, entry));
+      }
+    }
   } catch {
-    // No `.github/workflows` directory (or unreadable): nothing to do.
-    return [];
+    // No `.github/workflows` directory (or unreadable): nothing to add.
   }
 
-  const updated: string[] = [];
-  for (const entry of entries) {
-    if (!/\.ya?ml$/i.test(entry)) {
+  // Composite actions live under `.github/actions/<name>/action.{yml,yaml}` and
+  // can be nested at any depth, so walk the tree.
+  const stack = [path.join(projectPath, '.github', 'actions')];
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    let dirEntries: fs.Dirent[];
+    try {
+      dirEntries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
       continue;
     }
-    const filePath = path.join(workflowsDir, entry);
+    for (const dirEntry of dirEntries) {
+      const full = path.join(dir, dirEntry.name);
+      if (dirEntry.isDirectory()) {
+        stack.push(full);
+      } else if (/^action\.ya?ml$/i.test(dirEntry.name)) {
+        files.push(full);
+      }
+    }
+  }
+
+  return files;
+}
+
+/**
+ * After `.nvmrc` is converted to `.node-version`, rewrite any GitHub Actions
+ * workflow or composite action that still references the removed file via
+ * `node-version-file:`, otherwise `actions/setup-node` fails in CI with "The
+ * specified node version file at: .../.nvmrc does not exist".
+ *
+ * Best-effort and narrowly scoped: scans the files from `collectGithubActionFiles`,
+ * only rewrites `node-version-file:` values (preserving the original
+ * quoting/indentation), and never fails the migration if a file cannot be
+ * read/written. Returns the relative paths of the files that were updated.
+ */
+function rewriteNodeVersionFileReferences(projectPath: string): string[] {
+  const updated: string[] = [];
+  for (const filePath of collectGithubActionFiles(projectPath)) {
     try {
       const original = fs.readFileSync(filePath, 'utf8');
       // `$1` key+space, `$2` opening quote (reused as the closing quote),
@@ -170,7 +200,7 @@ function rewriteWorkflowNodeVersionFileReferences(projectPath: string): string[]
       const rewritten = original.replace(NODE_VERSION_FILE_NVMRC_RE, '$1$2$3.node-version$2');
       if (rewritten !== original) {
         fs.writeFileSync(filePath, rewritten);
-        updated.push(path.join('.github', 'workflows', entry));
+        updated.push(path.relative(projectPath, filePath));
       }
     } catch {
       // Best-effort: skip files that cannot be read or written.
@@ -243,13 +273,14 @@ export function migrateNodeVersionManagerFile(
   fs.writeFileSync(nodeVersionPath, `${version}\n`);
   fs.unlinkSync(sourcePath);
 
-  // The .nvmrc is gone, so repoint any GitHub Actions workflow that fed it to
-  // `actions/setup-node` via `node-version-file:` at the new `.node-version`,
-  // so CI does not break with "node version file ... does not exist".
-  const updatedWorkflows = rewriteWorkflowNodeVersionFileReferences(projectPath);
-  if (updatedWorkflows.length > 0) {
+  // The .nvmrc is gone, so repoint any GitHub Actions workflow or composite
+  // action that fed it to `actions/setup-node` via `node-version-file:` at the
+  // new `.node-version`, so CI does not break with "node version file ... does
+  // not exist".
+  const updatedFiles = rewriteNodeVersionFileReferences(projectPath);
+  if (updatedFiles.length > 0) {
     warnMigration(
-      `Updated node-version-file from .nvmrc to .node-version in GitHub workflow(s): ${updatedWorkflows.join(', ')}`,
+      `Updated node-version-file from .nvmrc to .node-version in GitHub Actions file(s): ${updatedFiles.join(', ')}`,
       report,
     );
   }
