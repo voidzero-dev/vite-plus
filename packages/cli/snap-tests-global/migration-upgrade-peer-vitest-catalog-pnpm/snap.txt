@@ -7,6 +7,7 @@
 {
   "name": "migration-upgrade-peer-vitest-catalog-pnpm",
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {

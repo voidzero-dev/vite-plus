@@ -14,6 +14,7 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
     "format": "vp fmt ."
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

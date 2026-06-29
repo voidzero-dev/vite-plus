@@ -8,6 +8,7 @@
   "name": "migration-upgrade-monorepo-vitest-localized-pnpm",
   "private": true,
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -24,6 +25,7 @@
   "name": "app",
   "devDependencies": {
     "@vitest/ui": "<semver>",
+    "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   }

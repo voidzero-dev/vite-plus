@@ -12,6 +12,7 @@
     "lint": "vp lint ."
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

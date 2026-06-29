@@ -15,6 +15,9 @@
       "version": "<semver>",
       "onFail": "download"
     }
+  },
+  "devDependencies": {
+    "vite": "catalog:"
   }
 }
 
