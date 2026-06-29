@@ -143,12 +143,12 @@ info(
 Where `VITE_PLUS_VERSION` is the vite-plus package version, injected via:
 
 - A new constant in `vite/packages/vite/src/node/constants.ts`, or
-- Read from an environment variable set by the Rust CLI before spawning vite (e.g., `VITE_PLUS_VERSION`)
+- Read from an environment variable set by the Rust CLI before spawning vite (e.g., `VP_VERSION`)
 
-**Recommended approach:** Environment variable injection. The Rust NAPI binding in `packages/cli/binding/src/cli.rs` already merges environment variables when spawning sub-tools via `merge_resolved_envs()`. We add `VITE_PLUS_VERSION` to the env map, and read it in vite:
+**Recommended approach:** Environment variable injection. The Rust NAPI binding in `packages/cli/binding/src/cli.rs` already merges environment variables when spawning sub-tools via `merge_resolved_envs()`. We add `VP_VERSION` to the env map, and read it in vite:
 
 ```javascript
-const VITE_PLUS_VERSION = process.env.VITE_PLUS_VERSION || VERSION;
+const VITE_PLUS_VERSION = process.env.VP_VERSION || VERSION;
 ```
 
 This is clean: the vite source change is minimal (reads an env var with fallback), and the version injection happens in the Rust layer that already owns this responsibility.
@@ -307,11 +307,11 @@ Historical context (no longer applies): Vitest was bundled (not cloned source) v
 After `bundleVitest()` copies vitest files to `dist/`, a `brandVitest()` step patches the cac chunk (`dist/chunks/cac.*.js`) with string replacements:
 
 1. `cac("vitest")` → `cac("vp test")` — CLI name shown in banner and help output
-2. `var version = "<semver>"` → `var version = process.env.VITE_PLUS_VERSION || "<semver>"` — runtime version injection via env var
+2. `var version = "<semver>"` → `var version = process.env.VP_VERSION || "<semver>"` — runtime version injection via env var
 3. `/^vitest\/\d+\.\d+\.\d+$/` regex → `/^vp test\/[\d.]+$/` — so the help callback can still find the banner line
 4. `$ vitest --help --expand-help` → `$ vp test --help --expand-help` — hardcoded help text
 
-The Rust NAPI binding injects `VITE_PLUS_VERSION` env var (same mechanism used for vite build/dev/preview commands), so `vp test -h` shows `vp test/<vite-plus-version>`.
+The Rust NAPI binding injects `VP_VERSION` env var (same mechanism used for vite build/dev/preview commands), so `vp test -h` shows `vp test/<vite-plus-version>`.
 
 #### 3.3 Remaining `vite` → `vp` branding in CLI output
 
@@ -379,7 +379,7 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 ### D3: Inject version via environment variable
 
-**Decision:** The Rust CLI sets `VITE_PLUS_VERSION` env var before spawning vite. The modified vite source reads it with a fallback.
+**Decision:** The Rust CLI sets `VP_VERSION` env var before spawning vite. The modified vite source reads it with a fallback.
 
 **Rationale:** This avoids hardcoding the version in vite source (which would require updating on every release). The Rust CLI already manages environment variables for sub-tool spawning via `merge_resolved_envs()`. The env var approach is the minimal-touch change to vite.
 
@@ -429,7 +429,7 @@ These are internal identifiers, API references, or project name references:
 
 ### Phase 1: vite Rebranding
 
-1. Add `VITE_PLUS_VERSION` env var injection in `packages/cli/binding/src/cli.rs` for vite commands (build, dev, preview)
+1. Add `VP_VERSION` env var injection in `packages/cli/binding/src/cli.rs` for vite commands (build, dev, preview)
 2. Modify `vite/packages/vite/src/node/cli.ts` — read env var, change banner text
 3. Modify `vite/packages/vite/src/node/build.ts` — change build banner text
 4. Modify `vite/packages/vite/src/node/logger.ts` — change default prefix

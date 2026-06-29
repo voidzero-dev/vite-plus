@@ -101,7 +101,7 @@ vp exec -r --parallel -- eslint .
 vp exec -r --resume-from @my/app -- tsc --noEmit
 
 # Run on workspace root only
-vp exec -w -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)"
+vp exec -w -- node -e "console.log(process.env.VP_PACKAGE_NAME)"
 
 # Save execution summary
 vp exec -r --report-summary -- vitest run
@@ -161,7 +161,7 @@ Based on pnpm exec behavior (reference: `exec/plugin-commands-script-runners/src
 2. **Strip leading `--`** from the command for backward compatibility
 3. **Execute command** via process spawn with `stdio: inherit` — the command resolves through the modified PATH (local bins first, then system PATH)
 4. **Shell mode**: When `-c` is specified, pass `shell: true` to the child process
-5. **Set `VITE_PLUS_PACKAGE_NAME`** env var with the current package name (analogous to pnpm's `PNPM_PACKAGE_NAME`)
+5. **Set `VP_PACKAGE_NAME`** env var with the current package name (analogous to pnpm's `PNPM_PACKAGE_NAME`)
 6. **Error if no command**: `'vp exec' requires a command to run`
 
 ## Relationship Between Commands
@@ -290,7 +290,7 @@ The following existing code is reused:
 
 ### 4. Same Env Var Convention
 
-**Decision**: Set `VITE_PLUS_PACKAGE_NAME` env var when executing in a workspace package.
+**Decision**: Set `VP_PACKAGE_NAME` env var when executing in a workspace package.
 
 **Rationale**:
 
@@ -583,7 +583,7 @@ This is a new feature with no breaking changes:
 | Name + path filter    | `--filter 'app-*{./packages}'`           | `--filter 'app-*{./packages}'`           |
 | Parallel              | `--parallel`                             | `--parallel`                             |
 | Report summary        | `--report-summary`                       | `--report-summary`                       |
-| Package name env var  | `PNPM_PACKAGE_NAME`                      | `VITE_PLUS_PACKAGE_NAME`                 |
+| Package name env var  | `PNPM_PACKAGE_NAME`                      | `VP_PACKAGE_NAME`                        |
 | Strip leading `--`    | Yes                                      | Yes                                      |
 
 ## Future Enhancements

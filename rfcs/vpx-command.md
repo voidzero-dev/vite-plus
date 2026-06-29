@@ -155,7 +155,7 @@ if tool == "vpx" {
 
 ### Windows
 
-On Windows, `vpx.exe` is a trampoline executable (consistent with existing `node.exe`, `npm.exe`, `npx.exe` shims). It detects its tool name from its own filename (`vpx`), sets `VITE_PLUS_SHIM_TOOL=vpx`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
+On Windows, `vpx.exe` is a trampoline executable (consistent with existing `node.exe`, `npm.exe`, `npx.exe` shims). It detects its tool name from its own filename (`vpx`), sets `VP_SHIM_TOOL=vpx`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 ### Setup
 
