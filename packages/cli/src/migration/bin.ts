@@ -1392,10 +1392,12 @@ async function main() {
 
     let fixBaseUrl = false;
     if (hasBaseUrlInWorkspace(workspaceInfoOptional)) {
-      // Stop the "Configuring package manager" progress spinner before the
-      // confirm so it does not animate beneath the prompt; the next progress
-      // update restarts it.
-      clearMigrationProgress();
+      // Interactive only: stop the "Configuring package manager" spinner so it
+      // does not animate beneath the confirm prompt; the next progress update
+      // restarts it. Non-interactive shows no prompt, so its output is unchanged.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
       fixBaseUrl = await confirmBaseUrlFix(options.interactive);
     }
 
@@ -1439,9 +1441,11 @@ async function main() {
     );
     let prettierMigrated = false;
     if (prettierProject.hasDependency && prettierProject.configFile) {
-      // Stop any active progress spinner (e.g. "Migrating ESLint") before the
-      // confirm so it does not animate beneath the prompt.
-      clearMigrationProgress();
+      // Interactive only: stop any active spinner (e.g. "Migrating ESLint") so
+      // it does not animate beneath the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
       const migratePrettier = await confirmPrettierMigration(options.interactive);
       if (migratePrettier) {
         await ensureExistingPackageManager();
@@ -1466,9 +1470,11 @@ async function main() {
     // Check if node version manager file migration is needed
     const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
     if (nodeVersionDetection) {
-      // Stop any active progress spinner before the confirm so it does not
-      // animate beneath the prompt.
-      clearMigrationProgress();
+      // Interactive only: stop any active spinner so it does not animate beneath
+      // the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
       const confirmed = await confirmNodeVersionFileMigration(
         options.interactive,
         nodeVersionDetection,

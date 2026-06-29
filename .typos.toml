@@ -4,6 +4,7 @@ PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
 fpr = "fpr" # GPG colon-format record name for a key fingerprint
+unparseable = "unparseable" # valid variant of "unparsable"; used in migrate Node-pin docs
 
 [default.extend-identifiers]
 # Yarn Plug'n'Play — tokenizer splits `PnP` into the word `Pn`, which typos
