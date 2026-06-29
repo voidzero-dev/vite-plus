@@ -109,7 +109,7 @@ impl JsRuntime {
 
 /// Ensure the managed Node.js core bin directory exists and return it.
 ///
-/// The returned directory is a sibling of Node's real `bin` directory:
+/// The returned directory is scoped to Node's version directory:
 /// `.../node/<version>/core`.
 ///
 /// # Errors
@@ -120,10 +120,13 @@ pub fn ensure_node_core_bin_prefix(
     let bin_dir = node_binary_path
         .parent()
         .ok_or_else(|| std::io::Error::other("Node binary has no parent directory"))?;
-    let install_dir = bin_dir
+    #[cfg(unix)]
+    let core_dir = bin_dir
         .parent()
-        .ok_or_else(|| std::io::Error::other("Node bin directory has no parent directory"))?;
-    let core_dir = install_dir.join("core");
+        .ok_or_else(|| std::io::Error::other("Node bin directory has no parent directory"))?
+        .join("core");
+    #[cfg(windows)]
+    let core_dir = bin_dir.join("core");
     std::fs::create_dir_all(core_dir.as_path())?;
 
     for (link_name, target_name) in node_core_tools() {
@@ -158,7 +161,7 @@ fn link_core_tool(target: &std::path::Path, link: &std::path::Path) -> std::io::
 
 #[cfg(windows)]
 fn link_core_tool(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
-    std::fs::hard_link(target, link).or_else(|_| std::fs::copy(target, link).map(|_| ()))
+    std::fs::hard_link(target, link)
 }
 
 /// Download and cache a JavaScript runtime
