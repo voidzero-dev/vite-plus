@@ -1322,6 +1322,83 @@ describe('migrateNodeVersionManagerFile', () => {
     expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);
   });
 
+  it('rewrites node-version-file references to .nvmrc in GitHub workflows, preserving quote style', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    const workflowsDir = path.join(tmpDir, '.github', 'workflows');
+    fs.mkdirSync(workflowsDir, { recursive: true });
+    // Quoted reference (the common actions/setup-node style).
+    fs.writeFileSync(
+      path.join(workflowsDir, 'ci.yml'),
+      [
+        'jobs:',
+        '  build:',
+        '    steps:',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        "          node-version-file: '.nvmrc'",
+        '',
+      ].join('\n'),
+    );
+    // Unquoted reference in a .yaml file.
+    fs.writeFileSync(
+      path.join(workflowsDir, 'release.yaml'),
+      [
+        'jobs:',
+        '  release:',
+        '    steps:',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        '          node-version-file: .nvmrc',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
+
+    expect(ok).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.nvmrc'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('20.19.0\n');
+    // Quote style preserved: single-quoted stays single-quoted, bare stays bare.
+    expect(fs.readFileSync(path.join(workflowsDir, 'ci.yml'), 'utf8')).toContain(
+      "node-version-file: '.node-version'",
+    );
+    expect(fs.readFileSync(path.join(workflowsDir, 'ci.yml'), 'utf8')).not.toContain('.nvmrc');
+    expect(fs.readFileSync(path.join(workflowsDir, 'release.yaml'), 'utf8')).toContain(
+      'node-version-file: .node-version',
+    );
+    expect(fs.readFileSync(path.join(workflowsDir, 'release.yaml'), 'utf8')).not.toContain(
+      '.nvmrc',
+    );
+    // The change is surfaced in the report.
+    expect(report.warnings.some((w) => w.includes('ci.yml') || w.includes('.node-version'))).toBe(
+      true,
+    );
+  });
+
+  it('does not rewrite non-node-version-file .nvmrc mentions in workflows', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    const workflowsDir = path.join(tmpDir, '.github', 'workflows');
+    fs.mkdirSync(workflowsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(workflowsDir, 'shell.yml'),
+      ['jobs:', '  build:', '    steps:', '      - run: cat .nvmrc', ''].join('\n'),
+    );
+
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' });
+
+    expect(ok).toBe(true);
+    // A shell `cat .nvmrc` is out of scope and must be left untouched.
+    expect(fs.readFileSync(path.join(workflowsDir, 'shell.yml'), 'utf8')).toContain('cat .nvmrc');
+  });
+
+  it('migrates .nvmrc with no .github/workflows directory present', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' });
+    expect(ok).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('20.19.0\n');
+  });
+
   it('migrates volta node version to .node-version', () => {
     const ok = migrateNodeVersionManagerFile(tmpDir, {
       file: 'package.json',

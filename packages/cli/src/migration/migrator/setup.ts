@@ -122,6 +122,67 @@ export function parseNvmrcVersion(alias: string): string | null {
 }
 
 /**
+ * Match an `actions/setup-node` `node-version-file:` value that points at the
+ * now-removed `.nvmrc`, capturing the surrounding style so it can be preserved:
+ *   1. the key + whitespace (`node-version-file:` ...)
+ *   2. the optional opening quote (`'`, `"`, or none), reused as the closing quote
+ *   3. the optional `./` prefix
+ * The closing quote backreference (`\2`) plus the `(?=\s|$)` boundary keep this
+ * pinned to the exact value `.nvmrc` / `./.nvmrc` (quoted or bare) and prevent
+ * matching look-alikes such as `.nvmrc-backup`. Only `node-version-file:` lines
+ * are touched, so shell `cat .nvmrc` and comments are left alone.
+ */
+const NODE_VERSION_FILE_NVMRC_RE = /(node-version-file:[ \t]*)(['"]?)(\.\/)?\.nvmrc\2(?=\s|$)/gm;
+
+/**
+ * After `.nvmrc` is converted to `.node-version`, rewrite any GitHub Actions
+ * workflow that still references the removed file via `node-version-file:`,
+ * otherwise `actions/setup-node` fails in CI with "The specified node version
+ * file at: .../.nvmrc does not exist".
+ *
+ * Best-effort and narrowly scoped: scans `.github/workflows/*.{yml,yaml}` under
+ * the workspace root, only rewrites `node-version-file:` values (preserving the
+ * original quoting/indentation), and never fails the migration if the directory
+ * is absent or a file cannot be read/written. Returns the relative paths of the
+ * workflow files that were updated.
+ */
+function rewriteWorkflowNodeVersionFileReferences(projectPath: string): string[] {
+  const workflowsDir = path.join(projectPath, '.github', 'workflows');
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(workflowsDir);
+  } catch {
+    // No `.github/workflows` directory (or unreadable): nothing to do.
+    return [];
+  }
+
+  const updated: string[] = [];
+  for (const entry of entries) {
+    if (!/\.ya?ml$/i.test(entry)) {
+      continue;
+    }
+    const filePath = path.join(workflowsDir, entry);
+    try {
+      const original = fs.readFileSync(filePath, 'utf8');
+      const rewritten = original.replace(
+        NODE_VERSION_FILE_NVMRC_RE,
+        (_match, prefix: string, quote: string, dotSlash: string | undefined) =>
+          `${prefix}${quote}${dotSlash ?? ''}.node-version${quote}`,
+      );
+      if (rewritten !== original) {
+        fs.writeFileSync(filePath, rewritten);
+        updated.push(path.join('.github', 'workflows', entry));
+      }
+    } catch {
+      // Best-effort: skip files that cannot be read or written.
+    }
+  }
+
+  return updated;
+}
+
+/**
  * Migrate .nvmrc or Volta node version from package.json to .node-version.
  * - For .nvmrc: the source file is removed after migration.
  * - For package.json (Volta): the volta field is left as-is; removal is left to the user's discretion.
@@ -183,6 +244,17 @@ export function migrateNodeVersionManagerFile(
 
   fs.writeFileSync(nodeVersionPath, `${version}\n`);
   fs.unlinkSync(sourcePath);
+
+  // The .nvmrc is gone, so repoint any GitHub Actions workflow that fed it to
+  // `actions/setup-node` via `node-version-file:` at the new `.node-version`,
+  // so CI does not break with "node version file ... does not exist".
+  const updatedWorkflows = rewriteWorkflowNodeVersionFileReferences(projectPath);
+  if (updatedWorkflows.length > 0) {
+    warnMigration(
+      `Updated node-version-file from .nvmrc to .node-version in GitHub workflow(s): ${updatedWorkflows.join(', ')}`,
+      report,
+    );
+  }
 
   if (report) {
     report.nodeVersionFileMigrated = true;
