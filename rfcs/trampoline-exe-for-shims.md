@@ -75,13 +75,13 @@ On Unix, shims are symlinks to the `vp` binary. The binary detects the tool name
 ```
 ~/.vite-plus/bin/
 ├── vp.exe       # Trampoline → spawns current\bin\vp.exe
-├── node.exe     # Trampoline → sets VITE_PLUS_SHIM_TOOL=node, spawns vp.exe
-├── npm.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=npm, spawns vp.exe
-├── npx.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=npx, spawns vp.exe
-├── corepack.exe # Trampoline → sets VITE_PLUS_SHIM_TOOL=corepack, spawns vp.exe
-├── vpx.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=vpx, spawns vp.exe
-├── vpr.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=vpr, spawns vp.exe
-└── tsc.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=tsc, spawns vp.exe (package shim)
+├── node.exe     # Trampoline → sets VP_SHIM_TOOL=node, spawns vp.exe
+├── npm.exe      # Trampoline → sets VP_SHIM_TOOL=npm, spawns vp.exe
+├── npx.exe      # Trampoline → sets VP_SHIM_TOOL=npx, spawns vp.exe
+├── corepack.exe # Trampoline → sets VP_SHIM_TOOL=corepack, spawns vp.exe
+├── vpx.exe      # Trampoline → sets VP_SHIM_TOOL=vpx, spawns vp.exe
+├── vpr.exe      # Trampoline → sets VP_SHIM_TOOL=vpr, spawns vp.exe
+└── tsc.exe      # Trampoline → sets VP_SHIM_TOOL=tsc, spawns vp.exe (package shim)
 ```
 
 Each trampoline is a copy of `vp-shim.exe` (the template binary distributed alongside `vp.exe`).
@@ -124,11 +124,11 @@ fn main() {
     // 4. Spawn vp.exe with env vars
     let mut cmd = Command::new(&vp_exe);
     cmd.args(env::args_os().skip(1));
-    cmd.env("VITE_PLUS_HOME", vp_home);
+    cmd.env("VP_HOME", vp_home);
 
     if tool_name != "vp" {
-        cmd.env("VITE_PLUS_SHIM_TOOL", tool_name);
-        cmd.env_remove("VITE_PLUS_TOOL_RECURSION");
+        cmd.env("VP_SHIM_TOOL", tool_name);
+        cmd.env_remove("VP_TOOL_RECURSION");
     }
 
     // 5. Propagate exit code (error message via write_all, not eprintln!)
@@ -170,11 +170,11 @@ fn install_ctrl_handler() {
 
 The trampoline sets three env vars before spawning `vp.exe`:
 
-| Variable                   | When                       | Purpose                                                                        |
-| -------------------------- | -------------------------- | ------------------------------------------------------------------------------ |
-| `VITE_PLUS_HOME`           | Always                     | Tells vp.exe the install directory (derived from `bin_dir.parent()`)           |
-| `VITE_PLUS_SHIM_TOOL`      | Tool shims only (not "vp") | Tells vp.exe to enter shim dispatch mode for the named tool                    |
-| `VITE_PLUS_TOOL_RECURSION` | Removed for tool shims     | Clears the recursion marker for fresh version resolution in nested invocations |
+| Variable            | When                       | Purpose                                                                        |
+| ------------------- | -------------------------- | ------------------------------------------------------------------------------ |
+| `VP_HOME`           | Always                     | Tells vp.exe the install directory (derived from `bin_dir.parent()`)           |
+| `VP_SHIM_TOOL`      | Tool shims only (not "vp") | Tells vp.exe to enter shim dispatch mode for the named tool                    |
+| `VP_TOOL_RECURSION` | Removed for tool shims     | Clears the recursion marker for fresh version resolution in nested invocations |
 
 ### Ctrl+C Handling
 
@@ -190,11 +190,11 @@ The trampoline installs a console control handler that returns `TRUE` (1):
 
 ### Integration with Shim Detection
 
-`detect_shim_tool()` in `shim/mod.rs` checks `VITE_PLUS_SHIM_TOOL` env var **before** `argv[0]`:
+`detect_shim_tool()` in `shim/mod.rs` checks `VP_SHIM_TOOL` env var **before** `argv[0]`:
 
 ```
 Trampoline (node.exe)
-  → sets VITE_PLUS_SHIM_TOOL=node, VITE_PLUS_HOME=..., removes VITE_PLUS_TOOL_RECURSION
+  → sets VP_SHIM_TOOL=node, VP_HOME=..., removes VP_TOOL_RECURSION
   → spawns current/bin/vp.exe with original args
     → detect_shim_tool() reads env var → "node"
     → dispatch("node", args)
