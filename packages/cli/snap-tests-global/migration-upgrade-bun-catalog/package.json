@@ -1,5 +1,6 @@
 {
   "name": "migration-upgrade-bun-catalog",
+  "workspaces": ["packages/*"],
   "devDependencies": {
     "vite-plus": "catalog:",
     "vitest": "catalog:"
