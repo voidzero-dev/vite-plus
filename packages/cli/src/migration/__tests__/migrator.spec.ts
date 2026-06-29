@@ -1928,6 +1928,69 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog['vite-plus']).toBe('latest');
   });
 
+  it('strips bundled tool deps (oxlint/oxlint-tsgolint/oxfmt/tsdown) from an existing Vite+ pnpm project so no `catalog:` reference dangles after the catalog drops them', () => {
+    // Regression for the upgrade path: the catalog rewrite deletes EVERY
+    // REMOVE_PACKAGES entry from the workspace catalog (catalog.ts), but the
+    // existing-Vite+ package.json reconcile only stripped the `@vitest/*`
+    // subset. That left `oxlint-tsgolint` (and the other bundled tools) as a
+    // `catalog:` reference whose catalog entry was just deleted, so the next
+    // `pnpm install` aborts with
+    // `[ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC] No catalog entry
+    // 'oxlint-tsgolint' was found for catalog 'default'`.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          oxfmt: 'catalog:',
+          oxlint: 'catalog:',
+          'oxlint-tsgolint': 'catalog:',
+          tsdown: 'catalog:',
+          'vite-plus': 'catalog:',
+        },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  oxfmt: ^0.1.0',
+        '  oxlint: ^1.0.0',
+        '  oxlint-tsgolint: ^1.0.0',
+        '  tsdown: ^0.10.0',
+        '  vite-plus: latest',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // The bundled toolchain packages are owned by vite-plus and must be removed
+    // from package.json (matching the catalog removal and the fresh path), so
+    // they leave no dangling `catalog:` reference behind.
+    expect(pkg.devDependencies.oxfmt).toBeUndefined();
+    expect(pkg.devDependencies.oxlint).toBeUndefined();
+    expect(pkg.devDependencies['oxlint-tsgolint']).toBeUndefined();
+    expect(pkg.devDependencies.tsdown).toBeUndefined();
+    // vite-plus itself stays a managed catalog dependency.
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+
+    // Both sides are consistent: the catalog no longer defines the bundled
+    // tools either, confirming no surviving `catalog:` reference dangles.
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog.oxfmt).toBeUndefined();
+    expect(workspace.catalog.oxlint).toBeUndefined();
+    expect(workspace.catalog['oxlint-tsgolint']).toBeUndefined();
+    expect(workspace.catalog.tsdown).toBeUndefined();
+  });
+
   it('reconciles stale pnpm-workspace.yaml overrides when package.json has an empty pnpm field (urllib shape)', () => {
     // urllib 0.1.x shape: an empty `pnpm: {}` in package.json AND a committed
     // pnpm-workspace.yaml whose overrides pin vite/vitest to the deleted

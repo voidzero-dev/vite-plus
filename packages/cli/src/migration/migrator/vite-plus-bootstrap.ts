@@ -380,9 +380,16 @@ function reconcileVitePlusBootstrapPackage(
     }
   }
 
-  // The base browser runtime and preview provider are bundled by vite-plus;
-  // only the heavy framework-specific providers remain project-owned.
-  for (const bundledPackage of REMOVE_PACKAGES.filter((name) => name.startsWith('@vitest/'))) {
+  // The full bundled set (oxlint/oxlint-tsgolint/oxfmt/tsdown plus the base
+  // `@vitest/browser`/preview runtime) is owned by vite-plus, so strip every
+  // REMOVE_PACKAGES entry from this package's install groups, matching the
+  // catalog removal (catalog.ts) and the fresh path (package-json.ts). Leaving
+  // any of them behind keeps a `catalog:` reference whose catalog entry the
+  // catalog rewrite just deleted, dangling the next `pnpm install`. A plain
+  // delete is correct here: none of these carry a project-owned peer (the
+  // browser-provider peer logic is for the opt-in `@vitest/browser-*`
+  // providers, which are deliberately NOT in REMOVE_PACKAGES).
+  for (const bundledPackage of REMOVE_PACKAGES) {
     for (const dependencies of installGroups) {
       if (dependencies?.[bundledPackage] !== undefined) {
         delete dependencies[bundledPackage];
