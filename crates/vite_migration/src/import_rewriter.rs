@@ -1993,6 +1993,34 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Returns whether the package follows a published-plugin naming convention
+/// whose code is consumed by Vite projects: its unscoped name starts with
+/// `vite-plugin-` (<https://vite.dev/guide/api-plugin>) or `unplugin-`
+/// (<https://unplugin.unjs.io/guide/plugin-conventions.html>; cross-bundler
+/// plugins that ship a Vite entry and are used by Vite projects).
+///
+/// For a scoped name like `@scope/vite-plugin-foo`, the part after the first `/`
+/// is the unscoped name; for an unscoped name the whole name is used. The
+/// trailing hyphen is required, so `vite-plugin`, `unplugin`, and their plurals
+/// do not match.
+fn package_name_is_plugin(pkg: &serde_json::Value) -> bool {
+    let Some(name) = pkg.get("name").and_then(|v| v.as_str()) else {
+        return false;
+    };
+
+    // Strip a leading `@scope/` for scoped packages, otherwise use the name as-is.
+    let unscoped = if name.starts_with('@') {
+        match name.split_once('/') {
+            Some((_, rest)) => rest,
+            None => return false,
+        }
+    } else {
+        name
+    };
+
+    unscoped.starts_with("vite-plugin-") || unscoped.starts_with("unplugin-")
+}
+
 /// Parse package.json and check which packages are in peerDependencies or dependencies.
 /// Returns default (no skipping) if package.json doesn't exist or can't be parsed.
 fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContext {
@@ -2016,10 +2044,22 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
     // Peer and runtime dependencies preserve the existing whole-package skip
     // behavior. Nuxt compatibility is narrower and accepts the three install
     // groups where @nuxt/test-utils is normally declared.
+    //
+    // `vite` is additionally skipped when the package follows a published-plugin
+    // naming convention: an unscoped name starting with `vite-plugin-`
+    // (<https://vite.dev/guide/api-plugin>) or `unplugin-`
+    // (<https://unplugin.unjs.io/guide/plugin-conventions.html>). Such libraries
+    // are consumed by both vite and vite-plus projects, so rewriting their
+    // `vite` imports to `vite-plus` would break plain-vite consumers; many
+    // declare `vite` only in devDependencies and would otherwise be missed by
+    // the dependency checks above. Only the name is used (not `keywords`, which
+    // is too broad), and this convention skip is scoped to `vite` (never
+    // vitest/tsdown).
     PackageRewriteContext {
         skip_packages: SkipPackages {
             skip_vite: has_package("peerDependencies", "vite")
-                || has_package("dependencies", "vite"),
+                || has_package("dependencies", "vite")
+                || package_name_is_plugin(&pkg),
             skip_vitest: has_package("peerDependencies", "vitest")
                 || has_package("dependencies", "vitest"),
             skip_tsdown: has_package("peerDependencies", "tsdown")
@@ -3779,6 +3819,232 @@ export default defineConfig({});"#;
         assert!(skip.skip_vite); // in dependencies
         assert!(skip.skip_vitest); // in peerDependencies
         assert!(!skip.skip_tsdown);
+    }
+
+    // ===================================
+    // Vite plugin name-convention tests
+    // ===================================
+
+    #[test]
+    fn test_skip_vite_when_scoped_vite_plugin_name_with_vite_devdep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Real-world case: @nkzw/vite-plugin-remdx declares vite only in
+        // devDependencies, yet is a Vite plugin consumed by plain-vite projects.
+        let pkg_json = r#"{
+  "name": "@nkzw/vite-plugin-remdx",
+  "devDependencies": {
+    "vite": "catalog:"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite); // skipped by the vite-plugin- name convention
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_unscoped_vite_plugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "vite-plugin-foo"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_app_with_vite_devdep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A regular app declaring vite as a devDependency should still be
+        // rewritten; devDependencies alone never trigger the skip.
+        let pkg_json = r#"{
+  "name": "my-app",
+  "private": true,
+  "devDependencies": {
+    "vite": "^7"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_scoped_non_plugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "@scope/not-a-plugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_vite_plugin_without_trailing_hyphen() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "vite-plugin" without the trailing hyphen is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "vite-plugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_vite_plugins_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "vite-plugins" (plural, no trailing hyphen) is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "vite-plugins"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_unscoped_unplugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // unplugin libraries (https://unplugin.unjs.io) ship a Vite entry and are
+        // consumed by vite projects, so their `vite` imports must be preserved
+        // even when `vite` is only a devDependency.
+        let pkg_json = r#"{
+  "name": "unplugin-icons",
+  "devDependencies": {
+    "vite": "^7"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_scoped_unplugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "@scope/unplugin-foo"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_unplugin_without_trailing_hyphen() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "unplugin" without the trailing hyphen is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "unplugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_unplugins_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "unplugins" (plural, no trailing hyphen) is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "unplugins"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_preserves_plugin_import_by_name_convention() {
+        // A Vite plugin library keeps importing from 'vite' so plain-vite
+        // consumers are not broken; without the skip it is rewritten.
+        let content = "import { Plugin } from 'vite';";
+
+        let preserved = SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let result = rewrite_import_content(content, &preserved).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, "import { Plugin } from 'vite';");
+
+        let rewritten =
+            SkipPackages { skip_vite: false, skip_vitest: false, skip_tsdown: false };
+        let result = rewrite_import_content(content, &rewritten).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, "import { Plugin } from 'vite-plus';");
     }
 
     #[test]

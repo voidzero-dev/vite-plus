@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp migrate --no-interactive --no-hooks # vite-plugin-* and unplugin-* packages keep their `vite` imports; a normal app gets them rewritten to vite-plus",
+    "cat packages/vite-plugin-demo/index.ts # PRESERVED: a vite-plugin-* package keeps `from 'vite'` so it stays usable by plain-vite projects",
+    "cat packages/unplugin-demo/src/index.ts # PRESERVED: an unplugin-* package keeps `from 'vite'` too",
+    "cat packages/app/src/main.ts # REWRITTEN: a normal app's `vite` import becomes `vite-plus`"
+  ]
+}

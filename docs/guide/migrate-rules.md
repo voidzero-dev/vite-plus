@@ -132,6 +132,14 @@ user-defined scopes rather than scalar version pins.
 
 ## Source Rewrite Rules
 
+- Rewrite ordinary `vite` and `vite/*` imports to `vite-plus`, except in plugin
+  packages. A package is treated as a plugin when its unscoped name starts with
+  `vite-plugin-` (the Vite plugin naming convention) or `unplugin-` (the unplugin
+  naming convention), or it declares `vite` in `peerDependencies` or
+  `dependencies`. Preserving the upstream `vite` import keeps a published plugin
+  usable by plain Vite projects; in a Vite+ project `vite` still resolves through
+  the `@voidzero-dev/vite-plus-core` alias, so the import works in both
+  ecosystems. The skip is scoped to `vite` only.
 - Rewrite ordinary `vitest` and `vitest/*` imports to `vite-plus/test*`.
 - Detect legacy Playwright and WebdriverIO provider imports before applying that
   rewrite so their optional provider dependencies are not lost.

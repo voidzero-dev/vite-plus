@@ -1,0 +1,26 @@
+> vp migrate --no-interactive --no-hooks # vite-plugin-* and unplugin-* packages keep their `vite` imports; a normal app gets them rewritten to vite-plus
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 2 files had imports rewritten
+
+> cat packages/vite-plugin-demo/index.ts # PRESERVED: a vite-plugin-* package keeps `from 'vite'` so it stays usable by plain-vite projects
+import type { Plugin } from 'vite';
+
+export default function demo(): Plugin {
+  return { name: 'vite-plugin-demo' };
+}
+
+> cat packages/unplugin-demo/src/index.ts # PRESERVED: an unplugin-* package keeps `from 'vite'` too
+import type { Plugin } from 'vite';
+
+export function vitePlugin(): Plugin {
+  return { name: 'unplugin-demo' };
+}
+
+> cat packages/app/src/main.ts # REWRITTEN: a normal app's `vite` import becomes `vite-plus`
+import { createServer } from 'vite-plus';
+
+export async function start() {
+  const server = await createServer();
+  await server.listen();
+}
