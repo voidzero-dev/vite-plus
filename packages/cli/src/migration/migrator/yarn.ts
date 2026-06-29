@@ -346,7 +346,7 @@ export function rewriteYarnrcYml(
   // project resolves to an older Yarn the managed packages live in package.json
   // `resolutions` instead, so no `catalog`/`catalogs` field is written here.
   // `nodeLinker`/`npmPreapprovedPackages` are still configured regardless.
-  supportCatalog = true,
+  supportCatalog: boolean,
 ): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -390,7 +390,7 @@ export function yarnrcSatisfiesVitePlus(
   // When false (Yarn < 4.10.0), the managed packages are pinned through
   // package.json `resolutions` rather than a `.yarnrc.yml` catalog, so only the
   // `nodeLinker` setup is required here (a catalog is neither expected nor checked).
-  supportCatalog = true,
+  supportCatalog: boolean,
 ): boolean {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
