@@ -23,6 +23,10 @@ That means you usually do not need separate `setup-node`, package-manager setup,
 
 With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
+::: tip
+`setup-vp` caches package-manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
+:::
+
 ## Simplifying Existing Workflows
 
 If you are migrating an existing GitHub Actions workflow, you can often replace large blocks of Node, package-manager, and cache setup with a single `setup-vp` step.

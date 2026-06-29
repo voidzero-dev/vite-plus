@@ -102,10 +102,40 @@ See [Run Config](/config/run) for the full `run` block reference.
 
 ## Task Dependencies
 
-Use [`dependsOn`](/config/run#dependson) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first. Dependencies can also target other packages in the same project with the `package#task` notation:
+Use [`dependsOn`](/config/run#dependson) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first.
+
+String task names in `dependsOn` reference tasks in the current or another package:
 
 ```ts [vite.config.ts]
-dependsOn: ['@my/core#build', '@my/utils#lint'];
+dependsOn: [
+  'build', // same package
+  '@my/core#build', // another package
+];
+```
+
+Use the object form when you need to reference all tasks with a given name from the current package's dependencies:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  run: {
+    tasks: {
+      test: {
+        command: 'vp test',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
+    },
+  },
+});
+```
+
+In this example, `vp run test` checks the current package's `dependencies`. For each direct workspace dependency that defines `build`, Vite Task runs that dependency's `build` task before `test`.
+
+Use an array when you need more than one dependency field:
+
+```ts [vite.config.ts]
+dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }];
 ```
 
 ## Running in a Workspace

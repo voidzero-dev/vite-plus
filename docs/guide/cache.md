@@ -4,32 +4,19 @@ Vite Task can automatically track dependencies and cache tasks run through `vp r
 
 ## Overview
 
-When a task runs successfully (exit code 0), its terminal output (stdout/stderr) is saved. On the next run, Vite Task checks if anything changed:
+When a task runs successfully (exit code 0), its terminal output (stdout/stderr) and all files it writes (output files) are saved. On the next run, Vite Task checks if anything changed:
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
 2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
 3. **Input files:** did any file that the command reads change?
 
-If everything matches, the cached output is replayed instantly, and the command does not run.
-
-::: info
-By default, only terminal output is cached and replayed. To cache files produced by a task, configure [`output`](/config/run#output) globs. Matching files are archived after a successful run and restored on a cache hit.
-:::
-
-```ts [vite.config.ts]
-tasks: {
-  build: {
-    command: 'vp build',
-    output: ['dist/**'],
-  },
-}
-```
+If the entry matches, Vite Task replays the terminal output, restores the written files, and skips the command.
 
 When a cache miss occurs, Vite Task tells you exactly why:
 
 ```
 $ vp lint ✗ cache miss: 'src/utils.ts' modified, executing
-$ vp build ✗ cache miss: env changed, executing
+$ vp build ✗ cache miss: env 'VITE_GREETING' changed, executing
 $ vp test ✗ cache miss: args changed, executing
 ```
 
@@ -45,7 +32,7 @@ A task can set [`cache: false`](/config/run#cache) to opt out. This cannot be ov
 
 ### 2. CLI flags
 
-`--no-cache` disables caching for everything. `--cache` enables caching for both tasks and scripts, which is equivalent to setting [`run.cache: true`](/config/run#run-cache) for that invocation.
+`--no-cache` disables caching for tasks and scripts. `--cache` enables caching for both tasks and scripts, which is equivalent to setting [`run.cache: true`](/config/run#run-cache) for that invocation.
 
 ### 3. Workspace config
 
@@ -83,6 +70,14 @@ tasks: {
 }
 ```
 
+### Tool-Reported Caching
+
+Tool-reported caching lets a tool tell Vite Task which cache inputs, outputs, and environment variables affect its result.
+
+Vite+ only supports tool-reported caching for `vp build` today. Vite reports the build cache metadata it already knows, so you do not need to declare `env: ['VITE_*']` or replace automatic inputs for a standard Vite build. Add manual `input`, `output`, or `env` entries when your project has extra cache behavior the tool cannot know.
+
+We plan to extend tool-reported caching to more first-party tools. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
+
 ## Environment Variables
 
 By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.
@@ -98,7 +93,7 @@ tasks: {
 }
 ```
 
-To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not generally affect caching behavior.
+To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not affect caching behavior.
 
 See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
 

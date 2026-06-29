@@ -120,8 +120,10 @@ Commands joined with `&&` (or supplied as an array) are automatically split into
 
 ### `dependsOn`
 
-- **Type:** `string[]`
+- **Type:** `Array<string | { task: string, from: DependsOnFrom }>`
 - **Default:** `[]`
+
+`DependsOnFrom` accepts `"dependencies"`, `"devDependencies"`, `"peerDependencies"`, or an array of those values.
 
 Tasks that must complete successfully before this one starts.
 
@@ -139,6 +141,19 @@ Dependencies can reference tasks in other packages using the `package#task` form
 ```ts [vite.config.ts]
 dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
+
+Use the object form `{ task: string, from: DependsOnFrom }` to reference tasks from all dependencies:
+
+```ts [vite.config.ts]
+tasks: {
+  test: {
+    command: 'vp test',
+    dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }],
+  },
+}
+```
+
+For the example above, Vite Task reads the declaring package's direct `dependencies` and `devDependencies`, and runs `build` task in each dependency if it defines one. Packages without `build` are skipped.
 
 See [Task Dependencies](/guide/run#task-dependencies) for details on how explicit and topological dependencies interact.
 
@@ -168,17 +183,17 @@ Environment variables included in the cache fingerprint. When any listed variabl
 ```ts [vite.config.ts]
 tasks: {
   build: {
-    command: 'vp build',
+    command: 'node build.mjs',
     env: ['NODE_ENV'],
   },
 }
 ```
 
-Wildcard patterns are supported: `VITE_*` matches all variables starting with `VITE_`.
+Wildcard patterns and `!` exclusion patterns are supported: `VITE_*` matches all variables starting with `VITE_`, and `!VITE_SECRET` excludes the `VITE_SECRET` variable from the match.
 
 ```bash
 $ NODE_ENV=development vp run build    # first run
-$ NODE_ENV=production vp run build     # cache miss: variable changed
+$ NODE_ENV=production vp run build     # cache miss: env 'NODE_ENV' changed
 ```
 
 ### `untrackedEnv`
@@ -191,13 +206,15 @@ Environment variables passed to the task process but **not** included in the cac
 ```ts [vite.config.ts]
 tasks: {
   build: {
-    command: 'vp build',
+    command: 'node build.mjs',
     untrackedEnv: ['CI', 'GITHUB_ACTIONS'],
   },
 }
 ```
 
-A set of common environment variables are automatically passed through to all tasks:
+`untrackedEnv` accepts the same wildcard and `!` exclusion patterns as [`env`](#env).
+
+Vite Task passes a set of common environment variables to all tasks:
 
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
@@ -270,16 +287,29 @@ String glob patterns are resolved relative to the package directory by default. 
 
 ### `output`
 
-- **Type:** `Array<string | { pattern: string, base: "workspace" | "package" }>`
-- **Default:** `[]` (nothing is archived)
+- **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
+- **Default:** automatic write tracking
 
-Files the task produces. They get archived after a successful run and restored on a cache hit, so you don't have to rebuild them. Leave it empty (or omit it) and nothing is archived.
+Files Vite Task archives after a successful run and restores on a cache hit.
+
+If you omit `output`, Vite Task tracks files that the task writes and restores those files on cache hits. Use explicit output entries when you need to override the tracked files.
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
-    command: 'vp build',
+    command: 'node build.mjs',
     output: ['dist/**', '!dist/cache/**'],
+  },
+}
+```
+
+Use `{ auto: true }` to keep automatic write tracking while adding explicit output globs:
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    command: 'node build.mjs',
+    output: [{ auto: true }, 'storybook-static/**'],
   },
 }
 ```
@@ -289,7 +319,7 @@ If a task writes outside its own package, use the object form with `base: "works
 ```ts [vite.config.ts]
 tasks: {
   build: {
-    command: 'vp build',
+    command: 'node build.mjs',
     output: [
       'dist/**',
       { pattern: 'shared-artifacts/**', base: 'workspace' },
@@ -297,6 +327,19 @@ tasks: {
   },
 }
 ```
+
+Set `output: []` to disable output restoration for a cached task:
+
+```ts [vite.config.ts]
+tasks: {
+  report: {
+    command: 'node scripts/report.mjs',
+    output: [],
+  },
+}
+```
+
+Vite Task still replays terminal output for that task on cache hits.
 
 ### `cwd`
 
