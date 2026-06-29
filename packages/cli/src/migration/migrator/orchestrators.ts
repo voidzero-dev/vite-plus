@@ -21,6 +21,7 @@ import {
   ensureDirectViteForPnpm,
   ensurePnpmWorkspaceExoticSubdepsSetting,
   findYarnWorkspaceHoisting,
+  getCatalogDependencySpec,
   hasDirectVitePlusInstallEntry,
   hasOwnWebdriverioDependency,
   injectFmtDefaults,
@@ -101,8 +102,17 @@ export function rewriteStandaloneProject(
   // upstream module reference, or browser mode). Computed inside the callback and
   // hoisted so the post-callback pnpm-workspace.yaml writer sees it too.
   let usesVitest = false;
-  // Determined inside editJsonFile callback to avoid a redundant file read
-  let usePnpmWorkspaceYaml = false;
+  // Pure function of the pinned pnpm version, so it is computed up front and
+  // reused both inside the callback (the bun direct-`vite` edge and pnpm sinks)
+  // and by the post-callback pnpm-workspace.yaml writer.
+  const usePnpmWorkspaceYaml =
+    packageManager === PackageManager.pnpm &&
+    pnpmSupportsWorkspaceSettings(workspaceInfo.downloadPackageManager.version);
+  // Whether the active toolchain edges use catalog references (`catalog:`) rather
+  // than concrete aliases. Bun standalone projects never manage a catalog
+  // (`rewriteBunCatalog` runs only on monorepo roots), so this stays false for
+  // bun and the direct `vite` edge resolves to the concrete core alias.
+  const supportCatalog = usePnpmWorkspaceYaml || packageManager === PackageManager.yarn;
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -156,18 +166,27 @@ export function rewriteStandaloneProject(
         // 4.1.9 declares peer `vite ^6 || ^7 || ^8` and aborts with
         // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
         // in the tree, even when the override would redirect it. Mirror the
-        // override as a devDep so bun's resolver sees `vite` immediately;
-        // the override above still points it at vite-plus-core.
+        // override as a devDep so bun's resolver sees `vite` immediately. Only
+        // the PRESENCE of a direct `vite` edge matters for #8406: a `catalog:`
+        // reference satisfies it just as well as a concrete alias because catalog
+        // refs resolve during the dependency-graph build (unlike overrides).
+        // Route through getCatalogDependencySpec for parity with the monorepo and
+        // bootstrap paths; standalone bun has no catalog (supportCatalog=false)
+        // so this resolves to the concrete core alias. Verified on bun 1.3.11.
         // See https://github.com/oven-sh/bun/issues/8406.
         pkg.devDependencies = {
           ...pkg.devDependencies,
-          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          vite: getCatalogDependencySpec(
+            undefined,
+            VITE_PLUS_OVERRIDE_PACKAGES.vite,
+            supportCatalog,
+            {
+              preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
+            },
+          ),
         };
       }
     } else if (packageManager === PackageManager.pnpm) {
-      usePnpmWorkspaceYaml = pnpmSupportsWorkspaceSettings(
-        workspaceInfo.downloadPackageManager.version,
-      );
       if (usePnpmWorkspaceYaml) {
         shouldRewritePnpmWorkspaceYaml = true;
         shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
@@ -233,7 +252,6 @@ export function rewriteStandaloneProject(
       }
     }
 
-    const supportCatalog = usePnpmWorkspaceYaml || packageManager === PackageManager.yarn;
     extractedStagedConfig = rewritePackageJson(
       pkg,
       packageManager,
@@ -267,13 +285,9 @@ export function rewriteStandaloneProject(
       };
     }
     // This caller injects vite-plus after rewritePackageJson returned, so the
-    // direct-`vite` pass must run here too.
-    ensureDirectViteForPnpm(
-      pkg,
-      packageManager,
-      usePnpmWorkspaceYaml && packageManager !== PackageManager.npm,
-      catalogDependencyResolver,
-    );
+    // direct-`vite` pass must run here too. `usePnpmWorkspaceYaml` is true only
+    // for pnpm, so it already implies a non-npm package manager.
+    ensureDirectViteForPnpm(pkg, packageManager, usePnpmWorkspaceYaml, catalogDependencyResolver);
     return pkg;
   });
 

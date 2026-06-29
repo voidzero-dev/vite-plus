@@ -382,14 +382,24 @@ function reconcileVitePlusBootstrapPackage(
     // override that redirects `vite` to vite-plus-core, and aborts with
     // "vite@... failed to resolve" unless `vite` is a direct dependency. Mirror
     // the full-migration path (rewriteStandaloneProject) so the idempotent
-    // bootstrap path also produces an installable bun project. The override set
-    // above still points the direct dep at vite-plus-core.
+    // bootstrap path also produces an installable bun project. Only the PRESENCE
+    // of a direct `vite` edge matters for #8406: a `catalog:` reference satisfies
+    // it just as well as a concrete alias because catalog refs resolve during the
+    // dependency-graph build (unlike overrides). Route through
+    // getCatalogDependencySpec so catalog-capable bun gets `catalog:` (matching
+    // the catalog/override sinks) and falls back to the concrete core alias
+    // otherwise. Verified on bun 1.3.11. See https://github.com/oven-sh/bun/issues/8406.
     const viteAlreadyDirect = installGroups.some(
       (dependencies) => dependencies?.vite !== undefined,
     );
     if (!viteAlreadyDirect) {
       pkg.devDependencies ??= {};
-      pkg.devDependencies.vite = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+      pkg.devDependencies.vite = getCatalogDependencySpec(
+        undefined,
+        VITE_PLUS_OVERRIDE_PACKAGES.vite,
+        supportCatalog,
+        { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
+      );
     }
   }
 

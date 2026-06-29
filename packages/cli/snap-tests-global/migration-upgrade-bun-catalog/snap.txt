@@ -1,0 +1,27 @@
+> vp migrate --no-interactive # existing bun Vite+ catalog project gains a direct vite edge for bun#8406
+◇ Migrated . to Vite+
+• Node <semver>  bun <semver>
+• Package manager settings configured
+
+> cat package.json # the direct vite edge is catalog: (resolving through the bun catalog), not a concrete alias
+{
+  "name": "migration-upgrade-bun-catalog",
+  "devDependencies": {
+    "vite-plus": "catalog:",
+    "vite": "catalog:"
+  },
+  "overrides": {
+    "vite": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
+  "catalog": {
+    "vite-plus": "<semver>",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
+  }
+}

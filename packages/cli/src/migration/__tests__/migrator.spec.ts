@@ -1430,7 +1430,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('adds the direct vite dependency for an existing bun Vite+ project so bun resolves the vitest peer', () => {
+  it('adds the direct bun `vite` edge as `catalog:` (not the concrete core alias) so the vitest peer resolves', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1449,11 +1449,17 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
       overrides: Record<string, string>;
+      catalog: Record<string, string>;
     };
-    // Bun needs `vite` as a direct dependency (pointing at vite-plus-core) for
-    // vitest's peer to resolve; the bootstrap path previously only wrote the
-    // override and left `bun install` broken.
-    expect(pkg.devDependencies.vite).toContain('@voidzero-dev/vite-plus-core');
+    // Bun needs `vite` as a DIRECT dependency for vitest's `vite` peer to resolve
+    // before overrides apply (oven-sh/bun#8406). A `catalog:` edge satisfies that
+    // (catalog refs resolve during the dependency-graph build) and keeps the
+    // direct edge consistent with the catalog/override sinks instead of leaking a
+    // concrete alias. Verified on bun 1.3.11.
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    // The bootstrap path writes a bun catalog mapping `vite` -> vite-plus-core,
+    // so the `catalog:` direct edge resolves to the managed core build.
+    expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
   });
 
   it('adds a direct `vite: catalog:` to an already-Vite+ pnpm root on upgrade (#1932)', () => {
@@ -6002,6 +6008,39 @@ describe('rewriteMonorepo yarn catalog', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+  });
+});
+
+describe('rewriteStandaloneProject bun direct vite (#8406)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bun-standalone-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('pins the direct `vite` edge to the concrete core alias for a non-catalog bun project', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-standalone',
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.bun), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // A standalone bun project never manages a catalog (rewriteBunCatalog runs
+    // only on monorepo roots), so the direct `vite` edge bun needs for #8406 must
+    // be the concrete core alias rather than a dangling `catalog:` reference.
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
   });
 });
 
