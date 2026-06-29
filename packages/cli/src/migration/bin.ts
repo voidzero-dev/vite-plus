@@ -64,7 +64,6 @@ import {
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   hasFrameworkShim,
-  hasUnsupportedNodeVersionPin,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
   installGitHooks,
@@ -76,7 +75,6 @@ import {
   preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
-  upgradeUnsupportedNodeVersions,
   warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
   warnPackageLevelEslint,
@@ -472,10 +470,10 @@ function hasExplicitExistingVitePlusSetupRequest(options: MigrationOptions): boo
   );
 }
 
-async function hasExistingVitePlusMigrationCandidates(
+function hasExistingVitePlusMigrationCandidates(
   workspaceInfo: WorkspaceInfoOptional,
   options: MigrationOptions,
-): Promise<boolean> {
+): boolean {
   const eslintProject = detectEslintProject(workspaceInfo.rootDir, workspaceInfo.packages);
   const prettierProject = detectPrettierProject(workspaceInfo.rootDir, workspaceInfo.packages);
   return (
@@ -485,12 +483,7 @@ async function hasExistingVitePlusMigrationCandidates(
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
-    getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0 ||
-    // A below-floor `.node-version` / `devEngines.runtime` / `engines.node` pin
-    // that `upgradeUnsupportedNodeVersions` (run later) would lift. Without this,
-    // an already-Vite+, otherwise up-to-date project whose only pending work is
-    // such a pin hits the early return below and the upgrade never runs.
-    (await hasUnsupportedNodeVersionPin(workspaceInfo.rootDir))
+    getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
 }
 
@@ -1015,17 +1008,6 @@ async function executeMigrationPlan(
     migrateNodeVersionManagerFile(workspaceInfo.rootDir, plan.nodeVersionDetection, report);
   }
 
-  // 3b. Upgrade any Node.js pin below the Vite+ supported range to the latest
-  // release of the same major. Runs independently of the migration above (an
-  // existing .node-version may still be too old) and is best-effort.
-  updateMigrationProgress('Checking Node.js version support');
-  await upgradeUnsupportedNodeVersions(
-    workspaceInfo.rootDir,
-    interactive,
-    report,
-    clearMigrationProgress,
-  );
-
   // 4. Run vp install to ensure the project is ready
   updateMigrationProgress('Installing dependencies');
   const initialInstallSummary = await runViteInstall(
@@ -1349,7 +1331,7 @@ async function main() {
       !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
-      !(await hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options))
+      !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
     ) {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
@@ -1491,20 +1473,6 @@ async function main() {
       ) {
         didMigrate = true;
       }
-    }
-
-    // Upgrade any below-range Node.js pin to the latest release of the same
-    // major (independent of the .node-version migration above; best-effort).
-    if (
-      await upgradeUnsupportedNodeVersions(
-        workspaceInfoOptional.rootDir,
-        options.interactive,
-        report,
-        clearMigrationProgress,
-      )
-    ) {
-      didMigrate = true;
-      needsInstall = true;
     }
 
     if (convertYarnPnp) {

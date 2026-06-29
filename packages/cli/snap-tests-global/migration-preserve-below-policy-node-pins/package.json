@@ -1,0 +1,23 @@
+{
+  "name": "migration-preserve-below-policy-node-pins",
+  "devDependencies": {
+    "vite": "catalog:vite-stack",
+    "vite-plus": "catalog:vite-stack"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "devEngines": {
+    "runtime": [
+      {
+        "name": "node",
+        "version": "^24"
+      }
+    ],
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

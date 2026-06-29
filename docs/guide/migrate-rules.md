@@ -183,8 +183,8 @@ Unrelated `bunx` commands and other package-executor forms remain unchanged.
 
 ## Node.js Version Rules
 
-Migration normalizes the project's Node.js pins so package managers do not skip
-the native binding's optional dependency:
+Migration converts legacy Node.js version manager files to the `.node-version`
+format Vite+ reads:
 
 - `.nvmrc` and Volta `volta.node` pins are converted to `.node-version` (the
   format Vite+ reads). An existing `.node-version` is kept. When `.nvmrc` is
@@ -192,20 +192,6 @@ the native binding's optional dependency:
   `.github/workflows/*.{yml,yaml}` and composite actions
   (`.github/actions/**/action.{yml,yaml}`) is repointed to `.node-version` so CI
   does not fail with "node version file ... does not exist".
-- Each pin (`.node-version`, `devEngines.runtime`, and `engines.node`) is checked
-  independently against the Vite+ supported range (`package.json#engines.node`),
-  on its _floor_ (the lowest version it permits). Package managers evaluate the
-  native binding's optional dependency against that floor, so a pin such as `>=24`
-  or `24` overlaps the supported range yet its floor (`24.0.0`) is below the
-  minimum (`>=24.11.0`); pnpm then skips the native package and the toolchain
-  fails with "Cannot find native binding".
-- A pin whose floor is below the supported minimum is raised when its major has a
-  supported release: `.node-version` to the concrete latest release of that major
-  (`24.3.0`, `24.2`, `24` → `24.18.0`); `devEngines.runtime` and `engines.node` to
-  an open `>=<supported minimum>` range (`>=24`, `^24`, `24` → `>=24.11.0`) so they
-  keep accepting newer releases.
-- A floor-supported pin (`24.18.0`, `>=24.11.0`, `^22.18.0`), an alias (`lts/*`),
-  or a major with no supported release is left unchanged.
 
 ## Package-Manager Rules
 

@@ -68,23 +68,16 @@ In a Vite+ project the preserved import still resolves through the managed
 
 ### Node.js version
 
-`vp migrate` converts `.nvmrc` and Volta `volta.node` pins to `.node-version`,
-then normalizes every Node pin (`.node-version`, `devEngines.runtime`, and
-`engines.node`) independently against the Vite+ supported range
-(`package.json#engines.node`), reusing the Rust runtime resolver rather than
-re-implementing the lookup in JS. The check is on each pin's _floor_ (the lowest
-version it permits), because package managers evaluate the native binding's
-optional dependency against that floor: `>=24` or bare `24` overlap the supported
-range but their floor (`24.0.0`) is below the minimum (`>=24.11.0`), so pnpm
-skips the native package and the install breaks with "Cannot find native
-binding". A pin whose floor is below the supported minimum is raised when its
-major has a supported release: `.node-version` to the concrete latest release of
-that major (`24.3.0` / `24.2` / `24` → `24.18.0`), and `devEngines.runtime` /
-`engines.node` to an open `>=<supported minimum>` range (`>=24` / `^24` →
-`>=24.11.0`) so they keep accepting newer releases. A floor-supported pin
-(`24.18.0`, `>=24.11.0`, `^22.18.0`), an alias (`lts/*`), or a major with no
-supported release is left unchanged. Interactive migration confirms the upgrade
-(default yes); `--no-interactive` applies it directly.
+`vp migrate` converts `.nvmrc` and Volta `volta.node` pins to `.node-version`
+(the format Vite+ reads), reusing the Rust runtime resolver rather than
+re-implementing the lookup in JS. An existing `.node-version` is kept, and when
+`.nvmrc` is removed any `actions/setup-node` `node-version-file: .nvmrc`
+reference in the project's workflows and composite actions is repointed to
+`.node-version` so CI does not break. The native binding runs on any Node
+`>=20.0.0`, so a below-policy Node pin (`engines.node: 24.x`,
+`devEngines.runtime` `^22`, `.node-version` `24.3.0`) is left untouched: the
+platform packages declare that true ABI floor, so package managers no longer
+skip the optional native dependency over a product-policy gap.
 
 ## `@nuxt/test-utils` compatibility
 
