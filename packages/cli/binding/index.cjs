@@ -854,6 +854,7 @@ module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.resolveProjectNodeVersion = nativeBinding.resolveProjectNodeVersion;
+module.exports.resolveSupportedNodeRange = nativeBinding.resolveSupportedNodeRange;
 module.exports.resolveSupportedNodeVersion = nativeBinding.resolveSupportedNodeVersion;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
 module.exports.rewriteImportsInDirectory = nativeBinding.rewriteImportsInDirectory;

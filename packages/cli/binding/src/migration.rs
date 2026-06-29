@@ -22,15 +22,22 @@ use vite_path::AbsolutePathBuf;
 /// Returns `None` when:
 /// - `current` cannot be parsed as a range (a true alias like `lts/*` or
 ///   garbage), or
-/// - `current`'s range overlaps `supported_range` — i.e. the pin can already
-///   resolve to a supported version, so it is left untouched. This covers a
-///   bare major such as `24` (`>=24.0.0 <25.0.0` overlaps `>=24.11.0`) and a
-///   partial that is already in range such as `24.11`.
+/// - `current`'s FLOOR (the minimum version it permits) already satisfies
+///   `supported_range` — i.e. the lowest version the pin allows is itself
+///   supported, so it is left untouched (e.g. `24.18.0`, `>=24.11.0`,
+///   `^22.18.0`, the partial `24.11`).
 ///
-/// Otherwise returns a constrained range like `>=24.0.0 <25.0.0` that, when
-/// resolved against the Node.js release index, yields the latest release of that
-/// major. The resolved version is verified against `supported_range` separately,
-/// which is what rejects unsupported majors (e.g. 21 or 23).
+/// The check is FLOOR-based, not overlap-based, because engine-strict installers
+/// (pnpm) evaluate the native optional dependency's `engines.node` against the
+/// FLOOR of the project's declared range. `>=24` overlaps `>=24.11.0` yet its
+/// floor 24.0.0 fails `>=24.11.0`, so pnpm would still skip the native package —
+/// such a pin must be lifted.
+///
+/// Otherwise returns a constrained range like `>=24.0.0 <25.0.0` (the floor's
+/// whole major) that, when resolved against the Node.js release index, yields
+/// the latest release of that major. The resolved version is verified against
+/// `supported_range` separately, which is what rejects unsupported majors (e.g.
+/// 21 or 23) whose floor is also below the (nonexistent) supported minimum.
 fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<String> {
     let normalized = current.strip_prefix('v').unwrap_or(current);
 
@@ -38,16 +45,48 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
     // alias ("lts/*") or non-version string fails to parse and is left as-is.
     let current_range = Range::parse(normalized).ok()?;
 
-    // The pin can resolve to a supported version (its range overlaps the
-    // supported range) — nothing to upgrade (and never hits the network).
-    if supported_range.allows_any(&current_range) {
+    // FLOOR-based check: the pin is already OK iff the minimum version it permits
+    // is itself supported. (Overlap is not enough — see the doc comment.)
+    let floor = current_range.min_version()?;
+    if supported_range.satisfies(&floor) {
         return None;
     }
 
-    // Below/outside the supported range: target the latest release of the same
-    // major, taken from the leading numeric component (e.g. "24.2" → 24).
-    let major: u64 = normalized.split('.').next()?.parse().ok()?;
+    // Below the supported minimum: target the latest release of the floor's
+    // major (e.g. floor 24.0.0 → ">=24.0.0 <25.0.0").
+    let major = floor.major;
     Some(format!(">={major}.0.0 <{}.0.0", major + 1))
+}
+
+/// Compute the open-ended `>=<supported-minimum>` range that lifts a below-floor
+/// pin's major up to the lowest *supported* release of that major, WITHOUT
+/// pinning a concrete version.
+///
+/// Used to rewrite the constraint fields `engines.node` and
+/// `devEngines.runtime[node].version`, where an exact pin would wrongly reject
+/// newer supported releases. The supported minimum is derived from
+/// `supported_range` (e.g. `^20.19.0 || ^22.18.0 || >=24.11.0` yields `20.19.0`
+/// / `22.18.0` / `24.11.0`): there are no hardcoded per-major floors.
+///
+/// Returns `None` in exactly the same situations as
+/// [`supported_node_requirement`] (already-supported floor, unparseable input,
+/// or a major with no supported release such as 21/23). Pure range math: never
+/// touches the network / release index.
+///
+/// # Example
+///
+/// `supported_node_floor_range(">=24", &range)` → `Some(">=24.11.0")`.
+fn supported_node_floor_range(current: &str, supported_range: &Range) -> Option<String> {
+    // Reuse the floor-based decision: `None` here means "leave the pin alone".
+    let requirement = supported_node_requirement(current, supported_range)?;
+    let requirement_range = Range::parse(&requirement).ok()?;
+
+    // The supported minimum for this major is the floor of the major bracket
+    // intersected with the supported range. An unsupported major (e.g. 21)
+    // yields an empty intersection → `None`, matching the resolve-then-verify
+    // rejection on the concrete path.
+    let supported_minimum = requirement_range.intersect(supported_range)?.min_version()?;
+    Some(format!(">={supported_minimum}"))
 }
 
 /// Return `resolved` only when it satisfies `supported_range`. An unsupported
@@ -98,10 +137,11 @@ fn resolve_supported_node_version_from_list(
 /// # Returns
 ///
 /// * `Some(latest)` - The concrete latest supported release of `current`'s major
-///   (e.g. `24.18.0`) when `current`'s range cannot resolve to any supported
-///   version but its major has a supported release
-/// * `None` - When `current`'s range can already resolve to a supported version
-///   (e.g. `24`, `24.11`), cannot be parsed (e.g. `lts/*`), or belongs to an
+///   (e.g. `24.18.0`) when `current`'s FLOOR is below the major's supported
+///   minimum but the major has a supported release (e.g. `24.3.0`, `24`, `>=24`,
+///   `^24`)
+/// * `None` - When `current`'s FLOOR is already supported (e.g. `24.18.0`,
+///   `24.11`, `>=24.11.0`), cannot be parsed (e.g. `lts/*`), or belongs to an
 ///   unsupported major (e.g. `21`, `23`)
 ///
 /// # Example
@@ -126,6 +166,50 @@ pub async fn resolve_supported_node_version(
     let latest = provider.resolve_version(&requirement).await.map_err(anyhow::Error::from)?;
 
     Ok(resolved_if_supported(latest.to_string(), &supported))
+}
+
+/// Compute the open-ended `>=<supported-minimum>` range that lifts a below-floor
+/// Node.js pin up to the lowest supported release of the same major, for
+/// rewriting the `engines.node` / `devEngines.runtime[node].version` constraint
+/// fields.
+///
+/// Unlike [`resolve_supported_node_version`] (which pins a concrete release for
+/// the single-version `.node-version` file), this returns an open-ended range so
+/// the constraint keeps accepting newer supported releases. Pure range math — it
+/// never hits the network.
+///
+/// # Arguments
+///
+/// * `current` - The pinned Node.js spec, treated as a semver range so partials
+///   and ranges are accepted (e.g. `>=24`, `^24`, `24`, `24.3.0`,
+///   optionally `v`-prefixed)
+/// * `supported_range` - The Vite+-supported Node.js range, sourced from the
+///   `engines.node` field in `package.json` (e.g.
+///   `^20.19.0 || ^22.18.0 || >=24.11.0`)
+///
+/// # Returns
+///
+/// * `Some(range)` - e.g. `>=24.11.0` when `current`'s floor is below the major's
+///   supported minimum but the major has a supported release
+/// * `None` - when `current`'s floor is already supported, cannot be parsed
+///   (e.g. `lts/*`), or belongs to an unsupported major (e.g. `21`, `23`)
+///
+/// # Example
+///
+/// ```javascript
+/// const range = resolveSupportedNodeRange('>=24', '^20.19.0 || ^22.18.0 || >=24.11.0');
+/// // range === '>=24.11.0'
+/// ```
+#[napi]
+pub fn resolve_supported_node_range(
+    current: String,
+    supported_range: String,
+) -> Result<Option<String>> {
+    let Ok(supported) = Range::parse(&supported_range) else {
+        return Ok(None);
+    };
+
+    Ok(supported_node_floor_range(&current, &supported))
 }
 
 /// Stable string label for a [`VersionSource`], used as the `source` field of
@@ -611,12 +695,11 @@ mod tests {
 
     #[test]
     fn skips_non_semver_input() {
+        // True aliases / garbage fail to parse as a range and are left as-is.
+        // (`^24.3.0` is valid semver with a below-floor minimum, so it now
+        // upgrades — see `floor_based_open_and_caret_ranges_upgrade`.)
         assert_eq!(
             resolve_supported_node_version_from_list("lts/*", SUPPORTED_RANGE, &mock_versions()),
-            None
-        );
-        assert_eq!(
-            resolve_supported_node_version_from_list("^24.3.0", SUPPORTED_RANGE, &mock_versions()),
             None
         );
         assert_eq!(
@@ -641,20 +724,9 @@ mod tests {
         assert_eq!(result.as_deref(), Some("24.18.0"));
     }
 
-    #[test]
-    fn partial_pin_bare_major_left_unchanged() {
-        // "24" → >=24.0.0 <25.0.0 overlaps the supported >=24.11.0, so it can
-        // resolve to a supported version → leave it.
-        assert_eq!(
-            resolve_supported_node_version_from_list("24", SUPPORTED_RANGE, &mock_versions()),
-            None
-        );
-        // "20" → >=20.0.0 <21.0.0 overlaps ^20.19.0 → leave it.
-        assert_eq!(
-            resolve_supported_node_version_from_list("20", SUPPORTED_RANGE, &mock_versions()),
-            None
-        );
-    }
+    // NOTE: bare-major upgrades (`24` → 24.18.0, `20` → 20.19.0) are covered by
+    // `floor_based_bare_major_upgrades`; under FLOOR-based logic a bare major's
+    // floor (e.g. 24.0.0) is below the supported minimum, so it is lifted.
 
     #[test]
     fn partial_pin_below_range_upgrades_to_latest_of_major() {
@@ -741,5 +813,103 @@ mod tests {
         // supported (no upgrade) before a requirement is computed.
         assert_eq!(supported_node_requirement("26.0.0", &range), None);
         assert_eq!(supported_node_requirement("25.0.0", &range), None);
+    }
+
+    // ---------------------------------------------------------------------
+    // FLOOR-BASED behavior (new): a pin is OK iff the *minimum* version it
+    // permits is itself supported. Overlap is not enough — `>=24` overlaps
+    // `>=24.11.0` but its floor 24.0.0 is below the supported minimum, so
+    // pnpm's engine check against the floor would skip the native dep.
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn floor_based_bare_major_upgrades() {
+        // "24" floor is 24.0.0 (< 24.11.0) → upgrade to latest 24.x.
+        assert_eq!(
+            resolve_supported_node_version_from_list("24", SUPPORTED_RANGE, &mock_versions())
+                .as_deref(),
+            Some("24.18.0")
+        );
+        // "20" floor is 20.0.0 (< 20.19.0) → upgrade to latest 20.x.
+        assert_eq!(
+            resolve_supported_node_version_from_list("20", SUPPORTED_RANGE, &mock_versions())
+                .as_deref(),
+            Some("20.19.0")
+        );
+    }
+
+    #[test]
+    fn floor_based_open_and_caret_ranges_upgrade() {
+        // All of these have a floor below the major's supported minimum even
+        // though the range overlaps the supported range.
+        for spec in [">=24", ">=24.0.0", "^24", "^24.3.0", "^24.10.0"] {
+            assert_eq!(
+                resolve_supported_node_version_from_list(spec, SUPPORTED_RANGE, &mock_versions())
+                    .as_deref(),
+                Some("24.18.0"),
+                "spec {spec} should upgrade to latest supported 24.x"
+            );
+        }
+    }
+
+    #[test]
+    fn floor_based_already_supported_ranges_left() {
+        // Floor already supported → leave alone (regression guard).
+        for spec in [">=24.11.0", "^22.18.0", ">=22.18.0", "24.18.0", "24.11", ">=25"] {
+            assert_eq!(
+                resolve_supported_node_version_from_list(spec, SUPPORTED_RANGE, &mock_versions()),
+                None,
+                "spec {spec} should be left unchanged"
+            );
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // supported_node_floor_range: open-ended `>=<supported-minimum>` for the
+    // constraint fields (engines.node / devEngines.runtime). Pure range math,
+    // derived from the supported range (no hardcoded per-major floors).
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn floor_range_targets_supported_minimum() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+        // Below-floor major-24 pins (bare/open/caret/partial/exact) all lift to
+        // the major's supported minimum, 24.11.0.
+        for spec in ["24", ">=24", ">=24.0.0", "^24", "^24.3.0", "24.3.0", "24.2"] {
+            assert_eq!(
+                supported_node_floor_range(spec, &range).as_deref(),
+                Some(">=24.11.0"),
+                "spec {spec} should lift to >=24.11.0"
+            );
+        }
+        // Other majors derive their own supported minimum from the range.
+        assert_eq!(supported_node_floor_range("22.0.0", &range).as_deref(), Some(">=22.18.0"));
+        assert_eq!(supported_node_floor_range(">=22", &range).as_deref(), Some(">=22.18.0"));
+        assert_eq!(supported_node_floor_range("20.5", &range).as_deref(), Some(">=20.19.0"));
+        assert_eq!(supported_node_floor_range("20", &range).as_deref(), Some(">=20.19.0"));
+    }
+
+    #[test]
+    fn floor_range_leaves_supported_and_unsupported_alone() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+        // Already-supported floor → None.
+        for spec in [">=24.11.0", "24.18.0", "^22.18.0", "24.11", ">=25"] {
+            assert_eq!(
+                supported_node_floor_range(spec, &range),
+                None,
+                "spec {spec} floor is already supported"
+            );
+        }
+        // Unsupported major (no supported release in that major) → None.
+        for spec in ["21", "21.5", "23.5.0", "18", ">=18"] {
+            assert_eq!(
+                supported_node_floor_range(spec, &range),
+                None,
+                "spec {spec} has no supported release in its major"
+            );
+        }
+        // Unparseable input → None.
+        assert_eq!(supported_node_floor_range("lts/*", &range), None);
+        assert_eq!(supported_node_floor_range("", &range), None);
     }
 }

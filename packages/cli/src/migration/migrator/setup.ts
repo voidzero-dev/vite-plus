@@ -6,11 +6,11 @@ import semver from 'semver';
 
 import {
   type DownloadPackageManagerResult,
-  resolveProjectNodeVersion,
+  resolveSupportedNodeRange,
   resolveSupportedNodeVersion,
 } from '../../../binding/index.js';
 import { SUPPORTED_NODE_RANGE } from '../../utils/constants.ts';
-import { editJsonFile } from '../../utils/json.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { detectConfigs } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
@@ -222,35 +222,134 @@ function findNodeRuntimeEntry(runtime: unknown): NodeRuntimeEntry | undefined {
   return undefined;
 }
 
+/** A planned Node.js pin rewrite, gathered per independent source. */
+interface NodeVersionUpgrade {
+  source: 'node-version-file' | 'dev-engines-runtime' | 'engines-node';
+  /** The current pin, exactly as written in the source. */
+  from: string;
+  /** The value to write: a concrete version for `.node-version`, an open-ended
+   * `>=<supported-minimum>` range for the constraint fields. */
+  to: string;
+}
+
+/** Human-readable label per upgrade source, used in the confirm summary. */
+const NODE_VERSION_SOURCE_LABELS: Record<NodeVersionUpgrade['source'], string> = {
+  'node-version-file': '.node-version',
+  'dev-engines-runtime': 'devEngines.runtime',
+  'engines-node': 'engines.node',
+};
+
 /**
- * Write an upgraded Node.js version back to the source it was resolved from
- * (returned by {@link resolveProjectNodeVersion}):
- * - `node-version-file` → overwrite the `.node-version` file at `sourcePath`.
- * - `dev-engines-runtime` → set the `node` runtime entry's `.version` in package.json.
- * - `engines-node` → set `engines.node` in package.json.
- *
- * package.json edits go through {@link editJsonFile} so the file's formatting is
- * preserved.
+ * Best-effort wrapper around the synchronous, network-free
+ * {@link resolveSupportedNodeRange} binding. Returns the open-ended
+ * `>=<supported-minimum>` range for a below-floor constraint pin, or `null` when
+ * the pin is already supported, unparseable, or in an unsupported major.
  */
-function writeUpgradedNodeVersion(source: string, sourcePath: string, version: string): void {
-  if (source === 'node-version-file') {
-    fs.writeFileSync(sourcePath, `${version}\n`);
-    return;
+function resolveSupportedNodeFloorRange(from: string): string | null {
+  try {
+    return resolveSupportedNodeRange(from, SUPPORTED_NODE_RANGE) ?? null;
+  } catch {
+    return null;
   }
-  if (source === 'dev-engines-runtime') {
-    editJsonFile<NodePinnedPackageJson>(sourcePath, (pkg) => {
-      const entry = findNodeRuntimeEntry(pkg.devEngines?.runtime);
-      if (entry) {
-        entry.version = version;
+}
+
+/**
+ * Gather every Node.js pin that sits BELOW the Vite+ supported range (sourced
+ * from this package's `engines.node`, e.g. `^20.19.0 || ^22.18.0 || >=24.11.0`),
+ * checking all three sources INDEPENDENTLY rather than only the single effective
+ * pin. pnpm decides whether to install the native optional dependency by testing
+ * its `engines.node` against the FLOOR of the project's declared Node range
+ * (chiefly `devEngines.runtime[node].version`), so a too-low floor in ANY source
+ * can make pnpm skip the native package and trigger "Cannot find native
+ * binding".
+ *
+ * - `.node-version` (single-version file) → the concrete latest release of the
+ *   floor's major via {@link resolveSupportedNodeVersion} (hits the release
+ *   index).
+ * - `devEngines.runtime[node].version` and `engines.node` (constraint fields) →
+ *   an open-ended `>=<supported-minimum>` range via
+ *   {@link resolveSupportedNodeFloorRange}; an exact pin in a constraint field
+ *   would wrongly reject newer supported releases.
+ *
+ * Whether a pin is below floor (and what to lift it to) is decided entirely by
+ * the binding's FLOOR-based range math, so open ranges already at floor
+ * (`>=24.11.0`), caret unions (`^22.18.0`), aliases (`lts/*`), and unsupported
+ * majors (21/23) are left untouched. `.nvmrc`/Volta pins are converted to
+ * `.node-version` by {@link migrateNodeVersionManagerFile}, which runs first, so
+ * they are covered via the `.node-version` source here. Every binding call is
+ * best-effort: a failure (e.g. an offline release-index lookup) is treated as
+ * "nothing to upgrade" for that source.
+ */
+async function planNodeVersionUpgrades(projectPath: string): Promise<NodeVersionUpgrade[]> {
+  const plans: NodeVersionUpgrade[] = [];
+
+  const nodeVersionPath = path.join(projectPath, '.node-version');
+  if (fs.existsSync(nodeVersionPath)) {
+    const from = fs.readFileSync(nodeVersionPath, 'utf8').split('\n')[0]?.trim() ?? '';
+    if (from) {
+      try {
+        const to = await resolveSupportedNodeVersion(from, SUPPORTED_NODE_RANGE);
+        if (to) {
+          plans.push({ source: 'node-version-file', from, to });
+        }
+      } catch {
+        // best-effort: leave this source unchanged
       }
-      return pkg;
-    });
-    return;
+    }
   }
-  if (source === 'engines-node') {
-    editJsonFile<NodePinnedPackageJson>(sourcePath, (pkg) => {
-      if (pkg.engines) {
-        pkg.engines.node = version;
+
+  let pkg: NodePinnedPackageJson | undefined;
+  try {
+    pkg = readJsonFile(path.join(projectPath, 'package.json')) as NodePinnedPackageJson;
+  } catch {
+    pkg = undefined;
+  }
+  if (pkg) {
+    const runtimeEntry = findNodeRuntimeEntry(pkg.devEngines?.runtime);
+    const runtimeVersion =
+      typeof runtimeEntry?.version === 'string' ? runtimeEntry.version : undefined;
+    if (runtimeVersion) {
+      const to = resolveSupportedNodeFloorRange(runtimeVersion);
+      if (to) {
+        plans.push({ source: 'dev-engines-runtime', from: runtimeVersion, to });
+      }
+    }
+
+    const enginesNode = typeof pkg.engines?.node === 'string' ? pkg.engines.node : undefined;
+    if (enginesNode) {
+      const to = resolveSupportedNodeFloorRange(enginesNode);
+      if (to) {
+        plans.push({ source: 'engines-node', from: enginesNode, to });
+      }
+    }
+  }
+
+  return plans;
+}
+
+/**
+ * Apply gathered Node.js upgrades, preserving each file's formatting. The
+ * `.node-version` file is overwritten with the concrete version; the package.json
+ * constraint fields are rewritten in a single {@link editJsonFile} pass.
+ */
+function applyNodeVersionUpgrades(projectPath: string, plans: NodeVersionUpgrade[]): void {
+  const nodeVersionPlan = plans.find((plan) => plan.source === 'node-version-file');
+  if (nodeVersionPlan) {
+    fs.writeFileSync(path.join(projectPath, '.node-version'), `${nodeVersionPlan.to}\n`);
+  }
+
+  const runtimePlan = plans.find((plan) => plan.source === 'dev-engines-runtime');
+  const enginesPlan = plans.find((plan) => plan.source === 'engines-node');
+  if (runtimePlan || enginesPlan) {
+    editJsonFile<NodePinnedPackageJson>(path.join(projectPath, 'package.json'), (pkg) => {
+      if (runtimePlan) {
+        const entry = findNodeRuntimeEntry(pkg.devEngines?.runtime);
+        if (entry) {
+          entry.version = runtimePlan.to;
+        }
+      }
+      if (enginesPlan && pkg.engines) {
+        pkg.engines.node = enginesPlan.to;
       }
       return pkg;
     });
@@ -258,31 +357,22 @@ function writeUpgradedNodeVersion(source: string, sourcePath: string, version: s
 }
 
 /**
- * Bump the project's effective Node.js pin up to the concrete latest release of
- * the same major when it sits BELOW the Vite+ supported range (sourced from this
- * package's `engines.node`, e.g. `^20.19.0 || ^22.18.0 || >=24.11.0`). This
- * fixes "Cannot find native binding" failures caused by engine-strict
- * installers skipping the native optional dependency under an unsupported
- * Node.js version.
+ * Lift every Node.js pin that sits BELOW the Vite+ supported range up to a
+ * supported value, fixing "Cannot find native binding" failures caused by
+ * engine-strict installers (pnpm) skipping the native optional dependency when
+ * the project's declared Node FLOOR is too low.
  *
- * The effective pin and its source are read with the shared Rust resolver
- * {@link resolveProjectNodeVersion}, which checks, in priority order:
- * `.node-version` → `devEngines.runtime[node]` → `engines.node`. Only that
- * single effective source is upgraded; shadowed lower-priority pins don't affect
- * the runtime. `.nvmrc`/Volta pins are converted to `.node-version` by
- * {@link migrateNodeVersionManagerFile}, which runs first, so they are covered
- * via the `.node-version` source here.
+ * All three pin sources are normalized INDEPENDENTLY (see
+ * {@link planNodeVersionUpgrades}): `.node-version` gets the concrete latest
+ * release of its major, while `engines.node` and `devEngines.runtime[node]` get
+ * an open-ended `>=<supported-minimum>` range so they keep accepting newer
+ * supported releases. The below-floor decision is delegated to the native
+ * binding's FLOOR-based range math.
  *
- * Whether the pin is below range (and what to upgrade it to) is decided by the
- * {@link resolveSupportedNodeVersion} binding via range intersection, so true
- * ranges, caret unions, and aliases like `lts/*` are left untouched. The binding
- * calls are best-effort: any failure (e.g. offline) is treated as "nothing to
- * upgrade".
+ * In interactive mode a single confirm (default Yes) covers every planned
+ * change; in non-interactive mode it proceeds directly.
  *
- * In interactive mode the upgrade is confirmed first (default Yes); in
- * non-interactive mode it proceeds directly.
- *
- * @returns true if the pin was rewritten.
+ * @returns true if any pin was rewritten.
  */
 export async function upgradeUnsupportedNodeVersions(
   projectPath: string,
@@ -293,36 +383,20 @@ export async function upgradeUnsupportedNodeVersions(
   // spinner with its next progress update.
   pauseProgress?: () => void,
 ): Promise<boolean> {
-  // 1. Read the effective pin + source via the shared Rust resolver.
-  let resolution: Awaited<ReturnType<typeof resolveProjectNodeVersion>>;
-  try {
-    resolution = await resolveProjectNodeVersion(projectPath);
-  } catch {
-    return false;
-  }
-  if (!resolution) {
-    return false;
-  }
-  const { version: from, source, sourcePath } = resolution;
-
-  // 2. Plan: resolve the supported upgrade target. null = already supported, a
-  // true range/alias, or an unsupported major — nothing to do.
-  let to: string | null;
-  try {
-    to = (await resolveSupportedNodeVersion(from, SUPPORTED_NODE_RANGE)) ?? null;
-  } catch {
-    return false;
-  }
-  if (!to) {
+  const plans = await planNodeVersionUpgrades(projectPath);
+  if (plans.length === 0) {
     return false;
   }
 
-  // 3. Confirm before writing (default Yes in interactive mode; proceed
-  // directly when non-interactive).
+  // One confirm covering every planned change (default Yes in interactive mode;
+  // proceed directly when non-interactive).
   if (interactive) {
     pauseProgress?.();
+    const summary = plans
+      .map((plan) => `${NODE_VERSION_SOURCE_LABELS[plan.source]} ${plan.from} → ${plan.to}`)
+      .join(', ');
     const confirmed = await prompts.confirm({
-      message: `Upgrade Node.js ${from} to ${to}? ${from} is below the Vite+ supported range.`,
+      message: `Upgrade Node.js version pins below the Vite+ supported range? (${summary})`,
       initialValue: true,
     });
     if (prompts.isCancel(confirmed)) {
@@ -333,8 +407,12 @@ export async function upgradeUnsupportedNodeVersions(
     }
   }
 
-  // 4. Write the upgrade back to its source.
-  writeUpgradedNodeVersion(source, sourcePath, to);
-  warnMigration(`Upgraded Node.js ${from} to ${to} (below the supported range)`, report);
+  applyNodeVersionUpgrades(projectPath, plans);
+  for (const plan of plans) {
+    warnMigration(
+      `Upgraded Node.js ${plan.from} to ${plan.to} (below the supported range)`,
+      report,
+    );
+  }
   return true;
 }

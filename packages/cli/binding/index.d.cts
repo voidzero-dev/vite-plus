@@ -3547,6 +3547,45 @@ export declare function resolveProjectNodeVersion(
 ): Promise<ProjectNodeVersion | null>;
 
 /**
+ * Compute the open-ended `>=<supported-minimum>` range that lifts a below-floor
+ * Node.js pin up to the lowest supported release of the same major, for
+ * rewriting the `engines.node` / `devEngines.runtime[node].version` constraint
+ * fields.
+ *
+ * Unlike [`resolve_supported_node_version`] (which pins a concrete release for
+ * the single-version `.node-version` file), this returns an open-ended range so
+ * the constraint keeps accepting newer supported releases. Pure range math — it
+ * never hits the network.
+ *
+ * # Arguments
+ *
+ * * `current` - The pinned Node.js spec, treated as a semver range so partials
+ *   and ranges are accepted (e.g. `>=24`, `^24`, `24`, `24.3.0`,
+ *   optionally `v`-prefixed)
+ * * `supported_range` - The Vite+-supported Node.js range, sourced from the
+ *   `engines.node` field in `package.json` (e.g.
+ *   `^20.19.0 || ^22.18.0 || >=24.11.0`)
+ *
+ * # Returns
+ *
+ * * `Some(range)` - e.g. `>=24.11.0` when `current`'s floor is below the major's
+ *   supported minimum but the major has a supported release
+ * * `None` - when `current`'s floor is already supported, cannot be parsed
+ *   (e.g. `lts/*`), or belongs to an unsupported major (e.g. `21`, `23`)
+ *
+ * # Example
+ *
+ * ```javascript
+ * const range = resolveSupportedNodeRange('>=24', '^20.19.0 || ^22.18.0 || >=24.11.0');
+ * // range === '>=24.11.0'
+ * ```
+ */
+export declare function resolveSupportedNodeRange(
+  current: string,
+  supportedRange: string,
+): string | null;
+
+/**
  * Resolve a Node.js version that is below Vite+'s supported range to the
  * concrete latest release of the same major.
  *
@@ -3567,10 +3606,11 @@ export declare function resolveProjectNodeVersion(
  * # Returns
  *
  * * `Some(latest)` - The concrete latest supported release of `current`'s major
- *   (e.g. `24.18.0`) when `current`'s range cannot resolve to any supported
- *   version but its major has a supported release
- * * `None` - When `current`'s range can already resolve to a supported version
- *   (e.g. `24`, `24.11`), cannot be parsed (e.g. `lts/*`), or belongs to an
+ *   (e.g. `24.18.0`) when `current`'s FLOOR is below the major's supported
+ *   minimum but the major has a supported release (e.g. `24.3.0`, `24`, `>=24`,
+ *   `^24`)
+ * * `None` - When `current`'s FLOOR is already supported (e.g. `24.18.0`,
+ *   `24.11`, `>=24.11.0`), cannot be parsed (e.g. `lts/*`), or belongs to an
  *   unsupported major (e.g. `21`, `23`)
  *
  * # Example
