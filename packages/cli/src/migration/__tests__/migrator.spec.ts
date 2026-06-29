@@ -1511,11 +1511,15 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('adds the direct bun `vite` edge as `catalog:` (not the concrete core alias) so the vitest peer resolves', () => {
+  it('adds the direct bun `vite` edge as `catalog:` (not the concrete core alias) so the vitest peer resolves on a WORKSPACE upgrade', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
+        // A non-empty `workspaces` makes this a real bun workspace, where bun
+        // resolves `catalog:` references. A standalone bun project (no
+        // `workspaces`) must NOT use catalogs — covered by the test below.
+        workspaces: ['packages/*'],
         devDependencies: { 'vite-plus': 'latest', vitest: '4.1.9' },
         overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0' },
         devEngines: {
@@ -1550,6 +1554,68 @@ describe('ensureVitePlusBootstrap', () => {
     // The bootstrap path writes a bun catalog mapping `vite` -> vite-plus-core,
     // so the `catalog:` direct edge resolves to the managed core build.
     expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
+  });
+
+  it('keeps a STANDALONE bun project on concrete specs (no `catalog:`, no catalog field) on upgrade', () => {
+    // Regression for the OneSignal-Website-SDK upgrade: a standalone
+    // (non-workspace) bun project already on Vite+ with concrete specs. Bun
+    // resolves `catalog:` references ONLY inside a workspace (a root
+    // package.json with a non-empty `workspaces`), so converting these edges to
+    // `catalog:` and writing a top-level `catalog` field makes `bun install`
+    // abort with "vite@catalog: failed to resolve". The upgrade path must keep
+    // every managed spec concrete and write NO catalog field, mirroring the
+    // fresh standalone path (rewriteBunCatalog runs only on monorepo roots). A
+    // direct `@vitest/coverage-v8` dep keeps vitest a direct-usage signal so the
+    // managed `vitest` spec survives (and must stay concrete, not `catalog:`).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'standalone-bun',
+        devDependencies: {
+          '@vitest/coverage-v8': '4.1.9',
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.24',
+          'vite-plus': '0.1.24',
+          vitest: '4.1.9',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.24',
+          vitest: '4.1.9',
+        },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+    expect(result.changed).toBe(true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+      catalog?: Record<string, string>;
+      workspaces?: unknown;
+    };
+    // No bun catalog field is written for a standalone (non-workspace) project,
+    // and no `workspaces` field is fabricated.
+    expect(pkg.catalog).toBeUndefined();
+    expect(pkg.workspaces).toBeUndefined();
+    // Managed install specs re-pin to the active toolchain target and stay
+    // concrete: `vite` via the core alias, `vite-plus` at the version, `vitest`
+    // at the bundled version.
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    // Overrides stay concrete too (bun resolves these regardless, but a
+    // `catalog:` override would still dangle without a catalog).
+    expect(pkg.overrides.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    // Nothing collapses to a dangling `catalog:` reference.
+    for (const spec of [...Object.values(pkg.devDependencies), ...Object.values(pkg.overrides)]) {
+      expect(spec).not.toMatch(/^catalog:/);
+    }
+    // A second pass is a no-op: the standalone project is already settled.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
   });
 
   it('injects a SORTED direct `vite` edge for an npm opt-in-provider project on upgrade', () => {

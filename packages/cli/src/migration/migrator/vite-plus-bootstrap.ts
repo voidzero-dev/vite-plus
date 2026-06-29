@@ -58,6 +58,24 @@ import {
   type PnpmPackageJsonSettings,
 } from './shared.ts';
 
+// Bun resolves `catalog:` references (and a top-level `catalog` field) ONLY
+// inside a workspace: a root package.json declaring a non-empty `workspaces`
+// (the array form, or the object `{ packages: [...] }` form). A standalone bun
+// project has nowhere to resolve a catalog from, so converting its edges to
+// `catalog:` makes `bun install` abort with "vite@catalog: failed to resolve".
+// The upgrade path must keep standalone bun on concrete specs, mirroring the
+// fresh path: `supportCatalog` is false for standalone bun (orchestrators.ts)
+// and `rewriteBunCatalog` runs only on monorepo roots (orchestrators.ts).
+function bunWorkspaceDeclaresPackages(workspaces: NpmWorkspaces | undefined): boolean {
+  if (Array.isArray(workspaces)) {
+    return workspaces.length > 0;
+  }
+  if (workspaces && typeof workspaces === 'object') {
+    return Array.isArray(workspaces.packages) && workspaces.packages.length > 0;
+  }
+  return false;
+}
+
 export type BootstrapPackageJson = {
   overrides?: Record<string, string>;
   resolutions?: Record<string, string>;
@@ -537,7 +555,8 @@ export function detectVitePlusBootstrapPending(
     !VITE_PLUS_VERSION.startsWith('file:') &&
     (usePnpmWorkspaceYaml ||
       packageManager === PackageManager.yarn ||
-      packageManager === PackageManager.bun);
+      // Standalone bun excluded: catalogs only resolve inside a bun workspace.
+      (packageManager === PackageManager.bun && bunWorkspaceDeclaresPackages(pkg.workspaces)));
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const canonicalVitePlusSpec = supportCatalog
     ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
@@ -776,11 +795,21 @@ export function ensureVitePlusBootstrap(
   const usePnpmWorkspaceYaml =
     workspaceInfo.packageManager === PackageManager.pnpm &&
     pnpmSupportsWorkspaceSettings(workspaceInfo.downloadPackageManager.version);
+  // Catalogs only resolve inside a bun WORKSPACE (a root package.json with a
+  // non-empty `workspaces`). Gate both the catalog edges (`supportCatalog`) and
+  // the `rewriteBunCatalog` sink below on this so a standalone bun project keeps
+  // concrete specs and writes no catalog field — otherwise `bun install` aborts
+  // with "vite@catalog: failed to resolve".
+  const isBunWorkspace =
+    workspaceInfo.packageManager === PackageManager.bun &&
+    bunWorkspaceDeclaresPackages(
+      (readJsonFile(packageJsonPath) as { workspaces?: NpmWorkspaces }).workspaces,
+    );
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
     (usePnpmWorkspaceYaml ||
       workspaceInfo.packageManager === PackageManager.yarn ||
-      workspaceInfo.packageManager === PackageManager.bun);
+      isBunWorkspace);
   const catalogDependencyResolver = createCatalogDependencyResolver(
     projectPath,
     workspaceInfo.packageManager,
@@ -946,7 +975,10 @@ export function ensureVitePlusBootstrap(
     rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages, providerCatalogAdditions);
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
-  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+  } else if (isBunWorkspace) {
+    // Only a bun WORKSPACE writes a catalog (matching the fresh path, where
+    // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
+    // keeps the concrete overrides set by `ensureOverrideEntries` above.
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
     rewriteBunCatalog(projectPath, usesVitest, vitestEcosystemPackages);
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
