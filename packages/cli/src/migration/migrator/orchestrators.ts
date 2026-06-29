@@ -285,9 +285,8 @@ export function rewriteStandaloneProject(
       };
     }
     // This caller injects vite-plus after rewritePackageJson returned, so the
-    // direct-`vite` pass must run here too. `usePnpmWorkspaceYaml` is true only
-    // for pnpm, so it already implies a non-npm package manager.
-    ensureDirectViteForPnpm(pkg, packageManager, usePnpmWorkspaceYaml, catalogDependencyResolver);
+    // direct-`vite` pass must run here too.
+    ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
     return pkg;
   });
 
