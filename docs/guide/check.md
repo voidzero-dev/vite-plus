@@ -57,4 +57,4 @@ export default defineConfig({
 });
 ```
 
-These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed.
+These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed. Because the defaults apply to every `vp check` run, a pre-commit hook that calls `vp check` will skip the disabled step too. See [Check config](/config/check) for the full reference.

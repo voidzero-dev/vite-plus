@@ -13,8 +13,9 @@ export default defineConfig({
   check: {
     // Skip the format step in `vp check`. Defaults to true.
     fmt: false,
-    // Skip lint rules in `vp check`. Type-check still runs when
-    // `lint.options.typeCheck` is enabled. Defaults to true.
+    // Skip lint rules in `vp check`. Type-check still runs when both
+    // `lint.options.typeAware` and `lint.options.typeCheck` are enabled.
+    // Defaults to true.
     lint: true,
   },
 });
@@ -24,5 +25,5 @@ When a step is disabled here, `vp check` prints a short `note:` line so it is cl
 
 ## Scope and precedence
 
-- These options only affect the composite `vp check`. Standalone [`vp fmt`](/config/fmt), [`vp lint`](/config/lint), and the git-hook [`staged`](/config/staged) flow are unaffected, so you can still run a disabled tool directly when you need it once.
+- These options only affect the composite `vp check`. Standalone [`vp fmt`](/config/fmt) and [`vp lint`](/config/lint) are unaffected, so you can still run a disabled tool directly when you need it once. Note that any `vp check` invocation honors these defaults, including one run from a pre-commit hook: if your [`staged`](/config/staged) tasks call `vp check`, that step is skipped there too.
 - A step is skipped if the config disables it **or** the matching CLI flag is passed. There is no flag to re-enable a step disabled in config; run `vp fmt` or `vp lint` directly instead.

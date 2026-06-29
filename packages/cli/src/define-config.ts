@@ -44,8 +44,8 @@ declare module '@voidzero-dev/vite-plus-core' {
       fmt?: boolean;
 
       /**
-       * Run the lint step in `vp check`. Type-check still runs when
-       * `lint.options.typeCheck` is enabled.
+       * Run the lint step in `vp check`. Type-check still runs when both
+       * `lint.options.typeAware` and `lint.options.typeCheck` are enabled.
        * @default true
        */
       lint?: boolean;
