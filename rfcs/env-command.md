@@ -22,9 +22,9 @@ This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe 
 
 A shim-based approach where:
 
-- `VITE_PLUS_HOME/bin/` directory is added to PATH (system-level for IDE reliability)
+- `VP_HOME/bin/` directory is added to PATH (system-level for IDE reliability)
 - Shims (`node`, `npm`, `npx`, `corepack`) are symlinks to the `vp` binary (Unix) or trampoline `.exe` files (Windows)
-- The `vp` CLI itself is also in `VITE_PLUS_HOME/bin/`, so users only need one PATH entry
+- The `vp` CLI itself is also in `VP_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
 - Version resolution and installation leverage existing `vite_js_runtime` infrastructure
 
@@ -124,10 +124,10 @@ vp env use --silent-if-unchanged  # Suppress output if version already active
 **How it works:**
 
 1. `~/.vite-plus/env` includes a `vp()` shell function that intercepts `vp env use` calls
-2. The wrapper sets `VITE_PLUS_ENV_USE_EVAL_ENABLE=1` before calling `command vp env use ...`
+2. The wrapper sets `VP_ENV_USE_EVAL_ENABLE=1` before calling `command vp env use ...`
 3. When the env var is present (wrapper active), `vp env use` outputs shell commands to stdout for eval
 4. When the env var is absent in CI, `vp env use` writes a session file (`~/.vite-plus/.session-node-version`) instead
-5. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
+5. The shim dispatch checks `VP_NODE_VERSION` env var first, then the session file, in the resolution chain
 
 On Windows interactive shells, `vp env use` requires the PowerShell setup script (`~/.vite-plus/env.ps1`, written by `vp env setup`) to be dot-sourced in the current shell so the selected version stays session-scoped:
 
@@ -144,7 +144,7 @@ Invoke-Item $PROFILE
 
 **Automatic session file (for CI):**
 
-When `vp env use` detects a CI environment and the shell eval wrapper is not active (i.e., `VITE_PLUS_ENV_USE_EVAL_ENABLE` is not set), it automatically writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so CI jobs can keep using `vp env use` without shell setup. The env var still takes priority when set, so the shell wrapper experience is unchanged.
+When `vp env use` detects a CI environment and the shell eval wrapper is not active (i.e., `VP_ENV_USE_EVAL_ENABLE` is not set), it automatically writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so CI jobs can keep using `vp env use` without shell setup. The env var still takes priority when set, so the shell wrapper experience is unchanged.
 
 ```bash
 # GitHub Actions example (no shell wrapper, session file written automatically)
@@ -155,12 +155,12 @@ When `vp env use` detects a CI environment and the shell eval wrapper is not act
 
 **Shell-specific output:**
 
-| Shell            | Set                                       | Unset                                        |
-| ---------------- | ----------------------------------------- | -------------------------------------------- |
-| POSIX (bash/zsh) | `export VITE_PLUS_NODE_VERSION=20.18.1`   | `unset VITE_PLUS_NODE_VERSION`               |
-| Fish             | `set -gx VITE_PLUS_NODE_VERSION 20.18.1`  | `set -e VITE_PLUS_NODE_VERSION`              |
-| PowerShell       | `$env:VITE_PLUS_NODE_VERSION = "20.18.1"` | `Remove-Item Env:VITE_PLUS_NODE_VERSION ...` |
-| cmd.exe          | `set VITE_PLUS_NODE_VERSION=20.18.1`      | `set VITE_PLUS_NODE_VERSION=`                |
+| Shell            | Set                                | Unset                                 |
+| ---------------- | ---------------------------------- | ------------------------------------- |
+| POSIX (bash/zsh) | `export VP_NODE_VERSION=20.18.1`   | `unset VP_NODE_VERSION`               |
+| Fish             | `set -gx VP_NODE_VERSION 20.18.1`  | `set -e VP_NODE_VERSION`              |
+| PowerShell       | `$env:VP_NODE_VERSION = "20.18.1"` | `Remove-Item Env:VP_NODE_VERSION ...` |
+| cmd.exe          | `set VP_NODE_VERSION=20.18.1`      | `set VP_NODE_VERSION=`                |
 
 **Shell function wrappers** are included in env files created by `vp env setup`:
 
@@ -287,7 +287,7 @@ argv[0] = "corepack"  → Shim mode: resolve version, exec corepack (managed fal
 │                 ▼                                                           │
 │  ┌──────────────────────────────┐     ┌─────────────────────────────┐       │
 │  │  Version Resolution          │────▶│  Priority Order:            │       │
-│  │  (walk up directory tree)    │     │  0. VITE_PLUS_NODE_VERSION  │       │
+│  │  (walk up directory tree)    │     │  0. VP_NODE_VERSION  │       │
 │  └──────────────┬───────────────┘     │  1. .session-node-version   │       │
 │                 │                     │  2. .node-version           │       │
 │                 │                     │  3. package.json#devEngines │       │
@@ -312,7 +312,7 @@ argv[0] = "corepack"  → Shim mode: resolve version, exec corepack (managed fal
 │                         DIRECTORY STRUCTURE                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ~/.vite-plus/                        (VITE_PLUS_HOME)                      │
+│  ~/.vite-plus/                        (VP_HOME)                      │
 │  ├── bin/                                                                   │
 │  │   ├── vp   ──────────────────────  Symlink to ../current/bin/vp          │
 │  │   ├── node ──────────────────────┐                                       │
@@ -356,10 +356,10 @@ argv[0] = "corepack"  → Shim mode: resolve version, exec corepack (managed fal
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### VITE_PLUS_HOME Directory Layout
+### VP_HOME Directory Layout
 
 ```
-VITE_PLUS_HOME/                              # Default: ~/.vite-plus
+VP_HOME/                              # Default: ~/.vite-plus
 ├── bin/
 │   ├── vp -> ../current/bin/vp       # Symlink to current vp binary (Unix)
 │   ├── node -> ../current/bin/vp     # Symlink to vp binary (Unix)
@@ -538,7 +538,7 @@ New LTS codenames are added dynamically based on the Node.js release schedule. v
 
 When resolving which Node.js version to use, vite-plus checks the following sources in order:
 
-0. **`VITE_PLUS_NODE_VERSION` env var** (session override, highest priority)
+0. **`VP_NODE_VERSION` env var** (session override, highest priority)
    - Set by `vp env use` via shell wrapper eval
    - Overrides all file-based resolution
 
@@ -607,7 +607,7 @@ lts/iron
 | actions/setup-node | ✅              | ✅       | ✅          | ✅            |
 | asdf               | ✅              | ❌       | ❌          | ❌            |
 
-**Note**: Node.js binaries are stored in VITE_PLUS_HOME:
+**Note**: Node.js binaries are stored in VP_HOME:
 
 - Linux/macOS: `~/.vite-plus/js_runtime/node/{version}/`
 - Windows: `%USERPROFILE%\.vite-plus\js_runtime\node\{version}\`
@@ -645,42 +645,42 @@ crates/vite_global_cli/
 
 ### Shim Dispatch Flow
 
-1. Check `VITE_PLUS_BYPASS` environment variable → bypass to system tool (filters all listed directories from PATH)
-2. Check `VITE_PLUS_TOOL_RECURSION` → if set, use passthrough mode
+1. Check `VP_BYPASS` environment variable → bypass to system tool (filters all listed directories from PATH)
+2. Check `VP_TOOL_RECURSION` → if set, use passthrough mode
 3. Check shim mode from config:
-   - If `system_first`: try system tool first, fallback to managed; appends own bin dir to `VITE_PLUS_BYPASS` before exec to prevent loops with multiple installations
+   - If `system_first`: try system tool first, fallback to managed; appends own bin dir to `VP_BYPASS` before exec to prevent loops with multiple installations
    - If `managed`: use vite-plus managed Node.js
 4. Resolve version (with mtime-based caching)
 5. Ensure Node.js is installed (download if needed)
 6. Locate tool binary in the installed Node.js
 7. Prepend real node bin dir to PATH for child processes
-8. Set `VITE_PLUS_TOOL_RECURSION=1` to prevent recursion
+8. Set `VP_TOOL_RECURSION=1` to prevent recursion
 9. Execute the tool (Unix: `execve`, Windows: spawn)
 
 ### Shim Recursion Prevention
 
 To prevent infinite loops when shims invoke other shims, vite-plus uses environment variable markers:
 
-**Environment Variable**: `VITE_PLUS_TOOL_RECURSION`
+**Environment Variable**: `VP_TOOL_RECURSION`
 
 **Mechanism:**
 
-1. When a shim executes the real binary, it sets `VITE_PLUS_TOOL_RECURSION=1`
+1. When a shim executes the real binary, it sets `VP_TOOL_RECURSION=1`
 2. Subsequent shim invocations check this variable
 3. If set, shims use **passthrough mode** (skip version resolution, use current PATH)
 4. `vp env exec` explicitly **removes** this variable to force re-evaluation
 
-**Environment Variable**: `VITE_PLUS_BYPASS` (PATH-style list)
+**Environment Variable**: `VP_BYPASS` (PATH-style list)
 
 **SystemFirst Loop Prevention:**
 
 When multiple vite-plus installations exist in PATH and `system_first` mode is active, each installation could find the other's shim as the "system tool", causing an infinite exec loop. To prevent this:
 
-1. In `system_first` mode, before exec'ing the found system tool, the current installation appends its own bin directory to `VITE_PLUS_BYPASS`
-2. The next installation sees `VITE_PLUS_BYPASS` is set and enters bypass mode via `find_system_tool()`
-3. `find_system_tool()` filters all directories listed in `VITE_PLUS_BYPASS` (plus its own bin dir) from PATH
+1. In `system_first` mode, before exec'ing the found system tool, the current installation appends its own bin directory to `VP_BYPASS`
+2. The next installation sees `VP_BYPASS` is set and enters bypass mode via `find_system_tool()`
+3. `find_system_tool()` filters all directories listed in `VP_BYPASS` (plus its own bin dir) from PATH
 4. This ensures the search skips all known vite-plus bin directories and finds the real system binary (or errors cleanly)
-5. `VITE_PLUS_BYPASS` is preserved through `vp env exec` so loop protection remains active
+5. `VP_BYPASS` is preserved through `vp env exec` so loop protection remains active
 
 **Flow Diagram:**
 
@@ -688,7 +688,7 @@ When multiple vite-plus installations exist in PATH and `system_first` mode is a
 User runs: node app.js
     │
     ▼
-Shim checks VITE_PLUS_TOOL_RECURSION
+Shim checks VP_TOOL_RECURSION
     │
     ├── Not set → Resolve version, set RECURSION=1, exec real node
     │
@@ -698,7 +698,7 @@ Shim checks VITE_PLUS_TOOL_RECURSION
 **Code Example:**
 
 ```rust
-const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
+const RECURSION_ENV_VAR: &str = "VP_TOOL_RECURSION";
 
 fn execute_shim() {
     if env::var(RECURSION_ENV_VAR).is_ok() {
@@ -756,7 +756,7 @@ fn execute_run_command() {
 
 ### 3. Trampoline Executables for Windows
 
-**Decision**: Use lightweight trampoline `.exe` files on Windows instead of `.cmd` wrappers. Each trampoline detects its tool name from its own filename, sets `VITE_PLUS_SHIM_TOOL`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
+**Decision**: Use lightweight trampoline `.exe` files on Windows instead of `.cmd` wrappers. Each trampoline detects its tool name from its own filename, sets `VP_SHIM_TOOL`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 **Rationale**:
 
@@ -775,14 +775,14 @@ fn execute_run_command() {
 - Windows doesn't support `execve`-style process replacement
 - `spawn` on Windows with proper exit code propagation is standard practice
 
-### 5. Separate VITE_PLUS_HOME from Cache
+### 5. Separate VP_HOME from Cache
 
-**Decision**: Keep VITE_PLUS_HOME (bin, config) separate from cache (Node binaries).
+**Decision**: Keep VP_HOME (bin, config) separate from cache (Node binaries).
 
 **Rationale**:
 
 - Cache uses XDG/platform-standard locations (already implemented)
-- VITE_PLUS_HOME needs to be user-accessible for PATH configuration
+- VP_HOME needs to be user-accessible for PATH configuration
 - Allows clearing cache without breaking shim setup
 
 ### 6. mtime-Based Cache Invalidation
@@ -813,7 +813,7 @@ v22.13.0  # Falls back to latest LTS
 
 The resolution order is:
 
-1. `VITE_PLUS_NODE_VERSION` env var (session override)
+1. `VP_NODE_VERSION` env var (session override)
 2. `.session-node-version` file (session override)
 3. `.node-version` in current or parent directories
 4. `package.json#devEngines.runtime` in current or parent directories
@@ -827,7 +827,7 @@ The resolution order is:
 $ node -v
 vp: Failed to install Node 20.18.0: Network error: connection refused
 vp: Check your network connection and try again
-vp: Or set VITE_PLUS_BYPASS=1 to use system node
+vp: Or set VP_BYPASS=1 to use system node
 ```
 
 ### Tool Not Found
@@ -843,7 +843,7 @@ vp: npx is available in Node 5.2.0+
 ```bash
 $ vp env doctor
 Installation
-  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✓ VP_HOME    ~/.vite-plus
   ✓ Bin directory     exists
   ✓ Shims             node, npm, npx, corepack
 
@@ -942,7 +942,7 @@ Restart your terminal and IDE, then run 'vp env doctor' to verify.
 ```bash
 $ vp env doctor
 Installation
-  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✓ VP_HOME    ~/.vite-plus
   ✓ Bin directory     exists
   ✓ Shims             node, npm, npx, corepack
 
@@ -975,7 +975,7 @@ $ vp env doctor
 Configuration
   ✓ Node.js mode      managed
   ✓ IDE integration   env sourced in ~/.zshenv
-  ⚠ Session override  VITE_PLUS_NODE_VERSION=20.18.0
+  ⚠ Session override  VP_NODE_VERSION=20.18.0
                       Overrides all file-based resolution.
                       Run 'vp env use --unset' to remove.
   ⚠ Session override (file)  .session-node-version=20.18.0
@@ -1024,7 +1024,7 @@ Configuration
 ```bash
 $ vp env doctor
 Installation
-  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✓ VP_HOME    ~/.vite-plus
   ✗ Bin directory     does not exist
   ✗ Missing shims     node, npm, npx, corepack
                       Run 'vp env setup' to create bin directory and shims.
@@ -1353,7 +1353,7 @@ When using session override:
 $ vp env which node
 /Users/user/.vite-plus/js_runtime/node/18.20.0/bin/node
   Version:    18.20.0
-  Source:     VITE_PLUS_NODE_VERSION (session)
+  Source:     VP_NODE_VERSION (session)
 ```
 
 **Global packages** - shows binary path plus package metadata:
@@ -1986,9 +1986,9 @@ When `--node` is **not provided** and the first command is a shim tool:
 - **Matching package-manager tools (npm/npx, pnpm/pnpx, yarn/yarnpkg, bun/bunx)**: If `packageManager` explicitly declares the same tool family, the shim downloads/runs that package-manager version while keeping the project-resolved Node.js runtime on PATH. Mismatched tools are not translated.
 - **Global packages (tsc, eslint, etc.)**: Uses the Node.js version that was used during `vp install -g`
 
-Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. On Windows, trampoline `.exe` shims set `VITE_PLUS_SHIM_TOOL` to enter shim dispatch mode.
+Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. On Windows, trampoline `.exe` shims set `VP_SHIM_TOOL` to enter shim dispatch mode.
 
-**Important**: The `VITE_PLUS_TOOL_RECURSION` environment variable is cleared before dispatch to ensure fresh version resolution, even when invoked from within a context where the variable is already set (e.g., when pnpm runs through the vite-plus shim).
+**Important**: The `VP_TOOL_RECURSION` environment variable is cleared before dispatch to ensure fresh version resolution, even when invoked from within a context where the variable is already set (e.g., when pnpm runs through the vite-plus shim).
 
 ### Explicit Version Mode Behavior
 
@@ -1997,7 +1997,7 @@ When `--node` **is provided**:
 1. **Version Resolution**: Specified versions are resolved to exact versions
 2. **Auto-Install**: If the version isn't installed, it's downloaded automatically
 3. **PATH Construction**: Constructs PATH with specified version's bin directory
-4. **Recursion Reset**: Clears `VITE_PLUS_TOOL_RECURSION` to force context re-evaluation
+4. **Recursion Reset**: Clears `VP_TOOL_RECURSION` to force context re-evaluation
 
 ### Examples
 
@@ -2159,22 +2159,22 @@ $ vp env --current --json
 
 ## Environment Variables
 
-| Variable                        | Description                                                                                     | Default        |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- | -------------- |
-| `VITE_PLUS_HOME`                | Base directory for bin and config                                                               | `~/.vite-plus` |
-| `VITE_PLUS_NODE_VERSION`        | Session override for Node.js version (set by `vp env use`)                                      | unset          |
-| `VITE_PLUS_LOG`                 | Log level: debug, info, warn, error                                                             | `warn`         |
-| `VITE_PLUS_DEBUG_SHIM`          | Enable extra shim diagnostics                                                                   | unset          |
-| `VITE_PLUS_BYPASS`              | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
-| `VITE_PLUS_TOOL_RECURSION`      | **Internal**: Prevents shim recursion                                                           | unset          |
-| `VITE_PLUS_ENV_USE_EVAL_ENABLE` | **Internal**: Set by shell wrappers to signal that `vp env use` output will be eval'd           | unset          |
+| Variable                 | Description                                                                                     | Default        |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | -------------- |
+| `VP_HOME`                | Base directory for bin and config                                                               | `~/.vite-plus` |
+| `VP_NODE_VERSION`        | Session override for Node.js version (set by `vp env use`)                                      | unset          |
+| `VITE_LOG`               | Log level: debug, info, warn, error                                                             | `warn`         |
+| `VP_DEBUG_SHIM`          | Enable extra shim diagnostics                                                                   | unset          |
+| `VP_BYPASS`              | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
+| `VP_TOOL_RECURSION`      | **Internal**: Prevents shim recursion                                                           | unset          |
+| `VP_ENV_USE_EVAL_ENABLE` | **Internal**: Set by shell wrappers to signal that `vp env use` output will be eval'd           | unset          |
 
 ## Unix-Specific Considerations
 
 ### Shim Structure
 
 ```
-VITE_PLUS_HOME/
+VP_HOME/
 ├── bin/
 │   ├── vp -> ../current/bin/vp      # Symlink to actual binary
 │   ├── node -> ../current/bin/vp    # Symlink to same binary
@@ -2220,13 +2220,13 @@ ln -sf ../current/bin/vp ~/.vite-plus/bin/tsc
 ### Shim Structure
 
 ```
-VITE_PLUS_HOME\
+VP_HOME\
 ├── bin\
 │   ├── vp.exe       # Trampoline forwarding to current\bin\vp.exe
-│   ├── node.exe     # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=node)
-│   ├── npm.exe      # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=npm)
-│   ├── npx.exe      # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=npx)
-│   ├── corepack.exe # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=corepack)
+│   ├── node.exe     # Trampoline shim (sets VP_SHIM_TOOL=node)
+│   ├── npm.exe      # Trampoline shim (sets VP_SHIM_TOOL=npm)
+│   ├── npx.exe      # Trampoline shim (sets VP_SHIM_TOOL=npx)
+│   ├── corepack.exe # Trampoline shim (sets VP_SHIM_TOOL=corepack)
 │   └── tsc.exe      # Trampoline shim for global package
 └── current\
     └── bin\
@@ -2236,7 +2236,7 @@ VITE_PLUS_HOME\
 
 ### Trampoline Executables
 
-Windows shims use lightweight trampoline `.exe` files (see [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md)). Each trampoline detects its tool name from its own filename, sets `VITE_PLUS_SHIM_TOOL`, and spawns `vp.exe`. This avoids the "Terminate batch job (Y/N)?" prompt from `.cmd` wrappers and works in all shells (cmd.exe, PowerShell, Git Bash) without needing separate wrapper formats.
+Windows shims use lightweight trampoline `.exe` files (see [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md)). Each trampoline detects its tool name from its own filename, sets `VP_SHIM_TOOL`, and spawns `vp.exe`. This avoids the "Terminate batch job (Y/N)?" prompt from `.cmd` wrappers and works in all shells (cmd.exe, PowerShell, Git Bash) without needing separate wrapper formats.
 
 #### Why Not Symlinks?
 
@@ -2251,7 +2251,7 @@ Instead, trampoline `.exe` files are used. See [RFC: Trampoline EXE for Shims](.
 
 1. User runs `npm install`
 2. Windows finds `~/.vite-plus/bin/npm.exe` in PATH
-3. Trampoline sets `VITE_PLUS_SHIM_TOOL=npm` and spawns `vp.exe`
+3. Trampoline sets `VP_SHIM_TOOL=npm` and spawns `vp.exe`
 4. `vp env exec` command handles version resolution and execution
 
 **Benefits of this approach**:
@@ -2311,7 +2311,7 @@ env-doctor/
 
 ## Security Considerations
 
-1. **Path Validation**: Verify executed binaries are under VITE_PLUS_HOME/cache paths
+1. **Path Validation**: Verify executed binaries are under VP_HOME/cache paths
 2. **No Path Traversal**: Sanitize version strings before path construction
 3. **Atomic Installs**: Use temp directory + rename pattern (already implemented)
 4. **Log Sanitization**: Don't log sensitive environment variables
@@ -2331,7 +2331,7 @@ env-doctor/
 9. Implement `vp env pin [version]` for per-directory version pinning
 10. Implement `vp env unpin` as alias for `pin --unpin`
 11. Implement `vp env list` (local) and `vp env list-remote` (remote) to show versions
-12. Implement recursion prevention (`VITE_PLUS_TOOL_RECURSION`)
+12. Implement recursion prevention (`VP_TOOL_RECURSION`)
 13. Implement `vp env exec --node <version>` command
 
 ### Phase 2: Full Tool Support (P1)
@@ -2354,7 +2354,7 @@ env-doctor/
 ### Phase 3: Polish (P2)
 
 1. Implement `vp env --print` for session-only env
-2. Add VITE_PLUS_BYPASS escape hatch
+2. Add VP_BYPASS escape hatch
 3. Improve error messages
 4. Add IDE-specific setup guidance
 5. Documentation
@@ -2385,9 +2385,9 @@ This is a new feature with no impact on existing functionality. The `vp` binary 
 
 The following decisions have been made:
 
-1. **VITE_PLUS_HOME Default Location**: `~/.vite-plus` - Simple, memorable path that's easy for users to find and configure.
+1. **VP_HOME Default Location**: `~/.vite-plus` - Simple, memorable path that's easy for users to find and configure.
 
-2. **Windows Shim Strategy**: Trampoline `.exe` files that set `VITE_PLUS_SHIM_TOOL` and spawn `vp.exe` - Avoids "Terminate batch job?" prompt, works in all shells. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
+2. **Windows Shim Strategy**: Trampoline `.exe` files that set `VP_SHIM_TOOL` and spawn `vp.exe` - Avoids "Terminate batch job?" prompt, works in all shells. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 3. **Corepack Handling**: Included as a default shim (revisited in [#1309](https://github.com/voidzero-dev/vite-plus/issues/1309), originally excluded). The shim prefers a vp-managed global corepack, falls back to the Node-bundled binary (Node.js ≤ 24), and auto-installs a managed copy on Node.js 25+ where corepack is no longer bundled. See [Corepack Shim](#corepack-shim).
 

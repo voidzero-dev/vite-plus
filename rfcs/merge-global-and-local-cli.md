@@ -281,5 +281,5 @@ if (command === 'create') {
 - `pnpm -F vite-plus snap-test-local` — Local CLI snap tests pass
 - `pnpm -F vite-plus snap-test-global` — Global CLI snap tests pass
 - `pnpm bootstrap-cli` — Full build and global install succeeds
-- `VITE_PLUS_VERSION=test bash packages/cli/install.sh` — Production install from npm works
+- `VP_VERSION=test bash packages/cli/install.sh` — Production install from npm works
 - Manual testing: `vp create`, `vp migrate`, `vp --version`, `vp build`, `vp test` all work
