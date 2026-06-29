@@ -626,7 +626,7 @@ async function runTestCase(
     env['PATH'] = env['Path'];
     delete env['Path'];
   }
-  // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/bin/ to PATH,
+  // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/core/ to PATH,
   // which leaks into this process. Strip internal vite-plus paths so the test
   // environment simulates a clean user PATH (only the shim bin dir + system paths).
   const vitePlusJsRuntime = path.join(env['VP_HOME'], 'js_runtime');

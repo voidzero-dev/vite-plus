@@ -163,9 +163,15 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
         }
     };
 
-    // Prepend Node.js bin dir to PATH
-    let node_bin_dir = node_path.parent().expect("Node has no parent directory");
-    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    // Prepend Node.js core bin dir to PATH
+    let node_core_dir = match vite_js_runtime::ensure_node_core_bin_prefix(&node_path) {
+        Ok(path) => path,
+        Err(e) => {
+            output::error(&format!("vpx: Failed to prepare Node.js core PATH: {e}"));
+            return 1;
+        }
+    };
+    let _ = prepend_to_path_env(&node_core_dir, PrependOptions::default());
 
     // Prepend local node_modules/.bin dirs to PATH
     prepend_node_modules_bin_to_path(cwd);

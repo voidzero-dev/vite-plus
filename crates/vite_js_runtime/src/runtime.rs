@@ -58,6 +58,21 @@ impl JsRuntime {
         }
     }
 
+    /// Get the limited bin directory to prepend for child processes.
+    ///
+    /// Managed Node.js runtimes expose only node/npm/npx here so global bins
+    /// installed inside a runtime do not leak into child process PATH.
+    ///
+    /// # Errors
+    /// Returns an error when the core directory or tool links cannot be created.
+    pub fn ensure_core_bin_prefix(&self) -> Result<AbsolutePathBuf, Error> {
+        if self.runtime_type == JsRuntimeType::Node && self.version != "system" {
+            ensure_node_core_bin_prefix(&self.get_binary_path())
+        } else {
+            Ok(self.get_bin_prefix())
+        }
+    }
+
     /// Get the runtime type
     #[must_use]
     pub const fn runtime_type(&self) -> JsRuntimeType {
@@ -90,6 +105,60 @@ impl JsRuntime {
             bin_dir_relative_path: Str::default(),
         }
     }
+}
+
+/// Ensure the managed Node.js core bin directory exists and return it.
+///
+/// The returned directory is a sibling of Node's real `bin` directory:
+/// `.../node/<version>/core`.
+///
+/// # Errors
+/// Returns an error when the core directory or tool links cannot be created.
+pub fn ensure_node_core_bin_prefix(
+    node_binary_path: &AbsolutePath,
+) -> Result<AbsolutePathBuf, Error> {
+    let bin_dir = node_binary_path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Node binary has no parent directory"))?;
+    let install_dir = bin_dir
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Node bin directory has no parent directory"))?;
+    let core_dir = install_dir.join("core");
+    std::fs::create_dir_all(core_dir.as_path())?;
+
+    for (link_name, target_name) in node_core_tools() {
+        let target = bin_dir.join(target_name);
+        if !target.as_path().exists() {
+            continue;
+        }
+        let link = core_dir.join(link_name);
+        if std::fs::symlink_metadata(link.as_path()).is_ok() {
+            continue;
+        }
+        link_core_tool(target.as_path(), link.as_path())?;
+    }
+
+    Ok(core_dir)
+}
+
+#[cfg(unix)]
+fn node_core_tools() -> &'static [(&'static str, &'static str)] {
+    &[("node", "node"), ("npm", "npm"), ("npx", "npx")]
+}
+
+#[cfg(windows)]
+fn node_core_tools() -> &'static [(&'static str, &'static str)] {
+    &[("node.exe", "node.exe"), ("npm.cmd", "npm.cmd"), ("npx.cmd", "npx.cmd")]
+}
+
+#[cfg(unix)]
+fn link_core_tool(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn link_core_tool(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    std::fs::hard_link(target, link).or_else(|_| std::fs::copy(target, link).map(|_| ()))
 }
 
 /// Download and cache a JavaScript runtime

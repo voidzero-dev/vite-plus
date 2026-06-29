@@ -1,5 +1,11 @@
 > cd node && test "$(npm --version)" = "$(node ../print-version.js)" && node ../print-path.js
-<vite-plus-home>/js_runtime/node/<semver>/bin/npm
+<vite-plus-home>/js_runtime/node/<semver>/core/npm
+
+> cd node && node ../assert-core-path.js # child PATH exposes only node/npm/npx core links
+runtime bin not leaked
+<vite-plus-home>/js_runtime/node/<semver>/core/node
+<vite-plus-home>/js_runtime/node/<semver>/core/npm
+<vite-plus-home>/js_runtime/node/<semver>/core/npx
 
 > cd specific && test "$(npm --version)" = "$(node ../print-version.js)" && test "$(node ../print-version.js)" = "$(node ./print-package-json-pm-version.js)" && node ../print-path.js
 <vite-plus-home>/package_manager/npm/<semver>/npm/bin/npm

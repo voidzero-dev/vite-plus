@@ -156,14 +156,14 @@ async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     // Resolve the Node.js version for the current directory
     let resolution = config::resolve_version(&cwd).await?;
 
-    // Get the node bin directory
+    // Get the limited core bin directory
     let runtime = vite_js_runtime::download_runtime(
         vite_js_runtime::JsRuntimeType::Node,
         &resolution.version,
     )
     .await?;
 
-    let bin_dir = runtime.get_bin_prefix();
+    let bin_dir = runtime.ensure_core_bin_prefix()?;
     let snippet = match detect_shell() {
         Shell::NuShell => {
             format!("$env.PATH = ($env.PATH | prepend \"{}\")", bin_dir.as_path().display())

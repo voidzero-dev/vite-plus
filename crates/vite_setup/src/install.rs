@@ -342,7 +342,9 @@ async fn run_pnpm_install(
     args: &[&str],
     registry: Option<&str>,
 ) -> Result<Output, Error> {
-    let node_bin = node_runtime.get_bin_prefix();
+    let node_bin = node_runtime.ensure_core_bin_prefix().map_err(|error| {
+        Error::Setup(format!("Failed to prepare Node.js core PATH: {error}").into())
+    })?;
     let pnpm_bin = pnpm_entry.parent().ok_or_else(|| {
         Error::Setup(format!("pnpm entry has no parent: {}", pnpm_entry.as_path().display()).into())
     })?;

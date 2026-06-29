@@ -9,7 +9,7 @@
 
 use std::process::ExitStatus;
 
-use vite_js_runtime::NodeProvider;
+use vite_js_runtime::{NodeProvider, ensure_node_core_bin_prefix};
 use vite_shared::{env_vars, format_path_prepended};
 
 use crate::{
@@ -137,10 +137,9 @@ async fn execute_with_version(
         std::env::remove_var(env_vars::VP_TOOL_RECURSION);
     }
 
-    // 4. Build PATH with node bin dir first (uses platform-specific separator)
-    // Always prepend to ensure the requested Node version is first in PATH
-    let node_bin_dir = runtime.get_bin_prefix();
-    let new_path = format_path_prepended(node_bin_dir.as_path());
+    // 4. Build PATH with the limited core bin dir first (uses platform-specific separator)
+    let core_bin_dir = ensure_node_core_bin_prefix(&runtime.get_binary_path())?;
+    let new_path = format_path_prepended(core_bin_dir.as_path());
 
     // 5. Execute command
     let (cmd, args) = command.split_first().unwrap();

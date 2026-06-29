@@ -9,6 +9,7 @@ use vite_install::package_manager::{
     PackageManagerType, download_package_manager, package_manager_bin_path,
     package_manager_install_dir, resolve_package_manager_from_package_json,
 };
+use vite_js_runtime::ensure_node_core_bin_prefix;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 
@@ -716,15 +717,15 @@ async fn resolve_matching_package_manager_tool(
 
 async fn prepend_js_child_process_path_env(
     cwd: &AbsolutePath,
-    node_bin_dir: &AbsolutePath,
+    node_core_dir: &AbsolutePath,
 ) -> Result<(), Error> {
-    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    let _ = prepend_to_path_env(node_core_dir, PrependOptions::default());
 
     let Some(npm_path) = resolve_matching_package_manager_tool(cwd, "npm").await? else {
         return Ok(());
     };
     if let Some(pm_bin_dir) = npm_path.parent()
-        && pm_bin_dir != node_bin_dir
+        && pm_bin_dir != node_core_dir
     {
         let _ = prepend_to_path_env(pm_bin_dir, PrependOptions::default());
     }
@@ -878,7 +879,14 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // version was selected from `packageManager`, put that PM bin dir first so
     // nested invocations see the same PM version while recursion prevention is set.
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
-    if let Err(e) = prepend_js_child_process_path_env(&cwd, node_bin_dir).await {
+    let node_core_dir = match ensure_node_core_bin_prefix(&node_path) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("vp: Failed to prepare Node.js core PATH: {e}");
+            return 1;
+        }
+    };
+    if let Err(e) = prepend_js_child_process_path_env(&cwd, &node_core_dir).await {
         eprintln!("vp: Failed to resolve package manager for child process PATH: {e}");
         return 1;
     }
@@ -979,16 +987,21 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
                     if !node_version.is_empty() {
                         match ensure_installed(&node_version).await {
                             Ok(node_path) => {
-                                if let Some(node_bin_dir) = node_path.parent() {
-                                    if let Err(e) =
-                                        prepend_js_child_process_path_env(&cwd, node_bin_dir).await
-                                    {
-                                        eprintln!(
-                                            "vp: Failed to resolve package manager for child \
-                                             process PATH: {e}"
-                                        );
+                                let node_core_dir = match ensure_node_core_bin_prefix(&node_path) {
+                                    Ok(path) => path,
+                                    Err(e) => {
+                                        eprintln!("vp: Failed to prepare Node.js core PATH: {e}");
                                         return 1;
                                     }
+                                };
+                                if let Err(e) =
+                                    prepend_js_child_process_path_env(&cwd, &node_core_dir).await
+                                {
+                                    eprintln!(
+                                        "vp: Failed to resolve package manager for child process \
+                                         PATH: {e}"
+                                    );
+                                    return 1;
                                 }
                             }
                             Err(e) => {
@@ -1089,14 +1102,14 @@ pub(crate) async fn package_binary_invocation(
         .map_err(|e| format!("Binary '{tool}' not found: {e}"))?;
 
     // Prepare environment for recursive invocations
-    let node_bin_dir =
-        node_path.parent().ok_or_else(|| "Node has no parent directory".to_string())?;
+    let node_core_dir = ensure_node_core_bin_prefix(&node_path)
+        .map_err(|e| format!("Failed to prepare Node.js core PATH: {e}"))?;
     if let Ok(cwd) = current_dir() {
-        prepend_js_child_process_path_env(&cwd, node_bin_dir).await.map_err(|e| {
+        prepend_js_child_process_path_env(&cwd, &node_core_dir).await.map_err(|e| {
             format!("Failed to resolve package manager for child process PATH: {e}")
         })?;
     } else {
-        let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+        let _ = prepend_to_path_env(&node_core_dir, PrependOptions::default());
     }
 
     // JS binaries (determined at install time and stored in metadata) run

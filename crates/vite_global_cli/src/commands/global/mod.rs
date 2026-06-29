@@ -13,6 +13,7 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use tar::Archive;
 use tokio::process::Command;
+use vite_js_runtime::ensure_node_core_bin_prefix;
 use vite_path::{AbsolutePathBuf, current_dir};
 use vite_shared::format_path_prepended;
 
@@ -33,7 +34,7 @@ struct PackageVersion {
 
 struct NpmRegistry {
     npm_path: AbsolutePathBuf,
-    node_bin_dir: AbsolutePathBuf,
+    node_core_dir: AbsolutePathBuf,
 }
 
 impl NpmRegistry {
@@ -49,12 +50,13 @@ impl NpmRegistry {
         let node_bin_dir = runtime.get_bin_prefix();
         let npm_path =
             if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
+        let node_core_dir = ensure_node_core_bin_prefix(&runtime.get_binary_path())?;
 
-        Ok(Self { npm_path, node_bin_dir })
+        Ok(Self { npm_path, node_core_dir })
     }
 
     async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "version").await?;
+        let output = npm_view(&self.npm_path, &self.node_core_dir, package_spec, "version").await?;
 
         parse_npm_view_version(&output)
     }
@@ -62,13 +64,13 @@ impl NpmRegistry {
 
 async fn npm_view(
     npm_path: &AbsolutePathBuf,
-    node_bin_dir: &AbsolutePathBuf,
+    node_core_dir: &AbsolutePathBuf,
     package_spec: &str,
     field: &str,
 ) -> Result<Vec<u8>, Error> {
     let output = Command::new(npm_path.as_path())
         .args(["view", package_spec, field, "--json"])
-        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .env("PATH", format_path_prepended(node_core_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

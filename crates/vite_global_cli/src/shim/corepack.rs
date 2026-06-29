@@ -134,9 +134,16 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
     };
     if let Some(corepack_path) = corepack_path {
         // The bundled corepack sits in the same bin directory as node;
-        // prepend it so corepack's child processes see the same runtime.
+        // prepend the limited core bin so child processes see the same runtime.
         if let Some(node_bin_dir) = corepack_path.parent() {
-            let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+            let node_path = if cfg!(windows) {
+                node_bin_dir.join("node.exe")
+            } else {
+                node_bin_dir.join("node")
+            };
+            if let Ok(node_core_dir) = vite_js_runtime::ensure_node_core_bin_prefix(&node_path) {
+                let _ = prepend_to_path_env(&node_core_dir, PrependOptions::default());
+            }
         }
         // Match the core-tool dispatch: nested core-tool shims pass through.
         // SAFETY: Setting env vars at this point before exec/spawn is safe

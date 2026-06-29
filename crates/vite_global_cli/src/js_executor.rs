@@ -232,7 +232,7 @@ impl JsExecutor {
         // Use project's runtime based on its devEngines.runtime configuration
         let runtime = self.ensure_project_runtime(project_path).await?;
         let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
+        let bin_prefix = runtime.ensure_core_bin_prefix()?;
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
@@ -243,7 +243,7 @@ impl JsExecutor {
     ) -> Result<Output, Error> {
         let runtime = self.ensure_project_runtime(project_path).await?;
         let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
+        let bin_prefix = runtime.ensure_core_bin_prefix()?;
         self.run_js_entry_output(project_path, &node_binary, &bin_prefix, args).await
     }
 
@@ -258,7 +258,7 @@ impl JsExecutor {
     ) -> Result<ExitStatus, Error> {
         let runtime = self.ensure_cli_runtime().await?;
         let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
+        let bin_prefix = runtime.ensure_core_bin_prefix()?;
         let scripts_dir = self.get_scripts_dir()?;
         let entry_point = scripts_dir.join("bin.js");
 
@@ -285,7 +285,7 @@ impl JsExecutor {
     ) -> Result<ExitStatus, Error> {
         let runtime = self.ensure_cli_runtime().await?;
         let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
+        let bin_prefix = runtime.ensure_core_bin_prefix()?;
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 

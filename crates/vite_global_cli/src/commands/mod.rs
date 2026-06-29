@@ -75,8 +75,8 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         executor.ensure_cli_runtime().await?
     };
 
-    let node_bin_prefix = runtime.get_bin_prefix();
-    // Use dedupe_anywhere=true to check if node bin already exists anywhere in PATH
+    let node_bin_prefix = runtime.ensure_core_bin_prefix()?;
+    // Use dedupe_anywhere=true to check if the core bin already exists anywhere in PATH
     let options = PrependOptions { dedupe_anywhere: true };
     if prepend_to_path_env(&node_bin_prefix, options) {
         tracing::debug!("Set PATH to include {:?}", node_bin_prefix);

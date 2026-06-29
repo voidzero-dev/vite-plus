@@ -14,7 +14,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use tokio::process::Command;
 use uuid::Uuid;
-use vite_js_runtime::NodeProvider;
+use vite_js_runtime::{NodeProvider, ensure_node_core_bin_prefix};
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
@@ -154,6 +154,10 @@ pub async fn install(
     let node_bin_dir = runtime.get_bin_prefix();
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
+    let node_core_dir = match ensure_node_core_bin_prefix(&runtime.get_binary_path()) {
+        Ok(path) => path,
+        Err(error) => return Err((None, Error::RuntimeDownload(error))),
+    };
 
     // 3. Install packages in parallel
     let mut packages = IndexMap::<String, Package>::new();
@@ -205,7 +209,7 @@ pub async fn install(
             installs.push(async {
                 (
                     package_name.clone(),
-                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
+                    install_one(package_name, package.spec, &npm_path, &node_core_dir).await,
                 )
             });
         }
@@ -527,7 +531,7 @@ async fn install_one(
     package_name: &str,
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
-    node_bin_dir: &AbsolutePathBuf,
+    node_core_dir: &AbsolutePathBuf,
 ) -> Result<(InstalledPackage, File), Error> {
     // 1. Create an immutable install directory.
     let install_id = new_install_id();
@@ -540,7 +544,7 @@ async fn install_one(
     let output = Command::new(npm_path.as_path())
         .args(["install", "-g", "--no-fund", &package_spec])
         .env("npm_config_prefix", install_dir.as_path())
-        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .env("PATH", format_path_prepended(node_core_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
