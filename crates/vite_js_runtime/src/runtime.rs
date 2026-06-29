@@ -135,6 +135,9 @@ pub fn ensure_node_core_bin_prefix(
             continue;
         }
         let link = core_dir.join(link_name);
+        if std::fs::symlink_metadata(link.as_path()).is_ok() {
+            continue;
+        }
         link_core_tool(target.as_path(), link.as_path())?;
     }
 
@@ -153,9 +156,6 @@ fn node_core_tools() -> &'static [(&'static str, &'static str)] {
 
 #[cfg(unix)]
 fn link_core_tool(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
-    if std::fs::symlink_metadata(link).is_ok() {
-        return Ok(());
-    }
     std::os::unix::fs::symlink(target, link)
 }
 
@@ -167,9 +167,6 @@ fn link_core_tool(target: &std::path::Path, link: &std::path::Path) -> std::io::
         .is_some_and(|ext| ext.eq_ignore_ascii_case("cmd"))
     {
         return write_core_cmd_wrapper(target, link);
-    }
-    if std::fs::symlink_metadata(link).is_ok() {
-        return Ok(());
     }
     std::fs::hard_link(target, link)
 }
@@ -183,12 +180,6 @@ fn write_core_cmd_wrapper(target: &std::path::Path, link: &std::path::Path) -> s
     let wrapper =
         format!("@ECHO OFF\r\nCALL \"%~dp0..\\{target_name}\" %*\r\nEXIT /B %ERRORLEVEL%\r\n");
 
-    if std::fs::read_to_string(link).is_ok_and(|content| content == wrapper) {
-        return Ok(());
-    }
-    if std::fs::symlink_metadata(link).is_ok() {
-        std::fs::remove_file(link)?;
-    }
     std::fs::write(link, wrapper)
 }
 
