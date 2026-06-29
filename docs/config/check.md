@@ -21,7 +21,13 @@ export default defineConfig({
 });
 ```
 
-When a step is disabled here, `vp check` prints a short `note:` line so it is clear why the step did not run.
+When a step is disabled here, `vp check` prints a short `note:` line so it is clear why the step did not run. With the `check.fmt: false` config above:
+
+```bash
+$ vp check
+note: Format skipped (check.fmt: false in vite.config.ts)
+pass: Found no warnings or lint errors in 1 file (12ms, 8 threads)
+```
 
 ## Scope and precedence
 
