@@ -313,7 +313,7 @@ const NODE_VERSION_SOURCE_LABELS: Record<NodeVersionUpgrade['source'], string> =
  * Best-effort wrapper around the synchronous, network-free
  * {@link resolveSupportedNodeRange} binding. Returns the open-ended
  * `>=<supported-minimum>` range for a below-floor constraint pin, or `null` when
- * the pin is already supported, unparseable, or in an unsupported major.
+ * the pin is already supported, unparsable, or in an unsupported major.
  */
 function resolveSupportedNodeFloorRange(from: string): string | null {
   try {

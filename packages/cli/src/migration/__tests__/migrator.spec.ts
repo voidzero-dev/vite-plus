@@ -3263,6 +3263,256 @@ describe('ensureVitePlusBootstrap', () => {
     expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(firstPackageJson);
     expect(fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8')).toBe(firstYarnrc);
   });
+
+  // Finding 1: rewriteYarnrcYml ALWAYS writes the vitest age-gate exemptions to
+  // npmPreapprovedPackages, but yarnrcSatisfiesVitePlus never checked them, so an
+  // otherwise-current Yarn project that lacked them took the "already Vite+" path
+  // and never got the exemptions -> hardened-mode install rejects fresh vitest.
+  it('treats a yarn project missing the npmPreapprovedPackages vitest exemptions as pending', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        resolutions: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
+        },
+      }),
+    );
+    // Current catalog + nodeLinker, but NO npmPreapprovedPackages exemptions.
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      [
+        'nodeLinker: node-modules',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '',
+      ].join('\n'),
+    );
+
+    // Missing exemptions -> still pending (so they get written).
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(true);
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.yarn));
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      npmPreapprovedPackages: string[];
+    };
+    expect(yarnrc.npmPreapprovedPackages).toContain('vitest');
+    expect(yarnrc.npmPreapprovedPackages).toContain('@vitest/*');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+  });
+
+  // Finding 2: rewritePnpmWorkspaceYaml adds the Vite+/vitest exemptions to
+  // minimumReleaseAgeExclude when minimumReleaseAge is configured, but the pnpm
+  // workspace pending check never inspected minimumReleaseAgeExclude, so an
+  // otherwise-current workspace skipped the fix and `pnpm install` could reject a
+  // freshly pinned version.
+  it('treats a pnpm workspace missing the minimumReleaseAge exemptions as pending', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        // The age gate is configured, but the exemptions are missing.
+        'minimumReleaseAge: 1440',
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      minimumReleaseAgeExclude: string[];
+    };
+    expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  // Finding 4: the bun reconcile injected a direct `vite` devDependency into EVERY
+  // workspace package lacking one (for oven-sh/bun#8406), dirtying unrelated
+  // workspaces that do not depend on vite-plus/vitest/a browser provider. The
+  // injection must be gated to packages that actually need it.
+  it('does not inject a direct `vite` edge into an unrelated bun workspace package', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+    // A workspace that depends on vite-plus -> still needs the bun direct vite edge.
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+    // A workspace with no vite-plus/vitest/provider signal -> must stay untouched.
+    const utilDir = path.join(tmpDir, 'packages', 'util');
+    fs.mkdirSync(utilDir, { recursive: true });
+    const utilJson = JSON.stringify({
+      name: '@scope/util',
+      dependencies: { 'left-pad': '^1.0.0' },
+    });
+    fs.writeFileSync(path.join(utilDir, 'package.json'), utilJson);
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.bun),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [
+        { name: '@scope/lib', path: 'packages/lib' },
+        { name: '@scope/util', path: 'packages/util' },
+      ],
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    // The vite-plus-depending workspace still gets the direct vite edge.
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(libPkg.devDependencies.vite).toBeDefined();
+
+    // The unrelated workspace is left exactly as written (no injected vite).
+    const utilPkg = readJson(path.join(utilDir, 'package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(utilPkg.devDependencies?.vite).toBeUndefined();
+    expect(utilPkg.dependencies?.vite).toBeUndefined();
+    expect(fs.readFileSync(path.join(utilDir, 'package.json'), 'utf8')).toBe(utilJson);
+  });
+});
+
+describe('ensureVitePlusBootstrap yarn workspace hoisting', () => {
+  let tmpDir: string;
+  const savedEnv: Record<string, string | undefined> = {};
+  // The Yarn-hoisting resolver consults these at highest precedence; clear them so
+  // an ambient value can't override the fixture `.yarnrc.yml` and make the test
+  // non-hermetic. HOME/USERPROFILE redirect the lowest-precedence home rc lookup.
+  const ISOLATED_ENV = [
+    'HOME',
+    'USERPROFILE',
+    'YARN_NODE_LINKER',
+    'YARN_NM_HOISTING_LIMITS',
+  ] as const;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bootstrap-yarn-hoist-'));
+    for (const key of ISOLATED_ENV) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    const cleanHome = path.join(tmpDir, '.home');
+    fs.mkdirSync(cleanHome, { recursive: true });
+    process.env.HOME = cleanHome;
+    process.env.USERPROFILE = cleanHome;
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    for (const key of ISOLATED_ENV) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+  });
+
+  // Finding 3: the bootstrap pending check only simulated
+  // reconcileVitePlusBootstrapPackage and ignored the Yarn workspace-hoisting
+  // opt-out. An existing Vite+ Yarn monorepo on `node-modules` +
+  // `nmHoistingLimits: workspaces` whose vite-plus workspace lacked
+  // `installConfig.hoistingLimits: none` was reported "already using Vite+" and
+  // never got the opt-out, leaving the split `@vitest/runner` layout.
+  it('opts a vite-plus yarn workspace out of nmHoistingLimits on the bootstrap path', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        resolutions: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      [
+        'nodeLinker: node-modules',
+        'nmHoistingLimits: workspaces',
+        'npmPreapprovedPackages:',
+        '  - vitest',
+        '  - "@vitest/*"',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '',
+      ].join('\n'),
+    );
+    // A vite-plus workspace WITHOUT the hoisting opt-out -> needs it.
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { 'vite-plus': 'catalog:' } }),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.yarn),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: '@scope/lib', path: 'packages/lib' }],
+    };
+
+    // The only pending reason is the missing hoisting opt-out.
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, workspaceInfo.packages, '4.12.0'),
+    ).toBe(true);
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, workspaceInfo.packages, '4.12.0'),
+    ).toBe(false);
+  });
 });
 
 describe('yarn catalog version gating', () => {

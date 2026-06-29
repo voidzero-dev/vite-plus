@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { runCommandSilently } from '../../utils/command.ts';
@@ -5,6 +6,27 @@ import { addMigrationWarning, type MigrationReport } from '../report.ts';
 import { ROLLDOWN_COMPAT_RESULT_PREFIX } from './protocol.ts';
 
 export { ROLLDOWN_COMPAT_RESULT_PREFIX };
+
+/**
+ * Resolve the isolated compat worker emitted at `migration/compat/worker.js`.
+ *
+ * The worker is a sibling of this module in source (`src/migration/compat/`),
+ * so `./worker.js` is the correct relative path. The bundler, however, inlines
+ * this runner into the parent `migration/bin.js` entry, which sits one level up
+ * from the emitted `migration/compat/worker.js`; there the worker lives in the
+ * nested `./compat/` directory. A fixed literal can only satisfy one layout:
+ * `./compat/worker.js` doubles to `compat/compat/worker.js` in source, while
+ * `./worker.js` misses the bundled worker. Probe for the nested
+ * `./compat/worker.js` next to this module to pick the right prefix for
+ * whichever layout this code is running in.
+ */
+function resolveWorkerPath(): string {
+  const nestedWorker = new URL('./compat/worker.js', import.meta.url);
+  if (existsSync(nestedWorker)) {
+    return fileURLToPath(nestedWorker);
+  }
+  return fileURLToPath(new URL('./worker.js', import.meta.url));
+}
 
 interface RolldownCompatibilityResult {
   warnings: string[];
@@ -46,7 +68,7 @@ export async function checkRolldownCompatibility(
   report: MigrationReport,
 ): Promise<void> {
   try {
-    const workerPath = fileURLToPath(new URL('./compat/worker.js', import.meta.url));
+    const workerPath = resolveWorkerPath();
     const result = await runCommandSilently({
       command: process.execPath,
       args: [workerPath, rootDir],

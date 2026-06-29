@@ -78,10 +78,12 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
 ///   no supported release (e.g. a lone `^21`, or the `^18` in `^18 || ^20`)
 ///   drop out.
 ///
-/// Returns `None` when the OVERALL floor (the minimum across all disjuncts) is
-/// already supported, the input is unparseable, or no disjunct has a supported
-/// release in its major (e.g. `^21 || ^23`). Pure range math: never touches the
-/// network / release index.
+/// Returns `None` when the input is unparsable, no disjunct has a supported
+/// release in its major (e.g. `^21 || ^23`), or nothing needed lifting. For a
+/// single disjunct that means its floor is already supported, and for a union it
+/// means every branch is already supported and survives verbatim (e.g.
+/// `^20.19.0 || ^22.18.0`). Pure range math: never touches the network / release
+/// index.
 ///
 /// # Example
 ///
@@ -89,33 +91,41 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
 /// `supported_node_floor_range("^20 || ^22", &range)`
 /// → `Some(">=20.19.0 <21.0.0 || >=22.18.0 <23.0.0")`.
 fn supported_node_floor_range(current: &str, supported_range: &Range) -> Option<String> {
-    // Reuse the floor-based decision: `None` here means "leave the pin alone".
-    // The check is against the OVERALL floor (the minimum across all disjuncts),
-    // so a multi-major pin whose lowest disjunct is already supported is left
-    // untouched.
-    let requirement = supported_node_requirement(current, supported_range)?;
-
     let normalized = current.strip_prefix('v').unwrap_or(current);
 
-    // Multi-major pin (`^20 || ^22`): collapsing to a single open-ended
-    // `>=<supported-minimum>` would (a) DROP the other disjuncts and (b) WIDEN
-    // the constraint across the unsupported gaps (21, 23) — and if the lowest
-    // disjunct's major is itself unsupported (e.g. `^18 || ^20`), the single
-    // `requirement` bracket would intersect to nothing and discard the
-    // supported branches entirely. Lift each disjunct independently instead, so
-    // every supported major survives, each below-floor disjunct is bounded to
-    // its own major (excluding 21 / 23), and fully-unsupported disjuncts drop
-    // out. An all-unsupported pin (`^21 || ^23`) yields no disjuncts → `None`.
+    // Multi-major pin (`^20 || ^22`): each disjunct must be lifted INDEPENDENTLY,
+    // regardless of the overall floor. The overall floor (the minimum across all
+    // disjuncts) cannot gate a union: a union whose lowest branch is supported
+    // can still carry a LATER below-floor branch (e.g. `^20.19.0 || ^22.0.0`,
+    // whose 22 branch admits 22.0 to 22.17 below the `^22.18.0` floor).
+    // Collapsing to a single open-ended `>=<supported-minimum>` would also
+    // (a) DROP the other disjuncts and (b) WIDEN the constraint across the gaps
+    // (21, 23). So lift each disjunct on its own: every supported major survives,
+    // each below-floor disjunct is bounded to its own major (excluding 21 / 23),
+    // and fully-unsupported disjuncts drop out. Return `None` only when no
+    // disjunct survives (`^21 || ^23`) or every disjunct survives verbatim, i.e.
+    // nothing needed lifting and nothing was dropped (`^20.19.0 || ^22.18.0`).
     if normalized.contains("||") {
-        let lifted: Vec<String> = normalized
-            .split("||")
-            .filter_map(|disjunct| lift_disjunct(disjunct.trim(), supported_range))
+        let originals: Vec<&str> = normalized.split("||").map(str::trim).collect();
+        let lifted: Vec<String> = originals
+            .iter()
+            .filter_map(|disjunct| lift_disjunct(disjunct, supported_range))
             .collect();
         if lifted.is_empty() {
             return None;
         }
+        // Unchanged union: same arity AND every branch kept verbatim → no rewrite.
+        let unchanged = lifted.len() == originals.len()
+            && lifted.iter().zip(&originals).all(|(lift, original)| lift.as_str() == *original);
+        if unchanged {
+            return None;
+        }
         return Some(lifted.join(" || "));
     }
+
+    // Single disjunct: reuse the floor-based decision as the gate. `None` here
+    // means "leave the pin alone" because the floor is already supported.
+    let requirement = supported_node_requirement(current, supported_range)?;
 
     // Single disjunct: keep the open-ended `>=<supported-minimum>` form so the
     // constraint keeps accepting newer supported releases of the same major
@@ -990,7 +1000,7 @@ mod tests {
                 "spec {spec} has no supported release in its major"
             );
         }
-        // Unparseable input → None.
+        // Unparsable input → None.
         assert_eq!(supported_node_floor_range("lts/*", &range), None);
         assert_eq!(supported_node_floor_range("", &range), None);
     }
@@ -1063,5 +1073,64 @@ mod tests {
         let range = Range::parse(SUPPORTED_RANGE).unwrap();
         // No disjunct has a supported release in its major → leave the pin alone.
         assert_eq!(supported_node_floor_range("^21 || ^23", &range), None);
+    }
+
+    #[test]
+    fn floor_range_multi_major_lifts_later_below_floor_disjunct() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+
+        // `^20.19.0 || ^22.0.0`: the FIRST/lowest branch (20.19.0) is already
+        // supported, so the OVERALL floor is supported, but the LATER `^22.0.0`
+        // branch accepts 22.0 to 22.17, below the `^22.18.0` floor. The 22 branch
+        // must be lifted independently while the supported `^20.19.0` branch
+        // stays verbatim, even though the overall floor would gate the rewrite
+        // out.
+        let result = supported_node_floor_range("^20.19.0 || ^22.0.0", &range)
+            .expect("a below-floor later disjunct must be lifted");
+        assert_eq!(result, "^20.19.0 || >=22.18.0 <23.0.0");
+
+        let rewritten = Range::parse(&result).unwrap();
+        assert!(
+            rewritten.satisfies(&Version::parse("20.19.0").unwrap()),
+            "keeps the supported 20.x branch"
+        );
+        assert!(
+            rewritten.satisfies(&Version::parse("22.18.0").unwrap()),
+            "admits the lifted 22.18.0"
+        );
+        assert!(
+            !rewritten.satisfies(&Version::parse("22.17.0").unwrap()),
+            "must not admit below-floor 22.17.x"
+        );
+        assert!(!rewritten.satisfies(&Version::parse("23.0.0").unwrap()), "must not admit 23.x");
+    }
+
+    #[test]
+    fn floor_range_multi_major_all_supported_is_none() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+        // Every branch is already supported → no rewrite, even though it is a
+        // union (regression guard for the gate-removal change).
+        assert_eq!(supported_node_floor_range("^20.19.0 || ^22.18.0", &range), None);
+    }
+
+    #[test]
+    fn floor_range_multi_major_drops_unsupported_lower_keeps_supported_higher() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+        // `^18 || ^20.19.0`: the lower branch's major (18) has no supported
+        // release and drops out; the higher `^20.19.0` branch is already
+        // supported and stays verbatim. Dropping a branch is still a rewrite.
+        let result = supported_node_floor_range("^18 || ^20.19.0", &range)
+            .expect("dropping an unsupported lower branch is still a rewrite");
+        assert_eq!(result, "^20.19.0");
+
+        let rewritten = Range::parse(&result).unwrap();
+        assert!(
+            rewritten.satisfies(&Version::parse("20.19.0").unwrap()),
+            "keeps the supported 20.x branch"
+        );
+        assert!(
+            !rewritten.satisfies(&Version::parse("18.20.0").unwrap()),
+            "the unsupported 18 branch is dropped"
+        );
     }
 }

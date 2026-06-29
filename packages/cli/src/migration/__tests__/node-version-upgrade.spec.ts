@@ -136,7 +136,7 @@ describe('upgradeUnsupportedNodeVersions', () => {
     const dir = makeTempDir();
     const sourcePath = path.join(dir, '.node-version');
     fs.writeFileSync(sourcePath, 'lts/*\n');
-    // Unparseable alias → the binding reports no upgrade.
+    // Unparsable alias → the binding reports no upgrade.
     resolveSupportedNodeVersion.mockResolvedValue(null);
 
     const changed = await upgradeUnsupportedNodeVersions(dir, false);

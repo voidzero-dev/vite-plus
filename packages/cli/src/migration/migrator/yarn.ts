@@ -398,11 +398,26 @@ export function yarnrcSatisfiesVitePlus(
   }
   const doc = readYamlFile(yarnrcYmlPath) as {
     nodeLinker?: string;
+    npmPreapprovedPackages?: string[];
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
   } | null;
+  if (!doc) {
+    return false;
+  }
+  // `rewriteYarnrcYml` ALWAYS preapproves the vitest age-gate family (regardless
+  // of catalog support or vitest usage) so Yarn hardened mode does not quarantine
+  // the freshly pinned vitest. Mirror it: the rc is not satisfied until every
+  // exempt entry is present, otherwise an otherwise-current project takes the
+  // early "already Vite+" path and never writes the exemptions.
+  const preapproved = new Set(
+    Array.isArray(doc.npmPreapprovedPackages) ? doc.npmPreapprovedPackages : [],
+  );
+  const npmPreapprovedSatisfied = VITEST_AGE_GATE_EXEMPT_PACKAGES.every((pkg) =>
+    preapproved.has(pkg),
+  );
   if (!supportCatalog) {
-    return !!doc && Object.hasOwn(doc, 'nodeLinker');
+    return Object.hasOwn(doc, 'nodeLinker') && npmPreapprovedSatisfied;
   }
   const resolver = createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
   const catalogName = resolver.preferredCatalogSpec.slice('catalog:'.length);
@@ -411,8 +426,8 @@ export function yarnrcSatisfiesVitePlus(
       ? doc?.catalogs?.[catalogName]
       : (doc?.catalog ?? doc?.catalogs?.default);
   return (
-    !!doc &&
     Object.hasOwn(doc, 'nodeLinker') &&
+    npmPreapprovedSatisfied &&
     overridesSatisfyVitePlus(managedCatalog, usesVitest) &&
     (VITE_PLUS_VERSION.startsWith('file:') ||
       resolver(resolver.preferredCatalogSpec, VITE_PLUS_NAME) === VITE_PLUS_VERSION)

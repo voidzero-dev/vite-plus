@@ -53,6 +53,24 @@ const PUBLIC_PEER_DEPENDENCY_FALLBACKS: Record<string, string> = {
   vitest: '*',
 };
 
+// Package-name patterns the migrator exempts from pnpm's `minimumReleaseAge`
+// gate. Vite+ pins `vitest` to an exact (sometimes freshly published) version and
+// the in-tree @vitest/* siblings install transitively at that version, so the age
+// gate would otherwise quarantine the Vite+-managed family and break `vp install`.
+// Shared between the writer (`rewritePnpmWorkspaceYaml`) and the pending check
+// (`pnpmWorkspaceMinimumReleaseAgeExemptionsPending`) so they cannot drift.
+const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
+  'vite-plus',
+  '@voidzero-dev/*',
+  'oxlint',
+  '@oxlint/*',
+  'oxlint-tsgolint',
+  '@oxlint-tsgolint/*',
+  'oxfmt',
+  '@oxfmt/*',
+  ...VITEST_AGE_GATE_EXEMPT_PACKAGES,
+] as const;
+
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
 
 // pnpm 10.5 started reading package.json#pnpm settings from
@@ -314,24 +332,9 @@ export function rewritePnpmWorkspaceYaml(
     }
     doc.setIn(['peerDependencyRules', 'allowedVersions'], allowedVersions);
 
-    // minimumReleaseAgeExclude
+    // minimumReleaseAgeExclude: exempt the Vite+-managed packages (vite-plus,
+    // @voidzero-dev/*, the ox* family, and the vitest family) from the age gate.
     if (doc.has('minimumReleaseAge')) {
-      // Exempt the Vite+-managed packages from the age gate: vite-plus,
-      // @voidzero-dev/*, the ox* family, and the vitest family. Vite+ pins
-      // `vitest` to an exact (sometimes freshly published) version and the
-      // in-tree @vitest/* siblings install transitively at that version, so the
-      // age gate would otherwise quarantine them and break `vp install`.
-      const excludes = [
-        'vite-plus',
-        '@voidzero-dev/*',
-        'oxlint',
-        '@oxlint/*',
-        'oxlint-tsgolint',
-        '@oxlint-tsgolint/*',
-        'oxfmt',
-        '@oxfmt/*',
-        ...VITEST_AGE_GATE_EXEMPT_PACKAGES,
-      ];
       let minimumReleaseAgeExclude = doc.getIn(['minimumReleaseAgeExclude']) as YAMLSeq<
         Scalar<string>
       >;
@@ -339,7 +342,7 @@ export function rewritePnpmWorkspaceYaml(
         minimumReleaseAgeExclude = new YAMLSeq();
       }
       const existing = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
-      for (const exclude of excludes) {
+      for (const exclude of PNPM_MINIMUM_RELEASE_AGE_EXCLUDES) {
         if (!existing.has(exclude)) {
           minimumReleaseAgeExclude.add(scalarString(exclude));
         }
@@ -1252,6 +1255,31 @@ export function readPnpmWorkspaceOverrides(
   }
   const doc = readYamlFile(pnpmWorkspaceYamlPath) as { overrides?: Record<string, string> } | null;
   return doc?.overrides;
+}
+
+// True when pnpm-workspace.yaml configures `minimumReleaseAge` but its
+// `minimumReleaseAgeExclude` is missing any Vite+-managed exemption that
+// `rewritePnpmWorkspaceYaml` would add. Used by the bootstrap pending check so an
+// otherwise-current workspace is not reported "already using Vite+" while the
+// freshly pinned versions would still be quarantined by the age gate. Gated on
+// `minimumReleaseAge` being present, mirroring the writer (no gate -> nothing to
+// exempt).
+export function pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath: string): boolean {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return false;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
+    minimumReleaseAge?: unknown;
+    minimumReleaseAgeExclude?: string[];
+  } | null;
+  if (!doc || doc.minimumReleaseAge === undefined) {
+    return false;
+  }
+  const existing = new Set(
+    Array.isArray(doc.minimumReleaseAgeExclude) ? doc.minimumReleaseAgeExclude : [],
+  );
+  return PNPM_MINIMUM_RELEASE_AGE_EXCLUDES.some((exclude) => !existing.has(exclude));
 }
 
 export function readPnpmWorkspacePeerDependencyRules(

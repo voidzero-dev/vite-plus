@@ -15,11 +15,13 @@ import { editYamlFile, readYamlFile, type YamlDocument } from '../../utils/yaml.
 import {
   alignVitestEcosystemPackages,
   applyBuildAllowanceToPackageJsonPnpm,
+  applyYarnWorkspaceHoistingFix,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
   ensureDirectViteForPnpm,
   ensurePnpmWorkspacePackages,
+  findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
   isLegacyWrapperSpec,
@@ -29,6 +31,7 @@ import {
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
   pnpmSupportsWorkspaceSettings,
+  pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
   readBunCatalogDependencyResolver,
@@ -410,10 +413,18 @@ function reconcileVitePlusBootstrapPackage(
     // catalog-capable bun a `catalog:` edge (matching the catalog/override sinks)
     // and the concrete core alias otherwise. Verified on bun 1.3.11.
     // See https://github.com/oven-sh/bun/issues/8406.
+    //
+    // Only the vitest peer drags `vite` in, so gate the injection to packages that
+    // actually pull vitest — a direct `vite-plus` (bundles vitest), a direct/used
+    // vitest, or an opt-in browser provider (a vitest peer) — mirroring the
+    // pnpm/npm branches. Injecting `vite` into every workspace package would dirty
+    // unrelated workspaces that don't depend on the vitest family.
+    const needsDirectVite =
+      hasDirectVitePlusInstallEntry(pkg) || usesVitest || usesAnyOptInProvider;
     const viteAlreadyDirect = installGroups.some(
       (dependencies) => dependencies?.vite !== undefined,
     );
-    if (!viteAlreadyDirect) {
+    if (needsDirectVite && !viteAlreadyDirect) {
       setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     }
   }
@@ -519,6 +530,46 @@ function workspaceVitestEcosystemCatalogReferencesPending(
   });
 }
 
+// True when an existing Vite+ Yarn monorepo still needs the workspace-hoisting
+// opt-out that `ensureVitePlusBootstrap` writes. Mirrors the silent auto-fix in
+// `applyYarnWorkspaceHoistingFix`: under `node-modules` + `nmHoistingLimits:
+// workspaces`, a non-root workspace that depends on `vite-plus` (which bundles
+// vitest) but lacks an explicit `installConfig.hoistingLimits` keeps its own split
+// `@vitest/runner` copy unless opted out to `none`. Only the silently-fixable
+// layout is reported pending; the warn-only layouts (root `dependencies`, or an
+// explicit per-workspace limit) cannot be fixed from package.json, so flagging
+// them would make the bootstrap pending forever.
+function yarnWorkspaceHoistingOptOutPending(
+  rootDir: string,
+  packageManager: PackageManager,
+  packages: WorkspacePackage[] | undefined,
+): boolean {
+  if (packageManager !== PackageManager.yarn || !packages?.length) {
+    return false;
+  }
+  const hoisting = findYarnWorkspaceHoisting(rootDir);
+  if (!hoisting || hoisting.nodeLinker !== 'node-modules' || hoisting.limit !== 'workspaces') {
+    return false;
+  }
+  return packages.some((workspacePackage) => {
+    const packagePath = path.join(rootDir, workspacePackage.path);
+    if (path.resolve(packagePath) === hoisting.rootDir) {
+      return false;
+    }
+    const childPackageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(childPackageJsonPath)) {
+      return false;
+    }
+    const childPkg = readJsonFile(childPackageJsonPath) as BootstrapPackageJson & {
+      installConfig?: { hoistingLimits?: string };
+    };
+    return (
+      hasDirectVitePlusInstallEntry(childPkg) &&
+      childPkg.installConfig?.hoistingLimits === undefined
+    );
+  });
+}
+
 export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
@@ -604,7 +655,8 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.yarn) {
     return (
       !overridesSatisfyVitePlus(pkg.resolutions, usesVitest) ||
-      !yarnrcSatisfiesVitePlus(projectPath, usesVitest, supportCatalog)
+      !yarnrcSatisfiesVitePlus(projectPath, usesVitest, supportCatalog) ||
+      yarnWorkspaceHoistingOptOutPending(projectPath, packageManager, packages)
     );
   }
   if (packageManager === PackageManager.npm) {
@@ -639,7 +691,8 @@ export function detectVitePlusBootstrapPending(
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
         usesVitest,
-      )
+      ) ||
+      pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath)
     );
   }
 
@@ -906,6 +959,18 @@ export function ensureVitePlusBootstrap(
 
   // Existing Vite+ monorepos take this bootstrap path instead of the full
   // migration, so reconcile every workspace manifest as well as the root.
+  //
+  // Yarn `nmHoistingLimits` isolation (resolved from the root `.yarnrc.yml`
+  // chain) splits the bundled vitest family per workspace. Mirror the full
+  // migration (`rewriteMonorepoProject`) and opt each vite-plus workspace out so
+  // its vitest dedupes to the single shared root copy, or warn when the split
+  // cannot be fixed from package.json. The root itself never needs an opt-out (its
+  // deps already hoist to the top), so `applyYarnWorkspaceHoistingFix` is gated on
+  // a non-root workspace that depends on vite-plus.
+  const yarnHoisting =
+    workspaceInfo.packageManager === PackageManager.yarn
+      ? findYarnWorkspaceHoisting(projectPath)
+      : undefined;
   for (const workspacePackage of workspaceInfo.packages) {
     const packagePath = path.join(projectPath, workspacePackage.path);
     const childPackageJsonPath = path.join(packagePath, 'package.json');
@@ -913,18 +978,36 @@ export function ensureVitePlusBootstrap(
       continue;
     }
     let childChanged = false;
-    editJsonFile<BootstrapPackageJson>(childPackageJsonPath, (pkg) => {
-      childChanged = reconcileVitePlusBootstrapPackage(
-        packagePath,
-        pkg,
-        canonicalVitePlusSpec,
-        workspaceInfo.packageManager,
-        supportCatalog,
-        false,
-        catalogDependencyResolver,
-      );
-      return childChanged ? pkg : undefined;
-    });
+    editJsonFile<BootstrapPackageJson & { installConfig?: { hoistingLimits?: string } }>(
+      childPackageJsonPath,
+      (pkg) => {
+        const before = JSON.stringify(pkg);
+        reconcileVitePlusBootstrapPackage(
+          packagePath,
+          pkg,
+          canonicalVitePlusSpec,
+          workspaceInfo.packageManager,
+          supportCatalog,
+          false,
+          catalogDependencyResolver,
+        );
+        if (
+          yarnHoisting &&
+          path.resolve(packagePath) !== yarnHoisting.rootDir &&
+          hasDirectVitePlusInstallEntry(pkg)
+        ) {
+          applyYarnWorkspaceHoistingFix(
+            pkg,
+            yarnHoisting.limit,
+            yarnHoisting.nodeLinker,
+            path.relative(yarnHoisting.rootDir, packagePath) || packagePath,
+            report,
+          );
+        }
+        childChanged = before !== JSON.stringify(pkg);
+        return childChanged ? pkg : undefined;
+      },
+    );
     result.packageJson = result.packageJson || childChanged;
   }
 
@@ -942,6 +1025,7 @@ export function ensureVitePlusBootstrap(
         result.packageJson ||
         ecosystemCatalogReferencesPending ||
         !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||
+        pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath) ||
         catalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),

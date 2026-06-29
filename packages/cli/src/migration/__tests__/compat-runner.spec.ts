@@ -31,10 +31,16 @@ describe('checkRolldownCompatibility', () => {
     expect(mockRunCommandSilently).toHaveBeenCalledWith({
       command: process.execPath,
       // fileURLToPath yields OS-native separators: '/' on POSIX, '\' on Windows.
-      args: [expect.stringMatching(/compat[/\\]worker\.js$/), '/project'],
+      // The worker must resolve as the emitted sibling `migration/compat/worker.js`,
+      // never the doubled `migration/compat/compat/worker.js` that `./compat/worker.js`
+      // produces relative to this module's own directory.
+      args: [expect.stringMatching(/migration[/\\]compat[/\\]worker\.js$/), '/project'],
       cwd: '/project',
       envs: process.env,
     });
+
+    const [{ args }] = mockRunCommandSilently.mock.calls[0];
+    expect(args[0]).not.toMatch(/compat[/\\]compat/);
   });
 
   it('skips compatibility checking when project config crashes the worker', async () => {
