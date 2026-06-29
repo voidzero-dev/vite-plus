@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { globSync } from 'glob';
 import semver from 'semver';
 
 import {
@@ -136,47 +137,18 @@ const NODE_VERSION_FILE_NVMRC_RE = /(node-version-file:[ \t]*)(['"]?)(\.\/)?\.nv
 
 /**
  * Collect GitHub Actions YAML files that may carry a `node-version-file:`
- * reference: top-level workflows (`.github/workflows/*.{yml,yaml}`) and composite
- * action definitions (`.github/actions/**​/action.{yml,yaml}`, nested at any
- * depth). Returns absolute paths. Best-effort: missing or unreadable directories
- * are skipped.
+ * reference: top-level workflows (`.github/workflows/*.{yml,yaml}`, which GitHub
+ * runs only when flat in that directory) and composite action definitions
+ * (`.github/actions/**​/action.{yml,yaml}`, which may nest at any depth). Returns
+ * absolute paths; a missing `.github` tree just yields an empty list. `nocase`
+ * keeps the match case-insensitive on case-sensitive filesystems.
  */
 function collectGithubActionFiles(projectPath: string): string[] {
-  const files: string[] = [];
-
-  const workflowsDir = path.join(projectPath, '.github', 'workflows');
-  try {
-    for (const entry of fs.readdirSync(workflowsDir)) {
-      if (/\.ya?ml$/i.test(entry)) {
-        files.push(path.join(workflowsDir, entry));
-      }
-    }
-  } catch {
-    // No `.github/workflows` directory (or unreadable): nothing to add.
-  }
-
-  // Composite actions live under `.github/actions/<name>/action.{yml,yaml}` and
-  // can be nested at any depth, so walk the tree.
-  const stack = [path.join(projectPath, '.github', 'actions')];
-  while (stack.length > 0) {
-    const dir = stack.pop()!;
-    let dirEntries: fs.Dirent[];
-    try {
-      dirEntries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const dirEntry of dirEntries) {
-      const full = path.join(dir, dirEntry.name);
-      if (dirEntry.isDirectory()) {
-        stack.push(full);
-      } else if (/^action\.ya?ml$/i.test(dirEntry.name)) {
-        files.push(full);
-      }
-    }
-  }
-
-  return files;
+  return globSync(['workflows/*.{yml,yaml}', 'actions/**/action.{yml,yaml}'], {
+    cwd: path.join(projectPath, '.github'),
+    absolute: true,
+    nocase: true,
+  });
 }
 
 /**
