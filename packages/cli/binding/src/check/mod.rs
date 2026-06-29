@@ -9,9 +9,9 @@ use vite_shared::output;
 use vite_task::ExitStatus;
 
 use self::analysis::{
-    LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count, format_elapsed,
-    lint_config_type_check_enabled, print_error_block, print_pass_line, print_stdout_block,
-    print_summary_line,
+    LintMessageKind, analyze_fmt_check_output, analyze_lint_output, check_config_step_enabled,
+    format_count, format_elapsed, lint_config_type_check_enabled, print_error_block,
+    print_pass_line, print_stdout_block, print_summary_line,
 };
 use crate::cli::{
     CapturedCommandOutput, SubcommandResolver, SynthesizableSubcommand, resolve_and_capture_output,
@@ -21,8 +21,8 @@ use crate::cli::{
 pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
     fix: bool,
-    no_fmt: bool,
-    no_lint: bool,
+    no_fmt_flag: bool,
+    no_lint_flag: bool,
     no_error_on_unmatched_pattern: bool,
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
@@ -38,6 +38,23 @@ pub(crate) async fn execute_check(
     let mut deferred_lint_pass: Option<(String, String)> = None;
     let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
 
+    // A step is skipped when either the CLI flag is passed OR `check.fmt`/
+    // `check.lint` is disabled in vite.config.ts. The skip note is printed only
+    // when CONFIG (not the CLI flag) turned a step off, so existing `--no-fmt` /
+    // `--no-lint` output stays byte-identical.
+    let config_fmt_off =
+        !check_config_step_enabled(resolved_vite_config.check.as_ref(), "fmt");
+    let config_lint_off =
+        !check_config_step_enabled(resolved_vite_config.check.as_ref(), "lint");
+    if config_fmt_off && !no_fmt_flag {
+        output::note("Format skipped (check.fmt: false in vite.config.ts)");
+    }
+    if config_lint_off && !no_lint_flag {
+        output::note("Lint skipped (check.lint: false in vite.config.ts)");
+    }
+    let no_fmt = no_fmt_flag || config_fmt_off;
+    let no_lint = no_lint_flag || config_lint_off;
+
     let type_check_enabled = lint_config_type_check_enabled(resolved_vite_config.lint.as_ref());
     let lint_enabled = !no_lint;
     let run_lint_phase = lint_enabled || type_check_enabled;
@@ -45,7 +62,7 @@ pub(crate) async fn execute_check(
     if no_fmt && !run_lint_phase {
         output::error("No checks enabled");
         print_summary_line(
-            "Enable `lint.options.typeCheck` in vite.config.ts to use `vp check --no-fmt --no-lint` for type-check only, or drop a flag to re-enable fmt/lint.",
+            "Enable `lint.options.typeCheck` in vite.config.ts for type-check only, drop a `--no-fmt`/`--no-lint` flag, or re-enable `check.fmt`/`check.lint` in vite.config.ts.",
         );
         return Ok(ExitStatus(1));
     }

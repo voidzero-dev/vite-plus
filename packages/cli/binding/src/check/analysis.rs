@@ -94,6 +94,18 @@ pub(super) fn lint_config_type_check_enabled(lint_config: Option<&serde_json::Va
     type_aware && type_check
 }
 
+/// Read `check.<key>` from vite.config.ts. An absent block, an absent key, or a
+/// non-boolean value all default to `true` (the step runs).
+pub(super) fn check_config_step_enabled(
+    check_config: Option<&serde_json::Value>,
+    key: &str,
+) -> bool {
+    check_config
+        .and_then(|config| config.get(key))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true)
+}
+
 fn parse_check_summary(line: &str) -> Option<CheckSummary> {
     let rest = line.strip_prefix("Finished in ")?;
     let (duration, rest) = rest.split_once(" on ")?;
@@ -247,7 +259,7 @@ pub(super) fn analyze_lint_output(output: &str) -> Option<Result<LintSuccess, Li
 mod tests {
     use serde_json::json;
 
-    use super::{LintMessageKind, lint_config_type_check_enabled};
+    use super::{LintMessageKind, check_config_step_enabled, lint_config_type_check_enabled};
 
     #[test]
     fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
@@ -294,6 +306,25 @@ mod tests {
         assert!(!lint_config_type_check_enabled(Some(&json!({
             "options": { "typeAware": true, "typeCheck": null }
         }))));
+    }
+
+    #[test]
+    fn check_config_step_defaults_to_enabled() {
+        // No `check` block, an absent key, or a non-bool value all default to true.
+        assert!(check_config_step_enabled(None, "fmt"));
+        assert!(check_config_step_enabled(Some(&json!({})), "fmt"));
+        assert!(check_config_step_enabled(Some(&json!({ "lint": false })), "fmt"));
+        assert!(check_config_step_enabled(Some(&json!({ "fmt": "false" })), "fmt"));
+        assert!(check_config_step_enabled(Some(&json!({ "fmt": 0 })), "fmt"));
+        assert!(check_config_step_enabled(Some(&json!({ "fmt": null })), "fmt"));
+    }
+
+    #[test]
+    fn check_config_step_respects_explicit_booleans() {
+        assert!(!check_config_step_enabled(Some(&json!({ "fmt": false })), "fmt"));
+        assert!(check_config_step_enabled(Some(&json!({ "fmt": true })), "fmt"));
+        assert!(!check_config_step_enabled(Some(&json!({ "lint": false })), "lint"));
+        assert!(check_config_step_enabled(Some(&json!({ "lint": true })), "lint"));
     }
 
     #[test]
