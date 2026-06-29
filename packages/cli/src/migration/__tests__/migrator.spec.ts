@@ -1618,6 +1618,52 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
   });
 
+  it('rewrites a STANDALONE bun `catalog:` override to the concrete core alias (catalogs unsupported)', () => {
+    // Regression: a standalone (non-workspace) bun project already on Vite+ that
+    // carries `overrides.vite: "catalog:"` plus a matching top-level `catalog`.
+    // Bun resolves `catalog:` ONLY inside a workspace, so on a standalone project
+    // the catalog field is dead and `bun install --force` aborts on
+    // `vite@catalog:`. The catalog-aware bun resolver must NOT be consulted when
+    // catalogs are unsupported (`supportCatalog === false`) — otherwise the
+    // `catalog:` override resolves through the catalog and is treated as already
+    // satisfied, leaving it dangling. It must instead be rewritten to the
+    // concrete `@voidzero-dev/vite-plus-core` alias, mirroring the direct `vite`
+    // edge on the standalone path.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'standalone-bun-catalog-override',
+        devDependencies: {
+          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          'vite-plus': 'latest',
+        },
+        overrides: { vite: 'catalog:' },
+        catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    // Detection must not accept the dangling `catalog:` override as satisfied via
+    // the unsupported catalog resolver: the project is still pending.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(true);
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+    expect(result.changed).toBe(true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+    };
+    // The `catalog:` override is rewritten to the concrete core alias so
+    // `bun install --force` resolves it without a workspace catalog.
+    expect(pkg.overrides.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.overrides.vite).not.toMatch(/^catalog:/);
+
+    // Settled afterward: a second detect pass is a no-op.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+  });
+
   it('injects a SORTED direct `vite` edge for an npm opt-in-provider project on upgrade', () => {
     // npm has no catalog, so the direct `vite` edge an opt-in browser provider
     // needs (so nested `@vitest/mocker` copies resolve a single hoisted `vite`)

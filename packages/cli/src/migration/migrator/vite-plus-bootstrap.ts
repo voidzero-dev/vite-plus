@@ -674,10 +674,14 @@ export function detectVitePlusBootstrapPending(
     );
   }
   if (packageManager === PackageManager.bun) {
+    // A standalone bun project (`supportCatalog === false`) cannot resolve
+    // `catalog:` references, so the catalog resolver must NOT be consulted —
+    // otherwise a dangling `catalog:` override resolves through the dead catalog
+    // field and is mistaken for satisfied, masking the pending rewrite.
     return !overridesSatisfyVitePlus(
       pkg.overrides,
       usesVitest,
-      readBunCatalogDependencyResolver(pkg),
+      supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
     );
   }
   if (packageManager === PackageManager.pnpm) {
@@ -929,10 +933,14 @@ export function ensureVitePlusBootstrap(
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.bun) {
+      // Standalone bun (`supportCatalog === false`) has no catalog support, so a
+      // `catalog:` override must be rewritten to the concrete core alias rather
+      // than left dangling — the catalog resolver is only consulted for a real
+      // bun workspace where `rewriteBunCatalog` maintains the catalog field.
       const ensured = ensureOverrideEntries(
         pkg.overrides,
         usesVitest,
-        readBunCatalogDependencyResolver(pkg),
+        supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
       );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;

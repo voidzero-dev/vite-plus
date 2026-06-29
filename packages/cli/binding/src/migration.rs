@@ -67,9 +67,13 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
 /// `supported_range` (e.g. `^20.19.0 || ^22.18.0 || >=24.11.0` yields `20.19.0`
 /// / `22.18.0` / `24.11.0`): there are no hardcoded per-major floors.
 ///
-/// - **Single disjunct** (`>=24`, `^24`, `24.3.0`, …) → the open-ended
-///   `>=<supported-minimum>` form, so the constraint keeps accepting newer
-///   supported releases of that major.
+/// - **Single disjunct** (`^24`, `24.3.0`, `>=24`, …) → lifted to its major's
+///   supported minimum while keeping the bounded-vs-open shape of the input: a
+///   bounded pin (`^24`, `24`, `24.3.0`, `~20`, `20.x`) becomes
+///   `>=<supported-minimum> <<next-major>.0.0` so the unsupported next major
+///   stays excluded, while a genuinely open pin (`>=24`) becomes the open
+///   `>=<supported-minimum>`. This is the SAME per-disjunct decision the union
+///   path applies, so the two paths never disagree.
 /// - **Multi-major disjunct** (`^20 || ^22`) → each disjunct's floor is lifted
 ///   to that major's supported minimum while its per-major upper bound is
 ///   preserved, so EVERY supported disjunct survives and the unsupported gaps
@@ -87,60 +91,49 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
 ///
 /// # Example
 ///
-/// `supported_node_floor_range(">=24", &range)` → `Some(">=24.11.0")`;
-/// `supported_node_floor_range("^20 || ^22", &range)`
+/// `supported_node_floor_range(">=24", &range)` → `Some(">=24.11.0")` (open);
+/// `supported_node_floor_range("^24", &range)` → `Some(">=24.11.0 <25.0.0")`
+/// (bounded); `supported_node_floor_range("^20 || ^22", &range)`
 /// → `Some(">=20.19.0 <21.0.0 || >=22.18.0 <23.0.0")`.
 fn supported_node_floor_range(current: &str, supported_range: &Range) -> Option<String> {
     let normalized = current.strip_prefix('v').unwrap_or(current);
 
-    // Multi-major pin (`^20 || ^22`): each disjunct must be lifted INDEPENDENTLY,
-    // regardless of the overall floor. The overall floor (the minimum across all
-    // disjuncts) cannot gate a union: a union whose lowest branch is supported
-    // can still carry a LATER below-floor branch (e.g. `^20.19.0 || ^22.0.0`,
-    // whose 22 branch admits 22.0 to 22.17 below the `^22.18.0` floor).
-    // Collapsing to a single open-ended `>=<supported-minimum>` would also
-    // (a) DROP the other disjuncts and (b) WIDEN the constraint across the gaps
-    // (21, 23). So lift each disjunct on its own: every supported major survives,
-    // each below-floor disjunct is bounded to its own major (excluding 21 / 23),
-    // and fully-unsupported disjuncts drop out. Return `None` only when no
-    // disjunct survives (`^21 || ^23`) or every disjunct survives verbatim, i.e.
-    // nothing needed lifting and nothing was dropped (`^20.19.0 || ^22.18.0`).
-    if normalized.contains("||") {
-        let originals: Vec<&str> = normalized.split("||").map(str::trim).collect();
-        let lifted: Vec<String> = originals
-            .iter()
-            .filter_map(|disjunct| lift_disjunct(disjunct, supported_range))
-            .collect();
-        if lifted.is_empty() {
-            return None;
-        }
-        // No rewrite when the lifted union is identical to the input: every
-        // branch survived verbatim and none was dropped (a drop shortens the
-        // join, a lift changes a branch — both differ from the original join).
-        let rewritten = lifted.join(" || ");
-        if rewritten == originals.join(" || ") {
-            return None;
-        }
-        return Some(rewritten);
+    // Lift every `||` disjunct INDEPENDENTLY, whether the pin is a single
+    // disjunct (`^24`) or a union (`^20 || ^22`). The overall floor cannot gate a
+    // union: a union whose lowest branch is supported can still carry a LATER
+    // below-floor branch (e.g. `^20.19.0 || ^22.0.0`, whose 22 branch admits 22.0
+    // to 22.17 below the `^22.18.0` floor). Per-disjunct lifting keeps every
+    // supported major, bounds each below-floor disjunct to its own major
+    // (excluding the unsupported gaps 21 / 23), keeps a genuinely open branch
+    // (`>=24`) open, and drops fully-unsupported disjuncts (a lone `^21`, or the
+    // `^18` of `^18 || ^20`). The single-disjunct case is just a union of one, so
+    // it goes through the same lift and inherits the same bounded-vs-open shape.
+    let originals: Vec<&str> = normalized.split("||").map(str::trim).collect();
+    let lifted: Vec<String> =
+        originals.iter().filter_map(|disjunct| lift_disjunct(disjunct, supported_range)).collect();
+
+    // No disjunct survived (`^21 || ^23`, `lts/*`, unparsable, ...) → leave the
+    // pin alone.
+    if lifted.is_empty() {
+        return None;
     }
 
-    // Single disjunct: reuse the floor-based decision as the gate. `None` here
-    // means "leave the pin alone" because the floor is already supported.
-    let requirement = supported_node_requirement(current, supported_range)?;
-
-    // Single disjunct: keep the open-ended `>=<supported-minimum>` form so the
-    // constraint keeps accepting newer supported releases of the same major
-    // (e.g. `^24` / `>=24` → `>=24.11.0`). The supported minimum for this major
-    // is the floor of the major bracket intersected with the supported range.
-    // An unsupported major (e.g. 21) yields an empty intersection → `None`,
-    // matching the resolve-then-verify rejection on the concrete path.
-    let requirement_range = Range::parse(&requirement).ok()?;
-    let supported_minimum = requirement_range.intersect(supported_range)?.min_version()?;
-    Some(format!(">={supported_minimum}"))
+    // No rewrite when the lifted form is identical to the input: every branch
+    // survived verbatim and none was dropped (a drop shortens the join, a lift
+    // changes a branch — both differ from the original join). For a single
+    // already-supported disjunct this is the "floor already supported → leave the
+    // pin alone" gate; for a union it is the "every branch already supported" gate
+    // (e.g. `^20.19.0 || ^22.18.0`).
+    let rewritten = lifted.join(" || ");
+    if rewritten == originals.join(" || ") {
+        return None;
+    }
+    Some(rewritten)
 }
 
-/// Rewrite a single disjunct of a multi-major constraint pin (a `||`-separated
-/// branch of `engines.node` / `devEngines.runtime[node].version`).
+/// Rewrite one `||`-separated disjunct of a Node.js constraint pin (a branch of
+/// `engines.node` / `devEngines.runtime[node].version`). `supported_node_floor_range`
+/// runs every pin through this, treating a single-disjunct pin as a union of one.
 ///
 /// Returns:
 /// - the disjunct verbatim when its floor is already supported (e.g. the
@@ -154,9 +147,9 @@ fn supported_node_floor_range(current: &str, supported_range: &Range) -> Option<
 /// - `None` when the major has no supported release (a lone `^21`, or the `^18`
 ///   of `^18 || ^20`), so the disjunct drops out of the rewritten union.
 ///
-/// Unlike the single-disjunct path, a bounded caret branch (`^24`) is kept
-/// bounded here: in a union the user enumerated specific majors, so the rewrite
-/// must not widen past them.
+/// A bounded branch (`^24`, `24`, `>=20 <21`) is kept bounded so the rewrite
+/// never widens past the major the pin named; an open branch (`>=24`) stays open
+/// so it keeps accepting newer supported releases of that major.
 fn lift_disjunct(disjunct: &str, supported_range: &Range) -> Option<String> {
     let parsed = Range::parse(disjunct).ok()?;
     let floor = parsed.min_version()?;
@@ -958,28 +951,46 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
-    // supported_node_floor_range: open-ended `>=<supported-minimum>` for the
-    // constraint fields (engines.node / devEngines.runtime). Pure range math,
-    // derived from the supported range (no hardcoded per-major floors).
+    // supported_node_floor_range: lift below-floor constraint-field pins
+    // (engines.node / devEngines.runtime) to their major's supported minimum,
+    // keeping the bounded-vs-open shape of the input. Pure range math, derived
+    // from the supported range (no hardcoded per-major floors).
     // ---------------------------------------------------------------------
 
     #[test]
     fn floor_range_targets_supported_minimum() {
         let range = Range::parse(SUPPORTED_RANGE).unwrap();
-        // Below-floor major-24 pins (bare/open/caret/partial/exact) all lift to
-        // the major's supported minimum, 24.11.0.
-        for spec in ["24", ">=24", ">=24.0.0", "^24", "^24.3.0", "24.3.0", "24.2"] {
+        // Below-floor major-24 pins that are BOUNDED to major 24 (bare/caret/
+        // partial/exact) lift to the supported minimum while keeping the upper
+        // bound, so the unsupported next major (25) stays excluded.
+        for spec in ["24", "^24", "^24.3.0", "24.3.0", "24.2"] {
+            assert_eq!(
+                supported_node_floor_range(spec, &range).as_deref(),
+                Some(">=24.11.0 <25.0.0"),
+                "bounded spec {spec} should lift to >=24.11.0 <25.0.0"
+            );
+        }
+        // OPEN major-24 pins lift to the supported minimum but stay open, so they
+        // keep accepting newer releases.
+        for spec in [">=24", ">=24.0.0"] {
             assert_eq!(
                 supported_node_floor_range(spec, &range).as_deref(),
                 Some(">=24.11.0"),
-                "spec {spec} should lift to >=24.11.0"
+                "open spec {spec} should lift to the open >=24.11.0"
             );
         }
-        // Other majors derive their own supported minimum from the range.
-        assert_eq!(supported_node_floor_range("22.0.0", &range).as_deref(), Some(">=22.18.0"));
+        // Other majors derive their own supported minimum from the range and keep
+        // the same bounded-vs-open shape.
+        assert_eq!(
+            supported_node_floor_range("22.0.0", &range).as_deref(),
+            Some(">=22.18.0 <23.0.0")
+        );
         assert_eq!(supported_node_floor_range(">=22", &range).as_deref(), Some(">=22.18.0"));
-        assert_eq!(supported_node_floor_range("20.5", &range).as_deref(), Some(">=20.19.0"));
-        assert_eq!(supported_node_floor_range("20", &range).as_deref(), Some(">=20.19.0"));
+        assert_eq!(
+            supported_node_floor_range("20.5", &range).as_deref(),
+            Some(">=20.19.0 <21.0.0")
+        );
+        assert_eq!(supported_node_floor_range("20", &range).as_deref(), Some(">=20.19.0 <21.0.0"));
     }
 
     #[test]
@@ -1004,6 +1015,44 @@ mod tests {
         // Unparsable input → None.
         assert_eq!(supported_node_floor_range("lts/*", &range), None);
         assert_eq!(supported_node_floor_range("", &range), None);
+    }
+
+    #[test]
+    fn floor_range_single_disjunct_preserves_bounded_major() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+
+        // A single BOUNDED-major pin keeps its upper bound so the rewrite never
+        // admits the unsupported next major (21, 23, 25, ...). Matches the union
+        // path's per-disjunct decision instead of widening to the open form.
+        for spec in ["^20", "20.18.0", "20", "20.5", "~20", "20.x"] {
+            assert_eq!(
+                supported_node_floor_range(spec, &range).as_deref(),
+                Some(">=20.19.0 <21.0.0"),
+                "bounded major-20 pin {spec} must stay bounded to major 20"
+            );
+        }
+        // `^24` is bounded to major 24 → bounded form (intended change from the
+        // old open `>=24.11.0`).
+        assert_eq!(
+            supported_node_floor_range("^24", &range).as_deref(),
+            Some(">=24.11.0 <25.0.0"),
+            "^24 must bound to major 24"
+        );
+
+        // Genuinely OPEN pins stay open so they keep accepting newer releases.
+        assert_eq!(supported_node_floor_range(">=20", &range).as_deref(), Some(">=20.19.0"));
+        assert_eq!(supported_node_floor_range(">=24", &range).as_deref(), Some(">=24.11.0"));
+
+        // Parse back: the bounded `^20` rewrite must EXCLUDE the unsupported
+        // 21.x and 23.x lines that an open `>=20.19.0` would have admitted.
+        let lifted = supported_node_floor_range("^20", &range).unwrap();
+        let lifted_range = Range::parse(&lifted).unwrap();
+        assert!(
+            lifted_range.satisfies(&Version::parse("20.19.0").unwrap()),
+            "keeps the supported 20.19.0"
+        );
+        assert!(!lifted_range.satisfies(&Version::parse("21.0.0").unwrap()), "must not admit 21.x");
+        assert!(!lifted_range.satisfies(&Version::parse("23.5.0").unwrap()), "must not admit 23.x");
     }
 
     // ---------------------------------------------------------------------
