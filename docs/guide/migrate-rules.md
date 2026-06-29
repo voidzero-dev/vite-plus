@@ -257,8 +257,11 @@ the native binding's optional dependency:
 
 ### Bun
 
-- Preserve existing top-level or workspace catalog locations and named catalog
-  references.
+- Bun catalogs only resolve inside a workspace (a root `package.json` with a
+  non-empty `workspaces`). In a bun workspace, preserve existing top-level or
+  workspace catalog locations and named catalog references. A standalone
+  (single-package) bun project keeps concrete specs and writes no catalog field,
+  because `bun install` cannot resolve `catalog:` outside a workspace.
 - Mirror the core alias as a direct `vite` dependency so Bun sees the peer
   provider before applying overrides.
 

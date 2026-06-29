@@ -50,6 +50,7 @@ import {
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   wrapLazyPluginsInViteConfig,
+  yarnSupportsCatalog,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
@@ -106,8 +107,13 @@ export function rewriteStandaloneProject(
   // Whether the active toolchain edges use catalog references (`catalog:`) rather
   // than concrete aliases. Bun standalone projects never manage a catalog
   // (`rewriteBunCatalog` runs only on monorepo roots), so this stays false for
-  // bun and the direct `vite` edge resolves to the concrete core alias.
-  const supportCatalog = usePnpmWorkspaceYaml || packageManager === PackageManager.yarn;
+  // bun and the direct `vite` edge resolves to the concrete core alias. Yarn
+  // catalogs require Yarn >= 4.10.0 (older Yarn cannot resolve `catalog:`), so a
+  // project resolving to an older Yarn falls back to concrete specs.
+  const supportCatalog =
+    usePnpmWorkspaceYaml ||
+    (packageManager === PackageManager.yarn &&
+      yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version));
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -296,7 +302,13 @@ export function rewriteStandaloneProject(
   }
 
   if (packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages, providerCatalogAdditions);
+    rewriteYarnrcYml(
+      projectPath,
+      usesVitest,
+      vitestEcosystemPackages,
+      providerCatalogAdditions,
+      supportCatalog,
+    );
   }
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
@@ -359,6 +371,13 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
+  // Yarn catalogs require Yarn >= 4.10.0; a workspace resolving to an older Yarn
+  // falls back to concrete specs. pnpm/bun keep their existing catalog behavior
+  // (driven by their own pnpm-workspace.yaml / bun catalog sinks).
+  const supportCatalog =
+    workspaceInfo.packageManager === PackageManager.yarn
+      ? yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version)
+      : true;
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(
@@ -366,6 +385,7 @@ export function rewriteMonorepo(
       workspaceUsesVitest,
       vitestEcosystemPackages,
       providerCatalogAdditions,
+      supportCatalog,
     );
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
     rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
@@ -380,6 +400,7 @@ export function rewriteMonorepo(
     workspaceInfo.downloadPackageManager.version,
     workspaceShouldAllowBrowserBuilds,
     workspaceUsesVitest,
+    supportCatalog,
   );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -422,6 +443,7 @@ export function rewriteMonorepo(
       catalogDependencyResolver,
       workspaceContext,
       true,
+      supportCatalog,
     );
   }
 
@@ -462,6 +484,10 @@ export function rewriteMonorepoProject(
   catalogDependencyResolver?: CatalogDependencyResolver,
   workspaceContext?: { rootDir: string; packages: WorkspacePackage[] },
   deferLazyPluginWrapping = false,
+  // Whether this workspace's edges use catalog references. Yarn catalogs require
+  // Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog. Defaults to true
+  // so the `vp create` callers (always a catalog-capable bundled PM) are covered.
+  supportCatalog = true,
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
@@ -509,7 +535,7 @@ export function rewriteMonorepoProject(
     extractedStagedConfig = rewritePackageJson(
       pkg,
       packageManager,
-      true,
+      supportCatalog,
       skipStagedMigration,
       catalogDependencyResolver,
       browserMode,

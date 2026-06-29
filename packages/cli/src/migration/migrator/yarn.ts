@@ -342,6 +342,11 @@ export function rewriteYarnrcYml(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   catalogAdditions: ReadonlySet<string> = new Set(),
+  // Yarn catalogs require Yarn >= 4.10.0 (`yarnSupportsCatalog`). When the
+  // project resolves to an older Yarn the managed packages live in package.json
+  // `resolutions` instead, so no `catalog`/`catalogs` field is written here.
+  // `nodeLinker`/`npmPreapprovedPackages` are still configured regardless.
+  supportCatalog = true,
 ): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -372,12 +377,21 @@ export function rewriteYarnrcYml(
       }
     }
     doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
-    // catalog
-    rewriteCatalog(doc, usesVitest, vitestEcosystemPackages, catalogAdditions);
+    // catalog (Yarn >= 4.10.0 only)
+    if (supportCatalog) {
+      rewriteCatalog(doc, usesVitest, vitestEcosystemPackages, catalogAdditions);
+    }
   });
 }
 
-export function yarnrcSatisfiesVitePlus(projectPath: string, usesVitest: boolean): boolean {
+export function yarnrcSatisfiesVitePlus(
+  projectPath: string,
+  usesVitest: boolean,
+  // When false (Yarn < 4.10.0), the managed packages are pinned through
+  // package.json `resolutions` rather than a `.yarnrc.yml` catalog, so only the
+  // `nodeLinker` setup is required here (a catalog is neither expected nor checked).
+  supportCatalog = true,
+): boolean {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
     return false;
@@ -387,6 +401,9 @@ export function yarnrcSatisfiesVitePlus(projectPath: string, usesVitest: boolean
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
   } | null;
+  if (!supportCatalog) {
+    return !!doc && Object.hasOwn(doc, 'nodeLinker');
+  }
   const resolver = createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
   const catalogName = resolver.preferredCatalogSpec.slice('catalog:'.length);
   const managedCatalog =

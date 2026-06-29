@@ -3037,7 +3037,8 @@ describe('ensureVitePlusBootstrap', () => {
         name: 'test',
         devDependencies: { 'vite-plus': 'latest', vite: '^7.0.0' },
         devEngines: {
-          packageManager: { name: 'yarn', version: '4.0.0', onFail: 'download' },
+          // Yarn >= 4.10.0 is required for the `catalog:` protocol this test exercises.
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
         },
       }),
     );
@@ -3261,6 +3262,139 @@ describe('ensureVitePlusBootstrap', () => {
     rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
     expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(firstPackageJson);
     expect(fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8')).toBe(firstYarnrc);
+  });
+});
+
+describe('yarn catalog version gating', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-yarn-catalog-gate-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function yarnWorkspaceInfo(version: string) {
+    const info = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    info.packageManagerVersion = version;
+    info.downloadPackageManager = { ...info.downloadPackageManager, version };
+    return info;
+  }
+
+  it('writes concrete specs (no catalog) for a standalone Yarn project below 4.10.0', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    // Yarn's `catalog:` protocol ships by default only from Yarn 4.10.0. A
+    // project resolving to an older Yarn (e.g. 3.x, which `vp migrate` does NOT
+    // auto-upgrade) cannot resolve `catalog:` references, so migration must fall
+    // back to concrete specs exactly like the non-catalog (npm) path.
+    rewriteStandaloneProject(tmpDir, yarnWorkspaceInfo('3.6.0'), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.resolutions.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+
+    // No catalog field is written into .yarnrc.yml; nodeLinker is still set.
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml'));
+    expect(yarnrc.catalog).toBeUndefined();
+    expect(yarnrc.catalogs).toBeUndefined();
+    expect(yarnrc.nodeLinker).toBe('node-modules');
+
+    // Idempotent: the project is fully migrated under the same below-floor version.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, undefined, '3.6.0')).toBe(
+      false,
+    );
+  });
+
+  it('still uses catalog specs for a standalone Yarn project at 4.10.0+', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    rewriteStandaloneProject(tmpDir, yarnWorkspaceInfo('4.12.0'), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yarnrc.catalog.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, undefined, '4.12.0')).toBe(
+      false,
+    );
+  });
+
+  it('writes concrete specs for a Yarn monorepo below 4.10.0', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    const workspaceInfo = yarnWorkspaceInfo('3.6.0');
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
+
+    rewriteMonorepo(workspaceInfo, true);
+
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // Below 4.10.0 → concrete edges, never `catalog:` references.
+    expect(appPkg.devDependencies['vite-plus']).toBe('latest');
+    expect(appPkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml'));
+    expect(yarnrc.catalog).toBeUndefined();
+    expect(yarnrc.catalogs).toBeUndefined();
+  });
+
+  it('still uses catalog specs for a Yarn monorepo at 4.10.0+', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    const workspaceInfo = yarnWorkspaceInfo('4.12.0');
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
+
+    rewriteMonorepo(workspaceInfo, true);
+
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(appPkg.devDependencies.vite).toBe('catalog:');
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yarnrc.catalog.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
   });
 });
 

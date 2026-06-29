@@ -67,6 +67,24 @@ export function pnpmSupportsWorkspaceSettings(version: string): boolean {
   return version === 'latest' || version === 'next';
 }
 
+const YARN_CATALOG_MIN_VERSION = '4.10.0';
+
+// Yarn's `catalog:` protocol (and the `.yarnrc.yml` `catalog`/`catalogs` fields)
+// ships ENABLED BY DEFAULT only from Yarn 4.10.0. `vp migrate` auto-upgrades an
+// in-range Yarn (`>=4.0.0 <4.10.0`) to the latest stable, but the version this
+// helper receives is the RECORDED (pre-upgrade) `downloadPackageManager.version`,
+// and an older Yarn (1.x/2.x/3.x) is left untouched. Gating catalog emission on
+// the recorded version keeps the migration safe in every case: a project that is
+// not (yet) provably on a catalog-capable Yarn gets concrete specs instead of
+// `catalog:` references it cannot resolve. Mirrors `pnpmSupportsWorkspaceSettings`.
+export function yarnSupportsCatalog(version: string): boolean {
+  const coerced = semver.coerce(version);
+  if (coerced) {
+    return semver.gte(coerced, YARN_CATALOG_MIN_VERSION);
+  }
+  return version === 'latest' || version === 'next' || version === 'stable';
+}
+
 // These are the root package.json#pnpm settings pnpm 10.6.2+ accepts at the
 // top level of pnpm-workspace.yaml. Unknown keys may belong to third-party
 // tooling and stay in package.json.
@@ -1059,6 +1077,10 @@ export function rewriteRootWorkspacePackageJson(
   // shared by every package, so `vitest` stays managed here iff ANY package uses
   // vitest directly.
   workspaceUsesVitest = true,
+  // Whether the workspace uses catalog references for its toolchain edges. Yarn
+  // catalogs require Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog.
+  // When false, the root `vite-plus` edge and the direct `vite` edge are concrete.
+  supportCatalog = true,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1178,12 +1200,14 @@ export function rewriteRootWorkspacePackageJson(
       pkg.devDependencies = {
         ...pkg.devDependencies,
         [VITE_PLUS_NAME]:
-          packageManager === PackageManager.npm || VITE_PLUS_VERSION.startsWith('file:')
+          packageManager === PackageManager.npm ||
+          !supportCatalog ||
+          VITE_PLUS_VERSION.startsWith('file:')
             ? VITE_PLUS_VERSION
             : (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:'),
       };
     }
-    ensureDirectViteForPnpm(pkg, packageManager, true, catalogDependencyResolver);
+    ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
     return pkg;
   });
 
@@ -1201,6 +1225,7 @@ export function rewriteRootWorkspacePackageJson(
     catalogDependencyResolver,
     packages ? { rootDir: projectPath, packages } : undefined,
     true,
+    supportCatalog,
   );
 }
 

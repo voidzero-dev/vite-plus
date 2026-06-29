@@ -214,6 +214,38 @@ fn bunx_target(words: &[CommandWord], start: usize) -> Option<usize> {
     Some(target)
 }
 
+/// Commands that launch a following command, either env-injection proxies
+/// (`dotenv`, `cross-env`, `portless`, ...) or package runners (`npm`, `pnpm`,
+/// `yarn`, ...). Only when the command name is one of these does a trailing
+/// `--`/`run`/`exec` separator turn a subsequent `bunx` into a launcher whose
+/// inner command should be rewritten.
+///
+/// This deliberately excludes commands like `echo`/`printf` that treat
+/// `-- bunx --bun vite build` as literal text rather than a command to run, so
+/// their arguments are never corrupted by the rewrite.
+const KNOWN_RUNNER_WRAPPERS: &[&str] = &[
+    // Package runners.
+    "npm",
+    "pnpm",
+    "yarn",
+    "yarnpkg",
+    "bun",
+    "npx",
+    "pnpx",
+    // Env-injection / proxy wrappers.
+    "cross-env",
+    "cross-env-shell",
+    "dotenv",
+    "dotenvx",
+    "portless",
+];
+
+/// Whether `name` is a command that launches a following command (see
+/// [`KNOWN_RUNNER_WRAPPERS`]).
+fn is_known_runner_wrapper(name: &str) -> bool {
+    KNOWN_RUNNER_WRAPPERS.contains(&name)
+}
+
 fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
     let words = collect_command_words(cmd);
     let mut invocations = Vec::new();
@@ -227,18 +259,30 @@ fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
         };
 
         let allowed_position = match words[start].position {
+            // `bunx` is itself the command being run.
             CommandWordPosition::Name => true,
-            CommandWordPosition::Suffix(runner_index) => cmd
-                .suffix
-                .as_ref()
-                .and_then(|suffix| runner_index.checked_sub(1).and_then(|i| suffix.0.get(i)))
-                .is_some_and(|item| {
-                    matches!(
-                        item,
-                        ast::CommandPrefixOrSuffixItem::Word(word)
-                            if matches!(word.value.as_str(), "--" | "run" | "exec")
-                    )
-                }),
+            // `bunx` appears as an argument: only treat it as a launcher when a
+            // recognized wrapper command (`words[0]`) hands off to it via a
+            // `--`/`run`/`exec` separator. A bare `--`/`run`/`exec` on a
+            // non-wrapper command (e.g. `echo -- bunx ...`) is literal text.
+            CommandWordPosition::Suffix(runner_index) => {
+                let preceded_by_separator = cmd
+                    .suffix
+                    .as_ref()
+                    .and_then(|suffix| runner_index.checked_sub(1).and_then(|i| suffix.0.get(i)))
+                    .is_some_and(|item| {
+                        matches!(
+                            item,
+                            ast::CommandPrefixOrSuffixItem::Word(word)
+                                if matches!(word.value.as_str(), "--" | "run" | "exec")
+                        )
+                    });
+                let command_is_wrapper = cmd
+                    .word_or_name
+                    .as_ref()
+                    .is_some_and(|name| is_known_runner_wrapper(&name.value));
+                preceded_by_separator && command_is_wrapper
+            }
         };
         if allowed_position {
             invocations.push(BunxInvocation { target_suffix_index });
@@ -547,5 +591,55 @@ mod tests {
         assert_eq!(normalize_pipe_spacing("cmd1 | cmd2"), "cmd1 | cmd2");
         assert_eq!(normalize_pipe_spacing("cmd1 || cmd2"), "cmd1 || cmd2");
         assert_eq!(normalize_pipe_spacing("cmd1 && cmd2"), "cmd1 && cmd2");
+    }
+
+    /// Minimal inner rewriter for bunx tests: `vite <args>` -> `vp <args>`.
+    fn rewrite_vite_to_vp(inner: &str) -> String {
+        match inner.split_once(' ') {
+            Some(("vite", rest)) => format!("vp {rest}"),
+            _ if inner == "vite" => "vp dev".to_owned(),
+            _ => inner.to_owned(),
+        }
+    }
+
+    #[test]
+    fn bunx_as_command_name_is_a_launcher() {
+        assert_eq!(
+            rewrite_bunx_commands("bunx --bun vite build", rewrite_vite_to_vp),
+            "bunx --bun vp build"
+        );
+    }
+
+    #[test]
+    fn suffix_bunx_launches_only_for_known_wrapper_commands() {
+        // Env-injection wrapper using `--` to separate the launched command.
+        assert_eq!(
+            rewrite_bunx_commands("dotenv -e .env -- bunx --bun vite build", rewrite_vite_to_vp),
+            "dotenv -e .env -- bunx --bun vp build"
+        );
+        // Proxy wrapper using a `run` subcommand to launch the command.
+        assert_eq!(
+            rewrite_bunx_commands("portless run bunx --bun vite build", rewrite_vite_to_vp),
+            "portless run bunx --bun vp build"
+        );
+        // Package runner using `exec` to launch the command.
+        assert_eq!(
+            rewrite_bunx_commands("pnpm exec bunx --bun vite build", rewrite_vite_to_vp),
+            "pnpm exec bunx --bun vp build"
+        );
+    }
+
+    #[test]
+    fn suffix_bunx_after_non_wrapper_command_stays_literal() {
+        // `echo` prints its arguments verbatim: `-- bunx --bun vite build` is
+        // literal text, not a command to launch, so it must stay unchanged.
+        assert_eq!(
+            rewrite_bunx_commands("echo -- bunx --bun vite build", rewrite_vite_to_vp),
+            "echo -- bunx --bun vite build"
+        );
+        assert_eq!(
+            rewrite_bunx_commands("printf -- bunx --bun vite build", rewrite_vite_to_vp),
+            "printf -- bunx --bun vite build"
+        );
     }
 }

@@ -58,9 +58,8 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
     Some(format!(">={major}.0.0 <{}.0.0", major + 1))
 }
 
-/// Compute the open-ended `>=<supported-minimum>` range that lifts a below-floor
-/// pin's major up to the lowest *supported* release of that major, WITHOUT
-/// pinning a concrete version.
+/// Lift a below-floor Node.js pin up to the lowest *supported* release of its
+/// major(s) WITHOUT pinning a concrete version.
 ///
 /// Used to rewrite the constraint fields `engines.node` and
 /// `devEngines.runtime[node].version`, where an exact pin would wrongly reject
@@ -68,25 +67,108 @@ fn supported_node_requirement(current: &str, supported_range: &Range) -> Option<
 /// `supported_range` (e.g. `^20.19.0 || ^22.18.0 || >=24.11.0` yields `20.19.0`
 /// / `22.18.0` / `24.11.0`): there are no hardcoded per-major floors.
 ///
-/// Returns `None` in exactly the same situations as
-/// [`supported_node_requirement`] (already-supported floor, unparseable input,
-/// or a major with no supported release such as 21/23). Pure range math: never
-/// touches the network / release index.
+/// - **Single disjunct** (`>=24`, `^24`, `24.3.0`, …) → the open-ended
+///   `>=<supported-minimum>` form, so the constraint keeps accepting newer
+///   supported releases of that major.
+/// - **Multi-major disjunct** (`^20 || ^22`) → each disjunct's floor is lifted
+///   to that major's supported minimum while its per-major upper bound is
+///   preserved, so EVERY supported disjunct survives and the unsupported gaps
+///   (21, 23) are excluded — e.g.
+///   `>=20.19.0 <21.0.0 || >=22.18.0 <23.0.0`. Disjuncts whose entire major has
+///   no supported release (e.g. a lone `^21`, or the `^18` in `^18 || ^20`)
+///   drop out.
+///
+/// Returns `None` when the OVERALL floor (the minimum across all disjuncts) is
+/// already supported, the input is unparseable, or no disjunct has a supported
+/// release in its major (e.g. `^21 || ^23`). Pure range math: never touches the
+/// network / release index.
 ///
 /// # Example
 ///
-/// `supported_node_floor_range(">=24", &range)` → `Some(">=24.11.0")`.
+/// `supported_node_floor_range(">=24", &range)` → `Some(">=24.11.0")`;
+/// `supported_node_floor_range("^20 || ^22", &range)`
+/// → `Some(">=20.19.0 <21.0.0 || >=22.18.0 <23.0.0")`.
 fn supported_node_floor_range(current: &str, supported_range: &Range) -> Option<String> {
     // Reuse the floor-based decision: `None` here means "leave the pin alone".
+    // The check is against the OVERALL floor (the minimum across all disjuncts),
+    // so a multi-major pin whose lowest disjunct is already supported is left
+    // untouched.
     let requirement = supported_node_requirement(current, supported_range)?;
-    let requirement_range = Range::parse(&requirement).ok()?;
 
-    // The supported minimum for this major is the floor of the major bracket
-    // intersected with the supported range. An unsupported major (e.g. 21)
-    // yields an empty intersection → `None`, matching the resolve-then-verify
-    // rejection on the concrete path.
+    let normalized = current.strip_prefix('v').unwrap_or(current);
+
+    // Multi-major pin (`^20 || ^22`): collapsing to a single open-ended
+    // `>=<supported-minimum>` would (a) DROP the other disjuncts and (b) WIDEN
+    // the constraint across the unsupported gaps (21, 23) — and if the lowest
+    // disjunct's major is itself unsupported (e.g. `^18 || ^20`), the single
+    // `requirement` bracket would intersect to nothing and discard the
+    // supported branches entirely. Lift each disjunct independently instead, so
+    // every supported major survives, each below-floor disjunct is bounded to
+    // its own major (excluding 21 / 23), and fully-unsupported disjuncts drop
+    // out. An all-unsupported pin (`^21 || ^23`) yields no disjuncts → `None`.
+    if normalized.contains("||") {
+        let lifted: Vec<String> = normalized
+            .split("||")
+            .filter_map(|disjunct| lift_disjunct(disjunct.trim(), supported_range))
+            .collect();
+        if lifted.is_empty() {
+            return None;
+        }
+        return Some(lifted.join(" || "));
+    }
+
+    // Single disjunct: keep the open-ended `>=<supported-minimum>` form so the
+    // constraint keeps accepting newer supported releases of the same major
+    // (e.g. `^24` / `>=24` → `>=24.11.0`). The supported minimum for this major
+    // is the floor of the major bracket intersected with the supported range.
+    // An unsupported major (e.g. 21) yields an empty intersection → `None`,
+    // matching the resolve-then-verify rejection on the concrete path.
+    let requirement_range = Range::parse(&requirement).ok()?;
     let supported_minimum = requirement_range.intersect(supported_range)?.min_version()?;
     Some(format!(">={supported_minimum}"))
+}
+
+/// Rewrite a single disjunct of a multi-major constraint pin (a `||`-separated
+/// branch of `engines.node` / `devEngines.runtime[node].version`).
+///
+/// Returns:
+/// - the disjunct verbatim when its floor is already supported (e.g. the
+///   `^20.19.0` branch of `^18 || ^20.19.0`),
+/// - `>=<supported-minimum> <<next-major>.0.0` when the floor is below the
+///   major's supported minimum but bounded to that major (`^20`, `20`,
+///   `>=20 <21` → `>=20.19.0 <21.0.0`), so the unsupported next major is
+///   excluded,
+/// - the open `>=<supported-minimum>` when the disjunct itself extends past its
+///   major (an open `>=24` branch stays open), or
+/// - `None` when the major has no supported release (a lone `^21`, or the `^18`
+///   of `^18 || ^20`), so the disjunct drops out of the rewritten union.
+///
+/// Unlike the single-disjunct path, a bounded caret branch (`^24`) is kept
+/// bounded here: in a union the user enumerated specific majors, so the rewrite
+/// must not widen past them.
+fn lift_disjunct(disjunct: &str, supported_range: &Range) -> Option<String> {
+    let parsed = Range::parse(disjunct).ok()?;
+    let floor = parsed.min_version()?;
+
+    // Floor already supported → keep the user's branch exactly as written.
+    if supported_range.satisfies(&floor) {
+        return Some(disjunct.to_string());
+    }
+
+    // Below floor: lift to this major's supported minimum. An unsupported major
+    // (e.g. 21) has an empty intersection with the supported range → drop it.
+    let major = floor.major;
+    let bracket = Range::parse(format!(">={major}.0.0 <{}.0.0", major + 1)).ok()?;
+    let supported_minimum = bracket.intersect(supported_range)?.min_version()?;
+
+    // A branch that admits the start of the next major is open-ended (`>=24`);
+    // keep it open so it accepts newer releases. A per-major branch (`^24`,
+    // `24`, `>=20 <21`) is bounded to its major so 21 / 23 stay excluded.
+    if parsed.satisfies(&Version::from((major + 1, 0, 0))) {
+        Some(format!(">={supported_minimum}"))
+    } else {
+        Some(format!(">={supported_minimum} <{}.0.0", major + 1))
+    }
 }
 
 /// Return `resolved` only when it satisfies `supported_range`. An unsupported
@@ -911,5 +993,75 @@ mod tests {
         // Unparseable input → None.
         assert_eq!(supported_node_floor_range("lts/*", &range), None);
         assert_eq!(supported_node_floor_range("", &range), None);
+    }
+
+    // ---------------------------------------------------------------------
+    // Multi-major (disjunct) constraint fields: a `^20 || ^22`-style pin must
+    // keep EVERY supported disjunct and lift each below-floor disjunct to its
+    // own supported minimum, without (a) dropping later disjuncts or (b)
+    // widening open-ended across the unsupported gaps (21 / 23).
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn floor_range_multi_major_preserves_supported_disjuncts() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+
+        // `^20 || ^22`: both floors (20.0.0, 22.0.0) are below their major's
+        // supported minimum, but both majors are supported. The rewrite must
+        // lift each floor and keep BOTH disjuncts.
+        let result = supported_node_floor_range("^20 || ^22", &range)
+            .expect("multi-major below-floor pin should be rewritten");
+        assert_eq!(result, ">=20.19.0 <21.0.0 || >=22.18.0 <23.0.0");
+
+        let rewritten = Range::parse(&result).unwrap();
+        assert!(rewritten.satisfies(&Version::parse("20.19.0").unwrap()), "keeps supported 20.x");
+        assert!(rewritten.satisfies(&Version::parse("22.18.0").unwrap()), "keeps supported 22.x");
+        assert!(!rewritten.satisfies(&Version::parse("21.5.0").unwrap()), "must not admit 21.x");
+        assert!(!rewritten.satisfies(&Version::parse("23.5.0").unwrap()), "must not admit 23.x");
+    }
+
+    #[test]
+    fn floor_range_multi_major_drops_unsupported_disjunct() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+
+        // `^18 || ^20 || ^22`: 18 has no supported release, so its disjunct is
+        // dropped; 20 and 22 are lifted to their supported minimums.
+        let result = supported_node_floor_range("^18 || ^20 || ^22", &range)
+            .expect("multi-major pin with supported majors should be rewritten");
+        assert_eq!(result, ">=20.19.0 <21.0.0 || >=22.18.0 <23.0.0");
+
+        let rewritten = Range::parse(&result).unwrap();
+        assert!(!rewritten.satisfies(&Version::parse("18.20.0").unwrap()), "18 dropped");
+        assert!(rewritten.satisfies(&Version::parse("20.19.0").unwrap()));
+        assert!(rewritten.satisfies(&Version::parse("22.18.0").unwrap()));
+        assert!(!rewritten.satisfies(&Version::parse("21.5.0").unwrap()));
+        assert!(!rewritten.satisfies(&Version::parse("23.5.0").unwrap()));
+    }
+
+    #[test]
+    fn floor_range_multi_major_explicit_bounds() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+
+        // Explicit `>=X <Y` disjuncts get their floors lifted while keeping the
+        // per-major upper bound, still excluding 21 / 23.
+        let result = supported_node_floor_range(">=20 <21 || >=22 <23", &range)
+            .expect("explicit-bound multi-major pin should be rewritten");
+        assert_eq!(result, ">=20.19.0 <21.0.0 || >=22.18.0 <23.0.0");
+
+        let rewritten = Range::parse(&result).unwrap();
+        // Regression guard: the supported 22.x portion still resolves.
+        assert!(
+            rewritten.satisfies(&Version::parse("22.18.0").unwrap()),
+            "supported 22.x resolves"
+        );
+        assert!(!rewritten.satisfies(&Version::parse("21.5.0").unwrap()));
+        assert!(!rewritten.satisfies(&Version::parse("23.5.0").unwrap()));
+    }
+
+    #[test]
+    fn floor_range_multi_major_all_unsupported_is_none() {
+        let range = Range::parse(SUPPORTED_RANGE).unwrap();
+        // No disjunct has a supported release in its major → leave the pin alone.
+        assert_eq!(supported_node_floor_range("^21 || ^23", &range), None);
     }
 }

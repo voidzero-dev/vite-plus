@@ -46,6 +46,7 @@ import {
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   yarnrcSatisfiesVitePlus,
+  yarnSupportsCatalog,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
@@ -545,16 +546,20 @@ export function detectVitePlusBootstrapPending(
     return true;
   }
 
-  const pnpmVersion = packageManagerVersion ?? pinnedPackageManagerVersion(pkg) ?? '';
+  const resolvedPackageManagerVersion =
+    packageManagerVersion ?? pinnedPackageManagerVersion(pkg) ?? '';
   const usePnpmWorkspaceYaml =
-    packageManager === PackageManager.pnpm && pnpmSupportsWorkspaceSettings(pnpmVersion);
+    packageManager === PackageManager.pnpm &&
+    pnpmSupportsWorkspaceSettings(resolvedPackageManagerVersion);
   if (usePnpmWorkspaceYaml && pnpmPackageJsonSettingsPending(pkg)) {
     return true;
   }
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
     (usePnpmWorkspaceYaml ||
-      packageManager === PackageManager.yarn ||
+      // Yarn catalogs require Yarn >= 4.10.0 (older Yarn cannot resolve `catalog:`).
+      (packageManager === PackageManager.yarn &&
+        yarnSupportsCatalog(resolvedPackageManagerVersion)) ||
       // Standalone bun excluded: catalogs only resolve inside a bun workspace.
       (packageManager === PackageManager.bun && bunWorkspaceDeclaresPackages(pkg.workspaces)));
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
@@ -599,7 +604,7 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.yarn) {
     return (
       !overridesSatisfyVitePlus(pkg.resolutions, usesVitest) ||
-      !yarnrcSatisfiesVitePlus(projectPath, usesVitest)
+      !yarnrcSatisfiesVitePlus(projectPath, usesVitest, supportCatalog)
     );
   }
   if (packageManager === PackageManager.npm) {
@@ -808,7 +813,9 @@ export function ensureVitePlusBootstrap(
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
     (usePnpmWorkspaceYaml ||
-      workspaceInfo.packageManager === PackageManager.yarn ||
+      // Yarn catalogs require Yarn >= 4.10.0; older Yarn cannot resolve `catalog:`.
+      (workspaceInfo.packageManager === PackageManager.yarn &&
+        yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||
       isBunWorkspace);
   const catalogDependencyResolver = createCatalogDependencyResolver(
     projectPath,
@@ -972,7 +979,13 @@ export function ensureVitePlusBootstrap(
     const before = fs.existsSync(yarnrcYmlPath)
       ? fs.readFileSync(yarnrcYmlPath, 'utf-8')
       : undefined;
-    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages, providerCatalogAdditions);
+    rewriteYarnrcYml(
+      projectPath,
+      usesVitest,
+      vitestEcosystemPackages,
+      providerCatalogAdditions,
+      supportCatalog,
+    );
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
   } else if (isBunWorkspace) {
