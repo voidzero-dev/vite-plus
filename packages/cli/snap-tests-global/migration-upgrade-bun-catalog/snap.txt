@@ -7,8 +7,8 @@
 {
   "name": "migration-upgrade-bun-catalog",
   "devDependencies": {
-    "vite-plus": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "overrides": {
     "vite": "catalog:"

@@ -2,12 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
-import {
-  VITE_PLUS_NAME,
-  VITE_PLUS_OVERRIDE_PACKAGES,
-  VITE_PLUS_VERSION,
-  isForceOverrideMode,
-} from '../../utils/constants.ts';
+import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
@@ -21,7 +16,6 @@ import {
   ensureDirectViteForPnpm,
   ensurePnpmWorkspaceExoticSubdepsSetting,
   findYarnWorkspaceHoisting,
-  getCatalogDependencySpec,
   hasDirectVitePlusInstallEntry,
   hasOwnWebdriverioDependency,
   injectFmtDefaults,
@@ -47,6 +41,7 @@ import {
   rewriteRootWorkspacePackageJson,
   rewriteTsconfigTypes,
   rewriteYarnrcYml,
+  setDirectViteEdge,
   setPackageManager,
   sourceTreeReferencesRetainedVitestModule,
   takePnpmWorkspaceSettings,
@@ -166,25 +161,11 @@ export function rewriteStandaloneProject(
         // 4.1.9 declares peer `vite ^6 || ^7 || ^8` and aborts with
         // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
         // in the tree, even when the override would redirect it. Mirror the
-        // override as a devDep so bun's resolver sees `vite` immediately. Only
-        // the PRESENCE of a direct `vite` edge matters for #8406: a `catalog:`
-        // reference satisfies it just as well as a concrete alias because catalog
-        // refs resolve during the dependency-graph build (unlike overrides).
-        // Route through getCatalogDependencySpec for parity with the monorepo and
-        // bootstrap paths; standalone bun has no catalog (supportCatalog=false)
-        // so this resolves to the concrete core alias. Verified on bun 1.3.11.
-        // See https://github.com/oven-sh/bun/issues/8406.
-        pkg.devDependencies = {
-          ...pkg.devDependencies,
-          vite: getCatalogDependencySpec(
-            undefined,
-            VITE_PLUS_OVERRIDE_PACKAGES.vite,
-            supportCatalog,
-            {
-              preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
-            },
-          ),
-        };
+        // override as a devDep so bun's resolver sees `vite` immediately. A
+        // standalone bun project has no catalog (supportCatalog=false), so the
+        // shared helper resolves this to the concrete core alias. Verified on
+        // bun 1.3.11. See https://github.com/oven-sh/bun/issues/8406.
+        setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
       }
     } else if (packageManager === PackageManager.pnpm) {
       if (usePnpmWorkspaceYaml) {

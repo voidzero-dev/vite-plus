@@ -544,17 +544,58 @@ export function ensureDirectViteForPnpm(
   // (file:/npm:) override spec; the extra getCatalogDependencySpec options only
   // matter for an existing value or a peerDependencies field, neither of which
   // applies here (we only reach this for a fresh devDependencies entry).
-  const viteSpec = getCatalogDependencySpec(undefined, viteOverride, supportCatalog, {
-    preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
-  });
-  // Insert `vite` in sorted position rather than appending it: oxfmt sorts
-  // package.json dependencies and `vp migrate` has no later format pass, so an
-  // out-of-order key would fail a follow-up `vp check`.
-  const entries: [string, string][] = Object.entries(pkg.devDependencies ?? {});
+  setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
+  return true;
+}
+
+/**
+ * Insert (or overwrite) a DIRECT `vite` devDependency edge in SORTED position.
+ *
+ * Several migration paths need a direct `vite` devDep for different reasons
+ * (pnpm peer binding #1932; bun peer pre-resolution oven-sh/bun#8406; npm
+ * `@vitest/mocker` hoisting for opt-in providers), but they all want the SAME
+ * spec and the SAME placement, so both are centralized here. Each caller keeps
+ * its OWN gate for WHEN a direct edge is needed; this owns only the spec +
+ * placement.
+ *
+ * - The spec is computed once from the `vite` override: under a catalog
+ *   (`supportCatalog`) it resolves to the preferred `catalog:` reference,
+ *   otherwise the concrete `npm:@voidzero-dev/vite-plus-core@<v>` alias (or the
+ *   `file:` tgz under force-override). A `catalog:` reference satisfies bun's
+ *   #8406 peer pre-resolution just as well as a concrete alias because catalog
+ *   refs resolve during the dependency-graph build (unlike overrides).
+ * - `vite` is inserted in SORTED position rather than appended: oxfmt sorts
+ *   package.json dependencies and `vp migrate` has no later format pass, so an
+ *   out-of-order key (e.g. `vite` after `vite-plus`) would fail a follow-up
+ *   `vp check`.
+ */
+export function setDirectViteEdge(
+  pkg: { devDependencies?: Record<string, string> },
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): void {
+  const viteSpec = getCatalogDependencySpec(
+    undefined,
+    VITE_PLUS_OVERRIDE_PACKAGES.vite,
+    supportCatalog,
+    { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
+  );
+  // Drop any existing `vite` entry first so an out-of-order one (appended after
+  // `vite-plus`) is re-placed, then splice the new entry in sorted position.
+  const entries: [string, string][] = Object.entries(pkg.devDependencies ?? {}).filter(
+    ([name]) => name !== 'vite',
+  );
   const insertAt = entries.findIndex(([name]) => name > 'vite');
   entries.splice(insertAt === -1 ? entries.length : insertAt, 0, ['vite', viteSpec]);
-  pkg.devDependencies = Object.fromEntries(entries);
-  return true;
+  // Rewrite the keys IN PLACE (same object reference) rather than reassigning
+  // `pkg.devDependencies`: some callers capture the devDependencies reference
+  // before this runs (e.g. the bootstrap path's `installGroups`) and keep
+  // mutating it afterwards, so a fresh object would silently drop those edits.
+  const target = (pkg.devDependencies ??= {});
+  for (const key of Object.keys(target)) {
+    delete target[key];
+  }
+  Object.assign(target, Object.fromEntries(entries));
 }
 
 // A peer declaration does not install Vitest and therefore must not keep a
@@ -1067,16 +1108,10 @@ export function rewriteRootWorkspacePackageJson(
       // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
       // dep at the workspace root. Mirror the override as a devDep; the override
-      // configured in rewriteBunCatalog still redirects it to vite-plus-core.
-      // See https://github.com/oven-sh/bun/issues/8406.
-      pkg.devDependencies = {
-        ...pkg.devDependencies,
-        vite: getCatalogDependencySpec(
-          pkg.devDependencies?.vite,
-          VITE_PLUS_OVERRIDE_PACKAGES.vite,
-          true,
-        ),
-      };
+      // configured in rewriteBunCatalog still redirects it to vite-plus-core. A
+      // bun workspace root always manages a catalog, so the direct edge resolves
+      // to a `catalog:` reference. See https://github.com/oven-sh/bun/issues/8406.
+      setDirectViteEdge(pkg, true, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(managed);
       const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');

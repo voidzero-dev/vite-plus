@@ -39,6 +39,7 @@ import {
   rewriteBunCatalog,
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
+  setDirectViteEdge,
   setPackageManager,
   takePnpmWorkspaceSettings,
   vitestEcosystemCatalogReferencesPending,
@@ -372,8 +373,9 @@ function reconcileVitePlusBootstrapPackage(
       (dependencies) => dependencies?.vite !== undefined,
     );
     if (!viteAlreadyDirect) {
-      pkg.devDependencies ??= {};
-      pkg.devDependencies.vite = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+      // npm has no catalog (supportCatalog=false), so the shared helper resolves
+      // the direct edge to the concrete core alias, placed in sorted order.
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     }
   }
 
@@ -385,21 +387,15 @@ function reconcileVitePlusBootstrapPackage(
     // bootstrap path also produces an installable bun project. Only the PRESENCE
     // of a direct `vite` edge matters for #8406: a `catalog:` reference satisfies
     // it just as well as a concrete alias because catalog refs resolve during the
-    // dependency-graph build (unlike overrides). Route through
-    // getCatalogDependencySpec so catalog-capable bun gets `catalog:` (matching
-    // the catalog/override sinks) and falls back to the concrete core alias
-    // otherwise. Verified on bun 1.3.11. See https://github.com/oven-sh/bun/issues/8406.
+    // dependency-graph build (unlike overrides). The shared helper gives
+    // catalog-capable bun a `catalog:` edge (matching the catalog/override sinks)
+    // and the concrete core alias otherwise. Verified on bun 1.3.11.
+    // See https://github.com/oven-sh/bun/issues/8406.
     const viteAlreadyDirect = installGroups.some(
       (dependencies) => dependencies?.vite !== undefined,
     );
     if (!viteAlreadyDirect) {
-      pkg.devDependencies ??= {};
-      pkg.devDependencies.vite = getCatalogDependencySpec(
-        undefined,
-        VITE_PLUS_OVERRIDE_PACKAGES.vite,
-        supportCatalog,
-        { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
-      );
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     }
   }
 

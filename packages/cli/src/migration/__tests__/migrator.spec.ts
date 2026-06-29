@@ -598,6 +598,12 @@ describe('rewritePackageJson', () => {
     };
     rewritePackageJson(pkg, PackageManager.npm);
     expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    // The injected `vite` must land in SORTED position (oxfmt sorts package.json
+    // and `vp migrate` has no later format pass), so it sits before `vitest`
+    // rather than being appended after it.
+    const keys = Object.keys(pkg.devDependencies);
+    expect(keys.indexOf('vite')).toBeLessThan(keys.indexOf('vitest'));
+    expect(keys.slice(0, 3)).toEqual(['@vitest/browser-playwright', 'playwright', 'vite']);
   });
 
   it('does not inject a direct vite devDependency for npm projects without a browser provider', async () => {
@@ -1457,9 +1463,50 @@ describe('ensureVitePlusBootstrap', () => {
     // direct edge consistent with the catalog/override sinks instead of leaking a
     // concrete alias. Verified on bun 1.3.11.
     expect(pkg.devDependencies.vite).toBe('catalog:');
+    // The injected `vite` must land in SORTED position (oxfmt sorts package.json
+    // and `vp migrate` has no later format pass), i.e. before the existing
+    // `vite-plus` entry rather than appended after it.
+    const devKeys = Object.keys(pkg.devDependencies);
+    expect(devKeys).toEqual([...devKeys].toSorted());
+    // The direct `vite` edge is inserted before the existing `vite-plus` entry.
+    // (A non-managed direct `vitest` is removed in this common case, arriving
+    // transitively through vite-plus.)
+    expect(devKeys).toEqual(['vite', 'vite-plus']);
     // The bootstrap path writes a bun catalog mapping `vite` -> vite-plus-core,
     // so the `catalog:` direct edge resolves to the managed core build.
     expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
+  });
+
+  it('injects a SORTED direct `vite` edge for an npm opt-in-provider project on upgrade', () => {
+    // npm has no catalog, so the direct `vite` edge an opt-in browser provider
+    // needs (so nested `@vitest/mocker` copies resolve a single hoisted `vite`)
+    // is the concrete core alias. It must land before the existing `vite-plus`
+    // entry, not be appended after it (oxfmt sorts package.json; `vp migrate`
+    // has no later format pass, so an out-of-order key fails a follow-up
+    // `vp check`).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          '@vitest/browser-playwright': '^4.0.0',
+          playwright: '^1.60.0',
+          'vite-plus': 'latest',
+          vitest: '4.1.9',
+        },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    const devKeys = Object.keys(pkg.devDependencies);
+    expect(devKeys).toEqual([...devKeys].toSorted());
+    expect(devKeys.indexOf('vite')).toBeLessThan(devKeys.indexOf('vite-plus'));
   });
 
   it('adds a direct `vite: catalog:` to an already-Vite+ pnpm root on upgrade (#1932)', () => {

@@ -19,6 +19,7 @@ import {
   pruneLegacyWrapperAliases,
   readRulesYaml,
   removeManagedVitestEntry,
+  setDirectViteEdge,
 } from '../migrator.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
@@ -280,8 +281,9 @@ export function rewritePackageJson(
     const viteAlreadyDirect =
       pkg.dependencies?.vite ?? pkg.devDependencies?.vite ?? pkg.optionalDependencies?.vite;
     if (viteOverride && !viteAlreadyDirect) {
-      pkg.devDependencies ??= {};
-      pkg.devDependencies.vite = viteOverride;
+      // npm has no catalog (supportCatalog=false), so the shared helper resolves
+      // the direct edge to the concrete core alias, just placed in sorted order.
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
       needVitePlus = true;
     }
   }
