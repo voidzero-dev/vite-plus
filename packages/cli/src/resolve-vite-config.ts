@@ -126,6 +126,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
       configFile: config.configFile,
       lint: config.lint,
       fmt: config.fmt,
+      check: config.check,
       run: config.run,
       staged: config.staged,
     });

@@ -15,6 +15,7 @@ pub(crate) struct ResolvedUniversalViteConfig {
     pub(crate) config_file: Option<String>,
     pub(crate) lint: Option<serde_json::Value>,
     pub(crate) fmt: Option<serde_json::Value>,
+    pub(crate) check: Option<serde_json::Value>,
     pub(crate) run: Option<serde_json::Value>,
 }
 

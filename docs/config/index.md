@@ -14,6 +14,7 @@ export default defineConfig({
   run: {},
   fmt: {},
   lint: {},
+  check: {},
   test: {},
   pack: {},
   staged: {},
@@ -28,6 +29,7 @@ Vite+ extends the basic Vite configuration with these additions:
 - [`run`](/config/run) for Vite Task
 - [`fmt`](/config/fmt) for Oxfmt
 - [`lint`](/config/lint) for Oxlint
+- [`check`](/config/check) for `vp check` defaults
 - [`test`](/config/test) for Vitest
 - [`pack`](/config/pack) for tsdown
 - [`staged`](/config/staged) for staged-file checks
