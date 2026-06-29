@@ -135,10 +135,7 @@ pub fn ensure_node_core_bin_prefix(
             continue;
         }
         let link = core_dir.join(link_name);
-        if std::fs::symlink_metadata(link.as_path()).is_ok() {
-            continue;
-        }
-        link_core_tool(target.as_path(), link.as_path())?;
+        create_core_tool_link(target.as_path(), link.as_path())?;
     }
 
     Ok(core_dir)
@@ -152,6 +149,23 @@ fn node_core_tools() -> &'static [(&'static str, &'static str)] {
 #[cfg(windows)]
 fn node_core_tools() -> &'static [(&'static str, &'static str)] {
     &[("node.exe", "node.exe"), ("npm.cmd", "npm.cmd"), ("npx.cmd", "npx.cmd")]
+}
+
+fn create_core_tool_link(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    if std::fs::symlink_metadata(link).is_ok() {
+        return Ok(());
+    }
+
+    match link_core_tool(target, link) {
+        Ok(()) => Ok(()),
+        Err(error)
+            if error.kind() == std::io::ErrorKind::AlreadyExists
+                && std::fs::symlink_metadata(link).is_ok() =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(unix)]
