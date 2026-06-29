@@ -129,7 +129,7 @@ export function parseNvmrcVersion(alias: string): string | null {
  *   3. the optional `./` prefix
  * The closing quote backreference (`\2`) plus the `(?=\s|$)` boundary keep this
  * pinned to the exact value `.nvmrc` / `./.nvmrc` (quoted or bare) and prevent
- * matching look-alikes such as `.nvmrc-backup`. Only `node-version-file:` lines
+ * matching similar values such as `.nvmrc-backup`. Only `node-version-file:` lines
  * are touched, so shell `cat .nvmrc` and comments are left alone.
  */
 const NODE_VERSION_FILE_NVMRC_RE = /(node-version-file:[ \t]*)(['"]?)(\.\/)?\.nvmrc\2(?=\s|$)/gm;
