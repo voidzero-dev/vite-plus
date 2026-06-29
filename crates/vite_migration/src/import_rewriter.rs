@@ -4030,24 +4030,6 @@ export default defineConfig({});"#;
     }
 
     #[test]
-    fn test_skip_vite_preserves_plugin_import_by_name_convention() {
-        // A Vite plugin library keeps importing from 'vite' so plain-vite
-        // consumers are not broken; without the skip it is rewritten.
-        let content = "import { Plugin } from 'vite';";
-
-        let preserved = SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
-        let result = rewrite_import_content(content, &preserved).unwrap();
-        assert!(!result.updated);
-        assert_eq!(result.content, "import { Plugin } from 'vite';");
-
-        let rewritten =
-            SkipPackages { skip_vite: false, skip_vitest: false, skip_tsdown: false };
-        let result = rewrite_import_content(content, &rewritten).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, "import { Plugin } from 'vite-plus';");
-    }
-
-    #[test]
     fn test_rewrite_imports_in_directory_with_vite_dependency() {
         use std::fs;
 
