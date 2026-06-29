@@ -9,25 +9,13 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import url from 'node:url';
 
+import { globSync } from 'glob';
 import { describe, expect, it } from 'vitest';
 
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
 const distDir = path.join(cliPkgDir, 'dist');
 const corePkgPath = path.join(cliPkgDir, '../core/package.json');
 const vitestPkgPath = createRequire(import.meta.url).resolve('vitest/package.json');
-
-function collectJsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...collectJsFiles(full));
-    } else if (entry.isFile() && entry.name.endsWith('.js')) {
-      out.push(full);
-    }
-  }
-  return out;
-}
 
 describe('versions export', () => {
   describe('build artifacts', () => {
@@ -68,7 +56,7 @@ describe('versions export', () => {
     it('every relative `import(... versions.js)` in dist resolves to an existing file', () => {
       const offenders: string[] = [];
       let matchCount = 0;
-      for (const file of collectJsFiles(distDir)) {
+      for (const file of globSync('**/*.js', { cwd: distDir, absolute: true })) {
         const content = fs.readFileSync(file, 'utf-8');
         for (const match of content.matchAll(RELATIVE_VERSIONS_IMPORT)) {
           matchCount++;
