@@ -18,7 +18,8 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{
-    config::{VERSION_ENV_VAR, get_node_modules_dir, resolve_version},
+    bin_config::{BinConfig, BinSource},
+    config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
@@ -55,8 +56,8 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     }
 
     // Check if this is a global package binary
-    if let Some(metadata) = PackageMetadata::find_by_binary(tool).await? {
-        return execute_package_binary(tool, &metadata).await;
+    if let Some(bin_config) = BinConfig::load(tool).await? {
+        return execute_bin_config_binary(tool, &bin_config).await;
     }
 
     // Unknown tool
@@ -64,6 +65,84 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     eprintln!("Not a core tool (node, npm, npx, corepack) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
+}
+
+async fn execute_bin_config_binary(
+    tool: &str,
+    bin_config: &BinConfig,
+) -> Result<ExitStatus, Error> {
+    match bin_config.source {
+        BinSource::Vp => {
+            if let Some(metadata) = PackageMetadata::load(&bin_config.package).await? {
+                return execute_package_binary(tool, &metadata).await;
+            }
+            output::error(&format!("binary '{}' not found", tool.bold()));
+            eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+            eprintln!("Run 'vp install -g {}' to reinstall.", bin_config.package);
+            Ok(exit_status(1))
+        }
+        BinSource::Npm => execute_npm_link_binary(tool, bin_config).await,
+    }
+}
+
+async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<ExitStatus, Error> {
+    let binary_path = match locate_npm_link_binary(tool).await {
+        Ok(path) if tokio::fs::try_exists(&path).await.unwrap_or(false) => path,
+        _ => {
+            output::error(&format!("binary '{}' not found", tool.bold()));
+            eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+            eprintln!("Run 'npm install -g {}' to recreate the link.", bin_config.package);
+            return Ok(exit_status(1));
+        }
+    };
+
+    println!("{}", binary_path.as_path().display());
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Package:".dimmed(),
+        bin_config.package.as_str().bright_blue()
+    );
+    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), "npm".dimmed());
+    println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), bin_config.node_version.bright_green());
+
+    Ok(ExitStatus::default())
+}
+
+#[cfg(unix)]
+async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
+    let link_path = get_bin_dir()?.join(tool);
+    let target = tokio::fs::read_link(&link_path).await?;
+    let binary_path = if target.is_absolute() {
+        target
+    } else {
+        let parent = link_path
+            .parent()
+            .ok_or_else(|| Error::Other(format!("Invalid npm link path for {tool}").into()))?;
+        parent.join(target).into_path_buf()
+    };
+    let canonical_path = tokio::fs::canonicalize(&binary_path).await?;
+    AbsolutePathBuf::new(canonical_path)
+        .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()))
+}
+
+#[cfg(windows)]
+async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
+    let cmd_path = get_bin_dir()?.join(format!("{tool}.cmd"));
+    let content = tokio::fs::read_to_string(&cmd_path).await?;
+    let mut lines = content.lines();
+    let source = match (lines.next(), lines.next(), lines.next(), lines.next()) {
+        (Some("@echo off"), Some(line), Some("exit /b %ERRORLEVEL%"), None)
+            if line.starts_with('"') && line.ends_with("\" %*") =>
+        {
+            &line[1..line.len() - "\" %*".len()]
+        }
+        _ => {
+            return Err(Error::Other(format!("Invalid npm link wrapper for {tool}").into()));
+        }
+    };
+
+    AbsolutePathBuf::new(std::path::PathBuf::from(source))
+        .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()))
 }
 
 async fn execute_package_manager_tool(

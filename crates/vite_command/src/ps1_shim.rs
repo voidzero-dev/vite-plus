@@ -32,7 +32,7 @@
 use std::ffi::OsString;
 
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
+use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powershell_host};
 
 /// Rewrite a vp-managed `.cmd` invocation to go through `PowerShell`.
 ///
@@ -54,19 +54,11 @@ use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 pub fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
+    // `build_command` always inherits stdin into spawned children, so a TTY on
+    // our stdin means a TTY in the child too. `is_stdin_terminal` is shared with
+    // `vite_task_plan::ps1_shim` via the `vite_powershell` crate.
     let host = powershell_host()?;
     rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
-}
-
-/// Cached `stdin.is_terminal()`. The TTY-ness of the parent's stdin
-/// is fixed for the process lifetime, and `build_command` always
-/// inherits stdin into spawned children — so a TTY here means a TTY
-/// in the child too.
-fn is_stdin_terminal() -> bool {
-    use std::{io::IsTerminal, sync::LazyLock};
-
-    static IS_TTY: LazyLock<bool> = LazyLock::new(|| std::io::stdin().is_terminal());
-    *IS_TTY
 }
 
 /// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
