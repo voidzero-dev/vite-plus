@@ -1390,9 +1390,14 @@ async function main() {
       }
     }
 
-    const fixBaseUrl = hasBaseUrlInWorkspace(workspaceInfoOptional)
-      ? await confirmBaseUrlFix(options.interactive)
-      : false;
+    let fixBaseUrl = false;
+    if (hasBaseUrlInWorkspace(workspaceInfoOptional)) {
+      // Stop the "Configuring package manager" progress spinner before the
+      // confirm so it does not animate beneath the prompt; the next progress
+      // update restarts it.
+      clearMigrationProgress();
+      fixBaseUrl = await confirmBaseUrlFix(options.interactive);
+    }
 
     // Check if tsconfig baseUrl migration is needed
     const fixedBaseUrlProjectPaths = await fixBaseUrlForWorkspace(
@@ -1434,6 +1439,9 @@ async function main() {
     );
     let prettierMigrated = false;
     if (prettierProject.hasDependency && prettierProject.configFile) {
+      // Stop any active progress spinner (e.g. "Migrating ESLint") before the
+      // confirm so it does not animate beneath the prompt.
+      clearMigrationProgress();
       const migratePrettier = await confirmPrettierMigration(options.interactive);
       if (migratePrettier) {
         await ensureExistingPackageManager();
@@ -1458,6 +1466,9 @@ async function main() {
     // Check if node version manager file migration is needed
     const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
     if (nodeVersionDetection) {
+      // Stop any active progress spinner before the confirm so it does not
+      // animate beneath the prompt.
+      clearMigrationProgress();
       const confirmed = await confirmNodeVersionFileMigration(
         options.interactive,
         nodeVersionDetection,
@@ -1477,6 +1488,7 @@ async function main() {
         workspaceInfoOptional.rootDir,
         options.interactive,
         report,
+        clearMigrationProgress,
       )
     ) {
       didMigrate = true;
