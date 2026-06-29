@@ -114,13 +114,14 @@ fn supported_node_floor_range(current: &str, supported_range: &Range) -> Option<
         if lifted.is_empty() {
             return None;
         }
-        // Unchanged union: same arity AND every branch kept verbatim → no rewrite.
-        let unchanged = lifted.len() == originals.len()
-            && lifted.iter().zip(&originals).all(|(lift, original)| lift.as_str() == *original);
-        if unchanged {
+        // No rewrite when the lifted union is identical to the input: every
+        // branch survived verbatim and none was dropped (a drop shortens the
+        // join, a lift changes a branch — both differ from the original join).
+        let rewritten = lifted.join(" || ");
+        if rewritten == originals.join(" || ") {
             return None;
         }
-        return Some(lifted.join(" || "));
+        return Some(rewritten);
     }
 
     // Single disjunct: reuse the floor-based decision as the gate. `None` here
