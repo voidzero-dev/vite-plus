@@ -72,9 +72,15 @@ tasks: {
 
 ### Tool-Reported Caching
 
-Tool-reported caching lets a tool tell Vite Task which cache inputs, outputs, and environment variables affect its result.
+Tool-reported caching lets a tool report the cache facts it already knows at runtime, instead of making you copy tool-specific inputs, outputs, or environment variables into task config.
 
-Vite+ only supports tool-reported caching for `vp build` today. Vite reports the build cache metadata it already knows, so you do not need to declare `env: ['VITE_*']` or replace automatic inputs for a standard Vite build. Add manual `input`, `output`, or `env` entries when your project has extra cache behavior the tool cannot know.
+Vite+ currently supports tool-reported caching for `vp build`. When a task runs `vp build`, Vite reports the build cache metadata at runtime, so you do not need to declare `env: ['VITE_*']` or `output: ['dist/**']` for a standard Vite build. With task shorthand, the task can be:
+
+```ts [vite.config.ts]
+tasks: {
+  build: 'vp build',
+}
+```
 
 We plan to extend tool-reported caching to more first-party tools. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
 
