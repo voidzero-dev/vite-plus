@@ -42,10 +42,8 @@ pub(crate) async fn execute_check(
     // `check.lint` is disabled in vite.config.ts. The skip note is printed only
     // when CONFIG (not the CLI flag) turned a step off, so existing `--no-fmt` /
     // `--no-lint` output stays byte-identical.
-    let config_fmt_off =
-        !check_config_step_enabled(resolved_vite_config.check.as_ref(), "fmt");
-    let config_lint_off =
-        !check_config_step_enabled(resolved_vite_config.check.as_ref(), "lint");
+    let config_fmt_off = !check_config_step_enabled(resolved_vite_config.check.as_ref(), "fmt");
+    let config_lint_off = !check_config_step_enabled(resolved_vite_config.check.as_ref(), "lint");
     if config_fmt_off && !no_fmt_flag {
         output::note("Format skipped (check.fmt: false in vite.config.ts)");
     }
