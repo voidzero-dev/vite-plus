@@ -61,6 +61,10 @@ jobs:
       # pkg-pr-new comments on PRs and posts run statuses with this token.
       contents: read
       pull-requests: write
+      # The "Comment bridge version" step creates/updates a sticky comment via
+      # github.rest.issues.createComment/updateComment; creating an issue comment
+      # is gated on issues:write (the create path runs on PRs without one yet).
+      issues: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
