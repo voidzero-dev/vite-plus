@@ -9,9 +9,9 @@ use vite_shared::output;
 use vite_task::ExitStatus;
 
 use self::analysis::{
-    LintMessageKind, analyze_fmt_check_output, analyze_lint_output, check_config_step_enabled,
-    format_count, format_elapsed, lint_config_type_check_enabled, print_error_block,
-    print_pass_line, print_stdout_block, print_summary_line,
+    LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count, format_elapsed,
+    json_bool, lint_config_type_check_enabled, print_error_block, print_pass_line,
+    print_stdout_block, print_summary_line,
 };
 use crate::cli::{
     CapturedCommandOutput, SubcommandResolver, SynthesizableSubcommand, resolve_and_capture_output,
@@ -42,8 +42,8 @@ pub(crate) async fn execute_check(
     // `check.lint` is disabled in vite.config.ts. The skip note is printed only
     // when CONFIG (not the CLI flag) turned a step off, so existing `--no-fmt` /
     // `--no-lint` output stays byte-identical.
-    let config_fmt_off = !check_config_step_enabled(resolved_vite_config.check.as_ref(), "fmt");
-    let config_lint_off = !check_config_step_enabled(resolved_vite_config.check.as_ref(), "lint");
+    let config_fmt_off = !json_bool(resolved_vite_config.check.as_ref(), "fmt", true);
+    let config_lint_off = !json_bool(resolved_vite_config.check.as_ref(), "lint", true);
     if config_fmt_off && !no_fmt_flag {
         output::note("Format skipped (check.fmt: false in vite.config.ts)");
     }
