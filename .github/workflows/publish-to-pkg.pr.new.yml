@@ -157,10 +157,13 @@ jobs:
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: voidzero-dev/pkg-pr-registry-bridge@533147006965e863af35d039a1d7db9f468c0b81 # main
+        uses: voidzero-dev/pkg-pr-registry-bridge@00b63a27a0e43eca8a3c56f5aac21cbbc870d863 # main
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
+          # Surfaced by the bridge's /-/refs so a registered ref links back to its
+          # PR. Always present here (this workflow only runs on pull_request).
+          pr-url: ${{ github.event.pull_request.html_url }}
 
       # Once the bridge has the commit build, post (or update) a sticky PR comment
       # with the resolved npm versions and per-package-manager registry config, so
@@ -180,7 +183,7 @@ jobs:
             const shortSha = context.payload.pull_request.head.sha.slice(0, 7);
             const pr = context.payload.pull_request.number;
             const marker = '<!-- pkg-pr-bridge-version -->';
-            const bridge = 'https://pkg-pr-registry-bridge.void.app/';
+            const bridge = 'https://registry-bridge.viteplus.dev/';
             // Built as a line array (not a template literal) so the inline
             // backticks and the fenced json block don't need backslash-escaping.
             const body = [

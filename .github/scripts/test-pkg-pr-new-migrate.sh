@@ -72,7 +72,7 @@ if command -v git >/dev/null 2>&1 && git -C "$project_dir" rev-parse --is-inside
   fi
 fi
 
-bridge_registry="https://pkg-pr-registry-bridge.void.app/"
+bridge_registry="https://registry-bridge.viteplus.dev/"
 pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
 requested_vite_plus_spec="$pkg_pr_new_base@$pr_ref"
 
