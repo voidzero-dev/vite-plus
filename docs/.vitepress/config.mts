@@ -17,8 +17,8 @@ const taskRunnerGuideItems = [
     link: '/guide/cache',
   },
   {
-    text: 'Tool-Reported Caching',
-    link: '/guide/tool-reported-caching',
+    text: 'Automatic Tracking',
+    link: '/guide/automatic-tracking',
   },
   {
     text: 'GitHub Actions Cache',

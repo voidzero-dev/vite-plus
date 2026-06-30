@@ -28,7 +28,7 @@ Fix local misses first. GitHub Actions cache can move Vite Task's local cache di
 
 Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache; run `vp run build` or define a CI-specific task.
 
-The example below uses automatic input tracking for `vp build`. Vite reports build cache metadata to Vite Task through [tool-reported caching](/guide/tool-reported-caching), so a short explicit list can miss files such as `public/**`, `.env*`, or framework config. The extra lockfile input ties the task fingerprint to dependency identity.
+The example below uses [automatic tracking](/guide/automatic-tracking) for `vp build`. Vite Task tracks file reads, and Vite reports build metadata that file tracking cannot infer. A short explicit input list can miss files such as `public/**`, `.env*`, or framework config. The extra lockfile input ties the task fingerprint to dependency identity.
 
 The lint task uses explicit inputs because its CI input set is smaller. If you use npm, Yarn, or Bun, replace `pnpm-lock.yaml` with the lockfile your project commits.
 
@@ -81,7 +81,7 @@ export default defineConfig({
 });
 ```
 
-For a standard Vite build, you do not need to add `env: ['VITE_*']` or replace automatic inputs. Add explicit `input` entries only to track extra files such as lockfiles or to exclude generated outputs.
+For a standard Vite build, you do not need to add `env: ['VITE_*']` or replace automatic tracking. Add explicit `input` entries only to track extra files such as lockfiles or to exclude generated outputs.
 
 ## 2. Restore The Cache After Install
 
@@ -186,7 +186,7 @@ When the task cache is restored, Vite Task can replay hits for the target packag
 
 ## Keep Inputs Stable Across CI Runs
 
-Vite Task's [automatic input tracking](/guide/cache#automatic-file-tracking) records file reads, missing-file probes, and directory listings. In CI, a command can read files that describe the dependency install or tool state rather than source behavior. Those reads can change between runs and cause misses after a successful GitHub cache restore.
+Vite Task's [automatic tracking](/guide/automatic-tracking) records file reads, missing-file probes, and directory listings. In CI, a command can read files that describe the dependency install or tool state rather than source behavior. Those reads can change between runs and cause misses after a successful GitHub cache restore.
 
 Treat these cases by root cause:
 

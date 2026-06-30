@@ -191,7 +191,7 @@ tasks: {
 
 Wildcard patterns and `!` exclusion patterns are supported: `VITE_*` matches all variables starting with `VITE_`, and `!VITE_SECRET` excludes the `VITE_SECRET` variable from the match.
 
-For `vp build`, Vite reports Vite environment variables through [tool-reported caching](/guide/tool-reported-caching). Do not add `VITE_*` or `NODE_ENV` here for a standard Vite build unless your project has extra build behavior Vite cannot report.
+For `vp build`, Vite reports Vite environment variables through [automatic tracking](/guide/automatic-tracking#cooperative-tracking). Do not add `VITE_*` or `NODE_ENV` here for a standard Vite build unless your project has extra build behavior Vite cannot report.
 
 ```bash
 $ NODE_ENV=development vp run build    # first run
@@ -216,7 +216,7 @@ tasks: {
 
 `untrackedEnv` accepts the same wildcard and `!` exclusion patterns as [`env`](#env).
 
-Do not put a variable in `untrackedEnv` if its value changes the task result. If a tool reports the variable through [tool-reported caching](/guide/tool-reported-caching), leave it out of both `env` and `untrackedEnv`.
+Do not put a variable in `untrackedEnv` if its value changes the task result. If a cache-reporting tool covers the variable through [automatic tracking](/guide/automatic-tracking#cooperative-tracking), leave it out of both `env` and `untrackedEnv`.
 
 Vite Task passes a set of common environment variables to all tasks:
 
@@ -230,7 +230,7 @@ Vite Task passes a set of common environment variables to all tasks:
 - **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
 
-Vite Task automatically detects which files are used by a command (see [Automatic File Tracking](/guide/cache#automatic-file-tracking)). The `input` option can be used to explicitly include or exclude certain files.
+Vite Task automatically detects which files a command uses. See [Automatic Tracking](/guide/automatic-tracking) for the two tracking tiers and when to add manual config. The `input` option can be used to explicitly include or exclude certain files.
 
 **Exclude files** from automatic tracking:
 
