@@ -56,7 +56,7 @@ Use [`input`](/config/run#input) and [`output`](/config/run#output) together whe
 tasks: {
   build: {
     command: 'node build.mjs',
-    input: [{ auto: true }, '!dist', '!dist/**'],
+    input: [{ auto: true }, '!dist/**'],
     output: ['dist/**'],
   },
 }

@@ -40,7 +40,7 @@ export default defineConfig({
     tasks: {
       'ci-build': {
         command: 'vp build',
-        input: [{ auto: true }, 'pnpm-lock.yaml', '!dist', '!dist/**'],
+        input: [{ auto: true }, 'pnpm-lock.yaml', '!dist/**'],
         output: ['dist/**'],
       },
       'ci-lint': {

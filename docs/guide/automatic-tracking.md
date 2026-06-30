@@ -41,7 +41,7 @@ File system tracking also tracks outputs. If you omit [`output`](/config/run#out
 
 ### Limitations
 
-Vite Task cannot track environment variable reads, and it cannot always tell which tracked paths are stable inputs, generated outputs, or tool-managed cache paths.
+Vite Task cannot track environment variable reads, and it cannot always tell which tracked paths are stable inputs, generated outputs, or tool-managed cache paths that should not become inputs or outputs.
 
 Use [Override Inputs And Outputs](#override-inputs-and-outputs) when file system tracking includes files that should not affect the cache, misses files that should, or restores the wrong outputs.
 
@@ -68,7 +68,7 @@ tasks: {
     command: 'node build.mjs',
 
     // Keep automatic input tracking, but exclude `dist` from inputs.
-    input: [{ auto: true }, '!dist', '!dist/**'],
+    input: [{ auto: true }, '!dist/**'],
 
     // Disable automatic output tracking and restore only `dist/**` on a cache hit.
     output: ['dist/**'],
@@ -126,7 +126,7 @@ Add config when your project has behavior the command or tool cannot know.
 
 | Case                                                              | Example                                                                                         |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist', '!dist/**']`                                                  |
+| Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist/**']`                                                           |
 | Exclude a temporary generated file from input and output tracking | `input: [{ auto: true }, '!.tmp/config.mjs']`<br>`output: [{ auto: true }, '!.tmp/config.mjs']` |
 | Avoid automatic file tracking for a task                          | `input: ['src/**']`<br>`output: ['dist/**']`                                                    |
 | Track and pass an env var                                         | `env: ['NODE_ENV']`                                                                             |
