@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
 import pkg from './package.json' with { type: 'json' };
+import { editJsonFile } from './src/utils/json.ts';
 
 const cli = new NapiCli();
 
@@ -87,10 +88,10 @@ const platformDirs = await readdir(npmDir);
 // skipped. `packages/cli/package.json` and `packages/core/package.json` keep the
 // product policy unchanged.
 for (const dir of platformDirs) {
-  const pkgJsonPath = join(npmDir, dir, 'package.json');
-  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-  pkgJson.engines = { ...pkgJson.engines, node: '>=20.0.0' };
-  writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  editJsonFile(join(npmDir, dir, 'package.json'), (pkgJson) => ({
+    ...pkgJson,
+    engines: { ...(pkgJson.engines as Record<string, unknown>), node: '>=20.0.0' },
+  }));
 }
 
 // Publish each NAPI platform package (without vp binary)
