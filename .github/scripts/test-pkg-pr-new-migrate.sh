@@ -320,9 +320,12 @@ fi
 # vite-plus and vite via the @voidzero-dev/vite-plus-core alias, the bundled
 # upstream for vitest); more than one version of any means the migration or
 # install is broken. Query one package at a time: npm/yarn/bun `why` only accept
-# a single package, and `-r` (recursive across workspaces) is pnpm-only.
+# a single package, and `-r` (recursive across workspaces) is pnpm-only — detect
+# the package manager via `vp env current --json`.
+pm_name="$(cd "$project_dir" && "$vp_bin" env current --json 2>/dev/null \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("package_manager",{}).get("name",""))' 2>/dev/null || true)"
 why_recursive=
-if grep -qE '"packageManager"[[:space:]]*:[[:space:]]*"pnpm' "$project_dir/package.json" 2>/dev/null; then
+if [ "$pm_name" = "pnpm" ]; then
   why_recursive=-r
 fi
 echo
