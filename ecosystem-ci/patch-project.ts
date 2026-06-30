@@ -163,3 +163,21 @@ if (packageJson.dependencies?.['vite-plus']) {
 }
 
 await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf-8');
+
+// Install with the local tgz overrides now wired into package.json. Disable
+// pnpm's minimumReleaseAge gate so the freshly published bumped deps (e.g.
+// @oxc-project/runtime, @oxfmt/binding-*) pass `vp install`'s lockfile
+// supply-chain check instead of failing with
+// ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION.
+//
+// dify is the exception: it sets `resolutionMode: time-based`, so the gate var
+// re-activates pnpm's resolution policy and vp's bundled pnpm (no
+// handleResolutionPolicyViolations callback) crashes on the local file: tgz
+// overrides with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Its
+// `minimumReleaseAge:` key was already removed above, so the policy stays
+// inactive when the var is unset.
+const installEnv: NodeJS.ProcessEnv = { ...process.env };
+if (!isDify) {
+  installEnv.pnpm_config_minimum_release_age = '0';
+}
+execSync(`${cli} install --no-frozen-lockfile`, { cwd, stdio: 'inherit', env: installEnv });

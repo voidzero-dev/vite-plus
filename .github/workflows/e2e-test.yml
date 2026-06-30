@@ -444,14 +444,11 @@ jobs:
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
-        run: |
-          # patch-project.ts scopes pnpm's minimumReleaseAge gate to the
-          # `vp migrate` subprocess (needed for the @oxlint/migrate dlx on a
-          # same-day publish). The `vp install` below intentionally runs without
-          # that gate so dify's `resolutionMode: time-based` policy stays
-          # inactive.
-          node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
-          vp install --no-frozen-lockfile
+        # patch-project.ts runs `vp migrate` and the follow-up `vp install`,
+        # handling pnpm's minimumReleaseAge gate per project (disabled so
+        # freshly published deps install, kept off for dify's time-based
+        # resolution policy). See its comments for the details.
+        run: node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
 
       - name: Verify local tgz packages installed
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
