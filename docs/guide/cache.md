@@ -72,17 +72,9 @@ tasks: {
 
 ### Tool-Reported Caching
 
-Tool-reported caching lets a tool report the cache facts it already knows at runtime, instead of making you copy tool-specific inputs, outputs, or environment variables into task config.
+Tool-reported caching lets a tool report cache metadata to Vite Task while it runs. Vite+ supports this for `vp build` today, so standard Vite builds do not need manual `env: ['VITE_*']` or `output: ['dist/**']` config.
 
-Vite+ currently supports tool-reported caching for `vp build`. When a task runs `vp build`, Vite reports the build cache metadata at runtime, so you do not need to declare `env: ['VITE_*']` or `output: ['dist/**']` for a standard Vite build. With task shorthand, the task can be:
-
-```ts [vite.config.ts]
-tasks: {
-  build: 'vp build',
-}
-```
-
-We plan to extend tool-reported caching to more first-party tools. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
+See [Tool-Reported Caching](/guide/tool-reported-caching) for current support, manual config rules, and third-party tool integration.
 
 ## Environment Variables
 
@@ -99,7 +91,7 @@ tasks: {
 }
 ```
 
-To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not affect caching behavior.
+To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untrackedenv). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not affect caching behavior.
 
 See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
 
