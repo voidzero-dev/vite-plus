@@ -119,16 +119,11 @@ vp run: cache hit, 1.10s saved.
 
 If GitHub restores a cache but Vite Task prints a cache miss, the Actions cache transport worked, but the task fingerprint changed.
 
-## Keep Tracking Stable Across CI Runs
+## Keep Task Tracking Stable
 
-Vite Task's [automatic tracking](/guide/automatic-tracking) records file reads, missing-file probes, and directory listings. In CI, a command can read files that describe the dependency install or tool state rather than source behavior. Those reads can change between runs and cause misses after a successful GitHub cache restore.
+GitHub Actions cache only restores the Vite Task cache directory. Vite Task still checks each restored entry before replaying it.
 
-Treat these cases by root cause:
-
-- **Dependency install metadata.** Package managers and build tools can read install metadata to resolve packages, discover workspace layout, or configure file-system access. Track dependency identity with committed package manifests and lockfiles. For `vp build`, keep automatic tracking and add the lockfile as an input. Use explicit `input` globs only for commands with a small input set you can name. If that command writes files, review `output` in the same task config.
-- **Tool-owned incremental state.** Tools such as TypeScript can write incremental state into a directory they also scan. A fresh checkout may lack that file, so the next run can miss because the directory listing changed. Move that state into a generated cache directory or use explicit task inputs. For TypeScript, set `--tsBuildInfoFile` to a generated cache location instead of writing `*.tsbuildinfo` next to source files.
-- **Task outputs.** If a task output also appears in the input fingerprint, deleting the output causes a miss instead of an output restore. Keep generated files out of `input`, then use `output` to choose which files Vite Task restores.
-- **Absolute arguments.** Vite Task stores command arguments in the fingerprint. If a command receives a different absolute checkout path between runs, it can miss with `args changed`. GitHub-hosted runners check out a repository under a stable path unless you override the checkout path. On self-hosted runners, keep the working directory stable or avoid absolute arguments.
+If GitHub restores a cache but `vp run` prints a cache miss, fix the task fingerprint before changing the Actions cache key. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks).
 
 ## Choose A Cache Key
 
