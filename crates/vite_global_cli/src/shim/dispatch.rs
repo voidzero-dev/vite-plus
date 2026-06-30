@@ -714,19 +714,12 @@ async fn resolve_matching_package_manager_tool(
     Ok(Some(package_manager_bin_path(&install_dir, bin_name)))
 }
 
-fn package_manager_tool_mismatch_message(
-    cwd: &AbsolutePath,
-    tool: &str,
-) -> Result<Option<String>, Error> {
-    let Some(invoked_type) = PackageManagerType::from_tool(tool) else {
-        return Ok(None);
-    };
-
+fn npm_package_manager_mismatch_message(cwd: &AbsolutePath) -> Result<Option<String>, Error> {
     let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
         return Ok(None);
     };
 
-    if resolution.package_manager_type == invoked_type {
+    if resolution.package_manager_type == PackageManagerType::Npm {
         return Ok(None);
     }
 
@@ -735,7 +728,7 @@ fn package_manager_tool_mismatch_message(
     let source = resolution.source;
     Ok(Some(
         vite_str::format!(
-            "This project is configured to use {package_manager} because {path} has a \"{source}\" field\n\nUse `{package_manager}` instead of `{tool}`."
+            "This project is configured to use {package_manager} because {path} has a \"{source}\" field\n\nUse `{package_manager}` instead of `npm`."
         )
         .to_string(),
     ))
@@ -832,9 +825,17 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         return super::corepack::dispatch_corepack(args).await;
     }
 
-    // Package-manager shims should not run against a project that explicitly
-    // declares a different package manager.
-    if PackageManagerType::from_tool(tool).is_some() {
+    // Check recursion prevention - if already in a shim context, passthrough directly
+    // Only applies to core tools (node/npm/npx) whose bin dir is prepended to PATH.
+    // Package binaries are always resolved via metadata lookup, so they can't loop.
+    if std::env::var(RECURSION_ENV_VAR).is_ok() && is_core_shim_tool(tool) {
+        tracing::debug!("recursion prevention enabled for core tool");
+        return passthrough_to_system(tool, args);
+    }
+
+    // Top-level npm should not run against a project that explicitly declares
+    // a different package manager.
+    if tool == "npm" {
         let cwd = match current_dir() {
             Ok(path) => path,
             Err(e) => {
@@ -842,7 +843,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                 return 1;
             }
         };
-        match package_manager_tool_mismatch_message(&cwd, tool) {
+        match npm_package_manager_mismatch_message(&cwd) {
             Ok(Some(message)) => {
                 output::raw_stderr(&message);
                 return 1;
@@ -853,14 +854,6 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                 return 1;
             }
         }
-    }
-
-    // Check recursion prevention - if already in a shim context, passthrough directly
-    // Only applies to core tools (node/npm/npx) whose bin dir is prepended to PATH.
-    // Package binaries are always resolved via metadata lookup, so they can't loop.
-    if std::env::var(RECURSION_ENV_VAR).is_ok() && is_core_shim_tool(tool) {
-        tracing::debug!("recursion prevention enabled for core tool");
-        return passthrough_to_system(tool, args);
     }
 
     // Check if this is a package binary (not node/npm/npx)
@@ -1563,12 +1556,18 @@ mod tests {
         )
         .unwrap();
 
-        let message = package_manager_tool_mismatch_message(&cwd, "npm").unwrap().unwrap();
+        let message = npm_package_manager_mismatch_message(&cwd).unwrap().unwrap();
 
         assert!(message.contains("This project is configured to use pnpm"), "got: {message}");
         assert!(message.contains("\"packageManager\" field"), "got: {message}");
         assert!(message.contains("Use `pnpm` instead of `npm`."), "got: {message}");
-        assert!(package_manager_tool_mismatch_message(&cwd, "pnpm").unwrap().is_none());
+
+        std::fs::write(
+            cwd.join("package.json"),
+            r#"{"name":"fixture","packageManager":"npm@10.9.4"}"#,
+        )
+        .unwrap();
+        assert!(npm_package_manager_mismatch_message(&cwd).unwrap().is_none());
     }
 
     #[tokio::test]
