@@ -22,12 +22,14 @@ Use this workflow when all of these are true:
 
 Fix local misses first. GitHub Actions cache can move Vite Task's local cache directory between runs, but it cannot make an unstable task cacheable.
 
-## When To Skip GitHub Actions Cache
+## Measure Before Caching Across Runs
+
+Measure before you add GitHub Actions cache for Vite Task. Compare workflow duration with and without the restore and save steps. Check both the GitHub cache step time and the `vp run` time.
 
 You may not need to restore Vite Task cache across GitHub Actions runs in these cases:
 
 - The task is already fast enough. Cache restore and save steps add overhead, so short tasks can finish faster without this workflow.
-- The cache is expensive to move between runs. Vite Task can still save time when the same task runs more than once in one workflow run. Across workflow runs, GitHub must download and upload the cache, so a large task cache can cost more time than rerunning the task.
+- The cache is expensive to move between runs. Vite Task can still save time when the same task runs more than once in one workflow run. Across workflow runs, GitHub must download and upload the cache. If that transfer time is greater than rerunning the task, skip this workflow.
 
 ## 1. Define Cacheable CI Tasks
 
