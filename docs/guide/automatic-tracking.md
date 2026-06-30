@@ -1,6 +1,6 @@
 # Automatic Tracking
 
-Automatic tracking is how Vite Task learns whether a cached task can be reused. When you run a cached command through `vp run`, Vite Task records the files, outputs, and cache-reporting metadata that affect the result. On the next run, Vite Task compares that record with the current command and replays the task only when the fingerprint still matches.
+Automatic tracking is how Vite Task learns what to cache for a task without explicit configurations. When you run a cache-enabled task, Vite Task observes the task's execution and records what files were read and written, as well as any metadata reported by the task. On the next run, Vite Task decides whether the cache misses or hits based on the recorded fingerprint.
 
 Use this page when you need to understand why a task hits or misses the cache, or when you need to decide whether to add `input`, `output`, `env`, or `untrackedEnv` config.
 
@@ -8,16 +8,16 @@ Use this page when you need to understand why a task hits or misses the cache, o
 
 Automatic tracking has two tiers:
 
-| Tier                 | Applies to                            | Records                                                                                                                  |
-| -------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| File system tracking | All cached tasks run through `vp run` | Files read by the command, missing-file probes, directory listings, and written output files                             |
-| Cooperative tracking | Cache-reporting tools                 | Metadata reported by the tool, such as environment variables and tool-owned paths that should not affect the task result |
+| Tier                 | Applies to                   | Records                                                                                                                                                                       |
+| -------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File system tracking | All tasks with cache enabled | Files read by the command, missing-file probes, directory listings, and written output files                                                                                  |
+| Cooperative tracking | Cache-reporting tools        | Metadata reported by the tool, such as environment variables and tool-managed cache paths that should not be considered as inputs or outputs (e.g. `node_modules/.vite-temp`) |
 
 Vite Task starts with file system tracking for any command. A cache-reporting tool can add information that only the tool knows while it runs.
 
 ## File System Tracking
 
-File system tracking applies to every cached task run through `vp run`. If you omit [`input`](/config/run#input), Vite Task tracks the files a command reads while it runs:
+File system tracking applies to every task to be cached. If you omit [`input`](/config/run#input), Vite Task tracks the files a command reads while it runs:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
