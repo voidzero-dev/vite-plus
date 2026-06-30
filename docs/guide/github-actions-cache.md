@@ -9,7 +9,7 @@ Vite Task stores task results in `node_modules/.vite/task-cache` at the workspac
 GitHub Actions cache and Vite Task make separate decisions:
 
 1. `actions/cache` restores and saves the cache directory based on the key in your workflow.
-2. Vite Task checks the restored entries and replays only the tasks whose fingerprints still match.
+2. Vite Task uses the restored cache directory and replays only the tasks whose fingerprints still match.
 
 This cache is separate from dependency caching. Keep using [`setup-vp` cache support](/guide/ci) for package installs, then restore the Vite Task cache after dependencies are installed.
 
@@ -26,11 +26,11 @@ Fix local misses first. GitHub Actions cache can move Vite Task's local cache di
 
 ## 1. Define Cacheable CI Tasks
 
-Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache; run `vp run build` or define a CI-specific task.
+Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache. Define a task in your `vite.config.ts` for each command you want to cache in CI.
 
-The example below uses [automatic tracking](/guide/automatic-tracking) for `vp build`. Vite Task tracks file reads, and Vite reports build metadata that file tracking cannot infer. A short explicit input list can miss files such as `public/**`, `.env*`, or framework config. The extra lockfile input ties the task fingerprint to dependency identity.
+The example below uses [automatic tracking](/guide/automatic-tracking) for `vp build`. Vite Task tracks file reads, and Vite reports build metadata that file tracking cannot infer. Do not replace it with a short explicit input list, which can miss files such as `public/**`, `.env*`, or framework config.
 
-The lint task uses explicit inputs because its CI input set is smaller. If you use npm, Yarn, or Bun, replace `pnpm-lock.yaml` with the lockfile your project commits.
+The lint task uses explicit inputs because its CI input set is small and stable.
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -38,29 +38,25 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   run: {
     tasks: {
-      'ci-build': {
-        command: 'vp build',
-        input: [{ auto: true }, 'pnpm-lock.yaml', '!dist/**'],
-        output: ['dist/**'],
-      },
-      'ci-lint': {
+      build: 'vp build',
+      lint: {
         command: 'vp lint',
-        input: ['package.json', 'pnpm-lock.yaml', 'src/**', 'tsconfig*.json', 'vite.config.ts'],
+        input: ['src/**', 'tsconfig*.json', 'vite.config.ts'],
       },
     },
   },
 });
 ```
 
-The build task sets `output: ['dist/**']` to narrow output restoration to `dist`. The `!dist` input exclusions keep generated output files from invalidating the same cache entry Vite Task can restore. If you omit `output`, Vite Task tracks files that the task writes and restores those files on cache hits. Use [`output`](/config/run#output) when you need to narrow, extend, or disable output restoration.
+The build task needs no manual `input`, `output`, or `env` entries for a standard Vite build. The lint task overrides only `input`, so output tracking stays automatic.
 
 Run each task twice:
 
 ```bash
-vp run ci-build
-vp run ci-build # should print "cache hit"
-vp run ci-lint
-vp run ci-lint # should print "cache hit"
+vp run build
+vp run build # should print "cache hit"
+vp run lint
+vp run lint # should print "cache hit"
 ```
 
 For other auto-tracked tasks that produce files, use the same output pattern:
@@ -73,7 +69,7 @@ export default defineConfig({
     tasks: {
       report: {
         command: 'node scripts/report.mjs',
-        input: [{ auto: true }, '!reports', '!reports/**'],
+        input: [{ auto: true }, '!reports/**'],
         output: ['reports/**'],
       },
     },
@@ -119,8 +115,8 @@ jobs:
           restore-keys: |
             vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock', '**/bun.lock', '**/bun.lockb') }}-
 
-      - run: vp run ci-lint
-      - run: vp run ci-build
+      - run: vp run lint
+      - run: vp run build
 
       - name: Save Vite Task cache
         if: success()
@@ -167,12 +163,7 @@ export default defineConfig({
       build: {
         command: 'vp build',
         dependsOn: [{ task: 'build', from: 'dependencies' }],
-        input: [
-          { auto: true },
-          { pattern: 'pnpm-lock.yaml', base: 'workspace' },
-          '!dist',
-          '!dist/**',
-        ],
+        input: [{ auto: true }, { pattern: 'pnpm-lock.yaml', base: 'workspace' }, '!dist/**'],
         output: ['dist/**'],
       },
     },
