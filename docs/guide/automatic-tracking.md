@@ -37,20 +37,21 @@ For this task, Vite Task records source files, config files, missing files the c
 
 File system tracking also tracks outputs. If you omit [`output`](/config/run#output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
 
-### Adjust File System Tracking
+### Override Inputs And Outputs
 
-Keep file system tracking and add exclusions when a command reads generated files that should not invalidate the task:
+Pair input and output overrides when a task writes files. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
-    command: 'tsc',
-    input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist', '!dist/**'],
+    command: 'node build.mjs',
+    input: [{ auto: true }, '!dist', '!dist/**'],
+    output: ['dist/**'],
   },
 }
 ```
 
-Use explicit `input` globs only when the command has a small, stable input set you can name:
+Use explicit `input` globs only when the command has a small, stable input set you can name. Commands that do not write outputs do not need `output`:
 
 ```ts [vite.config.ts]
 tasks: {
@@ -61,12 +62,13 @@ tasks: {
 }
 ```
 
-Use explicit `output` globs when you want to narrow or extend the files Vite Task restores:
+Use explicit `output` globs when you want to narrow or extend the files Vite Task restores. If the command also reads its output directory, exclude that directory from `input`:
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'node build.mjs',
+    input: [{ auto: true }, '!dist', '!dist/**'],
     output: ['dist/**'],
   },
 }
@@ -142,7 +144,7 @@ Vite Task chooses a cache miss when tracked data changed between runs. In CI, th
 - **Dependency install metadata:** add committed package manifests and lockfiles as inputs. For `vp build`, keep automatic tracking and add the lockfile.
 - **Tool-owned incremental state:** move incremental files into a generated cache directory or exclude them from file system-tracked inputs.
 - **Generated outputs:** exclude output directories from `input`, then configure `output` so Vite Task can restore them.
-- **Broad directory scans:** use explicit `input` globs when a command scans directories that contain unrelated files.
+- **Broad directory scans:** use explicit `input` globs when a command scans directories that contain unrelated files. If the command writes files, review `output` in the same task config.
 - **Environment variables:** add `env` for variables that change a non-reporting command's result. Leave standard Vite build env vars out of `env` because `vp build` reports them.
 
 For GitHub Actions cache reuse, see [GitHub Actions Cache](/guide/github-actions-cache). That guide explains how to restore `node_modules/.vite/task-cache` between CI runs after your task hits locally.

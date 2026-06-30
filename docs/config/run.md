@@ -230,7 +230,7 @@ Vite Task passes a set of common environment variables to all tasks:
 - **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
 
-Vite Task automatically detects which files a command uses. See [Automatic Tracking](/guide/automatic-tracking) for the two tracking tiers and when to add manual config. The `input` option can be used to explicitly include or exclude certain files.
+Vite Task automatically detects which files a command uses. See [Automatic Tracking](/guide/automatic-tracking) for the two tracking tiers and when to add manual config. The `input` option explicitly includes or excludes files from the cache fingerprint. Pair it with [`output`](#output) when a task writes files that Vite Task should restore.
 
 **Exclude files** from automatic tracking:
 
@@ -294,7 +294,7 @@ String glob patterns are resolved relative to the package directory by default. 
 - **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** automatic write tracking
 
-Files Vite Task archives after a successful run and restores on a cache hit.
+Files Vite Task archives after a successful run and restores on a cache hit. Pair `output` with [`input`](#input) when a task writes files that it also reads, so generated files do not invalidate the cache entry Vite Task can restore.
 
 If you omit `output`, Vite Task tracks files that the task writes and restores those files on cache hits. Use explicit output entries when you need to override the tracked files.
 

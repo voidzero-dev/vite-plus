@@ -19,7 +19,7 @@ Use this workflow when all of these are true:
 
 - The command runs through [`vp run`](/guide/run).
 - The task hits on a second local run.
-- The task has a stable input strategy for CI.
+- The task has stable input and output tracking for CI.
 - The workflow installs dependencies before restoring `node_modules/.vite/task-cache`.
 
 Fix local misses first. GitHub Actions cache can move Vite Task's local cache directory between runs, but it cannot make an unstable task cacheable.
@@ -81,7 +81,7 @@ export default defineConfig({
 });
 ```
 
-For a standard Vite build, you do not need to add `env: ['VITE_*']` or replace automatic tracking. Add explicit `input` entries only to track extra files such as lockfiles or to exclude generated outputs.
+For a standard Vite build, you do not need to add `env: ['VITE_*']` or replace automatic tracking. Add explicit `input` entries only to track extra files such as lockfiles or to exclude generated outputs. Add explicit `output` entries only when you need to narrow, extend, or disable output restoration.
 
 ## 2. Restore The Cache After Install
 
@@ -184,15 +184,15 @@ The object-form `dependsOn` runs `build` in direct workspace dependency packages
 
 When the task cache is restored, Vite Task can replay hits for the target package and its workspace dependencies. In a transitive `core -> util -> app` experiment, restoring only `node_modules/.vite/task-cache` in a fresh checkout produced `3/3` cache hits and restored each package's `dist/**` output.
 
-## Keep Inputs Stable Across CI Runs
+## Keep Tracking Stable Across CI Runs
 
 Vite Task's [automatic tracking](/guide/automatic-tracking) records file reads, missing-file probes, and directory listings. In CI, a command can read files that describe the dependency install or tool state rather than source behavior. Those reads can change between runs and cause misses after a successful GitHub cache restore.
 
 Treat these cases by root cause:
 
-- **Dependency install metadata.** Package managers and build tools can read install metadata to resolve packages, discover workspace layout, or configure file-system access. Track dependency identity with committed package manifests and lockfiles. For `vp build`, keep automatic tracking and add the lockfile as an input. Use explicit `input` globs only for commands with a small input set you can name.
+- **Dependency install metadata.** Package managers and build tools can read install metadata to resolve packages, discover workspace layout, or configure file-system access. Track dependency identity with committed package manifests and lockfiles. For `vp build`, keep automatic tracking and add the lockfile as an input. Use explicit `input` globs only for commands with a small input set you can name. If that command writes files, review `output` in the same task config.
 - **Tool-owned incremental state.** Tools such as TypeScript can write incremental state into a directory they also scan. A fresh checkout may lack that file, so the next run can miss because the directory listing changed. Move that state into a generated cache directory or use explicit task inputs. For TypeScript, set `--tsBuildInfoFile` to a generated cache location instead of writing `*.tsbuildinfo` next to source files.
-- **Task outputs.** If a task output also appears in the input fingerprint, deleting the output causes a miss instead of an output restore. Keep generated files out of `input`, then let Vite Task restore tracked outputs.
+- **Task outputs.** If a task output also appears in the input fingerprint, deleting the output causes a miss instead of an output restore. Keep generated files out of `input`, then use `output` to choose which files Vite Task restores.
 - **Absolute arguments.** Vite Task stores command arguments in the fingerprint. If a command receives a different absolute checkout path between runs, it can miss with `args changed`. GitHub-hosted runners check out a repository under a stable path unless you override the checkout path. On self-hosted runners, keep the working directory stable or avoid absolute arguments.
 
 ## Choose A Cache Key
