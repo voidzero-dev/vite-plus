@@ -450,14 +450,15 @@ jobs:
           # minimumReleaseAge gate so a same-day publish does not fail with
           # ERR_PNPM_NO_MATURE_MATCHING_VERSION.
           #
-          # dify is excluded: it sets `resolutionMode: time-based` and
+          # dify is excluded here: it sets `resolutionMode: time-based` and
           # patch-project.ts removes its `minimumReleaseAge:` key to keep the
           # resolution policy inactive. Defining pnpm_config_minimum_release_age
-          # here (even as 0 or empty) re-activates that policy, and vp's bundled
-          # pnpm has no handleResolutionPolicyViolations callback, so the local
-          # file: tgz overrides crash it with
-          # ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. The variable must be
-          # fully unset (not just empty) for dify.
+          # for the `vp install` below (even as 0 or empty) re-activates that
+          # policy, and vp's bundled pnpm has no handleResolutionPolicyViolations
+          # callback, so the local file: tgz overrides crash it with
+          # ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. dify still needs the
+          # gate disabled for `vp migrate`'s @oxlint/migrate dlx, so
+          # patch-project.ts scopes the var to that migrate subprocess only.
           if [ '${{ matrix.project.name }}' != 'dify' ]; then
             export pnpm_config_minimum_release_age=0
           fi
