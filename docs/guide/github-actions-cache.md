@@ -148,3 +148,17 @@ Include:
 - A per-run value such as `github.run_id` and `github.run_attempt`, because GitHub cache entries are immutable.
 
 If a dependency file affects a task result, track it in the task fingerprint rather than the GitHub Actions key.
+
+## Manage Cache Eviction And Scope
+
+GitHub evicts caches based on its cache retention and repository storage rules. Cache scope is also branch-aware: workflow runs can restore caches from the current branch and the default branch, while pull request merge-ref caches have limited scope.
+
+Vite Task can clean the whole task cache, but it does not currently evict individual task entries by age or size. As new task entries and output archives are saved, `node_modules/.vite/task-cache` can keep growing.
+
+Use GitHub Actions cache as the eviction boundary:
+
+- Keep the cached `path` limited to the Vite Task cache directory.
+- Keep the restore prefix scoped to compatible runners, such as the same OS and architecture.
+- Delete stale GitHub Actions cache entries, save caches from fewer workflows, or adjust the repository cache limit if cache size causes churn.
+
+See [GitHub's cache reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) for the current eviction and scope rules.
