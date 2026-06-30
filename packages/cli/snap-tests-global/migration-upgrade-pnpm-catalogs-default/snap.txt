@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # reuse the managed named catalog beside catalogs.default
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # existing catalog:build dependency references are preserved

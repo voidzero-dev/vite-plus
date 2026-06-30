@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # peer catalog must resolve before managed Vitest catalogs are pruned
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # peer uses its resolved public range without gaining direct Vitest

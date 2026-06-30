@@ -3,8 +3,12 @@
 ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
 
 ✔ Switched Yarn to node-modules mode
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  yarn <semver>
+• Dependencies:
+    vite-plus   latest → <semver>
+    vite               → <semver>
+    @vitest/ui  <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # direct deps and resolutions should use the managed catalog/version

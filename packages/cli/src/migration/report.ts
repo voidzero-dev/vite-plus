@@ -1,3 +1,15 @@
+/**
+ * A single toolchain dependency version change captured before the
+ * existing-Vite+ reconcile mutates the manifest. `from` is the pre-migration
+ * version (undefined when the package is freshly added); `to` is the version
+ * Vite+ migrates it to. Rendered as an aligned table in the migrate summary.
+ */
+export interface DependencyVersionChange {
+  name: string;
+  from?: string;
+  to: string;
+}
+
 export interface MigrationReport {
   createdViteConfigCount: number;
   mergedConfigCount: number;
@@ -15,6 +27,7 @@ export interface MigrationReport {
   gitHooksConfigured: boolean;
   frameworkShimAdded: boolean;
   packageManagerBootstrapConfigured: boolean;
+  dependencyUpgrades: DependencyVersionChange[];
   warnings: string[];
   manualSteps: string[];
 }
@@ -37,6 +50,7 @@ export function createMigrationReport(): MigrationReport {
     gitHooksConfigured: false,
     frameworkShimAdded: false,
     packageManagerBootstrapConfigured: false,
+    dependencyUpgrades: [],
     warnings: [],
     manualSteps: [],
   };

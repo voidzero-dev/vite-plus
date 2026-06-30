@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # nested Vitest override is user-owned and not pending removal
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # object-valued override is preserved

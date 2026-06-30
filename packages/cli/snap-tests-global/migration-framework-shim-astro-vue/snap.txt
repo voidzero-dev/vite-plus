@@ -3,7 +3,7 @@
 Formatting code...
 
 Code formatted
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 ✓ Dependencies installed in <variable>ms
 • 1 config update applied

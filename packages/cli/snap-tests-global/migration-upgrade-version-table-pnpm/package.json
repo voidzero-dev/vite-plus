@@ -1,0 +1,16 @@
+{
+  "name": "migration-upgrade-version-table-pnpm",
+  "devDependencies": {
+    "@vitest/coverage-v8": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

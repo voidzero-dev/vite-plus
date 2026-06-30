@@ -1,6 +1,6 @@
 > git init
 > vp migrate --no-interactive # migration should add prepare script, remove lint-staged from devDeps
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 3 config updates applied
 • Git hooks configured

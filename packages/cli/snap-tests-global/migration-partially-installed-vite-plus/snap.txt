@@ -1,6 +1,9 @@
 > vp migrate --no-interactive --no-hooks --no-agent --no-editor # should finish core rewrites even when vite-plus is already installed in a pnpm project
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • 1 config update applied, 1 file had imports rewritten
 • Package manager settings configured
 

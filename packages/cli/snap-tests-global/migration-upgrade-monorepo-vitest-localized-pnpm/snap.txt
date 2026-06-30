@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # existing Vite+ workspace packages should be reconciled
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # root should not gain a direct vitest

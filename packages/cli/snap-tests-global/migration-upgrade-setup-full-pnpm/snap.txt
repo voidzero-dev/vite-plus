@@ -1,7 +1,10 @@
 > chmod +x fix-baseurl.mjs # stub the baseUrl fixer so the dlx stays offline
 > vp migrate --full --no-interactive # existing Vite+ project: upgrade plus the full setup
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • 2 config updates applied
 • Node version manager file migrated to .node-version
 • Package manager settings configured

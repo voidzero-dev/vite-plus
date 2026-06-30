@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # existing Vite+ project: upgrade the toolchain version only, skip the full setup
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 • Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
 

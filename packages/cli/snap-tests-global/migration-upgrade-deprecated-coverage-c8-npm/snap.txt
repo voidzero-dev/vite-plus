@@ -1,6 +1,10 @@
 > vp migrate --no-interactive # deprecated coverage-c8 has an independent version line
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
+    vitest     <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # coverage-c8 must not be rewritten to a nonexistent Vitest 4 version

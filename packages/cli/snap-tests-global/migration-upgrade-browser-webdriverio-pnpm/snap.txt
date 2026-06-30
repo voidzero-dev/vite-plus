@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # source-only WebdriverIO provider should be restored
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # provider, webdriverio, and local vitest should be present

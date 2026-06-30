@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # existing bun Vite+ catalog WORKSPACE gains a direct vite edge for bun#8406 (bun resolves catalog: only inside a workspace)
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  bun <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # the direct vite edge is catalog: (resolving through the bun catalog), not a concrete alias

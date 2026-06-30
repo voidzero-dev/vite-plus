@@ -1,6 +1,10 @@
 > vp migrate --no-interactive # clean checkout conservatively preserves existing Vitest
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
+    vitest     <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # package-local Vitest and its shared override remain aligned

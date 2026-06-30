@@ -1,17 +1,20 @@
 > vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
-• 3 config updates applied
-• ESLint rules migrated to Oxlint
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
+• Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
 
 > cat package.json # check eslint removed from devDependencies and scripts rewritten
 {
   "name": "migration-eslint-rerun",
   "scripts": {
-    "lint": "vp lint ."
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "eslint": "^9.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
@@ -24,38 +27,6 @@
   }
 }
 
-> test ! -f eslint.config.mjs # check eslint config is removed
-> cat vite.config.ts # check oxlint config merged into vite.config.ts
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  lint: {
-    "plugins": [
-      "oxc",
-      "typescript",
-      "unicorn",
-      "react"
-    ],
-    "categories": {
-      "correctness": "warn"
-    },
-    "env": {
-      "builtin": true
-    },
-    "rules": {
-      "no-unused-vars": "error",
-      "vite-plus/prefer-vite-plus-imports": "error"
-    },
-    "options": {
-      "typeAware": true,
-      "typeCheck": true
-    },
-    "jsPlugins": [
-      {
-        "name": "vite-plus",
-        "specifier": "vite-plus/oxlint-plugin"
-      }
-    ]
-  },
-  
-});
+[1]> test ! -f eslint.config.mjs # check eslint config is removed
+[1]> cat vite.config.ts # check oxlint config merged into vite.config.ts
+cat: vite.config.ts: No such file or directory

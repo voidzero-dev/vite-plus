@@ -1,6 +1,8 @@
 > vp migrate --no-interactive # deliberate vite-plus protocol pin must survive bootstrap
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite   → <semver>
 • Package manager settings configured
 
 > cat package.json # file pin should remain while stale vitest config is removed

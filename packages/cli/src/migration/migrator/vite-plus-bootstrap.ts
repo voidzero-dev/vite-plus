@@ -24,6 +24,7 @@ import {
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
+  isAlignableVitestEcosystemPackage,
   isLegacyWrapperSpec,
   isProtocolPinnedSpec,
   managedOverridePackages,
@@ -51,7 +52,7 @@ import {
   yarnrcSatisfiesVitePlus,
   yarnSupportsCatalog,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
   OPT_IN_BROWSER_PROVIDERS,
@@ -1134,4 +1135,162 @@ export function ensureVitePlusBootstrap(
     report.packageManagerBootstrapConfigured = true;
   }
   return result;
+}
+
+type RawVitePackageJson = {
+  name?: string;
+  version?: string;
+  bundledVersions?: { vite?: string };
+};
+
+function declaredRootSpec(pkg: BootstrapPackageJson, dependencyName: string): string | undefined {
+  return pkg.dependencies?.[dependencyName] ?? pkg.devDependencies?.[dependencyName];
+}
+
+/**
+ * Reduce a plain spec to a concrete-ish version string for display: a
+ * `npm:@scope/name@<range>` alias (e.g. the legacy `@voidzero-dev/vite-plus-test`
+ * vitest wrapper) keeps only its trailing range, then a single leading `^`/`~`/
+ * `>=` operator is stripped. Any remaining range text is kept as-is.
+ */
+function concretizeRange(spec: string): string {
+  let value = spec;
+  if (value.startsWith('npm:')) {
+    const versionAt = value.lastIndexOf('@');
+    if (versionAt > 'npm:'.length) {
+      value = value.slice(versionAt + 1);
+    }
+  }
+  return value.replace(/^(?:\^|~|>=)\s*/, '');
+}
+
+/**
+ * Resolve a pre-migration root dependency spec to a concrete version string for
+ * display. A `catalog:`/`catalog:<name>` reference resolves through the project
+ * catalog (then concretized, since a named catalog may itself hold an alias).
+ */
+function resolveDisplayFromSpec(
+  spec: string,
+  dependencyName: string,
+  catalogDependencyResolver: CatalogDependencyResolver | undefined,
+): string | undefined {
+  if (spec.startsWith('catalog:')) {
+    const resolved = catalogDependencyResolver?.(spec, dependencyName);
+    return resolved === undefined ? undefined : concretizeRange(resolved);
+  }
+  return concretizeRange(spec);
+}
+
+/**
+ * Read the RAW upstream Vite version installed under `node_modules/vite`,
+ * best-effort. When that copy is the `@voidzero-dev/vite-plus-core` alias (the
+ * Vite+ bundle), the raw Vite version lives in its `bundledVersions.vite`;
+ * otherwise it is a real upstream vite and `version` is the raw value. Returns
+ * undefined when the file is missing or yields nothing.
+ */
+function readInstalledRawViteVersion(projectPath: string): string | undefined {
+  const vitePackageJsonPath = path.join(projectPath, 'node_modules', 'vite', 'package.json');
+  if (!fs.existsSync(vitePackageJsonPath)) {
+    return undefined;
+  }
+  let pkgJson: RawVitePackageJson;
+  try {
+    pkgJson = readJsonFile(vitePackageJsonPath) as RawVitePackageJson;
+  } catch {
+    return undefined;
+  }
+  if (pkgJson.name === '@voidzero-dev/vite-plus-core') {
+    return pkgJson.bundledVersions?.vite;
+  }
+  return pkgJson.version;
+}
+
+/**
+ * Capture the toolchain dependency version changes an existing-Vite+ upgrade
+ * will apply, for the migrate summary table. Call this BEFORE the bootstrap
+ * reconcile mutates the manifest so the `from` values still reflect the
+ * pre-migration root package.json.
+ *
+ * `to` targets: `vite-plus` -> VITE_PLUS_VERSION, `vitest` and every declared
+ * `@vitest/*` -> VITEST_VERSION, `vite` -> the RAW bundled upstream Vite version
+ * (NOT the `@voidzero-dev/vite-plus-core` alias). An entry is included only when
+ * `to` is defined and the version actually changes (or the package is freshly
+ * added, i.e. `from` is undefined).
+ */
+export async function collectToolchainVersionChanges(
+  projectPath: string,
+): Promise<DependencyVersionChange[]> {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return [];
+  }
+  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
+
+  // The bundled raw Vite version is imported from `./versions.js` (dist root):
+  // the tsdown `fix-versions-path` plugin rewrites this specifier and
+  // versions.spec.ts guards that it resolves. Mirror migrator/eslint.ts EXACTLY.
+  // @ts-expect-error — resolved at runtime from dist/ -> dist/versions.js
+  const { versions } = await import('../versions.js');
+  const rawViteVersion = versions.vite as string | undefined;
+
+  const catalogDependencyResolver =
+    readPnpmWorkspaceCatalogDependencyResolver(projectPath) ??
+    createCatalogDependencyResolver(projectPath, PackageManager.yarn) ??
+    createCatalogDependencyResolver(projectPath, PackageManager.bun);
+
+  const fromFor = (dependencyName: string): string | undefined => {
+    const spec = declaredRootSpec(pkg, dependencyName);
+    if (spec === undefined) {
+      return undefined;
+    }
+    return resolveDisplayFromSpec(spec, dependencyName, catalogDependencyResolver);
+  };
+
+  const changes: DependencyVersionChange[] = [];
+  const pushChange = (name: string, to: string | undefined, from: string | undefined): void => {
+    if (to === undefined || (from !== undefined && from === to)) {
+      return;
+    }
+    changes.push(from === undefined ? { name, to } : { name, from, to });
+  };
+
+  // A deliberate NON-catalog protocol pin (file:/link:/workspace:/npm:/git/http)
+  // is preserved by ensureVitePlusDependencySpecs, so it is not a version change
+  // unless force-override mode rewrites every spec. A catalog ref or plain range
+  // is re-pinned to the toolchain target.
+  const vitePlusSpec = declaredRootSpec(pkg, VITE_PLUS_NAME);
+  const vitePlusChanges =
+    vitePlusSpec === undefined ||
+    vitePlusSpec.startsWith('catalog:') ||
+    isForceOverrideMode() ||
+    !isProtocolPinnedSpec(vitePlusSpec);
+  if (vitePlusChanges) {
+    pushChange(VITE_PLUS_NAME, VITE_PLUS_VERSION, fromFor(VITE_PLUS_NAME));
+  }
+  pushChange('vite', rawViteVersion, readInstalledRawViteVersion(projectPath));
+  // A declared-but-unused bare `vitest` is removed (not bumped) by the reconcile,
+  // so only show it when the root actually uses vitest (the same signal the
+  // reconcile uses to keep and align it).
+  if (
+    declaredRootSpec(pkg, 'vitest') !== undefined &&
+    projectUsesVitestDirectly(projectPath, pkg, undefined, true)
+  ) {
+    pushChange('vitest', VITEST_VERSION, fromFor('vitest'));
+  }
+  // Only the `@vitest/*` packages the migrator actually aligns to the bundled
+  // vitest version belong here. `@vitest/eslint-plugin` and `@vitest/coverage-c8`
+  // version independently and are left untouched, so they are not "changes".
+  const scopedVitestNames = new Set<string>();
+  for (const group of [pkg.dependencies, pkg.devDependencies]) {
+    for (const name of Object.keys(group ?? {})) {
+      if (isAlignableVitestEcosystemPackage(name)) {
+        scopedVitestNames.add(name);
+      }
+    }
+  }
+  for (const name of [...scopedVitestNames].toSorted()) {
+    pushChange(name, VITEST_VERSION, fromFor(name));
+  }
+
+  return changes;
 }

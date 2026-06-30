@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # retained vitest augmentations should keep a package-local vitest
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 

@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # existing Vite+ project: a Node pin below the supported range is preserved, not raised (native binding supports Node >=20)
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat .node-version # stays 24.3.0

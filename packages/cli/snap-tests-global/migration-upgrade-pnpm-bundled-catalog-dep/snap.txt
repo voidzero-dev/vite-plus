@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # existing Vite+ pnpm project declared bundled tools (oxlint/oxlint-tsgolint/oxfmt/tsdown) via catalog:
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # the bundled tools are removed (vite-plus provides them) so no dangling catalog: references survive

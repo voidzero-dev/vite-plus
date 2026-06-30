@@ -1,6 +1,6 @@
 > git init
 > vp migrate --no-hooks --no-interactive # --no-hooks should keep husky/lint-staged and preserve config
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

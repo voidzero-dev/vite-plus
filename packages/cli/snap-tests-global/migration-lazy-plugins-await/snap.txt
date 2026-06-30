@@ -1,5 +1,5 @@
 > vp migrate --no-interactive --no-hooks # migration should wrap awaited inline plugins with async lazyPlugins
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt

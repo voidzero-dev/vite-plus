@@ -1,6 +1,14 @@
 > vp migrate --no-interactive # exact @vitest peers require a package-local vitest
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus            latest → <semver>
+    vite                        → <semver>
+    vitest               latest → <semver>
+    @vitest/coverage-v8  <semver>  → <semver>
+    @vitest/ui           <semver>  → <semver>
+    @vitest/utils        <semver>  → <semver>
+    @vitest/web-worker   <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # ecosystem packages and vitest should align to the bundled version

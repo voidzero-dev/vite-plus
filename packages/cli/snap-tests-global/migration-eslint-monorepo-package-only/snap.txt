@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should warn about package-only eslint
 
 ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 

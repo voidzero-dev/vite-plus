@@ -1,5 +1,5 @@
 > vp migrate --no-interactive --no-hooks 2>&1 # project config process handlers must not terminate migration
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 file had imports rewritten
 

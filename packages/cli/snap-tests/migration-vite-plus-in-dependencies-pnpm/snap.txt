@@ -1,6 +1,9 @@
 > vp migrate --no-interactive --no-hooks # vite-plus declared in dependencies must NOT be duplicated into devDependencies
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # vite-plus stays in dependencies (normalized to catalog:); no duplicate devDependencies entry

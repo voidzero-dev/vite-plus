@@ -1,11 +1,16 @@
 > vp migrate --no-interactive # common existing project removes the stale wrapper override, no hooks/agent setup defaults
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project
-◇ Updated .
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite   → <semver>
 • 2 config updates applied
 
 > cat package.json # prepare script should be configured for vp config

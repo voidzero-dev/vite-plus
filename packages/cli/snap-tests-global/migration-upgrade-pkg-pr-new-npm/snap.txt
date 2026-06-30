@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # bridge commit builds replace every stale managed spec
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # direct dependencies and npm overrides use the same immutable commit version

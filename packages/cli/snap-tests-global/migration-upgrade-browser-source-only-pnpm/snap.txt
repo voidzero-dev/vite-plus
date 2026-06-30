@@ -1,6 +1,10 @@
 > vp migrate --no-interactive # source-only browser provider should be restored
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus        latest → <semver>
+    vite                    → <semver>
+    @vitest/browser  <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # provider, framework peer, and local vitest should be present

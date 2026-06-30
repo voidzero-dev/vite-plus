@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt

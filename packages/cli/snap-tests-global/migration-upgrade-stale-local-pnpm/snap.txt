@@ -1,7 +1,10 @@
 > node setup-local.mjs
 > vp migrate --no-interactive # newer global CLI must bypass the installed stale local CLI
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # stale wrapper deps and plain vite-plus range should be repaired; empty pnpm field should be removed

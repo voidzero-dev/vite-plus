@@ -1,6 +1,11 @@
 > vp migrate --no-interactive # non-runtime @vitest packages must not keep a vitest pin
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus          latest → <semver>
+    vite                      → <semver>
+    @vitest/utils      <semver>  → <semver>
+    @vitest/ws-client  <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # internal packages align, eslint plugin stays independent, vitest is removed

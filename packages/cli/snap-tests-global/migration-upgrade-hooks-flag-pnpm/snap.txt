@@ -1,7 +1,10 @@
 > git init
 > vp migrate --hooks --no-interactive # existing Vite+ project: upgrade plus only the git hooks action
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 • 2 config updates applied
 • Git hooks configured
 • Package manager settings configured

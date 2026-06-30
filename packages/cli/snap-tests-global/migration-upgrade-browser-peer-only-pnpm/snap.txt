@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # peer-only browser provider is promoted with its required peers
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
 
 > cat package.json # provider, Playwright, and package-local Vitest are installed

@@ -1,5 +1,5 @@
 > vp migrate --no-interactive --no-hooks # vite-plugin-* and unplugin-* packages keep their `vite` imports; a normal app gets them rewritten to vite-plus
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 files had imports rewritten
 

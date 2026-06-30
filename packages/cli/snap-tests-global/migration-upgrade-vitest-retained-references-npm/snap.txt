@@ -1,6 +1,10 @@
 > vp migrate --no-interactive # retained upstream references require package-local Vitest
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
+    vitest     <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # Vitest dependency and override stay aligned

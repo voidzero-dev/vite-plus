@@ -4,7 +4,7 @@
 ✔ Created vite.config.ts in vite.config.ts
 
 ✔ Merged staged config into vite.config.ts
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • Git hooks configured
 

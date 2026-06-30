@@ -12,7 +12,7 @@ import {
   type WorkspacePackage,
 } from '../types/index.ts';
 import { writeAgentInstructions } from '../utils/agent.ts';
-import { isForceOverrideMode } from '../utils/constants.ts';
+import { isForceOverrideMode, VITE_PLUS_VERSION } from '../utils/constants.ts';
 import { writeEditorConfigs } from '../utils/editor.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
@@ -40,6 +40,7 @@ import {
   addFrameworkShim,
   checkVitestVersion,
   checkViteVersion,
+  collectToolchainVersionChanges,
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
@@ -625,13 +626,31 @@ function showMigrationSummary(options: {
     report.wrappedPluginConfigCount;
 
   log(
-    `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
-      updatedExistingVitePlus ? '' : ' to Vite+'
-    }`,
+    `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)} to Vite+ ${VITE_PLUS_VERSION}`,
   );
   log(
     `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
   );
+  // Toolchain version-upgrade table (existing-Vite+ path only; the fresh path
+  // leaves `dependencyUpgrades` empty). One aligned row per changed dependency:
+  // name padded to the longest name, the old `from` padded to the longest from
+  // and rendered muted, the new `to` rendered green.
+  if (report.dependencyUpgrades.length > 0) {
+    const nameWidth = Math.max(...report.dependencyUpgrades.map((change) => change.name.length));
+    const fromWidth = Math.max(
+      ...report.dependencyUpgrades.map((change) => (change.from ?? '').length),
+    );
+    log(`${styleText('gray', '•')} Dependencies:`);
+    for (const change of report.dependencyUpgrades) {
+      const name = change.name.padEnd(nameWidth);
+      const to = styleText('green', change.to);
+      if (change.from === undefined) {
+        log(`    ${name}  ${''.padEnd(fromWidth)} → ${to}`);
+      } else {
+        log(`    ${name}  ${muted(change.from.padEnd(fromWidth))} → ${to}`);
+      }
+    }
+  }
   // Gate the green success line on the FINAL install actually succeeding.
   // A nonzero duration could come from a successful pre-migration install
   // followed by a failed post-migration reinstall — in that case node_modules
@@ -1129,6 +1148,11 @@ async function main() {
       );
     }
 
+    // Capture the toolchain version changes BEFORE the reconcile mutates the
+    // manifest, so the `from` values still reflect the pre-migration versions
+    // (raw vite is read from the untouched node_modules).
+    report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
+
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1174,11 +1198,6 @@ async function main() {
       return;
     }
 
-    const fullMigrationSummary =
-      vitePlusBootstrapPending ||
-      coreMigrationResult.scripts ||
-      coreMigrationResult.tsconfigTypes ||
-      coreMigrationResult.imports;
     const setupOptions = getExistingVitePlusSetupOptions(
       options,
       legacyGitHooksMigrationCandidate,
@@ -1471,7 +1490,9 @@ async function main() {
         installDurationMs,
         finalInstallOk,
         report,
-        updatedExistingVitePlus: !fullMigrationSummary,
+        // The existing-Vite+ branch always updates an existing project, so the
+        // headline reads "Updated <project> to Vite+ <version>".
+        updatedExistingVitePlus: true,
         suggestFullMigration: skippedSetupCandidates,
       });
     } else {

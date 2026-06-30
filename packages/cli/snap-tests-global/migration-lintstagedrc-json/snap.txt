@@ -13,6 +13,7 @@ Options:
   --no-editor       Skip writing editor config files
   --hooks           Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks        Skip pre-commit hooks setup
+  --full            Existing Vite+ projects: also run the full setup (hooks, editor, agent files, ESLint/Prettier migration, framework shims, tsconfig baseUrl, .node-version). Without it, `vp migrate` only upgrades the toolchain version.
   --no-interactive  Run in non-interactive mode (skip prompts and use defaults)
   -h, --help        Show this help message
 
@@ -68,7 +69,7 @@ Documentation: https://viteplus.dev/guide/migrate
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 ! Warnings:

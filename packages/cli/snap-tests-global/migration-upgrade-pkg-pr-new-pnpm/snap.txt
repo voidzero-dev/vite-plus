@@ -1,6 +1,11 @@
 > vp migrate --no-interactive # bridge commit builds upgrade like an ordinary npm version
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus            <semver> → <semver>
+    vite                        → <semver>
+    vitest               <semver> → <semver>
+    @vitest/coverage-v8  <semver>  → <semver>
 • Package manager settings configured
 
 > cat package.json # direct dependencies use catalogs aligned to the bridge build

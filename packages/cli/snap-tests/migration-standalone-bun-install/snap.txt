@@ -3,8 +3,11 @@
 Formatting code...
 
 Code formatted
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  bun <semver>
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
 ✓ Dependencies installed in <variable>ms
 • Package manager settings configured
 

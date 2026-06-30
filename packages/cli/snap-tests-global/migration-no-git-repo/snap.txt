@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should create .vite-hooks/pre-commit even without .git
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 

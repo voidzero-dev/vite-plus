@@ -5,7 +5,7 @@
 ✔ Switched Yarn to node-modules mode
 
 ✔ Merged .oxlintrc.json into vite.config.ts
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  yarn <semver>
 • 2 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt

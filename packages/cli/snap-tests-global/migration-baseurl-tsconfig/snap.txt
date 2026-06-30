@@ -1,6 +1,6 @@
 > chmod +x fix-baseurl.mjs # setup baseUrl fixer
 > vp migrate --no-interactive # migration should auto-fix tsconfig baseUrl
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 3 config updates applied
 

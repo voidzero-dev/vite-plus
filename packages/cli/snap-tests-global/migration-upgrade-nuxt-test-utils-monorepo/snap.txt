@@ -1,6 +1,9 @@
 > vp migrate --no-interactive # preserve upstream Vitest package-wide and localize it to the affected workspace
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • 1 file had imports rewritten
 • Kept upstream `vitest` imports in 2 files for @nuxt/test-utils compatibility
 • Package manager settings configured
