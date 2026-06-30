@@ -41,7 +41,7 @@ export default defineConfig({
 });
 ```
 
-Keep tracking config in `vite.config.ts`. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks) for `input`, `output`, `env`, and `untrackedEnv`.
+Keep tracking config in `vite.config.ts`. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks) for details.
 
 Run each task twice:
 
