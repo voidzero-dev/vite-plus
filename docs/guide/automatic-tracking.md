@@ -45,7 +45,7 @@ Use [Override Inputs And Outputs](#override-inputs-and-outputs) when automatic f
 
 Use [`env`](/config/run#env) when an environment variable changes a command's result.
 
-These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking](#cooperative-tracking) metadata automatically, including `VITE_*`, `NODE_ENV`, and tool-managed cache paths that should not become inputs or outputs. A standard `vp build` task does not need manual `input`, `output`, or `env` entries for that build metadata:
+These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking](#cooperative-tracking) metadata automatically, including `VITE_*`, `NODE_ENV`, and tool-managed cache paths that should not become inputs or outputs. A standard `vp build` task does not need manual `input`, `output`, or `env`:
 
 ```ts [vite.config.ts]
 tasks: {
