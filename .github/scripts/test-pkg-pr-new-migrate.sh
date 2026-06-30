@@ -319,14 +319,16 @@ fi
 # at a glance. Each must resolve to exactly ONE version (the commit build for
 # vite-plus and vite via the @voidzero-dev/vite-plus-core alias, the bundled
 # upstream for vitest); more than one version of any means the migration or
-# install is broken. `vp why -r` (recursive across workspaces) is pnpm-only, so
-# only pass -r for pnpm projects.
+# install is broken. Query one package at a time: npm/yarn/bun `why` only accept
+# a single package, and `-r` (recursive across workspaces) is pnpm-only.
 why_recursive=
 if grep -qE '"packageManager"[[:space:]]*:[[:space:]]*"pnpm' "$project_dir/package.json" 2>/dev/null; then
   why_recursive=-r
 fi
 echo
 echo "Resolved vite-plus / vite / vitest versions (each should be a single version):"
-(cd "$project_dir" && "$vp_bin" why $why_recursive vite-plus vite vitest) || true
+for pkg in vite-plus vite vitest; do
+  (cd "$project_dir" && "$vp_bin" why $why_recursive "$pkg") || true
+done
 
 exit "$migrate_status"

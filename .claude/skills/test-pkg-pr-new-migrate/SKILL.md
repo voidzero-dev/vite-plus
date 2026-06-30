@@ -21,9 +21,12 @@ Required inputs: a `<PR-or-SHA>` (the build to verify) and a `<project-path>`. I
 
 **The build under test must include the "migrate writes the bridge registry" feature** (this session's work / current branch head onward). The harness no longer writes the registry itself — it relies on `vp migrate` doing it. Testing an older build with this harness would leave the project with no bridge registry, so its deps resolve from npmjs (`ERR_PNPM_NO_MATCHING_VERSION` on the `0.0.0-commit.<sha>` version). Always verify a fresh build of the branch, not a stale published commit.
 
-The script prints the resolved versions at the end (`vp why vite-plus vite vitest`, adding `-r` for pnpm projects since `-r` is pnpm-only). Each must resolve to exactly ONE version: `vite-plus` and `vite` at the expected `0.0.0-commit.<sha>` (vite via the `@voidzero-dev/vite-plus-core` alias), `vitest` at the bundled upstream version. Multiple versions, or a stale/wrong version, means the migration or install is broken. To re-check by hand (drop `-r` for non-pnpm):
+The script prints the resolved versions at the end, querying one package at a time (npm/yarn/bun `why` only accept a single package; `-r` is pnpm-only). Each must resolve to exactly ONE version: `vite-plus` and `vite` at the expected `0.0.0-commit.<sha>` (vite via the `@voidzero-dev/vite-plus-core` alias), `vitest` at the bundled upstream version. Multiple versions, or a stale/wrong version, means the migration or install is broken. To re-check by hand:
 
 ```bash
 cd <project-path>
+# pnpm: one call, recursive across workspaces
 vp why -r vite-plus vite vitest
+# npm / yarn / bun: one package per call, no -r
+vp why vite-plus && vp why vite && vp why vitest
 ```
