@@ -16,7 +16,6 @@ async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
 fspy = { workspace = true }
-node-semver = { workspace = true }
 rustc-hash = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
@@ -29,7 +28,6 @@ tracing = { workspace = true }
 vite_command = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
-vite_js_runtime = { workspace = true }
 vite_migration = { workspace = true }
 vite_pm_cli = { workspace = true }
 vite_path = { workspace = true }

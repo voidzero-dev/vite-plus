@@ -2,80 +2,6 @@ use std::path::Path;
 
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
-use vite_js_runtime::{VersionSource, resolve_node_version};
-use vite_path::AbsolutePathBuf;
-
-/// Stable string label for a [`VersionSource`], used as the `source` field of
-/// [`resolve_project_node_version`]'s result so the JS migrator can branch on a
-/// fixed value instead of the human-facing `Display` string.
-fn version_source_label(source: VersionSource) -> &'static str {
-    match source {
-        VersionSource::NodeVersionFile => "node-version-file",
-        VersionSource::DevEnginesRuntime => "dev-engines-runtime",
-        VersionSource::EnginesNode => "engines-node",
-    }
-}
-
-/// The effective Node.js version pin resolved from a project's configuration.
-#[napi(object)]
-pub struct ProjectNodeVersion {
-    /// The pinned version string, exactly as written in the source.
-    pub version: String,
-    /// Which source the pin came from: `"node-version-file"`,
-    /// `"dev-engines-runtime"`, or `"engines-node"`.
-    pub source: String,
-    /// Absolute path to the file the pin was read from (the `.node-version`
-    /// file or the `package.json`).
-    pub source_path: String,
-}
-
-/// Resolve the single effective Node.js version pin for a project, reusing the
-/// shared Rust resolver so the JS migrator does not re-implement source
-/// detection.
-///
-/// Checks, in priority order (see `rfcs/dev-engines.md`):
-/// 1. `.node-version`
-/// 2. `package.json#devEngines.runtime[name="node"].version`
-/// 3. `package.json#engines.node`
-///
-/// Does not walk up to parent directories: the migrator operates on the project
-/// root it was given.
-///
-/// # Arguments
-///
-/// * `project_path` - Absolute path to the project directory
-///
-/// # Returns
-///
-/// * `Some(ProjectNodeVersion)` - the effective pin, its source label, and the
-///   absolute source path
-/// * `None` - when no version source is found
-///
-/// # Example
-///
-/// ```javascript
-/// const pin = await resolveProjectNodeVersion('/path/to/project');
-/// // pin === { version: '24.3.0', source: 'node-version-file', sourcePath: '/path/to/project/.node-version' }
-/// ```
-#[napi]
-pub async fn resolve_project_node_version(
-    project_path: String,
-) -> Result<Option<ProjectNodeVersion>> {
-    let project_path = AbsolutePathBuf::new(project_path.into())
-        .ok_or_else(|| napi::Error::from_reason("invalid project path"))?;
-
-    let resolution =
-        resolve_node_version(&project_path, false).await.map_err(anyhow::Error::from)?;
-
-    Ok(resolution.map(|r| ProjectNodeVersion {
-        version: r.version.to_string(),
-        source: version_source_label(r.source).to_string(),
-        source_path: r
-            .source_path
-            .map(|p| p.as_path().to_string_lossy().to_string())
-            .unwrap_or_default(),
-    }))
-}
 
 /// Rewrite scripts json content using rules from rules_yaml
 ///
@@ -393,18 +319,4 @@ pub fn rewrite_imports_in_directory(
             })
             .collect(),
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_source_label_is_stable() {
-        // These labels are part of the JS<->Rust contract; the JS migrator
-        // branches on them, so they must stay fixed.
-        assert_eq!(version_source_label(VersionSource::NodeVersionFile), "node-version-file");
-        assert_eq!(version_source_label(VersionSource::DevEnginesRuntime), "dev-engines-runtime");
-        assert_eq!(version_source_label(VersionSource::EnginesNode), "engines-node");
-    }
 }

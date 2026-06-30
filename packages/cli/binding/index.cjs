@@ -853,7 +853,6 @@ module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
-module.exports.resolveProjectNodeVersion = nativeBinding.resolveProjectNodeVersion;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
 module.exports.rewriteImportsInDirectory = nativeBinding.rewriteImportsInDirectory;
 module.exports.rewritePrettier = nativeBinding.rewritePrettier;
