@@ -6,9 +6,9 @@ allowed-tools: Bash, Read
 
 # Verify a pkg.pr.new build against one project
 
-Installs an isolated global `vp` from a pkg.pr.new commit and runs `vp migrate` on a specified local project. The result pins `vite-plus`/`vite` to `0.0.0-commit.<sha>` resolved through the registry bridge, persisted into the project's `.npmrc` (and `.yarnrc.yml` for Yarn Berry) so the project's own CI installs the build too.
+Installs an isolated global `vp` built from a registry bridge commit build and runs `vp migrate` on a specified local project. The global CLI and the migrated project both pin `vite-plus`/`vite` to the clearly-defined `0.0.0-commit.<sha>` build. `vp migrate` itself writes the bridge registry into the project's `.npmrc` (or `.yarnrc.yml` for Yarn Berry) so the deps resolve, during this run and in the project's own CI; this script only force-stages that file past `.gitignore`.
 
-Required inputs: a `<PR-or-SHA>` (the pkg.pr.new build to verify) and a `<project-path>`. If either is missing from the request, **ask the user** for it — never guess the PR/SHA, as the build under test is the user's choice.
+Required inputs: a `<PR-or-SHA>` (the build to verify) and a `<project-path>`. If either is missing from the request, **ask the user** for it — never guess the PR/SHA, as the build under test is the user's choice.
 
 ```bash
 .github/scripts/test-pkg-pr-new-migrate.sh <PR-or-SHA> <project-path> [migrate-options...]
@@ -16,8 +16,10 @@ Required inputs: a `<PR-or-SHA>` (the pkg.pr.new build to verify) and a `<projec
 .github/scripts/test-pkg-pr-new-migrate.sh 1891 /path/to/npmx.dev --no-interactive
 ```
 
-- First arg is a PR number or commit SHA; the script resolves the immutable commit and verifies the bridge serves it (the pkg.pr.new publish workflow registers each commit).
-- Never touches `~/.vite-plus`; refuses a dirty worktree unless `ALLOW_DIRTY=1`; prints the project's `git status`/`diff` at the end — inspect that to confirm the migration result.
+- First arg is a PR number or commit SHA; the script resolves the immutable commit via the bridge `x-commit-key` header and verifies the bridge serves it (the pkg.pr.new publish workflow registers each commit).
+- Never touches `~/.vite-plus`; clears only the workspace ROOT lockfile + `node_modules` before migrating; refuses a dirty worktree unless `ALLOW_DIRTY=1`; prints the project's `git status`/`diff` at the end — inspect that to confirm the migration result.
+
+**The build under test must include the "migrate writes the bridge registry" feature** (this session's work / current branch head onward). The harness no longer writes the registry itself — it relies on `vp migrate` doing it. Testing an older build with this harness would leave the project with no bridge registry, so its deps resolve from npmjs (`ERR_PNPM_NO_MATCHING_VERSION` on the `0.0.0-commit.<sha>` version). Always verify a fresh build of the branch, not a stale published commit.
 
 Then confirm the resolved versions (`-r` across workspaces for monorepos):
 
