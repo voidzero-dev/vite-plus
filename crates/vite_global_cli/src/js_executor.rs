@@ -125,6 +125,19 @@ impl JsExecutor {
             .ok_or(Error::JsScriptsDirNotFound)
     }
 
+    /// Resolve the version of the global CLI's own installed `vite-plus`.
+    ///
+    /// Reads the installed package's `version` (not the compiled-in crate
+    /// version) so a preview global build, whose `vite-plus` is published as
+    /// `0.0.0-commit.<sha>`, is recognized as the build under test by
+    /// [`local_vite_plus_is_older`]. Returns `None` when the package.json is
+    /// missing or unreadable, letting the caller fall back to
+    /// `CARGO_PKG_VERSION`.
+    fn resolve_global_vite_plus_version(&self) -> Option<String> {
+        let pkg_json = self.get_cli_package_dir().ok()?.join("package.json");
+        read_package_json_version(pkg_json.as_path())
+    }
+
     /// Ensure the CLI runtime is downloaded and cached.
     ///
     /// Uses the CLI's package.json `devEngines.runtime` configuration
@@ -260,12 +273,14 @@ impl JsExecutor {
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
+        let global = self
+            .resolve_global_vite_plus_version()
+            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
         let escalate = resolve_local_vite_plus_version(project_path)
-            .is_some_and(|local| local_vite_plus_is_older(&local, env!("CARGO_PKG_VERSION")));
+            .is_some_and(|local| local_vite_plus_is_older(&local, &global));
         if escalate {
             tracing::debug!(
-                "Local vite-plus is older than global vp {}; running migrate from the global CLI",
-                env!("CARGO_PKG_VERSION")
+                "Local vite-plus is older than global vp {global}; running migrate from the global CLI"
             );
             self.delegate_to_global_cli(project_path, args).await
         } else {
@@ -399,16 +414,44 @@ fn resolve_local_vite_plus_version(project_path: &AbsolutePath) -> Option<String
         ..ResolveOptions::default()
     });
     let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
-    let content = std::fs::read_to_string(resolved.path()).ok()?;
+    read_package_json_version(resolved.path())
+}
+
+/// Read the top-level `version` string from a package.json. Returns `None` when
+/// the file is missing, unreadable, or has no string `version`.
+fn read_package_json_version(pkg_json: impl AsRef<std::path::Path>) -> Option<String> {
+    let content = std::fs::read_to_string(pkg_json).ok()?;
     let value: serde_json::Value = serde_json::from_str(&content).ok()?;
     value.get("version")?.as_str().map(str::to_string)
 }
 
-/// True when `local` is a parseable semver strictly older than `global`.
+/// True when a version is a pkg.pr.new / registry-bridge preview build.
 ///
-/// Returns false if either version fails to parse (be conservative: never
-/// escalate on a version we can't understand).
+/// Preview builds are published as `0.0.0-commit.<sha>` (and, more generally,
+/// any `0.0.0-<prerelease>`). A real release is never `0.0.0`, so this reliably
+/// flags a build under test.
+fn is_preview_version(version: &str) -> bool {
+    version.starts_with("0.0.0-")
+}
+
+/// True when the local `vite-plus` should be treated as older than `global`, so
+/// migrate escalates to the global CLI.
+///
+/// A preview build (`0.0.0-commit.<sha>`) is an unreleased build of future code
+/// under test. Whichever side is a preview wins (is treated as the newest) so
+/// the build under test always performs the migration: a preview local stays
+/// local, a preview global is escalated to. This keeps `vp migrate` running the
+/// build you are actually testing instead of falling back to a stale release.
+///
+/// When neither side is a preview, returns false if a version fails to parse
+/// (be conservative: never escalate on a version we can't understand).
 fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
+    if is_preview_version(local) {
+        return false;
+    }
+    if is_preview_version(global) {
+        return true;
+    }
     match (node_semver::Version::parse(local), node_semver::Version::parse(global)) {
         (Ok(local_v), Ok(global_v)) => local_v < global_v,
         _ => false,
@@ -488,6 +531,29 @@ mod tests {
         assert!(!local_vite_plus_is_older("0.3.0", "0.2.1"));
         // Unparsable versions are conservative: never escalate.
         assert!(!local_vite_plus_is_older("latest", "0.2.1"));
+    }
+
+    #[test]
+    fn test_preview_version_always_wins() {
+        // A preview local (build under test) stays local even though semver
+        // would rank `0.0.0-...` below a release.
+        assert!(!local_vite_plus_is_older("0.0.0-commit.abc1234", "0.2.1"));
+        // A preview global (build under test) wins: escalate to it even from a
+        // newer-looking release local.
+        assert!(local_vite_plus_is_older("0.2.1", "0.0.0-commit.abc1234"));
+        assert!(local_vite_plus_is_older("0.3.0", "0.0.0-commit.abc1234"));
+        // Both preview: keep local-first semantics, run local.
+        assert!(!local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.bbb"));
+    }
+
+    #[test]
+    fn test_is_preview_version() {
+        assert!(is_preview_version("0.0.0-commit.abc1234"));
+        assert!(is_preview_version("0.0.0-pr.1891"));
+        assert!(!is_preview_version("0.2.1"));
+        assert!(!is_preview_version("0.0.1"));
+        assert!(!is_preview_version("0.0.0"));
+        assert!(!is_preview_version("latest"));
     }
 
     #[test]
