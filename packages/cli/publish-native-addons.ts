@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
 import pkg from './package.json' with { type: 'json' };
+import { editJsonFile } from './src/utils/json.ts';
 
 const cli = new NapiCli();
 
@@ -77,20 +78,20 @@ await cli.prePublish({
 const npmDir = join(currentDir, 'npm');
 const platformDirs = await readdir(npmDir);
 
-// The native binding's true ABI floor is Node 20, well below the supported
-// range copied into `engines.node` (e.g. `^20.19.0 || ^22.18.0 || >=24.11.0`).
-// Declaring that range on the platform packages makes engine-strict package
-// managers (pnpm) skip the optional native dependency whenever a consumer's
-// declared Node floor lands in one of its gaps (20.0-20.18, 22.0-22.17,
-// 24.0-24.10), surfacing as "Cannot find native binding". Rewrite each platform
-// package to its real ABI floor of `>=20.0.0` so the native dep is never
-// skipped. `packages/cli/package.json` and `packages/core/package.json` keep
-// their declared `engines.node` range unchanged.
+// The native binding's true ABI floor is Node 20, well below the product
+// support policy copied into `engines.node` (e.g. `^20.19.0 || ^22.18.0 ||
+// >=24.11.0`). Declaring that policy on the platform packages makes engine-strict
+// package managers (pnpm) skip the optional native dependency whenever a
+// consumer's declared Node floor lands in one of the policy's gaps (20.0-20.18,
+// 22.0-22.17, 24.0-24.10), surfacing as "Cannot find native binding". Rewrite each
+// platform package to its real ABI floor of `>=20.0.0` so the native dep is never
+// skipped. `packages/cli/package.json` and `packages/core/package.json` keep the
+// product policy unchanged.
 for (const dir of platformDirs) {
-  const pkgJsonPath = join(npmDir, dir, 'package.json');
-  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-  pkgJson.engines = { ...pkgJson.engines, node: '>=20.0.0' };
-  writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  editJsonFile(join(npmDir, dir, 'package.json'), (pkgJson) => ({
+    ...pkgJson,
+    engines: { ...(pkgJson.engines as Record<string, unknown>), node: '>=20.0.0' },
+  }));
 }
 
 // Publish each NAPI platform package (without vp binary)
