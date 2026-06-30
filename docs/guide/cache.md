@@ -61,8 +61,6 @@ tasks: {
 }
 ```
 
-See [Automatic Tracking](/guide/automatic-tracking) for current `vp build` support, CI guidance, and third-party tool integration.
-
 ## Environment Variables
 
 By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.
