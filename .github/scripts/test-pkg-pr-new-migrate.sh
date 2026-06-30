@@ -322,8 +322,11 @@ fi
 # install is broken. Query one package at a time: npm/yarn/bun `why` only accept
 # a single package, and `-r` (recursive across workspaces) is pnpm-only — detect
 # the package manager via `vp env current --json`.
+# Parse with vp's managed node (guaranteed present, unlike a bare `node` that may
+# be a version-manager shim) and slice from the first `{` so a stray notice line
+# before the JSON can't break the parse.
 pm_name="$(cd "$project_dir" && "$vp_bin" env current --json 2>/dev/null \
-  | node -e 'try{process.stdout.write((JSON.parse(require("fs").readFileSync(0,"utf8")).package_manager||{}).name||"")}catch{}' 2>/dev/null || true)"
+  | "$vp_bin" node -e 'try{const s=require("fs").readFileSync(0,"utf8");process.stdout.write((JSON.parse(s.slice(s.indexOf("{"))).package_manager||{}).name||"")}catch{}' 2>/dev/null || true)"
 why_recursive=
 if [ "$pm_name" = "pnpm" ]; then
   why_recursive=-r
