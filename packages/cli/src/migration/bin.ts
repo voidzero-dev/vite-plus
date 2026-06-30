@@ -212,6 +212,31 @@ function hasBaseUrlInWorkspace(workspaceInfo: {
   return getWorkspaceProjectPaths(workspaceInfo).some(hasBaseUrlInTsconfig);
 }
 
+// Check the root and each workspace package for Rolldown-incompatible config
+// patterns, reporting per-package progress. Each package spawns its own Vite
+// config resolution, so on a large monorepo this is the slowest silent phase;
+// the running counter + package path keeps the spinner moving instead of
+// stalling on a stale message.
+async function checkWorkspaceRolldownCompatibility(
+  workspaceInfo: { rootDir: string; packages?: WorkspacePackage[] },
+  report: MigrationReport,
+  updateProgress?: (message: string) => void,
+): Promise<void> {
+  const targets = [
+    { path: workspaceInfo.rootDir, label: undefined as string | undefined },
+    ...(workspaceInfo.packages ?? []).map((pkg) => ({
+      path: path.join(workspaceInfo.rootDir, pkg.path),
+      label: pkg.path,
+    })),
+  ];
+  for (const [index, target] of targets.entries()) {
+    const counter = targets.length > 1 ? ` (${index + 1}/${targets.length})` : '';
+    const where = target.label ? `: ${target.label}` : '';
+    updateProgress?.(`Checking config compatibility${counter}${where}`);
+    await checkRolldownCompatibility(target.path, report);
+  }
+}
+
 const helpMessage = renderCliDoc({
   usage: 'vp migrate [PATH] [OPTIONS]',
   summary:
@@ -858,13 +883,7 @@ async function executeMigrationPlan(
   }
 
   // 5. Check for Rolldown-incompatible config patterns (root + workspace packages)
-  updateMigrationProgress('Checking config compatibility');
-  await checkRolldownCompatibility(workspaceInfo.rootDir, report);
-  if (workspaceInfo.packages) {
-    for (const pkg of workspaceInfo.packages) {
-      await checkRolldownCompatibility(path.join(workspaceInfo.rootDir, pkg.path), report);
-    }
-  }
+  await checkWorkspaceRolldownCompatibility(workspaceInfo, report, updateMigrationProgress);
 
   await fixBaseUrlForWorkspace(workspaceInfo, plan.fixBaseUrl, updateMigrationProgress, report);
 
@@ -1450,15 +1469,11 @@ async function main() {
     }
 
     // Check for Rolldown-incompatible config patterns (root + workspace packages)
-    await checkRolldownCompatibility(workspaceInfoOptional.rootDir, report);
-    if (workspaceInfoOptional.packages) {
-      for (const pkg of workspaceInfoOptional.packages) {
-        await checkRolldownCompatibility(
-          path.join(workspaceInfoOptional.rootDir, pkg.path),
-          report,
-        );
-      }
-    }
+    await checkWorkspaceRolldownCompatibility(
+      workspaceInfoOptional,
+      report,
+      updateMigrationProgress,
+    );
 
     if (
       didMigrate &&
