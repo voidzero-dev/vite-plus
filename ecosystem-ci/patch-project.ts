@@ -115,21 +115,15 @@ const migrateEnv: NodeJS.ProcessEnv = {
     ...vitestOverrides,
   }),
   VP_VERSION: vitePlusTgz,
+  // E2E intentionally installs just-published toolchain packages (e.g.
+  // @oxlint/migrate during `vp migrate`). Disable pnpm's minimumReleaseAge gate
+  // so a same-day publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION.
+  // This is scoped to the migrate subprocess; the workflow's follow-up
+  // `vp install` runs without it (see the dify note below).
+  pnpm_config_minimum_release_age: '0',
 };
 
 const isDify = project === 'dify';
-if (isDify) {
-  // dify needs the minimumReleaseAge gate disabled so `vp migrate`'s
-  // `@oxlint/migrate` dlx can install a same-day toolchain publish. But with
-  // the gate active, dify's `resolutionMode: time-based` policy plus the local
-  // `file:` tgz overrides (no publish timestamp) trip
-  // ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED in vp's bundled pnpm during
-  // migrate's auto-install. Scope the gate var to this migrate subprocess only,
-  // and tolerate the auto-install crash below: migrate still generates the
-  // config and import rewrites, and the workflow's follow-up `vp install` (run
-  // without the var, so the policy stays inactive) does the real install.
-  migrateEnv.pnpm_config_minimum_release_age = '0';
-}
 
 try {
   execSync(`${cli} migrate --no-agent --no-interactive`, {
@@ -138,7 +132,17 @@ try {
     env: migrateEnv,
   });
 } catch (err) {
-  if (!isDify) throw err;
+  // dify sets `resolutionMode: time-based`, so the gate var above re-activates
+  // pnpm's resolution policy during migrate's auto-install. vp's bundled pnpm
+  // has no handleResolutionPolicyViolations callback, so the local `file:` tgz
+  // overrides (no publish timestamp) crash it with
+  // ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Tolerate it: migrate still
+  // generated the config and import rewrites, and the workflow's follow-up
+  // `vp install` (run without the gate var, so the policy stays inactive) does
+  // the real install. Other projects must still fail hard.
+  if (!isDify) {
+    throw err;
+  }
   console.warn(
     'dify: `vp migrate` auto-install failed (expected with the age gate active); ' +
       'continuing, `vp install` will resync node_modules.',
