@@ -8,9 +8,9 @@ When a task runs successfully (exit code 0), its terminal output (stdout/stderr)
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
 2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
-3. **Inputs:** did any tracked file or cache-reporting dependency change?
+3. **Inputs:** did any input file that the command reads change?
 
-If the entry matches, Vite Task replays the terminal output, restores the written files, and skips the command.
+When all checks match, Vite Task replays the cached terminal output, restores saved output files, and skips the command.
 
 When a cache miss occurs, Vite Task tells you exactly why:
 
@@ -32,7 +32,7 @@ A task can set [`cache: false`](/config/run#cache) to opt out. This cannot be ov
 
 ### 2. CLI flags
 
-`--no-cache` disables caching for tasks and scripts. `--cache` enables caching for both tasks and scripts, which is equivalent to setting [`run.cache: true`](/config/run#run-cache) for that invocation.
+`--no-cache` disables caching for every task and script in that run. `--cache` enables caching for both tasks and scripts, which is equivalent to setting [`run.cache: true`](/config/run#run-cache) for that invocation.
 
 ### 3. Workspace config
 
