@@ -142,7 +142,7 @@ Dependencies can reference tasks in other packages using the `package#task` form
 dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 
-Use the object form `{ task: string, from: DependsOnFrom }` to reference tasks from all dependencies:
+Use the object form `{ task: string, from: DependsOnFrom }` to reference tasks from packages listed in dependency fields:
 
 ```ts [vite.config.ts]
 tasks: {
@@ -153,7 +153,7 @@ tasks: {
 }
 ```
 
-For the example above, Vite Task reads the declaring package's direct `dependencies` and `devDependencies`, and runs `build` task in each dependency if it defines one. Packages without `build` are skipped.
+For the example above, Vite Task reads the declaring package's direct `dependencies` and `devDependencies`, and runs the `build` task in each dependency that defines one. Packages without `build` are skipped.
 
 See [Task Dependencies](/guide/run#task-dependencies) for details on how explicit and topological dependencies interact.
 

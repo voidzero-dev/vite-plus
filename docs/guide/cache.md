@@ -50,7 +50,7 @@ Vite Task uses [automatic tracking](/guide/automatic-tracking) to learn what eac
 - **File system tracking:** Vite Task records file reads, missing-file probes, directory listings, and written output files for every task with cache enabled.
 - **Cooperative tracking:** cache-reporting tools can report metadata that file system tracking cannot infer. Vite+ supports this for `vp build` today.
 
-Use [`input`](/config/run#input) and [`output`](/config/run#output) together when a task needs manual tracking rules. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
+Use [`input`](/config/run#input) or [`output`](/config/run#output) when a task needs manual tracking rules. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
 
 ```ts [vite.config.ts]
 tasks: {

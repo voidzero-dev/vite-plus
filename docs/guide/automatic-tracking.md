@@ -1,6 +1,6 @@
 # Automatic Tracking
 
-Automatic tracking is how Vite Task learns what to cache for a task without explicit configurations.
+Automatic tracking is how Vite Task learns what to cache for a task without explicit config.
 
 When you run a cache-enabled task, Vite Task observes the task's execution and records what files were read and written, as well as any metadata reported by the task. On the next run, Vite Task decides whether the cache misses or hits based on the recorded fingerprint.
 
@@ -19,7 +19,7 @@ Vite Task starts with file system tracking for any command. A cache-reporting to
 
 ## File System Tracking
 
-File system tracking applies to every task to be cached. If you omit [`input`](/config/run#input), Vite Task tracks the files a command reads while it runs:
+File system tracking applies to every cache-enabled task. If you omit [`input`](/config/run#input), Vite Task tracks the files a command reads while it runs:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -116,7 +116,7 @@ export default defineConfig({
 });
 ```
 
-Manual config still wins. Add `input`, `output`, `env`, or `untrackedEnv` when your project has behavior that Vite cannot report.
+Manual config overrides reported metadata. Add `input`, `output`, `env`, or `untrackedEnv` when your project has behavior that Vite cannot report.
 
 Vite+ supports cooperative tracking for `vp build` today. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
 

@@ -29,7 +29,7 @@ Measure before you add GitHub Actions cache for Vite Task. Compare workflow dura
 You may not need to restore Vite Task cache across GitHub Actions runs in these cases:
 
 - The task is already fast enough. Cache restore and save steps add overhead, so short tasks can finish faster without this workflow.
-- The cache is expensive to move between runs. Vite Task can still save time when the same task runs more than once in one workflow run. Across workflow runs, GitHub must download and upload the cache. If that transfer time is greater than rerunning the task, skip this workflow.
+- Cache transfer takes longer than the task. Vite Task can still save time when the same task runs more than once in one workflow run. Across workflow runs, GitHub must download and upload the cache. If that transfer time is greater than rerunning the task, skip this workflow.
 
 ## 1. Define Cacheable CI Tasks
 
