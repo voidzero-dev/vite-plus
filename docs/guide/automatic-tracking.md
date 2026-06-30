@@ -43,7 +43,9 @@ File system tracking records file access, not every value a process reads. It ca
 
 Use [Override Inputs And Outputs](#override-inputs-and-outputs) when automatic file tracking includes files that should not affect the cache, misses files that should, or restores the wrong outputs. Common cases include generated files and directory scans with unrelated files.
 
-Use [`env`](/config/run#env) when an environment variable changes a non-reporting command's result. Supported tools provide [Cooperative Tracking](#cooperative-tracking) metadata automatically, such as environment variables that affect the result or tool-managed cache paths that should not become inputs or outputs.
+Use [`env`](/config/run#env) when an environment variable changes a command's result.
+
+For `vp build`, Vite reports [Cooperative Tracking](#cooperative-tracking) metadata automatically, including Vite environment variables and tool-managed cache paths that should not become inputs or outputs.
 
 ### Override Inputs And Outputs
 
