@@ -357,7 +357,8 @@ async fn run_pnpm_install(
         .args(args)
         .current_dir(version_dir)
         .env("CI", "true")
-        .env("PATH", path);
+        .env("PATH", path)
+        .env(vite_shared::env_vars::VP_TOOL_RECURSION, "1");
 
     if let Some(registry_url) = registry {
         cmd.env(vite_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
@@ -873,7 +874,7 @@ mod tests {
         let node_binary = node_bin.join("node");
         tokio::fs::write(
             &node_binary,
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > invocation.txt\nprintf '%s' \"$PATH\" > path.txt\nprintf '%s' \"$npm_config_registry\" > registry.txt\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > invocation.txt\nprintf '%s' \"$PATH\" > path.txt\nprintf '%s' \"$npm_config_registry\" > registry.txt\nprintf '%s' \"$VP_TOOL_RECURSION\" > recursion.txt\n",
         )
         .await
         .unwrap();
@@ -913,6 +914,9 @@ mod tests {
         // falls back to its default registry.
         let registry = tokio::fs::read_to_string(version_dir.join("registry.txt")).await.unwrap();
         assert_eq!(registry, "");
+
+        let recursion = tokio::fs::read_to_string(version_dir.join("recursion.txt")).await.unwrap();
+        assert_eq!(recursion, "1");
     }
 
     #[cfg(unix)]
