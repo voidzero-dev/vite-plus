@@ -129,14 +129,12 @@ Vite+ supports cooperative tracking for `vp build` today. It will extend this su
 
 Add config when your project has behavior the command or tool cannot know.
 
-| Goal                                                     | Config                                         |
-| -------------------------------------------------------- | ---------------------------------------------- |
-| Keep file system tracking and add CI dependency identity | `input: [{ auto: true }, 'pnpm-lock.yaml']`    |
-| Exclude generated output from the input fingerprint      | `input: [{ auto: true }, '!dist', '!dist/**']` |
-| Replace file system tracking for a small input set       | `input: ['src/**', 'package.json']`            |
-| Narrow output restoration                                | `output: ['dist/**']`                          |
-| Track an env var used by a non-reporting command         | `env: ['NODE_ENV']`                            |
-| Pass an env var without fingerprinting it                | `untrackedEnv: ['GITHUB_ACTIONS']`             |
+| Case                                                              | Config                                                                                          |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist', '!dist/**']`                                                  |
+| Exclude a temporary generated file from input and output tracking | `input: [{ auto: true }, '!.tmp/config.mjs']`<br>`output: [{ auto: true }, '!.tmp/config.mjs']` |
+| Track an env var used by a non-cooperative command                | `env: ['NODE_ENV']`                                                                             |
+| Pass an env var without fingerprinting it                         | `untrackedEnv: ['GITHUB_ACTIONS']`                                                              |
 
 For CI builds, keep automatic tracking for `vp build` and add only the extra project facts CI needs:
 
