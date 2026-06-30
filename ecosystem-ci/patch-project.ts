@@ -106,20 +106,48 @@ const vitestOverrides = {
   '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
-execSync(`${cli} migrate --no-agent --no-interactive`, {
-  cwd,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
-    VP_OVERRIDE_PACKAGES: JSON.stringify({
-      vite: `file:${tgzDir}/${viteOverrideTgz}`,
-      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-      ...vitestOverrides,
-    }),
-    VP_VERSION: vitePlusTgz,
-  },
-});
+const migrateEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
+  VP_OVERRIDE_PACKAGES: JSON.stringify({
+    vite: `file:${tgzDir}/${viteOverrideTgz}`,
+    '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+    ...vitestOverrides,
+  }),
+  VP_VERSION: vitePlusTgz,
+  // E2E intentionally installs just-published toolchain packages (e.g.
+  // @oxlint/migrate during `vp migrate`). Disable pnpm's minimumReleaseAge gate
+  // so a same-day publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION.
+  // This is scoped to the migrate subprocess; the workflow's follow-up
+  // `vp install` runs without it (see the dify note below).
+  pnpm_config_minimum_release_age: '0',
+};
+
+const isDify = project === 'dify';
+
+try {
+  execSync(`${cli} migrate --no-agent --no-interactive`, {
+    cwd,
+    stdio: 'inherit',
+    env: migrateEnv,
+  });
+} catch (err) {
+  // dify sets `resolutionMode: time-based`, so the gate var above re-activates
+  // pnpm's resolution policy during migrate's auto-install. vp's bundled pnpm
+  // has no handleResolutionPolicyViolations callback, so the local `file:` tgz
+  // overrides (no publish timestamp) crash it with
+  // ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Tolerate it: migrate still
+  // generated the config and import rewrites, and the workflow's follow-up
+  // `vp install` (run without the gate var, so the policy stays inactive) does
+  // the real install. Other projects must still fail hard.
+  if (!isDify) {
+    throw err;
+  }
+  console.warn(
+    'dify: `vp migrate` auto-install failed (expected with the age gate active); ' +
+      'continuing, `vp install` will resync node_modules.',
+  );
+}
 
 const packageJsonPath = join(cwd, 'package.json');
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as {
@@ -135,3 +163,21 @@ if (packageJson.dependencies?.['vite-plus']) {
 }
 
 await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf-8');
+
+// Install with the local tgz overrides now wired into package.json. Disable
+// pnpm's minimumReleaseAge gate so the freshly published bumped deps (e.g.
+// @oxc-project/runtime, @oxfmt/binding-*) pass `vp install`'s lockfile
+// supply-chain check instead of failing with
+// ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION.
+//
+// dify is the exception: it sets `resolutionMode: time-based`, so the gate var
+// re-activates pnpm's resolution policy and vp's bundled pnpm (no
+// handleResolutionPolicyViolations callback) crashes on the local file: tgz
+// overrides with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Its
+// `minimumReleaseAge:` key was already removed above, so the policy stays
+// inactive when the var is unset.
+const installEnv: NodeJS.ProcessEnv = { ...process.env };
+if (!isDify) {
+  installEnv.pnpm_config_minimum_release_age = '0';
+}
+execSync(`${cli} install --no-frozen-lockfile`, { cwd, stdio: 'inherit', env: installEnv });
