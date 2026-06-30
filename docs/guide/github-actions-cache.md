@@ -26,11 +26,7 @@ Fix local misses first. GitHub Actions cache can move Vite Task's local cache di
 
 ## 1. Define Cacheable CI Tasks
 
-Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache. Define a task in your `vite.config.ts` for each command you want to cache in CI.
-
-The example below uses [automatic tracking](/guide/automatic-tracking) for `vp build`. Vite Task tracks file reads, and Vite reports build metadata that file tracking cannot infer. Do not replace it with a short explicit input list, which can miss files such as `public/**`, `.env*`, or framework config.
-
-The lint task uses explicit inputs because its CI input set is small and stable.
+Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache. Define a task in `vite.config.ts` for each command you want to cache in CI:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -39,16 +35,13 @@ export default defineConfig({
   run: {
     tasks: {
       build: 'vp build',
-      lint: {
-        command: 'vp lint',
-        input: ['src/**', 'tsconfig*.json', 'vite.config.ts'],
-      },
+      lint: 'vp lint',
     },
   },
 });
 ```
 
-The build task needs no manual `input`, `output`, or `env` entries for a standard Vite build. The lint task overrides only `input`, so output tracking stays automatic.
+Keep tracking config in `vite.config.ts`. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks) for `input`, `output`, `env`, and `untrackedEnv`.
 
 Run each task twice:
 
@@ -58,26 +51,6 @@ vp run build # should print "cache hit"
 vp run lint
 vp run lint # should print "cache hit"
 ```
-
-For other auto-tracked tasks that produce files, use the same output pattern:
-
-```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  run: {
-    tasks: {
-      report: {
-        command: 'node scripts/report.mjs',
-        input: [{ auto: true }, '!reports/**'],
-        output: ['reports/**'],
-      },
-    },
-  },
-});
-```
-
-For a standard Vite build, you do not need to add `env: ['VITE_*']` or replace automatic tracking. Add explicit `input` entries only to track extra files such as lockfiles or to exclude generated outputs. Add explicit `output` entries only when you need to narrow, extend, or disable output restoration.
 
 ## 2. Restore The Cache After Install
 
