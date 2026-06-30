@@ -41,7 +41,7 @@ export default defineConfig({
 });
 ```
 
-Keep tracking config in `vite.config.ts`. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks) for details.
+This guide assumes each task already hits locally. If a task misses, fix its tracking config in `vite.config.ts` before adding the GitHub Actions cache steps. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks).
 
 Run each task twice:
 
