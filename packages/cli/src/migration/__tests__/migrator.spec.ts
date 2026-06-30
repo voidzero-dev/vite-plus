@@ -43,6 +43,8 @@ const {
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
   rewriteEslintPackageJson,
+  collectInstalledPackageNames,
+  sanitizeMigratedOxlintConfig,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
   detectLegacyGitHooksMigrationCandidate,
@@ -1071,6 +1073,62 @@ describe('rewriteEslintPackageJson', () => {
     rewriteEslintPackageJson(pkgPath, new Set());
     const pkg = readJson(pkgPath);
     expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+  });
+});
+
+describe('collectInstalledPackageNames', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-collect-installed-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeRootPkg(pkg: object): void {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
+  }
+
+  it('includes packages from dependencies, devDependencies, and optionalDependencies', () => {
+    writeRootPkg({
+      dependencies: { 'pkg-dep': '^1.0.0' },
+      devDependencies: { 'pkg-dev': '^1.0.0' },
+      optionalDependencies: { 'pkg-opt': '^1.0.0' },
+    });
+    const names = collectInstalledPackageNames(tmpDir);
+    expect(names.has('pkg-dep')).toBe(true);
+    expect(names.has('pkg-dev')).toBe(true);
+    expect(names.has('pkg-opt')).toBe(true);
+  });
+
+  it('excludes packages that appear only in peerDependencies', () => {
+    // A package's own peerDependencies are NOT installed in its
+    // node_modules (the consumer must provide them). A jsPlugin that
+    // exists only as a peer is therefore not actually loadable, so the
+    // availability check must not treat it as installed.
+    writeRootPkg({
+      devDependencies: { vite: '^7.0.0' },
+      peerDependencies: { 'eslint-plugin-only-peer': '^1.0.0' },
+    });
+    const names = collectInstalledPackageNames(tmpDir);
+    expect(names.has('eslint-plugin-only-peer')).toBe(false);
+    expect(names.has('vite')).toBe(true);
+  });
+
+  it('drops a jsPlugin whose package is only a peerDependency (would fail to load at lint time)', () => {
+    writeRootPkg({
+      devDependencies: { vite: '^7.0.0' },
+      peerDependencies: { 'eslint-plugin-only-peer': '^1.0.0' },
+    });
+    const available = collectInstalledPackageNames(tmpDir);
+    const config = { jsPlugins: ['eslint-plugin-only-peer'] };
+    sanitizeMigratedOxlintConfig(
+      config as Parameters<typeof sanitizeMigratedOxlintConfig>[0],
+      available,
+    );
+    expect(config.jsPlugins).toEqual([]);
   });
 });
 
@@ -2545,6 +2603,75 @@ describe('ensureVitePlusBootstrap', () => {
     expect(appPkg.devDependencies['@vitest/ui']).toBe(VITEST_VERSION);
     expect(appPkg.devDependencies.vitest).toBe('catalog:');
     expect(JSON.stringify(appPkg)).not.toContain('@voidzero-dev/vite-plus-test');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(false);
+  });
+
+  it('reports pending when a workspace package pins vite-plus to a stale named catalog', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    // Root is already up to date through the default catalog (vite-plus: latest).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    // The workspace package pins vite-plus to a DIFFERENT named catalog whose
+    // entry still points at an old Vite+. A root-only pending check would miss it.
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:legacy' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'catalogs:',
+        '  legacy:',
+        '    vite-plus: 0.1.24',
+        '    vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    // The stale `catalog:legacy` reference in the workspace package must keep the
+    // bootstrap pending even though the root manifest's default catalog is current.
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(true);
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalogs: { legacy: Record<string, string> };
+    };
+    expect(workspace.catalogs.legacy['vite-plus']).toBe('latest');
     expect(
       detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
     ).toBe(false);

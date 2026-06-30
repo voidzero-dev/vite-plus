@@ -537,6 +537,29 @@ function workspaceVitestEcosystemCatalogReferencesPending(
   });
 }
 
+// Mirror workspaceVitestEcosystemCatalogReferencesPending: a pnpm workspace is
+// only satisfied once EVERY package's `vite-plus` catalog reference resolves to
+// the target version, not just the root manifest's. A non-root package can pin a
+// different named catalog (e.g. `catalog:legacy`) whose entry still points at an
+// old Vite+, so checking the root alone lets a stale workspace slip through the
+// "already on Vite+" early exit.
+function workspaceCatalogVitePlusDependencyPending(
+  rootDir: string,
+  packages: WorkspacePackage[] | undefined,
+  catalogDependencyResolver: CatalogDependencyResolver | undefined,
+): boolean {
+  return bootstrapProjectPaths(rootDir, packages).some((packagePath) => {
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return false;
+    }
+    return catalogVitePlusDependencyPending(
+      readJsonFile(packageJsonPath) as BootstrapPackageJson,
+      catalogDependencyResolver,
+    );
+  });
+}
+
 // True when an existing Vite+ Yarn monorepo still needs the workspace-hoisting
 // opt-out that `ensureVitePlusBootstrap` writes. Mirrors the silent auto-fix in
 // `applyYarnWorkspaceHoistingFix`: under `node-modules` + `nmHoistingLimits:
@@ -697,7 +720,7 @@ export function detectVitePlusBootstrapPending(
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
     return (
-      catalogVitePlusDependencyPending(pkg, resolver) ||
+      workspaceCatalogVitePlusDependencyPending(projectPath, packages, resolver) ||
       !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), usesVitest, resolver) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
@@ -1027,7 +1050,6 @@ export function ensureVitePlusBootstrap(
   }
 
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
-    const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
     if (usePnpmWorkspaceYaml) {
       const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
       const before = fs.existsSync(pnpmWorkspaceYamlPath)
@@ -1041,7 +1063,11 @@ export function ensureVitePlusBootstrap(
         ecosystemCatalogReferencesPending ||
         !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||
         pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath) ||
-        catalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
+        workspaceCatalogVitePlusDependencyPending(
+          projectPath,
+          workspaceInfo.packages,
+          catalogDependencyResolver,
+        ) ||
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),
           usesVitest,

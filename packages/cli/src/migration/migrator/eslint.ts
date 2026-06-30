@@ -516,12 +516,11 @@ export function collectInstalledPackageNames(
     } catch {
       continue;
     }
-    for (const field of [
-      'devDependencies',
-      'dependencies',
-      'peerDependencies',
-      'optionalDependencies',
-    ] as const) {
+    // Limit to actual install groups. A package's own peerDependencies are
+    // not installed in its node_modules (the consumer must provide them), so
+    // a peer-only package is not actually loadable by Oxlint at lint time and
+    // must not count as available here.
+    for (const field of ['devDependencies', 'dependencies', 'optionalDependencies'] as const) {
       const deps = pkg[field];
       if (deps) {
         for (const name of Object.keys(deps)) {
