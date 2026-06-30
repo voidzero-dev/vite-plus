@@ -8,10 +8,10 @@ Use this page when you need to understand why a task hits or misses the cache, o
 
 Automatic tracking has two tiers:
 
-| Tier                 | Applies to                   | Records                                                                                                                                                                       |
-| -------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File system tracking | All tasks with cache enabled | Files read by the command, missing-file probes, directory listings, and written output files                                                                                  |
-| Cooperative tracking | Cache-reporting tools        | Metadata reported by the tool, such as environment variables and tool-managed cache paths that should not be considered as inputs or outputs (e.g. `node_modules/.vite-temp`) |
+| Tier                 | Applies to                               | Records                                                                                                                                                         |
+| -------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File system tracking | All tasks with cache enabled             | <ul><li>Files read by the command</li><li>Missing-file probes</li><li>Directory listings</li><li>Written output files</li></ul>                                 |
+| Cooperative tracking | Cache-reporting tools (`vp build` today) | <ul><li>Environment variables reported by the tool</li><li>Tool-managed paths that should not be inputs or outputs, such as `node_modules/.vite-temp`</li></ul> |
 
 Vite Task starts with file system tracking for any command. A cache-reporting tool can add information that only the tool knows while it runs.
 
