@@ -6,15 +6,17 @@ usage() {
   cat <<'EOF'
 Usage: .github/scripts/test-pkg-pr-new-migrate.sh <PR-or-SHA> <project-path> [migrate-options...]
 
-Installs an isolated global Vite+ CLI built from a pkg.pr.new commit and runs
-`vp migrate` against a local project. The migrated project pins `vite-plus` and
-`vite` to the matching commit build, resolved through the pkg.pr.new registry
-bridge (https://github.com/voidzero-dev/pkg-pr-registry-bridge) so they install like
-ordinary npm versions (0.0.0-commit.<sha>) instead of mutable pkg.pr.new URLs.
+Installs an isolated global Vite+ CLI built from a registry bridge commit build
+and runs `vp migrate` against a local project. The global CLI and the migrated
+project both pin `vite-plus` and `vite` to the matching commit build, resolved
+through the registry bridge (https://github.com/voidzero-dev/pkg-pr-registry-bridge)
+so they install like ordinary npm versions (0.0.0-commit.<sha>) instead of
+mutable pkg.pr.new URLs.
 
-Persists the bridge registry into the project's `.npmrc` (npm/pnpm/Yarn
-Classic/Bun) and, for Yarn Berry projects, `.yarnrc.yml`, so the migrated
-project resolves the commit versions both during this run and in its own CI.
+The preview `vp migrate` itself writes the bridge registry into the project's
+`.npmrc` (or `.yarnrc.yml` for Yarn Berry), so the migrated project resolves the
+commit versions both during this run and in its own CI; this script just
+force-stages that file past `.gitignore`.
 
 Examples:
   .github/scripts/test-pkg-pr-new-migrate.sh 1891 /path/to/npmx.dev
@@ -73,15 +75,15 @@ if command -v git >/dev/null 2>&1 && git -C "$project_dir" rev-parse --is-inside
 fi
 
 bridge_registry="https://registry-bridge.viteplus.dev/"
-pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
-requested_vite_plus_spec="$pkg_pr_new_base@$pr_ref"
+bridge_download_base="https://registry-bridge.viteplus.dev/voidzero-dev/vite-plus"
 
-# pkg.pr.new commit builds are immutable; PR-number URLs are mutable and the
-# registry bridge only mirrors commit builds. Resolve the requested PR or SHA to
-# its underlying 40-char commit so the global install and every dependency spec
-# share one immutable key.
-resolve_pkg_pr_new_commit() {
-  curl -fsSIL "$requested_vite_plus_spec" | tr -d '\r' | awk -F ': ' '
+# Commit builds are immutable; PR-number refs are mutable. The bridge's
+# pkg.pr.new-style download URL exposes the underlying commit via an
+# `x-commit-key: <owner>:<repo>:<sha>` header (HEAD). Resolve the requested ref
+# to that 40-char commit so the global install and every dependency spec share
+# one immutable key.
+resolve_bridge_commit() {
+  curl -fsSIL "${bridge_download_base}@${pr_ref}" | tr -d '\r' | awk -F ': ' '
     tolower($1) == "x-commit-key" {
       count = split($2, parts, ":")
       print parts[count]
@@ -90,15 +92,15 @@ resolve_pkg_pr_new_commit() {
   '
 }
 
-available_commit="$(resolve_pkg_pr_new_commit || true)"
+available_commit="$(resolve_bridge_commit || true)"
 case "$available_commit" in
   '' | *[!0-9a-fA-F]*)
-    echo "error: could not resolve an immutable pkg.pr.new commit for $pr_ref" >&2
+    echo "error: could not resolve an immutable registry bridge commit for $pr_ref" >&2
     exit 1
     ;;
 esac
 if [ "${#available_commit}" -ne 40 ]; then
-  echo "error: pkg.pr.new returned an invalid commit for $pr_ref: $available_commit" >&2
+  echo "error: registry bridge returned an invalid commit for $pr_ref: $available_commit" >&2
   exit 1
 fi
 
@@ -140,7 +142,8 @@ read_installed_commit() {
     awk -F '"' '
       $2 == "@voidzero-dev/vite-plus-core" {
         value = $4
-        sub(/^.*@/, "", value)
+        sub(/^.*@/, "", value)               # pkg.pr.new URL form: keep trailing sha
+        sub(/^0\.0\.0-commit\./, "", value)  # registry bridge version form: keep sha
         print value
         exit
       }
@@ -185,10 +188,10 @@ else
     esac
   fi
 
-  # The global CLI ships per-platform binaries that the bridge cannot serve
-  # through npm's tarball path, so install it straight from pkg.pr.new by its
-  # immutable commit.
-  echo "Installing Vite+ pkg.pr.new build $resolved_ref (requested $pr_ref) into $pr_home"
+  # install.sh installs the global CLI from the registry bridge: the bridge
+  # serves the per-platform binaries and resolves the wrapper install to the
+  # clearly-defined 0.0.0-commit.<sha> build (no pkg.pr.new URLs).
+  echo "Installing Vite+ registry bridge build $resolved_ref (requested $pr_ref) into $pr_home"
   HOME="$installer_home" \
     VP_HOME="$pr_home" \
     VP_PR_VERSION="$resolved_ref" \
@@ -230,51 +233,10 @@ export PATH="$VP_HOME/bin:$PATH"
 # needs no escaping.
 export VP_VERSION="$commit_version"
 export VP_OVERRIDE_PACKAGES="{\"vite\":\"$vite_core_spec\",\"vitest\":\"$vitest_version\"}"
-# Point every package manager at the registry bridge. It serves the vite-plus /
-# vite-plus-core / per-platform CLI commit builds and proxies everything else to
-# npmjs, so the project resolves the commit versions like any released package.
-# Yarn Berry only honors YARN_NPM_REGISTRY_SERVER; Bun honors npm_config_registry.
-export npm_config_registry="$bridge_registry"
-export YARN_NPM_REGISTRY_SERVER="$bridge_registry"
-
-# Persist the bridge registry into the project's own config files so the
-# migrated project installs the commit builds in ITS OWN CI too, not just during
-# this run (the env vars above are not persisted). pnpm in particular resolves
-# from .npmrc, not npm_config_registry, and without this fetches the commit
-# version from registry.npmjs.org and fails with ERR_PNPM_NO_MATCHING_VERSION.
-registry_marker="# pkg.pr.new registry bridge (added by test-pkg-pr-new-migrate.sh)"
-
-# .npmrc is read by npm, pnpm, Yarn Classic and Bun.
-project_npmrc="$project_dir/.npmrc"
-if ! grep -qsF "$registry_marker" "$project_npmrc"; then
-  if [ -s "$project_npmrc" ]; then
-    printf '\n' >> "$project_npmrc"
-  fi
-  printf '%s\nregistry=%s\n' "$registry_marker" "$bridge_registry" >> "$project_npmrc"
-fi
-
-# Yarn Berry ignores .npmrc and reads .yarnrc.yml instead. The migration's own
-# .yarnrc.yml rewrite preserves unrelated keys, so npmRegistryServer survives.
-project_yarnrc="$project_dir/.yarnrc.yml"
-is_yarn_berry=0
-if [ -f "$project_yarnrc" ] ||
-  { [ -f "$project_dir/yarn.lock" ] && grep -q '^__metadata:' "$project_dir/yarn.lock" 2>/dev/null; } ||
-  grep -qE '"packageManager"[[:space:]]*:[[:space:]]*"yarn@([2-9]|[1-9][0-9])' "$project_dir/package.json" 2>/dev/null; then
-  is_yarn_berry=1
-fi
-if [ "$is_yarn_berry" -eq 1 ]; then
-  if grep -qsE '^npmRegistryServer:' "$project_yarnrc"; then
-    # Override an existing default-registry setting in place.
-    sed -i.pkg-pr-new.bak -E \
-      "s|^npmRegistryServer:.*|npmRegistryServer: \"$bridge_registry\"|" "$project_yarnrc"
-    rm -f "$project_yarnrc.pkg-pr-new.bak"
-  elif ! grep -qsF "$registry_marker" "$project_yarnrc"; then
-    if [ -s "$project_yarnrc" ]; then
-      printf '\n' >> "$project_yarnrc"
-    fi
-    printf '%s\nnpmRegistryServer: "%s"\n' "$registry_marker" "$bridge_registry" >> "$project_yarnrc"
-  fi
-fi
+# The preview `vp migrate` itself writes the bridge registry into the project's
+# own `.npmrc` (or `.yarnrc.yml` for Yarn Berry) before it installs, so both this
+# run and the project's own CI resolve the commit versions. This script only
+# force-stages that file past `.gitignore` below.
 
 hash -r
 
@@ -284,8 +246,7 @@ echo "  requested ref: $pr_ref"
 echo "  resolved commit: $resolved_ref"
 echo "  executable: $vp_bin"
 echo "  installation: $(readlink "$pr_home/current" 2>/dev/null || echo unknown)"
-echo "  registry bridge: $bridge_registry"
-echo "  project .npmrc: $project_npmrc"
+echo "  registry bridge: $bridge_registry (vp migrate writes it into the project)"
 echo "  vite-plus spec: $commit_version"
 echo "  vite spec: $vite_core_spec"
 "$vp_bin" --version
@@ -342,15 +303,13 @@ migrate_status=$?
 set -e
 
 if [ "$is_git_repo" -eq 1 ]; then
-  # Force-stage the bridge registry config. Projects commonly gitignore .npmrc
-  # (and .yarnrc.yml), so without -f it never reaches the project's CI: the
-  # commit build then resolves from the default registry, which has no
-  # 0.0.0-commit.<sha>, and the supply-chain policy check rejects the lockfile
-  # (ERR_PNPM_TARBALL_URL_MISMATCH). Force-staging also surfaces it below.
+  # Force-stage the bridge registry config that vp migrate wrote. Projects
+  # commonly gitignore .npmrc (and .yarnrc.yml), so without -f it never reaches
+  # the project's CI: the commit build then resolves from the default registry,
+  # which has no 0.0.0-commit.<sha>, and the supply-chain policy check rejects the
+  # lockfile (ERR_PNPM_TARBALL_URL_MISMATCH). Stage whichever file migrate wrote.
   git -C "$project_dir" add -f .npmrc 2>/dev/null || true
-  if [ "$is_yarn_berry" -eq 1 ]; then
-    git -C "$project_dir" add -f .yarnrc.yml 2>/dev/null || true
-  fi
+  git -C "$project_dir" add -f .yarnrc.yml 2>/dev/null || true
   echo
   echo "Migration worktree changes (.npmrc force-staged so it survives .gitignore):"
   git -C "$project_dir" status --short
