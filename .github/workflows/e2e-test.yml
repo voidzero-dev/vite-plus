@@ -336,8 +336,9 @@ jobs:
               # FIXME: mantine uses postcss-simple-vars (e.g. `@media (max-width:
               # $mantine-breakpoint-md)` in src/components/Welcome/Welcome.module.css),
               # which oxfmt's CSS parser does not support yet (regressed in oxfmt 0.57.0
-              # after the switch to oxc-css-parser, oxc-project/oxc#23920). Resume once
-              # postcss-simple-vars syntax is supported.
+              # after the switch to oxc-css-parser). Tracking issue:
+              # https://github.com/oxc-project/oxc/issues/23969. Drop the `|| true`
+              # once postcss-simple-vars syntax is supported.
               vp fmt || true
               vp run validate
           - name: vite-plus-vitest-global-type-minimal-repro
