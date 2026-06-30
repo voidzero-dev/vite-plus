@@ -106,11 +106,11 @@ jobs:
           key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 ```
 
-The primary key includes `github.run_id` and `github.run_attempt` so each successful run can save a new immutable cache entry. The restore prefix lets GitHub restore the newest cache for the same operating system and architecture. Vite Task checks the restored entries before replaying a task.
+The primary key includes `github.run_id` and `github.run_attempt` so each successful run can save a new immutable cache entry. The restore prefix lets GitHub restore the newest cache for the same operating system and architecture.
 
 Leave task inputs, including source files and lockfiles, out of the GitHub Actions key. Vite Task fingerprints them. If they change the Actions key, GitHub can skip useful restores before Vite Task decides which tasks still hit.
 
-For workspaces, restore the task cache from the workspace root. Then run the same workspace targets you use locally, such as `vp run -t @my/app#build`. Vite Task checks each restored entry before replaying it, including tasks from workspace dependencies.
+For workspaces, restore the task cache from the workspace root. Then run the same workspace targets you use locally, such as `vp run -t @my/app#build`. The same cache covers tasks from workspace dependencies.
 
 ## 3. Verify In The Logs
 
@@ -128,8 +128,6 @@ If GitHub restores a cache but Vite Task prints a cache miss, the Actions cache 
 
 ## Keep Task Tracking Stable
 
-GitHub Actions cache only restores the Vite Task cache directory. Vite Task still checks each restored entry before replaying it.
-
 If GitHub restores a cache but `vp run` prints a cache miss, fix the task fingerprint before changing the Actions cache key. See [Automatic Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks).
 
 ## Choose A Cache Key
@@ -142,7 +140,7 @@ restore-keys: |
   vite-task-${{ runner.os }}-${{ runner.arch }}-
 ```
 
-The exact key misses on each new run because the key contains `github.run_id` and `github.run_attempt`. GitHub then searches the restore prefix and restores the newest matching cache. Vite Task checks restored entries before replaying a task.
+The exact key misses on each new run because the key contains `github.run_id` and `github.run_attempt`. GitHub then searches the restore prefix and restores the newest matching cache.
 
 Include:
 
