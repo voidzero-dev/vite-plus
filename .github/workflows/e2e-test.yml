@@ -442,14 +442,24 @@ jobs:
 
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
-        # E2E intentionally installs just-published toolchain packages (e.g.
-        # @oxlint/migrate during `vp migrate`). Disable pnpm's minimumReleaseAge
-        # gate so a same-day publish does not fail with
-        # ERR_PNPM_NO_MATURE_MATCHING_VERSION.
-        env:
-          pnpm_config_minimum_release_age: '0'
         shell: bash
         run: |
+          # E2E intentionally installs just-published toolchain packages (e.g.
+          # @oxlint/migrate during `vp migrate`). Disable pnpm's
+          # minimumReleaseAge gate so a same-day publish does not fail with
+          # ERR_PNPM_NO_MATURE_MATCHING_VERSION.
+          #
+          # dify is excluded: it sets `resolutionMode: time-based` and
+          # patch-project.ts removes its `minimumReleaseAge:` key to keep the
+          # resolution policy inactive. Defining pnpm_config_minimum_release_age
+          # here (even as 0 or empty) re-activates that policy, and vp's bundled
+          # pnpm has no handleResolutionPolicyViolations callback, so the local
+          # file: tgz overrides crash it with
+          # ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. The variable must be
+          # fully unset (not just empty) for dify.
+          if [ '${{ matrix.project.name }}' != 'dify' ]; then
+            export pnpm_config_minimum_release_age=0
+          fi
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
           vp install --no-frozen-lockfile
 
