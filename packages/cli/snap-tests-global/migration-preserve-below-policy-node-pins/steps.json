@@ -1,7 +1,8 @@
 {
   "commands": [
-    "vp migrate --no-interactive # existing Vite+ project: below-policy Node pins are preserved, not raised (native binding supports Node >=20)",
-    "cat .node-version # .node-version stays 24.3.0 (24.0-24.10 is below the support policy but valid for the binding)",
-    "node -e \"const p=require('./package.json');console.log(p.engines.node, JSON.stringify(p.devEngines.runtime))\" # engines.node stays 24.x and devEngines.runtime node stays ^24"
+    "vp migrate --no-interactive # existing Vite+ project: a Node pin below the supported range is preserved, not raised (native binding supports Node >=20)",
+    "cat .node-version # stays 24.3.0",
+    "cat package.json # engines.node stays 24.x and devEngines.runtime node stays ^24 (preserved, not raised)",
+    "cat pnpm-workspace.yaml # vite-stack catalog updated to the migration target"
   ]
 }

@@ -69,15 +69,15 @@ In a Vite+ project the preserved import still resolves through the managed
 ### Node.js version
 
 `vp migrate` converts `.nvmrc` and Volta `volta.node` pins to `.node-version`
-(the format Vite+ reads), reusing the Rust runtime resolver rather than
-re-implementing the lookup in JS. An existing `.node-version` is kept, and when
-`.nvmrc` is removed any `actions/setup-node` `node-version-file: .nvmrc`
-reference in the project's workflows and composite actions is repointed to
-`.node-version` so CI does not break. The native binding runs on any Node
-`>=20.0.0`, so a below-policy Node pin (`engines.node: 24.x`,
-`devEngines.runtime` `^22`, `.node-version` `24.3.0`) is left untouched: the
-platform packages declare that true ABI floor, so package managers no longer
-skip the optional native dependency over a product-policy gap.
+(the format Vite+ reads). An existing `.node-version` is kept, and when `.nvmrc`
+is removed any `actions/setup-node` `node-version-file: .nvmrc` reference in the
+project's workflows and composite actions is repointed to `.node-version` so CI
+does not break. The native binding runs on any Node `>=20.0.0`, so a Node pin
+whose floor sits below the supported-range minimum but at or above that ABI floor
+(`engines.node: 24.x`, `devEngines.runtime` `^24`, `.node-version` `24.3.0`) is
+left untouched: the platform packages declare the true ABI floor, so package
+managers no longer skip the optional native dependency over a gap in the
+supported range.
 
 ## `@nuxt/test-utils` compatibility
 
