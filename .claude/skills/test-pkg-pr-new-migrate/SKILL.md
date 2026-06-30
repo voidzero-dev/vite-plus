@@ -21,11 +21,9 @@ Required inputs: a `<PR-or-SHA>` (the build to verify) and a `<project-path>`. I
 
 **The build under test must include the "migrate writes the bridge registry" feature** (this session's work / current branch head onward). The harness no longer writes the registry itself — it relies on `vp migrate` doing it. Testing an older build with this harness would leave the project with no bridge registry, so its deps resolve from npmjs (`ERR_PNPM_NO_MATCHING_VERSION` on the `0.0.0-commit.<sha>` version). Always verify a fresh build of the branch, not a stale published commit.
 
-Then confirm the resolved versions (`-r` across workspaces for monorepos):
+The script prints the resolved versions at the end (`vp why -r vite-plus vite vitest`). Each must resolve to exactly ONE version: `vite-plus` and `vite` at the expected `0.0.0-commit.<sha>` (vite via the `@voidzero-dev/vite-plus-core` alias), `vitest` at the bundled upstream version. Multiple versions, or a stale/wrong version, means the migration or install is broken. To re-check by hand:
 
 ```bash
 cd <project-path>
 vp why -r vite-plus vite vitest
 ```
-
-Each must resolve to exactly ONE version: `vite-plus` and `vite` at the expected `0.0.0-commit.<sha>` (vite via the `@voidzero-dev/vite-plus-core` alias), `vitest` at the bundled upstream version. Multiple versions, or a stale/wrong version, means the migration or install is broken.

@@ -313,7 +313,15 @@ if [ "$is_git_repo" -eq 1 ]; then
   echo
   echo "Migration worktree changes (.npmrc force-staged so it survives .gitignore):"
   git -C "$project_dir" status --short
-  git -C "$project_dir" diff --stat
 fi
+
+# Show the resolved vite-plus / vite / vitest versions so the result is visible
+# at a glance. Each must resolve to exactly ONE version (the commit build for
+# vite-plus and vite via the @voidzero-dev/vite-plus-core alias, the bundled
+# upstream for vitest); more than one version of any means the migration or
+# install is broken.
+echo
+echo "Resolved vite-plus / vite / vitest versions (each should be a single version):"
+(cd "$project_dir" && "$vp_bin" why -r vite-plus vite vitest) || true
 
 exit "$migrate_status"
