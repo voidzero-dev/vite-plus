@@ -99,8 +99,8 @@ jobs:
           # A release commit can leave `packages/{core,cli}` at a published
           # version (e.g. 0.1.22), which would make `pnpm pack` emit
           # `*-0.1.22.tgz` instead. Pin both to 0.0.0 so the names stay stable.
-          (cd packages/core && npm pkg set version=0.0.0)
-          (cd packages/cli && npm pkg set version=0.0.0)
+          (cd packages/core && pnpm pkg set version=0.0.0)
+          (cd packages/cli && pnpm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Bun is uniquely strict about peer-dep resolution:

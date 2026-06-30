@@ -546,7 +546,7 @@ jobs:
           # Force-reinstall the published `latest` version rather than the local
           # build's version: mid-release-cycle the build can be ahead of the
           # registry, and `vp upgrade <version>` must download <version> from npm.
-          $version = "$(npm view vite-plus version)".Trim()
+          $version = "$(pnpm view vite-plus version)".Trim()
           if (-not $version) {
             Write-Error "Failed to resolve latest published vite-plus version"
             exit 1
@@ -605,7 +605,7 @@ jobs:
           # Force-reinstall the published `latest` version rather than the local
           # build's version: mid-release-cycle the build can be ahead of the
           # registry, and `vp upgrade <version>` must download <version> from npm.
-          version=$(npm view vite-plus version)
+          version=$(pnpm view vite-plus version)
           if [ -z "$version" ]; then
             echo "Failed to resolve latest published vite-plus version"
             exit 1

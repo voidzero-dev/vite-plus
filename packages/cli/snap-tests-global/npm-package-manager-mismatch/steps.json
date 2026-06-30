@@ -1,3 +1,0 @@
-{
-  "commands": ["npm --version || echo 'npm blocked'"]
-}

@@ -1,5 +1,0 @@
-> npm --version || echo 'npm blocked'
-This project is configured to use pnpm because <cwd>/package.json has a "packageManager" field
-
-Use `pnpm` instead of `npm`.
-npm blocked
