@@ -84,9 +84,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: node_modules/.vite/task-cache
-          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock', '**/bun.lock', '**/bun.lockb') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock', '**/bun.lock', '**/bun.lockb') }}-
+            vite-task-${{ runner.os }}-${{ runner.arch }}-
 
       - run: vp run lint
       - run: vp run build
@@ -99,9 +99,11 @@ jobs:
           key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 ```
 
-The primary key includes `github.run_id` and `github.run_attempt` so each successful run can save a new immutable cache entry. The restore prefix includes the lockfile hash, so a dependency change starts from a cold Vite Task cache instead of restoring entries from a different dependency graph.
+The primary key includes `github.run_id` and `github.run_attempt` so each successful run can save a new immutable cache entry. The restore prefix lets GitHub restore the newest cache for the same operating system and architecture. Vite Task checks the restored entries before replaying a task.
 
-Leave source files out of the GitHub Actions key. Vite Task fingerprints task inputs. If a source change updates the Actions key, GitHub can skip useful restores before Vite Task decides which tasks still hit.
+Leave task inputs, including source files and lockfiles, out of the GitHub Actions key. Vite Task fingerprints them. If they change the Actions key, GitHub can skip useful restores before Vite Task decides which tasks still hit.
+
+For workspaces, restore the task cache from the workspace root. Then run the same workspace targets you use locally, such as `vp run -t @my/app#build`. Vite Task checks each restored entry before replaying it, including tasks from workspace dependencies.
 
 ## 3. Verify In The Logs
 
@@ -116,37 +118,6 @@ vp run: cache hit, 1.10s saved.
 ```
 
 If GitHub restores a cache but Vite Task prints a cache miss, the Actions cache transport worked, but the task fingerprint changed.
-
-## 4. Workspaces
-
-Cache reuse works with workspace task targets. Define cacheable tasks in the package that owns the target, then run the same `vp run` command in CI:
-
-```bash
-vp run -t @my/app#build
-```
-
-For workspace builds, keep automatic tracking and add the workspace lockfile as a workspace-relative input:
-
-```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  run: {
-    tasks: {
-      build: {
-        command: 'vp build',
-        dependsOn: [{ task: 'build', from: 'dependencies' }],
-        input: [{ auto: true }, { pattern: 'pnpm-lock.yaml', base: 'workspace' }, '!dist/**'],
-        output: ['dist/**'],
-      },
-    },
-  },
-});
-```
-
-The object-form `dependsOn` runs `build` in direct workspace dependency packages that define that task. Each dependency can pull in more tasks through its own `dependsOn` config.
-
-When the task cache is restored, Vite Task can replay hits for the target package and its workspace dependencies. In a transitive `core -> util -> app` experiment, restoring only `node_modules/.vite/task-cache` in a fresh checkout produced `3/3` cache hits and restored each package's `dist/**` output.
 
 ## Keep Tracking Stable Across CI Runs
 
@@ -164,9 +135,9 @@ Treat these cases by root cause:
 Use a rolling primary key plus a restore prefix:
 
 ```yaml [.github/workflows/ci.yml]
-key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
 restore-keys: |
-  vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml') }}-
+  vite-task-${{ runner.os }}-${{ runner.arch }}-
 ```
 
 The exact key misses on each new run because the key contains `github.run_id` and `github.run_attempt`. GitHub then searches the restore prefix and restores the newest matching cache. Vite Task checks restored entries before replaying a task.
@@ -174,10 +145,9 @@ The exact key misses on each new run because the key contains `github.run_id` an
 Include:
 
 - `runner.os` and `runner.arch`, because outputs and native tools can be platform-specific.
-- Your lockfile hash, so GitHub restores caches from the same dependency graph.
 - A per-run value such as `github.run_id` and `github.run_attempt`, because GitHub cache entries are immutable.
 
-You can add a broader restore prefix only if the task inputs include the package manifests and lockfiles that define dependency identity. The broader prefix can save a download on some projects, but it can also restore a cache that Vite Task rejects task by task.
+If a dependency file affects a task result, track it in the task fingerprint rather than the GitHub Actions key.
 
 ## Limitations And Workarounds
 
