@@ -323,7 +323,7 @@ fi
 # a single package, and `-r` (recursive across workspaces) is pnpm-only — detect
 # the package manager via `vp env current --json`.
 pm_name="$(cd "$project_dir" && "$vp_bin" env current --json 2>/dev/null \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("package_manager",{}).get("name",""))' 2>/dev/null || true)"
+  | node -e 'try{process.stdout.write((JSON.parse(require("fs").readFileSync(0,"utf8")).package_manager||{}).name||"")}catch{}' 2>/dev/null || true)"
 why_recursive=
 if [ "$pm_name" = "pnpm" ]; then
   why_recursive=-r
