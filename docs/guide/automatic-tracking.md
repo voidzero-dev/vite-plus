@@ -151,15 +151,3 @@ tasks: {
 ```
 
 This task keeps file system tracking, lets Vite report build metadata, adds the lockfile to the fingerprint, excludes restored output files from inputs, and restores only `dist/**` on a cache hit.
-
-## Common Cache Miss Causes
-
-Vite Task chooses a cache miss when tracked data changed between runs. In CI, these data sources often explain misses after a restored cache:
-
-- **Dependency install metadata:** add committed package manifests and lockfiles as inputs. For `vp build`, keep automatic tracking and add the lockfile.
-- **Tool-owned incremental state:** move incremental files into a generated cache directory or exclude them from file system-tracked inputs.
-- **Generated outputs:** exclude output directories from `input`, then configure `output` so Vite Task can restore them.
-- **Broad directory scans:** use explicit `input` globs when a command scans directories that contain unrelated files. If the command writes files, review `output` in the same task config.
-- **Environment variables:** add `env` for variables that change a non-reporting command's result. Leave standard Vite build env vars out of `env` because `vp build` reports them.
-
-For GitHub Actions cache reuse, see [GitHub Actions Cache](/guide/github-actions-cache). That guide explains how to restore `node_modules/.vite/task-cache` between CI runs after your task hits locally.
