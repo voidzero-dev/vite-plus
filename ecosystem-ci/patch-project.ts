@@ -117,35 +117,32 @@ const migrateEnv: NodeJS.ProcessEnv = {
   VP_VERSION: vitePlusTgz,
 };
 
-if (project === 'dify') {
+const isDify = project === 'dify';
+if (isDify) {
   // dify needs the minimumReleaseAge gate disabled so `vp migrate`'s
   // `@oxlint/migrate` dlx can install a same-day toolchain publish. But with
   // the gate active, dify's `resolutionMode: time-based` policy plus the local
   // `file:` tgz overrides (no publish timestamp) trip
   // ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED in vp's bundled pnpm during
   // migrate's auto-install. Scope the gate var to this migrate subprocess only,
-  // and tolerate the auto-install crash: migrate still generates the config and
-  // import rewrites, and the workflow's follow-up `vp install` (run without the
-  // var, so the policy stays inactive) does the real install.
+  // and tolerate the auto-install crash below: migrate still generates the
+  // config and import rewrites, and the workflow's follow-up `vp install` (run
+  // without the var, so the policy stays inactive) does the real install.
   migrateEnv.pnpm_config_minimum_release_age = '0';
-  try {
-    execSync(`${cli} migrate --no-agent --no-interactive`, {
-      cwd,
-      stdio: 'inherit',
-      env: migrateEnv,
-    });
-  } catch {
-    console.warn(
-      'dify: `vp migrate` auto-install failed (expected with the age gate active); ' +
-        'continuing, `vp install` will resync node_modules.',
-    );
-  }
-} else {
+}
+
+try {
   execSync(`${cli} migrate --no-agent --no-interactive`, {
     cwd,
     stdio: 'inherit',
     env: migrateEnv,
   });
+} catch (err) {
+  if (!isDify) throw err;
+  console.warn(
+    'dify: `vp migrate` auto-install failed (expected with the age gate active); ' +
+      'continuing, `vp install` will resync node_modules.',
+  );
 }
 
 const packageJsonPath = join(cwd, 'package.json');
