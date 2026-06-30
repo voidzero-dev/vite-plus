@@ -97,15 +97,17 @@ Set `input: []` when no files should affect the cache key. Set `output: []` when
 
 ## Cooperative Tracking
 
-Some tools know cache dependencies that file system tracking cannot infer from the outside. A cache-reporting tool can cooperate with Vite Task while it runs. Vite Task still observes file reads and writes. It uses the report to refine the cache fingerprint.
+File system tracking sees access. It cannot always see intent.
 
-Vite+ supports cooperative tracking for `vp build` today. When a task runs `vp build`, Vite reports build cache metadata to Vite Task. For a standard Vite build, you do not need to add these entries yourself:
+`vp build` knows more about a Vite build than Vite Task can infer from file access. When a cached task runs `vp build`, Vite reports that metadata to Vite Task. Vite Task merges the report with file system tracking to build a more accurate cache fingerprint.
+
+For a standard Vite build, you do not need to add these entries yourself:
 
 - `env: ['VITE_*']` or `env: ['NODE_ENV']`
 - `output: ['dist/**']`
-- explicit input globs that replace file system tracking
+- input or output rules for tool-managed temporary paths
 
-Define the build as a `vp run` task:
+The user still defines what to run:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -119,7 +121,7 @@ export default defineConfig({
 });
 ```
 
-Then run it with:
+Run the task through Vite Task:
 
 ```bash
 vp run build
@@ -127,7 +129,9 @@ vp run build
 
 Direct `vp build` runs a build, but it does not use the Vite Task cache. Use `vp run build` when you want task caching.
 
-Vite+ will extend cooperative tracking to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
+Manual config still wins. Add `input`, `output`, or `env` when your project has behavior that Vite cannot know.
+
+Vite+ supports cooperative tracking for `vp build` today. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
 
 ## When To Add Manual Config
 
