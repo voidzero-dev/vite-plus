@@ -13,21 +13,21 @@
     "vite": "catalog:vite-stack",
     "vite-plus": "catalog:vite-stack"
   },
-  "engines": {
-    "node": "24.x"
-  },
   "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    },
     "runtime": [
       {
         "name": "node",
         "version": "^24"
       }
-    ],
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<semver>",
-      "onFail": "download"
-    }
+    ]
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
 
