@@ -41,11 +41,11 @@ File system tracking also tracks outputs. If you omit [`output`](/config/run#out
 
 ### Limitations
 
-Vite Task cannot track environment variable reads, and it cannot always tell which tracked paths are stable inputs, generated outputs, or tool-managed cache (which should not be considered as inputs or outputs).
+Vite Task cannot track environment variable reads, and it cannot always tell which tracked paths are stable inputs, generated outputs, or tool-managed cache paths.
 
 Use [Override Inputs And Outputs](#override-inputs-and-outputs) when file system tracking includes files that should not affect the cache, misses files that should, or restores the wrong outputs.
 
-Use [`env`](/config/run#env) when an environment variable needs to be fingerprinted in cache and passed to the command. Use [`untrackedEnv`](/config/run#untrackedenv) when an environment variable needs to be passed to the command but should not affect the cache.
+Use [`env`](/config/run#env) when a command needs an environment variable and the value should affect the cache. Use [`untrackedEnv`](/config/run#untrackedenv) when a command needs an environment variable but the value should not affect the cache.
 
 These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking](#cooperative-tracking) metadata automatically, including `VITE_*`, `NODE_ENV`, and Vite-managed cache paths that should not become inputs or outputs. A standard `vp build` task does not need manual `input`, `output`, or `env`.
 
@@ -54,12 +54,12 @@ These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking
 [`input`](/config/run#input) controls what invalidates the cache.
 [`output`](/config/run#output) controls which files Vite Task restores on a cache hit.
 
-They shared the same syntax and can be configured separately.
- 
-- Omit to keep automatic tracking for it.
-- Add `{ auto: true }` to keep automatic tracking along with  globs.
-- Use string globs to include paths
-- `!` globs to exclude paths. 
+Both options use the same syntax and can be configured separately.
+
+- Omit the option to keep automatic tracking.
+- Add `{ auto: true }` to keep automatic tracking while adding glob rules.
+- Use string globs to include paths.
+- Use `!` globs to exclude paths.
 - Use `[]` to replace automatic tracking with an empty list.
 
 ```ts [vite.config.ts]
@@ -67,23 +67,23 @@ tasks: {
   build: {
     command: 'node build.mjs',
 
-    // Keep automatic input tracking, but exclude `dist` from inputs 
-    input: [{ auto: true }, '!dist/**'],
-    // Disable automatic output tracking and restore only `dist/**` on a cache hit
+    // Keep automatic input tracking, but exclude `dist` from inputs.
+    input: [{ auto: true }, '!dist', '!dist/**'],
+
+    // Disable automatic output tracking and restore only `dist/**` on a cache hit.
     output: ['dist/**'],
   },
 }
 ```
 
-Use explicit `input`/`output` globs only when you know the command's full input/output set:
+Use explicit `input` globs only when you know the command's full input set. This lint task overrides inputs only, so output tracking stays automatic:
 
 ```ts [vite.config.ts]
 tasks: {
   lint: {
     command: 'vp lint',
-    // Disable automatic input tracking and fingerprint only these files
+    // Disable automatic input tracking and fingerprint only these files.
     input: ['src/**', 'vite.config.ts'],
-    // Keep automatic output tracking because `output` is not specified
   },
 }
 ```
@@ -116,7 +116,7 @@ export default defineConfig({
 });
 ```
 
-Manual config still wins. Add `input`, `output`, `env` or `untrackedEnv` when even cooperative tracking misses something.
+Manual config still wins. Add `input`, `output`, `env`, or `untrackedEnv` when your project has behavior that Vite cannot report.
 
 Vite+ supports cooperative tracking for `vp build` today. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
 
@@ -126,8 +126,8 @@ Add config when your project has behavior the command or tool cannot know.
 
 | Case                                                              | Example                                                                                         |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist']`                                                              |
+| Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist', '!dist/**']`                                                  |
 | Exclude a temporary generated file from input and output tracking | `input: [{ auto: true }, '!.tmp/config.mjs']`<br>`output: [{ auto: true }, '!.tmp/config.mjs']` |
-| Disable file tracking when it makes your task misbehave           | `input: ["src/**"], output: ["dist/**"]`                                                        |
+| Avoid automatic file tracking for a task                          | `input: ['src/**']`<br>`output: ['dist/**']`                                                    |
 | Track and pass an env var                                         | `env: ['NODE_ENV']`                                                                             |
 | Pass an env var without fingerprinting it                         | `untrackedEnv: ['GITHUB_ACTIONS']`                                                              |
