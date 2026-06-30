@@ -435,6 +435,12 @@ jobs:
 
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
+        # E2E intentionally installs just-published toolchain packages (e.g.
+        # @oxlint/migrate during `vp migrate`). Disable pnpm's minimumReleaseAge
+        # gate so a same-day publish does not fail with
+        # ERR_PNPM_NO_MATURE_MATCHING_VERSION.
+        env:
+          pnpm_config_minimum_release_age: '0'
         shell: bash
         run: |
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
