@@ -125,19 +125,6 @@ impl JsExecutor {
             .ok_or(Error::JsScriptsDirNotFound)
     }
 
-    /// Resolve the version of the global CLI's own installed `vite-plus`.
-    ///
-    /// Reads the installed package's `version` (not the compiled-in crate
-    /// version) so a preview global build, whose `vite-plus` is published as
-    /// `0.0.0-commit.<sha>`, is recognized as the build under test by
-    /// [`local_vite_plus_is_older`]. Returns `None` when the package.json is
-    /// missing or unreadable, letting the caller fall back to
-    /// `CARGO_PKG_VERSION`.
-    fn resolve_global_vite_plus_version(&self) -> Option<String> {
-        let pkg_json = self.get_cli_package_dir().ok()?.join("package.json");
-        read_package_json_version(pkg_json.as_path())
-    }
-
     /// Ensure the CLI runtime is downloaded and cached.
     ///
     /// Uses the CLI's package.json `devEngines.runtime` configuration
@@ -273,11 +260,13 @@ impl JsExecutor {
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        let global = self
-            .resolve_global_vite_plus_version()
-            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+        // CARGO_PKG_VERSION is stamped to the published version at build time
+        // (the release version, or `0.0.0-commit.<sha>` for a pkg.pr.new build),
+        // so a preview global build compares as a preview and wins. No need to
+        // read the installed package.json.
+        let global = env!("CARGO_PKG_VERSION");
         let escalate = resolve_local_vite_plus_version(project_path)
-            .is_some_and(|local| local_vite_plus_is_older(&local, &global));
+            .is_some_and(|local| local_vite_plus_is_older(&local, global));
         if escalate {
             tracing::debug!(
                 "Local vite-plus is older than global vp {global}; running migrate from the global CLI"

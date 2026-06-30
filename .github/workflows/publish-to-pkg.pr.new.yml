@@ -24,16 +24,14 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-
-      # pkg-pr-new rewrites the published version anyway, but we still need a
-      # unique snapshot version so `napi pre-publish` writes consistent
-      # optionalDependencies entries across the platform packages.
+      # Use the exact version the registry bridge serves (0.0.0-commit.<head-sha>,
+      # same head SHA the bridge registers below), so the built Rust binary and JS
+      # dist carry the version that actually gets installed: CARGO_PKG_VERSION and
+      # cliPkg.version both equal it, instead of the build-time release placeholder.
+      # `napi pre-publish` reuses this for consistent optionalDependencies entries.
       - name: Compute version
         id: version
-        run: |
-          short_sha=$(git rev-parse --short=7 HEAD)
-          echo "version=0.0.0-pkg-pr-new.${short_sha}" >> "$GITHUB_OUTPUT"
+        run: echo "version=0.0.0-commit.${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
 
   build-rust:
     name: Build bindings and binaries
