@@ -22,6 +22,13 @@ Use this workflow when all of these are true:
 
 Fix local misses first. GitHub Actions cache can move Vite Task's local cache directory between runs, but it cannot make an unstable task cacheable.
 
+## When To Skip GitHub Actions Cache
+
+You may not need to restore Vite Task cache across GitHub Actions runs in these cases:
+
+- The task is already fast enough. Cache restore and save steps add overhead, so short tasks can finish faster without this workflow.
+- The cache is expensive to move between runs. Vite Task can still save time when the same task runs more than once in one workflow run. Across workflow runs, GitHub must download and upload the cache, so a large task cache can cost more time than rerunning the task.
+
 ## 1. Define Cacheable CI Tasks
 
 Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache. Define a task in `vite.config.ts` for each command you want to cache in CI:
@@ -141,18 +148,3 @@ Include:
 - A per-run value such as `github.run_id` and `github.run_attempt`, because GitHub cache entries are immutable.
 
 If a dependency file affects a task result, track it in the task fingerprint rather than the GitHub Actions key.
-
-## Limitations And Workarounds
-
-- **Cache entries are immutable.** Use a unique primary key per run and restore prefixes. GitHub will not update an existing cache entry in place.
-- **Fork pull requests may be restore-only.** GitHub can allow forked pull request runs to restore existing caches without saving new entries. Populate shared caches from trusted branch or default-branch runs.
-- **GitHub evicts caches.** GitHub removes caches that have not been accessed for over 7 days. It also evicts least-recently-used entries when repository cache storage exceeds its limit, which defaults to 10 GB. If this causes churn, narrow what you cache, delete stale entries, or increase the repository cache limit in GitHub settings.
-- **Cache scope is branch-aware.** Workflow runs can restore caches from the current branch and the default branch. Pull request merge-ref caches have limited scope and help re-runs of the same pull request. See [GitHub's dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) for the full branch and tag rules.
-- **Secrets can leak through cache contents.** Vite Task caches terminal output and configured output files. Keep secrets out of task logs and generated files that you cache.
-- **Output tracking can be too broad or too narrow.** By default, Vite Task restores files that the task writes. Use `output` globs such as `['dist/**']` when you want to narrow restoration. Use `{ auto: true }` with extra globs when you want automatic write tracking plus extra files.
-- **Failed tasks are not cached.** Vite Task saves successful task results. Fix failing lint, test, or build commands before expecting cache reuse.
-- **Toolchain changes can start cold.** Vite Task uses schema-versioned cache directories. If a restored cache was written by an incompatible version, Vite Task ignores those entries and reruns the task.
-
-::: tip
-Restore after dependency install because the default cache path lives under `node_modules`. If your workflow must restore before install, set a stable absolute `VITE_CACHE_PATH` outside `node_modules` for all `vp run` steps and cache that directory instead.
-:::
