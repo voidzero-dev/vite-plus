@@ -750,6 +750,9 @@ export function hasDirectVitePlusInstallEntry(pkg: {
   );
 }
 
+// `collectToolchainVersionChanges` mirrors this pinning rule (the `vitePlusChanges`
+// predicate) to decide whether the summary shows a vite-plus version row; keep the
+// two in sync.
 function ensureVitePlusDependencySpecs(
   pkg: BootstrapPackageJson,
   version: string,
@@ -1182,11 +1185,14 @@ function resolveDisplayFromSpec(
 }
 
 /**
- * Read the RAW upstream Vite version installed under `node_modules/vite`,
- * best-effort. When that copy is the `@voidzero-dev/vite-plus-core` alias (the
- * Vite+ bundle), the raw Vite version lives in its `bundledVersions.vite`;
- * otherwise it is a real upstream vite and `version` is the raw value. Returns
- * undefined when the file is missing or yields nothing.
+ * Read the RAW upstream Vite version installed under the project's own
+ * `node_modules/vite`, best-effort. This is a deliberate project-local read (not
+ * an ancestor-walking resolve) so a parent directory's vite cannot leak in as
+ * the project's "from". When that copy is the `@voidzero-dev/vite-plus-core`
+ * alias (the Vite+ bundle), the raw Vite version lives in its
+ * `bundledVersions.vite`; otherwise it is a real upstream vite and `version` is
+ * the raw value. Returns undefined when the file is missing (e.g. a cleared
+ * install or Yarn PnP) or yields nothing.
  */
 function readInstalledRawViteVersion(projectPath: string): string | undefined {
   const vitePackageJsonPath = path.join(projectPath, 'node_modules', 'vite', 'package.json');

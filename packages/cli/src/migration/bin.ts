@@ -643,12 +643,9 @@ function showMigrationSummary(options: {
     log(`${styleText('gray', '•')} Dependencies:`);
     for (const change of report.dependencyUpgrades) {
       const name = change.name.padEnd(nameWidth);
+      const from = muted((change.from ?? '').padEnd(fromWidth));
       const to = styleText('green', change.to);
-      if (change.from === undefined) {
-        log(`    ${name}  ${''.padEnd(fromWidth)} → ${to}`);
-      } else {
-        log(`    ${name}  ${muted(change.from.padEnd(fromWidth))} → ${to}`);
-      }
+      log(`    ${name}  ${from} → ${to}`);
     }
   }
   // Gate the green success line on the FINAL install actually succeeding.
