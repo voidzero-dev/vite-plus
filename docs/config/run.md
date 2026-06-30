@@ -191,6 +191,8 @@ tasks: {
 
 Wildcard patterns and `!` exclusion patterns are supported: `VITE_*` matches all variables starting with `VITE_`, and `!VITE_SECRET` excludes the `VITE_SECRET` variable from the match.
 
+For `vp build`, Vite reports Vite environment variables through [tool-reported caching](/guide/tool-reported-caching). Do not add `VITE_*` or `NODE_ENV` here for a standard Vite build unless your project has extra build behavior Vite cannot report.
+
 ```bash
 $ NODE_ENV=development vp run build    # first run
 $ NODE_ENV=production vp run build     # cache miss: env 'NODE_ENV' changed
@@ -213,6 +215,8 @@ tasks: {
 ```
 
 `untrackedEnv` accepts the same wildcard and `!` exclusion patterns as [`env`](#env).
+
+Do not put a variable in `untrackedEnv` if its value changes the task result. If a tool reports the variable through [tool-reported caching](/guide/tool-reported-caching), leave it out of both `env` and `untrackedEnv`.
 
 Vite Task passes a set of common environment variables to all tasks:
 

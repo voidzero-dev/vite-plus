@@ -28,7 +28,7 @@ Fix local misses first. GitHub Actions cache can move Vite Task's local cache di
 
 Only commands run through `vp run` use Vite Task caching. A direct command such as `vp build` does not use the task cache; run `vp run build` or define a CI-specific task.
 
-The example below uses automatic input tracking for `vp build`. Vite reports build cache metadata to Vite Task through [tool-reported caching](/guide/cache#tool-reported-caching), so a short explicit list can miss files such as `public/**`, `.env*`, or framework config. The extra lockfile input ties the task fingerprint to dependency identity.
+The example below uses automatic input tracking for `vp build`. Vite reports build cache metadata to Vite Task through [tool-reported caching](/guide/tool-reported-caching), so a short explicit list can miss files such as `public/**`, `.env*`, or framework config. The extra lockfile input ties the task fingerprint to dependency identity.
 
 The lint task uses explicit inputs because its CI input set is smaller. If you use npm, Yarn, or Bun, replace `pnpm-lock.yaml` with the lockfile your project commits.
 
@@ -137,7 +137,7 @@ Leave source files out of the GitHub Actions key. Vite Task fingerprints task in
 
 ## 3. Verify In The Logs
 
-On the first run, the restore step should say that no cache was found, and the save step should create one.
+On the first run, the restore step should say that no cache was found, and the save step should create one. Pull requests from forks may be restore-only because GitHub can give the cache token read-only access. In that case, the save step warns and exits successfully without writing a cache entry.
 
 On a later run, look for both layers:
 
@@ -219,6 +219,7 @@ You can add a broader restore prefix only if the task inputs include the package
 ## Limitations And Workarounds
 
 - **Cache entries are immutable.** Use a unique primary key per run and restore prefixes. GitHub will not update an existing cache entry in place.
+- **Fork pull requests may be restore-only.** GitHub can allow forked pull request runs to restore existing caches without saving new entries. Populate shared caches from trusted branch or default-branch runs.
 - **GitHub evicts caches.** GitHub removes caches that have not been accessed for over 7 days. It also evicts least-recently-used entries when repository cache storage exceeds its limit, which defaults to 10 GB. If this causes churn, narrow what you cache, delete stale entries, or increase the repository cache limit in GitHub settings.
 - **Cache scope is branch-aware.** Workflow runs can restore caches from the current branch and the default branch. Pull request merge-ref caches have limited scope and help re-runs of the same pull request. See [GitHub's dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) for the full branch and tag rules.
 - **Secrets can leak through cache contents.** Vite Task caches terminal output and configured output files. Keep secrets out of task logs and generated files that you cache.
