@@ -4,7 +4,7 @@
 Reusing Vite Task cache across GitHub Actions runs is experimental. Test and measure it in your project before relying on it in CI.
 :::
 
-Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. Restore that directory in later GitHub Actions runs so Vite Task can reuse valid cache entries.
+Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. Restore that directory in later GitHub Actions runs so Vite Task can reuse previous task results.
 
 GitHub Actions cache and Vite Task make separate decisions:
 
@@ -110,7 +110,7 @@ The primary key includes `github.run_id` and `github.run_attempt` so each succes
 
 Leave task inputs, including source files and lockfiles, out of the GitHub Actions key. Vite Task fingerprints them. If they change the Actions key, GitHub can skip useful restores before Vite Task decides which tasks still hit.
 
-For workspaces, restore the task cache from the workspace root. Then run the same workspace targets you use locally, such as `vp run -t @my/app#build`. The same cache covers tasks from workspace dependencies.
+For monorepos, restore the task cache from the workspace root. Then run the same `vp run` commands you use locally, such as `vp run -t @my/app#build`. Vite Task can reuse results for the requested package and the packages it depends on.
 
 ## 3. Verify In The Logs
 
@@ -124,7 +124,7 @@ $ vp build ◉ cache hit, replaying
 vp run: cache hit, 1.10s saved.
 ```
 
-If GitHub restores a cache but Vite Task prints a cache miss, the Actions cache transport worked, but the task fingerprint changed.
+If GitHub restores a cache but Vite Task prints a cache miss, the workflow restored the cache directory, but the task fingerprint changed.
 
 ## Keep Task Tracking Stable
 
@@ -140,7 +140,7 @@ restore-keys: |
   vite-task-${{ runner.os }}-${{ runner.arch }}-
 ```
 
-The exact key misses on each new run because the key contains `github.run_id` and `github.run_attempt`. GitHub then searches the restore prefix and restores the newest matching cache.
+The primary key is unique for each run because it contains `github.run_id` and `github.run_attempt`. GitHub then searches the restore prefix and restores the newest matching cache.
 
 Include:
 
@@ -153,12 +153,12 @@ If a dependency file affects a task result, track it in the task fingerprint rat
 
 GitHub evicts caches based on its cache retention and repository storage rules. Cache scope is also branch-aware: workflow runs can restore caches from the current branch and the default branch, while pull request merge-ref caches have limited scope.
 
-Vite Task can clean the whole task cache, but it does not currently evict individual task entries by age or size. As new task entries and output archives are saved, `node_modules/.vite/task-cache` can keep growing.
+Vite Task can clear the whole task cache, but it does not currently evict individual task entries by age or size. As new task entries and output archives are saved, `node_modules/.vite/task-cache` can keep growing.
 
-Use GitHub Actions cache as the eviction boundary:
+Manage size at the GitHub Actions cache layer:
 
 - Keep the cached `path` limited to the Vite Task cache directory.
 - Keep the restore prefix scoped to compatible runners, such as the same OS and architecture.
-- Delete stale GitHub Actions cache entries, save caches from fewer workflows, or adjust the repository cache limit if cache size causes churn.
+- Delete stale GitHub Actions cache entries, save caches from fewer workflows, or adjust the repository cache limit if large caches cause frequent evictions.
 
 See [GitHub's cache reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) for the current eviction and scope rules.

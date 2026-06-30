@@ -1,8 +1,8 @@
 # Automatic Tracking
 
-Automatic tracking is how Vite Task learns what to cache for a task without explicit config.
+Automatic tracking is how Vite Task learns what a task needs for caching without explicit config.
 
-When you run a cache-enabled task, Vite Task observes the task's execution and records what files were read and written, as well as any metadata reported by the task. On the next run, Vite Task decides whether the cache misses or hits based on the recorded fingerprint.
+When you run a cache-enabled task, Vite Task observes the task's execution and records what files were read and written, as well as any metadata reported by the task. On the next run, Vite Task uses the recorded fingerprint to decide whether to replay the cache or run the task.
 
 Use this page when you need to understand why a task hits or misses the cache, or when you need to decide whether to add `input`, `output`, `env`, or `untrackedEnv` config.
 
@@ -92,7 +92,7 @@ Set `input: []` when no files should affect the cache fingerprint. Set `output: 
 
 ## Cooperative Tracking
 
-File system tracking sees access. It cannot always see intent.
+File system tracking records access. It cannot know why a tool used each path.
 
 `vp build` knows more about a Vite build than Vite Task can infer from file access. When `vp build` runs with cache enabled, Vite reports that metadata to Vite Task. Vite Task merges the report with file system tracking to build a more accurate cache fingerprint.
 
