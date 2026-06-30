@@ -133,6 +133,7 @@ Add config when your project has behavior the command or tool cannot know.
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist', '!dist/**']`                                                  |
 | Exclude a temporary generated file from input and output tracking | `input: [{ auto: true }, '!.tmp/config.mjs']`<br>`output: [{ auto: true }, '!.tmp/config.mjs']` |
+| Disable file tracking when it changes command behavior            | `input: []`                                                                                     |
 | Track an env var used by a non-cooperative command                | `env: ['NODE_ENV']`                                                                             |
 | Pass an env var without fingerprinting it                         | `untrackedEnv: ['GITHUB_ACTIONS']`                                                              |
 
