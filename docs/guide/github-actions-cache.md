@@ -1,10 +1,10 @@
 # GitHub Actions Cache
 
 ::: warning Experimental
-Reusing Vite Task cache through GitHub Actions cache is experimental. Validate the workflow in your project before you depend on it for CI time savings.
+Reusing Vite Task cache across GitHub Actions runs is experimental. Test and measure it in your project before relying on it in CI.
 :::
 
-Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. You can restore that directory in a later GitHub Actions run, then let Vite Task decide whether each task matches the current command, environment, inputs, and outputs.
+Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. Restore that directory in later GitHub Actions runs. Vite Task replays only entries whose task fingerprint still matches the current command, environment, inputs, and outputs.
 
 GitHub Actions cache and Vite Task make separate decisions:
 

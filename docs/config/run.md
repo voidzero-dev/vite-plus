@@ -142,7 +142,7 @@ Dependencies can reference tasks in other packages using the `package#task` form
 dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 
-Use the object form `{ task: string, from: DependsOnFrom }` to reference tasks from packages listed in dependency fields:
+Use the object form `{ task: string, from: DependsOnFrom }` to reference tasks from all dependencies:
 
 ```ts [vite.config.ts]
 tasks: {

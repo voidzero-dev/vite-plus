@@ -113,7 +113,7 @@ dependsOn: [
 ];
 ```
 
-Use the object form when you need to reference tasks with a given name from packages listed in the current package's dependencies:
+Use the object form when you need to reference all tasks with a given name from the current package's dependencies:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
