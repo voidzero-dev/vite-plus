@@ -107,7 +107,7 @@ For a standard Vite build, you do not need to add these entries yourself:
 - `output: ['dist/**']`
 - input or output rules for temporary paths like `node_modules/.vite-temp`
 
-Define the task with `vp build`:
+You only need to define the task with `vp build`:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
