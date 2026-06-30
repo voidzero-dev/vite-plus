@@ -41,9 +41,9 @@ File system tracking also tracks outputs. If you omit [`output`](/config/run#out
 
 File system tracking records file access, not every value a process reads. It cannot correctly track environment variable reads, and it cannot always tell which paths are stable inputs, generated outputs, or tool-managed state.
 
-Use [Override Inputs And Outputs](#override-inputs-and-outputs) when automatic file tracking includes files that should not affect the cache, misses files that should, or restores the wrong outputs. Common cases include generated files, directory scans with unrelated files, and extra dependency files such as lockfiles.
+Use [Override Inputs And Outputs](#override-inputs-and-outputs) when automatic file tracking includes files that should not affect the cache, misses files that should, or restores the wrong outputs. Common cases include generated files and directory scans with unrelated files.
 
-Use [`env`](/config/run#env) when an environment variable changes a non-reporting command's result. Use [Cooperative Tracking](#cooperative-tracking) when the tool knows cache facts that file access does not expose, such as environment variables that affect the result or tool-managed cache paths that should not become inputs or outputs.
+Use [`env`](/config/run#env) when an environment variable changes a non-reporting command's result. Supported tools provide [Cooperative Tracking](#cooperative-tracking) metadata automatically, such as environment variables that affect the result or tool-managed cache paths that should not become inputs or outputs.
 
 ### Override Inputs And Outputs
 
