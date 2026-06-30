@@ -55,7 +55,10 @@ tasks: {
 
 ### Override Inputs And Outputs
 
-Input and output overrides use the same rules and can be set independently. `{ auto: true }` keeps automatic tracking, string globs select paths, and `!` globs exclude paths. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
+- [`input`](/config/run#input) controls what invalidates the cache.
+- [`output`](/config/run#output) controls which files Vite Task restores on a cache hit.
+
+Both options accept the same kinds of entries and can be configured separately. Omit an option to keep automatic tracking for it. Add `{ auto: true }` to keep automatic tracking while adding glob rules. Use string globs to include paths and `!` globs to exclude paths. Use `[]` to replace automatic tracking with an empty list.
 
 ```ts [vite.config.ts]
 tasks: {
@@ -67,7 +70,7 @@ tasks: {
 }
 ```
 
-Use explicit `input` globs only when the command has a small, stable input set you can name. Commands that do not write outputs do not need `output`:
+Use explicit `input` globs only when you can name the command's full, stable input set. This lint task overrides inputs only, so output tracking stays automatic:
 
 ```ts [vite.config.ts]
 tasks: {
@@ -78,7 +81,7 @@ tasks: {
 }
 ```
 
-Use explicit `output` globs when you want to narrow or extend the files Vite Task restores. If the command also reads its output directory, exclude that directory from `input`:
+Use explicit `output` globs when you want to narrow or extend the files Vite Task restores:
 
 ```ts [vite.config.ts]
 tasks: {
@@ -90,7 +93,7 @@ tasks: {
 }
 ```
 
-Set `input: []` to disable file tracking for a task. Set `output: []` to disable output restoration. The task can still use cache entries based on command arguments and tracked environment variables.
+Set `input: []` when no files should affect the cache key. Set `output: []` when no files should be restored on a cache hit.
 
 ## Cooperative Tracking
 
