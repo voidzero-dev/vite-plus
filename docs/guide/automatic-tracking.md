@@ -99,15 +99,15 @@ Set `input: []` when no files should affect the cache key. Set `output: []` when
 
 File system tracking sees access. It cannot always see intent.
 
-`vp build` knows more about a Vite build than Vite Task can infer from file access. When a cached task runs `vp build`, Vite reports that metadata to Vite Task. Vite Task merges the report with file system tracking to build a more accurate cache fingerprint.
+`vp build` knows more about a Vite build than Vite Task can infer from file access. When `vp build` runs with cache enabled, Vite reports that metadata to Vite Task. Vite Task merges the report with file system tracking to build a more accurate cache fingerprint.
 
 For a standard Vite build, you do not need to add these entries yourself:
 
 - `env: ['VITE_*']` or `env: ['NODE_ENV']`
 - `output: ['dist/**']`
-- input or output rules for tool-managed temporary paths
+- input or output rules for temporary paths like `node_modules/.vite-temp`
 
-The user still defines what to run:
+Define the task with `vp build`:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -120,14 +120,6 @@ export default defineConfig({
   },
 });
 ```
-
-Run the task through Vite Task:
-
-```bash
-vp run build
-```
-
-Direct `vp build` runs a build, but it does not use the Vite Task cache. Use `vp run build` when you want task caching.
 
 Manual config still wins. Add `input`, `output`, or `env` when your project has behavior that Vite cannot know.
 
