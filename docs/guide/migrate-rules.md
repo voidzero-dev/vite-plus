@@ -19,6 +19,21 @@ package-manager configuration in existing Vite+ projects. See the
 Running the migration again after a successful migration should not produce
 another diff.
 
+## Upgrade vs. Full Setup
+
+On a project that already depends on `vite-plus`, `vp migrate` upgrades the
+toolchain version only (dependencies, package-manager configuration, and import
+finalization). It does not touch project setup.
+
+- Pass `--full` to also run the setup bucket: git hooks, editor config, agent
+  files, ESLint and Prettier migration, framework shims, the tsconfig `baseUrl`
+  fix, and the `.nvmrc`/Volta to `.node-version` conversion.
+- The per-action flags `--hooks`, `--agent`, and `--editor` opt into a single
+  setup action without `--full`.
+
+When a default upgrade skips available setup actions, it prints a hint to run
+`vp migrate --full`. Fresh (non Vite+) projects always run the full migration.
+
 ## Dependency Versions
 
 - `vite-plus` is pinned to the concrete version of the CLI running the
@@ -183,6 +198,8 @@ Unrelated `bunx` commands and other package-executor forms remain unchanged.
 
 ## Node.js Version Rules
 
+On an existing Vite+ project this conversion is part of the full setup bucket, so
+it runs with `vp migrate --full`. Fresh migrations run it unconditionally.
 Migration converts legacy Node.js version manager files to the `.node-version`
 format Vite+ reads:
 

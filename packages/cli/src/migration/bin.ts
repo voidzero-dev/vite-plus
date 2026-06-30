@@ -11,19 +11,9 @@ import {
   type WorkspaceInfoOptional,
   type WorkspacePackage,
 } from '../types/index.ts';
-import {
-  detectAgentConflicts,
-  detectExistingAgentTargetPaths,
-  selectAgentTargetPaths,
-  writeAgentInstructions,
-} from '../utils/agent.ts';
+import { writeAgentInstructions } from '../utils/agent.ts';
 import { isForceOverrideMode } from '../utils/constants.ts';
-import {
-  detectEditorConflicts,
-  type EditorId,
-  selectEditor,
-  writeEditorConfigs,
-} from '../utils/editor.ts';
+import { writeEditorConfigs } from '../utils/editor.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
@@ -32,7 +22,6 @@ import {
   type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
-  promptGitHooks,
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
@@ -51,11 +40,9 @@ import {
   addFrameworkShim,
   checkVitestVersion,
   checkViteVersion,
-  confirmEslintMigration,
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
-  detectIncompatibleEslintIntegration,
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
@@ -72,18 +59,16 @@ import {
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
   configureYarnNodeModulesMode,
-  preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
-  warnIncompatibleEslintIntegration,
-  warnLegacyEslintConfig,
-  warnPackageLevelEslint,
   warnPackageLevelPrettier,
   type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
+import type { MigrationOptions } from './options.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
+import { collectMigrationSetupPlan, type MigrationSetupPlan } from './setup-plan.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -266,6 +251,11 @@ const helpMessage = renderCliDoc({
         },
         { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
         {
+          label: '--full',
+          description:
+            'Existing Vite+ projects: also run the full setup (hooks, editor, agent files, ESLint/Prettier migration, framework shims, tsconfig baseUrl, .node-version). Without it, `vp migrate` only upgrades the toolchain version.',
+        },
+        {
           label: '--no-interactive',
           description: 'Run in non-interactive mode (skip prompts and use defaults)',
         },
@@ -329,14 +319,6 @@ const helpMessage = renderCliDoc({
   ],
 });
 
-export interface MigrationOptions {
-  interactive: boolean;
-  help?: boolean;
-  agent?: string | string[] | false;
-  editor?: string | false;
-  hooks?: boolean;
-}
-
 function parseArgs() {
   const args = process.argv.slice(3); // Skip 'node', 'vite', 'migrate'
 
@@ -346,9 +328,10 @@ function parseArgs() {
     agent?: string | string[] | false;
     editor?: string | false;
     hooks?: boolean;
+    full?: boolean;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'interactive', 'hooks'],
+    boolean: ['help', 'interactive', 'hooks', 'full'],
     default: { interactive: defaultInteractive() },
   });
   const interactive = parsed.interactive;
@@ -368,18 +351,9 @@ function parseArgs() {
       agent: parsed.agent,
       editor: parsed.editor,
       hooks: parsed.hooks,
+      full: parsed.full,
     } as MigrationOptions,
   };
-}
-
-interface MigrationSetupPlan {
-  shouldSetupHooks: boolean;
-  selectedAgentTargetPaths?: string[];
-  agentConflictDecisions: Map<string, 'append' | 'skip'>;
-  selectedEditor?: EditorId;
-  editorConflictDecisions: Map<string, 'merge' | 'skip'>;
-  migrateEslint: boolean;
-  eslintConfigFile?: string;
 }
 
 interface MigrationPlan extends MigrationSetupPlan {
@@ -485,172 +459,6 @@ function hasExistingVitePlusMigrationCandidates(
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
     getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
-}
-
-async function collectGitHooksDecision(
-  rootDir: string,
-  packageManager: PackageManager | undefined,
-  options: MigrationOptions,
-): Promise<boolean> {
-  let shouldSetupHooks = await promptGitHooks(options);
-  if (shouldSetupHooks) {
-    const reason = preflightGitHooksSetup(rootDir, packageManager);
-    if (reason) {
-      prompts.log.warn(`⚠ ${reason}`);
-      shouldSetupHooks = false;
-    }
-  }
-  return shouldSetupHooks;
-}
-
-async function collectAgentInstructionPlan(
-  rootDir: string,
-  options: MigrationOptions,
-): Promise<{
-  selectedAgentTargetPaths?: string[];
-  agentConflictDecisions: Map<string, 'append' | 'skip'>;
-}> {
-  const existingAgentTargetPaths =
-    options.agent !== undefined || !options.interactive
-      ? undefined
-      : detectExistingAgentTargetPaths(rootDir);
-  const selectedAgentTargetPaths =
-    existingAgentTargetPaths !== undefined
-      ? existingAgentTargetPaths
-      : await selectAgentTargetPaths({
-          interactive: options.interactive,
-          agent: options.agent,
-          onCancel: () => cancelAndExit(),
-        });
-
-  const agentConflicts = await detectAgentConflicts({
-    projectRoot: rootDir,
-    targetPaths: selectedAgentTargetPaths,
-  });
-  const agentConflictDecisions = new Map<string, 'append' | 'skip'>();
-  for (const conflict of agentConflicts) {
-    if (options.interactive) {
-      const action = await prompts.select({
-        message:
-          `Agent instructions already exist at ${conflict.targetPath}.\n  ` +
-          styleText(
-            'gray',
-            'The Vite+ template includes guidance on `vp` commands, the build pipeline, and project conventions.',
-          ),
-        options: [
-          { label: 'Append', value: 'append' as const, hint: 'Add template content to the end' },
-          { label: 'Skip', value: 'skip' as const, hint: 'Leave existing file unchanged' },
-        ],
-        initialValue: 'skip' as const,
-      });
-      if (prompts.isCancel(action)) {
-        cancelAndExit();
-      }
-      agentConflictDecisions.set(conflict.targetPath, action);
-    } else {
-      agentConflictDecisions.set(conflict.targetPath, 'skip');
-    }
-  }
-
-  return { selectedAgentTargetPaths, agentConflictDecisions };
-}
-
-async function collectEditorConfigPlan(
-  rootDir: string,
-  options: MigrationOptions,
-): Promise<{
-  selectedEditor?: EditorId;
-  editorConflictDecisions: Map<string, 'merge' | 'skip'>;
-}> {
-  const selectedEditor = await selectEditor({
-    interactive: options.interactive,
-    editor: options.editor,
-    onCancel: () => cancelAndExit(),
-  });
-
-  const editorConflicts = detectEditorConflicts({
-    projectRoot: rootDir,
-    editorId: selectedEditor,
-  });
-  const editorConflictDecisions = new Map<string, 'merge' | 'skip'>();
-  for (const conflict of editorConflicts) {
-    if (options.interactive) {
-      const action = await prompts.select({
-        message:
-          `${conflict.displayPath} already exists.\n  ` +
-          styleText(
-            'gray',
-            'Vite+ adds editor settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.',
-          ),
-        options: [
-          {
-            label: 'Merge',
-            value: 'merge' as const,
-            hint: 'Merge new settings into existing file',
-          },
-          { label: 'Skip', value: 'skip' as const, hint: 'Leave existing file unchanged' },
-        ],
-        initialValue: 'skip' as const,
-      });
-      if (prompts.isCancel(action)) {
-        cancelAndExit();
-      }
-      editorConflictDecisions.set(conflict.fileName, action);
-    } else {
-      editorConflictDecisions.set(conflict.fileName, 'merge');
-    }
-  }
-
-  return { selectedEditor, editorConflictDecisions };
-}
-
-async function collectEslintMigrationDecision(
-  rootDir: string,
-  options: MigrationOptions,
-  packages?: WorkspacePackage[],
-): Promise<{ migrateEslint: boolean; eslintConfigFile?: string }> {
-  const eslintProject = detectEslintProject(rootDir, packages);
-  const incompatibleEslintIntegration = detectIncompatibleEslintIntegration(rootDir, packages);
-  let migrateEslint = false;
-  if (incompatibleEslintIntegration) {
-    // e.g. `@nuxt/eslint` — skip the entire ESLint migration; preserve
-    // the user's current ESLint setup and let them migrate by hand.
-    warnIncompatibleEslintIntegration(incompatibleEslintIntegration);
-  } else if (
-    eslintProject.hasDependency &&
-    !eslintProject.configFile &&
-    eslintProject.legacyConfigFile
-  ) {
-    warnLegacyEslintConfig(eslintProject.legacyConfigFile);
-  } else if (eslintProject.hasDependency && eslintProject.configFile) {
-    migrateEslint = await confirmEslintMigration(options.interactive);
-  } else if (eslintProject.hasDependency) {
-    warnPackageLevelEslint();
-  }
-
-  return { migrateEslint, eslintConfigFile: eslintProject.configFile };
-}
-
-async function collectMigrationSetupPlan(
-  rootDir: string,
-  packageManager: PackageManager | undefined,
-  options: MigrationOptions,
-  packages?: WorkspacePackage[],
-  includeEslint = true,
-): Promise<MigrationSetupPlan> {
-  const shouldSetupHooks = await collectGitHooksDecision(rootDir, packageManager, options);
-  const agentPlan = await collectAgentInstructionPlan(rootDir, options);
-  const editorPlan = await collectEditorConfigPlan(rootDir, options);
-  const eslintPlan = includeEslint
-    ? await collectEslintMigrationDecision(rootDir, options, packages)
-    : { migrateEslint: false };
-
-  return {
-    shouldSetupHooks,
-    ...agentPlan,
-    ...editorPlan,
-    ...eslintPlan,
-  };
 }
 
 function getExistingVitePlusSetupOptions(
@@ -782,6 +590,10 @@ function handleInstallResult(
   return 0;
 }
 
+// Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
+// the "already using Vite+" early-exit and the post-migration summary.
+const FULL_MIGRATION_HINT = `${styleText('gray', '•')} Skipped editor, hooks, and lint setup. Run \`vp migrate --full\` to apply them.`;
+
 function showMigrationSummary(options: {
   projectRoot: string;
   packageManager: string;
@@ -790,6 +602,7 @@ function showMigrationSummary(options: {
   finalInstallOk: boolean;
   report: MigrationReport;
   updatedExistingVitePlus?: boolean;
+  suggestFullMigration?: boolean;
 }) {
   const {
     projectRoot,
@@ -799,6 +612,7 @@ function showMigrationSummary(options: {
     finalInstallOk,
     report,
     updatedExistingVitePlus,
+    suggestFullMigration,
   } = options;
   const projectLabel = displayRelative(projectRoot) || '.';
   const configUpdates =
@@ -872,6 +686,9 @@ function showMigrationSummary(options: {
   }
   if (report.packageManagerBootstrapConfigured) {
     log(`${styleText('gray', '•')} Package manager settings configured`);
+  }
+  if (suggestFullMigration) {
+    log(FULL_MIGRATION_HINT);
   }
   if (report.warnings.length > 0) {
     log(`${styleText('yellow', '!')} Warnings:`);
@@ -1326,13 +1143,33 @@ async function main() {
       didMigrate = true;
     }
 
+    // On an existing Vite+ project, `vp migrate` only upgrades the toolchain
+    // version. The full setup bucket (hooks, editor, agent files, ESLint/Prettier
+    // migration, framework shims, tsconfig baseUrl, .node-version) runs only with
+    // `--full`; the per-action flags (--hooks/--agent/--editor) still opt into a
+    // single action without `--full`.
+    const fullSetup = options.full === true;
+    // Hint at `--full` only on a bare upgrade that left setup actions on the
+    // table. Suppress it when the user passed an explicit per-action flag
+    // (--hooks/--agent/--editor): that ran the action they asked for, so a
+    // "Skipped ... hooks ... setup" line would contradict the action above it.
+    const skippedSetupCandidates =
+      !fullSetup &&
+      !hasExplicitExistingVitePlusSetupRequest(options) &&
+      hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options);
+
     if (
       !didMigrate &&
       !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
-      !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
+      !(fullSetup
+        ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
+        : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
+      if (skippedSetupCandidates) {
+        log(FULL_MIGRATION_HINT);
+      }
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
@@ -1342,23 +1179,25 @@ async function main() {
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
       coreMigrationResult.imports;
-    const useFullMigrationDefaults = options.interactive && fullMigrationSummary;
     const setupOptions = getExistingVitePlusSetupOptions(
       options,
       legacyGitHooksMigrationCandidate,
-      useFullMigrationDefaults,
+      fullSetup,
     );
     const plan = await collectMigrationSetupPlan(
       workspaceInfoOptional.rootDir,
       packageManager,
       setupOptions,
       workspaceInfoOptional.packages,
+      fullSetup,
     );
-    const frameworkShimFrameworks = await collectFrameworkShimFrameworks(
-      workspaceInfoOptional.rootDir,
-      options,
-      workspaceInfoOptional.packages,
-    );
+    const frameworkShimFrameworks = fullSetup
+      ? await collectFrameworkShimFrameworks(
+          workspaceInfoOptional.rootDir,
+          options,
+          workspaceInfoOptional.packages,
+        )
+      : undefined;
 
     let needsInstall = false;
     if (vitePlusBootstrapPending) {
@@ -1379,7 +1218,7 @@ async function main() {
     }
 
     let fixBaseUrl = false;
-    if (hasBaseUrlInWorkspace(workspaceInfoOptional)) {
+    if (fullSetup && hasBaseUrlInWorkspace(workspaceInfoOptional)) {
       // Interactive only: stop the "Configuring package manager" spinner so it
       // does not animate beneath the confirm prompt; the next progress update
       // restarts it. Non-interactive shows no prompt, so its output is unchanged.
@@ -1423,55 +1262,65 @@ async function main() {
       eslintMigrated = true;
     }
 
-    const prettierProject = detectPrettierProject(
-      workspaceInfoOptional.rootDir,
-      workspaceInfoOptional.packages,
-    );
+    // Prettier migration is part of the full setup bucket. Default upgrades skip
+    // detection entirely; the variables stay at their no-prettier defaults so the
+    // formatting gate and summary below still compile and behave correctly.
+    let prettierProject: { hasDependency: boolean; configFile?: string } = {
+      hasDependency: false,
+    };
     let prettierMigrated = false;
-    if (prettierProject.hasDependency && prettierProject.configFile) {
-      // Interactive only: stop any active spinner (e.g. "Migrating ESLint") so
-      // it does not animate beneath the confirm prompt.
-      if (options.interactive) {
-        clearMigrationProgress();
-      }
-      const migratePrettier = await confirmPrettierMigration(options.interactive);
-      if (migratePrettier) {
-        await ensureExistingPackageManager();
-        updateMigrationProgress('Migrating Prettier');
-        const prettierOk = await migratePrettierToOxfmt(
-          workspaceInfoOptional.rootDir,
-          options.interactive,
-          prettierProject.configFile,
-          workspaceInfoOptional.packages,
-          { silent: true, report },
-        );
-        if (!prettierOk) {
+    if (fullSetup) {
+      prettierProject = detectPrettierProject(
+        workspaceInfoOptional.rootDir,
+        workspaceInfoOptional.packages,
+      );
+      if (prettierProject.hasDependency && prettierProject.configFile) {
+        // Interactive only: stop any active spinner (e.g. "Migrating ESLint") so
+        // it does not animate beneath the confirm prompt.
+        if (options.interactive) {
           clearMigrationProgress();
-          cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
         }
-        prettierMigrated = true;
+        const migratePrettier = await confirmPrettierMigration(options.interactive);
+        if (migratePrettier) {
+          await ensureExistingPackageManager();
+          updateMigrationProgress('Migrating Prettier');
+          const prettierOk = await migratePrettierToOxfmt(
+            workspaceInfoOptional.rootDir,
+            options.interactive,
+            prettierProject.configFile,
+            workspaceInfoOptional.packages,
+            { silent: true, report },
+          );
+          if (!prettierOk) {
+            clearMigrationProgress();
+            cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+          }
+          prettierMigrated = true;
+        }
+      } else if (prettierProject.hasDependency) {
+        warnPackageLevelPrettier();
       }
-    } else if (prettierProject.hasDependency) {
-      warnPackageLevelPrettier();
     }
 
-    // Check if node version manager file migration is needed
-    const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
-    if (nodeVersionDetection) {
-      // Interactive only: stop any active spinner so it does not animate beneath
-      // the confirm prompt.
-      if (options.interactive) {
-        clearMigrationProgress();
-      }
-      const confirmed = await confirmNodeVersionFileMigration(
-        options.interactive,
-        nodeVersionDetection,
-      );
-      if (
-        confirmed &&
-        migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)
-      ) {
-        didMigrate = true;
+    // Check if node version manager file migration is needed (full setup only)
+    if (fullSetup) {
+      const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
+      if (nodeVersionDetection) {
+        // Interactive only: stop any active spinner so it does not animate beneath
+        // the confirm prompt.
+        if (options.interactive) {
+          clearMigrationProgress();
+        }
+        const confirmed = await confirmNodeVersionFileMigration(
+          options.interactive,
+          nodeVersionDetection,
+        );
+        if (
+          confirmed &&
+          migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)
+        ) {
+          didMigrate = true;
+        }
       }
     }
 
@@ -1623,8 +1472,12 @@ async function main() {
         finalInstallOk,
         report,
         updatedExistingVitePlus: !fullMigrationSummary,
+        suggestFullMigration: skippedSetupCandidates,
       });
     } else {
+      if (skippedSetupCandidates) {
+        log(FULL_MIGRATION_HINT);
+      }
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
     }
     return;

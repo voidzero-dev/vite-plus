@@ -54,6 +54,8 @@ const {
   setPackageManager,
 } = await import('../migrator.js');
 
+const { collectMigrationSetupPlan } = await import('../setup-plan.js');
+
 describe('pnpm workspace settings support', () => {
   it.each([
     ['10.5.0', false],
@@ -7981,4 +7983,43 @@ describe('preflightGitHooksSetup husky catalog resolution', () => {
 
     expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
   });
+});
+
+describe('collectMigrationSetupPlan ESLint gating', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-setup-plan-eslint-'));
+    writePkgAt(tmpDir, { name: 'x', devDependencies: { eslint: '9' } });
+    // Flat config so detectEslintProject reports a migratable ESLint setup.
+    fs.writeFileSync(path.join(tmpDir, 'eslint.config.js'), 'export default [];\n');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const baseOptions = {
+    interactive: false,
+    hooks: false,
+    agent: false as const,
+    editor: false as const,
+  };
+
+  it.each([
+    [false, false],
+    [true, true],
+  ])(
+    'includeEslint=%s -> migrateEslint=%s (ESLint config present)',
+    async (includeEslint, expected) => {
+      const plan = await collectMigrationSetupPlan(
+        tmpDir,
+        PackageManager.pnpm,
+        { ...baseOptions },
+        undefined,
+        includeEslint,
+      );
+      expect(plan.migrateEslint).toBe(expected);
+    },
+  );
 });

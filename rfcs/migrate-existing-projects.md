@@ -17,6 +17,8 @@ Both are needed, and the order matters. `vp migrate` normally runs the project's
 
 `vp migrate` is idempotent: on an already-current project it reports "already using Vite+" and changes nothing.
 
+On an existing Vite+ project, `vp migrate` upgrades the toolchain version only (the rules below). The setup bucket (git hooks, editor config, agent files, ESLint and Prettier migration, framework shims, tsconfig `baseUrl`, and `.nvmrc`/Volta to `.node-version`) runs only with `--full`. The per-action flags `--hooks`, `--agent`, and `--editor` opt into a single setup action without `--full`. A default upgrade that skips available setup actions prints a hint to run `vp migrate --full`. Fresh (non Vite+) projects always run the full migration.
+
 ## Migrate rules
 
 Run on an existing Vite+ project, in order. The guiding fact for vitest: `vite-plus` declares `vitest` (and the `@vitest/*` runtime family) as dependencies at the bundled version, so ordinary node-mode projects using only `vite-plus/test*` do not need their own `vitest`. A direct package with a required `vitest` peer is different: under strict dependency layouts, the copy nested below the sibling `vite-plus` dependency cannot satisfy that peer. Such a package needs a package-local direct `vitest`, plus a shared override when the package manager supports one. This applies whether the peer range is exact or broad.
