@@ -617,14 +617,17 @@ async function wireBundledTsdownExtensions() {
   //   - `importWithError("@tsdown/exe")` dynamically imports a runtime string,
   //     which rolldown cannot follow, so rewrite the call site to the chunk.
   //   - `pkgExists("@tsdown/css")` resolves the top-level package at runtime;
-  //     since it is bundled now, force it on and point the import at the chunk.
+  //     since it is bundled now, force it on so the CSS plugin always loads.
   // `@tsdown/css` still imports `lightningcss` (a native module that cannot be
   // bundled), which resolves to core's own `lightningcss` dependency.
   let exeWired = false;
   let cssWired = false;
-  // The `import("@tsdown/css")` call site may already be deduped to the bundled
-  // entry by rolldown; track whether the bundled load ends up referenced either
-  // way so a silent miss (no rewrite and no dedup) fails the build.
+  // The `import("@tsdown/css")` call site is bundled by rolldown into a local
+  // chunk and rewritten either to a stable `./tsdown-css.js` entry or to a
+  // content-hashed `./dist-*.js` chunk (newer tsdown/rolldown dedupes the
+  // dynamic import straight onto the bundled `CssPlugin`). Track whether the
+  // bundled load ends up referenced via any of these forms so a silent miss
+  // (the bare `@tsdown/css` specifier left in place) fails the build.
   let cssLoadWired = false;
   for (const chunkFile of chunkFiles) {
     let content = await readFile(chunkFile, 'utf-8');
@@ -644,6 +647,12 @@ async function wireBundledTsdownExtensions() {
       changed = true;
     }
     if (content.includes('import("./tsdown-css.js")')) {
+      cssLoadWired = true;
+    }
+    // Newer tsdown/rolldown bundles `@tsdown/css` directly into a local chunk
+    // and points the `CssPlugin` dynamic import at it (`./dist-*.js`), so the
+    // bare specifier never appears and no rewrite is needed.
+    if (/\{\s*CssPlugin\s*\}\s*=\s*await import\("\.\//.test(content)) {
       cssLoadWired = true;
     }
     if (changed) {
