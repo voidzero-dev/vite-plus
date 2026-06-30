@@ -4,7 +4,7 @@
 Reusing Vite Task cache across GitHub Actions runs is experimental. Test and measure it in your project before relying on it in CI.
 :::
 
-Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. Restore that directory in later GitHub Actions runs. Vite Task replays only entries whose task fingerprint still matches the current command, environment, inputs, and outputs.
+Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. Restore that directory in later GitHub Actions runs so Vite Task can reuse valid cache entries.
 
 GitHub Actions cache and Vite Task make separate decisions:
 
