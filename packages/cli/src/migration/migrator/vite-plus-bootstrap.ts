@@ -520,44 +520,46 @@ export function collectInjectedProviderNames(
   return names;
 }
 
+// Test a predicate against every bootstrap project package.json (root +
+// workspace packages), short-circuiting on the first match. Missing manifests
+// are skipped. Shared scaffold for the workspace-wide catalog pending checks: a
+// pnpm workspace is only satisfied once EVERY package's catalog reference
+// resolves to the target version, not just the root manifest's.
+function someBootstrapProjectPackageJson(
+  rootDir: string,
+  packages: WorkspacePackage[] | undefined,
+  predicate: (pkg: BootstrapPackageJson) => boolean,
+): boolean {
+  return bootstrapProjectPaths(rootDir, packages).some((packagePath) => {
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return false;
+    }
+    return predicate(readJsonFile(packageJsonPath) as BootstrapPackageJson);
+  });
+}
+
 function workspaceVitestEcosystemCatalogReferencesPending(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  return bootstrapProjectPaths(rootDir, packages).some((packagePath) => {
-    const packageJsonPath = path.join(packagePath, 'package.json');
-    if (!fs.existsSync(packageJsonPath)) {
-      return false;
-    }
-    return vitestEcosystemCatalogReferencesPending(
-      readJsonFile(packageJsonPath) as BootstrapPackageJson,
-      catalogDependencyResolver,
-    );
-  });
+  return someBootstrapProjectPackageJson(rootDir, packages, (pkg) =>
+    vitestEcosystemCatalogReferencesPending(pkg, catalogDependencyResolver),
+  );
 }
 
-// Mirror workspaceVitestEcosystemCatalogReferencesPending: a pnpm workspace is
-// only satisfied once EVERY package's `vite-plus` catalog reference resolves to
-// the target version, not just the root manifest's. A non-root package can pin a
-// different named catalog (e.g. `catalog:legacy`) whose entry still points at an
-// old Vite+, so checking the root alone lets a stale workspace slip through the
-// "already on Vite+" early exit.
+// A non-root package can pin a different named catalog (e.g. `catalog:legacy`)
+// whose entry still points at an old Vite+, so checking the root alone lets a
+// stale workspace slip through the "already on Vite+" early exit.
 function workspaceCatalogVitePlusDependencyPending(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
-  catalogDependencyResolver: CatalogDependencyResolver | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  return bootstrapProjectPaths(rootDir, packages).some((packagePath) => {
-    const packageJsonPath = path.join(packagePath, 'package.json');
-    if (!fs.existsSync(packageJsonPath)) {
-      return false;
-    }
-    return catalogVitePlusDependencyPending(
-      readJsonFile(packageJsonPath) as BootstrapPackageJson,
-      catalogDependencyResolver,
-    );
-  });
+  return someBootstrapProjectPackageJson(rootDir, packages, (pkg) =>
+    catalogVitePlusDependencyPending(pkg, catalogDependencyResolver),
+  );
 }
 
 // True when an existing Vite+ Yarn monorepo still needs the workspace-hoisting
