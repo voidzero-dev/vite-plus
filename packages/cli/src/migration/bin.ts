@@ -209,13 +209,7 @@ function hasBaseUrlInWorkspace(workspaceInfo: {
   rootDir: string;
   packages?: WorkspacePackage[];
 }): boolean {
-  for (const projectPath of getWorkspaceProjectPaths(workspaceInfo)) {
-    if (!hasBaseUrlInTsconfig(projectPath)) {
-      continue;
-    }
-    return true;
-  }
-  return false;
+  return getWorkspaceProjectPaths(workspaceInfo).some(hasBaseUrlInTsconfig);
 }
 
 const helpMessage = renderCliDoc({
@@ -673,10 +667,10 @@ function showMigrationSummary(options: {
     }
     log(`${styleText('gray', '•')} ${parts.join(', ')}`);
   }
-  if (report.preservedNuxtVitestImportFileCount > 0) {
+  if (report.preservedUpstreamVitestImportFileCount > 0) {
     log(
-      `${styleText('gray', '•')} Kept upstream \`vitest\` imports in ${report.preservedNuxtVitestImportFileCount} ${
-        report.preservedNuxtVitestImportFileCount === 1 ? 'file' : 'files'
+      `${styleText('gray', '•')} Kept upstream \`vitest\` imports in ${report.preservedUpstreamVitestImportFileCount} ${
+        report.preservedUpstreamVitestImportFileCount === 1 ? 'file' : 'files'
       } for @nuxt/test-utils compatibility`,
     );
   }

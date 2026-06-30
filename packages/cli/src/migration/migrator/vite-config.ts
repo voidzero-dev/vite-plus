@@ -18,7 +18,7 @@ import {
 } from '../../oxlint-plugin-config.ts';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
+import { editJsonFile, isJsonFile, readJsonFile, writeJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
@@ -232,7 +232,9 @@ export function mergeViteConfigFiles(
       report,
     );
     const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
-    fs.writeFileSync(fullOxlintPath, JSON.stringify(normalizedOxlintConfig, null, 2));
+    // writeJsonFile preserves the user file's existing indent/newline (and adds a
+    // trailing newline) instead of forcing 2-space + no EOL.
+    writeJsonFile(fullOxlintPath, normalizedOxlintConfig as Record<string, unknown>);
     // merge oxlint config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent, report);
   }
@@ -498,7 +500,7 @@ export function rewriteAllImports(
 
   if (report) {
     report.rewrittenImportFileCount += modified;
-    report.preservedNuxtVitestImportFileCount += preserved;
+    report.preservedUpstreamVitestImportFileCount += preserved;
     report.rewrittenImportErrors.push(
       ...result.errors.map((error) => ({
         path: displayRelative(error.path),

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { VITE_PLUS_VERSION } from './constants.ts';
+import { readJsonFile } from './json.ts';
 import { editYamlFile } from './yaml.ts';
 
 const DEFAULT_BRIDGE_REGISTRY = 'https://registry-bridge.viteplus.dev/';
@@ -54,9 +55,7 @@ function isYarnBerryProject(projectRoot: string): boolean {
     }
   }
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8')) as {
-      packageManager?: unknown;
-    };
+    const pkg = readJsonFile(path.join(projectRoot, 'package.json'));
     const pm = typeof pkg.packageManager === 'string' ? pkg.packageManager : '';
     const major = /^yarn@(\d+)/.exec(pm)?.[1];
     if (major && Number(major) >= 2) {

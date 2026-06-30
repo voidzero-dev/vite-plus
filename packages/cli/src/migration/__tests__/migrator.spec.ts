@@ -4530,7 +4530,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(nuxtTest).toContain("from 'vitest'");
     expect(nuxtTest).toContain("from 'vitest/config'");
     expect(fs.readFileSync(path.join(tmpDir, 'unit.spec.ts'), 'utf8')).toContain("from 'vitest'");
-    expect(report.preservedNuxtVitestImportFileCount).toBe(2);
+    expect(report.preservedUpstreamVitestImportFileCount).toBe(2);
   });
 
   it('does not add a coverage provider the project never declared', () => {
