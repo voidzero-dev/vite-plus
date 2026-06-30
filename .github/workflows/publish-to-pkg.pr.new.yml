@@ -179,7 +179,6 @@ jobs:
           script: |
             const version = process.env.BRIDGE_VERSION;
             const shortSha = context.payload.pull_request.head.sha.slice(0, 7);
-            const headSha = context.payload.pull_request.head.sha;
             const pr = context.payload.pull_request.number;
             const marker = '<!-- pkg-pr-bridge-version -->';
             const bridge = 'https://registry-bridge.viteplus.dev/';
@@ -201,11 +200,11 @@ jobs:
               '',
               '```bash',
               '# macOS / Linux',
-              `curl -fsSL https://vite.plus | VP_PR_VERSION=${headSha} bash`,
+              `curl -fsSL https://vite.plus | VP_PR_VERSION=${pr} bash`,
               '```',
               '```powershell',
               '# Windows (PowerShell)',
-              `$env:VP_PR_VERSION="${headSha}"; irm https://vite.plus/ps1 | iex`,
+              `$env:VP_PR_VERSION="${pr}"; irm https://vite.plus/ps1 | iex`,
               '```',
               '',
               `After installing, upgrade the current project's \`vite-plus\` to this test build with:`,
