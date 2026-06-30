@@ -11,8 +11,6 @@ GitHub Actions cache and Vite Task make separate decisions:
 1. `actions/cache` restores and saves the cache directory based on the key in your workflow.
 2. Vite Task uses the restored cache directory and replays only the tasks whose fingerprints still match.
 
-This cache is separate from dependency caching. Keep using [`setup-vp` cache support](/guide/ci) for package installs, then restore the Vite Task cache after dependencies are installed.
-
 ## Before You Start
 
 Use this workflow when all of these are true:
