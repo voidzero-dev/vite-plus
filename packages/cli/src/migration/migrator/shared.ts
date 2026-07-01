@@ -203,7 +203,7 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
     return undefined;
   }
   try {
-    return readJsonFile(packageJsonPath) as DependencyBag;
+    return readJsonFile(packageJsonPath);
   } catch {
     return undefined;
   }

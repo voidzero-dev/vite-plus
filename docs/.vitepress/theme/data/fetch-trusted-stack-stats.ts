@@ -50,7 +50,7 @@ function parseNpmDownloadsJson(data: unknown, pkg: string): number {
   if (typeof data !== 'object' || data === null || !('downloads' in data)) {
     throw new Error(`npm API ${pkg}: unexpected payload`);
   }
-  const downloads = (data as { downloads: unknown }).downloads;
+  const downloads = data.downloads;
   if (typeof downloads !== 'number') {
     throw new Error(`npm API ${pkg}: unexpected payload`);
   }
@@ -71,7 +71,7 @@ function parseGithubRepoJson(data: unknown, repo: string): number {
   if (typeof data !== 'object' || data === null || !('stargazers_count' in data)) {
     throw new Error(`GitHub API ${repo}: unexpected payload`);
   }
-  const count = (data as { stargazers_count: unknown }).stargazers_count;
+  const count = data.stargazers_count;
   if (typeof count !== 'number') {
     throw new Error(`GitHub API ${repo}: unexpected payload`);
   }

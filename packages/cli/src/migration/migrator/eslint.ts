@@ -243,7 +243,7 @@ function collectJsPluginPackageNames(projectPath: string): Set<string> {
   }
   let config: OxlintConfig;
   try {
-    config = readJsonFile(oxlintConfigPath, true) as OxlintConfig;
+    config = readJsonFile(oxlintConfigPath, true);
   } catch {
     return out;
   }
@@ -804,7 +804,7 @@ export function detectIncompatibleEslintIntegration(
     }
     let pkg: { devDependencies?: Record<string, string>; dependencies?: Record<string, string> };
     try {
-      pkg = readJsonFile(pkgJsonPath) as typeof pkg;
+      pkg = readJsonFile(pkgJsonPath);
     } catch {
       continue;
     }

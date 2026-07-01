@@ -629,7 +629,7 @@ export function pruneLegacyWrapperAliases(record: Record<string, unknown> | unde
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       if (pruneLegacyWrapperAliases(value as Record<string, unknown>)) {
         mutated = true;
-        if (Object.keys(value as Record<string, unknown>).length === 0) {
+        if (Object.keys(value).length === 0) {
           delete record[key];
         }
       }
