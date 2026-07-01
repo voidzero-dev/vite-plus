@@ -1,22 +1,21 @@
 # Docker
 
-Vite+ publishes an official Docker image that bundles the `vp` CLI for the
-**build, CI, and development** phases.
+Vite+ publishes an official Docker image with the `vp` CLI preinstalled:
 
-```
+```bash
 ghcr.io/voidzero-dev/vite-plus
 ```
 
-The image is a toolchain image, not a production runtime image. Because `vp`
-already reads your project's pinned Node.js version (`.node-version`,
-`engines.node`, or `devEngines.runtime`) and downloads that exact version, you do
-not need a base image pinned to a specific Node.js version: one image builds any
-project against its own Node.js.
+Use it for builds, CI, and devcontainers. It is not intended as a production
+runtime image.
 
-For production, you do not ship this image. Instead you use a multi-stage build
-where this image builds the app, and the exact Node.js it resolved is copied into
-a small, vp-free runtime image. That keeps the deployed image small while
-matching your project's Node.js version exactly.
+`vp` resolves the Node.js version from your project (`.node-version`,
+`devEngines.runtime`, or `engines.node`) and downloads that exact version during
+install/build. This means the image does not need Node-version-specific tags.
+
+For production, use a multi-stage build: build the app with the Vite+ image, then
+copy only the resolved Node.js binary, build output, and production dependencies
+into a smaller runtime image.
 
 ## Image tags
 
