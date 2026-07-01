@@ -646,13 +646,15 @@ async function wireBundledTsdownExtensions() {
       content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
       changed = true;
     }
-    if (content.includes('import("./tsdown-css.js")')) {
-      cssLoadWired = true;
-    }
-    // Newer tsdown/rolldown bundles `@tsdown/css` directly into a local chunk
-    // and points the `CssPlugin` dynamic import at it (`./dist-*.js`), so the
-    // bare specifier never appears and no rewrite is needed.
-    if (/\{\s*CssPlugin\s*\}\s*=\s*await import\("\.\//.test(content)) {
+    // The css load counts as "wired" once it resolves to any local chunk:
+    //   - our rewrite target (`./tsdown-css.js`), or
+    //   - a chunk that newer tsdown/rolldown deduped `@tsdown/css` straight into
+    //     (`{ CssPlugin } = await import("./dist-*.js")`), where the bare
+    //     specifier never appears and no rewrite is needed.
+    if (
+      content.includes('import("./tsdown-css.js")') ||
+      /\{\s*CssPlugin\s*\}\s*=\s*await import\("\.\//.test(content)
+    ) {
       cssLoadWired = true;
     }
     if (changed) {
