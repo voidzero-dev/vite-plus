@@ -122,6 +122,26 @@ export function yarnSupportsCatalog(version: string): boolean {
   return version === 'latest' || version === 'next' || version === 'stable';
 }
 
+// Whether a `catalog:` reference resolves for this package manager and version:
+// pnpm >= 9.5.0, Yarn >= 4.10.0, bun only inside a workspace, npm never. The
+// force-override `file:` guard is layered on by the bootstrap callers.
+export function supportsCatalog(
+  packageManager: PackageManager,
+  version: string,
+  isBunWorkspace = false,
+): boolean {
+  switch (packageManager) {
+    case PackageManager.pnpm:
+      return pnpmSupportsCatalog(version);
+    case PackageManager.yarn:
+      return yarnSupportsCatalog(version);
+    case PackageManager.bun:
+      return isBunWorkspace;
+    default:
+      return false;
+  }
+}
+
 // These are the root package.json#pnpm settings pnpm 10.6.2+ accepts at the
 // top level of pnpm-workspace.yaml. Unknown keys may belong to third-party
 // tooling and stay in package.json.

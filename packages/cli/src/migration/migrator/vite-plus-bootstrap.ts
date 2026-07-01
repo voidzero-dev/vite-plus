@@ -31,8 +31,8 @@ import {
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
-  pnpmSupportsCatalog,
   pnpmSupportsWorkspaceSettings,
+  supportsCatalog,
   pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
@@ -51,7 +51,6 @@ import {
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   yarnrcSatisfiesVitePlus,
-  yarnSupportsCatalog,
 } from '../migrator.ts';
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
 import {
@@ -358,31 +357,20 @@ function reconcileVitePlusBootstrapPackage(
     ].find(({ dependencies }) => dependencies?.[provider] !== undefined);
     if (installGroupEntry?.dependencies) {
       if (VITEST_IS_MANAGED_OVERRIDE) {
-        installGroupEntry.dependencies[provider] = providerCatalogAdditions.has(provider)
-          ? // The workspace catalog is gaining this provider (another package uses
-            // it source-only), so REFERENCE that catalog entry instead of pinning a
-            // concrete version that would leave the entry unused. Mirrors the
-            // source-only inject branch below. See #2005.
-            getCatalogDependencySpec(
-              installGroupEntry.dependencies[provider],
-              VITEST_VERSION,
-              supportCatalog && packageManager !== PackageManager.bun,
-              {
-                dependencyField: installGroupEntry.dependencyField,
-                dependencyName: provider,
-                packageManager,
-                catalogDependencyResolver,
-                preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
-              },
-            )
-          : getAlignedVitestEcosystemDependencySpec(
-              installGroupEntry.dependencies[provider],
-              provider,
-              installGroupEntry.dependencyField,
-              packageManager,
-              supportCatalog,
-              catalogDependencyResolver,
-            );
+        // When the workspace catalog is gaining this provider (another package
+        // uses it source-only), reference the catalog entry — excluding standalone
+        // bun, which has no catalog — instead of pinning a concrete version that
+        // would leave the entry unused. Otherwise align it normally. See #2005.
+        installGroupEntry.dependencies[provider] = getAlignedVitestEcosystemDependencySpec(
+          installGroupEntry.dependencies[provider],
+          provider,
+          installGroupEntry.dependencyField,
+          packageManager,
+          providerCatalogAdditions.has(provider)
+            ? supportCatalog && packageManager !== PackageManager.bun
+            : supportCatalog,
+          catalogDependencyResolver,
+        );
       }
     } else {
       pkg.devDependencies ??= {};
@@ -662,15 +650,11 @@ export function detectVitePlusBootstrapPending(
   }
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
-    // pnpm catalogs require pnpm >= 9.5.0 — a SEPARATE gate from the 10.6.2
-    // `usePnpmWorkspaceYaml` (workspace settings) still used elsewhere here.
-    ((packageManager === PackageManager.pnpm &&
-      pnpmSupportsCatalog(resolvedPackageManagerVersion)) ||
-      // Yarn catalogs require Yarn >= 4.10.0 (older Yarn cannot resolve `catalog:`).
-      (packageManager === PackageManager.yarn &&
-        yarnSupportsCatalog(resolvedPackageManagerVersion)) ||
-      // Standalone bun excluded: catalogs only resolve inside a bun workspace.
-      (packageManager === PackageManager.bun && bunWorkspaceDeclaresPackages(pkg.workspaces)));
+    supportsCatalog(
+      packageManager,
+      resolvedPackageManagerVersion,
+      packageManager === PackageManager.bun && bunWorkspaceDeclaresPackages(pkg.workspaces),
+    );
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const canonicalVitePlusSpec = supportCatalog
     ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
@@ -935,14 +919,11 @@ export function ensureVitePlusBootstrap(
     );
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
-    // pnpm catalogs require pnpm >= 9.5.0 — a SEPARATE gate from the 10.6.2
-    // `usePnpmWorkspaceYaml` (workspace settings) still used elsewhere here.
-    ((workspaceInfo.packageManager === PackageManager.pnpm &&
-      pnpmSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||
-      // Yarn catalogs require Yarn >= 4.10.0; older Yarn cannot resolve `catalog:`.
-      (workspaceInfo.packageManager === PackageManager.yarn &&
-        yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||
-      isBunWorkspace);
+    supportsCatalog(
+      workspaceInfo.packageManager,
+      workspaceInfo.downloadPackageManager.version,
+      isBunWorkspace,
+    );
   const catalogDependencyResolver = createCatalogDependencyResolver(
     projectPath,
     workspaceInfo.packageManager,

@@ -26,8 +26,8 @@ import {
   mergeViteConfigFiles,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
-  pnpmSupportsCatalog,
   pnpmSupportsWorkspaceSettings,
+  supportsCatalog,
   projectListsRequiredVitestPeer,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
@@ -51,7 +51,6 @@ import {
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   wrapLazyPluginsInViteConfig,
-  yarnSupportsCatalog,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
@@ -111,11 +110,10 @@ export function rewriteStandaloneProject(
   // bun and the direct `vite` edge resolves to the concrete core alias. Yarn
   // catalogs require Yarn >= 4.10.0 (older Yarn cannot resolve `catalog:`), so a
   // project resolving to an older Yarn falls back to concrete specs.
-  const supportCatalog =
-    (packageManager === PackageManager.pnpm &&
-      pnpmSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||
-    (packageManager === PackageManager.yarn &&
-      yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version));
+  const supportCatalog = supportsCatalog(
+    packageManager,
+    workspaceInfo.downloadPackageManager.version,
+  );
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -374,13 +372,13 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
-  // Yarn catalogs require Yarn >= 4.10.0; a workspace resolving to an older Yarn
-  // falls back to concrete specs. pnpm/bun keep their existing catalog behavior
-  // (driven by their own pnpm-workspace.yaml / bun catalog sinks).
-  const supportCatalog =
-    workspaceInfo.packageManager === PackageManager.yarn
-      ? yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version)
-      : true;
+  // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun in a workspace (always
+  // true here — this is the monorepo path). An older PM falls back to concrete.
+  const supportCatalog = supportsCatalog(
+    workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
+    true,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(

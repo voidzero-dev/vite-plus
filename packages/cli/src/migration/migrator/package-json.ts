@@ -237,31 +237,20 @@ export function rewritePackageJson(
     );
     if (installGroupEntry?.dependencies) {
       if (VITEST_IS_MANAGED_OVERRIDE) {
-        installGroupEntry.dependencies[provider] = providerCatalogAdditions.has(provider)
-          ? // The workspace catalog is gaining this provider (another package uses
-            // it source-only), so REFERENCE that catalog entry instead of pinning a
-            // concrete version that would leave the entry unused. Mirrors the
-            // source-only inject branch below. See #2005.
-            getCatalogDependencySpec(
-              installGroupEntry.dependencies[provider],
-              VITEST_VERSION,
-              supportCatalog && packageManager !== PackageManager.bun,
-              {
-                dependencyField: installGroupEntry.dependencyField,
-                dependencyName: provider,
-                packageManager,
-                catalogDependencyResolver,
-                preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
-              },
-            )
-          : getAlignedVitestEcosystemDependencySpec(
-              installGroupEntry.dependencies[provider],
-              provider,
-              installGroupEntry.dependencyField,
-              packageManager,
-              supportCatalog,
-              catalogDependencyResolver,
-            );
+        // When the workspace catalog is gaining this provider (another package
+        // uses it source-only), reference the catalog entry — excluding standalone
+        // bun, which has no catalog — instead of pinning a concrete version that
+        // would leave the entry unused. Otherwise align it normally. See #2005.
+        installGroupEntry.dependencies[provider] = getAlignedVitestEcosystemDependencySpec(
+          installGroupEntry.dependencies[provider],
+          provider,
+          installGroupEntry.dependencyField,
+          packageManager,
+          providerCatalogAdditions.has(provider)
+            ? supportCatalog && packageManager !== PackageManager.bun
+            : supportCatalog,
+          catalogDependencyResolver,
+        );
       }
     } else {
       pkg.devDependencies ??= {};
