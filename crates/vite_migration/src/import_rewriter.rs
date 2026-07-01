@@ -2001,10 +2001,8 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
 /// `defineConfig` from `vite`. Matched by basename, so it covers configs at any
 /// monorepo depth.
 static VITE_CONFIG_FILE_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../packages/cli/src/vite-config-entry-basenames.json"
-    ))
-    .expect("invalid vite-config-entry-basenames.json")
+    serde_json::from_str(include_str!("../../../packages/cli/src/vite-config-entry-basenames.json"))
+        .expect("invalid vite-config-entry-basenames.json")
 });
 
 /// Whether a file is a Vite/Vitest config entry file, where rewriting `vite`
@@ -2995,11 +2993,8 @@ describe('test', () => {});"#,
         )
         .unwrap();
         // Only `vite` is scoped: a non-config `vitest` import still rewrites.
-        fs::write(
-            temp.path().join("src/app.spec.ts"),
-            "import { describe } from 'vitest';\n",
-        )
-        .unwrap();
+        fs::write(temp.path().join("src/app.spec.ts"), "import { describe } from 'vitest';\n")
+            .unwrap();
 
         rewrite_imports_in_directory(temp.path()).unwrap();
 
