@@ -4,7 +4,7 @@ Vite Task can automatically track dependencies and cache tasks run through `vp r
 
 ## Overview
 
-When a task runs successfully (exit code 0), its terminal output (stdout/stderr) and all files it writes (output files) are saved. On the next run, Vite Task checks if anything changed:
+When a task runs successfully (exit code 0), its terminal output (stdout/stderr) and all written files (output files) are saved. On the next run, Vite Task checks if anything changed:
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
 2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
