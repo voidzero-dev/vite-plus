@@ -120,11 +120,13 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   run: {
     tasks: {
-      build: 'vp build',
+      frontendBuild: 'vp build',
     },
   },
 });
 ```
+
+Run this task with `vpr frontendBuild` or `vp run frontendBuild`.
 
 Manual config overrides reported metadata. Add `input`, `output`, `env`, or `untrackedEnv` when your project has behavior that Vite cannot report.
 
