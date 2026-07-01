@@ -16,7 +16,7 @@ GitHub Actions cache and Vite Task make separate decisions:
 Use this workflow when all of these are true:
 
 - The command runs through [`vp run`](/guide/run).
-- The task hits on a second local run.
+- An immediate second run reports a cache hit for the task.
 - The task has stable input and output tracking for CI.
 - The workflow installs dependencies before restoring `node_modules/.vite/task-cache`.
 
