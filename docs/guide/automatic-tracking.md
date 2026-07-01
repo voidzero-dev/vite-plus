@@ -87,7 +87,18 @@ tasks: {
 }
 ```
 
-Set `input: []` when no files should affect the cache fingerprint. Set `output: []` when no files should be restored on a cache hit.
+Set `input: []` when no files should affect the cache fingerprint. This is rarely useful. For example, a download task can be cached when the same URL always serves the same file. No input files should be fingerprinted for this task, but changing the URL still invalidates the cache:
+
+```ts [vite.config.ts]
+tasks: {
+  downloadSchema: {
+    command: 'curl -O https://example.com/schema.json',
+    input: [],
+  },
+}
+```
+
+Set `output: []` when no files should be restored on a cache hit.
 
 ## Cooperative Tracking
 
