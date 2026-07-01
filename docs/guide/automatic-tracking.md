@@ -1,6 +1,6 @@
 # Automatic Data Tracking
 
-Automatic data tracking is how Vite Task learns what a task needs for caching without explicit config.
+Automatic data tracking is how Vite Task learns what inputs a task needs for caching outputs without explicit config.
 
 When you run a cache-enabled task, Vite Task observes the task's execution and records what files were read and written, as well as any metadata reported by the task. On the next run, Vite Task uses the recorded fingerprint to decide whether to replay the cache or run the task.
 
