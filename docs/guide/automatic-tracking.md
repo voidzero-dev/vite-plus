@@ -35,7 +35,7 @@ export default defineConfig({
 });
 ```
 
-For this task, Vite Task records source files, config files, missing files the command checked, and directories the command scanned. A later run misses the cache when one of those tracked inputs changes.
+For this task, Vite Task records source files, config files, missing files the command checked, and directories the command scanned. Subsequent runs re-run the task when one of those tracked inputs changes.
 
 File system tracking also tracks outputs. If you omit [`output`](/config/run#output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
 
