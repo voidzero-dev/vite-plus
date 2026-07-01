@@ -155,7 +155,7 @@ jobs:
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: voidzero-dev/pkg-pr-registry-bridge@00b63a27a0e43eca8a3c56f5aac21cbbc870d863 # main
+        uses: voidzero-dev/pkg-pr-registry-bridge@f86779608377b9db401b2951b67ac8d5817da461 # main
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
