@@ -3,9 +3,6 @@ base = "docs/"
 command = "pnpm build:netlify"
 publish = ".vitepress/dist"
 
-[build.environment]
-NODE_VERSION = "22.18.0"
-
 # Windows installer redirect
 [[redirects]]
 from = "/vp-setup"
