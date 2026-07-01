@@ -299,8 +299,14 @@ if [ "$is_git_repo" -eq 1 ]; then
   # the project's CI: the commit build then resolves from the default registry,
   # which has no 0.0.0-commit.<sha>, and the supply-chain policy check rejects the
   # lockfile (ERR_PNPM_TARBALL_URL_MISMATCH). Stage whichever file migrate wrote.
-  git -C "$project_dir" add -f .npmrc 2>/dev/null || true
-  git -C "$project_dir" add -f .yarnrc.yml 2>/dev/null || true
+  # Only stage config that carries the bridge marker, i.e. was written for this
+  # run. A pre-existing ignored `.npmrc`/`.yarnrc.yml` (private-registry auth
+  # tokens) that migrate never touched must not land in the migration diff.
+  for cfg in .npmrc .yarnrc.yml; do
+    if [ -f "$project_dir/$cfg" ] && grep -q "registry-bridge.viteplus.dev" "$project_dir/$cfg" 2>/dev/null; then
+      git -C "$project_dir" add -f "$cfg" 2>/dev/null || true
+    fi
+  done
   echo
   echo "Migration worktree changes (.npmrc force-staged so it survives .gitignore):"
   git -C "$project_dir" status --short

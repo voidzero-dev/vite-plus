@@ -116,7 +116,7 @@ export async function runViteInstall(
   // run left behind so installs don't hit the test bridge. No-op for a real build
   // with no leftover. Done before the VP_SKIP_INSTALL return so it persists for
   // the project's own CI even when this run skips the install.
-  reconcilePreviewBridgeRegistry(cwd);
+  reconcilePreviewBridgeRegistry(cwd, undefined, options?.packageManager);
 
   // install dependencies on non-CI environment
   if (process.env.VP_SKIP_INSTALL) {

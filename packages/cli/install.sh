@@ -898,7 +898,10 @@ main() {
     # immutable commit version (0.0.0-commit.<sha>), the clearly-defined test
     # version we install. The directory label stays non-semver so it keeps out
     # of cleanup_old_versions and makes the PR build obvious in `~/.vite-plus/`.
-    PR_COMMIT_VERSION="$(resolve_bridge_commit_version "$PR_VERSION")"
+    # `|| true` keeps `set -e` from aborting this assignment when resolution
+    # fails (unregistered ref / transient bridge error), so the actionable
+    # error below is reachable instead of the installer exiting silently.
+    PR_COMMIT_VERSION="$(resolve_bridge_commit_version "$PR_VERSION" || true)"
     if [ -z "$PR_COMMIT_VERSION" ]; then
       error "Could not resolve a registry bridge build for ${PR_VERSION}"
     fi

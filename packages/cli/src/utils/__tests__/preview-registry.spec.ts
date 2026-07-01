@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { PackageManager } from '../../types/index.ts';
 import { isPreviewVitePlusVersion, reconcilePreviewBridgeRegistry } from '../preview-registry.ts';
 
 const PREVIEW = '0.0.0-commit.81dee3abe99a61a28ebf112da4f76f2a32aec8b4';
@@ -47,6 +48,16 @@ describe('reconcilePreviewBridgeRegistry', () => {
     const npmrc = fs.readFileSync(path.join(dir, '.npmrc'), 'utf8');
     expect(npmrc).toContain(`registry=${BRIDGE}`);
     expect(fs.existsSync(path.join(dir, '.yarnrc.yml'))).toBe(false);
+  });
+
+  // PR #1891 review: a non-Yarn package manager must get `.npmrc` even when a
+  // stray `.yarnrc.yml` is present, or its install reads `.npmrc` and can't
+  // resolve `0.0.0-commit.<sha>` from the default registry.
+  it('writes .npmrc for a non-Yarn package manager despite a stray .yarnrc.yml', () => {
+    fs.writeFileSync(path.join(dir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    expect(reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.pnpm)).toBe(true);
+    expect(fs.existsSync(path.join(dir, '.npmrc'))).toBe(true);
+    expect(fs.readFileSync(path.join(dir, '.npmrc'), 'utf8')).toContain(`registry=${BRIDGE}`);
   });
 
   it('appends to an existing .npmrc without clobbering it', () => {

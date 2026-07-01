@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { PackageManager } from '../types/index.ts';
 import { VITE_PLUS_VERSION } from './constants.ts';
 import { readJsonFile } from './json.ts';
 import { editYamlFile } from './yaml.ts';
@@ -159,9 +160,19 @@ function clearYarnBerryRegistry(projectRoot: string): boolean {
 export function reconcilePreviewBridgeRegistry(
   projectRoot: string,
   version: string = process.env.VP_VERSION || VITE_PLUS_VERSION,
+  packageManager?: PackageManager,
 ): boolean {
   if (isPreviewVitePlusVersion(version)) {
-    if (isYarnBerryProject(projectRoot)) {
+    // Write the file the ACTIVE package manager reads: Yarn Berry uses
+    // `.yarnrc.yml`, everything else uses `.npmrc`. Fall back to file-based
+    // detection only when the manager is unknown, so a stray leftover
+    // `.yarnrc.yml` in a pnpm/npm/bun project doesn't leave `.npmrc` without the
+    // bridge registry (the install would then fail to resolve `0.0.0-commit.<sha>`).
+    const useYarnBerry =
+      packageManager === PackageManager.yarn
+        ? isYarnBerryProject(projectRoot)
+        : packageManager === undefined && isYarnBerryProject(projectRoot);
+    if (useYarnBerry) {
       ensureYarnBerryRegistry(projectRoot);
     } else {
       ensureNpmrcRegistry(projectRoot);

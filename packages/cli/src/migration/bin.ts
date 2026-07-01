@@ -1291,18 +1291,16 @@ async function main() {
       eslintMigrated = true;
     }
 
-    // Prettier migration is part of the full setup bucket. Default upgrades skip
-    // detection entirely; the variables stay at their no-prettier defaults so the
-    // formatting gate and summary below still compile and behave correctly.
-    let prettierProject: { hasDependency: boolean; configFile?: string } = {
-      hasDependency: false,
-    };
+    // Detect Prettier unconditionally so the formatting gate below skips Oxfmt on
+    // a project that still uses Prettier, even on a bare (non-`--full`) upgrade
+    // that rewrites imports/scripts. The Prettier MIGRATION itself stays in the
+    // full-setup bucket.
+    const prettierProject = detectPrettierProject(
+      workspaceInfoOptional.rootDir,
+      workspaceInfoOptional.packages,
+    );
     let prettierMigrated = false;
     if (fullSetup) {
-      prettierProject = detectPrettierProject(
-        workspaceInfoOptional.rootDir,
-        workspaceInfoOptional.packages,
-      );
       if (prettierProject.hasDependency && prettierProject.configFile) {
         // Interactive only: stop any active spinner (e.g. "Migrating ESLint") so
         // it does not animate beneath the confirm prompt.
