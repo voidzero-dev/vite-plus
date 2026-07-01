@@ -6,9 +6,9 @@ package-manager configuration in existing Vite+ projects. See the
 
 ## Before You Migrate
 
-1. Run `vp upgrade` before migrating an existing Vite+ project. A stale local
-   CLI does not contain the new migration rules; migration delegates to the
-   global CLI when the local version is older.
+1. Run `vp upgrade` so the global CLI has the latest migration rules. When a
+   project's local `vite-plus` is older, migration delegates to the global CLI,
+   so a stale local copy is not a blocker.
 2. Upgrade the project to Vite 8+ and Vitest 4.1+ when necessary.
 3. Run `vp migrate` from the workspace root. Use `--no-interactive` in
    automated environments.
@@ -237,9 +237,8 @@ format Vite+ reads:
   migration reuses that managed toolchain catalog for newly added dependencies
   and overrides. It creates a top-level default catalog only when no managed or
   default catalog can be reused.
-- Each package that lists `vite-plus` in `dependencies` or `devDependencies`
-  gets a direct `vite` dev dependency unless it already declares `vite` in a
-  dependency field.
+- Each package that declares `vite-plus` also gets a direct `vite` dev
+  dependency (see [Vite and Overrides](#vite-and-overrides)).
 - Unrelated selector-shaped and object-valued overrides are preserved.
 
 ### npm
@@ -271,6 +270,9 @@ format Vite+ reads:
   because `bun install` cannot resolve `catalog:` outside a workspace.
 - Mirror the core alias as a direct `vite` dependency so Bun sees the peer
   provider before applying overrides.
+
+Migration inspects each Vite config for Rolldown-incompatible patterns (such as
+`manualChunks`) and reports any it finds as warnings, without changing the config.
 
 After updating the manifests and package-manager configuration, migration
 reinstalls dependencies once to refresh the lockfile. If installation fails,
