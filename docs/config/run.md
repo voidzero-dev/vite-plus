@@ -345,7 +345,7 @@ tasks: {
 }
 ```
 
-Vite Task still replays terminal output for that task on cache hits.
+Unlike `cache: false`, `output: []` still lets Vite Task fingerprint the task. On a cache hit, Vite Task skips the command and replays its terminal output. Use this for local caches when the task's output files are already there and do not need to be restored.
 
 ### `cwd`
 
