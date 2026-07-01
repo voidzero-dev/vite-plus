@@ -37,6 +37,13 @@ fn print_env_header() {
     vite_shared::header::print_header();
 }
 
+fn print_env_clean_tip() {
+    vite_shared::output::raw("");
+    vite_shared::output::note(
+        "Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.",
+    );
+}
+
 fn should_print_env_header(subcommand: &EnvSubcommands) -> bool {
     match subcommand {
         EnvSubcommands::Current { json } => !json,
@@ -48,6 +55,20 @@ fn should_print_env_header(subcommand: &EnvSubcommands) -> bool {
     }
 }
 
+fn should_print_env_clean_tip(subcommand: &EnvSubcommands) -> bool {
+    match subcommand {
+        EnvSubcommands::Current { json } => !json,
+        EnvSubcommands::List { json } => !json,
+        EnvSubcommands::ListRemote { json, .. } => !json,
+        EnvSubcommands::Print
+        | EnvSubcommands::Use { .. }
+        | EnvSubcommands::Exec { .. }
+        | EnvSubcommands::Which { .. }
+        | EnvSubcommands::Clean => false,
+        _ => true,
+    }
+}
+
 /// Execute the env command based on the provided arguments.
 pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, Error> {
     // Handle subcommands first
@@ -55,8 +76,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         if should_print_env_header(&subcommand) {
             print_env_header();
         }
+        let should_print_tip = should_print_env_clean_tip(&subcommand);
 
-        return match subcommand {
+        let result = match subcommand {
             crate::cli::EnvSubcommands::Current { json } => current::execute(cwd, json).await,
             crate::cli::EnvSubcommands::Print => print_env(cwd).await,
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
@@ -135,6 +157,12 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 Ok(ExitStatus::default())
             }
         };
+
+        if matches!(&result, Ok(status) if status.success()) && should_print_tip {
+            print_env_clean_tip();
+        }
+
+        return result;
     }
 
     // No subcommand provided - show unified help to match `vp env --help`.

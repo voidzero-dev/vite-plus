@@ -448,6 +448,7 @@ Manage:
   use             Use a specific Node.js version for this shell session
   install, i      Install a Node.js version
   uninstall, uni  Uninstall a Node.js version
+  clean           Remove unused managed runtimes and package manager caches
   exec, run       Execute a command with a specific Node.js version
 
 Inspect:
@@ -468,6 +469,7 @@ Examples:
     vp env install                # Install version from .node-version / package.json
     vp env use 20                 # Use Node.js 20 for this shell session
     vp env use --unset            # Remove session override
+    vp env clean                  # Remove unused managed caches
 
   Inspect:
     vp env current                # Show current resolved environment
@@ -486,6 +488,9 @@ Related Commands:
   vp update -g [package]        # Update global packages
   vp outdated -g [package]      # List outdated packages
   vp list -g [package]          # List global packages
+
+Tips:
+  Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
 
 Documentation: https://viteplus.dev/guide/env
 ```

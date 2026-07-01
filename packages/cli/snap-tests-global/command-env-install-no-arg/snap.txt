@@ -1,3 +1,5 @@
 > vp env install # Install version from .node-version (22.x)
 Installing Node.js v<semver>...
 Installed Node.js v<semver>
+
+note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
