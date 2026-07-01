@@ -51,13 +51,13 @@ When a default upgrade skips available setup actions, it prints a hint to run
 
 ## Dependency Changes
 
-| Dependency                     | Migration rule                                                                                                                                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite-plus`                    | Add it where the package is migrated. Re-pin plain ranges to the current concrete target, directly or through a catalog. Preserve deliberate protocol pins.                                                                                             |
-| `vite`                         | Keep existing declarations. With pnpm, add a direct dev dependency to every package that depends on `vite-plus` and does not already declare `vite`. Point managed edges and the shared override to the matching `@voidzero-dev/vite-plus-core` target. |
-| `vitest`                       | Remove it in the common node-mode case because `vite-plus` provides it transitively. Keep or add an exact bundled version only in packages with direct Vitest requirements.                                                                             |
-| `@vitest/*`                    | Align lockstep packages that the project directly lists to the bundled Vitest version. Prefer the package's existing catalog reference when its catalog owns that package; otherwise write the concrete version.                                        |
-| `@voidzero-dev/vite-plus-test` | Remove all dependency, override, resolution, and catalog aliases. Rewrite imports to the current `vite-plus/test*` surface.                                                                                                                             |
+| Dependency                     | Migration rule                                                                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `vite-plus`                    | Add it where the package is migrated. Re-pin plain ranges to the current concrete target, directly or through a catalog. Preserve deliberate protocol pins.                                                                                                  |
+| `vite`                         | Keep existing declarations. With pnpm, add a direct dev dependency to every package that depends on `vite-plus` and does not already declare `vite`. Point managed edges and the shared override to the matching `@voidzero-dev/vite-plus-core` target.      |
+| `vitest`                       | Remove it in the common node-mode case because `vite-plus` provides it transitively. Keep or add an exact bundled version only in packages with direct Vitest requirements.                                                                                  |
+| `@vitest/*`                    | Align lockstep packages that the project directly lists to the bundled Vitest version. Reference them through the toolchain catalog when the package manager supports catalogs, adding an entry for any that lack one; otherwise write the concrete version. |
+| `@voidzero-dev/vite-plus-test` | Remove all dependency, override, resolution, and catalog aliases. Rewrite imports to the current `vite-plus/test*` surface.                                                                                                                                  |
 
 ### Vite and Overrides
 
@@ -112,12 +112,14 @@ Vitest. Align packages the project directly installs, including
 `@vitest/coverage-v8`, `@vitest/coverage-istanbul`, `@vitest/ui`, and
 `@vitest/web-worker`.
 
-Catalog handling is package-specific:
+Catalog handling:
 
-- preserve `catalog:` and named `catalog:<name>` dependency references when the
-  corresponding catalog already defines that package;
-- update that catalog entry to the bundled Vitest version; and
-- use the concrete bundled version when no catalog owns the package.
+- reference them through the toolchain catalog when the package manager supports
+  catalogs, preserving an existing `catalog:` / `catalog:<name>` reference and
+  adding a catalog entry for any that lack one;
+- update each catalog entry to the bundled Vitest version; and
+- use the concrete bundled version only when catalogs are unsupported (npm, a
+  standalone bun project, or a pre-catalog pnpm/Yarn).
 
 Do not align independently versioned or obsolete packages:
 
@@ -129,10 +131,10 @@ Do not align independently versioned or obsolete packages:
 
 The base `@vitest/browser` runtime and `@vitest/browser-preview` are bundled by
 Vite+ and should be removed as direct dependencies. The Playwright and
-WebdriverIO providers remain opt-in. Preserve an existing catalog reference when
-its catalog owns the provider. When migration injects a provider into a
-catalog-capable project, it uses the preferred catalog and adds the provider at
-the bundled Vitest version. Otherwise, it writes the concrete bundled version.
+WebdriverIO providers remain opt-in. In a catalog-capable project, a kept or
+injected provider is referenced through the preferred toolchain catalog and
+added at the bundled Vitest version. Otherwise, it writes the concrete bundled
+version.
 Ensure the provider's `playwright` or `webdriverio` peer is also installed.
 
 Migration detects providers before rewriting imports. This includes legacy

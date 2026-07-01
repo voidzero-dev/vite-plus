@@ -656,10 +656,12 @@ export function getAlignedVitestEcosystemDependencySpec(
   supportCatalog: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): string {
-  const catalogSpec = current.startsWith('catalog:') ? current : 'catalog:';
-  const catalogSupported =
-    supportCatalog && catalogDependencyResolver?.(catalogSpec, dependencyName) !== undefined;
-  return getCatalogDependencySpec(current, VITEST_VERSION, catalogSupported, {
+  // #2005: prefer a `catalog:` reference for an aligned @vitest/* whenever the
+  // package manager supports catalogs — mirroring how `vitest` itself is
+  // catalog-ized — so the toolchain and its ecosystem share one catalog source
+  // of truth. rewriteCatalog adds the matching catalog entry (keyed on the
+  // catalog owning `vitest`), keeping the two writers consistent and idempotent.
+  return getCatalogDependencySpec(current, VITEST_VERSION, supportCatalog, {
     dependencyField,
     dependencyName,
     packageManager,

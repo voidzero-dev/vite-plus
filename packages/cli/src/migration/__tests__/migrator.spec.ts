@@ -776,9 +776,9 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).toHaveProperty('vite-plus', 'catalog:');
     // The base `@vitest/browser` is still stripped (bundled by vite-plus).
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
-    // Playwright is opt-in: vite-plus keeps it in the user's deps, normalized to
-    // the bundled vitest version, so the rewritten import resolves.
-    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    // Playwright is opt-in: vite-plus keeps it in the user's deps; under a
+    // catalog-managed toolchain (supportCatalog=true) it is catalog-ized. #2005
+    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', 'catalog:');
     // The provider's runtime peer dep is preserved.
     expect(pkg.devDependencies).toHaveProperty('playwright', '*');
   });
@@ -2244,7 +2244,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
   });
 
-  it('prefers existing catalogs for Vitest ecosystem packages and pins unsupported ones', () => {
+  it('prefers existing catalogs for Vitest ecosystem packages and catalog-izes the rest', () => {
     const appDir = path.join(tmpDir, 'packages/app');
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(
@@ -2313,13 +2313,15 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe('catalog:');
     expect(pkg.devDependencies['@vitest/ui']).toBe('catalog:test');
-    expect(pkg.devDependencies['@vitest/web-worker']).toBe(VITEST_VERSION);
+    // #2005: web-worker had no prior catalog entry; it is catalog-ized into the default catalog.
+    expect(pkg.devDependencies['@vitest/web-worker']).toBe('catalog:');
 
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       catalog: Record<string, string>;
       catalogs: Record<string, Record<string, string>>;
     };
     expect(workspace.catalog['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
+    expect(workspace.catalog['@vitest/web-worker']).toBe(VITEST_VERSION);
     expect(workspace.catalogs.test['@vitest/ui']).toBe(VITEST_VERSION);
     expect(
       detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
@@ -2599,7 +2601,7 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(rootPkg.devDependencies.vitest).toBeUndefined();
     expect(appPkg.devDependencies['vite-plus']).toBe('catalog:');
-    expect(appPkg.devDependencies['@vitest/ui']).toBe(VITEST_VERSION);
+    expect(appPkg.devDependencies['@vitest/ui']).toBe('catalog:');
     expect(appPkg.devDependencies.vitest).toBe('catalog:');
     expect(JSON.stringify(appPkg)).not.toContain('@voidzero-dev/vite-plus-test');
     expect(
@@ -5491,8 +5493,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
     expect(resolutions['some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
     expect(devDeps.webdriverio).toBe('*');
+    // #2005: the catalog: ref is backed by a .yarnrc.yml catalog entry (not dangling).
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      catalog?: Record<string, string>;
+    };
+    expect(yarnrc.catalog?.['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
   });
 
   it('drops only global/glob/vite-plus-parent yarn SELECTOR-shaped @vitest/browser-webdriverio resolutions', () => {
@@ -5555,7 +5562,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // Unrelated selector resolutions survive.
     expect(resolutions['**/some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
     expect(devDeps.webdriverio).toBe('*');
   });
 
@@ -5595,7 +5602,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // stale provider over the migrated 4.1.9 dep.
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
     expect(devDeps.webdriverio).toBe('*');
   });
 
@@ -5650,8 +5657,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.vitest).toBe('catalog:');
     expect(devDeps['vite-plus']).toBe('catalog:');
     // Playwright is opt-in: vite-plus keeps the provider in the user's deps,
-    // normalized to the bundled vitest version.
-    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    // catalog-ized alongside vitest under the catalog-managed toolchain. #2005
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
     // Provider's runtime peer dep is preserved.
     expect(devDeps.playwright).toBe('*');
   });

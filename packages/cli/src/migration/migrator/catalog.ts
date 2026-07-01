@@ -897,7 +897,14 @@ function rewriteYamlCatalogAtPath(
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
   }
   if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
-    for (const name of catalogAdditions) {
+    // Injected providers, plus — when the toolchain is catalog-managed (the
+    // catalog now owns `vitest`) — every declared alignable @vitest/* so its
+    // `catalog:` reference (written by getAlignedVitestEcosystemDependencySpec)
+    // resolves instead of dangling. #2005
+    const additions = catalog.has('vitest')
+      ? new Set<string>([...catalogAdditions, ...vitestEcosystemPackages])
+      : catalogAdditions;
+    for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
         catalog.set(scalarString(name), scalarString(VITEST_VERSION));
       }

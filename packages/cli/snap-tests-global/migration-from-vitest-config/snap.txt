@@ -40,7 +40,8 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@vitest/browser-playwright": "<semver>",
+    "@vitest/browser-playwright": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
@@ -63,6 +64,8 @@ catalog:
   vitest: <semver>
   vite-plus: <semver>
   '@vitest/browser-webdriverio': <semver>
+  '@vitest/browser-playwright': <semver>
+  '@vitest/coverage-v8': <semver>
 allowBuilds:
   edgedriver: true
   geckodriver: true
