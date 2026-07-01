@@ -493,7 +493,18 @@ export function rewriteAllImports(
   report?: MigrationReport,
   preserveNuxtVitestImports = true,
 ): boolean {
-  const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports);
+  // Issue #2004: the Rust rewriter rewrites `vite` imports only in config entry
+  // files. Standard basenames are recognized in-crate; also pass any config the
+  // migrate resolved here so a custom-named config is honored.
+  const configs = detectConfigs(projectPath);
+  const extraConfigFiles = [configs.viteConfig, configs.vitestConfig]
+    .filter((name): name is string => Boolean(name))
+    .map((name) => path.join(projectPath, name));
+  const result = rewriteImportsInDirectory(
+    projectPath,
+    preserveNuxtVitestImports,
+    extraConfigFiles,
+  );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;

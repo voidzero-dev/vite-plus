@@ -1,13 +1,13 @@
 > vp migrate --no-interactive # retained vitest augmentations should keep a package-local vitest
 ◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
-• 2 config updates applied, 1 file had imports rewritten
+• 2 config updates applied
 
-> cat src/index.ts # check src/index.ts
+> cat src/index.ts # declare module 'vite'/'vitest' outside config files are preserved (issue #2004)
 import type { RuntimeEnvConfig } from './runtime.env.config.js';
 import type { RuntimeHtmlConfig } from './runtime.html.config.js';
 
-declare module 'vite-plus' {
+declare module 'vite' {
   interface UserConfig {
     /**
      * Options for vite-plugin-runtime-env

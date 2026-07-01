@@ -64,16 +64,20 @@ provider usage, installs the matching `@vitest/browser-<provider>` package and
 framework peer, and then rewrites the import to the equivalent
 `vite-plus/test*` surface.
 
-A plugin's published code must keep its upstream `vite` imports so the package
-stays consumable by plain Vite projects. Migration preserves `vite` and `vite/*`
-specifiers in any package it recognizes as a plugin: its unscoped name starts
-with `vite-plugin-` (the Vite plugin naming convention,
-<https://vite.dev/guide/api-plugin>) or `unplugin-` (the unplugin naming
-convention, <https://unplugin.unjs.io/guide/plugin-conventions.html>; cross-bundler
+`vite` imports are rewritten to `vite-plus` only in config entry files
+(`vite.config.*`, `vitest.config.*`, and any config the migrate resolved). Every
+other file keeps its `vite` imports, because `vite-plus` is not a guaranteed
+superset of Vite's exposed surface: it owns only `defineConfig`, `defineProject`,
+and `lazyPlugins`, so rewriting a pass-through symbol (e.g. `createBuilder`,
+`loadConfigFromFile`, including in `typeof import('vite')` type positions) carries
+no benefit and can break the type. An unrewritten `vite` import still resolves
+through the managed `@voidzero-dev/vite-plus-core` alias in a Vite+ project and
+stays consumable by plain Vite projects. Plugin packages additionally skip the
+rewrite even in their config files: a package is recognized as a plugin when its
+unscoped name starts with `vite-plugin-` (<https://vite.dev/guide/api-plugin>) or
+`unplugin-` (<https://unplugin.unjs.io/guide/plugin-conventions.html>; cross-bundler
 plugins that ship a Vite entry), or it declares `vite` in `peerDependencies` or
-`dependencies`. The skip is scoped to `vite`; `vitest` rewriting is unaffected.
-In a Vite+ project the preserved import still resolves through the managed
-`@voidzero-dev/vite-plus-core` alias, so it works in both ecosystems.
+`dependencies`. The scope is `vite`; `vitest` rewriting is unaffected.
 
 ### Node.js version
 

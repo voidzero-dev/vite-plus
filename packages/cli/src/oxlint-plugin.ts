@@ -8,6 +8,7 @@ import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
+import viteConfigEntryBasenames from './vite-config-entry-basenames.json' with { type: 'json' };
 
 // `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
 // intentionally preserved by `vp migrate` (see migration's import_rewriter and
@@ -23,6 +24,24 @@ function isVitestFamilyDeclareModuleSpecifier(specifier: string): boolean {
     specifier.startsWith('@vitest/browser/') ||
     specifier.startsWith('@vitest/browser-')
   );
+}
+
+// Issue #2004: `vp migrate` rewrites `vite`/`vite/*` imports only in config entry
+// files, so this lint rule (the parallel enforcement of the same rewrite) does
+// the same. Every other file keeps its `vite` imports, since vite-plus is not a
+// guaranteed superset of vite's exposed surface. The basename whitelist is the
+// single source shared with the migrate rewriter, which embeds the same
+// `vite-config-entry-basenames.json` at compile time (import_rewriter.rs). The
+// lint rule sees one file at a time, so it recognizes the standard basenames only
+// (no migrate-resolved custom path). vitest/tsdown/@vitest are unaffected.
+const VITE_CONFIG_FILE_BASENAMES = new Set(viteConfigEntryBasenames);
+
+function isViteSpecifier(specifier: string): boolean {
+  return specifier === 'vite' || specifier.startsWith('vite/');
+}
+
+function isViteConfigFile(filename: string): boolean {
+  return VITE_CONFIG_FILE_BASENAMES.has(path.basename(filename));
 }
 
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
@@ -159,11 +178,16 @@ function maybeReportLiteral(
   context: Context,
   literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
   preserveUpstreamVitest = false,
+  fileIsViteConfig = false,
 ) {
   if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
     return;
   }
   if (preserveUpstreamVitest && isUpstreamVitestSpecifier(literal.value)) {
+    return;
+  }
+  // Issue #2004: keep `vite`/`vite/*` imports outside config entry files.
+  if (!fileIsViteConfig && isViteSpecifier(literal.value)) {
     return;
   }
 
@@ -200,27 +224,29 @@ export const preferVitePlusImportsRule = defineRule({
   },
   createOnce(context: Context) {
     let preserveUpstreamVitest = false;
+    let fileIsViteConfig = false;
     return {
       Program() {
         preserveUpstreamVitest = nearestPackageUsesNuxtTestUtils(context.filename);
+        fileIsViteConfig = isViteConfigFile(context.filename);
       },
       ImportDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
       },
       ExportAllDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
       },
       ExportNamedDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
       },
       ImportExpression(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
       },
       TSImportType(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
       },
       TSExternalModuleReference(node) {
-        maybeReportLiteral(context, node.expression, preserveUpstreamVitest);
+        maybeReportLiteral(context, node.expression, preserveUpstreamVitest, fileIsViteConfig);
       },
       TSModuleDeclaration(node) {
         if (node.global) {
@@ -234,7 +260,7 @@ export const preferVitePlusImportsRule = defineRule({
         ) {
           return;
         }
-        maybeReportLiteral(context, id, preserveUpstreamVitest);
+        maybeReportLiteral(context, id, preserveUpstreamVitest, fileIsViteConfig);
       },
     };
   },

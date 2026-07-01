@@ -1956,11 +1956,16 @@ struct PackageRewriteContext {
 }
 
 /// Options controlling directory-wide import rewriting.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RewriteImportsOptions {
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
+    /// Extra absolute paths the migrate resolved as Vite/Vitest config entry
+    /// files (e.g. a custom-named config), in addition to the standard
+    /// `VITE_CONFIG_FILE_NAMES` basenames. `vite` imports are rewritten only in
+    /// config files (issue #2004).
+    pub extra_config_files: Vec<PathBuf>,
 }
 
 impl SkipPackages {
@@ -1991,6 +1996,38 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     }
 
     None
+}
+
+/// Canonical Vite/Vitest config entry basenames, the single source shared with
+/// the `prefer-vite-plus-imports` oxlint rule. The list lives in
+/// `packages/cli/src/vite-config-entry-basenames.json` and is embedded here at
+/// compile time so the two implementations cannot drift. The `vitest.config.*`
+/// family is included because a Vitest config can also import the unified
+/// `defineConfig` from `vite`. Matched by basename, so it covers configs at any
+/// monorepo depth.
+static VITE_CONFIG_FILE_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!(
+        "../../../packages/cli/src/vite-config-entry-basenames.json"
+    ))
+    .expect("invalid vite-config-entry-basenames.json")
+});
+
+/// Whether a file is a Vite/Vitest config entry file, where rewriting `vite`
+/// imports to `vite-plus` is correct (the unified `defineConfig`). Issue #2004:
+/// `vite` imports are rewritten ONLY in these files; every other file keeps its
+/// `vite` imports, since vite-plus is not a guaranteed superset of vite's exposed
+/// surface. A standard basename OR an exact path the migrate resolved (a
+/// custom-named config, passed as an absolute path matching the walk root)
+/// qualifies.
+fn is_vite_config_file(path: &Path, extra_config_files: &[PathBuf]) -> bool {
+    if path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| VITE_CONFIG_FILE_NAMES.iter().any(|config_name| config_name == name))
+    {
+        return true;
+    }
+    extra_config_files.iter().any(|config| config == path)
 }
 
 /// Returns whether the package follows a published-plugin naming convention
@@ -2152,7 +2189,7 @@ pub fn rewrite_imports_in_directory_with_options(
         .files
         .into_iter()
         .map(|file_path| {
-            let package_context =
+            let mut package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
                     *package_context_cache
                         .entry(package_json_path.clone())
@@ -2160,6 +2197,11 @@ pub fn rewrite_imports_in_directory_with_options(
                 } else {
                     PackageRewriteContext::default()
                 };
+            // Issue #2004: `vite` imports are rewritten only in config entry
+            // files; everything else keeps its `vite` imports. This is layered
+            // ON TOP of the package-level skip (a skipped package stays skipped).
+            package_context.skip_packages.skip_vite = package_context.skip_packages.skip_vite
+                || !is_vite_config_file(&file_path, &options.extra_config_files);
             (file_path, package_context)
         })
         .collect();
@@ -2881,7 +2923,7 @@ export default defineConfig({
 
         // Create test files with vite/vitest imports
         fs::write(
-            temp.path().join("src/config.ts"),
+            temp.path().join("vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 export default defineConfig({});"#,
         )
@@ -2925,7 +2967,7 @@ describe('test', () => {});"#,
         assert!(result.errors.is_empty());
 
         // Verify the files were actually modified
-        let config_content = fs::read_to_string(temp.path().join("src/config.ts")).unwrap();
+        let config_content = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
         assert!(config_content.contains("vite-plus"));
 
         let test_content = fs::read_to_string(temp.path().join("src/test.ts")).unwrap();
@@ -2934,6 +2976,104 @@ describe('test', () => {});"#,
         // Verify utils.ts was not modified
         let utils_content = fs::read_to_string(temp.path().join("src/utils.ts")).unwrap();
         assert!(!utils_content.contains("vite-plus"));
+    }
+
+    #[test]
+    fn test_vite_rewrite_scoped_to_config_files() {
+        // Issue #2004: `vite` imports must be rewritten ONLY in config entry
+        // files. A non-plugin app that declares `vite` only in devDependencies
+        // (like packages/cloudflare) must keep its programmatic/type `vite`
+        // imports on `vite`, because vite-plus is not a guaranteed superset of
+        // vite's surface (`typeof import("vite-plus")` lacks `createBuilder`).
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{"name":"my-app","devDependencies":{"vite":"^7"}}"#,
+        )
+        .unwrap();
+        fs::create_dir(temp.path().join("src")).unwrap();
+        // Config entry file: the `vite` import SHOULD be rewritten.
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            "import { defineConfig } from 'vite';\nexport default defineConfig({});",
+        )
+        .unwrap();
+        // Non-config source: programmatic + type `vite` imports MUST be preserved.
+        fs::write(
+            temp.path().join("src/deploy.ts"),
+            "import { createBuilder } from 'vite';\ntype Api = Pick<typeof import('vite'), 'createBuilder'>;\n",
+        )
+        .unwrap();
+        // Only `vite` is scoped: a non-config `vitest` import still rewrites.
+        fs::write(
+            temp.path().join("src/app.spec.ts"),
+            "import { describe } from 'vitest';\n",
+        )
+        .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
+        assert!(
+            config.contains("from 'vite-plus'"),
+            "config file `vite` import should be rewritten, got: {config}"
+        );
+
+        let deploy = fs::read_to_string(temp.path().join("src/deploy.ts")).unwrap();
+        assert!(
+            !deploy.contains("vite-plus"),
+            "non-config `vite` imports must be preserved, got: {deploy}"
+        );
+        assert!(deploy.contains("from 'vite'"));
+        assert!(deploy.contains("typeof import('vite')"));
+
+        let spec = fs::read_to_string(temp.path().join("src/app.spec.ts")).unwrap();
+        assert!(
+            spec.contains("from 'vite-plus/test'"),
+            "non-config `vitest` import should still be rewritten, got: {spec}"
+        );
+    }
+
+    #[test]
+    fn test_vite_rewrite_honors_resolved_custom_config_path() {
+        // A custom-named config the migrate resolved (not a standard basename)
+        // is still treated as a config file when passed via `extra_config_files`.
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"name":"my-app"}"#).unwrap();
+        let custom = temp.path().join("build.vite.ts");
+        fs::write(
+            &custom,
+            "import { defineConfig } from 'vite';\nexport default defineConfig({});",
+        )
+        .unwrap();
+        fs::create_dir(temp.path().join("src")).unwrap();
+        fs::write(
+            temp.path().join("src/main.ts"),
+            "import { createServer } from 'vite';\n",
+        )
+        .unwrap();
+
+        rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions {
+                extra_config_files: vec![custom.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let config = fs::read_to_string(&custom).unwrap();
+        assert!(
+            config.contains("from 'vite-plus'"),
+            "resolved custom config should be rewritten, got: {config}"
+        );
+        // A non-config file is still untouched even with the custom config registered.
+        let main = fs::read_to_string(temp.path().join("src/main.ts")).unwrap();
+        assert!(main.contains("from 'vite'") && !main.contains("vite-plus"), "got: {main}");
     }
 
     #[test]
@@ -2971,7 +3111,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true, ..Default::default() },
         )
         .unwrap();
 
@@ -3006,7 +3146,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true, ..Default::default() },
         )
         .unwrap();
 
@@ -3073,13 +3213,19 @@ describe('app', () => {
 
         let result = rewrite_imports_in_directory(temp.path()).unwrap();
 
-        // vite.config.ts, src/index.ts, tests/unit/app.test.ts should be modified
-        assert_eq!(result.modified_files.len(), 3);
-        // Button.tsx has no vite imports
-        assert_eq!(result.unchanged_files.len(), 1);
+        // vite.config.ts (vite) and tests/unit/app.test.ts (vitest) are modified.
+        // src/index.ts keeps its non-config `vite` import (issue #2004) and
+        // Button.tsx has no relevant imports, so both are unchanged.
+        assert_eq!(result.modified_files.len(), 2);
+        assert_eq!(result.unchanged_files.len(), 2);
         assert!(result.errors.is_empty());
 
-        // Verify nested file was modified
+        // The non-config `vite` import (a programmatic API) is preserved.
+        let index_content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
+        assert!(index_content.contains("from 'vite'"));
+        assert!(!index_content.contains("vite-plus"));
+
+        // Verify the nested vitest file was modified.
         let test_content = fs::read_to_string(temp.path().join("tests/unit/app.test.ts")).unwrap();
         assert!(test_content.contains("vite-plus/test"));
         assert!(test_content.contains("vite-plus/test/browser"));
@@ -4212,18 +4358,19 @@ import { build } from 'tsdown';"#;
         // app package.json (no peerDeps)
         fs::write(temp.path().join("packages/app/package.json"), r#"{"name": "app"}"#).unwrap();
 
-        // vite-plugin source file with vite and vitest imports
+        // Config files with vite and vitest imports. Config-file scoping (issue
+        // #2004) only rewrites `vite` in config entry files, so the per-package
+        // peerDependency skip is exercised here rather than in src.
         fs::write(
-            temp.path().join("packages/vite-plugin/src/index.ts"),
+            temp.path().join("packages/vite-plugin/vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 export default defineConfig({});"#,
         )
         .unwrap();
 
-        // app source file with vite and vitest imports
         fs::write(
-            temp.path().join("packages/app/src/index.ts"),
+            temp.path().join("packages/app/vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 export default defineConfig({});"#,
@@ -4236,9 +4383,9 @@ export default defineConfig({});"#,
         // Both files should be modified
         assert_eq!(result.modified_files.len(), 2);
 
-        // vite-plugin: vite NOT rewritten (has peerDep), vitest IS rewritten
+        // vite-plugin: vite NOT rewritten (peerDependency skip), vitest IS rewritten
         let vite_plugin_content =
-            fs::read_to_string(temp.path().join("packages/vite-plugin/src/index.ts")).unwrap();
+            fs::read_to_string(temp.path().join("packages/vite-plugin/vite.config.ts")).unwrap();
         assert_eq!(
             vite_plugin_content,
             r#"import { defineConfig } from 'vite';
@@ -4246,9 +4393,9 @@ import { describe } from 'vite-plus/test';
 export default defineConfig({});"#
         );
 
-        // app: vite IS rewritten (no peerDep), vitest IS rewritten
+        // app: vite IS rewritten (config file, no peerDep), vitest IS rewritten
         let app_content =
-            fs::read_to_string(temp.path().join("packages/app/src/index.ts")).unwrap();
+            fs::read_to_string(temp.path().join("packages/app/vite.config.ts")).unwrap();
         assert_eq!(
             app_content,
             r#"import { defineConfig } from 'vite-plus';
