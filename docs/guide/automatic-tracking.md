@@ -51,8 +51,7 @@ These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking
 
 ### Override Inputs And Outputs
 
-[`input`](/config/run#input) controls what invalidates the cache.
-[`output`](/config/run#output) controls which files Vite Task restores on a cache hit.
+[`input`](/config/run#input) controls what invalidates the cache. [`output`](/config/run#output) controls which files Vite Task restores on a cache hit.
 
 Both options use the same syntax and can be configured separately.
 
