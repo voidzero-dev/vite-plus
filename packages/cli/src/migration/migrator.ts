@@ -556,7 +556,7 @@ function pruneLegacyWrapperAliases(record: Record<string, unknown> | undefined):
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       if (pruneLegacyWrapperAliases(value as Record<string, unknown>)) {
         mutated = true;
-        if (Object.keys(value as Record<string, unknown>).length === 0) {
+        if (Object.keys(value).length === 0) {
           delete record[key];
         }
       }
@@ -830,7 +830,7 @@ function collectJsPluginPackageNames(projectPath: string): Set<string> {
   }
   let config: OxlintConfig;
   try {
-    config = readJsonFile(oxlintConfigPath, true) as OxlintConfig;
+    config = readJsonFile(oxlintConfigPath, true);
   } catch {
     return out;
   }
@@ -2129,7 +2129,7 @@ function readPackageJsonIfExists(packageJsonPath: string): DependencyBag | undef
     return undefined;
   }
   try {
-    return readJsonFile(packageJsonPath) as DependencyBag;
+    return readJsonFile(packageJsonPath);
   } catch {
     return undefined;
   }
@@ -5680,7 +5680,7 @@ export function detectIncompatibleEslintIntegration(
     }
     let pkg: { devDependencies?: Record<string, string>; dependencies?: Record<string, string> };
     try {
-      pkg = readJsonFile(pkgJsonPath) as typeof pkg;
+      pkg = readJsonFile(pkgJsonPath);
     } catch {
       continue;
     }
