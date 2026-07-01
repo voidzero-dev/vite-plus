@@ -230,6 +230,11 @@ format Vite+ reads:
   `package.json#pnpm`. General workspace-setting support started in pnpm 10.5.0,
   but overrides required 10.5.1 and `peerDependencyRules` required 10.6.2. pnpm
   11 no longer reads the legacy package.json settings.
+- Catalogs are a separate feature, supported from pnpm 9.5.0, independent of the
+  workspace-settings boundary. So below 10.6.2, where overrides stay in
+  `package.json#pnpm`, migration still rewrites the workspace catalog off stale
+  wrapper aliases and keeps `catalog:` overrides as references rather than
+  inlining them to concrete versions.
 - Migration keeps dependency references, default and named catalogs, overrides,
   and `peerDependencyRules` consistent.
 - pnpm accepts the logical default catalog as either top-level `catalog` or

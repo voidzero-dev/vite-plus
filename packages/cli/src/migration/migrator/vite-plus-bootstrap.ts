@@ -952,6 +952,35 @@ export function ensureVitePlusBootstrap(
   );
   let movedPnpmSettings: Record<string, unknown> | undefined;
 
+  // Below pnpm 10.6.2 the pnpm settings (overrides) stay in package.json, so the
+  // `usePnpmWorkspaceYaml` block below skips the pnpm-workspace.yaml rewrite. But
+  // catalogs work from 9.5.0, so rewrite the catalog NOW — before the package.json
+  // overrides are reconciled — so a `catalog:` override resolves to the fresh
+  // toolchain value (not the stale vite-plus-test wrapper) and stays `catalog:`,
+  // and the catalog itself is rewritten off the wrappers. Catalog only
+  // (`writeWorkspaceSettings: false`); never creates a missing pnpm-workspace.yaml.
+  const pnpmWorkspaceCatalogBefore =
+    workspaceInfo.packageManager === PackageManager.pnpm &&
+    fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))
+      ? fs.readFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf-8')
+      : undefined;
+  if (
+    workspaceInfo.packageManager === PackageManager.pnpm &&
+    !usePnpmWorkspaceYaml &&
+    supportCatalog &&
+    pnpmWorkspaceCatalogBefore !== undefined
+  ) {
+    rewritePnpmWorkspaceYaml(
+      projectPath,
+      pnpmMajorVersion,
+      shouldAllowBrowserBuilds,
+      usesVitest,
+      vitestEcosystemPackages,
+      false,
+      providerCatalogAdditions,
+    );
+  }
+
   editJsonFile<
     BootstrapPackageJson & {
       workspaces?: NpmWorkspaces;
@@ -998,7 +1027,14 @@ export function ensureVitePlusBootstrap(
       }
     } else if (workspaceInfo.packageManager === PackageManager.pnpm && !usePnpmWorkspaceYaml) {
       pkg.pnpm ??= {};
-      const ensured = ensureOverrideEntries(pkg.pnpm.overrides, usesVitest);
+      // Below pnpm 10.6.2 the settings stay here, but catalogs (>= 9.5.0) still
+      // work: keep `catalog:` overrides referencing the workspace catalog
+      // (rewritten below) instead of inlining them, mirroring the bun branch.
+      const ensured = ensureOverrideEntries(
+        pkg.pnpm.overrides,
+        usesVitest,
+        supportCatalog ? readPnpmWorkspaceCatalogDependencyResolver(projectPath) : undefined,
+      );
       if (ensured.changed) {
         pkg.pnpm.overrides = ensured.overrides;
         packageJsonChanged = true;
@@ -1123,9 +1159,19 @@ export function ensureVitePlusBootstrap(
         ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
         : undefined;
       result.packageManagerConfig = before !== after;
-    } else if (ensurePnpmWorkspaceExoticSubdepsSetting(projectPath)) {
-      ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
-      result.packageManagerConfig = true;
+    } else {
+      // The catalog was already rewritten before the reconcile (above). Only the
+      // exotic-subdeps setting and packages field remain; track the net change
+      // against the pre-rewrite snapshot.
+      const exoticChanged = ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+      const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+      if (fs.existsSync(pnpmWorkspaceYamlPath)) {
+        ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
+      }
+      const after = fs.existsSync(pnpmWorkspaceYamlPath)
+        ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
+        : undefined;
+      result.packageManagerConfig = exoticChanged || pnpmWorkspaceCatalogBefore !== after;
     }
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');

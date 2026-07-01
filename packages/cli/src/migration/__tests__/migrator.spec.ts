@@ -2579,6 +2579,63 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies['@types/node']).toBe('catalog:');
   });
 
+  it('rewrites the catalog and keeps pnpm.overrides catalog: below pnpm 10.6.2 (varlet #10)', () => {
+    // pnpm 9.5-10.6.1: catalogs work (>= 9.5.0) but settings stay in package.json
+    // (< 10.6.2). The catalog must still be rewritten off the stale vite-plus-test
+    // wrapper, and package.json pnpm.overrides that reference it stay `catalog:`.
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'varlet',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:', vitest: 'catalog:' },
+        pnpm: { overrides: { vite: 'catalog:', vitest: 'catalog:' } },
+        devEngines: { packageManager: { name: 'pnpm', version: '9.15.9', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vitest: 'catalog:' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.18'",
+        '  vite-plus: 0.1.18',
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+    workspaceInfo.downloadPackageManager = {
+      ...workspaceInfo.downloadPackageManager,
+      version: '9.15.9',
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+    };
+    // The vite override stays `catalog:` (settings remain in package.json below 10.6.2).
+    expect(rootPkg.pnpm?.overrides?.vite).toBe('catalog:');
+    // The catalog entries are rewritten off the stale 0.1.18 wrappers.
+    expect(workspace.catalog?.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalog?.['vite-plus']).toBe('latest');
+  });
+
   it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),

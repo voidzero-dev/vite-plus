@@ -48,6 +48,13 @@ When PnP is active, interactive migration prints the incompatibility and asks wh
 
 Force-override/CI mode (`VP_OVERRIDE_PACKAGES`) is respected: when `vitest` is not a managed key there, the project's own `vitest` is never stripped and its `@vitest/*` ecosystem dependencies are not realigned. Object-valued nested npm/Bun overrides are user-owned scopes rather than managed version pins and are preserved.
 
+Catalogs are a separate pnpm feature from workspace settings, supported since
+pnpm 9.5.0, so they are independent of the 10.6.2 settings boundary. Below 10.6.2,
+where overrides stay in `package.json#pnpm`, migration still rewrites the
+workspace catalog off stale `@voidzero-dev/vite-plus-test` wrappers and keeps
+`package.json` `catalog:` overrides as references rather than inlining them to
+concrete versions.
+
 Legacy browser-provider usage must be detected before source imports are
 rewritten. Projects that aliased `vitest` to the removed
 `@voidzero-dev/vite-plus-test` package can import Playwright or WebdriverIO from
@@ -160,6 +167,7 @@ Covered by unit tests in `migrator.spec.ts` (vitest removal, required-peer provi
 | Standalone Yarn writes catalog specs in one pass and is idempotent                          | `migration-standalone-yarn4-idempotent`                                                    |
 | pnpm preserves `catalogs.default` without adding top-level `catalog`                        | `migration-upgrade-pnpm-catalogs-default`                                                  |
 | pnpm reuses a named-only managed toolchain catalog during pkg.pr.new migration              | `migration-upgrade-pnpm-named-catalog`                                                     |
+| pnpm below 10.6.2 keeps `package.json` `catalog:` overrides while rewriting the catalog     | `migration-upgrade-pnpm9-overrides`                                                        |
 | Unmanaged exact-peer Vitest ecosystem versions remain aligned with user-owned Vitest        | `migration-vitest-unmanaged-override`                                                      |
 | Nuxt packages preserve all upstream `vitest` imports without affecting sibling packages     | `migration-upgrade-nuxt-test-utils`, `migration-upgrade-nuxt-test-utils-monorepo`          |
 
