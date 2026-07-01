@@ -90,11 +90,7 @@ The installer resolves the ref to its `0.0.0-commit.<sha>` build through the reg
 
 ### Local `vite-plus` Preview
 
-There are two ways to move a project's local `vite-plus` onto a preview build.
-
-#### With `vp migrate` (recommended)
-
-After installing the preview global CLI above, run migrate in the project:
+After installing the preview global CLI above, run migrate in the project to move its local `vite-plus` onto the same build:
 
 ```bash
 vp migrate
@@ -102,60 +98,4 @@ vp migrate
 
 Migrate points the project at the bridge registry (writing it to `.npmrc`, or `.yarnrc.yml` for Yarn Berry) and pins `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias to the matching `0.0.0-commit.<sha>` version. That registry line is what lets the same versions resolve in the project's own CI, so commit it if you want CI to test the preview too.
 
-#### By hand
-
-Point your package manager at the bridge registry, then pin the commit version. Use the version from the pull request comment (or from `vp --version`).
-
-Configure the registry:
-
-| Package manager | Registry config |
-| --- | --- |
-| npm / pnpm / Bun | `.npmrc`: `registry=https://registry-bridge.viteplus.dev/` |
-| Yarn (v2+) | `.yarnrc.yml`: `npmRegistryServer: "https://registry-bridge.viteplus.dev/"` |
-
-Then pin `vite-plus` and any `vite` alias to the commit version, exactly like ordinary npm versions. For npm and Bun projects, update the relevant `package.json` entries:
-
-```json
-{
-  "devDependencies": {
-    "vite-plus": "0.0.0-commit.<sha>",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>"
-  }
-}
-```
-
-Only include the direct `vite` entry if your project already has one. If your project has `@voidzero-dev/vite-plus-core` directly instead, pin that package to the same commit version. Only include the `overrides` entry if your project already pins `vite` there.
-
-For pnpm workspaces, make the same override change in `pnpm-workspace.yaml` if that is where your Vite+ overrides live:
-
-```yaml
-overrides:
-  vite: 'npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>'
-```
-
-For Yarn projects, update `resolutions` instead:
-
-```json
-{
-  "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>"
-  }
-}
-```
-
-Then install once:
-
-```bash
-vp install
-```
-
-After installing a preview, check the bundled versions with `vp --version`. If the preview includes a newer bundled Vitest, update your `vitest` override to that exact version so `vp test` and project imports keep using the same Vitest copy.
-
-When testing is complete, restore every preview spec first: set `vite-plus` back to `latest`, set any direct `vite` / `@voidzero-dev/vite-plus-core` dependency plus any `vite` override or resolution back to `npm:@voidzero-dev/vite-plus-core@latest`, and remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`). Then reinstall:
-
-```bash
-vp install
-```
+After installing, check the bundled versions with `vp --version`. When testing is complete, restore the published release: set `vite-plus` back to `latest`, remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`), and reinstall with `vp install`.
