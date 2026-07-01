@@ -32,33 +32,13 @@ Older versions are pruned automatically after each upgrade. The active version a
 
 ## Local `vite-plus`
 
-Update the project dependency with the package manager commands in Vite+:
+The recommended way to upgrade an existing Vite+ project is `vp migrate`:
 
 ```bash
-vp update vite-plus
+vp migrate
 ```
 
-You can also use `vp add vite-plus@latest` if you want to move the dependency explicitly to the latest version.
-
-### Updating Aliased Packages
-
-Vite+ sets up an npm alias for its core package during installation:
-
-- `vite` is aliased to `npm:@voidzero-dev/vite-plus-core@latest`
-
-`vp update vite-plus` does not re-resolve this alias in the lockfile. To fully upgrade, update it separately:
-
-```bash
-vp update @voidzero-dev/vite-plus-core
-```
-
-Or update everything at once:
-
-```bash
-vp update vite-plus @voidzero-dev/vite-plus-core
-```
-
-You can verify with `vp outdated` that no Vite+ packages remain outdated.
+On a project that is already on Vite+, migrate does a toolchain version upgrade only: it re-pins `vite-plus`, the `vite` -> `@voidzero-dev/vite-plus-core` alias, and the `vitest` pin to the versions the global `vp` now bundles, across every workspace package. It skips the first-time setup steps (git hooks, editor and agent files, lint migration), so a version bump does not re-touch things you already configured. Pass `--full` to also run that setup.
 
 ### Updating the Vitest Pin
 
@@ -80,7 +60,11 @@ Then set the `vitest` override to that exact version, or rerun `vp migrate` to u
 
 ## Preview Builds
 
-Some Vite+ pull requests publish temporary packages through `pkg.pr.new`. Treat these as nightly or bleeding-edge builds: they are useful when you want to verify a specific fix, test a fresh upstream dependency bump, or confirm a change before the next npm release. For day-to-day work, prefer the published `latest` release.
+Some Vite+ pull requests publish temporary packages for testing before an npm release. Treat these as nightly or bleeding-edge builds: they are useful when you want to verify a specific fix, test a fresh upstream dependency bump, or confirm a change before the next release. For day-to-day work, prefer the published `latest` release.
+
+Each commit on an eligible pull request is published to [pkg.pr.new](https://pkg.pr.new) and registered with the [registry bridge](https://registry-bridge.viteplus.dev/). The bridge serves these builds as ordinary npm versions of the form `0.0.0-commit.<sha>` and proxies every other package to the npm registry. That means you install a preview with normal version specs instead of mutable URLs, and the same versions resolve in CI.
+
+Both `vite-plus` and `@voidzero-dev/vite-plus-core` publish under the same `0.0.0-commit.<sha>` version. Each pull request carries a comment listing the exact version for its latest commit, along with ready-to-copy install steps.
 
 You can find preview builds in pull requests that automatically update upstream dependencies. For examples, search the merged pull requests for [upstream dependency updates](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+is%3Amerged+upgrade+upstream+dependencies).
 
@@ -88,7 +72,7 @@ Preview builds are addressed by pull request number or commit SHA. They are not 
 
 ### Global `vp` Preview
 
-Install a preview build of the global CLI by passing `VP_PR_VERSION` to the installer:
+Install a preview build of the global CLI by passing `VP_PR_VERSION` to the installer. Pass a pull request number or a commit SHA:
 
 ```bash
 curl -fsSL https://vite.plus | VP_PR_VERSION=<pr-or-sha> bash
@@ -102,37 +86,54 @@ irm https://vite.plus/ps1 | iex
 Remove-Item Env:\VP_PR_VERSION
 ```
 
-Run `vp --version` afterward to confirm which build and bundled tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
+The installer resolves the ref to its `0.0.0-commit.<sha>` build through the registry bridge and installs it like any other version. Run `vp --version` afterward to confirm which build and bundled tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
 
 ### Local `vite-plus` Preview
 
-To test an unreleased local package in a project, update the project dependency and any Vite+ alias or override before installing. Use the same pull request number or commit SHA for every preview URL:
+There are two ways to move a project's local `vite-plus` onto a preview build.
 
-- `vite-plus` should point at `https://pkg.pr.new/voidzero-dev/vite-plus@<pr-or-sha>`
-- any direct `vite` alias or direct `@voidzero-dev/vite-plus-core` dependency should point at `https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>`
-- any `vite` override or resolution should point at that same core preview URL
+#### With `vp migrate` (recommended)
 
-For npm and Bun projects, update the relevant `package.json` entries:
+After installing the preview global CLI above, run migrate in the project:
+
+```bash
+vp migrate
+```
+
+Migrate points the project at the bridge registry (writing it to `.npmrc`, or `.yarnrc.yml` for Yarn Berry) and pins `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias to the matching `0.0.0-commit.<sha>` version. That registry line is what lets the same versions resolve in the project's own CI, so commit it if you want CI to test the preview too.
+
+#### By hand
+
+Point your package manager at the bridge registry, then pin the commit version. Use the version from the pull request comment (or from `vp --version`).
+
+Configure the registry:
+
+| Package manager | Registry config |
+| --- | --- |
+| npm / pnpm / Bun | `.npmrc`: `registry=https://registry-bridge.viteplus.dev/` |
+| Yarn (v2+) | `.yarnrc.yml`: `npmRegistryServer: "https://registry-bridge.viteplus.dev/"` |
+
+Then pin `vite-plus` and any `vite` alias to the commit version, exactly like ordinary npm versions. For npm and Bun projects, update the relevant `package.json` entries:
 
 ```json
 {
   "devDependencies": {
-    "vite-plus": "https://pkg.pr.new/voidzero-dev/vite-plus@<pr-or-sha>",
-    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>"
+    "vite-plus": "0.0.0-commit.<sha>",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>"
   },
   "overrides": {
-    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>"
   }
 }
 ```
 
-Only include the direct `vite` entry if your project already has one. If your project has `@voidzero-dev/vite-plus-core` directly instead, update that package spec to the same core preview URL.
+Only include the direct `vite` entry if your project already has one. If your project has `@voidzero-dev/vite-plus-core` directly instead, pin that package to the same commit version. Only include the `overrides` entry if your project already pins `vite` there.
 
-For pnpm workspaces, make the same temporary override change in `pnpm-workspace.yaml` if that is where your Vite+ overrides live:
+For pnpm workspaces, make the same override change in `pnpm-workspace.yaml` if that is where your Vite+ overrides live:
 
 ```yaml
 overrides:
-  vite: 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>'
+  vite: 'npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>'
 ```
 
 For Yarn projects, update `resolutions` instead:
@@ -140,7 +141,7 @@ For Yarn projects, update `resolutions` instead:
 ```json
 {
   "resolutions": {
-    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.<sha>"
   }
 }
 ```
@@ -153,7 +154,7 @@ vp install
 
 After installing a preview, check the bundled versions with `vp --version`. If the preview includes a newer bundled Vitest, update your `vitest` override to that exact version so `vp test` and project imports keep using the same Vitest copy.
 
-When testing is complete, restore every preview spec first: set `vite-plus` back to `latest`, and set any direct `vite` / `@voidzero-dev/vite-plus-core` dependency plus any `vite` override or resolution back to `npm:@voidzero-dev/vite-plus-core@latest`. Then reinstall:
+When testing is complete, restore every preview spec first: set `vite-plus` back to `latest`, set any direct `vite` / `@voidzero-dev/vite-plus-core` dependency plus any `vite` override or resolution back to `npm:@voidzero-dev/vite-plus-core@latest`, and remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`). Then reinstall:
 
 ```bash
 vp install
