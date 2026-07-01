@@ -31,6 +31,7 @@ import {
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
+  pnpmSupportsCatalog,
   pnpmSupportsWorkspaceSettings,
   pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
   projectUsesVitestDirectly,
@@ -661,7 +662,10 @@ export function detectVitePlusBootstrapPending(
   }
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
-    (usePnpmWorkspaceYaml ||
+    // pnpm catalogs require pnpm >= 9.5.0 — a SEPARATE gate from the 10.6.2
+    // `usePnpmWorkspaceYaml` (workspace settings) still used elsewhere here.
+    ((packageManager === PackageManager.pnpm &&
+      pnpmSupportsCatalog(resolvedPackageManagerVersion)) ||
       // Yarn catalogs require Yarn >= 4.10.0 (older Yarn cannot resolve `catalog:`).
       (packageManager === PackageManager.yarn &&
         yarnSupportsCatalog(resolvedPackageManagerVersion)) ||
@@ -931,7 +935,10 @@ export function ensureVitePlusBootstrap(
     );
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
-    (usePnpmWorkspaceYaml ||
+    // pnpm catalogs require pnpm >= 9.5.0 — a SEPARATE gate from the 10.6.2
+    // `usePnpmWorkspaceYaml` (workspace settings) still used elsewhere here.
+    ((workspaceInfo.packageManager === PackageManager.pnpm &&
+      pnpmSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||
       // Yarn catalogs require Yarn >= 4.10.0; older Yarn cannot resolve `catalog:`.
       (workspaceInfo.packageManager === PackageManager.yarn &&
         yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||

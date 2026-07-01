@@ -26,6 +26,7 @@ import {
   mergeViteConfigFiles,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
+  pnpmSupportsCatalog,
   pnpmSupportsWorkspaceSettings,
   projectListsRequiredVitestPeer,
   projectUsesVitestDirectly,
@@ -111,7 +112,8 @@ export function rewriteStandaloneProject(
   // catalogs require Yarn >= 4.10.0 (older Yarn cannot resolve `catalog:`), so a
   // project resolving to an older Yarn falls back to concrete specs.
   const supportCatalog =
-    usePnpmWorkspaceYaml ||
+    (packageManager === PackageManager.pnpm &&
+      pnpmSupportsCatalog(workspaceInfo.downloadPackageManager.version)) ||
     (packageManager === PackageManager.yarn &&
       yarnSupportsCatalog(workspaceInfo.downloadPackageManager.version));
   editJsonFile<{

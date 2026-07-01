@@ -85,6 +85,25 @@ export function pnpmSupportsWorkspaceSettings(version: string): boolean {
   return version === 'latest' || version === 'next';
 }
 
+const PNPM_CATALOG_MIN_VERSION = '9.5.0';
+
+// pnpm catalogs (the `catalog:` protocol and the pnpm-workspace.yaml
+// `catalog`/`catalogs` fields) shipped in pnpm 9.5.0 as a minor change ("Added
+// support for catalogs", https://github.com/pnpm/pnpm/releases/tag/v9.5.0), and
+// every release from 9.5.0 onward supports them. This is a SEPARATE, EARLIER
+// feature than moving package.json#pnpm settings into pnpm-workspace.yaml
+// (`pnpmSupportsWorkspaceSettings`, 10.6.2). `supportCatalog` must gate on THIS,
+// not on workspace-settings support: otherwise a pnpm 9.5–10.6.1 project that
+// already uses catalogs has its reconciled toolchain edges (vite/vite-plus and
+// the vitest ecosystem) inlined to concrete versions instead of kept `catalog:`.
+export function pnpmSupportsCatalog(version: string): boolean {
+  const coerced = semver.coerce(version);
+  if (coerced) {
+    return semver.gte(coerced, PNPM_CATALOG_MIN_VERSION);
+  }
+  return version === 'latest' || version === 'next';
+}
+
 const YARN_CATALOG_MIN_VERSION = '4.10.0';
 
 // Yarn's `catalog:` protocol (and the `.yarnrc.yml` `catalog`/`catalogs` fields)

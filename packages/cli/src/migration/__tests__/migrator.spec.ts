@@ -2450,6 +2450,120 @@ describe('ensureVitePlusBootstrap', () => {
     expect(cliPkg.devDependencies?.vite).toBe('catalog:');
   });
 
+  it('keeps toolchain catalog: refs on a pnpm 9.5-10.6.1 catalog project (varlet-import-resolver #10)', () => {
+    const pkgDir = path.join(tmpDir, 'packages/import-resolver');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: { packageManager: { name: 'pnpm', version: '9.15.9', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({
+        name: 'import-resolver',
+        devDependencies: { '@types/node': 'catalog:', 'vite-plus': 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  '@types/node': ^20.19.0",
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        '  vite-plus: 0.1.18',
+        'overrides:',
+        "  vite: 'catalog:'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'import-resolver', path: 'packages/import-resolver' }],
+    };
+    workspaceInfo.downloadPackageManager = {
+      ...workspaceInfo.downloadPackageManager,
+      version: '9.15.9',
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const pkg = readJson(path.join(pkgDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // pnpm 9.15.9 supports catalogs (>= 9.5.0), so the reconciled toolchain edges
+    // stay catalog: rather than being inlined to the concrete toolchain version.
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies['@types/node']).toBe('catalog:');
+  });
+
+  it('pins the toolchain to concrete on pnpm < 9.5.0 (catalogs unsupported)', () => {
+    // pnpm added catalogs in 9.5.0; below that they cannot resolve, so the
+    // reconciled toolchain edges must stay concrete rather than `catalog:`.
+    const pkgDir = path.join(tmpDir, 'packages/import-resolver');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: { packageManager: { name: 'pnpm', version: '9.4.0', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({
+        name: 'import-resolver',
+        devDependencies: { '@types/node': 'catalog:', 'vite-plus': 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  '@types/node': ^20.19.0",
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        '  vite-plus: 0.1.18',
+        'overrides:',
+        "  vite: 'catalog:'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'import-resolver', path: 'packages/import-resolver' }],
+    };
+    workspaceInfo.downloadPackageManager = {
+      ...workspaceInfo.downloadPackageManager,
+      version: '9.4.0',
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const pkg = readJson(path.join(pkgDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // 9.4.0 < 9.5.0: toolchain edges are concrete (the direct vite is the core alias).
+    expect(pkg.devDependencies['vite-plus']).not.toBe('catalog:');
+    expect(pkg.devDependencies.vite).toContain('@voidzero-dev/vite-plus-core@');
+    // Untouched non-toolchain catalog refs are left as-is.
+    expect(pkg.devDependencies['@types/node']).toBe('catalog:');
+  });
+
   it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
