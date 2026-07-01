@@ -1509,6 +1509,11 @@ async function main() {
         suggestFullMigration: skippedSetupCandidates,
       });
     } else {
+      // Stop the "Checking config compatibility" spinner that
+      // checkWorkspaceRolldownCompatibility left running before printing the
+      // hint and outro; the sibling branches above already clear it, and
+      // without this its timer line keeps re-rendering underneath them.
+      clearMigrationProgress();
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
