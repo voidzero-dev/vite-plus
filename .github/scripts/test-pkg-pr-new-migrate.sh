@@ -310,22 +310,29 @@ fi
 # at a glance. Each must resolve to exactly ONE version (the commit build for
 # vite-plus and vite via the @voidzero-dev/vite-plus-core alias, the bundled
 # upstream for vitest); more than one version of any means the migration or
-# install is broken. Query one package at a time: npm/yarn/bun `why` only accept
-# a single package, and `-r` (recursive across workspaces) is pnpm-only — detect
-# the package manager via `vp env current --json`.
-# Parse with vp's managed node (guaranteed present, unlike a bare `node` that may
-# be a version-manager shim) and slice from the first `{` so a stray notice line
-# before the JSON can't break the parse.
-pm_name="$(cd "$project_dir" && "$vp_bin" env current --json 2>/dev/null \
-  | "$vp_bin" node -e 'try{const s=require("fs").readFileSync(0,"utf8");process.stdout.write((JSON.parse(s.slice(s.indexOf("{"))).package_manager||{}).name||"")}catch{}' 2>/dev/null || true)"
+# install is broken. pnpm's `-r` recurses across workspaces and reports all three
+# names in one query; npm/yarn/bun `why` accept only a single package, so those
+# query one at a time. Detect
+# pnpm from the project's own markers (a `packageManager` pin, a workspace file,
+# or the post-install lockfile) instead of a `vp env current` + `vp node`
+# round-trip: this isolated install runs with VP_NODE_MANAGER=no, so `vp node`
+# has no managed Node to parse the JSON and the detection came back empty.
 why_recursive=
-if [ "$pm_name" = "pnpm" ]; then
+if grep -qE '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' "$project_dir/package.json" 2>/dev/null \
+  || [ -f "$project_dir/pnpm-workspace.yaml" ] \
+  || [ -f "$project_dir/pnpm-lock.yaml" ]; then
   why_recursive=-r
 fi
 echo
 echo "Resolved vite-plus / vite / vitest versions (each should be a single version):"
-for pkg in vite-plus vite vitest; do
-  (cd "$project_dir" && "$vp_bin" why $why_recursive "$pkg") || true
-done
+if [ -n "$why_recursive" ]; then
+  # pnpm: one recursive `why` reports all three package names at once.
+  (cd "$project_dir" && "$vp_bin" why -r vite-plus vite vitest) || true
+else
+  # npm/yarn/bun `why` accept only a single package, so query one at a time.
+  for pkg in vite-plus vite vitest; do
+    (cd "$project_dir" && "$vp_bin" why "$pkg") || true
+  done
+fi
 
 exit "$migrate_status"
