@@ -91,7 +91,6 @@ export function rewriteStandaloneProject(
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   let movedPnpmSettings: Record<string, unknown> | undefined;
-  let shouldRewritePnpmWorkspaceYaml = false;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
   let shouldAllowBrowserProviderBuilds = false;
   // Whether the project uses vitest directly (a required-peer consumer, an
@@ -175,7 +174,6 @@ export function rewriteStandaloneProject(
       }
     } else if (packageManager === PackageManager.pnpm) {
       if (usePnpmWorkspaceYaml) {
-        shouldRewritePnpmWorkspaceYaml = true;
         shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
       }
       const overrideKeys = Object.keys(managed);
@@ -280,14 +278,20 @@ export function rewriteStandaloneProject(
 
   migratePnpmSettingsToWorkspaceYaml(projectPath, movedPnpmSettings);
 
-  if (shouldRewritePnpmWorkspaceYaml) {
+  // Catalogs are supported from pnpm 9.5.0, but pnpm settings only move into
+  // pnpm-workspace.yaml from 10.6.2. When the toolchain edges were rewritten to
+  // `catalog:` (supportCatalog), the catalog entries backing them must be
+  // written even below 10.6.2 or the install cannot resolve them; settings then
+  // stay in package.json (writeWorkspaceSettings = usePnpmWorkspaceYaml). This
+  // mirrors the monorepo orchestrator below.
+  if (packageManager === PackageManager.pnpm && (usePnpmWorkspaceYaml || supportCatalog)) {
     rewritePnpmWorkspaceYaml(
       projectPath,
       pnpmMajorVersion,
       shouldAllowBrowserProviderBuilds,
       usesVitest,
       vitestEcosystemPackages,
-      true,
+      usePnpmWorkspaceYaml,
       providerCatalogAdditions,
     );
   }

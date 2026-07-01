@@ -4439,6 +4439,35 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps['vite-plus']).toBe('catalog:');
   });
 
+  // PR #1891 review (P1): pnpm 9.5.0-10.6.1 supports catalogs (>= 9.5.0) but not
+  // moving settings to pnpm-workspace.yaml (< 10.6.2). The toolchain edges are
+  // rewritten to `catalog:` regardless, so the catalog ENTRIES must still be
+  // written to pnpm-workspace.yaml or the install cannot resolve them.
+  it('writes the catalog to pnpm-workspace.yaml for a standalone project on pnpm 9.5-10.6.1', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '9.15.9';
+    workspaceInfo.downloadPackageManager.version = '9.15.9';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    // package.json emits catalog: specs (this part already works today).
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const devDeps = pkg.devDependencies as Record<string, string>;
+    expect(devDeps.vite).toBe('catalog:');
+    expect(devDeps['vite-plus']).toBe('catalog:');
+
+    // The catalog backing those specs must exist. Below 10.6.2 the pnpm settings
+    // stay in package.json, so the workspace file holds only the catalog.
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
+    const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(yaml).toContain('catalog:');
+    expect(yaml).toContain('vite-plus:');
+    expect(yaml).not.toContain('overrides:');
+  });
+
   it('does not duplicate vite-plus into devDependencies when it already lives in dependencies', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
