@@ -4,6 +4,7 @@
 //! through shim-based version management.
 
 pub mod bin_config;
+mod clean;
 pub mod config;
 mod current;
 mod default;
@@ -94,6 +95,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 println!("Uninstalled Node.js v{}", resolved);
                 Ok(ExitStatus::default())
             }
+            crate::cli::EnvSubcommands::Clean => clean::execute(cwd).await,
             crate::cli::EnvSubcommands::Use { version, unset, no_install, silent_if_unchanged } => {
                 r#use::execute(cwd, version, unset, no_install, silent_if_unchanged).await
             }
