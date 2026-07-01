@@ -43,6 +43,7 @@ jobs:
         with:
           path: docs/node_modules/.vite/task-cache
           key: vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-${{ github.sha }}
+          # Restore the latest main cache; Vite Task fingerprints decide reuse.
           restore-keys: |
             vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-
 
