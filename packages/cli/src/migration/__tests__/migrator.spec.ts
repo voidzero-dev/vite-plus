@@ -317,6 +317,32 @@ describe('rewritePackageJson', () => {
     }
   });
 
+  // PR #1891 review: the vitest-injection fallback must honor the same
+  // VITEST_DIRECT_USAGE_EXCLUDED filter as usesVitestDirectly, otherwise an
+  // excluded @vitest/* package drives a `vitest: catalog:` spec while the
+  // catalog omits `vitest` — a dangling reference that breaks `pnpm install`.
+  it('does not inject a direct vitest for an excluded @vitest/* dep', () => {
+    const pkg: { devDependencies: Record<string, string> } = {
+      // oxlint is a managed tool → needVitePlus → the injection guard runs.
+      // @vitest/eslint-plugin is in VITEST_DIRECT_USAGE_EXCLUDED (a lint plugin,
+      // not a direct vitest consumer), so no direct vitest should be added.
+      devDependencies: { oxlint: '1.0.0', '@vitest/eslint-plugin': '1.0.0' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+  });
+
+  // PR #1891 review: a @nuxt/test-utils package keeps its `from 'vitest'`
+  // imports (preserveNuxtVitestImports), which need a package-local vitest under
+  // strict pnpm/Yarn layouts where vite-plus's transitive vitest is not visible.
+  it('injects a direct vitest for a Nuxt test-utils package', () => {
+    const pkg: { devDependencies: Record<string, string> } = {
+      devDependencies: { '@nuxt/test-utils': '3.0.0' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+  });
+
   // Under pnpm, a package that depends on vite-plus needs a direct `vite` so
   // vitest's required `vite` peer binds to the override (@voidzero-dev/vite-plus-core);
   // otherwise pnpm's autoInstallPeers installs a second upstream vite and splits

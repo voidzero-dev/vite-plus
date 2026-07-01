@@ -14,6 +14,7 @@ import {
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
   getScriptRulesYaml,
+  hasNuxtTestUtilsDependency,
   managedOverridePackages,
   normalizeVitestPeerCatalogSpec,
   pruneLegacyWrapperAliases,
@@ -306,6 +307,11 @@ export function rewritePackageJson(
       (name) =>
         name !== 'vitest' && name.includes('vitest') && !VITEST_DIRECT_USAGE_EXCLUDED.has(name),
     );
+  // A @nuxt/test-utils package keeps its `from 'vitest'` imports (the import
+  // rewriter preserves them for Nuxt packages), so it needs a package-local
+  // `vitest` under strict pnpm/Yarn layouts even though its name doesn't
+  // contain "vitest".
+  const hasNuxtTestUtils = hasNuxtTestUtilsDependency(pkg);
   // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
   // from siblings: in catalog-supporting monorepos that's `catalog:`, under
   // force-override (file:) it's the tgz path. Preserve protocol-prefixed
@@ -354,7 +360,8 @@ export function rewritePackageJson(
     effectiveBrowserMode ||
     isVitestAdjacent ||
     retainedVitestModule ||
-    requiredVitestPeer;
+    requiredVitestPeer ||
+    hasNuxtTestUtils;
   if (existingVitePlusGroup) {
     // Already present in `dependencies` or `devDependencies`: re-pin in place
     // (only vanilla ranges are normalized; protocol pins are preserved) and
@@ -392,7 +399,12 @@ export function rewritePackageJson(
       (effectiveBrowserMode ||
         retainedVitestModule ||
         requiredVitestPeer ||
-        Object.keys(installableDeps).some((name) => name.includes('vitest')))
+        // Only a genuinely vitest-adjacent dep (excludes `@vitest/eslint-plugin`
+        // etc. via VITEST_DIRECT_USAGE_EXCLUDED) or a Nuxt package with preserved
+        // vitest imports warrants a direct pin — otherwise the catalog omits
+        // `vitest` and this would leave a dangling `catalog:` spec.
+        isVitestAdjacent ||
+        hasNuxtTestUtils)
     ) {
       pkg.devDependencies ??= {};
       pkg.devDependencies.vitest = getCatalogDependencySpec(
