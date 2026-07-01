@@ -1126,10 +1126,7 @@ describe('collectInstalledPackageNames', () => {
     });
     const available = collectInstalledPackageNames(tmpDir);
     const config = { jsPlugins: ['eslint-plugin-only-peer'] };
-    sanitizeMigratedOxlintConfig(
-      config as Parameters<typeof sanitizeMigratedOxlintConfig>[0],
-      available,
-    );
+    sanitizeMigratedOxlintConfig(config, available);
     expect(config.jsPlugins).toEqual([]);
   });
 });

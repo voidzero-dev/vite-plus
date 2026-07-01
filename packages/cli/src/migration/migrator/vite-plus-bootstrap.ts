@@ -536,7 +536,7 @@ function someBootstrapProjectPackageJson(
     if (!fs.existsSync(packageJsonPath)) {
       return false;
     }
-    return predicate(readJsonFile(packageJsonPath) as BootstrapPackageJson);
+    return predicate(readJsonFile(packageJsonPath));
   });
 }
 
@@ -1201,7 +1201,7 @@ function readInstalledRawViteVersion(projectPath: string): string | undefined {
   }
   let pkgJson: RawVitePackageJson;
   try {
-    pkgJson = readJsonFile(vitePackageJsonPath) as RawVitePackageJson;
+    pkgJson = readJsonFile(vitePackageJsonPath);
   } catch {
     return undefined;
   }
