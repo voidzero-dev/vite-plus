@@ -618,12 +618,6 @@ fn env_help_doc() -> HelpDoc {
                     "  vp list -g [package]          # List global packages",
                 ],
             ),
-            section_lines(
-                "Tips",
-                vec![
-                    "  Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.",
-                ],
-            ),
         ],
         documentation_url: documentation_url_for_command_path(&["env"]),
     }

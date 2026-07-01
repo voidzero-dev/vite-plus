@@ -489,9 +489,6 @@ Related Commands:
   vp outdated -g [package]      # List outdated packages
   vp list -g [package]          # List global packages
 
-Tips:
-  Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
-
 Documentation: https://viteplus.dev/guide/env
 ```
 
