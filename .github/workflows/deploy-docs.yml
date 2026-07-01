@@ -40,6 +40,9 @@ jobs:
       - run: vp run build
         working-directory: docs
 
+      - run: vp run build
+        working-directory: docs
+
       - run: vpx void deploy --dir docs/.vitepress/dist
         env:
           VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
