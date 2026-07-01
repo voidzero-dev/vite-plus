@@ -74,7 +74,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 - `vp env use` sets a Node.js version for the current shell session
 - `vp env install` installs a Node.js version
 - `vp env uninstall` removes an installed Node.js version
-- `vp env clean` removes unused managed Node.js runtimes, all downloaded package managers, and the Corepack cache. It keeps the current resolved Node.js version and the configured default version.
+- `vp env clean` removes unused managed Node.js runtimes, all downloaded package managers, and the Corepack cache.
 - `vp env exec` runs a command with a specific Node.js version
 - `vp node` runs a Node.js script — shorthand for `vp env exec node`
 

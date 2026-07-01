@@ -18,7 +18,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let package_manager_dir = home_dir.join("package_manager");
     let protected_versions = protected_node_versions(&cwd).await?;
 
-    let corepack_cleaned = run_corepack_cache_clean().await?;
+    let corepack_cleaned = run_corepack_cache_clean(&cwd).await?;
     if corepack_cleaned {
         output::success("Cleaned Corepack cache");
     }
@@ -110,7 +110,11 @@ async fn remove_dir_all_if_exists(path: &Path) -> Result<bool, Error> {
     }
 }
 
-async fn run_corepack_cache_clean() -> Result<bool, Error> {
+async fn run_corepack_cache_clean(cwd: &AbsolutePathBuf) -> Result<bool, Error> {
+    if corepack_cache_clean_would_auto_install(cwd).await? {
+        return Ok(false);
+    }
+
     let result = tokio::process::Command::new("corepack")
         .args(["cache", "clean"])
         .env_remove(env_vars::VP_TOOL_RECURSION)
@@ -120,12 +124,57 @@ async fn run_corepack_cache_clean() -> Result<bool, Error> {
     match result {
         Ok(command_output) if command_output.status.success() => Ok(true),
         Ok(command_output) => Err(Error::Other(corepack_failure_message(&command_output).into())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            output::warn("corepack not found on PATH; skipped Corepack cache clean");
-            Ok(false)
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e.into()),
     }
+}
+
+async fn corepack_cache_clean_would_auto_install(cwd: &AbsolutePathBuf) -> Result<bool, Error> {
+    let corepack_path = match resolve_corepack_from_path(cwd) {
+        Some(path) => path,
+        None => return Ok(false),
+    };
+
+    let bin_dir = config::get_bin_dir()?;
+    if corepack_path.parent() != Some(&bin_dir) {
+        return Ok(false);
+    }
+
+    if config::load_config().await?.shim_mode == config::ShimMode::SystemFirst
+        && crate::shim::dispatch::find_system_tool("corepack").is_some()
+    {
+        return Ok(false);
+    }
+
+    if has_usable_managed_corepack().await {
+        return Ok(false);
+    }
+
+    let resolution =
+        crate::shim::dispatch::resolve_with_cache(cwd).await.map_err(|e| Error::Other(e.into()))?;
+    Ok(crate::shim::dispatch::locate_tool(&resolution.version, "corepack").is_err())
+}
+
+fn resolve_corepack_from_path(cwd: &AbsolutePathBuf) -> Option<AbsolutePathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    let paths = std::env::split_paths(&path_var).map(|path| {
+        if path.is_absolute() || path.starts_with("~") {
+            path
+        } else {
+            cwd.as_absolute_path().as_path().join(path)
+        }
+    });
+    let search_path = std::env::join_paths(paths).ok()?;
+    vite_command::resolve_bin("corepack", Some(&search_path), cwd).ok()
+}
+
+async fn has_usable_managed_corepack() -> bool {
+    let Ok(Some(metadata)) = crate::shim::dispatch::find_package_for_binary("corepack").await
+    else {
+        return false;
+    };
+    crate::shim::dispatch::locate_package_binary(&metadata, "corepack").is_ok()
+        && crate::shim::dispatch::locate_tool(&metadata.platform.node, "node").is_ok()
 }
 
 fn corepack_failure_message(command_output: &std::process::Output) -> String {
