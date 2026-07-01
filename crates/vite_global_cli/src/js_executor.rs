@@ -426,20 +426,19 @@ fn is_preview_version(version: &str) -> bool {
 /// True when the local `vite-plus` should be treated as older than `global`, so
 /// migrate escalates to the global CLI.
 ///
-/// A preview build (`0.0.0-commit.<sha>`) is an unreleased build of future code
-/// under test. Whichever side is a preview wins (is treated as the newest) so
-/// the build under test always performs the migration: a preview local stays
-/// local, a preview global is escalated to. This keeps `vp migrate` running the
-/// build you are actually testing instead of falling back to a stale release.
+/// A preview build (`0.0.0-commit.<sha>`) is an unreleased build under test and
+/// can't be semver-ranked against a release or another preview. When either side
+/// is a preview, the global is the build the user is currently running, so
+/// escalate to it unless local and global are the exact same build (already on
+/// it: a no-op, so stay local). This lets `vp migrate` move a project off a
+/// leftover preview onto the latest preview or the shipped release.
 ///
-/// When neither side is a preview, returns false if a version fails to parse
-/// (be conservative: never escalate on a version we can't understand).
+/// When neither side is a preview, semver-compare and return false if a version
+/// fails to parse (be conservative: never escalate on a version we can't
+/// understand).
 fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
-    if is_preview_version(local) {
-        return false;
-    }
-    if is_preview_version(global) {
-        return true;
+    if is_preview_version(local) || is_preview_version(global) {
+        return local != global;
     }
     match (node_semver::Version::parse(local), node_semver::Version::parse(global)) {
         (Ok(local_v), Ok(global_v)) => local_v < global_v,
@@ -523,16 +522,24 @@ mod tests {
     }
 
     #[test]
-    fn test_preview_version_always_wins() {
-        // A preview local (build under test) stays local even though semver
-        // would rank `0.0.0-...` below a release.
-        assert!(!local_vite_plus_is_older("0.0.0-commit.abc1234", "0.2.1"));
-        // A preview global (build under test) wins: escalate to it even from a
-        // newer-looking release local.
+    fn test_preview_version_routing() {
+        // A preview on either side is a build the user explicitly chose and can't
+        // be semver-ranked; the global is what they are running now, so escalate to
+        // it unless the local is already that exact build.
+
+        // Preview local, stable-release global: escalate. A leftover preview build
+        // under test is upgraded to the shipped release once it lands and you run
+        // migrate with the released global.
+        assert!(local_vite_plus_is_older("0.0.0-commit.abc1234", "0.2.1"));
+        // Stable-release local, preview global: escalate to the build under test,
+        // even from a newer-looking release local.
         assert!(local_vite_plus_is_older("0.2.1", "0.0.0-commit.abc1234"));
         assert!(local_vite_plus_is_older("0.3.0", "0.0.0-commit.abc1234"));
-        // Both preview: keep local-first semantics, run local.
-        assert!(!local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.bbb"));
+        // Two different preview builds: escalate to the global (the latest test
+        // build the user installed) instead of reporting "already using Vite+".
+        assert!(local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.bbb"));
+        // Same preview build on both sides: already on it, stay local (no-op).
+        assert!(!local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.aaa"));
     }
 
     #[test]
