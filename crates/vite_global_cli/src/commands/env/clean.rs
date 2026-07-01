@@ -45,10 +45,9 @@ async fn protected_node_versions(cwd: &AbsolutePath) -> Result<Vec<String>, Erro
 
     if let Some(default_version) = config::load_config().await?.default_node_version {
         let provider = vite_js_runtime::NodeProvider::new();
-        push_unique_version(
-            &mut versions,
-            config::resolve_version_alias(&default_version, &provider).await?,
-        );
+        if let Ok(version) = config::resolve_version_alias(&default_version, &provider).await {
+            push_unique_version(&mut versions, version);
+        }
     }
 
     Ok(versions)
