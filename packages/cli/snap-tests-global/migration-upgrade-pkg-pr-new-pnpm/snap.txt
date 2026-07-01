@@ -12,7 +12,7 @@
 {
   "name": "migration-upgrade-pkg-pr-new-pnpm",
   "devDependencies": {
-    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-v8": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
@@ -30,6 +30,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vite-plus: <semver>
   vitest: <semver>
+  '@vitest/coverage-v8': <semver>
 
 overrides:
   vite: 'catalog:'

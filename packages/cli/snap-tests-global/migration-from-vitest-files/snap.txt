@@ -15,7 +15,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@vitest/browser-playwright": "<semver>",
+    "@vitest/browser-playwright": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",
@@ -35,6 +35,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vitest: <semver>
   vite-plus: <semver>
+  '@vitest/browser-playwright': <semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

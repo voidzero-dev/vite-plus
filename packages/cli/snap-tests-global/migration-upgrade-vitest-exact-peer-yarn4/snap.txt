@@ -15,7 +15,7 @@
 {
   "name": "migration-upgrade-vitest-exact-peer-yarn4",
   "devDependencies": {
-    "@vitest/ui": "<semver>",
+    "@vitest/ui": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },
@@ -38,6 +38,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vite-plus: <semver>
   vitest: <semver>
+  '@vitest/ui': <semver>
 npmPreapprovedPackages:
   - vitest
   - '@vitest/*'

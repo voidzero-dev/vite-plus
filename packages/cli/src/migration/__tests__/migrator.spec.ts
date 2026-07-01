@@ -2328,6 +2328,74 @@ describe('ensureVitePlusBootstrap', () => {
     ).toBe(false);
   });
 
+  it('keeps catalog: refs and rewrites the catalog when it uses legacy wrapper aliases (varlet #10)', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        pnpm: { overrides: { vite: 'catalog:', vitest: 'catalog:' } },
+        devEngines: { packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: {
+          '@vitest/coverage-istanbul': 'catalog:',
+          typescript: 'catalog:',
+          vitest: 'catalog:',
+          vue: 'catalog:',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  typescript: 5.6.3',
+        '  vue: 3.5.21',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.18'",
+        '  vite-plus: 0.1.18',
+        "  '@vitest/coverage-istanbul': 4.1.4",
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    });
+
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    // The vitest-ecosystem refs stay `catalog:` (catalogs are supported here — the
+    // sibling typescript/vue refs are untouched), rather than being inlined to a
+    // concrete pin.
+    expect(appPkg.devDependencies.vitest).toBe('catalog:');
+    expect(appPkg.devDependencies['@vitest/coverage-istanbul']).toBe('catalog:');
+    expect(appPkg.devDependencies.typescript).toBe('catalog:');
+    // The catalog ENTRIES are rewritten: the legacy vitest wrapper alias becomes
+    // upstream vitest, @vitest/coverage-istanbul aligns to it, and the vite alias
+    // advances to the managed core target.
+    expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
+    expect(workspace.catalog['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
+    expect(workspace.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+  });
+
   it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
