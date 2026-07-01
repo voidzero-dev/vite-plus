@@ -145,25 +145,15 @@ jobs:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
       contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
-    name: Docker preview image (${{ matrix.variant }})
+    name: Docker preview image
     runs-on: ubuntu-latest
     needs: publish
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: debian
-            dockerfile: docker/Dockerfile
-            tag_suffix: ''
-          - variant: alpine
-            dockerfile: docker/Dockerfile.alpine
-            tag_suffix: '-alpine'
     env:
       IMAGE: ghcr.io/voidzero-dev/vite-plus
-      TAG: pr-${{ github.event.pull_request.number }}${{ matrix.tag_suffix }}
+      TAG: pr-${{ github.event.pull_request.number }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -184,7 +174,7 @@ jobs:
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: docker
-          file: ${{ matrix.dockerfile }}
+          file: docker/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE }}:${{ env.TAG }}
@@ -194,9 +184,9 @@ jobs:
           # and lets the comment job read the size via `docker manifest inspect`.
           provenance: false
 
-  # Post (or update) a single sticky PR comment with the preview image tags after
-  # both variants publish successfully. Re-runs reuse the same comment via the
-  # hidden marker instead of creating a new one.
+  # Post (or update) a single sticky PR comment with the preview image tag after
+  # it publishes. Re-runs reuse the same comment via the hidden marker instead of
+  # creating a new one.
   comment-docker-preview:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
@@ -220,25 +210,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Compressed download size from the registry manifest (config + layers),
-      # without pulling the images. Matches what `docker pull` transfers and what
+      # without pulling the image. Matches what `docker pull` transfers and what
       # the GHCR package page shows.
-      - name: Measure image sizes
-        id: sizes
+      - name: Measure image size
+        id: size
         run: |
-          size() {
-            local bytes
-            bytes=$(docker manifest inspect "$1" | jq '[.config.size] + [.layers[].size] | add')
-            numfmt --to=si --suffix=B "$bytes"
-          }
-          {
-            echo "debian=$(size "${IMAGE}:pr-${PR_NUMBER}")"
-            echo "alpine=$(size "${IMAGE}:pr-${PR_NUMBER}-alpine")"
-          } >> "$GITHUB_OUTPUT"
+          bytes=$(docker manifest inspect "${IMAGE}:pr-${PR_NUMBER}" | jq '[.config.size] + [.layers[].size] | add')
+          echo "compressed=$(numfmt --to=si --suffix=B "$bytes")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          DEBIAN_SIZE: ${{ steps.sizes.outputs.debian }}
-          ALPINE_SIZE: ${{ steps.sizes.outputs.alpine }}
+          COMPRESSED_SIZE: ${{ steps.size.outputs.compressed }}
         with:
           script: |
             const image = process.env.IMAGE;
@@ -248,18 +230,16 @@ jobs:
             // blocks don't collide with the YAML block-scalar indentation.
             const body = [
               marker,
-              '## 🐳 Docker preview images',
+              '## 🐳 Docker preview image',
               '',
               "Built from this PR's pkg.pr.new build:",
               '',
               '| Image | Compressed size |',
               '| --- | --- |',
-              `| \`${image}:pr-${pr}\` | ${process.env.DEBIAN_SIZE} |`,
-              `| \`${image}:pr-${pr}-alpine\` | ${process.env.ALPINE_SIZE} |`,
+              `| \`${image}:pr-${pr}\` | ${process.env.COMPRESSED_SIZE} |`,
               '',
               '```bash',
               `docker pull ${image}:pr-${pr}`,
-              `docker pull ${image}:pr-${pr}-alpine`,
               '```',
               '',
               'Quick check:',

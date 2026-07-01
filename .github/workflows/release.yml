@@ -220,25 +220,13 @@ jobs:
   # release is published (the image installs vp from npm, so the version must
   # exist first). See docker/Dockerfile and docs/guide/docker.md.
   publish-docker:
-    name: Publish Docker image (${{ matrix.variant }})
+    name: Publish Docker image
     runs-on: ubuntu-latest
     needs: [check, Release]
     if: needs.check.outputs.version_changed == 'true'
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Debian (glibc) is the default: tags get no suffix.
-          - variant: debian
-            dockerfile: docker/Dockerfile
-            suffix: ''
-          # Alpine (musl): tags get the -alpine suffix.
-          - variant: alpine
-            dockerfile: docker/Dockerfile.alpine
-            suffix: '-alpine'
     env:
       VERSION: ${{ needs.check.outputs.version }}
       IMAGE: ghcr.io/voidzero-dev/vite-plus
@@ -261,9 +249,7 @@ jobs:
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         with:
           images: ${{ env.IMAGE }}
-          flavor: |
-            latest=false
-            suffix=${{ matrix.suffix }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ env.VERSION }}
             type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
@@ -274,7 +260,7 @@ jobs:
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: docker
-          file: ${{ matrix.dockerfile }}
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -313,7 +299,6 @@ jobs:
 
             **Docker (GHCR):**
             • `docker pull ${{ env.IMAGE }}:${{ env.VERSION }}`
-            • Alpine: `${{ env.IMAGE }}:${{ env.VERSION }}-alpine`
 
             **Install:**
             • macOS/Linux: `curl -fsSL https://vite.plus | bash`

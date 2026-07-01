@@ -35,11 +35,6 @@ and `linux/arm64` and runs as a non-root user by default.
 
 Browse all published versions and digests on the [GitHub package page](https://github.com/voidzero-dev/vite-plus/pkgs/container/vite-plus).
 
-The default image is Debian (glibc). An Alpine (musl) variant is published under
-the same versions with an `-alpine` suffix (`:latest-alpine`,
-`:<major>-alpine`, and so on). See [Alpine variant](#alpine-musl-variant) for
-when to use it and its tradeoffs.
-
 ## Production: SSR / Node.js server app
 
 For apps that run Node.js in production (SvelteKit, Nuxt, a custom Vite SSR
@@ -161,55 +156,6 @@ Run any `vp` command against a project without installing vp on your machine:
 docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp build
 ```
 
-## Alpine (musl) variant
-
-The `-alpine` tags are a musl build for teams that standardize on Alpine. They
-produce the smallest runtime image, but come with tradeoffs:
-
-- Vite+ installs Node.js from the **unofficial musl builds**
-  (`unofficial-builds.nodejs.org`), which are **not PGP-signed** (the Debian
-  image uses the official, signature-verified builds).
-- Some native addons need musl prebuilds or source compilation.
-- A musl Node.js binary only runs on a musl base, so the runtime stage must also
-  be Alpine (not `debian:bookworm-slim` or distroless).
-
-Prefer the default Debian image unless you specifically need Alpine. The SSR
-pattern with an Alpine runtime:
-
-```dockerfile [Dockerfile]
-# syntax=docker/dockerfile:1
-
-FROM ghcr.io/voidzero-dev/vite-plus:latest-alpine AS build
-WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version* ./
-RUN vp install --frozen-lockfile
-COPY --chown=vp:vp . .
-RUN vp build
-RUN cp "$(vp env which node | head -1)" /tmp/node
-
-FROM ghcr.io/voidzero-dev/vite-plus:latest-alpine AS deps
-WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version* ./
-RUN vp install --frozen-lockfile --prod
-
-# Runtime must be a musl base so the musl Node.js binary runs.
-FROM alpine:3.21 AS runtime
-WORKDIR /app
-ENV NODE_ENV=production
-RUN apk add --no-cache libstdc++
-COPY --from=build /tmp/node /usr/local/bin/node
-COPY --from=build /app/dist ./dist
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./
-USER nobody
-EXPOSE 3000
-CMD ["node", "dist/server.js"]
-```
-
-For a static SPA there is no Node.js at runtime, so only the builder changes:
-swap the build stage to `ghcr.io/voidzero-dev/vite-plus:latest-alpine`; the
-`nginx:alpine` runtime and its output are unchanged.
-
 ## Notes
 
 - **Node.js version**: provisioned from `.node-version`, `engines.node`, or
@@ -223,9 +169,8 @@ swap the build stage to `ghcr.io/voidzero-dev/vite-plus:latest-alpine`; the
 - **Native addons**: the image includes a C/C++ build toolchain (`build-essential`,
   `python3`), so native dependencies such as `better-sqlite3` compile during
   `vp install`.
-- **glibc by default**: the default image is glibc based so it uses the official,
-  signature-verified Node.js builds. An [Alpine/musl variant](#alpine-musl-variant)
-  is also published (`-alpine` tags) with the tradeoffs noted above.
+- **glibc**: the image is glibc based so it uses the official, signature-verified
+  Node.js builds.
 - **Custom base image**: to add `vp` to your own base image instead, run the
   installer: `curl -fsSL https://vite.plus | bash` (set `VP_VERSION` to pin a
   version).
