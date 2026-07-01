@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env, fmt,
     fs::{self, File},
-    io::{self, BufReader, IsTerminal, Write},
+    io::{self, BufRead, BufReader, IsTerminal, Write},
     path::Path,
 };
 
@@ -291,10 +291,20 @@ pub fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if yarn.lock or .yarnrc.yml exists, use yarn@latest
+    // if yarn.lock exists, detect version from lockfile
     let yarn_lock_path = workspace_root.path.join("yarn.lock");
+    if is_exists_file(&yarn_lock_path)? {
+        let version = if is_yarn_lockfile_v1(&yarn_lock_path) {
+            Str::from(">=1.0.0 <2.0.0")
+        } else {
+            version // "latest"
+        };
+        return Ok((PackageManagerType::Yarn, version, None, source));
+    }
+
+    // if .yarnrc.yml exists, use yarn@latest
     let yarnrc_yml_path = workspace_root.path.join(".yarnrc.yml");
-    if is_exists_file(&yarn_lock_path)? || is_exists_file(&yarnrc_yml_path)? {
+    if is_exists_file(&yarnrc_yml_path)? {
         return Ok((PackageManagerType::Yarn, version, None, source));
     }
 
@@ -617,6 +627,21 @@ fn is_exists_file(path: impl AsRef<Path>) -> Result<bool, Error> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e.into()),
     }
+}
+
+/// Detect whether a `yarn.lock` file is for yarn v1 or not.
+///
+/// See https://github.com/yarnpkg/yarn/blob/c2dda503f3759b5be5f0e24ecd9cf5c97a540147/src/lockfile/parse.js#L28
+fn is_yarn_lockfile_v1(path: impl AsRef<Path>) -> bool {
+    let Ok(file) = File::open(path.as_ref()) else {
+        return false;
+    };
+    let reader = BufReader::new(file);
+    reader
+        .lines()
+        .take(2)
+        .filter_map(|line| line.ok())
+        .any(|line| line.trim() == "# yarn lockfile v1")
 }
 
 /// Whether a managed package manager install is complete (usable on the current
@@ -2049,7 +2074,54 @@ mod tests {
         let entry = &package_json["devEngines"]["packageManager"];
         assert_eq!(entry["name"].as_str().unwrap(), "yarn");
         assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+        // resolved to yarn v1
+        assert!(
+            entry["version"].as_str().unwrap().starts_with("1."),
+            "expected yarn v1, got version {:?}",
+            entry["version"]
+        );
         // keep other fields
+        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_yarn_berry_lock() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create yarn.lock
+        fs::write(
+            temp_dir_path.join("yarn.lock"),
+            "__metadata:\n  version: 10\n  cacheKey: 10c0\n",
+        )
+        .expect("Failed to write berry yarn.lock");
+
+        let result = PackageManager::builder(temp_dir_path.to_absolute_path_buf())
+            .build()
+            .await
+            .expect("Should detect yarn");
+        assert_eq!(result.bin_name, "yarn");
+        assert!(
+            result.get_bin_prefix().ends_with("yarn/bin"),
+            "bin_prefix should end with yarn/bin, but got {:?}",
+            result.get_bin_prefix()
+        );
+        // auto-pin writes devEngines.packageManager
+        let package_json_path = temp_dir_path.join("package.json");
+        let package_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+        println!("package_json: {package_json:?}");
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+        // resolved to latest yarn berry (2.x+), not v1
+        assert!(
+            !entry["version"].as_str().unwrap().starts_with("1."),
+            "expected yarn berry, got version {:?}",
+            entry["version"]
+        );
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
 
