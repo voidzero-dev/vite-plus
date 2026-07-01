@@ -45,7 +45,7 @@ Vite Task cannot track environment variable reads, and it cannot always tell whi
 
 Use [Override Inputs And Outputs](#override-inputs-and-outputs) when file system tracking includes files that should not affect the cache, misses files that should, or restores the wrong outputs.
 
-Use [`env`](/config/run#env) when a command needs an environment variable and the value should affect the cache. Use [`untrackedEnv`](/config/run#untrackedenv) when a command needs an environment variable but the value should not affect the cache.
+Use [`env`](/config/run#env) when a command needs an environment variable and the value should affect the cache, or [`untrackedEnv`](/config/run#untrackedenv) when the value should not affect the cache.
 
 These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking](#cooperative-tracking) metadata automatically, including `VITE_*`, `NODE_ENV`, and Vite-managed cache paths that should not become inputs or outputs. A standard `vp build` task does not need manual `input`, `output`, or `env`.
 
