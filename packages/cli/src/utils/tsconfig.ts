@@ -168,9 +168,13 @@ export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName
   return true;
 }
 
+// `vite/client` is intentionally NOT rewritten to `vite-plus/client`: per issue
+// #2004 the migration preserves `vite`/`vite/*` references outside config entry
+// files (a tsconfig is not a `vite.config.*`), and `vite/client` still resolves
+// through the `@voidzero-dev/vite-plus-core` alias. Only `tsdown/client` is
+// rewritten here (tsdown is not part of the vite scoping).
 const TSCONFIG_TYPE_REPLACEMENTS: Record<string, string> = {
   'tsdown/client': 'vite-plus/pack/client',
-  'vite/client': 'vite-plus/client',
 };
 
 export function hasTypesToRewriteInTsconfig(filePath: string): boolean {

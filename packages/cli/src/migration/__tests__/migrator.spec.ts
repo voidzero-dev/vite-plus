@@ -8084,7 +8084,7 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
     expect((tsconfig.compilerOptions as { types: string[] }).types).not.toContain('tsdown/client');
   });
 
-  it('rewrites vite/client to vite-plus/client in tsconfig.json', () => {
+  it('preserves vite/client in tsconfig.json (issue #2004: tsconfig is not a vite.config)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'tsconfig.json'),
       JSON.stringify({ compilerOptions: { types: ['vite/client'] } }, null, 2),
@@ -8093,8 +8093,7 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
     const tsconfig = readJson(path.join(tmpDir, 'tsconfig.json'));
-    expect((tsconfig.compilerOptions as { types: string[] }).types).toContain('vite-plus/client');
-    expect((tsconfig.compilerOptions as { types: string[] }).types).not.toContain('vite/client');
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual(['vite/client']);
   });
 
   it('rewrites types in tsconfig.node.json as well', () => {
@@ -8149,7 +8148,8 @@ describe('existing Vite+ core migration finalization', () => {
     );
     fs.writeFileSync(
       path.join(tmpDir, 'tsconfig.app.json'),
-      JSON.stringify({ compilerOptions: { types: ['vite/client'] } }, null, 2),
+      // tsdown/client is still rewritten (only `vite` is scoped to config files).
+      JSON.stringify({ compilerOptions: { types: ['tsdown/client'] } }, null, 2),
     );
 
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.npm);
@@ -8183,7 +8183,9 @@ describe('existing Vite+ core migration finalization', () => {
       "from 'vite-plus'",
     );
     const tsconfig = readJson(path.join(tmpDir, 'tsconfig.app.json'));
-    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual(['vite-plus/client']);
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual([
+      'vite-plus/pack/client',
+    ]);
     expect(detectPendingCoreMigration(workspaceInfo)).toEqual({
       scripts: false,
       tsconfigTypes: false,

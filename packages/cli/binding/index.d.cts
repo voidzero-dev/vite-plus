@@ -3537,7 +3537,6 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
 export declare function rewriteImportsInDirectory(
   root: string,
   preserveVitestInNuxtPackages?: boolean | undefined | null,
-  extraConfigFiles?: Array<string> | undefined | null,
 ): BatchRewriteResult;
 
 /**

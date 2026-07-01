@@ -4,7 +4,7 @@
 • Dependencies:
     vite-plus  <semver> → <semver>
     vite              → <semver>
-• 1 config update applied, 1 file had imports rewritten
+• 1 file had imports rewritten
 • Package manager settings configured
 
 > cat package.json # scripts should be rewritten without adding package.json overrides
@@ -63,10 +63,10 @@ export default defineConfig({
   plugins: [react()],
 })
 
-> cat tsconfig.app.json # vite/client types should be rewritten
+> cat tsconfig.app.json # vite/client is preserved (issue #2004: tsconfig is not a vite.config)
 {
   "compilerOptions": {
-    "types": ["vite-plus/client"]
+    "types": ["vite/client"]
   }
 }
 

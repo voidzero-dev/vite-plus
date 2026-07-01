@@ -1956,16 +1956,11 @@ struct PackageRewriteContext {
 }
 
 /// Options controlling directory-wide import rewriting.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct RewriteImportsOptions {
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
-    /// Extra absolute paths the migrate resolved as Vite/Vitest config entry
-    /// files (e.g. a custom-named config), in addition to the standard
-    /// `VITE_CONFIG_FILE_NAMES` basenames. `vite` imports are rewritten only in
-    /// config files (issue #2004).
-    pub extra_config_files: Vec<PathBuf>,
 }
 
 impl SkipPackages {
@@ -2016,18 +2011,11 @@ static VITE_CONFIG_FILE_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
 /// imports to `vite-plus` is correct (the unified `defineConfig`). Issue #2004:
 /// `vite` imports are rewritten ONLY in these files; every other file keeps its
 /// `vite` imports, since vite-plus is not a guaranteed superset of vite's exposed
-/// surface. A standard basename OR an exact path the migrate resolved (a
-/// custom-named config, passed as an absolute path matching the walk root)
-/// qualifies.
-fn is_vite_config_file(path: &Path, extra_config_files: &[PathBuf]) -> bool {
-    if path
-        .file_name()
+/// surface. Matched by basename, so it covers configs at any monorepo depth.
+fn is_vite_config_file(path: &Path) -> bool {
+    path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| VITE_CONFIG_FILE_NAMES.iter().any(|config_name| config_name == name))
-    {
-        return true;
-    }
-    extra_config_files.iter().any(|config| config == path)
 }
 
 /// Returns whether the package follows a published-plugin naming convention
@@ -2200,8 +2188,8 @@ pub fn rewrite_imports_in_directory_with_options(
             // Issue #2004: `vite` imports are rewritten only in config entry
             // files; everything else keeps its `vite` imports. This is layered
             // ON TOP of the package-level skip (a skipped package stays skipped).
-            package_context.skip_packages.skip_vite = package_context.skip_packages.skip_vite
-                || !is_vite_config_file(&file_path, &options.extra_config_files);
+            package_context.skip_packages.skip_vite =
+                package_context.skip_packages.skip_vite || !is_vite_config_file(&file_path);
             (file_path, package_context)
         })
         .collect();
@@ -3037,46 +3025,6 @@ describe('test', () => {});"#,
     }
 
     #[test]
-    fn test_vite_rewrite_honors_resolved_custom_config_path() {
-        // A custom-named config the migrate resolved (not a standard basename)
-        // is still treated as a config file when passed via `extra_config_files`.
-        use std::fs;
-
-        let temp = tempdir().unwrap();
-        fs::write(temp.path().join("package.json"), r#"{"name":"my-app"}"#).unwrap();
-        let custom = temp.path().join("build.vite.ts");
-        fs::write(
-            &custom,
-            "import { defineConfig } from 'vite';\nexport default defineConfig({});",
-        )
-        .unwrap();
-        fs::create_dir(temp.path().join("src")).unwrap();
-        fs::write(
-            temp.path().join("src/main.ts"),
-            "import { createServer } from 'vite';\n",
-        )
-        .unwrap();
-
-        rewrite_imports_in_directory_with_options(
-            temp.path(),
-            RewriteImportsOptions {
-                extra_config_files: vec![custom.clone()],
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-        let config = fs::read_to_string(&custom).unwrap();
-        assert!(
-            config.contains("from 'vite-plus'"),
-            "resolved custom config should be rewritten, got: {config}"
-        );
-        // A non-config file is still untouched even with the custom config registered.
-        let main = fs::read_to_string(temp.path().join("src/main.ts")).unwrap();
-        assert!(main.contains("from 'vite'") && !main.contains("vite-plus"), "got: {main}");
-    }
-
-    #[test]
     fn test_preserves_unscoped_vitest_in_nuxt_test_utils_packages() {
         use std::fs;
 
@@ -3111,7 +3059,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true, ..Default::default() },
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
         )
         .unwrap();
 
@@ -3146,7 +3094,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true, ..Default::default() },
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
         )
         .unwrap();
 
