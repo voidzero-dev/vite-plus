@@ -83,6 +83,7 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: '24'
+          cache: true
 
       - run: vp install
 
