@@ -2153,9 +2153,9 @@ The `vp env clean` command reclaims space used by managed runtime and package-ma
 
 ```bash
 $ vp env clean
+✓ Cleaned Corepack cache
 ✓ Removed 2 Node.js runtimes
 ✓ Removed 4 package manager installs
-✓ Cleaned Corepack cache
 ```
 
 ### Current Command (JSON)
