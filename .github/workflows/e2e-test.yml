@@ -295,14 +295,7 @@ jobs:
               vp run build
               vp check --fix
               vp run check
-              # FIXME: rolldown 1.1.3 emits undeclared named exports for
-              # default-imported JSON modules under preserveModules, so vinext's
-              # fallback-metrics-data.json breaks the built output and every
-              # ecosystem fixture dev server fails to load vite.config.ts with
-              # "SyntaxError: Export 'aBeeZee' is not defined in module".
-              # See https://github.com/rolldown/rolldown/issues/10020. Drop the
-              # `|| true` once a fixed rolldown ships.
-              vp run test || true
+              vp run test
           - name: reactive-resume
             node-version: 24
             command: |
