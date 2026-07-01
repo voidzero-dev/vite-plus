@@ -2396,6 +2396,60 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 
+  it('keeps vite-plus catalog: and adds the direct vite as catalog: for a vite-plus consumer (varlet-cli #10)', () => {
+    // packages/varlet-cli lists `vite-plus: catalog:` in dependencies and has no
+    // vite; under pnpm the migration must add a direct vite, and BOTH edges should
+    // reference the catalog rather than inline the concrete toolchain version.
+    const cliDir = path.join(tmpDir, 'packages/cli');
+    fs.mkdirSync(cliDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: { packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(cliDir, 'package.json'),
+      JSON.stringify({ name: 'cli', dependencies: { 'vite-plus': 'catalog:' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        '  vite-plus: 0.1.18',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'cli', path: 'packages/cli' }],
+    });
+
+    const cliPkg = readJson(path.join(cliDir, 'package.json')) as {
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    // vite-plus stays catalog: (not inlined to the concrete toolchain version)...
+    expect(cliPkg.dependencies['vite-plus']).toBe('catalog:');
+    // ...and the required direct vite is added as a catalog: ref, not a concrete pin.
+    expect(cliPkg.devDependencies?.vite).toBe('catalog:');
+  });
+
   it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
