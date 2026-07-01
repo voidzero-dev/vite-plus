@@ -4,32 +4,19 @@ Vite Task can automatically track dependencies and cache tasks run through `vp r
 
 ## Overview
 
-When a task runs successfully (exit code 0), its terminal output (stdout/stderr) is saved. On the next run, Vite Task checks if anything changed:
+When a task runs successfully (exit code 0), its terminal output (stdout/stderr) and all written files (output files) are saved. On the next run, Vite Task checks if anything changed:
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
 2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
-3. **Input files:** did any file that the command reads change?
+3. **Inputs:** did any input file that the command reads change?
 
-If everything matches, the cached output is replayed instantly, and the command does not run.
-
-::: info
-By default, only terminal output is cached and replayed. To cache files produced by a task, configure [`output`](/config/run#output) globs. Matching files are archived after a successful run and restored on a cache hit.
-:::
-
-```ts [vite.config.ts]
-tasks: {
-  build: {
-    command: 'vp build',
-    output: ['dist/**'],
-  },
-}
-```
+When all checks match, Vite Task replays the cached terminal output, restores saved output files, and skips the command.
 
 When a cache miss occurs, Vite Task tells you exactly why:
 
 ```
 $ vp lint ✗ cache miss: 'src/utils.ts' modified, executing
-$ vp build ✗ cache miss: env changed, executing
+$ vp build ✗ cache miss: env 'VITE_GREETING' changed, executing
 $ vp test ✗ cache miss: args changed, executing
 ```
 
@@ -45,7 +32,7 @@ A task can set [`cache: false`](/config/run#cache) to opt out. This cannot be ov
 
 ### 2. CLI flags
 
-`--no-cache` disables caching for everything. `--cache` enables caching for both tasks and scripts, which is equivalent to setting [`run.cache: true`](/config/run#run-cache) for that invocation.
+`--no-cache` disables caching for every task and script in that run. `--cache` enables caching for both tasks and scripts, which is equivalent to setting [`run.cache: true`](/config/run#run-cache) for that invocation.
 
 ### 3. Workspace config
 
@@ -56,29 +43,21 @@ The [`run.cache`](/config/run#run-cache) option in your root `vite.config.ts` co
 | `cache.tasks`   | `true`  | Cache tasks defined in `vite.config.ts` |
 | `cache.scripts` | `false` | Cache `package.json` scripts            |
 
-## Automatic File Tracking
+## Automatic Data Tracking
 
-Vite Task tracks which files each command reads during execution. When a task runs, it records which files the process opens, such as your `.ts` source files, `vite.config.ts`, and `package.json`, and records their content hashes. On the next run, it re-checks those hashes to determine if anything changed.
+Vite Task uses [automatic data tracking](/guide/automatic-tracking) to learn what each task needs for caching so you don't have to configure it manually. Automatic data tracking has two tiers:
 
-This means caching works out of the box for most commands without any configuration. Vite Task also records:
+- **File system tracking:** Vite Task records file reads, missing-file probes, directory listings, and written output files for every task with cache enabled.
+- **Cooperative tracking:** cache-reporting tools can report metadata that file system tracking cannot infer. Vite+ supports this for `vp build` today.
 
-- **Missing files:** if a command probes for a file that doesn't exist, such as `utils.ts` during module resolution, creating that file later correctly invalidates the cache.
-- **Directory listings:** if a command scans a directory, such as a test runner looking for `*.test.ts`, adding or removing files in that directory invalidates the cache.
-
-### Avoiding Overly Broad Input Tracking
-
-Automatic tracking can sometimes include more files than necessary, causing unnecessary cache misses:
-
-- **Tool cache files:** some tools maintain their own cache, such as TypeScript's `.tsbuildinfo` or Cargo's `target/`. These files may change between runs even when your source code has not, causing unnecessary cache invalidation.
-- **Directory listings:** when a command scans a directory, such as when globbing for `**/*.js`, Vite Task sees the directory read but not the glob pattern. Any file added or removed in that directory, even unrelated ones, invalidates the cache.
-
-Use the [`input`](/config/run#input) option to exclude files or to replace automatic tracking with explicit file patterns:
+Use [`input`](/config/run#input) or [`output`](/config/run#output) when a task needs manual tracking rules. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
-    command: 'tsc',
-    input: [{ auto: true }, '!**/*.tsbuildinfo'],
+    command: 'node build.mjs',
+    input: [{ auto: true }, '!dist/**'],
+    output: ['dist/**'],
   },
 }
 ```
@@ -98,7 +77,7 @@ tasks: {
 }
 ```
 
-To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not generally affect caching behavior.
+To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untrackedenv). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not affect caching behavior.
 
 See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
 
