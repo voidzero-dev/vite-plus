@@ -1179,6 +1179,11 @@ async function main() {
       didMigrate = true;
     }
 
+    // finalizeCore has finished; stop the spinner before the interactive setup
+    // prompts below (collectMigrationSetupPlan / framework shims, in --full mode)
+    // so they don't render on top of the still-running progress line.
+    clearMigrationProgress();
+
     // On an existing Vite+ project, `vp migrate` only upgrades the toolchain
     // version. The full setup bucket (hooks, editor, agent files, ESLint/Prettier
     // migration, framework shims, tsconfig baseUrl, .node-version) runs only with
@@ -1203,7 +1208,6 @@ async function main() {
         ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
         : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
-      clearMigrationProgress();
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
