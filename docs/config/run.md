@@ -123,7 +123,7 @@ Commands joined with `&&` (or supplied as an array) are automatically split into
 - **Type:** `Array<string | { task: string, from: DependsOnFrom }>`
 - **Default:** `[]`
 
-`DependsOnFrom` accepts `"dependencies"`, `"devDependencies"`, `"peerDependencies"`, or an array of those values.
+`from` accepts the dependency types `"dependencies"`, `"devDependencies"`, `"peerDependencies"`, or an array of those values, such as `["dependencies", "devDependencies"]`.
 
 Tasks that must complete successfully before this one starts.
 
