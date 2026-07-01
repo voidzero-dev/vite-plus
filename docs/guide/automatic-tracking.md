@@ -87,18 +87,7 @@ tasks: {
 }
 ```
 
-Set `input: []` rarely. Use it when no files should affect the cache fingerprint. For example, a download task can be cached when the same URL always serves the same file. Only changes to the command, such as changing the URL, invalidate the cache:
-
-```ts [vite.config.ts]
-tasks: {
-  downloadSchema: {
-    command: 'curl -O https://example.com/schema.json',
-    input: [],
-  },
-}
-```
-
-Set `output: []` when no files should be restored on a cache hit.
+Set `input: []` when no files should affect the cache fingerprint. Set `output: []` when no files should be restored on a cache hit.
 
 ## Cooperative Tracking
 
