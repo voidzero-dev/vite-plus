@@ -57,15 +57,9 @@ fn should_print_env_header(subcommand: &EnvSubcommands) -> bool {
 
 fn should_print_env_clean_tip(subcommand: &EnvSubcommands) -> bool {
     match subcommand {
-        EnvSubcommands::Current { json } => !json,
         EnvSubcommands::List { json } => !json,
         EnvSubcommands::ListRemote { json, .. } => !json,
-        EnvSubcommands::Print
-        | EnvSubcommands::Use { .. }
-        | EnvSubcommands::Exec { .. }
-        | EnvSubcommands::Which { .. }
-        | EnvSubcommands::Clean => false,
-        _ => true,
+        _ => false,
     }
 }
 
