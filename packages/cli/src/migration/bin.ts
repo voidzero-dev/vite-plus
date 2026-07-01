@@ -479,17 +479,17 @@ function hasExistingVitePlusMigrationCandidates(
 
 function getExistingVitePlusSetupOptions(
   options: MigrationOptions,
-  legacyGitHooksMigrationCandidate: boolean,
   useFullMigrationDefaults = false,
 ): MigrationOptions {
   if (useFullMigrationDefaults) {
     return options;
   }
+  // On a plain version-update, defer all setup (hooks, agent, editor) to
+  // `vp migrate --full`; legacy git-hooks migration (husky/lint-staged) is not
+  // auto-applied here. Explicit per-action flags (e.g. --hooks) still opt in.
   return {
     ...options,
-    hooks:
-      options.hooks ??
-      (legacyGitHooksMigrationCandidate ? (options.interactive ? undefined : true) : false),
+    hooks: options.hooks ?? false,
     agent: options.agent ?? false,
     editor: options.editor ?? false,
   };
@@ -1091,9 +1091,6 @@ async function main() {
     };
 
     const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
-    const legacyGitHooksMigrationCandidate = detectLegacyGitHooksMigrationCandidate(
-      workspaceInfoOptional.rootDir,
-    );
     const vitePlusBootstrapPending = detectVitePlusBootstrapPending(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
@@ -1215,11 +1212,7 @@ async function main() {
       return;
     }
 
-    const setupOptions = getExistingVitePlusSetupOptions(
-      options,
-      legacyGitHooksMigrationCandidate,
-      fullSetup,
-    );
+    const setupOptions = getExistingVitePlusSetupOptions(options, fullSetup);
     const plan = await collectMigrationSetupPlan(
       workspaceInfoOptional.rootDir,
       packageManager,
