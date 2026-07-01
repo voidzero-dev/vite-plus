@@ -15,14 +15,10 @@ const taskRunnerGuideItems = [
   {
     text: 'Task Caching',
     link: '/guide/cache',
-  },
-  {
-    text: 'Automatic Tracking',
-    link: '/guide/automatic-tracking',
-  },
-  {
-    text: 'GitHub Actions Cache',
-    link: '/guide/github-actions-cache',
+    items: [
+      { text: 'Automatic Data Tracking', link: '/guide/automatic-tracking' },
+      { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
+    ],
   },
   {
     text: 'Running Binaries',

@@ -230,7 +230,7 @@ Vite Task passes a set of common environment variables to all tasks:
 - **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
 
-Vite Task automatically detects which files a command uses. See [Automatic Tracking](/guide/automatic-tracking) for the details and when to add manual config.
+Vite Task automatically detects which files a command uses. See [Automatic Data Tracking](/guide/automatic-tracking) for the details and when to add manual config.
 
 **Exclude files** from automatic tracking:
 
