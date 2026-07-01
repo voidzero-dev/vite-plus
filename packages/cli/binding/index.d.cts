@@ -1937,11 +1937,6 @@ export declare class ParallelJsPluginRegistry {
   constructor(workerCount: number);
 }
 
-export declare class ScheduledBuild {
-  wait(): Promise<void>;
-  alreadyScheduled(): boolean;
-}
-
 export declare class TraceSubscriberGuard {
   close(): void;
 }
@@ -2347,10 +2342,6 @@ export interface BindingGeneratedCodeOptions {
   symbols?: boolean;
   preset?: string;
 }
-
-export type BindingGenerateHmrPatchReturn =
-  | { type: 'Ok'; field0: Array<BindingHmrUpdate> }
-  | { type: 'Error'; field0: Array<BindingError> };
 
 export interface BindingHmrBoundaryOutput {
   boundary: string;
