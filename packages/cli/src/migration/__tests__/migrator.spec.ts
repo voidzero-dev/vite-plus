@@ -2727,6 +2727,91 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
+  it('references the catalog for an installed browser provider the injection adds to the catalog', () => {
+    // #2005: a workspace package uses `@vitest/browser-playwright` only through a
+    // Vite+ shim (no dep), so migration ADDS the provider to the default catalog.
+    // The root package that ALSO declares it (concretely) must then reference that
+    // catalog entry — leaving it concrete makes the freshly-added catalog entry
+    // dead/unused.
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: {
+          'vite-plus': 'catalog:',
+          '@vitest/browser-playwright': '^4.0.0',
+          playwright: '^1.60.0',
+          vitest: 'catalog:',
+        },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: { 'vite-plus': 'catalog:', vitest: 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'vite.config.ts'),
+      [
+        "import { defineConfig } from 'vite-plus';",
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        'export default defineConfig({ test: { browser: { enabled: true, provider: playwright() } } });',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        `  vitest: ${VITEST_VERSION}`,
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    // The catalog gains the provider (added because the workspace uses it
+    // source-only), so BOTH the injected (workspace) and the pre-installed (root)
+    // specs must reference the catalog, not a concrete version.
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(rootPkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
+    expect(appPkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
+    expect(rootPkg.devDependencies.playwright).toBe('^1.60.0');
+    expect(rootPkg.devDependencies.vitest).toBe('catalog:');
+  });
+
   it('resolves a Vitest peer catalog before removing its managed catalog entry', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),

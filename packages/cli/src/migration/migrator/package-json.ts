@@ -62,6 +62,10 @@ export function rewritePackageJson(
   // Installed dependency metadata can reveal required Vitest peers whose
   // package names do not include "vitest".
   requiredVitestPeer = false,
+  // Opt-in browser providers the workspace catalog is gaining (some package uses
+  // one only through source/a shim). An already-installed copy of such a provider
+  // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
+  providerCatalogAdditions: ReadonlySet<string> = new Set(),
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -233,14 +237,31 @@ export function rewritePackageJson(
     );
     if (installGroupEntry?.dependencies) {
       if (VITEST_IS_MANAGED_OVERRIDE) {
-        installGroupEntry.dependencies[provider] = getAlignedVitestEcosystemDependencySpec(
-          installGroupEntry.dependencies[provider],
-          provider,
-          installGroupEntry.dependencyField,
-          packageManager,
-          supportCatalog,
-          catalogDependencyResolver,
-        );
+        installGroupEntry.dependencies[provider] = providerCatalogAdditions.has(provider)
+          ? // The workspace catalog is gaining this provider (another package uses
+            // it source-only), so REFERENCE that catalog entry instead of pinning a
+            // concrete version that would leave the entry unused. Mirrors the
+            // source-only inject branch below. See #2005.
+            getCatalogDependencySpec(
+              installGroupEntry.dependencies[provider],
+              VITEST_VERSION,
+              supportCatalog && packageManager !== PackageManager.bun,
+              {
+                dependencyField: installGroupEntry.dependencyField,
+                dependencyName: provider,
+                packageManager,
+                catalogDependencyResolver,
+                preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
+              },
+            )
+          : getAlignedVitestEcosystemDependencySpec(
+              installGroupEntry.dependencies[provider],
+              provider,
+              installGroupEntry.dependencyField,
+              packageManager,
+              supportCatalog,
+              catalogDependencyResolver,
+            );
       }
     } else {
       pkg.devDependencies ??= {};

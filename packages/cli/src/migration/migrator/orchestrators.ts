@@ -250,6 +250,7 @@ export function rewriteStandaloneProject(
       usesVitest,
       retainedVitestModule,
       requiredVitestPeer,
+      providerCatalogAdditions,
     );
 
     // ensure vite-plus is in devDependencies — but only when it isn't already a
@@ -444,6 +445,7 @@ export function rewriteMonorepo(
       workspaceContext,
       true,
       supportCatalog,
+      providerCatalogAdditions,
     );
   }
 
@@ -488,6 +490,10 @@ export function rewriteMonorepoProject(
   // Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog. Defaults to true
   // so the `vp create` callers (always a catalog-capable bundled PM) are covered.
   supportCatalog = true,
+  // Opt-in browser providers the workspace catalog is gaining (a sibling package
+  // uses one source-only). An already-installed copy here must reference that
+  // catalog entry rather than pin a concrete version. See #2005.
+  providerCatalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
@@ -546,6 +552,7 @@ export function rewriteMonorepoProject(
       }),
       retainedVitestModule,
       requiredVitestPeer,
+      providerCatalogAdditions,
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own

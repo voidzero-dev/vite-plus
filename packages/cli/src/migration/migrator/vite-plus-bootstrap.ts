@@ -302,6 +302,10 @@ function reconcileVitePlusBootstrapPackage(
   supportCatalog: boolean,
   ensureVitePlus: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
+  // Opt-in browser providers the workspace catalog is gaining (some package uses
+  // one only through source/a shim). An already-installed copy of such a provider
+  // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
+  providerCatalogAdditions: ReadonlySet<string> = new Set(),
 ): boolean {
   const before = JSON.stringify(pkg);
   const usesVitest = projectUsesVitestDirectly(projectPath, pkg, undefined, true);
@@ -353,14 +357,31 @@ function reconcileVitePlusBootstrapPackage(
     ].find(({ dependencies }) => dependencies?.[provider] !== undefined);
     if (installGroupEntry?.dependencies) {
       if (VITEST_IS_MANAGED_OVERRIDE) {
-        installGroupEntry.dependencies[provider] = getAlignedVitestEcosystemDependencySpec(
-          installGroupEntry.dependencies[provider],
-          provider,
-          installGroupEntry.dependencyField,
-          packageManager,
-          supportCatalog,
-          catalogDependencyResolver,
-        );
+        installGroupEntry.dependencies[provider] = providerCatalogAdditions.has(provider)
+          ? // The workspace catalog is gaining this provider (another package uses
+            // it source-only), so REFERENCE that catalog entry instead of pinning a
+            // concrete version that would leave the entry unused. Mirrors the
+            // source-only inject branch below. See #2005.
+            getCatalogDependencySpec(
+              installGroupEntry.dependencies[provider],
+              VITEST_VERSION,
+              supportCatalog && packageManager !== PackageManager.bun,
+              {
+                dependencyField: installGroupEntry.dependencyField,
+                dependencyName: provider,
+                packageManager,
+                catalogDependencyResolver,
+                preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
+              },
+            )
+          : getAlignedVitestEcosystemDependencySpec(
+              installGroupEntry.dependencies[provider],
+              provider,
+              installGroupEntry.dependencyField,
+              packageManager,
+              supportCatalog,
+              catalogDependencyResolver,
+            );
       }
     } else {
       pkg.devDependencies ??= {};
@@ -659,6 +680,10 @@ export function detectVitePlusBootstrapPending(
   ) {
     return true;
   }
+  // Match the actual reconcile so an already-installed provider whose catalog
+  // entry the migration will add is reported pending (its spec must become
+  // `catalog:`). See #2005.
+  const providerCatalogAdditions = collectInjectedProviderNames(projectPath, packages);
   for (const [index, packagePath] of bootstrapProjectPaths(projectPath, packages).entries()) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(childPackageJsonPath)) {
@@ -675,6 +700,7 @@ export function detectVitePlusBootstrapPending(
         supportCatalog,
         index === 0,
         catalogDependencyResolver,
+        providerCatalogAdditions,
       )
     ) {
       return true;
@@ -947,6 +973,7 @@ export function ensureVitePlusBootstrap(
       supportCatalog,
       true,
       catalogDependencyResolver,
+      providerCatalogAdditions,
     );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -1034,6 +1061,7 @@ export function ensureVitePlusBootstrap(
           supportCatalog,
           false,
           catalogDependencyResolver,
+          providerCatalogAdditions,
         );
         if (
           yarnHoisting &&
