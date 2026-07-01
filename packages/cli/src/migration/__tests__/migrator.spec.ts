@@ -1659,6 +1659,44 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
   });
 
+  it('keeps a bun WORKSPACE `catalog:` override instead of inlining it against a stale catalog', () => {
+    // Same ordering as the pnpm < 10.6.2 case: the override is reconciled against
+    // the still-stale in-memory catalog, so it is transiently inlined to the core
+    // alias. Unlike pnpm < 10.6.2 (which skipped the workspace rewrite, leaving the
+    // inline stuck until that bug was fixed), `rewriteBunCatalog` then rewrites the
+    // catalog AND re-catalogs the now-matching override back to `catalog:`, so the
+    // final result is correct. This test guards that self-heal.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'catalog:' },
+        overrides: { vite: 'catalog:' },
+        catalog: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0',
+          'vite-plus': '0.1.0',
+        },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+      catalog: Record<string, string>;
+    };
+    // The vite override references the catalog (rewritten below), so it stays
+    // `catalog:` rather than being inlined against the stale pre-rewrite catalog.
+    expect(pkg.overrides.vite).toBe('catalog:');
+    // The catalog is rewritten off the stale core@0.1.0 alias.
+    expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
+    expect(pkg.catalog.vite).not.toContain('@0.1.0');
+  });
+
   it('keeps a STANDALONE bun project on concrete specs (no `catalog:`, no catalog field) on upgrade', () => {
     // Regression for the OneSignal-Website-SDK upgrade: a standalone
     // (non-workspace) bun project already on Vite+ with concrete specs. Bun
