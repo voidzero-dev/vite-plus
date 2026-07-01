@@ -55,6 +55,7 @@ import {
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
+  resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
   REMOVE_PACKAGES,
   VITEST_IS_MANAGED_OVERRIDE,
@@ -387,7 +388,12 @@ function reconcileVitePlusBootstrapPackage(
     );
     if (frameworkPeer && !frameworkPresent) {
       pkg.devDependencies ??= {};
-      pkg.devDependencies[frameworkPeer] = '*';
+      pkg.devDependencies[frameworkPeer] = resolveProviderPeerSpec(
+        pkg,
+        frameworkPeer,
+        supportCatalog,
+        catalogDependencyResolver,
+      );
     }
   }
 

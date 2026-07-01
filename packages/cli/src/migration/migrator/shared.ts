@@ -82,6 +82,51 @@ export const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-webdriverio': 'webdriverio',
 };
 
+// Lockstep sibling packages whose declared version a browser provider's runtime
+// framework peer should reuse (they publish together). Keyed by the peer name.
+export const PROVIDER_PEER_VERSION_SIBLINGS: Record<string, readonly string[]> = {
+  playwright: ['@playwright/test'],
+  webdriverio: ['@wdio/cli', '@wdio/globals'],
+};
+
+// A package's declared spec across all four dependency fields, or undefined.
+export function findDeclaredSpec(pkg: DependencyBag, name: string): string | undefined {
+  return (
+    pkg.dependencies?.[name] ??
+    pkg.devDependencies?.[name] ??
+    pkg.peerDependencies?.[name] ??
+    pkg.optionalDependencies?.[name]
+  );
+}
+
+// A deterministic spec for a browser provider's framework peer instead of `*`:
+// reference the catalog when it already owns the peer, otherwise reuse a declared
+// lockstep sibling's version (concrete, or a catalog reference resolved to its
+// concrete value), falling back to `*` only when there is no sibling. See
+// npmx.dev #27.
+export function resolveProviderPeerSpec(
+  pkg: DependencyBag,
+  peer: string,
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): string {
+  if (supportCatalog && catalogDependencyResolver?.('catalog:', peer) !== undefined) {
+    return 'catalog:';
+  }
+  for (const sibling of PROVIDER_PEER_VERSION_SIBLINGS[peer] ?? []) {
+    const spec = findDeclaredSpec(pkg, sibling);
+    const resolved = spec?.startsWith('catalog:')
+      ? catalogDependencyResolver?.(spec, sibling)
+      : spec;
+    // Only reuse a concrete version: a `catalog:` entry may itself alias another
+    // protocol, and npm:/workspace:/file: specs aren't versions to copy.
+    if (resolved && !resolved.includes(':')) {
+      return resolved;
+    }
+  }
+  return '*';
+}
+
 // Browser-provider package names that, when present in the user's deps
 // before migration, signal vitest browser mode even if no source file
 // imports them. This covers config-only browser-mode setups (e.g.

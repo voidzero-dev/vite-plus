@@ -584,6 +584,21 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
   });
 
+  it('pins the provider framework peer to a lockstep sibling instead of * (npmx.dev #27)', () => {
+    // `playwright` and `@playwright/test` release in lockstep, so a newly-added
+    // `playwright` peer should reuse the pinned @playwright/test version rather
+    // than a non-deterministic `*`.
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        '@playwright/test': '1.60.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.devDependencies).toHaveProperty('playwright', '1.60.0');
+  });
+
   it('injects a direct vite devDependency for an npm project that uses an opt-in browser provider', async () => {
     // npm's flat node_modules cannot dedupe the provider's own
     // `@vitest/browser → @vitest/mocker` subtree against the one vite-plus

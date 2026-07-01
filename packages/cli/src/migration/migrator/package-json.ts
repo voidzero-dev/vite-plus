@@ -23,6 +23,8 @@ import {
 } from '../migrator.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
+  findDeclaredSpec,
+  resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
@@ -192,19 +194,6 @@ export function rewritePackageJson(
     if (wasRemoved) {
       needVitePlus = true;
     }
-    // e.g., removing @vitest/browser-playwright should keep `playwright` in devDeps
-    const peerDep = BROWSER_PROVIDER_PEER_DEPS[name];
-    if (
-      wasRemoved &&
-      peerDep &&
-      !pkg.devDependencies?.[peerDep] &&
-      !pkg.dependencies?.[peerDep] &&
-      !pkg.peerDependencies?.[peerDep] &&
-      !pkg.optionalDependencies?.[peerDep]
-    ) {
-      pkg.devDependencies ??= {};
-      pkg.devDependencies[peerDep] = '*';
-    }
   }
   // The browser providers (webdriverio, playwright) are opt-in: vite-plus no
   // longer bundles them at runtime (each drags a heavy non-optional framework
@@ -262,14 +251,15 @@ export function rewritePackageJson(
       );
     }
     const peer = BROWSER_PROVIDER_PEER_DEPS[provider]; // 'webdriverio' / 'playwright'
-    const peerPresent =
-      pkg.dependencies?.[peer] ??
-      pkg.devDependencies?.[peer] ??
-      pkg.peerDependencies?.[peer] ??
-      pkg.optionalDependencies?.[peer];
+    const peerPresent = findDeclaredSpec(pkg, peer);
     if (peer && !peerPresent) {
       pkg.devDependencies ??= {};
-      pkg.devDependencies[peer] = '*';
+      pkg.devDependencies[peer] = resolveProviderPeerSpec(
+        pkg,
+        peer,
+        supportCatalog,
+        catalogDependencyResolver,
+      );
     }
     needVitePlus = true;
   }
