@@ -49,9 +49,6 @@ jobs:
       - run: vp run build
         working-directory: docs
 
-      - run: vp run build
-        working-directory: docs
-
       - name: Save Vite Task cache
         if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
