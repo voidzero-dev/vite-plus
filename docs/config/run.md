@@ -307,13 +307,15 @@ tasks: {
 }
 ```
 
-Use `{ auto: true }` to keep automatic write tracking while adding explicit output globs:
+Use `{ auto: true }` to keep automatic write tracking while adding explicit output globs.
+
+This is useful when a task writes files that should not be restored from the cache. For example, exclude TypeScript `.tsbuildinfo` files:
 
 ```ts [vite.config.ts]
 tasks: {
-  build: {
-    command: 'node build.mjs',
-    output: [{ auto: true }, 'storybook-static/**'],
+  typecheck: {
+    command: 'tsc --build',
+    output: [{ auto: true }, '!*.tsbuildinfo'],
   },
 }
 ```
