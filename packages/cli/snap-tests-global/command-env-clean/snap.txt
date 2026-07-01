@@ -1,0 +1,10 @@
+> mkdir -p fake-bin home/js_runtime/node/20.18.0/bin home/js_runtime/node/22.18.0/bin home/js_runtime/node/24.11.0/bin home/package_manager/pnpm/10.0.0/pnpm/bin home/package_manager/npm/11.0.0/npm/bin # Create isolated runtime and package-manager caches
+> printf '#!/bin/sh\nmkdir -p "$VP_HOME"\ntouch "$VP_HOME/corepack-cleaned"\n' > fake-bin/corepack && chmod +x fake-bin/corepack # Fake corepack for deterministic cache clean
+> printf '{"defaultNodeVersion":"24.11.0"}\n' > home/config.json # Configure default Node.js version
+> PATH="$(pwd)/fake-bin:$PATH" VP_HOME="$(pwd)/home" vp env clean # Clean isolated Vite+ caches
+✓ Removed 1 Node.js runtime
+✓ Removed 2 package manager installs
+✓ Cleaned Corepack cache
+
+> test -d home/js_runtime/node/20.18.0 && test -d home/js_runtime/node/24.11.0 && test ! -d home/js_runtime/node/22.18.0 && test ! -d home/package_manager && test -f home/corepack-cleaned && echo 'clean preserved current/default and removed caches'
+clean preserved current/default and removed caches
