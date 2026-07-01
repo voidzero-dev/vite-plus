@@ -251,15 +251,6 @@ echo "  vite-plus spec: $commit_version"
 echo "  vite spec: $vite_core_spec"
 "$vp_bin" --version
 
-# Resolve the preview CLI's own managed Node, independent of the target
-# project's pin. Probe from the isolated VP_HOME (no project .node-version) so
-# we get the global default rather than the project's. A project pinned to an
-# old/unsupported Node would otherwise fail to launch the preview dist/bin.js,
-# even though the isolated CLI ships a compatible runtime.
-cli_node_version="$(cd "$pr_home" && "$vp_bin" --version 2>/dev/null \
-  | sed -nE 's/.*Node\.js[[:space:]]+v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)"
-echo "  cli node: ${cli_node_version:-unknown}"
-
 # Remove the existing root lockfile and root node_modules so migrate's reinstall
 # resolves from scratch. A stale pre-migrate lockfile can keep an optional-peer
 # copy of vite-plus pinned to an older published version (e.g. a nested oxlint's
@@ -287,17 +278,17 @@ echo
 echo "Running vp migrate in $project_dir"
 set +e
 (
-  # Run the installed JS entry directly so a project-local vite-plus at the
-  # same semver cannot take precedence. Keep cwd at the project root because
-  # project config and plugins may resolve dependencies from process.cwd().
-  # Pin the CLI's own Node (via `env exec --node`) so the project's pinned Node
-  # version cannot block dist/bin.js from starting.
+  # Run migrate through the global CLI's Rust `vp` binary, not by invoking the
+  # JS entry (`node dist/bin.js migrate`) directly. `vp`'s migrate routing
+  # (delegate_migrate) escalates this preview build over any project-local
+  # vite-plus (a preview build always wins) and launches the global CLI's own
+  # managed Node, so a project-local vite-plus at the same semver can't take
+  # precedence and the project's pinned Node can't block startup. Invoking
+  # dist/bin.js directly bypasses that routing and trips the migrate version
+  # check. Keep cwd at the project root because project config and plugins may
+  # resolve dependencies from process.cwd().
   cd "$project_dir"
-  if [ -n "$cli_node_version" ]; then
-    "$vp_bin" env exec --node "$cli_node_version" node "$global_cli_entry" migrate "$project_dir" "$@"
-  else
-    "$vp_bin" node "$global_cli_entry" migrate "$project_dir" "$@"
-  fi
+  "$vp_bin" migrate "$project_dir" "$@"
 )
 migrate_status=$?
 set -e
