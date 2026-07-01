@@ -18,6 +18,11 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let package_manager_dir = home_dir.join("package_manager");
     let protected_versions = protected_node_versions(&cwd).await?;
 
+    let corepack_cleaned = run_corepack_cache_clean().await?;
+    if corepack_cleaned {
+        output::success("Cleaned Corepack cache");
+    }
+
     let node_runtimes_removed =
         clean_node_runtimes(node_dir.as_path(), &protected_versions).await?;
     output::success(&format!(
@@ -30,11 +35,6 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
         "Removed {package_managers_removed} package manager install{}",
         plural(package_managers_removed)
     ));
-
-    let corepack_cleaned = run_corepack_cache_clean().await?;
-    if corepack_cleaned {
-        output::success("Cleaned Corepack cache");
-    }
 
     Ok(ExitStatus::default())
 }
