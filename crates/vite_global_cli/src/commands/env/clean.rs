@@ -20,17 +20,18 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     let node_runtimes_removed =
         clean_node_runtimes(node_dir.as_path(), &protected_versions).await?;
-    let package_managers_removed = clean_package_managers(package_manager_dir.as_path()).await?;
-    let corepack_cleaned = run_corepack_cache_clean().await?;
-
     output::success(&format!(
         "Removed {node_runtimes_removed} Node.js runtime{}",
         plural(node_runtimes_removed)
     ));
+
+    let package_managers_removed = clean_package_managers(package_manager_dir.as_path()).await?;
     output::success(&format!(
         "Removed {package_managers_removed} package manager install{}",
         plural(package_managers_removed)
     ));
+
+    let corepack_cleaned = run_corepack_cache_clean().await?;
     if corepack_cleaned {
         output::success("Cleaned Corepack cache");
     }
