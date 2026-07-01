@@ -20,7 +20,7 @@ Use this workflow when all of these are true:
 - The task has stable input and output tracking for CI.
 - The workflow installs dependencies before restoring `node_modules/.vite/task-cache`.
 
-Fix local misses first. GitHub Actions cache can move Vite Task's local cache directory between runs, but it cannot make an unstable task cacheable.
+If the immediate second run misses, fix the task's tracking config before adding GitHub Actions cache. Check [When To Add Manual Config](/guide/automatic-tracking#when-to-add-manual-config) for common causes of unstable caching and fixes.
 
 ## Measure Before Caching Across Runs
 
