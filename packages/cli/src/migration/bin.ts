@@ -222,18 +222,14 @@ async function checkWorkspaceRolldownCompatibility(
   report: MigrationReport,
   updateProgress?: (message: string) => void,
 ): Promise<void> {
-  const targets = [
-    { path: workspaceInfo.rootDir, label: undefined as string | undefined },
-    ...(workspaceInfo.packages ?? []).map((pkg) => ({
-      path: path.join(workspaceInfo.rootDir, pkg.path),
-      label: pkg.path,
-    })),
-  ];
-  for (const [index, target] of targets.entries()) {
-    const counter = targets.length > 1 ? ` (${index + 1}/${targets.length})` : '';
-    const where = target.label ? `: ${target.label}` : '';
-    updateProgress?.(`Checking config compatibility${counter}${where}`);
-    await checkRolldownCompatibility(target.path, report);
+  const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
+  for (const [index, projectPath] of projectPaths.entries()) {
+    const counter = projectPaths.length > 1 ? ` (${index + 1}/${projectPaths.length})` : '';
+    // Empty for the root (displayRelative(rootDir, rootDir) === ''), else the
+    // package's relative path.
+    const label = displayRelative(projectPath, workspaceInfo.rootDir);
+    updateProgress?.(`Checking config compatibility${counter}${label ? `: ${label}` : ''}`);
+    await checkRolldownCompatibility(projectPath, report);
   }
 }
 
