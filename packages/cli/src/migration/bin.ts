@@ -1163,6 +1163,12 @@ async function main() {
     // (raw vite is read from the untouched node_modules).
     report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
 
+    // finalizeCoreMigrationForExistingVitePlus rewrites Vite/Vitest imports across
+    // every workspace package via a synchronous native directory walk; on a large
+    // monorepo it is the slowest phase (several seconds) and blocks the event loop,
+    // so surface it first instead of leaving the spinner silent. The spinner paints
+    // this message synchronously on start(), before the walk begins.
+    updateMigrationProgress('Rewriting toolchain imports across the workspace');
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1201,6 +1207,7 @@ async function main() {
         ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
         : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
+      clearMigrationProgress();
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
