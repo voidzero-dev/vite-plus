@@ -38,7 +38,11 @@ Pack's positional means entry files/globs (`packages/cli/src/pack-bin.ts`) and i
 
 ```
 $ vp pack packages/ui
-✗ Error: cannot resolve entry: packages/ui
+ℹ entry: packages/ui
+ℹ Build start
+error: Build failed with 1 error:
+
+[UNRESOLVED_ENTRY] Cannot resolve entry module packages/ui.
 ```
 
 Directory targeting exists only via `--root` / `-W` / `-F`, inconsistent with `vp dev <path>`.
@@ -64,6 +68,8 @@ Error: ENOENT: no such file or directory, open '/acme/certs/dev.pem'
 ```
 
 Calling `process.chdir()` in the CLI process would close the gap but is a global mutation that leaks into everything sharing the process. The way out: `vp` never runs Vite or tsdown in-process; the NAPI binding always spawns a fresh child (`packages/cli/binding/src/cli/execution.rs`), so setting the child's spawn cwd achieves full equivalence with no `process.chdir()` and no upstream change.
+
+All of the failures above are reproducible with `vite-plus@0.2.2`: https://github.com/why-reproductions-are-required/vite-plus-monorepo-app-commands-repro
 
 ## Proposed UX
 
@@ -201,7 +207,7 @@ vp dev: using ./frontend (defaultPackage)
   ➜  Local:   http://localhost:5173/
 ```
 
-An explicit path still wins: `vp dev apps/admin` ignores `defaultPackage`. The same key works at a JS workspace root to skip the picker for one blessed app; there `vite-plus` is installed and the usual typed `import { defineConfig } from 'vite-plus'` form applies.
+An explicit path still wins: `vp dev apps/admin` ignores `defaultPackage`.
 
 ### 5. Inside a sub-package: nothing changes
 
