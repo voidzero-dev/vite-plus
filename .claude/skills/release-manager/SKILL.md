@@ -71,15 +71,22 @@ diff that the post-build no-unexpected-changes guard rejects.
 
 This is the only kind of commit that goes directly on the release branch. Everything else goes through `main` (see step 5).
 
-## 3. Optional: pkg.pr.new smoke build
+## 3. Optional: pkg.pr.new smoke test
 
-Add the `pkg.pr.new` label to the release PR to publish installable `0.0.0-commit.<head-sha>` builds:
+This step is optional. **Ask the release manager whether to run it** before doing anything here; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes).
 
-```bash
-gh pr edit <PR#> --repo voidzero-dev/vite-plus --add-label "pkg.pr.new"
-```
+If the release manager says yes:
 
-The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves, remove and re-add the label (this cancels an in-flight build for the branch). Use the `test-pkg-pr-new-migrate` skill to verify the build against a real project.
+1. Add the `pkg.pr.new` label to the release PR to publish installable `0.0.0-commit.<head-sha>` builds:
+
+   ```bash
+   gh pr edit <PR#> --repo voidzero-dev/vite-plus --add-label "pkg.pr.new"
+   ```
+
+2. Wait for the `Publish to pkg.pr.new` workflow run on the release branch to succeed (the pkg-pr-new bot comments install URLs on the PR).
+3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the pkg.pr.new commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
+
+The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
 
 ## 4. Write the release PR description
 
@@ -239,6 +246,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
 - [ ] PR description written from the head branch data; every PR exactly once; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
+- [ ] Smoke test offered to the release manager; if accepted, pkg.pr.new build published and verified via `test-pkg-pr-new-migrate`
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished and validated
