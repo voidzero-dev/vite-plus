@@ -19,17 +19,17 @@ Run a standard vite-plus release from version bump to published announcement. An
 When given a release PR (URL or number), do not start from step 1. First audit the release's current state, then continue from the earliest unfinished step:
 
 - Is the binding version synced? (step 2: `grep -c "'<prev>'" packages/cli/binding/index.cjs` on the release branch)
-- Is the PR description still the `prepare_release` boilerplate, or already a categorized changelog? (step 4)
+- Is the PR description still the `prepare_release` boilerplate, or already a categorized changelog? (step 3)
+- Is a pkg.pr.new build present and for the current head? (step 4)
 - Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
 - What is CI status? (`gh pr checks <PR#>`, step 5)
-- Is a pkg.pr.new build present and for the current head? (step 3)
 
 Report the detected state before making changes, so the previous release manager's work is not redone or overwritten.
 
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
-2. Release manager: sync `binding/index.cjs`, write the changelog PR description, get CI green, optionally smoke-test via pkg.pr.new.
+2. Release manager: sync `binding/index.cjs`, write the changelog PR description, optionally smoke-test via pkg.pr.new, get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
@@ -71,24 +71,7 @@ diff that the post-build no-unexpected-changes guard rejects.
 
 This is the only kind of commit that goes directly on the release branch. Everything else goes through `main` (see step 5).
 
-## 3. Optional: pkg.pr.new smoke test
-
-This step is optional. **Ask the release manager whether to run it** before doing anything here; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes).
-
-If the release manager says yes:
-
-1. Add the `pkg.pr.new` label to the release PR to publish installable `0.0.0-commit.<head-sha>` builds:
-
-   ```bash
-   gh pr edit <PR#> --repo voidzero-dev/vite-plus --add-label "pkg.pr.new"
-   ```
-
-2. Wait for the `Publish to pkg.pr.new` workflow run on the release branch to succeed (the pkg-pr-new bot comments install URLs on the PR).
-3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the pkg.pr.new commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
-
-The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
-
-## 4. Write the release PR description
+## 3. Write the release PR description
 
 The release tag does not exist yet, so read release files from the PR head branch and generate notes against `main`:
 
@@ -174,6 +157,23 @@ echo "$BODY" | grep -c '\\`'                                                    
 echo "$BODY" | tail -1                                                          # boilerplate closing line intact
 ```
 
+## 4. Optional: pkg.pr.new smoke test (before merging)
+
+This step is optional and runs **after the changelog (step 3) is complete and before merging (step 6)**. **Ask the release manager whether to run it**; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes).
+
+If the release manager says yes:
+
+1. Add the `pkg.pr.new` label to the release PR to publish installable `0.0.0-commit.<head-sha>` builds:
+
+   ```bash
+   gh pr edit <PR#> --repo voidzero-dev/vite-plus --add-label "pkg.pr.new"
+   ```
+
+2. Wait for the `Publish to pkg.pr.new` workflow run on the release branch to succeed (the pkg-pr-new bot comments install URLs on the PR).
+3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the pkg.pr.new commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
+
+The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
+
 ## 5. Release-branch CI
 
 Fixes for CI failures go through a **separate PR to `main`**, never as commits on the release branch (the binding sync in step 2 is the sole exception). After the fix PR merges:
@@ -182,7 +182,7 @@ Fixes for CI failures go through a **separate PR to `main`**, never as commits o
 git checkout release/vX.Y.Z && git merge origin/main --no-edit && git push origin release/vX.Y.Z
 ```
 
-Then add the fix PR to the changelog (rerun the step 4 validation; the `generate-notes` count grows by one per merged PR).
+Then add the fix PR to the changelog (rerun the step 3 validation; the `generate-notes` count grows by one per merged PR).
 
 Known release-branch-only failure modes:
 
@@ -207,7 +207,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
 ## 8. Post-release
 
-1. **Polish the GitHub release notes**: the auto-created release body lacks the changelog. Merge the release PR body into it with `gh release edit vX.Y.Z --repo voidzero-dev/vite-plus --notes-file ...`: changelog sections first, keep the generated Published Packages and Installation sections and the asset list, drop the `Merging this PR ...` line, and re-run the step 4 validation greps against the release body.
+1. **Polish the GitHub release notes**: the auto-created release body lacks the changelog. Merge the release PR body into it with `gh release edit vX.Y.Z --repo voidzero-dev/vite-plus --notes-file ...`: changelog sections first, keep the generated Published Packages and Installation sections and the asset list, drop the `Merging this PR ...` line, and re-run the step 3 validation greps against the release body.
 2. **Verify**:
    ```bash
    npm view vite-plus version                       # X.Y.Z
