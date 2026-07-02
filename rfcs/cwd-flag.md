@@ -229,10 +229,11 @@ No picker ever appears below the root.
 vp [-C <dir>] <command> [args...]
 ```
 
-### The `-C <dir>` global flag
+### The `-C, --dir <dir>` global flag
 
 - A vp-global flag, parsed before the subcommand like `git -C` / `make -C`, never forwarded to the underlying tool. It works with every vp command.
 - Semantics: run the command exactly as if invoked in `<dir>`. The directory is resolved against the invocation cwd; a missing directory errors with `directory not found`.
+- Name and long form follow pnpm exactly: pnpm's global `-C, --dir <path>` is documented as "Run as if pnpm was started in `<path>` instead of the current working directory", which is this flag's semantics verbatim. pnpm pairs it with `-w, --workspace-root`, which `vp run` already mirrors, so `-C, --dir` completes the pair.
 - Because it sits before the subcommand, it cannot collide with Vite or tsdown flags, present or future. The subcommands themselves gain zero flags.
 
 ### Positionals and forwarded args: unchanged
@@ -348,7 +349,6 @@ The interactive picker gets pty snapshot coverage in the `vite_task` repo style 
 3. Should `vp test` join the elicitation set? Probably not: Vitest already has first-class `projects` semantics at the root (`-C` works with it regardless).
 4. Exact non-interactive gate: the `vp run` picker's TTY check plus the `CI` check used by the global command picker?
 5. Should `vp dev <dir>` print a one-line tip pointing at `vp -C <dir> dev`, or would that be noise on a fully supported upstream form?
-6. Long form for `-C`: none (git style), or `--cwd` / `--directory` (make style)?
 
 ## Appendix: Naming Survey for `defaultPackage`
 
@@ -367,3 +367,5 @@ How comparable tools name "the member a root-level command targets when none is 
 The pattern is `default` plus the tool's own noun for the unit: Angular, Nx, and Ionic say "project", Cargo says "members", Salesforce says "package directories". vp's noun is "package" (the picker, `vp run` docs, `vite_workspace`, pnpm vocabulary), hence `defaultPackage`.
 
 Rejected: `defaultProject` (collides with Vitest `test.projects`, and the picker says "package"), `defaultWorkspace` ("workspace" means the whole monorepo in vp/pnpm vocabulary), `defaultMembers` (plural, implies running in many packages; meaningless without a workspace), `appRoot`/`rootDirectory`/`base` (collide with Vite's `root`/`base` options), member markers (need enumeration, impossible without workspace metadata). The Angular and Nx deprecations do not transfer: cwd inference is built into the resolution order, and per-environment flexibility is open question 2.
+
+The `-C` scheme does not change this conclusion. Tools with `-C`-style flags (git, make, tar, ninja, terraform, pnpm, yarn, bun) ship the flag with no config-file default at all, and tools that do have a directory config name it after the mechanism precisely because it applies to everything they run (just's `set working-directory`, GitHub Actions' `defaults.run.working-directory`, per-task `cwd` in vp's own `run.tasks`). `defaultPackage` is neither: it selects a member, only for the app commands, only when bare at the root. A mechanism name like `defaultCwd` or `defaultDir` would promise vp-wide effect it does not have; the member-selection name matches its member-selection scope.
