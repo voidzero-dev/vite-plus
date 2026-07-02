@@ -1,6 +1,7 @@
 {
   "ignoredPlatforms": ["win32"],
   "env": {
+    "VP_VERSION": "0.2.1",
     "VITE_DISABLE_AUTO_INSTALL": "1",
     "CI": "",
     "VP_SKIP_INSTALL": ""
