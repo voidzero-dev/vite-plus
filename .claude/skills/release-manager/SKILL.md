@@ -246,26 +246,26 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
    The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table.
-3. **Announce on Discord** (concise format only; do not produce a shorter variant). No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
+3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
 
    ```markdown
    **vite-plus vX.Y.Z is out** :tada:
 
-   <One-line theme summary.>
+   <One short theme line.>
 
    **Highlights**
-   :emoji: **Heading**: explanation.
+   :emoji: one short line per highlight
    (3-5 lines)
 
    **Also in this release**
-   - 5-7 bullets, no PR links or credits
+   - 4-6 short bullets, no PR links or credits
 
    **Bundled versions**
    vite `X`, rolldown `X`, tsdown `X`, vitest `X`, oxlint `X`, oxlint-tsgolint `X`, oxfmt `X`
 
    **Upgrade**: `vp upgrade`
 
-   Full release notes: <https://github.com/voidzero-dev/vite-plus/releases/tag/vX.Y.Z>
+   Full notes: <https://github.com/voidzero-dev/vite-plus/releases/tag/vX.Y.Z>
    Thanks to new contributors @a, @b :wave:
    ```
 
