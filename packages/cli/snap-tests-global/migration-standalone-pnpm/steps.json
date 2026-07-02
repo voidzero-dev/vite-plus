@@ -8,7 +8,7 @@
   },
   "commands": [
     {
-      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml",
+      "command": "node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml",
       "timeout": 120000
     },
     "cat package.json # check package.json has no pnpm section",

@@ -8,7 +8,7 @@
   },
   "commands": [
     {
-      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile",
+      "command": "node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile",
       "timeout": 120000
     },
     "cat package.json # check package.json has overrides field (not pnpm.overrides)",

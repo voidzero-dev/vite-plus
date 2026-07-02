@@ -21,10 +21,10 @@ let localVpPackagesPromise: Promise<string> | undefined;
 /**
  * Pack the checkout's `vite-plus` and `@voidzero-dev/vite-plus-core` once per
  * run, for fixtures with `localVitePlusPackages: true`. Commands routed
- * through `.shared/mock-npm-registry.mjs` serve these tarballs at the
- * checkout version, so real package-manager installs work without the version
- * being published on npm (e.g. on release branches) and exercise the actual
- * local build.
+ * through `local-npm-registry.mjs` serve these tarballs at the checkout
+ * version, so real package-manager installs work without the version being
+ * published on npm (e.g. on release branches) and exercise the actual local
+ * build.
  */
 function packLocalVitePlusPackages(casesDir: string, tempTmpDir: string): Promise<string> {
   localVpPackagesPromise ??= (async () => {
@@ -558,10 +558,9 @@ interface Steps {
    * If true, the harness packs the checkout's `vite-plus` and
    * `@voidzero-dev/vite-plus-core` (once per run) and exposes the tarball
    * directory as `SNAP_LOCAL_VP_PACKAGES_DIR`. Commands wrapped with
-   * `$SNAP_SHARED_DIR/mock-npm-registry.mjs` then install these local
-   * packages at the checkout version instead of resolving it from the npm
-   * registry (which would fail on release branches before the version is
-   * published).
+   * `node $SNAP_LOCAL_REGISTRY -- ...` then install these local packages at
+   * the checkout version instead of resolving it from the npm registry
+   * (which would fail on release branches before the version is published).
    */
   localVitePlusPackages?: boolean;
   /**
@@ -684,10 +683,15 @@ async function runTestCase(
     // shared helper scripts under `<casesDir>/.shared/` without
     // duplicating them into every fixture directory.
     SNAP_CASES_DIR: casesDir,
-    // Shared helper scripts live under `snap-tests/.shared/` only; expose the
-    // directory independently of the active casesDir so `snap-tests-global`
-    // fixtures can use them too.
-    SNAP_SHARED_DIR: path.join(path.dirname(casesDir), 'snap-tests', '.shared'),
+    // Absolute path to the local npm registry wrapper, so fixtures can route
+    // installs through it (`node $SNAP_LOCAL_REGISTRY -- vp ...`).
+    SNAP_LOCAL_REGISTRY: path.join(
+      resolveRepoRoot(casesDir),
+      'packages',
+      'tools',
+      'src',
+      'local-npm-registry.mjs',
+    ),
     // Global CLI snap tests execute the Rust binary from --bin-dir, but the JS
     // entry should come from this checkout instead of a stale ~/.vite-plus install.
     ...(globalCliScriptsDir ? { VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: globalCliScriptsDir } : {}),

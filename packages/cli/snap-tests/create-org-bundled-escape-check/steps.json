@@ -1,5 +1,5 @@
 {
   "commands": [
-    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # `../outside` path rejected at schema-validation, before any tarball fetch"
+    "node $SNAP_LOCAL_REGISTRY -- vp create @your-org --no-interactive # `../outside` path rejected at schema-validation, before any tarball fetch"
   ]
 }

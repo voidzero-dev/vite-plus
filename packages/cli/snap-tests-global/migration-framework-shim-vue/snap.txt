@@ -1,4 +1,4 @@
-> node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # migration should add Vue shim when vue dependency is detected
+> node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # migration should add Vue shim when vue dependency is detected
 
 Formatting code...
 

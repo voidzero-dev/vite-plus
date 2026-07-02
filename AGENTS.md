@@ -54,6 +54,7 @@ vite-plus/
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
 - **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
 - **CLI output behavior**: inspect the relevant code plus `packages/cli/snap-tests/` or `packages/cli/snap-tests-global/`.
+- **Install-testing against the local build**: `packages/tools/src/local-npm-registry.mjs` serves the packed checkout behind a real registry interface; used by install snap fixtures (`localVitePlusPackages`), ecosystem e2e (`ecosystem-ci/patch-project.ts`), and local `vp migrate`/`vp create` iteration (see `CONTRIBUTING.md`).
 
 ## Command and Config Model
 

@@ -1,27 +1,121 @@
-// Minimal mock npm registry used by snap-tests that need install-time control
-// over specific packages (`create-org-*`, and every fixture that installs the
-// locally packed Vite+ packages).
+// Local npm registry for testing Vite+ installs against the checkout.
 //
-// Reads `./mock-manifest.json` if present (keyed by URL path, e.g.
-// `"@your-org/create"`) and optionally serves `.tgz` tarballs from
-// `./tarballs/<name>`. When `SNAP_LOCAL_VP_PACKAGES_DIR` is set (see
-// `localVitePlusPackages` in the snap-test harness), every tarball in that
-// directory is served as a single-version packument, so package managers can
-// install the checkout's own `vite-plus` / `@voidzero-dev/vite-plus-core`
-// even when that version is not published on npm. Picks an ephemeral port,
-// points the package managers of the child environment at it, spawns the
-// wrapped command, and tears down when the child exits.
+// Serves locally packed packages (vite-plus, @voidzero-dev/vite-plus-core,
+// or any other tgz) as single-version packuments behind a real registry HTTP
+// interface, and proxies everything else upstream. Package managers then
+// install the checkout's own version even when it is not published on npm,
+// with no `file:` specs, pkg.pr.new publish, or registry-bridge round-trip.
 //
-// Usage: node mock-server.mjs -- <command> [args...]
+// Used by:
+// - snap tests: the harness packs the checkout once per run (see
+//   `localVitePlusPackages` in `snap-test.ts`) and fixtures wrap commands with
+//   `node $SNAP_LOCAL_REGISTRY -- vp ...`. Fixtures may also provide a
+//   `./mock-manifest.json` (keyed by URL path, e.g. `"@your-org/create"`) and
+//   `./tarballs/<name>` in their case directory (the `create-org-*` cases).
+// - ecosystem e2e: `patch-project.ts` serves the e2e tgz artifacts with
+//   `--packages-dir` so `vp migrate` / `vp install` resolve the local build
+//   through the standard registry code paths.
+// - local development: run `vp migrate` / `vp create` against the checkout
+//   from any project directory without publishing anything:
+//     node <repo>/packages/tools/src/local-npm-registry.mjs --pack -- vp migrate --no-interactive
+//   or keep a server running and export the printed env for repeated runs:
+//     node <repo>/packages/tools/src/local-npm-registry.mjs --pack --serve
+//
+// Usage:
+//   node local-npm-registry.mjs [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]]
+//
+//   --packages-dir <dir>  serve every *.tgz in <dir> (defaults to
+//                         $SNAP_LOCAL_VP_PACKAGES_DIR when set)
+//   --pack                pack the checkout's vite-plus and
+//                         @voidzero-dev/vite-plus-core into a temp dir first
+//   --serve               keep the server running and print the registry URL
+//                         and env exports instead of wrapping a command
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { Agent as HttpsAgent, get as httpsGet } from 'node:https';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
+
+const args = process.argv.slice(2);
+const separatorIndex = args.indexOf('--');
+const flags = separatorIndex === -1 ? args : args.slice(0, separatorIndex);
+const command = separatorIndex === -1 ? [] : args.slice(separatorIndex + 1);
+
+let packagesDir = process.env.SNAP_LOCAL_VP_PACKAGES_DIR;
+let pack = false;
+let serve = false;
+for (let i = 0; i < flags.length; i++) {
+  if (flags[i] === '--packages-dir' && flags[i + 1]) {
+    packagesDir = flags[++i];
+  } else if (flags[i] === '--pack') {
+    pack = true;
+  } else if (flags[i] === '--serve') {
+    serve = true;
+  } else {
+    console.error(`local-npm-registry: unknown option ${flags[i]}`);
+    process.exit(2);
+  }
+}
+if (!serve && command.length === 0) {
+  console.error(
+    'usage: node local-npm-registry.mjs [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]]',
+  );
+  process.exit(2);
+}
+
+// The script lives at `packages/tools/src/`, so the repo root is three up.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+// Pack the checkout's publishable Vite+ packages so they can be served at the
+// checkout version. Mirrors the snap harness's `packLocalVitePlusPackages`,
+// for standalone (dev / e2e) invocations that don't run under the harness.
+function packLocalVitePlusPackages() {
+  for (const sentinel of ['cli/dist/bin.js', 'core/dist']) {
+    if (!existsSync(path.join(repoRoot, 'packages', sentinel))) {
+      throw new Error(
+        `Cannot pack local Vite+ packages: packages/${sentinel} is missing. Run \`pnpm build\` first.`,
+      );
+    }
+  }
+  const bindingDir = path.join(repoRoot, 'packages', 'cli', 'binding');
+  const hostBindingPrefix = `vite-plus.${process.platform}-${process.arch}`;
+  const hasHostBinding = readdirSync(bindingDir).some(
+    (entry) => entry.startsWith(hostBindingPrefix) && entry.endsWith('.node'),
+  );
+  if (!hasHostBinding) {
+    throw new Error(
+      `Cannot pack local Vite+ packages: no ${hostBindingPrefix}*.node in ${bindingDir}. ` +
+        'Run `pnpm bootstrap-cli` (or build the NAPI binding) first.',
+    );
+  }
+  const destination = mkdtempSync(path.join(tmpdir(), 'vp-local-registry-pack-'));
+  const result = spawnSync(
+    'pnpm',
+    [
+      '--filter',
+      'vite-plus',
+      '--filter',
+      '@voidzero-dev/vite-plus-core',
+      'pack',
+      '--pack-destination',
+      destination,
+    ],
+    { cwd: repoRoot, stdio: ['ignore', 'ignore', 'inherit'], shell: process.platform === 'win32' },
+  );
+  if (result.status !== 0) {
+    throw new Error(`pnpm pack failed with exit code ${result.status}`);
+  }
+  return destination;
+}
+
+if (pack && !packagesDir) {
+  packagesDir = packLocalVitePlusPackages();
+}
 
 const manifest = existsSync('./mock-manifest.json')
   ? JSON.parse(readFileSync('./mock-manifest.json', 'utf-8'))
@@ -56,10 +150,9 @@ const upstreamAgent = new HttpsAgent({ keepAlive: true, maxSockets: 64 });
 function readPackageJsonFromTarball(tgzBytes, sourcePath) {
   const tar = gunzipSync(tgzBytes);
   for (let offset = 0; offset + 512 <= tar.length; ) {
-    const name = tar
-      .subarray(offset, offset + 100)
-      .toString()
-      .replace(/\0[^]*$/, '');
+    const rawName = tar.subarray(offset, offset + 100).toString();
+    const nulIndex = rawName.indexOf('\0');
+    const name = nulIndex === -1 ? rawName : rawName.slice(0, nulIndex);
     if (!name) {
       break; // end-of-archive marker
     }
@@ -79,17 +172,16 @@ function readPackageJsonFromTarball(tgzBytes, sourcePath) {
   throw new Error(`package/package.json not found in ${sourcePath}`);
 }
 
-const localPackagesDir = process.env.SNAP_LOCAL_VP_PACKAGES_DIR;
 const localTarballs = new Map(); // tarball basename -> absolute path
 // Far in the past so package-manager minimum-release-age gates never
 // quarantine the locally served versions.
 const LOCAL_PACKAGE_TIME = '2020-01-01T00:00:00.000Z';
-if (localPackagesDir) {
-  for (const basename of readdirSync(localPackagesDir)) {
+if (packagesDir) {
+  for (const basename of readdirSync(packagesDir)) {
     if (!basename.endsWith('.tgz')) {
       continue;
     }
-    const tgzPath = path.join(localPackagesDir, basename);
+    const tgzPath = path.join(packagesDir, basename);
     const bytes = readFileSync(tgzPath);
     const pkg = readPackageJsonFromTarball(bytes, tgzPath);
     localTarballs.set(basename, tgzPath);
@@ -182,7 +274,7 @@ function proxyToUpstream(req, res) {
   fetchUrl(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, 5);
 }
 
-const server = createServer(async (req, res) => {
+const server = createServer((req, res) => {
   const key = decodeURIComponent(req.url ?? '/').replace(/^\/+/, '');
   if (Object.hasOwn(manifest, key)) {
     const address = server.address();
@@ -206,53 +298,80 @@ const server = createServer(async (req, res) => {
     }
   }
   // Proxy anything we don't mock (pnpm/latest, tarball downloads for real
-  // packages, etc.) to the upstream registry. Keeps the fixture scoped to
-  // just the @org/create manifest while letting vp's other startup work
-  // (package-manager download) succeed normally.
-  await proxyToUpstream(req, res);
+  // packages, etc.) to the upstream registry. Keeps the local packages in
+  // charge while letting everything else (package-manager download, real
+  // dependencies) resolve normally.
+  proxyToUpstream(req, res);
 });
+
+// Registry env for every package manager, each of which reads its own
+// spelling: npm and bun honor NPM_CONFIG_REGISTRY, pnpm >= 10.6 only reads
+// PNPM_CONFIG_* (older pnpm read the lowercase npm_config_* form), and Yarn
+// Berry only reads YARN_-prefixed settings and refuses plain-http registries
+// unless the host is whitelisted.
+//
+// Yarn Berry persists packuments (with our ephemeral-port tarball URLs) in
+// its global folder, and bun's install cache trusts name@version without
+// refetching, so a later run would reuse dead URLs or stale local package
+// bytes. Give each run throwaway caches instead.
+function buildRegistryEnv(registry) {
+  return {
+    NPM_CONFIG_REGISTRY: registry,
+    npm_config_registry: registry,
+    PNPM_CONFIG_REGISTRY: registry,
+    YARN_NPM_REGISTRY_SERVER: registry,
+    YARN_UNSAFE_HTTP_WHITELIST: '127.0.0.1',
+    YARN_GLOBAL_FOLDER: mkdtempSync(path.join(tmpdir(), 'vp-local-registry-yarn-')),
+    BUN_INSTALL_CACHE_DIR: mkdtempSync(path.join(tmpdir(), 'vp-local-registry-bun-')),
+  };
+}
+
+function cleanupRegistryEnv(env) {
+  rmSync(env.YARN_GLOBAL_FOLDER, { recursive: true, force: true });
+  rmSync(env.BUN_INSTALL_CACHE_DIR, { recursive: true, force: true });
+}
 
 server.listen(0, '127.0.0.1', () => {
   const address = server.address();
   if (!address || typeof address === 'string') {
-    console.error('mock-server: failed to bind');
+    console.error('local-npm-registry: failed to bind');
     process.exit(1);
   }
   const registry = `http://127.0.0.1:${address.port}`;
-  const separatorIndex = process.argv.indexOf('--');
-  if (separatorIndex === -1) {
-    console.error('usage: node mock-server.mjs -- <command> [args...]');
-    server.close(() => process.exit(2));
+  const registryEnv = buildRegistryEnv(registry);
+
+  if (serve) {
+    // First line is machine-readable so callers (e.g. patch-project.ts) can
+    // spawn `--serve` and read the URL and env; the rest is copy-paste for
+    // humans.
+    const lines = [
+      JSON.stringify({ registry, env: registryEnv }),
+      '',
+      `# serving local packages${packagesDir ? ` from ${packagesDir}` : ''}`,
+      ...Object.keys(manifest).map((name) => `#   ${name}`),
+      '# run commands against it with:',
+      ...Object.entries(registryEnv).map(([key, value]) => `export ${key}=${value}`),
+    ];
+    process.stdout.write(`${lines.join('\n')}\n`);
+    const shutdown = () => {
+      cleanupRegistryEnv(registryEnv);
+      // Exit without waiting for `server.close()`: idle keep-alive
+      // connections from package managers would delay the callback
+      // indefinitely, leaking the process.
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
     return;
   }
-  const [cmd, ...args] = process.argv.slice(separatorIndex + 1);
-  // Yarn Berry persists packuments (with our ephemeral-port tarball URLs) in
-  // its global folder, and bun's install cache trusts name@version without
-  // refetching, so a later invocation would reuse dead URLs or stale local
-  // package bytes. Give each invocation throwaway caches instead.
-  const yarnGlobalFolder = mkdtempSync(path.join(tmpdir(), 'vp-mock-registry-yarn-'));
-  const bunCacheDir = mkdtempSync(path.join(tmpdir(), 'vp-mock-registry-bun-'));
-  const child = spawn(cmd, args, {
-    env: {
-      ...process.env,
-      // Every package manager reads its own env spelling: npm and bun honor
-      // NPM_CONFIG_REGISTRY, pnpm >= 10.6 only reads PNPM_CONFIG_* (older
-      // pnpm read the lowercase npm_config_* form), and Yarn Berry only reads
-      // YARN_-prefixed settings and refuses plain-http registries unless the
-      // host is whitelisted.
-      NPM_CONFIG_REGISTRY: registry,
-      npm_config_registry: registry,
-      PNPM_CONFIG_REGISTRY: registry,
-      YARN_NPM_REGISTRY_SERVER: registry,
-      YARN_UNSAFE_HTTP_WHITELIST: '127.0.0.1',
-      YARN_GLOBAL_FOLDER: yarnGlobalFolder,
-      BUN_INSTALL_CACHE_DIR: bunCacheDir,
-    },
+
+  const [cmd, ...cmdArgs] = command;
+  const child = spawn(cmd, cmdArgs, {
+    env: { ...process.env, ...registryEnv },
     stdio: 'inherit',
   });
   child.on('exit', (code, signal) => {
-    rmSync(yarnGlobalFolder, { recursive: true, force: true });
-    rmSync(bunCacheDir, { recursive: true, force: true });
+    cleanupRegistryEnv(registryEnv);
     const exitCode = code ?? (signal ? 128 : 0);
     server.close(() => process.exit(exitCode));
   });

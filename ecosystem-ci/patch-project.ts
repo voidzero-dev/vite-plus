@@ -1,5 +1,6 @@
-import { execSync } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { execSync, spawn } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
@@ -19,11 +20,75 @@ const repoRoot = join(ecosystemCiDir, project);
 const repoConfig = repos[project as keyof typeof repos];
 const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
 const cwd = directory ? join(repoRoot, directory) : repoRoot;
-// The e2e build job pins packages/cli to 0.0.0 before `pnpm pack`, so the
-// artifact is always vite-plus-0.0.0.tgz regardless of the committed version.
-const vitePlusTgz = `file:${tgzDir}/vite-plus-0.0.0.tgz`;
 // run vp migrate
 const cli = process.env.VP_CLI_BIN ?? 'vp';
+
+// The packed local build in tmp/tgz is served through a local npm registry
+// (local-npm-registry.mjs), so vp migrate pins and installs the checkout's
+// own version through the standard registry code paths — no `file:` specs.
+// The e2e build job pins packages/cli to 0.0.0 before `pnpm pack`; a local
+// run can serve whatever version the checkout carries.
+const vitePlusVersion = readdirSync(tgzDir)
+  .map((entry) => /^vite-plus-(\d.*)\.tgz$/.exec(entry)?.[1])
+  .find(Boolean);
+if (!vitePlusVersion) {
+  console.error(`No vite-plus-<version>.tgz found in ${tgzDir}`);
+  process.exit(1);
+}
+
+const registryScript = join(
+  import.meta.dirname,
+  '..',
+  'packages',
+  'tools',
+  'src',
+  'local-npm-registry.mjs',
+);
+// Detach the server so it can outlive this script on CI: the lockfiles
+// written below reference its tarball URLs, and later workflow steps (the
+// project's own vp commands) inherit the registry env via GITHUB_ENV.
+// stderr must not inherit this process's streams: the detached server would
+// hold the step's output pipe open after this script exits.
+const registryServer = spawn(
+  process.execPath,
+  [registryScript, '--serve', '--packages-dir', tgzDir],
+  {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    detached: true,
+  },
+);
+const registryInfo = await new Promise<{ registry: string; env: Record<string, string> }>(
+  (resolve, reject) => {
+    let buffered = '';
+    registryServer.stdout.on('data', (chunk: Buffer) => {
+      buffered += chunk.toString();
+      const newline = buffered.indexOf('\n');
+      if (newline !== -1) {
+        resolve(JSON.parse(buffered.slice(0, newline)));
+      }
+    });
+    registryServer.on('error', reject);
+    registryServer.on('exit', (code) => reject(new Error(`registry exited early (${code})`)));
+  },
+);
+console.log(
+  `Serving local Vite+ packages at ${registryInfo.registry} (vite-plus@${vitePlusVersion})`,
+);
+// The server prints nothing after the handshake; release the pipe and the
+// process handle so they don't keep this script's event loop alive after the
+// installs below finish.
+registryServer.stdout.destroy();
+registryServer.unref();
+
+if (process.env.GITHUB_ENV) {
+  // Keep the registry reachable for the workflow's later steps.
+  const lines = Object.entries(registryInfo.env)
+    .map(([key, value]) => `${key}=${value}\n`)
+    .join('');
+  await appendFile(process.env.GITHUB_ENV, lines);
+} else {
+  process.on('exit', () => registryServer.kill());
+}
 
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
@@ -61,11 +126,10 @@ if (project === 'vinext') {
 }
 
 if (project === 'dify') {
-  // dify sets `minimumReleaseAge` (0) with `resolutionMode: time-based`, and
-  // pnpm 11.5.2 crashes with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED
-  // once the policy machinery is active and the local `file:` tgz overrides
-  // produce violations (file deps have no publish timestamp). Remove the key
-  // so the policy stays inactive for the ecosystem run.
+  // dify sets `minimumReleaseAge` with `resolutionMode: time-based`. Keep the
+  // policy inactive for the ecosystem run so a same-day upstream publish does
+  // not fail resolution (the local Vite+ packages themselves carry an old
+  // `time` from the registry, so they always pass age gates).
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
   const workspace = await readFile(workspacePath, 'utf-8');
   const patched = workspace.replace(/^minimumReleaseAge:.*\n/m, '');
@@ -78,16 +142,6 @@ if (project === 'dify') {
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
-
-// Bun is uniquely strict about vitest's `peer vite ^6 || ^7 || ^8` resolution
-// (https://github.com/oven-sh/bun/issues/8406): it checks both the override
-// target's package name and version. Point bun-based projects at the
-// vite-7.99.0 alias tgz (a copy of core renamed to "vite" with a satisfying
-// version); pnpm/npm/yarn must keep pointing at the real core tgz, otherwise
-// they trip a registry lookup for "vite@<version>" when a workspace
-// sub-package and the override both reference the same vite-named alias.
-const isBunProject = project === 'bun-vite-template';
-const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
 
 // Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. The `@vitest/*` family
 // are exact deps of `vitest`, so a single `vitest` override cascades them.
@@ -106,78 +160,41 @@ const vitestOverrides = {
   '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
+// E2E intentionally installs just-published toolchain packages (e.g.
+// @oxlint/migrate during `vp migrate`, freshly bumped @oxc-project/runtime
+// during `vp install`). Disable pnpm's minimumReleaseAge gate so a same-day
+// publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION. pnpm >= 10.6
+// only reads the PNPM_CONFIG_* spelling; older pnpm reads the lowercase form.
+const releaseAgeEnv = {
+  pnpm_config_minimum_release_age: '0',
+  PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0',
+};
+
 const migrateEnv: NodeJS.ProcessEnv = {
   ...process.env,
+  ...registryInfo.env,
   ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
   VP_OVERRIDE_PACKAGES: JSON.stringify({
-    vite: `file:${tgzDir}/${viteOverrideTgz}`,
-    '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+    vite: `npm:@voidzero-dev/vite-plus-core@${vitePlusVersion}`,
     ...vitestOverrides,
   }),
-  VP_VERSION: vitePlusTgz,
-  // E2E intentionally installs just-published toolchain packages (e.g.
-  // @oxlint/migrate during `vp migrate`). Disable pnpm's minimumReleaseAge gate
-  // so a same-day publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION.
-  // This is scoped to the migrate subprocess; the workflow's follow-up
-  // `vp install` runs without it (see the dify note below).
-  pnpm_config_minimum_release_age: '0',
+  // The vp binary was built before the pack step pinned the package versions,
+  // so align the version migrate pins with the tgz the registry serves.
+  VP_VERSION: vitePlusVersion,
+  ...releaseAgeEnv,
 };
 
-const isDify = project === 'dify';
+execSync(`${cli} migrate --no-agent --no-interactive`, {
+  cwd,
+  stdio: 'inherit',
+  env: migrateEnv,
+});
 
-try {
-  execSync(`${cli} migrate --no-agent --no-interactive`, {
-    cwd,
-    stdio: 'inherit',
-    env: migrateEnv,
-  });
-} catch (err) {
-  // dify sets `resolutionMode: time-based`, so the gate var above re-activates
-  // pnpm's resolution policy during migrate's auto-install. vp's bundled pnpm
-  // has no handleResolutionPolicyViolations callback, so the local `file:` tgz
-  // overrides (no publish timestamp) crash it with
-  // ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Tolerate it: migrate still
-  // generated the config and import rewrites, and the workflow's follow-up
-  // `vp install` (run without the gate var, so the policy stays inactive) does
-  // the real install. Other projects must still fail hard.
-  if (!isDify) {
-    throw err;
-  }
-  console.warn(
-    'dify: `vp migrate` auto-install failed (expected with the age gate active); ' +
-      'continuing, `vp install` will resync node_modules.',
-  );
-}
-
-const packageJsonPath = join(cwd, 'package.json');
-const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as {
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-};
-
-if (packageJson.dependencies?.['vite-plus']) {
-  packageJson.dependencies['vite-plus'] = vitePlusTgz;
-} else {
-  packageJson.devDependencies ??= {};
-  packageJson.devDependencies['vite-plus'] = vitePlusTgz;
-}
-
-await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf-8');
-
-// Install with the local tgz overrides now wired into package.json. Disable
-// pnpm's minimumReleaseAge gate so the freshly published bumped deps (e.g.
-// @oxc-project/runtime, @oxfmt/binding-*) pass `vp install`'s lockfile
-// supply-chain check instead of failing with
-// ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION.
-//
-// dify is the exception: it sets `resolutionMode: time-based`, so the gate var
-// re-activates pnpm's resolution policy and vp's bundled pnpm (no
-// handleResolutionPolicyViolations callback) crashes on the local file: tgz
-// overrides with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Its
-// `minimumReleaseAge:` key was already removed above, so the policy stays
-// inactive when the var is unset.
-const installEnv: NodeJS.ProcessEnv = { ...process.env };
-if (!isDify) {
-  installEnv.pnpm_config_minimum_release_age = '0';
-}
-execSync(`${cli} install --no-frozen-lockfile`, { cwd, stdio: 'inherit', env: installEnv });
+// Install through the local registry. `vp migrate` already pinned
+// `vite-plus@<version>` in package.json exactly like a real migration, so no
+// manual package.json rewrite is needed.
+execSync(`${cli} install --no-frozen-lockfile`, {
+  cwd,
+  stdio: 'inherit',
+  env: { ...process.env, ...registryInfo.env, ...releaseAgeEnv },
+});
