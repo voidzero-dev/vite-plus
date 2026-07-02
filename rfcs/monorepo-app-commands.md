@@ -4,7 +4,7 @@
 
 Three changes make the built-in app commands useful and predictable in monorepos:
 
-1. **Path equivalence**: `vp dev <path>` behaves exactly like `cd <path> && vp dev`, by spawning the underlying tool with its working directory set to `<path>`. This also fixes `vp pack <path>`, which today misinterprets a directory path as an entry glob.
+1. **Path equivalence**: `vp dev <path>` behaves exactly like `cd <path> && vp dev`, by spawning the underlying tool with its working directory set to `<path>`. This also fixes `vp pack <path>`, which today misinterprets a directory path as an entry glob. **Note for reviewers**: this deliberately gives the positional different semantics than the upstream `vite <path>` CLI, where it only sets the `root` option and never changes cwd. This is the RFC's most consequential decision; see "Deliberate divergence from the `vite` CLI" under Decisions.
 2. **Interactive package picker at the workspace root**: running an app command at a monorepo root in an interactive terminal opens a fuzzy-searchable package selector (the `vite_select` component behind the `vp run` task picker). Selecting a package runs the command there and prints a hint teaching the direct form (`vp dev apps/web`).
 3. **`defaultPackage` config**: a root `vite.config.ts` can set the default target directory, skipping the picker. This also covers framework monorepos that are not JS workspaces (a Laravel, Rails, or Go repo with a `frontend/` directory), where there is no package list to enumerate.
 
@@ -299,9 +299,20 @@ export default defineConfig({
 
 ## Decisions
 
-### Spawn cwd instead of `process.chdir()` or Vite `root`
+### Deliberate divergence from the `vite` CLI
 
-Vite resolves `root` without touching `process.cwd()` by design, so forwarding the positional as `root` can never close pain point 2. Calling `process.chdir()` in the CLI process would, but it is a global mutation that leaks into everything sharing the process. The way out: `vp` never runs Vite or tsdown in-process; the NAPI binding always spawns a fresh child (`packages/cli/binding/src/cli/execution.rs`), so setting the child's spawn cwd achieves full equivalence with no `process.chdir()` and no upstream change.
+This is the RFC's most consequential decision. `vite <path>` sets only the `root` option and never changes cwd, by design. After this RFC, the same positional means "run as if you had `cd`'d there" in vp, so the same invocation shape behaves differently in the two CLIs:
+
+| | `vite <path>` | `vp dev <path>` (this RFC) |
+| --- | --- | --- |
+| Vite `root` | `<path>` | `<path>` (implied by cwd) |
+| config + `.env` lookup | `<path>` | `<path>` |
+| `process.cwd()` in configs/plugins | invocation directory | `<path>` |
+| relative CLI option values | invocation directory | `<path>` |
+
+The last two rows are the divergence, and they are exactly the cases users report as bugs (pain point 2). The choice is between two parities that cannot both hold: parity with `vite <path>`, or parity with `cd <path> && vp dev`. This RFC picks the second, because it leaves vp with one behavior instead of two subtly different ones, while upstream parity would preserve pain point 2 forever. Users who need root-only semantics keep them by setting `root` in the config file.
+
+Mechanism: `process.chdir()` in the CLI process was rejected as a global mutation that leaks into everything sharing the process. Instead, vp exploits being a launcher: the NAPI binding always spawns Vite/tsdown as a fresh child (`packages/cli/binding/src/cli/execution.rs`), so the child's spawn cwd is free to set with no `process.chdir()` and no upstream change. `vp dev --help` and the docs must state the divergence explicitly.
 
 ### Root-only interactivity
 
@@ -321,11 +332,11 @@ All changes live in the Rust layers; no upstream Vite or tsdown changes are requ
 - Picker: reuse `vite_select` and `vite_workspace`, both already dependencies via the `vite_task` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
 - `packages/cli/src/pack-bin.ts` needs no change once the binding strips the positional; the global CLI needs no change since it already delegates with the invocation cwd.
-- Docs: `docs/guide/monorepo.md` "App Commands" and a `docs/config/` page for the new key.
+- Docs: `docs/guide/monorepo.md` "App Commands" and a `docs/config/` page for the new key, both stating the deliberate divergence from `vite <path>`.
 
 ## Compatibility
 
-- `vp dev <path>` / `vp build <path>`: the cwd-dependent edge cases (cwd reads in configs and plugins, relative CLI args) now match the `cd` form; the delta is exactly the set of cases currently reported as bugs. Local CLI resolution is unchanged. Ship in a minor with a changelog note.
+- `vp dev <path>` / `vp build <path>`: the cwd-dependent edge cases (cwd reads in configs and plugins, relative CLI args) now match the `cd` form; the delta is exactly the set of cases currently reported as bugs. This is also a permanent, documented divergence from the upstream `vite <path>` CLI (see Decisions). Local CLI resolution is unchanged. Ship in a minor with a changelog note.
 - `vp pack <path>` with a directory changes from an error to packing that directory; file and glob entries are unaffected.
 - At a workspace root, picker / config / clear error replaces "silently serve the root". A root that is itself runnable stays available as a picker entry, and `defaultPackage: '.'` restores the old behavior unconditionally.
 - Sub-package and non-workspace invocations are unchanged.
