@@ -1,7 +1,7 @@
 {
   "commands": [
     "vp migrate --no-interactive # retained vitest augmentations should keep a package-local vitest",
-    "cat src/index.ts # declare module 'vite'/'vitest' outside config files are preserved (issue #2004)",
+    "cat src/index.ts # declare module 'vite' follows the rewritten config import; 'vitest' augmentations keep the upstream identity",
     "cat package.json # check package.json",
     "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
