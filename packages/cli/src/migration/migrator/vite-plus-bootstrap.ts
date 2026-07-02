@@ -735,6 +735,18 @@ export function detectVitePlusBootstrapPending(
       return true;
     }
     if (!usePnpmWorkspaceYaml) {
+      // pnpm 9.5–10.6.1: settings stay in package.json but catalogs resolve,
+      // and the reconcile deliberately keeps `catalog:` toolchain specs and
+      // overrides. Judge them through the workspace catalog instead of
+      // flagging every `catalog:` spec, or a fully migrated project would
+      // never converge to the "already using Vite+" fast exit.
+      if (supportCatalog) {
+        return (
+          catalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
+          !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest, catalogDependencyResolver) ||
+          !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
+        );
+      }
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
         !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest) ||
@@ -965,12 +977,16 @@ export function ensureVitePlusBootstrap(
   // overrides are reconciled — so a `catalog:` override resolves to the fresh
   // toolchain value (not the stale vite-plus-test wrapper) and stays `catalog:`,
   // and the catalog itself is rewritten off the wrappers. Catalog only
-  // (`writeWorkspaceSettings: false`); never creates a missing pnpm-workspace.yaml.
+  // (`writeWorkspaceSettings: false`). A missing pnpm-workspace.yaml is created:
+  // `canonicalVitePlusSpec` is already `catalog:` whenever `supportCatalog`, so
+  // skipping the write would leave the reconciled specs pointing at a catalog
+  // that does not exist and the post-migration install unresolvable (mirrors
+  // the standalone fresh-migration path).
   // The snapshot doubles as the change baseline for the `else` branch below.
   let pnpmWorkspaceCatalogBefore: string | undefined;
   if (workspaceInfo.packageManager === PackageManager.pnpm && !usePnpmWorkspaceYaml) {
     pnpmWorkspaceCatalogBefore = readTextFileIfExists(pnpmWorkspaceYamlPath);
-    if (supportCatalog && pnpmWorkspaceCatalogBefore !== undefined) {
+    if (supportCatalog) {
       rewritePnpmWorkspaceYaml(
         projectPath,
         pnpmMajorVersion,

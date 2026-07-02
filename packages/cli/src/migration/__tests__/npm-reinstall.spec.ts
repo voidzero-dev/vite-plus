@@ -57,7 +57,8 @@ describe('prepareNpmViteAliasReinstall', () => {
     );
 
     expect(
-      prepareNpmViteAliasReinstall(rootDir, [rootDir, path.join(rootDir, 'packages', 'app')]),
+      prepareNpmViteAliasReinstall(rootDir, [rootDir, path.join(rootDir, 'packages', 'app')])
+        .changed,
     ).toBe(true);
 
     const lock = JSON.parse(fs.readFileSync(path.join(rootDir, 'package-lock.json'), 'utf8')) as {
@@ -77,9 +78,30 @@ describe('prepareNpmViteAliasReinstall', () => {
     const staleVite = path.join(workspaceDir, 'node_modules', 'vite');
     writePackage(staleVite, 'vite');
 
-    expect(prepareNpmViteAliasReinstall(rootDir, [rootDir, workspaceDir])).toBe(true);
+    expect(prepareNpmViteAliasReinstall(rootDir, [rootDir, workspaceDir]).changed).toBe(true);
     expect(fs.existsSync(staleVite)).toBe(false);
-    expect(prepareNpmViteAliasReinstall(rootDir, [rootDir, workspaceDir])).toBe(false);
+    expect(prepareNpmViteAliasReinstall(rootDir, [rootDir, workspaceDir]).changed).toBe(false);
+  });
+
+  it('restores the moved-aside Vite install when the reinstall fails and deletes it on commit', () => {
+    const rootDir = createTempDir();
+    const staleVite = path.join(rootDir, 'node_modules', 'vite');
+    writePackage(staleVite, 'vite');
+
+    const preparation = prepareNpmViteAliasReinstall(rootDir);
+    expect(preparation.changed).toBe(true);
+    expect(fs.existsSync(staleVite)).toBe(false);
+
+    // Install failed: the previously working Vite comes back.
+    preparation.restore();
+    expect(fs.existsSync(path.join(staleVite, 'package.json'))).toBe(true);
+
+    const secondPreparation = prepareNpmViteAliasReinstall(rootDir);
+    expect(secondPreparation.changed).toBe(true);
+    // Install succeeded: the backup is deleted for good.
+    secondPreparation.commit();
+    expect(fs.existsSync(staleVite)).toBe(false);
+    expect(fs.readdirSync(path.join(rootDir, 'node_modules'))).toEqual([]);
   });
 
   it('does not throw on a malformed package-lock.json and still prunes install trees', () => {

@@ -337,9 +337,18 @@ export function rewritePnpmWorkspaceYaml(
     }
 
     // peerDependencyRules.allowAny
-    let allowAny = doc.getIn(['peerDependencyRules', 'allowAny']) as YAMLSeq<Scalar<string>>;
-    if (!allowAny) {
+    // `getIn` unwraps scalar values, so a malformed scalar-valued `allowAny:`
+    // (`allowAny: react`) arrives as a string here; coerce it into a sequence
+    // entry instead of crashing on `.items` below.
+    const allowAnyNode = doc.getIn(['peerDependencyRules', 'allowAny']);
+    let allowAny: YAMLSeq<Scalar<string>>;
+    if (allowAnyNode instanceof YAMLSeq) {
+      allowAny = allowAnyNode as YAMLSeq<Scalar<string>>;
+    } else {
       allowAny = new YAMLSeq<Scalar<string>>();
+      if (typeof allowAnyNode === 'string' && allowAnyNode.length > 0) {
+        allowAny.add(scalarString(allowAnyNode));
+      }
     }
     // Common case: drop any lingering managed `vitest` allowAny entry.
     if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
@@ -354,11 +363,13 @@ export function rewritePnpmWorkspaceYaml(
     doc.setIn(['peerDependencyRules', 'allowAny'], allowAny);
 
     // peerDependencyRules.allowedVersions
-    let allowedVersions = doc.getIn(['peerDependencyRules', 'allowedVersions']) as YAMLMap<
-      Scalar<string>,
-      Scalar<string>
-    >;
-    if (!allowedVersions) {
+    // Same guard as above: a malformed non-map `allowedVersions:` value (pnpm
+    // expects a map, so it carries no usable data) is replaced outright.
+    const allowedVersionsNode = doc.getIn(['peerDependencyRules', 'allowedVersions']);
+    let allowedVersions: YAMLMap<Scalar<string>, Scalar<string>>;
+    if (allowedVersionsNode instanceof YAMLMap) {
+      allowedVersions = allowedVersionsNode as YAMLMap<Scalar<string>, Scalar<string>>;
+    } else {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
     // Common case: drop any lingering managed `vitest` allowedVersions entry.

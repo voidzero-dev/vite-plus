@@ -1571,6 +1571,7 @@ describe('migrateNodeVersionManagerFile', () => {
 function makeWorkspaceInfo(
   rootDir: string,
   packageManager: PackageManager,
+  version = '10.33.0',
 ): import('../../types/index.js').WorkspaceInfo {
   return {
     rootDir,
@@ -1579,13 +1580,13 @@ function makeWorkspaceInfo(
     workspacePatterns: [],
     parentDirs: [],
     packageManager,
-    packageManagerVersion: '10.33.0',
+    packageManagerVersion: version,
     downloadPackageManager: {
       name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
       packageName: packageManager,
-      version: '10.33.0',
+      version,
     },
     packages: [],
   };
@@ -1638,6 +1639,41 @@ describe('ensureVitePlusBootstrap', () => {
     // it arrives transitively through vite-plus, so no override is written.
     expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
+  });
+
+  it('creates the pnpm-workspace.yaml catalog on a standalone pnpm 9.5-10.6.1 upgrade and converges', () => {
+    // Existing-Vite+ standalone project, pnpm 10.5.0: catalogs are supported
+    // (>= 9.5.0) so the reconcile rewrites the toolchain deps to `catalog:`,
+    // but no pnpm-workspace.yaml exists yet. The catalog entries MUST be
+    // created or the post-migration install cannot resolve `catalog:`.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        packageManager: 'pnpm@10.5.0',
+        devDependencies: { 'vite-plus': '^0.1.24' },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], '10.5.0')).toBe(true);
+
+    const result = ensureVitePlusBootstrap(
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '10.5.0'),
+    );
+    expect(result.changed).toBe(true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    const workspaceYaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(workspaceYaml).toContain('vite-plus:');
+    expect(workspaceYaml).toContain('@voidzero-dev/vite-plus-core');
+
+    // A fully migrated project must converge to the "already using Vite+"
+    // fast exit instead of re-running the bootstrap forever.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], '10.5.0')).toBe(false);
   });
 
   it('adds the direct bun `vite` edge as `catalog:` (not the concrete core alias) so the vitest peer resolves on a WORKSPACE upgrade', () => {
@@ -2098,6 +2134,37 @@ describe('ensureVitePlusBootstrap', () => {
         process.env.VP_FORCE_MIGRATE = savedForceMigrate;
       }
     }
+  });
+
+  it('survives scalar-valued peerDependencyRules entries in pnpm-workspace.yaml', () => {
+    // `allowAny: react` (scalar instead of a list) is malformed but must not
+    // crash the migration mid-write; the scalar is folded into the rebuilt
+    // sequence and a malformed `allowedVersions` scalar is replaced.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['peerDependencyRules:', '  allowAny: react', '  allowedVersions: react'].join('\n'),
+    );
+
+    expect(() =>
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm)),
+    ).not.toThrow();
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    expect(workspace.peerDependencyRules.allowAny).toContain('react');
+    expect(workspace.peerDependencyRules.allowAny).toContain('vite');
+    expect(workspace.peerDependencyRules.allowedVersions.vite).toBe('*');
   });
 
   it('detects missing pnpm workspace catalog entry for vite-plus', () => {
@@ -3644,7 +3711,18 @@ describe('ensureVitePlusBootstrap', () => {
 
     ensureVitePlusBootstrap(workspaceInfo);
 
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    // Catalogs are supported from 9.5.0, so the reconcile rewrites the
+    // toolchain deps to `catalog:` and the catalog itself MUST be written
+    // (creating pnpm-workspace.yaml when missing) or the install cannot
+    // resolve them. The pnpm SETTINGS still stay in package.json.
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides?: unknown;
+      peerDependencyRules?: unknown;
+    };
+    expect(workspace.catalog['vite-plus']).toBeDefined();
+    expect(workspace.overrides).toBeUndefined();
+    expect(workspace.peerDependencyRules).toBeUndefined();
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       pnpm: {
         overrides: Record<string, string>;

@@ -37,6 +37,10 @@ describe('checkRolldownCompatibility', () => {
       args: [expect.stringMatching(/migration[/\\]compat[/\\]worker\.js$/), '/project'],
       cwd: '/project',
       envs: process.env,
+      // A wedged config worker (e.g. a blocking plugin factory in a project
+      // whose local vite-plus predates the skip handshake) must not hang the
+      // migration; the runner opts into the kill-after-timeout path.
+      timeoutMs: expect.any(Number),
     });
 
     const [{ args }] = mockRunCommandSilently.mock.calls[0];

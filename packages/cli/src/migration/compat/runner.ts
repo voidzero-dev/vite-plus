@@ -28,6 +28,13 @@ function resolveWorkerPath(): string {
   return fileURLToPath(new URL('./worker.js', import.meta.url));
 }
 
+// Config resolution executes arbitrary project code; on the upgrade path the
+// project's own (older) vite-plus copy may not honor the lazyPlugins-skip env
+// handshake, so a blocking plugin factory can wedge the worker. The check is
+// best-effort: kill the worker after this long and continue without warnings
+// rather than hanging the migration.
+const WORKER_TIMEOUT_MS = 30_000;
+
 interface RolldownCompatibilityResult {
   warnings: string[];
 }
@@ -74,6 +81,7 @@ export async function checkRolldownCompatibility(
       args: [workerPath, rootDir],
       cwd: rootDir,
       envs: process.env,
+      timeoutMs: WORKER_TIMEOUT_MS,
     });
 
     if (result.exitCode !== 0) {

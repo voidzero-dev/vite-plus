@@ -89,15 +89,21 @@ export function detectPackageMetadata(
     try {
       const pnpApi = createRequire(pnpApiPath)(pnpApiPath) as {
         resolveToUnqualified: (request: string, issuer: string) => string;
+        findPackageLocator?: (location: string) => unknown;
         setup?: () => void;
       };
+      const issuer = path.join(projectPath, 'noop.js');
+      // The `.pnp.cjs` walk can climb above the project into an unrelated
+      // ancestor's stale PnP data. Only trust an API that actually owns the
+      // project path; activating a foreign one would install its resolution
+      // hooks process-wide and corrupt every later resolution in this run.
+      if (pnpApi.findPackageLocator && !pnpApi.findPackageLocator(issuer)) {
+        return;
+      }
       // Activating the generated API makes archive-backed Yarn cache paths
       // readable through Node's fs implementation as well.
       pnpApi.setup?.();
-      const unqualified = pnpApi.resolveToUnqualified(
-        packageName,
-        path.join(projectPath, 'noop.js'),
-      );
+      const unqualified = pnpApi.resolveToUnqualified(packageName, issuer);
       pkgFilePath = findOwningPackageJson(unqualified, packageName);
       if (!pkgFilePath) {
         pkgFilePath = resolvePackageJsonWithNode(require, packageName);

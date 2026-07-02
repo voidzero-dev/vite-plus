@@ -145,6 +145,33 @@ describe('reconcilePreviewBridgeRegistry', () => {
     );
   });
 
+  it('preserves and restores a custom npmRegistryServer across a preview round-trip', () => {
+    fs.writeFileSync(
+      path.join(dir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnpmRegistryServer: https://npm.corp.example/\n',
+    );
+
+    // Preview run: the bridge replaces the corporate registry...
+    expect(reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.yarn)).toBe(true);
+    const bridged = fs.readFileSync(path.join(dir, '.yarnrc.yml'), 'utf8');
+    expect(bridged).toContain(`npmRegistryServer: ${BRIDGE}`);
+    // ...but the original value is stashed, not lost.
+    expect(bridged).toContain('https://npm.corp.example/');
+
+    // A second preview run must not clobber the stashed original.
+    expect(reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.yarn)).toBe(true);
+    expect(fs.readFileSync(path.join(dir, '.yarnrc.yml'), 'utf8')).toContain(
+      'https://npm.corp.example/',
+    );
+
+    // Real release: the corporate registry comes back.
+    expect(reconcilePreviewBridgeRegistry(dir, '0.2.1', PackageManager.yarn)).toBe(true);
+    const restored = fs.readFileSync(path.join(dir, '.yarnrc.yml'), 'utf8');
+    expect(restored).toContain('npmRegistryServer: https://npm.corp.example/');
+    expect(restored).not.toContain(BRIDGE);
+    expect(restored).toContain('nodeLinker: node-modules');
+  });
+
   it('a real release removes the bridge npmRegistryServer but keeps other Berry keys', () => {
     fs.writeFileSync(path.join(dir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
     reconcilePreviewBridgeRegistry(dir, PREVIEW);

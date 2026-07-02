@@ -1571,6 +1571,25 @@ static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new
     ast_grep::load_rules(REWRITE_VITE_RULES).expect("failed to parse vite rewrite rules")
 });
 
+const VITE_DECLARE_MODULE_RULE_IDS: [&str; 2] =
+    ["rewrite-declare-module-vite", "rewrite-declare-module-vite-subpath"];
+
+/// The `declare module 'vite'` augmentation rules, applied in EVERY file (not
+/// only config entry files). The Issue #2004 config-file scoping covers value
+/// imports, whose unrewritten `vite` specifiers still resolve through the core
+/// alias; a module augmentation instead binds to the literal specifier of the
+/// import it augments, and the config's own import IS rewritten to `vite-plus`,
+/// so leaving the augmentation on `vite` would fail type-checking after
+/// migration.
+static PARSED_VITE_DECLARE_MODULE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> =
+    LazyLock::new(|| {
+        ast_grep::load_rules(REWRITE_VITE_RULES)
+            .expect("failed to parse vite rewrite rules")
+            .into_iter()
+            .filter(|rule| VITE_DECLARE_MODULE_RULE_IDS.contains(&rule.id.as_str()))
+            .collect()
+    });
+
 static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
 });
@@ -1727,6 +1746,7 @@ fn rewrite_reference_types(
     content: &mut String,
     skip_packages: &SkipPackages,
     preserve_unscoped_vitest: bool,
+    preserved_vitest: &mut bool,
 ) -> bool {
     // Fast path: skip files with no triple-slash reference directives.
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
@@ -1840,9 +1860,19 @@ fn rewrite_reference_types(
         }
         // Each line matches at most one pattern; use early exit to skip remaining regexes.
         if !skip_packages.skip_vitest {
-            if !preserve_unscoped_vitest
-                && apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}")
+            // Nuxt exception: unscoped `vitest` reference directives are
+            // preserved, and the preservation must be reported so the migrate
+            // summary counts files whose only upstream reference is a
+            // triple-slash directive (ast-grep never sees those).
+            if preserve_unscoped_vitest
+                && (RE_REF_VITEST_CONFIG.is_match(line)
+                    || RE_REF_VITEST_SUBPATH.is_match(line)
+                    || RE_REF_VITEST.is_match(line))
             {
+                *preserved_vitest = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
                 changed = true;
                 continue;
             }
@@ -1890,15 +1920,11 @@ fn rewrite_reference_types(
                 changed = true;
                 continue;
             }
-            if !preserve_unscoped_vitest
-                && apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}")
-            {
+            if apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}") {
                 changed = true;
                 continue;
             }
-            if !preserve_unscoped_vitest
-                && apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}")
-            {
+            if apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}") {
                 changed = true;
                 continue;
             }
@@ -2175,7 +2201,7 @@ pub fn rewrite_imports_in_directory_with_options(
         .files
         .into_iter()
         .map(|file_path| {
-            let mut package_context =
+            let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
                     *package_context_cache
                         .entry(package_json_path.clone())
@@ -2183,11 +2209,6 @@ pub fn rewrite_imports_in_directory_with_options(
                 } else {
                     PackageRewriteContext::default()
                 };
-            // Issue #2004: `vite` imports are rewritten only in config entry
-            // files; everything else keeps its `vite` imports. This is layered
-            // ON TOP of the package-level skip (a skipped package stays skipped).
-            package_context.skip_packages.skip_vite =
-                package_context.skip_packages.skip_vite || !is_vite_config_file(&file_path);
             (file_path, package_context)
         })
         .collect();
@@ -2268,8 +2289,18 @@ fn rewrite_import(
     // Read the file
     let content = std::fs::read_to_string(file_path)?;
 
-    // Rewrite the imports
-    rewrite_import_content_with_options(&content, skip_packages, preserve_vitest_in_nuxt_package)
+    // Issue #2004: `vite` value imports are rewritten only in config entry
+    // files; everything else keeps its `vite` imports (they still resolve
+    // through the core alias). `declare module 'vite'` augmentations are the
+    // exception and are rewritten everywhere — see
+    // `PARSED_VITE_DECLARE_MODULE_RULES`. This is layered ON TOP of the
+    // package-level skip (a skipped package stays skipped).
+    rewrite_import_content_full(
+        &content,
+        skip_packages,
+        preserve_vitest_in_nuxt_package,
+        is_vite_config_file(file_path),
+    )
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -2300,10 +2331,20 @@ fn rewrite_import_content(
     rewrite_import_content_with_options(content, skip_packages, false)
 }
 
+#[cfg(test)]
 fn rewrite_import_content_with_options(
     content: &str,
     skip_packages: &SkipPackages,
     preserve_unscoped_vitest: bool,
+) -> Result<RewriteResult, Error> {
+    rewrite_import_content_full(content, skip_packages, preserve_unscoped_vitest, true)
+}
+
+fn rewrite_import_content_full(
+    content: &str,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    vite_config_file: bool,
 ) -> Result<RewriteResult, Error> {
     // Fast path: skip AST parsing if the file doesn't contain any target strings
     if !content_may_need_rewriting(content, skip_packages) {
@@ -2318,9 +2359,13 @@ fn rewrite_import_content_with_options(
     let mut updated = false;
     let mut preserved_vitest = false;
 
-    // Apply vite rules if not skipped (using pre-parsed rules)
+    // Apply vite rules if not skipped (using pre-parsed rules). Outside config
+    // entry files only the `declare module 'vite'` augmentation rules apply
+    // (Issue #2004 keeps every other `vite` specifier).
     if !skip_packages.skip_vite {
-        let vite_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITE_RULES);
+        let vite_rules: &[RuleConfig<SupportLang>] =
+            if vite_config_file { &PARSED_VITE_RULES } else { &PARSED_VITE_DECLARE_MODULE_RULES };
+        let vite_content = ast_grep::apply_loaded_rules(&new_content, vite_rules);
         if vite_content != new_content {
             new_content = vite_content;
             updated = true;
@@ -2355,7 +2400,16 @@ fn rewrite_import_content_with_options(
 
     // Apply reference type rewriting (/// <reference types="..." />)
     // These cannot be handled by ast-grep because they are parsed as comments.
-    updated |= rewrite_reference_types(&mut new_content, skip_packages, preserve_unscoped_vitest);
+    // `vite` reference directives are pass-through type surfaces, so they
+    // follow the Issue #2004 config-file scoping (unlike the augmentations).
+    let reference_skip_packages =
+        SkipPackages { skip_vite: skip_packages.skip_vite || !vite_config_file, ..*skip_packages };
+    updated |= rewrite_reference_types(
+        &mut new_content,
+        &reference_skip_packages,
+        preserve_unscoped_vitest,
+        &mut preserved_vitest,
+    );
 
     Ok(RewriteResult { content: new_content, updated, preserved_vitest })
 }
@@ -3020,6 +3074,63 @@ describe('test', () => {});"#,
     }
 
     #[test]
+    fn test_declare_module_vite_rewritten_outside_config_files() {
+        // A `declare module 'vite'` augmentation binds to the literal specifier
+        // of the import it augments. The config's own import IS rewritten to
+        // `vite-plus`, so the augmentation must follow even though it lives in
+        // a non-config .d.ts (unlike value imports, which Issue #2004 keeps).
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"name":"my-app"}"#).unwrap();
+        fs::create_dir(temp.path().join("types")).unwrap();
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            "import { defineConfig } from 'vite';\nexport default defineConfig({ myPlugin: {} });",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("types/vite.d.ts"),
+            "import type { Plugin } from 'vite';\ndeclare module 'vite' {\n  interface UserConfig {\n    myPlugin?: object;\n  }\n}\n",
+        )
+        .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let dts = fs::read_to_string(temp.path().join("types/vite.d.ts")).unwrap();
+        assert!(
+            dts.contains("declare module 'vite-plus'"),
+            "augmentation must track the rewritten config import, got: {dts}"
+        );
+        assert!(
+            dts.contains("from 'vite'"),
+            "non-config `vite` value/type imports must be preserved, got: {dts}"
+        );
+        let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
+        assert!(config.contains("from 'vite-plus'"));
+    }
+
+    #[test]
+    fn test_declare_module_vite_skipped_in_plugin_packages() {
+        // The package-level plugin skip stays authoritative: a vite-plugin-*
+        // package keeps its `declare module 'vite'` augmentation untouched.
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"name":"vite-plugin-example"}"#).unwrap();
+        fs::write(
+            temp.path().join("types.d.ts"),
+            "declare module 'vite' {\n  interface UserConfig {\n    example?: object;\n  }\n}\n",
+        )
+        .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let dts = fs::read_to_string(temp.path().join("types.d.ts")).unwrap();
+        assert!(dts.contains("declare module 'vite'"), "plugin package must be skipped: {dts}");
+    }
+
+    #[test]
     fn test_preserves_unscoped_vitest_in_nuxt_test_utils_packages() {
         use std::fs;
 
@@ -3051,6 +3162,13 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
             "/// <reference types=\"vitest/globals\" />\nimport { expect } from 'vitest';\n",
         )
         .unwrap();
+        // A file whose ONLY upstream vitest reference is a triple-slash
+        // directive (no import for ast-grep to see) must still be counted.
+        fs::write(
+            temp.path().join("refs-only.d.ts"),
+            "/// <reference types=\"vitest/globals\" />\nexport {};\n",
+        )
+        .unwrap();
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
@@ -3058,9 +3176,12 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
         )
         .unwrap();
 
-        assert_eq!(result.preserved_vitest_files.len(), 2);
+        assert_eq!(result.preserved_vitest_files.len(), 3);
         assert!(result.preserved_vitest_files.contains(&temp.path().join("nuxt.spec.ts")));
         assert!(result.preserved_vitest_files.contains(&temp.path().join("ordinary.spec.ts")));
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("refs-only.d.ts")));
+        let refs_only = fs::read_to_string(temp.path().join("refs-only.d.ts")).unwrap();
+        assert!(refs_only.contains("types=\"vitest/globals\""));
         let nuxt = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
         assert!(nuxt.contains("from 'vitest'"));
         assert!(nuxt.contains("require('vitest')"));

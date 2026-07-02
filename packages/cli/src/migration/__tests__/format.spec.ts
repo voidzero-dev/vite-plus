@@ -103,8 +103,12 @@ describe('formatMigratedProject', () => {
       status: 'failed',
     });
     const report = createMigrationReport();
+    // Non-git project: whole-project formatting.
+    const collectPaths = vi.fn().mockResolvedValue(undefined);
 
-    await expect(formatMigratedProject('/project', false, report, { format })).resolves.toBe(false);
+    await expect(
+      formatMigratedProject('/project', false, report, { format, collectPaths }),
+    ).resolves.toBe(false);
     expect(report.warnings).toEqual([
       'Automatic formatting failed. Run `vp fmt` manually after migration.',
     ]);
@@ -113,8 +117,11 @@ describe('formatMigratedProject', () => {
   it('reports a formatter exception without throwing', async () => {
     const format = vi.fn().mockRejectedValue(new Error('could not load config'));
     const report = createMigrationReport();
+    const collectPaths = vi.fn().mockResolvedValue(undefined);
 
-    await expect(formatMigratedProject('/project', false, report, { format })).resolves.toBe(false);
+    await expect(
+      formatMigratedProject('/project', false, report, { format, collectPaths }),
+    ).resolves.toBe(false);
     expect(report.warnings).toEqual([
       'Automatic formatting failed. Run `vp fmt` manually after migration.',
     ]);

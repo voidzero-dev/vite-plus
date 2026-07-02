@@ -27,10 +27,12 @@ const FORMAT_FAILURE_MESSAGE =
   'Automatic formatting failed. Run `vp fmt` manually after migration.';
 
 // Keep each `vp fmt <...paths>` argument list well under the OS command-line
-// limit (ARG_MAX is ~256KB on macOS). Migrating a large monorepo can rewrite
-// thousands of files, so the path list is split into batches to avoid an E2BIG
-// spawn failure that would leave the migrated source unformatted.
-const MAX_FORMAT_ARG_BYTES = 100_000;
+// limit. Migrating a large monorepo can rewrite thousands of files, so the
+// path list is split into batches to avoid a spawn failure that would leave
+// the migrated source unformatted. The limit differs sharply by platform:
+// ARG_MAX is ~256KB on macOS, but Windows CreateProcess caps the whole joined
+// command line at 32,767 characters (shared with the node path and CLI entry).
+const MAX_FORMAT_ARG_BYTES = process.platform === 'win32' ? 24_000 : 100_000;
 
 function chunkPathsByArgLength(paths: string[]): string[][] {
   const chunks: string[][] = [];
@@ -86,7 +88,14 @@ export async function collectChangedFormatPaths(
     // (locked repo, mid-rebase, unusual config) must NOT trigger a full-tree
     // reformat that would bury the migration diff.
     const worktree = await git(['rev-parse', '--is-inside-work-tree']);
-    if (worktree.exitCode !== 0 || worktree.stdout.toString().trim() !== 'true') {
+    if (worktree.exitCode !== 0) {
+      // rev-parse also exits 128 for failures inside a real worktree, e.g.
+      // "detected dubious ownership" in Docker/CI checkouts. Only the genuine
+      // "not a git repository" answer opts into whole-project formatting;
+      // every other failure skips targeted formatting instead.
+      return worktree.stderr.toString().includes('not a git repository') ? undefined : [];
+    }
+    if (worktree.stdout.toString().trim() !== 'true') {
       return undefined;
     }
 
@@ -122,7 +131,10 @@ export async function collectChangedFormatPaths(
       .filter((file) => !excludedPaths?.has(file) && isExistingFile(projectRoot, file))
       .toSorted();
   } catch {
-    return undefined;
+    // git itself is unavailable (spawn failure). Whether the project is a
+    // worktree is unknowable here, so skip targeted formatting rather than
+    // risking a full-tree reformat of a real repository.
+    return [];
   }
 }
 

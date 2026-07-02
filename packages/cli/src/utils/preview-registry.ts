@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { Scalar } from 'yaml';
+
 import { PackageManager } from '../types/index.ts';
 import { VITE_PLUS_VERSION } from './constants.ts';
 import { readJsonFile } from './json.ts';
@@ -82,13 +84,29 @@ function ensureNpmrcRegistry(projectRoot: string): void {
   fs.appendFileSync(npmrc, `${prefix}${REGISTRY_MARKER}\nregistry=${bridge}\n`);
 }
 
+// Comment attached to the bridge `npmRegistryServer` value so a later
+// real-release run can restore the user's original registry instead of
+// deleting it. Comments survive the YAML round-trip.
+const YARN_ORIGINAL_REGISTRY_COMMENT_PREFIX =
+  ' vite-plus preview bridge (auto-added by vp); original npmRegistryServer: ';
+
 function ensureYarnBerryRegistry(projectRoot: string): void {
   const yarnrc = path.join(projectRoot, '.yarnrc.yml');
   if (!fs.existsSync(yarnrc)) {
     fs.writeFileSync(yarnrc, '');
   }
   editYamlFile(yarnrc, (doc) => {
+    const current = doc.get('npmRegistryServer');
+    if (current === bridgeRegistry()) {
+      return; // already pointed at the bridge; keep any stashed original
+    }
     doc.set('npmRegistryServer', bridgeRegistry());
+    const node = doc.get('npmRegistryServer', true);
+    if (node instanceof Scalar && typeof current === 'string' && !current.includes(BRIDGE_HOST)) {
+      // Overwriting a custom registry (e.g. a corporate proxy) must not lose
+      // it for good: stash it in a comment so clear/restore can put it back.
+      node.comment = `${YARN_ORIGINAL_REGISTRY_COMMENT_PREFIX}${current}`;
+    }
   });
 }
 
@@ -138,7 +156,20 @@ function clearYarnBerryRegistry(projectRoot: string): boolean {
       typeof current === 'string' &&
       (current.includes(BRIDGE_HOST) || current === bridgeRegistry())
     ) {
-      doc.delete('npmRegistryServer');
+      // A prior preview run may have replaced a custom registry and stashed it
+      // in the value's comment; restore it instead of deleting the setting.
+      const node = doc.get('npmRegistryServer', true);
+      const comment = node instanceof Scalar ? node.comment : undefined;
+      const original = comment?.split(YARN_ORIGINAL_REGISTRY_COMMENT_PREFIX.trimStart())[1]?.trim();
+      if (original) {
+        doc.set('npmRegistryServer', original);
+        const restored = doc.get('npmRegistryServer', true);
+        if (restored instanceof Scalar) {
+          restored.comment = undefined;
+        }
+      } else {
+        doc.delete('npmRegistryServer');
+      }
       cleared = true;
     }
   });

@@ -140,13 +140,16 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   while (true) {
     const packageJsonPath = path.join(directory, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      let mtimeMs = 0;
+      let mtimeMs: number | undefined;
       try {
         mtimeMs = fs.statSync(packageJsonPath).mtimeMs;
       } catch {
-        // Unreadable manifest: fall through to a fresh read below.
+        // Unreadable manifest: bypass the cache entirely below. A sentinel
+        // value would collide with an entry cached during an earlier failure
+        // and pin the pre-edit decision.
       }
-      const cached = nuxtTestUtilsPackageCache.get(packageJsonPath);
+      const cached =
+        mtimeMs === undefined ? undefined : nuxtTestUtilsPackageCache.get(packageJsonPath);
       if (cached !== undefined && cached.mtimeMs === mtimeMs) {
         return cached.usesNuxtTestUtils;
       }
@@ -163,7 +166,9 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
       } catch {
         // Invalid or unreadable package metadata cannot opt into the exception.
       }
-      nuxtTestUtilsPackageCache.set(packageJsonPath, { mtimeMs, usesNuxtTestUtils });
+      if (mtimeMs !== undefined) {
+        nuxtTestUtilsPackageCache.set(packageJsonPath, { mtimeMs, usesNuxtTestUtils });
+      }
       return usesNuxtTestUtils;
     }
     const parent = path.dirname(directory);

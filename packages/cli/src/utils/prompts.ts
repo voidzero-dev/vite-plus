@@ -205,8 +205,16 @@ export async function runViteFmt(
     spinner.stop(`Format failed`);
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
-    const relativePaths = (paths ?? []).length > 0 ? ` ${(paths ?? []).join(' ')}` : '';
-    prompts.log.info(`You may need to run "vp fmt${relativePaths}" manually in ${cwd}`);
+    // Migration can pass batches of thousands of paths; interpolating them all
+    // would bury the formatter's diagnostic above under one enormous line.
+    const joinedPaths = (paths ?? []).join(' ');
+    const hint =
+      joinedPaths.length === 0
+        ? `You may need to run "vp fmt" manually in ${cwd}`
+        : joinedPaths.length <= 256
+          ? `You may need to run "vp fmt ${joinedPaths}" manually in ${cwd}`
+          : `You may need to run "vp fmt" manually on the ${paths?.length} changed files in ${cwd}`;
+    prompts.log.info(hint);
     return {
       durationMs: Date.now() - startTime,
       exitCode,

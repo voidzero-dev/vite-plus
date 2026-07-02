@@ -978,9 +978,10 @@ async function executeMigrationPlan(
     plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
       ? ['--force']
       : ['--no-frozen-lockfile'];
-  if (plan.packageManager === PackageManager.npm) {
-    prepareNpmViteAliasReinstall(workspaceInfo.rootDir, getWorkspaceProjectPaths(workspaceInfo));
-  }
+  const npmReinstallPreparation =
+    plan.packageManager === PackageManager.npm
+      ? prepareNpmViteAliasReinstall(workspaceInfo.rootDir, getWorkspaceProjectPaths(workspaceInfo))
+      : undefined;
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -992,6 +993,11 @@ async function executeMigrationPlan(
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     },
   );
+  if (finalInstallSummary.status === 'failed') {
+    npmReinstallPreparation?.restore();
+  } else {
+    npmReinstallPreparation?.commit();
+  }
 
   clearMigrationProgress();
   // Process the initial install first so the final install's exit code "wins":
@@ -1402,12 +1408,13 @@ async function main() {
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
       const resolvedVersion = resolved?.version ?? packageManagerVersion;
-      if (packageManager === PackageManager.npm) {
-        prepareNpmViteAliasReinstall(
-          workspaceInfoOptional.rootDir,
-          getWorkspaceProjectPaths(workspaceInfoOptional),
-        );
-      }
+      const npmReinstallPreparation =
+        packageManager === PackageManager.npm
+          ? prepareNpmViteAliasReinstall(
+              workspaceInfoOptional.rootDir,
+              getWorkspaceProjectPaths(workspaceInfoOptional),
+            )
+          : undefined;
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
@@ -1432,6 +1439,9 @@ async function main() {
       // duration is unchanged.
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
+        npmReinstallPreparation?.restore();
+      } else {
+        npmReinstallPreparation?.commit();
       }
       finalInstallOk = installSummary.status !== 'failed';
       canFormatMigratedProject = finalInstallOk && canFormatMigratedProject;
