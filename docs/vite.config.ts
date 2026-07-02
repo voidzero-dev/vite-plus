@@ -10,6 +10,7 @@ export default {
           '!node_modules',
           '!node_modules/.vite-temp/**',
         ],
+        output: ['.vitepress/dist/**'],
       },
     },
   },
