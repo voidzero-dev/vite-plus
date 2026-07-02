@@ -178,12 +178,10 @@ The workflow triggers only on the `labeled` event, not on new pushes. To rebuild
 
 Changelog complete, CI green, release manager approved the smoke test. A build existed for head `06708538`; the head had since moved by a test-only merge from `main`, so that build was still valid and was not re-triggered.
 
-Pick a target project pinned to the **previous release** so the run exercises the real upgrade path (here: vibe-dashboard `main`, a pnpm monorepo on `vite-plus 0.2.1`), and pass the **full commit SHA** of the published build rather than the PR number whenever the PR head has moved past it:
+Pick a target project pinned to the **previous release** so the run exercises the real upgrade path (here: vibe-dashboard `main`, a pnpm monorepo on `vite-plus 0.2.1`), and pass the release PR number; the harness resolves it through the bridge to the latest published immutable commit and prints the resolved SHA (confirm it matches the build you expect). Pass a full commit SHA instead only to pin a specific build when several have been published:
 
 ```bash
-.github/scripts/test-pkg-pr-new-migrate.sh \
-  06708538195014078c8ecd4c4a4df7239ac0a309 \
-  /path/to/vibe-dashboard --no-interactive
+.github/scripts/test-pkg-pr-new-migrate.sh 2016 /path/to/vibe-dashboard --no-interactive
 ```
 
 A passing run looks like:
