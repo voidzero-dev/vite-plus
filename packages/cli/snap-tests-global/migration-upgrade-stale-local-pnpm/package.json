@@ -1,0 +1,16 @@
+{
+  "name": "migration-upgrade-stale-local-pnpm",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.24",
+    "vite-plus": "^0.1.24",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.24"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  },
+  "pnpm": {}
+}

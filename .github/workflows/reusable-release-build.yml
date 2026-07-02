@@ -58,27 +58,36 @@ jobs:
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
-      - name: Set binding version
+      - name: Set build version
         shell: bash
         run: |
-          pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' "version = \"${VERSION}\""
-          pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' "version = \"${VERSION}\""
-          cat crates/vite_global_cli/Cargo.toml
+          set -euo pipefail
+          # Stamp ${VERSION} as the [package] version so CARGO_PKG_VERSION matches
+          # the version that gets published/installed (the release version, or
+          # 0.0.0-commit.<sha> for pkg.pr.new). Anchored to the line-start
+          # `version = "..."` so crate dependency versions are never touched.
+          for f in crates/vite_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
+          done
+          # Stamp packages/cli/package.json too so the bundled JS dist inlines
+          # ${VERSION} as cliPkg.version (VITE_PLUS_VERSION). Without this a preview
+          # `vp migrate` pins the build-time release placeholder instead of the
+          # test build, and skips the registry-bridge .npmrc.
+          pnpm exec json-edit packages/cli/package.json '_.version = process.env.VERSION'
 
       - name: Verify version replacement
         shell: bash
         run: |
-          if grep -q 'version = "0.0.0"' crates/vite_global_cli/Cargo.toml; then
-            echo "ERROR: Version replacement failed for crates/vite_global_cli/Cargo.toml"
-            head -5 crates/vite_global_cli/Cargo.toml
-            exit 1
+          set -euo pipefail
+          for f in crates/vite_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            if ! grep -qF "version = \"${VERSION}\"" "$f"; then
+              echo "ERROR: version stamp failed for $f"; head -5 "$f"; exit 1
+            fi
+          done
+          if [ "$(node -p "require('./packages/cli/package.json').version")" != "${VERSION}" ]; then
+            echo "ERROR: version stamp failed for packages/cli/package.json"; exit 1
           fi
-          if grep -q 'version = "0.0.0"' packages/cli/binding/Cargo.toml; then
-            echo "ERROR: Version replacement failed for packages/cli/binding/Cargo.toml"
-            head -5 packages/cli/binding/Cargo.toml
-            exit 1
-          fi
-          echo "Version replacement verified successfully"
+          echo "Version stamp verified: ${VERSION}"
 
       - name: Build
         uses: ./.github/actions/build-upstream

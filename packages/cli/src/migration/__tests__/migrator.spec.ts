@@ -14,7 +14,14 @@ import { createMigrationReport } from '../report.js';
 // which would cause snapshot mismatches.
 vi.mock('../../utils/constants.js', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../utils/constants.js')>();
-  return { ...mod, VITE_PLUS_VERSION: 'latest' };
+  return {
+    ...mod,
+    VITE_PLUS_VERSION: 'latest',
+    VITE_PLUS_OVERRIDE_PACKAGES: {
+      ...mod.VITE_PLUS_OVERRIDE_PACKAGES,
+      vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+    },
+  };
 });
 
 const {
@@ -36,11 +43,108 @@ const {
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
   rewriteEslintPackageJson,
+  collectInstalledPackageNames,
+  sanitizeMigratedOxlintConfig,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
   detectLegacyGitHooksMigrationCandidate,
+  detectYarnPnpMode,
+  configureYarnNodeModulesMode,
+  pnpmSupportsWorkspaceSettings,
   setPackageManager,
 } = await import('../migrator.js');
+
+const { collectMigrationSetupPlan } = await import('../setup-plan.js');
+
+describe('pnpm workspace settings support', () => {
+  it.each([
+    ['10.5.0', false],
+    ['10.6.1', false],
+    ['10.6.2', true],
+    ['10.33.0', true],
+    ['11.0.0', true],
+    ['latest', true],
+  ])('detects support for pnpm %s', (version, expected) => {
+    expect(pnpmSupportsWorkspaceSettings(version)).toBe(expected);
+  });
+});
+
+describe('Yarn PnP migration preflight', () => {
+  let tmpDir: string;
+  const savedEnv: Record<string, string | undefined> = {};
+  const isolatedEnv = ['HOME', 'USERPROFILE', 'YARN_NODE_LINKER'] as const;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-yarn-pnp-'));
+    for (const key of isolatedEnv) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    const cleanHome = path.join(tmpDir, '.home');
+    fs.mkdirSync(cleanHome);
+    process.env.HOME = cleanHome;
+    process.env.USERPROFILE = cleanHome;
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    for (const key of isolatedEnv) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+  });
+
+  it('detects explicit and implicit Yarn Berry PnP modes', () => {
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'configuration' });
+
+    fs.rmSync(path.join(tmpDir, '.yarnrc.yml'));
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'default' });
+    expect(detectYarnPnpMode(tmpDir, 'latest')).toEqual({ source: 'default' });
+  });
+
+  it('does not classify Yarn Classic or node-modules configuration as PnP', () => {
+    expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+
+    fs.rmSync(path.join(tmpDir, '.yarnrc.yml'));
+    process.env.YARN_NODE_LINKER = 'pnp';
+    expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+
+    delete process.env.YARN_NODE_LINKER;
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
+  });
+
+  it('honours YARN_NODE_LINKER over project configuration', () => {
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    process.env.YARN_NODE_LINKER = 'pnp';
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'environment' });
+
+    process.env.YARN_NODE_LINKER = 'node-modules';
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
+  });
+
+  it('converts the project rc without discarding other settings and is idempotent', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: pnp\nnmHoistingLimits: workspaces\ncatalog:\n  react: ^19.0.0\n',
+    );
+
+    expect(configureYarnNodeModulesMode(tmpDir)).toBe(true);
+    expect(readYamlObject(path.join(tmpDir, '.yarnrc.yml'))).toEqual({
+      nodeLinker: 'node-modules',
+      nmHoistingLimits: 'workspaces',
+      catalog: { react: '^19.0.0' },
+    });
+    expect(configureYarnNodeModulesMode(tmpDir)).toBe(false);
+  });
+});
 
 describe('rewritePackageJson', () => {
   it('should rewrite package.json scripts and extract staged config', async () => {
@@ -73,6 +177,17 @@ describe('rewritePackageJson', () => {
         dev_profile: 'vite --profile',
         dev_stats: 'vite --stats',
         dev_analyze: 'vite --analyze',
+        wrapped_dev: 'bunx --bun vite',
+        wrapped_build: 'bunx --bun vite build',
+        wrapped_preview: 'bunx --bun vite preview',
+        wrapped_test: 'bunx --bun vitest run',
+        wrapped_lint: 'bunx --bun oxlint --type-aware',
+        wrapped_fmt: 'bunx --bun oxfmt --check .',
+        wrapped_pack: 'bunx --bun tsdown --watch',
+        wrapped_staged: 'bunx --bun lint-staged',
+        wrapped_nested_dev: 'NODE_ENV=development portless --tailscale run bunx --bun vite',
+        wrapped_nested_test: 'dotenv -e .env.test -- bunx --bun vitest run',
+        wrapped_unrelated: 'bunx --bun playwright test',
         ready: 'oxlint --fix --type-aware && vitest run && tsdown && oxfmt --fix',
         ready_env:
           'NODE_ENV=test FOO=bar oxlint --fix --type-aware && NODE_ENV=test FOO=bar vitest run && NODE_ENV=test FOO=bar tsdown && NODE_ENV=test FOO=bar oxfmt --fix',
@@ -200,6 +315,32 @@ describe('rewritePackageJson', () => {
       rewritePackageJson(pkg, pm, true);
       expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
     }
+  });
+
+  // PR #1891 review: the vitest-injection fallback must honor the same
+  // VITEST_DIRECT_USAGE_EXCLUDED filter as usesVitestDirectly, otherwise an
+  // excluded @vitest/* package drives a `vitest: catalog:` spec while the
+  // catalog omits `vitest` — a dangling reference that breaks `pnpm install`.
+  it('does not inject a direct vitest for an excluded @vitest/* dep', () => {
+    const pkg: { devDependencies: Record<string, string> } = {
+      // oxlint is a managed tool → needVitePlus → the injection guard runs.
+      // @vitest/eslint-plugin is in VITEST_DIRECT_USAGE_EXCLUDED (a lint plugin,
+      // not a direct vitest consumer), so no direct vitest should be added.
+      devDependencies: { oxlint: '1.0.0', '@vitest/eslint-plugin': '1.0.0' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+  });
+
+  // PR #1891 review: a @nuxt/test-utils package keeps its `from 'vitest'`
+  // imports (preserveNuxtVitestImports), which need a package-local vitest under
+  // strict pnpm/Yarn layouts where vite-plus's transitive vitest is not visible.
+  it('injects a direct vitest for a Nuxt test-utils package', () => {
+    const pkg: { devDependencies: Record<string, string> } = {
+      devDependencies: { '@nuxt/test-utils': '3.0.0' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
   });
 
   // Under pnpm, a package that depends on vite-plus needs a direct `vite` so
@@ -469,6 +610,21 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
   });
 
+  it('pins the provider framework peer to a lockstep sibling instead of * (npmx.dev #27)', () => {
+    // `playwright` and `@playwright/test` release in lockstep, so a newly-added
+    // `playwright` peer should reuse the pinned @playwright/test version rather
+    // than a non-deterministic `*`.
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        '@playwright/test': '1.60.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.devDependencies).toHaveProperty('playwright', '1.60.0');
+  });
+
   it('injects a direct vite devDependency for an npm project that uses an opt-in browser provider', async () => {
     // npm's flat node_modules cannot dedupe the provider's own
     // `@vitest/browser → @vitest/mocker` subtree against the one vite-plus
@@ -487,6 +643,12 @@ describe('rewritePackageJson', () => {
     };
     rewritePackageJson(pkg, PackageManager.npm);
     expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    // The injected `vite` must land in SORTED position (oxfmt sorts package.json
+    // and `vp migrate` has no later format pass), so it sits before `vitest`
+    // rather than being appended after it.
+    const keys = Object.keys(pkg.devDependencies);
+    expect(keys.indexOf('vite')).toBeLessThan(keys.indexOf('vitest'));
+    expect(keys.slice(0, 3)).toEqual(['@vitest/browser-playwright', 'playwright', 'vite']);
   });
 
   it('does not inject a direct vite devDependency for npm projects without a browser provider', async () => {
@@ -655,9 +817,9 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).toHaveProperty('vite-plus', 'catalog:');
     // The base `@vitest/browser` is still stripped (bundled by vite-plus).
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
-    // Playwright is opt-in: vite-plus keeps it in the user's deps, normalized to
-    // the bundled vitest version, so the rewritten import resolves.
-    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    // Playwright is opt-in: vite-plus keeps it in the user's deps; under a
+    // catalog-managed toolchain (supportCatalog=true) it is catalog-ized. #2005
+    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', 'catalog:');
     // The provider's runtime peer dep is preserved.
     expect(pkg.devDependencies).toHaveProperty('playwright', '*');
   });
@@ -957,6 +1119,59 @@ describe('rewriteEslintPackageJson', () => {
   });
 });
 
+describe('collectInstalledPackageNames', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-collect-installed-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeRootPkg(pkg: object): void {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
+  }
+
+  it('includes packages from dependencies, devDependencies, and optionalDependencies', () => {
+    writeRootPkg({
+      dependencies: { 'pkg-dep': '^1.0.0' },
+      devDependencies: { 'pkg-dev': '^1.0.0' },
+      optionalDependencies: { 'pkg-opt': '^1.0.0' },
+    });
+    const names = collectInstalledPackageNames(tmpDir);
+    expect(names.has('pkg-dep')).toBe(true);
+    expect(names.has('pkg-dev')).toBe(true);
+    expect(names.has('pkg-opt')).toBe(true);
+  });
+
+  it('excludes packages that appear only in peerDependencies', () => {
+    // A package's own peerDependencies are NOT installed in its
+    // node_modules (the consumer must provide them). A jsPlugin that
+    // exists only as a peer is therefore not actually loadable, so the
+    // availability check must not treat it as installed.
+    writeRootPkg({
+      devDependencies: { vite: '^7.0.0' },
+      peerDependencies: { 'eslint-plugin-only-peer': '^1.0.0' },
+    });
+    const names = collectInstalledPackageNames(tmpDir);
+    expect(names.has('eslint-plugin-only-peer')).toBe(false);
+    expect(names.has('vite')).toBe(true);
+  });
+
+  it('drops a jsPlugin whose package is only a peerDependency (would fail to load at lint time)', () => {
+    writeRootPkg({
+      devDependencies: { vite: '^7.0.0' },
+      peerDependencies: { 'eslint-plugin-only-peer': '^1.0.0' },
+    });
+    const available = collectInstalledPackageNames(tmpDir);
+    const config = { jsPlugins: ['eslint-plugin-only-peer'] };
+    sanitizeMigratedOxlintConfig(config, available);
+    expect(config.jsPlugins).toEqual([]);
+  });
+});
+
 function writePkgAt(dir: string, pkg: object): void {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
@@ -1205,6 +1420,112 @@ describe('migrateNodeVersionManagerFile', () => {
     expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);
   });
 
+  it('rewrites node-version-file references to .nvmrc in GitHub workflows, preserving quote style', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    const workflowsDir = path.join(tmpDir, '.github', 'workflows');
+    fs.mkdirSync(workflowsDir, { recursive: true });
+    // Quoted reference (the common actions/setup-node style).
+    fs.writeFileSync(
+      path.join(workflowsDir, 'ci.yml'),
+      [
+        'jobs:',
+        '  build:',
+        '    steps:',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        "          node-version-file: '.nvmrc'",
+        '',
+      ].join('\n'),
+    );
+    // Unquoted reference in a .yaml file.
+    fs.writeFileSync(
+      path.join(workflowsDir, 'release.yaml'),
+      [
+        'jobs:',
+        '  release:',
+        '    steps:',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        '          node-version-file: .nvmrc',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
+
+    expect(ok).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.nvmrc'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('20.19.0\n');
+    // Quote style preserved: single-quoted stays single-quoted, bare stays bare.
+    expect(fs.readFileSync(path.join(workflowsDir, 'ci.yml'), 'utf8')).toContain(
+      "node-version-file: '.node-version'",
+    );
+    expect(fs.readFileSync(path.join(workflowsDir, 'ci.yml'), 'utf8')).not.toContain('.nvmrc');
+    expect(fs.readFileSync(path.join(workflowsDir, 'release.yaml'), 'utf8')).toContain(
+      'node-version-file: .node-version',
+    );
+    expect(fs.readFileSync(path.join(workflowsDir, 'release.yaml'), 'utf8')).not.toContain(
+      '.nvmrc',
+    );
+    // The change is surfaced in the report, naming the updated workflow.
+    expect(report.warnings.some((w) => w.includes('ci.yml'))).toBe(true);
+  });
+
+  it('rewrites node-version-file references to .nvmrc in composite action.yml files', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    // Composite actions live under .github/actions/<name>/action.{yml,yaml},
+    // not .github/workflows, and reference .nvmrc the same way.
+    const actionDir = path.join(tmpDir, '.github', 'actions', 'setup-node');
+    fs.mkdirSync(actionDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(actionDir, 'action.yml'),
+      [
+        'runs:',
+        '  using: composite',
+        '  steps:',
+        '    - uses: actions/setup-node@v4',
+        '      with:',
+        '        node-version-file: .nvmrc',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
+
+    expect(ok).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.nvmrc'))).toBe(false);
+    const actionYml = fs.readFileSync(path.join(actionDir, 'action.yml'), 'utf8');
+    expect(actionYml).toContain('node-version-file: .node-version');
+    expect(actionYml).not.toContain('.nvmrc');
+    // The change is surfaced in the report, naming the updated action file.
+    expect(report.warnings.some((w) => w.includes('action.yml'))).toBe(true);
+  });
+
+  it('does not rewrite non-node-version-file .nvmrc mentions in workflows', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    const workflowsDir = path.join(tmpDir, '.github', 'workflows');
+    fs.mkdirSync(workflowsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(workflowsDir, 'shell.yml'),
+      ['jobs:', '  build:', '    steps:', '      - run: cat .nvmrc', ''].join('\n'),
+    );
+
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' });
+
+    expect(ok).toBe(true);
+    // A shell `cat .nvmrc` is out of scope and must be left untouched.
+    expect(fs.readFileSync(path.join(workflowsDir, 'shell.yml'), 'utf8')).toContain('cat .nvmrc');
+  });
+
+  it('migrates .nvmrc with no .github/workflows directory present', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.19.0\n');
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' });
+    expect(ok).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('20.19.0\n');
+  });
+
   it('migrates volta node version to .node-version', () => {
     const ok = migrateNodeVersionManagerFile(tmpDir, {
       file: 'package.json',
@@ -1250,6 +1571,7 @@ describe('migrateNodeVersionManagerFile', () => {
 function makeWorkspaceInfo(
   rootDir: string,
   packageManager: PackageManager,
+  version = '10.33.0',
 ): import('../../types/index.js').WorkspaceInfo {
   return {
     rootDir,
@@ -1258,13 +1580,13 @@ function makeWorkspaceInfo(
     workspacePatterns: [],
     parentDirs: [],
     packageManager,
-    packageManagerVersion: '10.33.0',
+    packageManagerVersion: version,
     downloadPackageManager: {
       name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
       packageName: packageManager,
-      version: '10.33.0',
+      version,
     },
     packages: [],
   };
@@ -1313,11 +1635,300 @@ describe('ensureVitePlusBootstrap', () => {
       devEngines: { packageManager: { name: string } };
     };
     expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
-    expect(pkg.overrides.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is NOT managed —
+    // it arrives transitively through vite-plus, so no override is written.
+    expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('rewrites the stale vitest wrapper override without pinning the @vitest/* family for npm projects', () => {
+  it('creates the pnpm-workspace.yaml catalog on a standalone pnpm 9.5-10.6.1 upgrade and converges', () => {
+    // Existing-Vite+ standalone project, pnpm 10.5.0: catalogs are supported
+    // (>= 9.5.0) so the reconcile rewrites the toolchain deps to `catalog:`,
+    // but no pnpm-workspace.yaml exists yet. The catalog entries MUST be
+    // created or the post-migration install cannot resolve `catalog:`.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        packageManager: 'pnpm@10.5.0',
+        devDependencies: { 'vite-plus': '^0.1.24' },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], '10.5.0')).toBe(true);
+
+    const result = ensureVitePlusBootstrap(
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '10.5.0'),
+    );
+    expect(result.changed).toBe(true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    const workspaceYaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(workspaceYaml).toContain('vite-plus:');
+    expect(workspaceYaml).toContain('@voidzero-dev/vite-plus-core');
+
+    // A fully migrated project must converge to the "already using Vite+"
+    // fast exit instead of re-running the bootstrap forever.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], '10.5.0')).toBe(false);
+  });
+
+  it('adds the direct bun `vite` edge as `catalog:` (not the concrete core alias) so the vitest peer resolves on a WORKSPACE upgrade', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        // A non-empty `workspaces` makes this a real bun workspace, where bun
+        // resolves `catalog:` references. A standalone bun project (no
+        // `workspaces`) must NOT use catalogs — covered by the test below.
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'latest', vitest: '4.1.9' },
+        overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0' },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+
+    expect(result.changed).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+      catalog: Record<string, string>;
+    };
+    // Bun needs `vite` as a DIRECT dependency for vitest's `vite` peer to resolve
+    // before overrides apply (oven-sh/bun#8406). A `catalog:` edge satisfies that
+    // (catalog refs resolve during the dependency-graph build) and keeps the
+    // direct edge consistent with the catalog/override sinks instead of leaking a
+    // concrete alias. Verified on bun 1.3.11.
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    // The injected `vite` must land in SORTED position (oxfmt sorts package.json
+    // and `vp migrate` has no later format pass), i.e. before the existing
+    // `vite-plus` entry rather than appended after it.
+    const devKeys = Object.keys(pkg.devDependencies);
+    expect(devKeys).toEqual([...devKeys].toSorted());
+    // The direct `vite` edge is inserted before the existing `vite-plus` entry.
+    // (A non-managed direct `vitest` is removed in this common case, arriving
+    // transitively through vite-plus.)
+    expect(devKeys).toEqual(['vite', 'vite-plus']);
+    // The bootstrap path writes a bun catalog mapping `vite` -> vite-plus-core,
+    // so the `catalog:` direct edge resolves to the managed core build.
+    expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
+  });
+
+  it('keeps a bun WORKSPACE `catalog:` override instead of inlining it against a stale catalog', () => {
+    // Same ordering as the pnpm < 10.6.2 case: the override is reconciled against
+    // the still-stale in-memory catalog, so it is transiently inlined to the core
+    // alias. Unlike pnpm < 10.6.2 (which skipped the workspace rewrite, leaving the
+    // inline stuck until that bug was fixed), `rewriteBunCatalog` then rewrites the
+    // catalog AND re-catalogs the now-matching override back to `catalog:`, so the
+    // final result is correct. This test guards that self-heal.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'catalog:' },
+        overrides: { vite: 'catalog:' },
+        catalog: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0',
+          'vite-plus': '0.1.0',
+        },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+      catalog: Record<string, string>;
+    };
+    // The vite override references the catalog (rewritten below), so it stays
+    // `catalog:` rather than being inlined against the stale pre-rewrite catalog.
+    expect(pkg.overrides.vite).toBe('catalog:');
+    // The catalog is rewritten off the stale core@0.1.0 alias.
+    expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
+    expect(pkg.catalog.vite).not.toContain('@0.1.0');
+  });
+
+  it('keeps a STANDALONE bun project on concrete specs (no `catalog:`, no catalog field) on upgrade', () => {
+    // Regression for the OneSignal-Website-SDK upgrade: a standalone
+    // (non-workspace) bun project already on Vite+ with concrete specs. Bun
+    // resolves `catalog:` references ONLY inside a workspace (a root
+    // package.json with a non-empty `workspaces`), so converting these edges to
+    // `catalog:` and writing a top-level `catalog` field makes `bun install`
+    // abort with "vite@catalog: failed to resolve". The upgrade path must keep
+    // every managed spec concrete and write NO catalog field, mirroring the
+    // fresh standalone path (rewriteBunCatalog runs only on monorepo roots). A
+    // direct `@vitest/coverage-v8` dep keeps vitest a direct-usage signal so the
+    // managed `vitest` spec survives (and must stay concrete, not `catalog:`).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'standalone-bun',
+        devDependencies: {
+          '@vitest/coverage-v8': '4.1.9',
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.24',
+          'vite-plus': '0.1.24',
+          vitest: '4.1.9',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.24',
+          vitest: '4.1.9',
+        },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+    expect(result.changed).toBe(true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+      catalog?: Record<string, string>;
+      workspaces?: unknown;
+    };
+    // No bun catalog field is written for a standalone (non-workspace) project,
+    // and no `workspaces` field is fabricated.
+    expect(pkg.catalog).toBeUndefined();
+    expect(pkg.workspaces).toBeUndefined();
+    // Managed install specs re-pin to the active toolchain target and stay
+    // concrete: `vite` via the core alias, `vite-plus` at the version, `vitest`
+    // at the bundled version.
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    // Overrides stay concrete too (bun resolves these regardless, but a
+    // `catalog:` override would still dangle without a catalog).
+    expect(pkg.overrides.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    // Nothing collapses to a dangling `catalog:` reference.
+    for (const spec of [...Object.values(pkg.devDependencies), ...Object.values(pkg.overrides)]) {
+      expect(spec).not.toMatch(/^catalog:/);
+    }
+    // A second pass is a no-op: the standalone project is already settled.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+  });
+
+  it('rewrites a STANDALONE bun `catalog:` override to the concrete core alias (catalogs unsupported)', () => {
+    // Regression: a standalone (non-workspace) bun project already on Vite+ that
+    // carries `overrides.vite: "catalog:"` plus a matching top-level `catalog`.
+    // Bun resolves `catalog:` ONLY inside a workspace, so on a standalone project
+    // the catalog field is dead and `bun install --force` aborts on
+    // `vite@catalog:`. The catalog-aware bun resolver must NOT be consulted when
+    // catalogs are unsupported (`supportCatalog === false`) — otherwise the
+    // `catalog:` override resolves through the catalog and is treated as already
+    // satisfied, leaving it dangling. It must instead be rewritten to the
+    // concrete `@voidzero-dev/vite-plus-core` alias, mirroring the direct `vite`
+    // edge on the standalone path.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'standalone-bun-catalog-override',
+        devDependencies: {
+          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          'vite-plus': 'latest',
+        },
+        overrides: { vite: 'catalog:' },
+        catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    // Detection must not accept the dangling `catalog:` override as satisfied via
+    // the unsupported catalog resolver: the project is still pending.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(true);
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+    expect(result.changed).toBe(true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+    };
+    // The `catalog:` override is rewritten to the concrete core alias so
+    // `bun install --force` resolves it without a workspace catalog.
+    expect(pkg.overrides.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.overrides.vite).not.toMatch(/^catalog:/);
+
+    // Settled afterward: a second detect pass is a no-op.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+  });
+
+  it('injects a SORTED direct `vite` edge for an npm opt-in-provider project on upgrade', () => {
+    // npm has no catalog, so the direct `vite` edge an opt-in browser provider
+    // needs (so nested `@vitest/mocker` copies resolve a single hoisted `vite`)
+    // is the concrete core alias. It must land before the existing `vite-plus`
+    // entry, not be appended after it (oxfmt sorts package.json; `vp migrate`
+    // has no later format pass, so an out-of-order key fails a follow-up
+    // `vp check`).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          '@vitest/browser-playwright': '^4.0.0',
+          playwright: '^1.60.0',
+          'vite-plus': 'latest',
+          vitest: '4.1.9',
+        },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    const devKeys = Object.keys(pkg.devDependencies);
+    expect(devKeys).toEqual([...devKeys].toSorted());
+    expect(devKeys.indexOf('vite')).toBeLessThan(devKeys.indexOf('vite-plus'));
+  });
+
+  it('adds a direct `vite: catalog:` to an already-Vite+ pnpm root on upgrade (#1932)', () => {
+    // Upgrade scenario: the project is already on Vite+ via a pnpm catalog and
+    // depends on `vite-plus` (which bundles the vitest browser ecosystem whose
+    // packages declare a `vite ^8` peer), but the root has NO direct `vite`
+    // edge. Without it, pnpm's autoInstallPeers fabricates a separate upstream
+    // `vite` to satisfy that peer, splitting vite-plus / vite / vitest. The
+    // full-migration path injects a direct vite via ensureDirectViteForPnpm; the
+    // bootstrap/re-pin (upgrade) path must do the same.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    // inserted in sorted position (oxfmt sorts package.json), not appended
+    expect(Object.keys(pkg.devDependencies)).toEqual(['vite', 'vite-plus']);
+  });
+
+  it('removes the stale vitest wrapper override for a non-vitest npm project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1335,20 +1946,60 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
 
-    // The `vite` alias still points at the live `@voidzero-dev/vite-plus-core`
-    // package, so it satisfies the migration and is left untouched. The `vitest`
-    // alias points at the DELETED `@voidzero-dev/vite-plus-test` wrapper, so it is
-    // rewritten to the bundled vitest version. The `@vitest/*` family is NOT pinned:
-    // it resolves transitively from `vitest`'s own exact deps.
+    // Both managed aliases must match the active toolchain target. Keeping the
+    // old core alias while rewriting a direct `vite` dependency causes npm's
+    // EOVERRIDE error. The project does NOT use vitest directly (no @vitest/*
+    // dep, no vitest source), so the stale deleted wrapper override is removed.
     expect(result.changed).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides: Record<string, string>;
     };
-    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@0.1.0');
-    expect(pkg.overrides.vitest).toBe('4.1.9');
+    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.overrides['@vitest/expect']).toBeUndefined();
     expect(pkg.overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('replaces protocol-pinned migration targets in force-override mode', () => {
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: {
+            'vite-plus': 'https://pkg.pr.new/voidzero-dev/vite-plus@old',
+            vite: 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@old',
+          },
+          overrides: {
+            vite: 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@old',
+          },
+          devEngines: {
+            packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+          },
+        }),
+      );
+
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        devDependencies: Record<string, string>;
+        overrides: Record<string, string>;
+      };
+      expect(pkg.devDependencies['vite-plus']).toBe('latest');
+      expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+      expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
   });
 
   it('rewrites direct npm Vite dependencies before adding overrides', () => {
@@ -1378,7 +2029,9 @@ describe('ensureVitePlusBootstrap', () => {
       dependencies: Record<string, string>;
     };
     expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.dependencies.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): the direct `vitest` dep
+    // is removed — it arrives transitively through vite-plus.
+    expect(pkg.dependencies.vitest).toBeUndefined();
   });
 
   it('normalizes catalog vite-plus pins for npm projects', () => {
@@ -1423,6 +2076,97 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
+  it('allows pkg.pr.new transitive URLs in pnpm workspace config and is idempotent', () => {
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    const savedViteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+    const viteOverride =
+      'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617';
+    process.env.VP_FORCE_MIGRATE = '1';
+    VITE_PLUS_OVERRIDE_PACKAGES.vite = viteOverride;
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: { 'vite-plus': 'catalog:' },
+          devEngines: {
+            packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'pnpm-workspace.yaml'),
+        [
+          'blockExoticSubdeps: true',
+          'catalog:',
+          `  vite: '${viteOverride}'`,
+          '  vite-plus: latest',
+          'overrides:',
+          "  vite: 'catalog:'",
+          'peerDependencyRules:',
+          '  allowAny:',
+          '    - vite',
+          '  allowedVersions:',
+          "    vite: '*'",
+        ].join('\n'),
+      );
+
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+      const first = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      expect(first.packageManagerConfig).toBe(true);
+      expect(
+        (
+          readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+            blockExoticSubdeps: boolean;
+          }
+        ).blockExoticSubdeps,
+      ).toBe(false);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+      expect(ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm)).changed).toBe(
+        false,
+      );
+    } finally {
+      VITE_PLUS_OVERRIDE_PACKAGES.vite = savedViteOverride;
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+  });
+
+  it('survives scalar-valued peerDependencyRules entries in pnpm-workspace.yaml', () => {
+    // `allowAny: react` (scalar instead of a list) is malformed but must not
+    // crash the migration mid-write; the scalar is folded into the rebuilt
+    // sequence and a malformed `allowedVersions` scalar is replaced.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['peerDependencyRules:', '  allowAny: react', '  allowedVersions: react'].join('\n'),
+    );
+
+    expect(() =>
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm)),
+    ).not.toThrow();
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    expect(workspace.peerDependencyRules.allowAny).toContain('react');
+    expect(workspace.peerDependencyRules.allowAny).toContain('vite');
+    expect(workspace.peerDependencyRules.allowedVersions.vite).toBe('*');
+  });
+
   it('detects missing pnpm workspace catalog entry for vite-plus', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -1464,7 +2208,1377 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog['vite-plus']).toBe('latest');
   });
 
-  it('uses a concrete vite-plus version when pnpm config stays in package.json', () => {
+  it('strips bundled tool deps (oxlint/oxlint-tsgolint/oxfmt/tsdown) from an existing Vite+ pnpm project so no `catalog:` reference dangles after the catalog drops them', () => {
+    // Regression for the upgrade path: the catalog rewrite deletes EVERY
+    // REMOVE_PACKAGES entry from the workspace catalog (catalog.ts), but the
+    // existing-Vite+ package.json reconcile only stripped the `@vitest/*`
+    // subset. That left `oxlint-tsgolint` (and the other bundled tools) as a
+    // `catalog:` reference whose catalog entry was just deleted, so the next
+    // `pnpm install` aborts with
+    // `[ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC] No catalog entry
+    // 'oxlint-tsgolint' was found for catalog 'default'`.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          oxfmt: 'catalog:',
+          oxlint: 'catalog:',
+          'oxlint-tsgolint': 'catalog:',
+          tsdown: 'catalog:',
+          'vite-plus': 'catalog:',
+        },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  oxfmt: ^0.1.0',
+        '  oxlint: ^1.0.0',
+        '  oxlint-tsgolint: ^1.0.0',
+        '  tsdown: ^0.10.0',
+        '  vite-plus: latest',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // The bundled toolchain packages are owned by vite-plus and must be removed
+    // from package.json (matching the catalog removal and the fresh path), so
+    // they leave no dangling `catalog:` reference behind.
+    expect(pkg.devDependencies.oxfmt).toBeUndefined();
+    expect(pkg.devDependencies.oxlint).toBeUndefined();
+    expect(pkg.devDependencies['oxlint-tsgolint']).toBeUndefined();
+    expect(pkg.devDependencies.tsdown).toBeUndefined();
+    // vite-plus itself stays a managed catalog dependency.
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+
+    // Both sides are consistent: the catalog no longer defines the bundled
+    // tools either, confirming no surviving `catalog:` reference dangles.
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog.oxfmt).toBeUndefined();
+    expect(workspace.catalog.oxlint).toBeUndefined();
+    expect(workspace.catalog['oxlint-tsgolint']).toBeUndefined();
+    expect(workspace.catalog.tsdown).toBeUndefined();
+  });
+
+  it('reconciles stale pnpm-workspace.yaml overrides when package.json has an empty pnpm field (urllib shape)', () => {
+    // urllib 0.1.x shape: an empty `pnpm: {}` in package.json AND a committed
+    // pnpm-workspace.yaml whose overrides pin vite/vitest to the deleted
+    // @voidzero-dev/vite-plus-test wrapper. The empty `pnpm: {}` is truthy, so the
+    // bootstrap used to take the package.json path and IGNORE the workspace.yaml,
+    // leaving the dead wrapper override in place (and a second, conflicting
+    // override source in package.json). Because a pnpm-workspace.yaml exists, the
+    // workspace.yaml is the real config location and must be reconciled.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'urllib',
+        devDependencies: {
+          '@vitest/coverage-v8': '^4.1.8',
+          vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24',
+          'vite-plus': '^0.1.24',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24',
+        },
+        pnpm: {},
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '11.7.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24'",
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - vite',
+        '    - vitest',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    // The deleted wrapper alias must no longer survive in the workspace.yaml.
+    const workspaceRaw = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf-8');
+    expect(workspaceRaw).not.toContain('@voidzero-dev/vite-plus-test');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(JSON.stringify(pkg)).not.toContain('@voidzero-dev/vite-plus-test');
+
+    // And the project must not be left pending (no stale wrapper override anywhere).
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('aligns coverage providers to the bundled vitest version (urllib coverage-v8 symptom)', () => {
+    // A coverage provider is a project-installed peer that Vitest pins to an
+    // exact runner version; a skewed copy makes Vitest run mixed versions. The
+    // upgrade must bump it to the bundled vitest version, not leave it behind.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/coverage-v8': '^4.1.8',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('aligns the full @vitest/* ecosystem (ui, web-worker) but leaves @vitest/eslint-plugin alone', () => {
+    // Every official @vitest/* package carries an exact `vitest` peer, so each
+    // must match the bundled vitest. @vitest/eslint-plugin versions on its own
+    // line (`vitest: *` peer) and must NOT be pinned to the vitest version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/ui': '^4.1.0',
+          '@vitest/web-worker': '^4.1.0',
+          '@vitest/eslint-plugin': '^1.0.0',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/ui']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/web-worker']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/eslint-plugin']).toBe('^1.0.0');
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+  });
+
+  it('prefers existing catalogs for Vitest ecosystem packages and catalog-izes the rest', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: {
+          // Reproduce the output from the prior migration: the package was
+          // hard-pinned even though the default catalog already owned it.
+          '@vitest/coverage-istanbul': VITEST_VERSION,
+          '@vitest/ui': 'catalog:test',
+          '@vitest/web-worker': '^4.1.0',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        `  vitest: ${VITEST_VERSION}`,
+        "  '@vitest/coverage-istanbul': 4.1.4",
+        'catalogs:',
+        '  test:',
+        "    '@vitest/ui': 4.1.4",
+        'blockExoticSubdeps: false',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite, vitest]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        "    vitest: '*'",
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(true);
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const pkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe('catalog:');
+    expect(pkg.devDependencies['@vitest/ui']).toBe('catalog:test');
+    // #2005: web-worker had no prior catalog entry; it is catalog-ized into the default catalog.
+    expect(pkg.devDependencies['@vitest/web-worker']).toBe('catalog:');
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(workspace.catalog['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
+    expect(workspace.catalog['@vitest/web-worker']).toBe(VITEST_VERSION);
+    expect(workspace.catalogs.test['@vitest/ui']).toBe(VITEST_VERSION);
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(false);
+  });
+
+  it('keeps catalog: refs and rewrites the catalog when it uses legacy wrapper aliases (varlet #10)', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        pnpm: { overrides: { vite: 'catalog:', vitest: 'catalog:' } },
+        devEngines: { packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: {
+          '@vitest/coverage-istanbul': 'catalog:',
+          typescript: 'catalog:',
+          vitest: 'catalog:',
+          vue: 'catalog:',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  typescript: 5.6.3',
+        '  vue: 3.5.21',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.18'",
+        '  vite-plus: 0.1.18',
+        "  '@vitest/coverage-istanbul': 4.1.4",
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    });
+
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    // The vitest-ecosystem refs stay `catalog:` (catalogs are supported here — the
+    // sibling typescript/vue refs are untouched), rather than being inlined to a
+    // concrete pin.
+    expect(appPkg.devDependencies.vitest).toBe('catalog:');
+    expect(appPkg.devDependencies['@vitest/coverage-istanbul']).toBe('catalog:');
+    expect(appPkg.devDependencies.typescript).toBe('catalog:');
+    // The catalog ENTRIES are rewritten: the legacy vitest wrapper alias becomes
+    // upstream vitest, @vitest/coverage-istanbul aligns to it, and the vite alias
+    // advances to the managed core target.
+    expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
+    expect(workspace.catalog['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
+    expect(workspace.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+  });
+
+  it('keeps vite-plus catalog: and adds the direct vite as catalog: for a vite-plus consumer (varlet-cli #10)', () => {
+    // packages/varlet-cli lists `vite-plus: catalog:` in dependencies and has no
+    // vite; under pnpm the migration must add a direct vite, and BOTH edges should
+    // reference the catalog rather than inline the concrete toolchain version.
+    const cliDir = path.join(tmpDir, 'packages/cli');
+    fs.mkdirSync(cliDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: { packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(cliDir, 'package.json'),
+      JSON.stringify({ name: 'cli', dependencies: { 'vite-plus': 'catalog:' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        '  vite-plus: 0.1.18',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'cli', path: 'packages/cli' }],
+    });
+
+    const cliPkg = readJson(path.join(cliDir, 'package.json')) as {
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    // vite-plus stays catalog: (not inlined to the concrete toolchain version)...
+    expect(cliPkg.dependencies['vite-plus']).toBe('catalog:');
+    // ...and the required direct vite is added as a catalog: ref, not a concrete pin.
+    expect(cliPkg.devDependencies?.vite).toBe('catalog:');
+  });
+
+  it('keeps toolchain catalog: refs on a pnpm 9.5-10.6.1 catalog project (varlet-import-resolver #10)', () => {
+    const pkgDir = path.join(tmpDir, 'packages/import-resolver');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: { packageManager: { name: 'pnpm', version: '9.15.9', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({
+        name: 'import-resolver',
+        devDependencies: { '@types/node': 'catalog:', 'vite-plus': 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  '@types/node': ^20.19.0",
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        '  vite-plus: 0.1.18',
+        'overrides:',
+        "  vite: 'catalog:'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'import-resolver', path: 'packages/import-resolver' }],
+    };
+    workspaceInfo.downloadPackageManager = {
+      ...workspaceInfo.downloadPackageManager,
+      version: '9.15.9',
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const pkg = readJson(path.join(pkgDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // pnpm 9.15.9 supports catalogs (>= 9.5.0), so the reconciled toolchain edges
+    // stay catalog: rather than being inlined to the concrete toolchain version.
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies['@types/node']).toBe('catalog:');
+  });
+
+  it('pins the toolchain to concrete on pnpm < 9.5.0 (catalogs unsupported)', () => {
+    // pnpm added catalogs in 9.5.0; below that they cannot resolve, so the
+    // reconciled toolchain edges must stay concrete rather than `catalog:`.
+    const pkgDir = path.join(tmpDir, 'packages/import-resolver');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: { packageManager: { name: 'pnpm', version: '9.4.0', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({
+        name: 'import-resolver',
+        devDependencies: { '@types/node': 'catalog:', 'vite-plus': 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  '@types/node': ^20.19.0",
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        '  vite-plus: 0.1.18',
+        'overrides:',
+        "  vite: 'catalog:'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'import-resolver', path: 'packages/import-resolver' }],
+    };
+    workspaceInfo.downloadPackageManager = {
+      ...workspaceInfo.downloadPackageManager,
+      version: '9.4.0',
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const pkg = readJson(path.join(pkgDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // 9.4.0 < 9.5.0: toolchain edges are concrete (the direct vite is the core alias).
+    expect(pkg.devDependencies['vite-plus']).not.toBe('catalog:');
+    expect(pkg.devDependencies.vite).toContain('@voidzero-dev/vite-plus-core@');
+    // Untouched non-toolchain catalog refs are left as-is.
+    expect(pkg.devDependencies['@types/node']).toBe('catalog:');
+  });
+
+  it('rewrites the catalog and keeps pnpm.overrides catalog: below pnpm 10.6.2 (varlet #10)', () => {
+    // pnpm 9.5-10.6.1: catalogs work (>= 9.5.0) but settings stay in package.json
+    // (< 10.6.2). The catalog must still be rewritten off the stale vite-plus-test
+    // wrapper, and package.json pnpm.overrides that reference it stay `catalog:`.
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'varlet',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:', vitest: 'catalog:' },
+        pnpm: { overrides: { vite: 'catalog:', vitest: 'catalog:' } },
+        devEngines: { packageManager: { name: 'pnpm', version: '9.15.9', onFail: 'download' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vitest: 'catalog:' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@0.1.18'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.18'",
+        '  vite-plus: 0.1.18',
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+    workspaceInfo.downloadPackageManager = {
+      ...workspaceInfo.downloadPackageManager,
+      version: '9.15.9',
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+    };
+    // The vite override stays `catalog:` (settings remain in package.json below 10.6.2).
+    expect(rootPkg.pnpm?.overrides?.vite).toBe('catalog:');
+    // The catalog entries are rewritten off the stale 0.1.18 wrappers.
+    expect(workspace.catalog?.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalog?.['vite-plus']).toBe('latest');
+  });
+
+  it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/coverage-c8': '^0.33.0',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-c8']).toBe('^0.33.0');
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+  });
+
+  it('detects a required Vitest peer from Yarn PnP dependency metadata', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          'vite-plugin-gherkin': '0.2.0',
+        },
+        resolutions: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
+        },
+      }),
+    );
+    const pluginDir = path.join(tmpDir, '.yarn/cache/vite-plugin-gherkin');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pluginDir, 'package.json'),
+      JSON.stringify({
+        name: 'vite-plugin-gherkin',
+        version: '0.2.0',
+        exports: { '.': './index.js' },
+        peerDependencies: { vitest: '^4.1.0' },
+      }),
+    );
+    fs.writeFileSync(path.join(pluginDir, 'index.js'), 'module.exports = {};\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.pnp.cjs'),
+      [
+        "const path = require('node:path');",
+        'module.exports = {',
+        '  resolveToUnqualified(request) {',
+        "    if (request !== 'vite-plugin-gherkin') throw new Error('not found');",
+        "    return path.join(__dirname, '.yarn/cache/vite-plugin-gherkin');",
+        '  },',
+        '};',
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.yarn));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(pkg.resolutions.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+  });
+
+  it('preserves existing Vitest when dependency peer metadata is unavailable', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          'vite-plugin-gherkin': '0.2.0',
+          vitest: '^4.1.0',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: '^4.1.0',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it.each([
+    {
+      name: 'compilerOptions.types',
+      writeReference: (projectPath: string) =>
+        fs.writeFileSync(
+          path.join(projectPath, 'tsconfig.json'),
+          JSON.stringify({ compilerOptions: { types: ['vitest/globals'] } }),
+        ),
+    },
+    {
+      name: 'nested compilerOptions.types',
+      writeReference: (projectPath: string) => {
+        const configDir = path.join(projectPath, 'config');
+        fs.mkdirSync(configDir);
+        fs.writeFileSync(
+          path.join(configDir, 'tsconfig.test.json'),
+          JSON.stringify({ compilerOptions: { types: ['vitest/globals'] } }),
+        );
+      },
+    },
+    {
+      name: 'vitest/package.json',
+      writeReference: (projectPath: string) =>
+        fs.writeFileSync(
+          path.join(projectPath, 'version.ts'),
+          "import metadata from 'vitest/package.json';\nconsole.log(metadata.version);\n",
+        ),
+    },
+    {
+      name: 'require.resolve',
+      writeReference: (projectPath: string) =>
+        fs.writeFileSync(
+          path.join(projectPath, 'resolve.cjs'),
+          "module.exports = require.resolve('vitest');\n",
+        ),
+    },
+  ])('keeps package-local Vitest for retained $name references', ({ writeReference }) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    writeReference(tmpDir);
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('does not treat @vitest/eslint-plugin as runner usage', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/eslint-plugin': '^1.6.0',
+          '@vitest/utils': '^4.1.8',
+          vitest: '4.1.8',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: '4.1.8',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'eslint.config.js'),
+      "import vitest from '@vitest/eslint-plugin';\nimport { diff } from '@vitest/utils';\nexport default [vitest.configs.recommended, diff];\n",
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/eslint-plugin']).toBe('^1.6.0');
+    expect(pkg.devDependencies['@vitest/utils']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(pkg.overrides.vitest).toBeUndefined();
+  });
+
+  it('reconciles vitest and vite-plus in the workspace package that needs them', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: {
+          'vite-plus': '^0.1.24',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24',
+          '@vitest/ui': '^4.1.8',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(true);
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(rootPkg.devDependencies.vitest).toBeUndefined();
+    expect(appPkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(appPkg.devDependencies['@vitest/ui']).toBe('catalog:');
+    expect(appPkg.devDependencies.vitest).toBe('catalog:');
+    expect(JSON.stringify(appPkg)).not.toContain('@voidzero-dev/vite-plus-test');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(false);
+  });
+
+  it('reports pending when a workspace package pins vite-plus to a stale named catalog', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    // Root is already up to date through the default catalog (vite-plus: latest).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    // The workspace package pins vite-plus to a DIFFERENT named catalog whose
+    // entry still points at an old Vite+. A root-only pending check would miss it.
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:legacy' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'catalogs:',
+        '  legacy:',
+        '    vite-plus: 0.1.24',
+        '    vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    // The stale `catalog:legacy` reference in the workspace package must keep the
+    // bootstrap pending even though the root manifest's default catalog is current.
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(true);
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalogs: { legacy: Record<string, string> };
+    };
+    expect(workspace.catalogs.legacy['vite-plus']).toBe('latest');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(false);
+  });
+
+  it('restores an opt-in browser provider used only through a Vite+ shim', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'browser-app',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { defineConfig } from 'vite-plus';",
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        'export default defineConfig({ test: { browser: { enabled: true, provider: playwright() } } });',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
+    expect(pkg.devDependencies.playwright).toBe('*');
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('references the catalog for an installed browser provider the injection adds to the catalog', () => {
+    // #2005: a workspace package uses `@vitest/browser-playwright` only through a
+    // Vite+ shim (no dep), so migration ADDS the provider to the default catalog.
+    // The root package that ALSO declares it (concretely) must then reference that
+    // catalog entry — leaving it concrete makes the freshly-added catalog entry
+    // dead/unused.
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: {
+          'vite-plus': 'catalog:',
+          '@vitest/browser-playwright': '^4.0.0',
+          playwright: '^1.60.0',
+          vitest: 'catalog:',
+        },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: { 'vite-plus': 'catalog:', vitest: 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'vite.config.ts'),
+      [
+        "import { defineConfig } from 'vite-plus';",
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        'export default defineConfig({ test: { browser: { enabled: true, provider: playwright() } } });',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        `  vitest: ${VITEST_VERSION}`,
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    // The catalog gains the provider (added because the workspace uses it
+    // source-only), so BOTH the injected (workspace) and the pre-installed (root)
+    // specs must reference the catalog, not a concrete version.
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(rootPkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
+    expect(appPkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
+    expect(rootPkg.devDependencies.playwright).toBe('^1.60.0');
+    expect(rootPkg.devDependencies.vitest).toBe('catalog:');
+  });
+
+  it('resolves a Vitest peer catalog before removing its managed catalog entry', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'peer-library',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        peerDependencies: { vitest: 'catalog:test' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vite-plus: latest',
+        'catalogs:',
+        '  test:',
+        '    vitest: ^4.0.0',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      peerDependencies: Record<string, string>;
+    };
+    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(workspace.catalogs.test.vitest).toBeUndefined();
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('keeps Vitest managed when promoting a peer-only browser provider', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'browser-library',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        peerDependencies: { '@vitest/browser-playwright': '^4.0.0' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      peerDependencies: Record<string, string>;
+    };
+    expect(pkg.peerDependencies['@vitest/browser-playwright']).toBe('^4.0.0');
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
+    expect(pkg.devDependencies.playwright).toBe('*');
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
+    expect(workspace.overrides.vitest).toBe('catalog:');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('rewrites whitespace-tolerant Vitest directives without leaving rerun mutations', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'typed-library',
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'env.d.ts'), '/// <reference types = "vitest" />\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    const firstPackageJson = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8');
+    const firstWorkspace = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
+    const firstDirective = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf8');
+
+    expect(firstPackageJson).not.toContain('"vitest"');
+    expect(firstWorkspace).not.toContain('vitest:');
+    expect(firstDirective).toContain('types = "vite-plus/test"');
+
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(firstPackageJson);
+    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).toBe(firstWorkspace);
+    expect(fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf8')).toBe(firstDirective);
+  });
+
+  it('does not remain pending for an object-valued nested Vitest override', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'nested-override',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: { '@vitest/runner': '4.0.0' },
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+    expect(result.changed).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, unknown>;
+    };
+    expect(pkg.overrides.vitest).toEqual({ '@vitest/runner': '4.0.0' });
+  });
+
+  it('removes a stale vitest wrapper override for a common-case npm project (no @vitest/* dep, no vitest source)', () => {
+    // v0.2.1 spec: vite-plus consumes upstream vitest directly, so a project that
+    // does NOT use vitest directly must NOT carry a managed `vitest` override —
+    // it arrives transitively through vite-plus. A pre-existing stale wrapper
+    // override (`npm:@voidzero-dev/vite-plus-test@*`) is REMOVED entirely while
+    // the `vite` alias stays. The bootstrap is idempotent: a second detect is
+    // false.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+    };
+    expect(pkg.overrides.vitest).toBeUndefined();
+    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('keeps vitest managed for a direct-usage npm project (@vitest/coverage-v8) and aligns coverage', () => {
+    // The project lists `@vitest/coverage-v8`, so it USES vitest directly: the
+    // managed `vitest` override is kept (re-pinned to the bundled vitest version,
+    // off the stale wrapper) AND the coverage provider is aligned to that version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/coverage-v8': '^4.1.8',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    // vitest stays managed (the stale wrapper is re-pinned to the bundled version).
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    // Coverage provider aligned to the same bundled vitest version.
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('removes managed vitest catalog/override/peer entries from pnpm-workspace.yaml in the common case', () => {
+    // pnpm-workspace.yaml common-case removal: a project with no @vitest/* dep
+    // and no vitest source must have every managed `vitest` entry (catalog,
+    // override, peer rule) stripped from the workspace file so vitest resolves
+    // transitively through vite-plus.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - vite',
+        '    - vitest',
+        '  allowedVersions:',
+        "    vite: '*'",
+        "    vitest: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    // Managed `vitest` is gone from every sink; `vite` stays managed.
+    expect(workspace.catalog.vitest).toBeUndefined();
+    expect(workspace.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.overrides.vitest).toBeUndefined();
+    expect(workspace.overrides.vite).toBe('catalog:');
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*' });
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('re-pins a behind vite-plus spec so the upgrade moves off the old version (urllib)', () => {
+    // urllib pinned vite-plus to a concrete 0.1.x range. A spec that stays at
+    // ^0.1.24 keeps the lockfile on the old resolution; the upgrade must re-pin
+    // it to the migrating toolchain target (here the mocked VITE_PLUS_VERSION
+    // 'latest', materialized as `catalog:` in a pnpm-workspace.yaml project) so
+    // the reinstall resolves the new version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'urllib',
+        devDependencies: {
+          'vite-plus': '^0.1.24',
+          vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24',
+        },
+        pnpm: {},
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '11.7.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24'",
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // vite-plus must no longer be pinned to the old 0.1.x range.
+    expect(pkg.devDependencies['vite-plus']).not.toContain('0.1.24');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('removes an empty pnpm field and creates pnpm-workspace.yaml on pnpm 10.6.2+', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1477,16 +3591,26 @@ describe('ensureVitePlusBootstrap', () => {
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
-      pnpm: { overrides: Record<string, string> };
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
-    expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    // vite-plus was declared in `dependencies`, so it is normalized in place
+    // (to `catalog:`) and not duplicated into `devDependencies`.
+    expect(pkg.dependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(workspace.catalog['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:');
   });
 
-  it('normalizes an existing catalog vite-plus pin when pnpm config stays in package.json', () => {
+  it('moves existing pnpm settings to pnpm-workspace.yaml', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1500,6 +3624,13 @@ describe('ensureVitePlusBootstrap', () => {
             vite: 'npm:@voidzero-dev/vite-plus-core@latest',
             vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
           },
+          onlyBuiltDependencies: ['esbuild'],
+          packageExtensions: {
+            'some-package@*': { peerDependencies: { react: '*' } },
+          },
+          patchedDependencies: {
+            'is-odd@3.0.1': 'patches/is-odd.patch',
+          },
           peerDependencyRules: {
             allowAny: ['vite', 'vitest'],
             allowedVersions: { vite: '*', vitest: '*' },
@@ -1507,20 +3638,129 @@ describe('ensureVitePlusBootstrap', () => {
         },
       }),
     );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        '  react: 18.3.1',
+        'onlyBuiltDependencies:',
+        '  - sharp',
+        'packageExtensions:',
+        "  'other-package@*':",
+        '    peerDependencies:',
+        "      vue: '*'",
+        'patchedDependencies:',
+        '  is-even@1.0.0: patches/is-even.patch',
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - react',
+        '  allowedVersions:',
+        "    react: '*'",
+        '',
+      ].join('\n'),
+    );
 
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      onlyBuiltDependencies: string[];
+      packageExtensions: Record<string, unknown>;
+      patchedDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    expect(workspace.onlyBuiltDependencies).toEqual(['sharp', 'esbuild']);
+    expect(workspace.packageExtensions).toEqual({
+      'other-package@*': { peerDependencies: { vue: '*' } },
+      'some-package@*': { peerDependencies: { react: '*' } },
+    });
+    expect(workspace.patchedDependencies).toEqual({
+      'is-even@1.0.0': 'patches/is-even.patch',
+      'is-odd@3.0.1': 'patches/is-odd.patch',
+    });
+    expect(workspace.overrides.react).toBe('18.3.1');
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['react', 'vite']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ react: '*', vite: '*' });
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
-  it('normalizes catalog vite-plus pins outside devDependencies when pnpm config stays in package.json', () => {
+  it('keeps pnpm settings in package.json before pnpm 10.6.2', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        pnpm: {
+          overrides: { react: '18.3.1' },
+          peerDependencyRules: { allowAny: ['react'] },
+        },
+      }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '10.6.1';
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    // Catalogs are supported from 9.5.0, so the reconcile rewrites the
+    // toolchain deps to `catalog:` and the catalog itself MUST be written
+    // (creating pnpm-workspace.yaml when missing) or the install cannot
+    // resolve them. The pnpm SETTINGS still stay in package.json.
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides?: unknown;
+      peerDependencyRules?: unknown;
+    };
+    expect(workspace.catalog['vite-plus']).toBeDefined();
+    expect(workspace.overrides).toBeUndefined();
+    expect(workspace.peerDependencyRules).toBeUndefined();
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: {
+        overrides: Record<string, string>;
+        peerDependencyRules: { allowAny: string[] };
+      };
+    };
+    expect(pkg.pnpm.overrides.react).toBe('18.3.1');
+    expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.pnpm.peerDependencyRules.allowAny).toEqual(['react', 'vite']);
+  });
+
+  it('preserves unknown package.json pnpm keys while moving supported settings', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        pnpm: {
+          app: { target: 'desktop' },
+          overrides: { react: '18.3.1' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: { app: { target: string }; overrides?: unknown };
+    };
+    expect(pkg.pnpm).toEqual({ app: { target: 'desktop' } });
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    expect(workspace.overrides.react).toBe('18.3.1');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('keeps catalog vite-plus pins outside devDependencies while moving pnpm settings', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1547,19 +3787,23 @@ describe('ensureVitePlusBootstrap', () => {
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
       dependencies: Record<string, string>;
       optionalDependencies: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
-    expect(pkg.dependencies['vite-plus']).toBe('latest');
-    expect(pkg.optionalDependencies['vite-plus']).toBe('latest');
+    // vite-plus already lives in `dependencies` (and `optionalDependencies`), so
+    // it is kept in place and not duplicated into `devDependencies`.
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
+    expect(pkg.dependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.optionalDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.pnpm).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
-  it('uses a concrete vite-plus version for pnpm monorepos that keep pnpm config in package.json', () => {
+  it('uses workspace catalog settings for pnpm 10.6.2+ monorepos', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1576,21 +3820,28 @@ describe('ensureVitePlusBootstrap', () => {
     });
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    // vite-plus was declared in `dependencies`, so it is normalized in place
+    // (to `catalog:`) and not duplicated into `devDependencies`.
+    expect(pkg.dependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
+    expect(pkg.pnpm).toBeUndefined();
   });
 
-  it('keeps yarn monorepo bootstrap rewrites out of package dependency specs', () => {
+  it('normalizes yarn monorepo dependency specs through the shared catalog', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
         devDependencies: { 'vite-plus': 'latest', vite: '^7.0.0' },
         devEngines: {
-          packageManager: { name: 'yarn', version: '4.0.0', onFail: 'download' },
+          // Yarn >= 4.10.0 is required for the `catalog:` protocol this test exercises.
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
         },
       }),
     );
@@ -1609,8 +3860,8 @@ describe('ensureVitePlusBootstrap', () => {
       devDependencies: Record<string, string>;
       resolutions: Record<string, string>;
     };
-    expect(pkg.devDependencies.vite).toBe('^7.0.0');
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
     expect(pkg.resolutions.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
       nodeLinker: string;
@@ -1618,7 +3869,9 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(yarnrc.nodeLinker).toBe('node-modules');
     expect(yarnrc.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(yarnrc.catalog.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no catalog entry is written for it.
+    expect(yarnrc.catalog.vitest).toBeUndefined();
     expect(yarnrc.catalog['vite-plus']).toBe('latest');
   });
 
@@ -1652,13 +3905,19 @@ describe('ensureVitePlusBootstrap', () => {
 
     expect(result.changed).toBe(true);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    // Common case (no @vitest/* dep, no vitest source): the pre-existing managed
+    // `vitest` catalog/override/peer entries are REMOVED — only `vite` stays
+    // managed. vitest arrives transitively through vite-plus.
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
       peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
     };
-    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite', 'vitest']);
+    expect(workspace.catalog.vitest).toBeUndefined();
+    expect(workspace.overrides.vitest).toBeUndefined();
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite']);
     expect(workspace.peerDependencyRules.allowedVersions).toEqual({
       vite: '*',
-      vitest: '*',
     });
   });
 
@@ -1778,6 +4037,418 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(workspace.packages).toEqual(['packages/*']);
   });
+
+  it('writes catalog specs during the first standalone Yarn migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'example.spec.ts'),
+      "import { expect, it } from 'vitest';\nit('works', () => expect(true).toBe(true));\n",
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    const firstPackageJson = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8');
+    const firstYarnrc = fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8');
+    const pkg = JSON.parse(firstPackageJson) as { devDependencies: Record<string, string> };
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(firstPackageJson);
+    expect(fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8')).toBe(firstYarnrc);
+  });
+
+  // Finding 1: rewriteYarnrcYml ALWAYS writes the vitest age-gate exemptions to
+  // npmPreapprovedPackages, but yarnrcSatisfiesVitePlus never checked them, so an
+  // otherwise-current Yarn project that lacked them took the "already Vite+" path
+  // and never got the exemptions -> hardened-mode install rejects fresh vitest.
+  it('treats a yarn project missing the npmPreapprovedPackages vitest exemptions as pending', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        resolutions: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
+        },
+      }),
+    );
+    // Current catalog + nodeLinker, but NO npmPreapprovedPackages exemptions.
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      [
+        'nodeLinker: node-modules',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '',
+      ].join('\n'),
+    );
+
+    // Missing exemptions -> still pending (so they get written).
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(true);
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.yarn));
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      npmPreapprovedPackages: string[];
+    };
+    expect(yarnrc.npmPreapprovedPackages).toContain('vitest');
+    expect(yarnrc.npmPreapprovedPackages).toContain('@vitest/*');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+  });
+
+  // Finding 2: rewritePnpmWorkspaceYaml adds the Vite+/vitest exemptions to
+  // minimumReleaseAgeExclude when minimumReleaseAge is configured, but the pnpm
+  // workspace pending check never inspected minimumReleaseAgeExclude, so an
+  // otherwise-current workspace skipped the fix and `pnpm install` could reject a
+  // freshly pinned version.
+  it('treats a pnpm workspace missing the minimumReleaseAge exemptions as pending', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        // The age gate is configured, but the exemptions are missing.
+        'minimumReleaseAge: 1440',
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      minimumReleaseAgeExclude: string[];
+    };
+    expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  // Finding 4: the bun reconcile injected a direct `vite` devDependency into EVERY
+  // workspace package lacking one (for oven-sh/bun#8406), dirtying unrelated
+  // workspaces that do not depend on vite-plus/vitest/a browser provider. The
+  // injection must be gated to packages that actually need it.
+  it('does not inject a direct `vite` edge into an unrelated bun workspace package', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+    // A workspace that depends on vite-plus -> still needs the bun direct vite edge.
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+    // A workspace with no vite-plus/vitest/provider signal -> must stay untouched.
+    const utilDir = path.join(tmpDir, 'packages', 'util');
+    fs.mkdirSync(utilDir, { recursive: true });
+    const utilJson = JSON.stringify({
+      name: '@scope/util',
+      dependencies: { 'left-pad': '^1.0.0' },
+    });
+    fs.writeFileSync(path.join(utilDir, 'package.json'), utilJson);
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.bun),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [
+        { name: '@scope/lib', path: 'packages/lib' },
+        { name: '@scope/util', path: 'packages/util' },
+      ],
+    };
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    // The vite-plus-depending workspace still gets the direct vite edge.
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(libPkg.devDependencies.vite).toBeDefined();
+
+    // The unrelated workspace is left exactly as written (no injected vite).
+    const utilPkg = readJson(path.join(utilDir, 'package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(utilPkg.devDependencies?.vite).toBeUndefined();
+    expect(utilPkg.dependencies?.vite).toBeUndefined();
+    expect(fs.readFileSync(path.join(utilDir, 'package.json'), 'utf8')).toBe(utilJson);
+  });
+});
+
+describe('ensureVitePlusBootstrap yarn workspace hoisting', () => {
+  let tmpDir: string;
+  const savedEnv: Record<string, string | undefined> = {};
+  // The Yarn-hoisting resolver consults these at highest precedence; clear them so
+  // an ambient value can't override the fixture `.yarnrc.yml` and make the test
+  // non-hermetic. HOME/USERPROFILE redirect the lowest-precedence home rc lookup.
+  const ISOLATED_ENV = [
+    'HOME',
+    'USERPROFILE',
+    'YARN_NODE_LINKER',
+    'YARN_NM_HOISTING_LIMITS',
+  ] as const;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bootstrap-yarn-hoist-'));
+    for (const key of ISOLATED_ENV) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    const cleanHome = path.join(tmpDir, '.home');
+    fs.mkdirSync(cleanHome, { recursive: true });
+    process.env.HOME = cleanHome;
+    process.env.USERPROFILE = cleanHome;
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    for (const key of ISOLATED_ENV) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+  });
+
+  // Finding 3: the bootstrap pending check only simulated
+  // reconcileVitePlusBootstrapPackage and ignored the Yarn workspace-hoisting
+  // opt-out. An existing Vite+ Yarn monorepo on `node-modules` +
+  // `nmHoistingLimits: workspaces` whose vite-plus workspace lacked
+  // `installConfig.hoistingLimits: none` was reported "already using Vite+" and
+  // never got the opt-out, leaving the split `@vitest/runner` layout.
+  it('opts a vite-plus yarn workspace out of nmHoistingLimits on the bootstrap path', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        resolutions: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      [
+        'nodeLinker: node-modules',
+        'nmHoistingLimits: workspaces',
+        'npmPreapprovedPackages:',
+        '  - vitest',
+        '  - "@vitest/*"',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '',
+      ].join('\n'),
+    );
+    // A vite-plus workspace WITHOUT the hoisting opt-out -> needs it.
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { 'vite-plus': 'catalog:' } }),
+    );
+
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.yarn),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: '@scope/lib', path: 'packages/lib' }],
+    };
+
+    // The only pending reason is the missing hoisting opt-out.
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, workspaceInfo.packages, '4.12.0'),
+    ).toBe(true);
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, workspaceInfo.packages, '4.12.0'),
+    ).toBe(false);
+  });
+});
+
+describe('yarn catalog version gating', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-yarn-catalog-gate-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function yarnWorkspaceInfo(version: string) {
+    const info = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    info.packageManagerVersion = version;
+    info.downloadPackageManager = { ...info.downloadPackageManager, version };
+    return info;
+  }
+
+  it('writes concrete specs (no catalog) for a standalone Yarn project below 4.10.0', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    // Yarn's `catalog:` protocol ships by default only from Yarn 4.10.0. A
+    // project resolving to an older Yarn (e.g. 3.x, which `vp migrate` does NOT
+    // auto-upgrade) cannot resolve `catalog:` references, so migration must fall
+    // back to concrete specs exactly like the non-catalog (npm) path.
+    rewriteStandaloneProject(tmpDir, yarnWorkspaceInfo('3.6.0'), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.resolutions.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+
+    // No catalog field is written into .yarnrc.yml; nodeLinker is still set.
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml'));
+    expect(yarnrc.catalog).toBeUndefined();
+    expect(yarnrc.catalogs).toBeUndefined();
+    expect(yarnrc.nodeLinker).toBe('node-modules');
+
+    // Idempotent: the project is fully migrated under the same below-floor version.
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, undefined, '3.6.0')).toBe(
+      false,
+    );
+  });
+
+  it('still uses catalog specs for a standalone Yarn project at 4.10.0+', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    rewriteStandaloneProject(tmpDir, yarnWorkspaceInfo('4.12.0'), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yarnrc.catalog.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn, undefined, '4.12.0')).toBe(
+      false,
+    );
+  });
+
+  it('writes concrete specs for a Yarn monorepo below 4.10.0', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    const workspaceInfo = yarnWorkspaceInfo('3.6.0');
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
+
+    rewriteMonorepo(workspaceInfo, true);
+
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // Below 4.10.0 → concrete edges, never `catalog:` references.
+    expect(appPkg.devDependencies['vite-plus']).toBe('latest');
+    expect(appPkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml'));
+    expect(yarnrc.catalog).toBeUndefined();
+    expect(yarnrc.catalogs).toBeUndefined();
+  });
+
+  it('still uses catalog specs for a Yarn monorepo at 4.10.0+', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vite: '^7.0.0' } }),
+    );
+
+    const workspaceInfo = yarnWorkspaceInfo('4.12.0');
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
+
+    rewriteMonorepo(workspaceInfo, true);
+
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(appPkg.devDependencies.vite).toBe('catalog:');
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yarnrc.catalog.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+  });
 });
 
 describe('rewriteStandaloneProject pnpm workspace yaml', () => {
@@ -1846,7 +4517,54 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps['vite-plus']).toBe('catalog:');
   });
 
-  it('keeps pnpm config in package.json when existing pnpm field present', () => {
+  // PR #1891 review (P1): pnpm 9.5.0-10.6.1 supports catalogs (>= 9.5.0) but not
+  // moving settings to pnpm-workspace.yaml (< 10.6.2). The toolchain edges are
+  // rewritten to `catalog:` regardless, so the catalog ENTRIES must still be
+  // written to pnpm-workspace.yaml or the install cannot resolve them.
+  it('writes the catalog to pnpm-workspace.yaml for a standalone project on pnpm 9.5-10.6.1', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '9.15.9';
+    workspaceInfo.downloadPackageManager.version = '9.15.9';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    // package.json emits catalog: specs (this part already works today).
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const devDeps = pkg.devDependencies as Record<string, string>;
+    expect(devDeps.vite).toBe('catalog:');
+    expect(devDeps['vite-plus']).toBe('catalog:');
+
+    // The catalog backing those specs must exist. Below 10.6.2 the pnpm settings
+    // stay in package.json, so the workspace file holds only the catalog.
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
+    const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(yaml).toContain('catalog:');
+    expect(yaml).toContain('vite-plus:');
+    expect(yaml).not.toContain('overrides:');
+  });
+
+  it('does not duplicate vite-plus into devDependencies when it already lives in dependencies', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        dependencies: { 'vite-plus': '0.1.20' },
+        devDependencies: { vite: '^7.0.0' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
+    expect(pkg.dependencies?.['vite-plus']).toBeDefined();
+  });
+
+  it('moves existing pnpm config into pnpm-workspace.yaml on pnpm 10.6.2+', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1860,29 +4578,27 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
-    // pnpm-workspace.yaml should NOT be created
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
-
-    // package.json should have pnpm.overrides with both existing and vite overrides
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json'));
-    const pnpm = pkg.pnpm as Record<string, unknown>;
-    expect(pnpm).toBeDefined();
-    const overrides = pnpm.overrides as Record<string, string>;
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+      peerDependencyRules: Record<string, unknown>;
+      onlyBuiltDependencies: string[];
+    };
+    const overrides = workspace.overrides;
     expect(overrides['some-pkg']).toBe('1.0.0');
     expect(overrides.vite).toBeDefined();
-    // vitest is pinned via overrides so downstream projects resolve a single
-    // vitest copy (the one vp-cli ships).
-    expect(overrides.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no override is written — it arrives transitively through vite-plus.
+    expect(overrides.vitest).toBeUndefined();
 
     // peerDependencyRules should be present
-    expect(pnpm.peerDependencyRules).toBeDefined();
-    // onlyBuiltDependencies should be preserved
-    expect(pnpm.onlyBuiltDependencies).toEqual(['esbuild']);
+    expect(workspace.peerDependencyRules).toBeDefined();
+    expect(workspace.onlyBuiltDependencies).toEqual(['esbuild']);
   });
 
   it('preserves custom peerDependencyRules when migrating to pnpm-workspace.yaml', () => {
-    // Project has peerDependencyRules but no pnpm.overrides -- pnpm field is present
-    // so it should keep using package.json
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1900,8 +4616,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
-    const pnpm = pkg.pnpm as Record<string, unknown>;
-    const rules = pnpm.peerDependencyRules as Record<string, unknown>;
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      peerDependencyRules: Record<string, unknown>;
+    };
+    const rules = workspace.peerDependencyRules;
     // Custom entries preserved, Vite entries merged (vitest is no longer
     // injected as it's not a managed override key anymore).
     expect(rules.allowAny).toEqual(expect.arrayContaining(['react', 'vite']));
@@ -1918,9 +4637,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
     expect(yaml).toContain("vite: 'catalog:'");
-    // vitest is now a managed override key — it resolves through the catalog
-    // like vite does.
-    expect(yaml).toContain("vitest: 'catalog:'");
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no `vitest` override is written — it arrives transitively through
+    // vite-plus.
+    expect(yaml).not.toContain('vitest');
   });
 
   it('rewrites named catalogs in pnpm-workspace.yaml without adding new entries', () => {
@@ -1963,16 +4683,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
-    // vitest is now a managed override key — it is added to overrides as a
-    // `catalog:` reference, and its catalog entry is rewritten to the pinned
-    // vitest version vp-cli ships.
-    expect(yaml.overrides.vitest).toBe('catalog:');
-    expect(yaml.catalog.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no override is added and the pre-existing managed `vitest` catalog
+    // entries (default + named) are REMOVED — it arrives transitively through
+    // vite-plus.
+    expect(yaml.overrides.vitest).toBeUndefined();
+    expect(yaml.catalog?.vitest).toBeUndefined();
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
-    // Named catalog vitest entries are also pinned to the managed override version.
-    expect(yaml.catalogs.test.vitest).toBe('4.1.9');
+    expect(yaml.catalogs.test.vitest).toBeUndefined();
     expect(yaml.catalogs.test.tsdown).toBeUndefined();
     expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
 
@@ -1981,18 +4701,177 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       peerDependencies: Record<string, string>;
     };
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
-    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:vite7');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer `catalog:` is resolved against the pre-rewrite catalog
-    // (which still holds the user's `^4.0.0`); only the catalog file itself
-    // is later rewritten to the pinned vp-cli version. The peer range stays
-    // as the user wrote it.
+    // Peer declarations do not keep the managed catalog alive. Resolve the
+    // catalog entry to its public range before pruning it so the peer cannot
+    // dangle after migration.
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
-  it('drops only global/vite-plus-parent selector-shaped REMOVE_PACKAGES overrides from package.json pnpm.overrides', () => {
-    // Project keeps its pnpm config in package.json (`pkg.pnpm.overrides`).
+  it('reuses catalogs.default without creating a duplicate top-level catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'rari-shaped-workspace',
+        devDependencies: {
+          vite: 'catalog:build',
+          'vite-plus': 'catalog:build',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalogs:',
+        '  build:',
+        '    vite: ^8.0.0',
+        '    vite-plus: ^0.2.0',
+        '  default:',
+        '    rari: ^0.14.12',
+        '',
+      ].join('\n'),
+    );
+
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+    };
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs.default).toEqual({ rari: '^0.14.12' });
+    expect(workspace.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalogs.build['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:build');
+    expect(pkg.devDependencies.vite).toBe('catalog:build');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('writes managed dependencies into an active catalogs.default definition', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'default-catalog-workspace',
+        devDependencies: {
+          vite: 'catalog:',
+          'vite-plus': 'catalog:',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalogs:',
+        '  default:',
+        '    react: ^19.0.0',
+        '    vite: ^8.0.0',
+        '    vite-plus: ^0.2.0',
+        '',
+      ].join('\n'),
+    );
+
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+    };
+
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs.default.react).toBe('^19.0.0');
+    expect(workspace.catalogs.default.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalogs.default['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('reuses a named-only Vite stack catalog without creating a default catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'vize-shaped-workspace',
+        devDependencies: {
+          vite: 'catalog:vite-stack',
+          'vite-plus': 'catalog:vite-stack',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalogs:',
+        '  repo-tooling:',
+        '    prettier: 3.8.3',
+        '  vite-stack:',
+        '    vite: npm:@voidzero-dev/vite-plus-core@0.1.21',
+        '    vitest: npm:@voidzero-dev/vite-plus-test@0.1.21',
+        '    vite-plus: 0.1.21',
+        '',
+      ].join('\n'),
+    );
+
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+    };
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs['repo-tooling']).toEqual({ prettier: '3.8.3' });
+    expect(workspace.catalogs['vite-stack'].vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalogs['vite-stack']['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:vite-stack');
+    expect(pkg.devDependencies.vite).toBe('catalog:vite-stack');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:vite-stack');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('drops only global/vite-plus-parent selector-shaped REMOVE_PACKAGES overrides after moving pnpm config', () => {
+    // Project starts with its pnpm config in package.json (`pkg.pnpm.overrides`).
     // A selector-shaped provider key is stripped only when it would re-pin
     // vite-plus's OWN provider dep — a versioned global pin or a `vite-plus`
     // parent. A provider selector scoped under a SPECIFIC non-vite-plus parent
@@ -2027,10 +4906,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      pnpm?: { overrides?: Record<string, string> };
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as { pnpm?: unknown };
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
     };
-    const overrides = pkg.pnpm?.overrides ?? {};
+    const overrides = workspace.overrides;
     // Playwright-as-TARGET: vite-plus parent and versioned global pin reach
     // vite-plus's own (now direct-dep) provider — dropped.
     expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
@@ -2113,11 +4994,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides['some-pkg']['@vitest/browser-playwright']).toBe('4.0.0');
   });
 
-  it('leaves an already-declared coverage provider untouched (no pin, no override)', () => {
-    // Coverage providers are vitest PEER deps the project installs and versions
-    // ITSELF. vite-plus never pins or overrides them: the user owns the provider
-    // version. (The runtime guard in define-config.ts only fail-fasts on a skew
-    // at `vp test --coverage` time; it does not rewrite the project's deps.)
+  it('aligns already-declared coverage providers without adding provider overrides', () => {
+    // Coverage providers have an exact vitest peer and must match the runner.
+    // Align their dependency specs directly; no provider override is needed.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2136,15 +5015,85 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       devDependencies: Record<string, string>;
       overrides?: Record<string, unknown>;
     };
-    // Provider versions are preserved exactly as the user declared them.
-    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe('^4.0.0');
-    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe('^4.0.0');
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
     // vitest itself is still pinned to the bundled version.
     expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
     // …and coverage is never written into the override sink.
     const overrides = pkg.overrides ?? {};
     expect(overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(overrides['@vitest/coverage-istanbul']).toBeUndefined();
+  });
+
+  it('removes direct vitest in the same pass that rewrites ordinary vitest imports', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'example.spec.ts'),
+      "import { expect, it } from 'vitest';\nit('works', () => expect(true).toBe(true));\n",
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(pkg.overrides.vitest).toBeUndefined();
+    expect(fs.readFileSync(path.join(tmpDir, 'example.spec.ts'), 'utf8')).toContain(
+      "from 'vite-plus/test'",
+    );
+  });
+
+  it('preserves all upstream Vitest imports in a Nuxt test-utils package', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'nuxt-project',
+        devDependencies: {
+          vite: '^7.0.0',
+          vitest: '^4.0.0',
+          '@nuxt/test-utils': '^4.0.3',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'nuxt.spec.ts'),
+      [
+        "import { vi } from 'vitest';",
+        "import { defineConfig } from 'vitest/config';",
+        "import { mockNuxtImport } from '@nuxt/test-utils/runtime';",
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'unit.spec.ts'), "import { expect } from 'vitest';\n");
+    const report = createMigrationReport();
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.npm),
+      true,
+      true,
+      report,
+    );
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    const nuxtTest = fs.readFileSync(path.join(tmpDir, 'nuxt.spec.ts'), 'utf8');
+    expect(nuxtTest).toContain("from 'vitest'");
+    expect(nuxtTest).toContain("from 'vitest/config'");
+    expect(fs.readFileSync(path.join(tmpDir, 'unit.spec.ts'), 'utf8')).toContain("from 'vitest'");
+    expect(report.preservedUpstreamVitestImportFileCount).toBe(2);
   });
 
   it('does not add a coverage provider the project never declared', () => {
@@ -2445,6 +5394,44 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.overrides['unrelated>some-other-pkg']).toBe('1.0.0');
   });
 
+  it('removes ADJACENT `dependency>vite` override selectors from pnpm-workspace.yaml', () => {
+    // A selector like `vite-plugin-svgr>vite` force-installs upstream vite under
+    // that dependency; the migration strips it so vite-plus's own `vite` override
+    // binds it to vite-plus-core instead. Two ADJACENT `...>vite` selectors must
+    // BOTH be removed — deleting one must not let the next shift into the iterated
+    // slot and survive (delete-while-iterating regression).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'overrides:',
+        "  '@vitejs/plugin-react>vite': 'npm:vite@7.0.12'",
+        "  'vite-plugin-svgr>vite': 'npm:vite@7.0.12'",
+        '  some-other-pkg: 1.0.0',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    // BOTH adjacent `...>vite` selectors must be gone. The second one survived
+    // before the fix because the first's deletion shifted it into the slot the
+    // `for...of` had already advanced past.
+    expect(yaml.overrides).not.toHaveProperty('@vitejs/plugin-react>vite');
+    expect(yaml.overrides).not.toHaveProperty('vite-plugin-svgr>vite');
+    // The managed `vite` override stays and unrelated selectors survive.
+    expect(yaml.overrides).toHaveProperty('vite');
+    expect(yaml.overrides['some-other-pkg']).toBe('1.0.0');
+  });
+
   it('adds a direct vitest dep when a vite config enables browser mode', () => {
     // A package whose vite config imports a browser provider but has no direct
     // vitest dep — `@vitest/browser` needs `vitest` resolvable from the package
@@ -2568,15 +5555,17 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    // Opt-in provider is pinned to a CONCRETE bundled vitest version in the
-    // user's own deps — it is deliberately NOT in VITE_PLUS_OVERRIDE_PACKAGES, so
-    // no catalog entry is written for it and it must self-resolve.
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    // The injected provider follows the same catalog as the managed Vitest
+    // dependency, and the catalog owns its concrete bundled version.
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
+    expect(devDeps.vitest).toBe('catalog:');
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
+      catalog: Record<string, string>;
     };
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -2609,11 +5598,118 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    // Opt-in provider pinned to a CONCRETE bundled vitest version in the user's
-    // own deps — deliberately NOT in VITE_PLUS_OVERRIDE_PACKAGES, so no catalog
-    // entry is written for it and it must self-resolve.
-    expect(devDeps).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-playwright', 'catalog:');
     expect(devDeps.playwright).toBe('*');
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yaml.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+  });
+
+  it.each([
+    ['playwright', 'browser-playwright'],
+    ['playwright', 'browser/providers/playwright'],
+    ['playwright', 'plugins/browser-playwright'],
+    ['webdriverio', 'browser-webdriverio'],
+    ['webdriverio', 'browser/providers/webdriverio'],
+    ['webdriverio', 'plugins/browser-webdriverio'],
+  ] as const)(
+    'injects the %s provider before rewriting the legacy vitest/%s import',
+    (provider, subpath) => {
+      const legacySpecifier = `vitest/${subpath}`;
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: {
+            vite: '^7.0.0',
+            vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24',
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'vite.config.ts'),
+        [
+          `import { ${provider} } from '${legacySpecifier}';`,
+          "import { defineConfig } from 'vite-plus';",
+          'export default defineConfig({',
+          `  test: { browser: { enabled: true, provider: ${provider}() } },`,
+          '});',
+          '',
+        ].join('\n'),
+      );
+
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+      const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+        string,
+        string
+      >;
+      expect(devDeps[`@vitest/browser-${provider}`]).toBe('catalog:');
+      expect(devDeps[provider]).toBe('*');
+      expect(devDeps.vitest).toBe('catalog:');
+      const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+        catalog: Record<string, string>;
+      };
+      expect(workspace.catalog[`@vitest/browser-${provider}`]).toBe(VITEST_VERSION);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+        `from 'vite-plus/test/${subpath}'`,
+      );
+    },
+  );
+
+  it('injects the provider before rewriting a legacy provider import at a monorepo root', () => {
+    // Regression for vue-core: the root manifest is rewritten before imports,
+    // so the legacy vite-plus-test alias path must be recognized during the
+    // initial source scan.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        devDependencies: {
+          playwright: '^1.56.1',
+          vite: 'catalog:',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24',
+        },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { playwright } from 'vitest/browser-playwright';",
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({',
+        '  test: { browser: { enabled: true, provider: playwright() } },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteMonorepo(
+      {
+        ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+        isMonorepo: true,
+        workspacePatterns: ['packages/*'],
+      },
+      true,
+      true,
+    );
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
+    expect(devDeps.playwright).toBe('^1.56.1');
+    expect(devDeps.vitest).toBe('catalog:');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "from 'vite-plus/test/browser-playwright'",
+    );
   });
 
   it('injects the playwright provider on a re-run from the migrated provider-subpath import', () => {
@@ -2644,8 +5740,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-playwright', 'catalog:');
     expect(devDeps.playwright).toBe('*');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
   });
 
   it('injects the webdriverio provider on a re-run from the migrated provider-subpath import', () => {
@@ -2677,11 +5777,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
+      catalog: Record<string, string>;
     };
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -2712,11 +5814,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
+      catalog: Record<string, string>;
     };
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -2750,8 +5854,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const devDeps = pkg.devDependencies as Record<string, string>;
-    // Provider installed in the user's own deps at the bundled vitest version.
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    // Provider installed through the same catalog used by the managed Vitest
+    // dependency.
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     // Peer-only declaration is left intact and its `catalog:` reference still
     // resolves because the catalog entry is preserved (NOT deleted).
@@ -2762,7 +5867,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalog: Record<string, string>;
       allowBuilds: Record<string, boolean>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(yaml.catalog.vitest).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -2866,8 +5972,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
     expect(resolutions['some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
     expect(devDeps.webdriverio).toBe('*');
+    // #2005: the catalog: ref is backed by a .yarnrc.yml catalog entry (not dangling).
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      catalog?: Record<string, string>;
+    };
+    expect(yarnrc.catalog?.['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
   });
 
   it('drops only global/glob/vite-plus-parent yarn SELECTOR-shaped @vitest/browser-webdriverio resolutions', () => {
@@ -2930,7 +6041,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // Unrelated selector resolutions survive.
     expect(resolutions['**/some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
     expect(devDeps.webdriverio).toBe('*');
   });
 
@@ -2970,7 +6081,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // stale provider over the migrated 4.1.9 dep.
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
     expect(devDeps.webdriverio).toBe('*');
   });
 
@@ -3025,8 +6136,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.vitest).toBe('catalog:');
     expect(devDeps['vite-plus']).toBe('catalog:');
     // Playwright is opt-in: vite-plus keeps the provider in the user's deps,
-    // normalized to the bundled vitest version.
-    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    // catalog-ized alongside vitest under the catalog-managed toolchain. #2005
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
     // Provider's runtime peer dep is preserved.
     expect(devDeps.playwright).toBe('*');
   });
@@ -3058,8 +6169,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
-    // vitest is now injected into overrides as a managed override key.
-    expect(yaml.overrides.vitest).toBe('catalog:');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no `vitest` override is injected.
+    expect(yaml.overrides.vitest).toBeUndefined();
     expect(yaml.overrides.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
 
@@ -3103,8 +6215,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       overrides: Record<string, string>;
     };
     expect(yaml.overrides.vite).toBe('catalog:');
-    // vitest is now a managed override key — added to overrides as catalog: ref.
-    expect(yaml.overrides.vitest).toBe('catalog:');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no `vitest` override is added.
+    expect(yaml.overrides.vitest).toBeUndefined();
   });
 
   it('does not resolve peer dependency catalog specs to migrated aliases', () => {
@@ -3136,8 +6249,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       peerDependencies: Record<string, string>;
     };
     expect(pkg.peerDependencies.vite).toBe('*');
-    // vitest is now a managed override key — peer dep catalog refs that
-    // resolve to the override target are coerced to '*'.
+    // Never expose the deleted wrapper alias as a public peer range.
     expect(pkg.peerDependencies.vitest).toBe('*');
   });
 
@@ -3254,6 +6366,50 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     // Auto-fix is silent: a deduped workspace needs no manual-step warning.
     expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(false);
+  });
+
+  it('opts out a yarn workspace that declares vite-plus in `dependencies` (not devDependencies)', () => {
+    // The migration now PRESERVES a pre-existing `vite-plus` under `dependencies`
+    // instead of duplicating it into `devDependencies`. The hoisting opt-out must
+    // therefore key off vite-plus in EITHER group — a workspace declaring it under
+    // `dependencies` still receives the bundled `vitest` family and needs the same
+    // `installConfig.hoistingLimits: none` dedupe to avoid the split-runner crash.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    // A workspace that declares vite-plus directly in `dependencies` (not devDeps).
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', dependencies: { 'vite-plus': '^0.1.0' } }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    rewriteMonorepo(workspaceInfo, true, false);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    // vite-plus stays in `dependencies` and is not duplicated into devDependencies.
+    expect(libPkg.dependencies).toHaveProperty('vite-plus');
+    expect(libPkg.devDependencies ?? {}).not.toHaveProperty('vite-plus');
+    // The hoisting opt-out still runs because vite-plus lives in `dependencies`.
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
   });
 
   it('leaves yarn workspaces alone when nmHoistingLimits does not isolate them', () => {
@@ -3984,7 +7140,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { allowBuilds: { edgedriver: false, geckodriver: true }, overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       allowBuilds?: Record<string, boolean>;
@@ -4006,7 +7164,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { allowBuilds: { edgedriver: false, geckodriver: false }, overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       allowBuilds?: Record<string, boolean>;
@@ -4024,7 +7184,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     // No webdriverio -> nothing to manage -> no allowBuilds key added to the pnpm sink
     // (the webdriverio-present case still writes `true` here — see the flip test below).
@@ -4043,18 +7205,19 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       }),
     );
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '9.15.0';
     workspaceInfo.downloadPackageManager.version = '9.15.0';
     rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      onlyBuiltDependencies?: string[];
+    const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
+      onlyBuiltDependencies: string[];
       allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.onlyBuiltDependencies).toEqual(
+    expect(pnpm.onlyBuiltDependencies).toEqual(
       expect.arrayContaining(['edgedriver', 'geckodriver']),
     );
     // v10-shape key must not appear on v9 setups
-    expect(yaml.allowBuilds).toBeUndefined();
+    expect(pnpm.allowBuilds).toBeUndefined();
   });
 
   it('leaves onlyBuiltDependencies untouched on pnpm v9 when webdriverio is unused', () => {
@@ -4063,15 +7226,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
     );
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '9.15.0';
     workspaceInfo.downloadPackageManager.version = '9.15.0';
     rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+    const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       onlyBuiltDependencies?: string[];
       allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.onlyBuiltDependencies).toBeUndefined();
-    expect(yaml.allowBuilds).toBeUndefined();
+    expect(pnpm.onlyBuiltDependencies).toBeUndefined();
+    expect(pnpm.allowBuilds).toBeUndefined();
   });
 
   it('detects webdriverio in a monorepo sub-package and allows builds at the root', () => {
@@ -4323,9 +7487,9 @@ describe('rewriteMonorepo yarn catalog', () => {
     expect(yarnrc.nodeLinker).toBe('node-modules');
     expect(yarnrc.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
-    // vitest is now a managed override key — existing catalog entries are
-    // rewritten to the pinned vp-cli vitest version.
-    expect(yarnrc.catalogs.test.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing named-catalog `vitest` entry is REMOVED.
+    expect(yarnrc.catalogs.test.vitest).toBeUndefined();
     expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -4334,10 +7498,40 @@ describe('rewriteMonorepo yarn catalog', () => {
     };
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer `catalog:test` is resolved against the pre-rewrite catalog
-    // (which still holds the user's `^4.0.0`). The peer range stays as the
-    // user wrote it; only the catalog file itself is later rewritten.
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+  });
+});
+
+describe('rewriteStandaloneProject bun direct vite (#8406)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bun-standalone-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('pins the direct `vite` edge to the concrete core alias for a non-catalog bun project', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-standalone',
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.bun), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // A standalone bun project never manages a catalog (rewriteBunCatalog runs
+    // only on monorepo roots), so the direct `vite` edge bun needs for #8406 must
+    // be the concrete core alias rather than a dangling `catalog:` reference.
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
   });
 });
 
@@ -4430,9 +7624,9 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
     expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    // vitest is now a managed override key — pre-existing catalog entries are
-    // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.catalog.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing catalog `vitest` entry is REMOVED.
+    expect(pkg.catalog.vitest).toBeUndefined();
     expect(pkg.catalog.tsdown).toBeUndefined();
     expect(pkg.catalog.react).toBe('^19.0.0');
     expect(pkg.catalog['vite-plus']).toBeUndefined();
@@ -4492,16 +7686,14 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.catalogs.build.react).toBe('^19.0.0');
     expect(pkg.catalogs.build.tsdown).toBeUndefined();
-    // vitest is now a managed override key — existing catalog entries are
-    // rewritten to the pinned version and `overrides.vitest` is injected
-    // as a `catalog:` ref so bun resolves it through the catalog.
-    expect(pkg.catalogs.test.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing named-catalog `vitest` entry is REMOVED and no
+    // `overrides.vitest` is injected.
+    expect(pkg.catalogs.test.vitest).toBeUndefined();
     expect(pkg.overrides.vite).toBe('catalog:build');
-    expect(pkg.overrides.vitest).toBe('catalog:');
+    expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devDependencies.vite).toBe('catalog:build');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer `catalog:test` is resolved against the pre-rewrite catalog
-    // (which still holds the user's `^4.0.0`). Peer range stays as-is.
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
   });
 
@@ -4537,9 +7729,9 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
     expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
-    // vitest is a managed override key — existing catalog entries are
-    // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing named-catalog `vitest` entry is REMOVED.
+    expect(pkg.workspaces.catalogs.test.vitest).toBeUndefined();
     expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.overrides.vite).toBe('catalog:');
   });
@@ -5025,7 +8217,7 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
     expect((tsconfig.compilerOptions as { types: string[] }).types).not.toContain('tsdown/client');
   });
 
-  it('rewrites vite/client to vite-plus/client in tsconfig.json', () => {
+  it('preserves vite/client in tsconfig.json (issue #2004: tsconfig is not a vite.config)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'tsconfig.json'),
       JSON.stringify({ compilerOptions: { types: ['vite/client'] } }, null, 2),
@@ -5034,8 +8226,7 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
     const tsconfig = readJson(path.join(tmpDir, 'tsconfig.json'));
-    expect((tsconfig.compilerOptions as { types: string[] }).types).toContain('vite-plus/client');
-    expect((tsconfig.compilerOptions as { types: string[] }).types).not.toContain('vite/client');
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual(['vite/client']);
   });
 
   it('rewrites types in tsconfig.node.json as well', () => {
@@ -5090,7 +8281,8 @@ describe('existing Vite+ core migration finalization', () => {
     );
     fs.writeFileSync(
       path.join(tmpDir, 'tsconfig.app.json'),
-      JSON.stringify({ compilerOptions: { types: ['vite/client'] } }, null, 2),
+      // tsdown/client is still rewritten (only `vite` is scoped to config files).
+      JSON.stringify({ compilerOptions: { types: ['tsdown/client'] } }, null, 2),
     );
 
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.npm);
@@ -5124,7 +8316,9 @@ describe('existing Vite+ core migration finalization', () => {
       "from 'vite-plus'",
     );
     const tsconfig = readJson(path.join(tmpDir, 'tsconfig.app.json'));
-    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual(['vite-plus/client']);
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual([
+      'vite-plus/pack/client',
+    ]);
     expect(detectPendingCoreMigration(workspaceInfo)).toEqual({
       scripts: false,
       tsconfigTypes: false,
@@ -5359,4 +8553,43 @@ describe('preflightGitHooksSetup husky catalog resolution', () => {
 
     expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
   });
+});
+
+describe('collectMigrationSetupPlan ESLint gating', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-setup-plan-eslint-'));
+    writePkgAt(tmpDir, { name: 'x', devDependencies: { eslint: '9' } });
+    // Flat config so detectEslintProject reports a migratable ESLint setup.
+    fs.writeFileSync(path.join(tmpDir, 'eslint.config.js'), 'export default [];\n');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const baseOptions = {
+    interactive: false,
+    hooks: false,
+    agent: false as const,
+    editor: false as const,
+  };
+
+  it.each([
+    [false, false],
+    [true, true],
+  ])(
+    'includeEslint=%s -> migrateEslint=%s (ESLint config present)',
+    async (includeEslint, expected) => {
+      const plan = await collectMigrationSetupPlan(
+        tmpDir,
+        PackageManager.pnpm,
+        { ...baseOptions },
+        undefined,
+        includeEslint,
+      );
+      expect(plan.migrateEslint).toBe(expected);
+    },
+  );
 });

@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should rewrite imports to vite-plus
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 3 config updates applied, 1 file had imports rewritten
 → Manual follow-up:
@@ -53,19 +53,15 @@ export default defineConfig({
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > vp migrate --no-interactive # run migration again to check if it is idempotent
 This project is already using Vite+! Happy coding!

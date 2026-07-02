@@ -11,9 +11,10 @@
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
-#   VP_PR_VERSION - PR number or commit SHA to install from pkg.pr.new
+#   VP_PR_VERSION - PR number or commit SHA to install from the registry bridge
 #                   (for temporary testing of unreleased builds, e.g. VP_PR_VERSION=1569).
-#                   When set, overrides VP_VERSION and bypasses the npm registry.
+#                   When set, overrides VP_VERSION and installs the clearly-defined
+#                   0.0.0-commit.<sha> build through the bridge instead of npm.
 
 set -e
 
@@ -34,10 +35,15 @@ NPM_REGISTRY="${NPM_REGISTRY%/}"
 LOCAL_TGZ="${VP_LOCAL_TGZ:-}"
 # Local binary path (set by install-global-cli.ts for local dev)
 LOCAL_BINARY="${VP_LOCAL_BINARY:-}"
-# pkg.pr.new PR number or commit SHA (for temporary testing of unreleased builds)
+# PR number or commit SHA to install as a test build (registry bridge mode)
 PR_VERSION="${VP_PR_VERSION:-}"
-# pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
-PKG_PR_NEW_BASE="https://pkg.pr.new/voidzero-dev/vite-plus"
+# Registry bridge that serves pkg.pr.new builds as clearly-versioned packages.
+# The pkg.pr.new-style download URL (BRIDGE_DOWNLOAD_BASE) 302-redirects to a
+# canonical 0.0.0-commit.<sha> tarball; the registry (BRIDGE_REGISTRY) resolves
+# those commit versions (and proxies everything else to npmjs) so a full install
+# pulls a coherent, clearly-defined test build.
+BRIDGE_DOWNLOAD_BASE="https://registry-bridge.viteplus.dev/voidzero-dev/vite-plus"
+BRIDGE_REGISTRY="https://registry-bridge.viteplus.dev/"
 
 # Colors for output
 RED='\033[0;31m'
@@ -120,9 +126,28 @@ confirm_release_age_override() {
 }
 
 write_release_age_override() {
-  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
-minimum-release-age=0
-NPMRC_EOF
+  # Append idempotently so a bridge registry line written for PR builds survives.
+  if [ ! -f "$VERSION_DIR/.npmrc" ] || ! grep -q '^minimum-release-age=' "$VERSION_DIR/.npmrc" 2>/dev/null; then
+    printf 'minimum-release-age=0\n' >> "$VERSION_DIR/.npmrc"
+  fi
+}
+
+# Resolve a PR number or commit SHA to the registry bridge's immutable commit
+# version (0.0.0-commit.<sha>). A full commit SHA maps directly to the bridge's
+# deterministic version; a PR number (or short ref) is resolved via the bridge
+# download URL's `x-commit-key: <owner>:<repo>:<sha>` header (HEAD).
+resolve_bridge_commit_version() {
+  local ref="$1"
+  local sha="$ref"
+  if [[ ! "$ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    sha="$(curl -fsSIL "${BRIDGE_DOWNLOAD_BASE}@${ref}" 2>/dev/null | tr -d '\r' | awk -F ': ' '
+      tolower($1) == "x-commit-key" { count = split($2, parts, ":"); print parts[count]; exit }')"
+  fi
+  case "$sha" in
+    '' | *[!0-9a-fA-F]*) return 1 ;;
+  esac
+  [ "${#sha}" -eq 40 ] || return 1
+  printf '0.0.0-commit.%s' "$sha"
 }
 
 print_install_failure() {
@@ -869,11 +894,19 @@ main() {
       VP_VERSION="local-dev"
     fi
   elif [ -n "$PR_VERSION" ]; then
-    # pkg.pr.new mode: skip npm metadata, use a synthetic version label.
-    # Non-semver label keeps the directory out of cleanup_old_versions and
-    # makes it obvious in `~/.vite-plus/` which install is the PR build.
+    # Registry bridge mode: resolve the requested PR/SHA to the bridge's
+    # immutable commit version (0.0.0-commit.<sha>), the clearly-defined test
+    # version we install. The directory label stays non-semver so it keeps out
+    # of cleanup_old_versions and makes the PR build obvious in `~/.vite-plus/`.
+    # `|| true` keeps `set -e` from aborting this assignment when resolution
+    # fails (unregistered ref / transient bridge error), so the actionable
+    # error below is reachable instead of the installer exiting silently.
+    PR_COMMIT_VERSION="$(resolve_bridge_commit_version "$PR_VERSION" || true)"
+    if [ -z "$PR_COMMIT_VERSION" ]; then
+      error "Could not resolve a registry bridge build for ${PR_VERSION}"
+    fi
     VP_VERSION="pkg-pr-new-${PR_VERSION}"
-    info "Using pkg.pr.new version: ${PR_VERSION}"
+    info "Using registry bridge build: ${PR_COMMIT_VERSION}"
   else
     # Fetch package metadata and resolve version from npm
     get_version_from_metadata
@@ -913,12 +946,13 @@ main() {
     fi
     chmod +x "$BIN_DIR/$binary_name"
   else
-    # Download CLI platform tarball — npm registry or pkg.pr.new (when PR_VERSION is set)
+    # Download CLI platform tarball — npm registry or registry bridge (when PR_VERSION is set)
     get_platform_suffix "$platform"
     local platform_url
     if [ -n "$PR_VERSION" ]; then
-      # pkg.pr.new redirects this URL to the platform tarball for the matching PR/commit
-      platform_url="${PKG_PR_NEW_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
+      # The registry bridge redirects this URL to the platform tarball for the
+      # matching commit build (0.0.0-commit.<sha>).
+      platform_url="${BRIDGE_DOWNLOAD_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
     else
       local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
       platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
@@ -943,11 +977,22 @@ main() {
   # pnpm will install vite-plus and all transitive deps via `vp install`.
   # The packageManager field pins pnpm to a known-good version, ensuring
   # consistent behavior regardless of the user's global pnpm version.
-  # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
-  # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
+  # In PR mode, pin vite-plus to the bridge's clearly-defined commit version and
+  # resolve it (plus its platform binaries and transitive deps) through the
+  # bridge registry written to .npmrc below. The bridge rewrites a preview
+  # tarball's transitive deps to versions, not self-contained URLs, so a full
+  # install must go through the registry rather than the bare download URL.
   local vite_plus_spec="$VP_VERSION"
   if [ -n "$PR_VERSION" ]; then
-    vite_plus_spec="${PKG_PR_NEW_BASE}@${PR_VERSION}"
+    vite_plus_spec="$PR_COMMIT_VERSION"
+    # Resolve the commit version + platform binaries through the bridge. Drop any
+    # stale wrapper lockfile: the pkg-pr-new-<ref> dir is reused across a PR's
+    # commits and install.sh rewrites this package.json each run, so a leftover
+    # lockfile pinning a prior spec would fail `vp install` with
+    # ERR_PNPM_OUTDATED_LOCKFILE under CI's frozen-lockfile default. Removing it
+    # lets the install regenerate a lockfile matching the spec we just wrote.
+    printf 'registry=%s\n' "$BRIDGE_REGISTRY" > "$VERSION_DIR/.npmrc"
+    rm -f "$VERSION_DIR/pnpm-lock.yaml"
   fi
   cat > "$VERSION_DIR/package.json" <<WRAPPER_EOF
 {

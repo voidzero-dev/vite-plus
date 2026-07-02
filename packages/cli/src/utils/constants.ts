@@ -1,14 +1,16 @@
 import { createRequire } from 'node:module';
 
+import cliPkg from '../../package.json' with { type: 'json' };
+
 export const VITE_PLUS_NAME = 'vite-plus';
-export const VITE_PLUS_VERSION = process.env.VP_VERSION || 'latest';
+export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
 
 export const VITEST_VERSION = '4.1.9';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
-      vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+      vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION}`,
       // Pin `vitest` only. The `@vitest/*` family (expect, runner, snapshot, spy,
       // utils, mocker, pretty-format) are EXACT (`4.1.9`) dependencies of `vitest`
       // itself, so a single `vitest` override cascades one consistent version to

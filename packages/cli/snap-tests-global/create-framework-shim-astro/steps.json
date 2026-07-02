@@ -1,5 +1,8 @@
 {
   "ignoredPlatforms": ["win32"],
+  "env": {
+    "VP_VERSION": "0.2.1"
+  },
   "commands": [
     {
       "command": "vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app",

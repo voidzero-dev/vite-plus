@@ -55,6 +55,9 @@ jobs:
             code:
               - '!**/*.md'
               - '!docs/**'
+              - '!.github/workflows/deploy-docs-preview.yml'
+              - '!.github/workflows/deploy-docs.yml'
+              - '!netlify.toml'
 
   download-previous-rolldown-binaries:
     needs: detect-changes

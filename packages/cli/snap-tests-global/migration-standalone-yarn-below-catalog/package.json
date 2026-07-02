@@ -1,0 +1,11 @@
+{
+  "name": "migration-standalone-yarn-below-catalog",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  },
+  "packageManager": "yarn@3.6.0"
+}

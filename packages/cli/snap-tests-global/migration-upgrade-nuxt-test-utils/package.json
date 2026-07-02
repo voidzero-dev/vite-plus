@@ -1,0 +1,19 @@
+{
+  "name": "migration-upgrade-nuxt-test-utils",
+  "devDependencies": {
+    "@nuxt/test-utils": "file:.fixture/nuxt-test-utils",
+    "vite-plus": "latest",
+    "vitest": "^4.0.2"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

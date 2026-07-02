@@ -1,0 +1,14 @@
+{
+  "name": "migration-upgrade-browser-source-only-pnpm",
+  "devDependencies": {
+    "@vitest/browser": "^4.1.8",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

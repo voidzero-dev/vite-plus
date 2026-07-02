@@ -1937,11 +1937,6 @@ export declare class ParallelJsPluginRegistry {
   constructor(workerCount: number);
 }
 
-export declare class ScheduledBuild {
-  wait(): Promise<void>;
-  alreadyScheduled(): boolean;
-}
-
 export declare class TraceSubscriberGuard {
   close(): void;
 }
@@ -2347,10 +2342,6 @@ export interface BindingGeneratedCodeOptions {
   symbols?: boolean;
   preset?: string;
 }
-
-export type BindingGenerateHmrPatchReturn =
-  | { type: 'Ok'; field0: Array<BindingHmrUpdate> }
-  | { type: 'Error'; field0: Array<BindingError> };
 
 export interface BindingHmrBoundaryOutput {
   boundary: string;
@@ -3281,6 +3272,8 @@ export interface BatchRewriteError {
 export interface BatchRewriteResult {
   /** Files that were modified */
   modifiedFiles: Array<string>;
+  /** Files in Nuxt test-utils packages where upstream `vitest` imports were preserved */
+  preservedVitestFiles: Array<string>;
   /** Files that had errors */
   errors: Array<BatchRewriteError>;
 }
@@ -3513,6 +3506,8 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
  * # Arguments
  *
  * * `root` - The root directory to search for files
+ * * `preserve_vitest_in_nuxt_packages` - Preserve `vitest` and `vitest/*`
+ *   specifiers throughout packages that declare `@nuxt/test-utils`
  *
  * # Returns
  *
@@ -3530,7 +3525,10 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
  * }
  * ```
  */
-export declare function rewriteImportsInDirectory(root: string): BatchRewriteResult;
+export declare function rewriteImportsInDirectory(
+  root: string,
+  preserveVitestInNuxtPackages?: boolean | undefined | null,
+): BatchRewriteResult;
 
 /**
  * Rewrite Prettier scripts: rename `prettier` → `vp fmt` and strip Prettier-only flags.

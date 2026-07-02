@@ -1575,6 +1575,40 @@ static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::n
     ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
 });
 
+const BARE_VITEST_RULE_IDS: [&str; 4] = [
+    "rewrite-vitest-import",
+    "rewrite-vitest-export",
+    "rewrite-vitest-require",
+    "rewrite-vitest-dynamic-import",
+];
+
+fn is_bare_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
+    BARE_VITEST_RULE_IDS.contains(&rule.id.as_str())
+}
+
+fn is_unscoped_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
+    is_bare_vitest_rule(rule)
+        || rule.id.starts_with("rewrite-vitest-config-")
+        || rule.id.starts_with("rewrite-vitest-subpath-")
+}
+
+static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_VITEST_RULES)
+        .expect("failed to parse vitest rewrite rules")
+        .into_iter()
+        .filter(is_unscoped_vitest_rule)
+        .collect()
+});
+
+static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
+    LazyLock::new(|| {
+        ast_grep::load_rules(REWRITE_VITEST_RULES)
+            .expect("failed to parse vitest rewrite rules")
+            .into_iter()
+            .filter(|rule| !is_unscoped_vitest_rule(rule))
+            .collect()
+    });
+
 static PARSED_TSDOWN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_TSDOWN_RULES).expect("failed to parse tsdown rewrite rules")
 });
@@ -1689,7 +1723,12 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
 /// to match TypeScript semantics and avoid false positives inside string/template literals.
 /// Allocates only for preamble lines, leaving the file body untouched.
 /// Returns whether any changes were made.
-fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
+fn rewrite_reference_types(
+    content: &mut String,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    preserved_vitest: &mut bool,
+) -> bool {
     // Fast path: skip files with no triple-slash reference directives.
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
     if !content.contains("///") {
@@ -1802,6 +1841,18 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         }
         // Each line matches at most one pattern; use early exit to skip remaining regexes.
         if !skip_packages.skip_vitest {
+            // Nuxt exception: unscoped `vitest` reference directives are
+            // preserved, and the preservation must be reported so the migrate
+            // summary counts files whose only upstream reference is a
+            // triple-slash directive (ast-grep never sees those).
+            if preserve_unscoped_vitest
+                && (RE_REF_VITEST_CONFIG.is_match(line)
+                    || RE_REF_VITEST_SUBPATH.is_match(line)
+                    || RE_REF_VITEST.is_match(line))
+            {
+                *preserved_vitest = true;
+                continue;
+            }
             if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
                 changed = true;
                 continue;
@@ -1905,6 +1956,20 @@ struct SkipPackages {
     skip_tsdown: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct PackageRewriteContext {
+    skip_packages: SkipPackages,
+    uses_nuxt_test_utils: bool,
+}
+
+/// Options controlling directory-wide import rewriting.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RewriteImportsOptions {
+    /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
+    /// whose nearest package.json declares `@nuxt/test-utils`.
+    pub preserve_vitest_in_nuxt_packages: bool,
+}
+
 impl SkipPackages {
     /// Check if all packages should be skipped (file can be skipped entirely)
     const fn all_skipped(&self) -> bool {
@@ -1935,17 +2000,68 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Canonical Vite/Vitest config entry basenames, the single source shared with
+/// the `prefer-vite-plus-imports` oxlint rule. The list lives in
+/// `packages/cli/src/vite-config-entry-basenames.json` and is embedded here at
+/// compile time so the two implementations cannot drift. The `vitest.config.*`
+/// family is included because a Vitest config can also import the unified
+/// `defineConfig` from `vite`. Matched by basename, so it covers configs at any
+/// monorepo depth.
+static VITE_CONFIG_FILE_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../packages/cli/src/vite-config-entry-basenames.json"))
+        .expect("invalid vite-config-entry-basenames.json")
+});
+
+/// Whether a file is a Vite/Vitest config entry file, where rewriting `vite`
+/// imports to `vite-plus` is correct (the unified `defineConfig`). Issue #2004:
+/// `vite` imports are rewritten ONLY in these files; every other file keeps its
+/// `vite` imports, since vite-plus is not a guaranteed superset of vite's exposed
+/// surface. Matched by basename, so it covers configs at any monorepo depth.
+fn is_vite_config_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| VITE_CONFIG_FILE_NAMES.iter().any(|config_name| config_name == name))
+}
+
+/// Returns whether the package follows a published-plugin naming convention
+/// whose code is consumed by Vite projects: its unscoped name starts with
+/// `vite-plugin-` (<https://vite.dev/guide/api-plugin>) or `unplugin-`
+/// (<https://unplugin.unjs.io/guide/plugin-conventions.html>; cross-bundler
+/// plugins that ship a Vite entry and are used by Vite projects).
+///
+/// For a scoped name like `@scope/vite-plugin-foo`, the part after the first `/`
+/// is the unscoped name; for an unscoped name the whole name is used. The
+/// trailing hyphen is required, so `vite-plugin`, `unplugin`, and their plurals
+/// do not match.
+fn package_name_is_plugin(pkg: &serde_json::Value) -> bool {
+    let Some(name) = pkg.get("name").and_then(|v| v.as_str()) else {
+        return false;
+    };
+
+    // Strip a leading `@scope/` for scoped packages, otherwise use the name as-is.
+    let unscoped = if name.starts_with('@') {
+        match name.split_once('/') {
+            Some((_, rest)) => rest,
+            None => return false,
+        }
+    } else {
+        name
+    };
+
+    unscoped.starts_with("vite-plugin-") || unscoped.starts_with("unplugin-")
+}
+
 /// Parse package.json and check which packages are in peerDependencies or dependencies.
 /// Returns default (no skipping) if package.json doesn't exist or can't be parsed.
-fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages {
+fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContext {
     let content = match std::fs::read_to_string(package_json_path) {
         Ok(c) => c,
-        Err(_) => return SkipPackages::default(),
+        Err(_) => return PackageRewriteContext::default(),
     };
 
     let pkg: serde_json::Value = match serde_json::from_str(&content) {
         Ok(p) => p,
-        Err(_) => return SkipPackages::default(),
+        Err(_) => return PackageRewriteContext::default(),
     };
 
     // Helper to check if a package exists in a dependencies object
@@ -1955,14 +2071,39 @@ fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages
             .is_some_and(|deps| deps.contains_key(package_name))
     };
 
-    // Check both peerDependencies and dependencies
-    SkipPackages {
-        skip_vite: has_package("peerDependencies", "vite") || has_package("dependencies", "vite"),
-        skip_vitest: has_package("peerDependencies", "vitest")
-            || has_package("dependencies", "vitest"),
-        skip_tsdown: has_package("peerDependencies", "tsdown")
-            || has_package("dependencies", "tsdown"),
+    // Peer and runtime dependencies preserve the existing whole-package skip
+    // behavior. Nuxt compatibility is narrower and accepts the three install
+    // groups where @nuxt/test-utils is normally declared.
+    //
+    // `vite` is additionally skipped when the package follows a published-plugin
+    // naming convention: an unscoped name starting with `vite-plugin-`
+    // (<https://vite.dev/guide/api-plugin>) or `unplugin-`
+    // (<https://unplugin.unjs.io/guide/plugin-conventions.html>). Such libraries
+    // are consumed by both vite and vite-plus projects, so rewriting their
+    // `vite` imports to `vite-plus` would break plain-vite consumers; many
+    // declare `vite` only in devDependencies and would otherwise be missed by
+    // the dependency checks above. Only the name is used (not `keywords`, which
+    // is too broad), and this convention skip is scoped to `vite` (never
+    // vitest/tsdown).
+    PackageRewriteContext {
+        skip_packages: SkipPackages {
+            skip_vite: has_package("peerDependencies", "vite")
+                || has_package("dependencies", "vite")
+                || package_name_is_plugin(&pkg),
+            skip_vitest: has_package("peerDependencies", "vitest")
+                || has_package("dependencies", "vitest"),
+            skip_tsdown: has_package("peerDependencies", "tsdown")
+                || has_package("dependencies", "tsdown"),
+        },
+        uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
+            .into_iter()
+            .any(|key| has_package(key, "@nuxt/test-utils")),
     }
+}
+
+#[cfg(test)]
+fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages {
+    get_package_rewrite_context(package_json_path).skip_packages
 }
 
 /// Result of rewriting imports in a file
@@ -1972,6 +2113,8 @@ struct RewriteResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
+    /// Whether an upstream `vitest` specifier was intentionally preserved.
+    pub preserved_vitest: bool,
 }
 
 /// Result of rewriting imports in multiple files
@@ -1981,6 +2124,8 @@ pub struct BatchRewriteResult {
     pub modified_files: Vec<PathBuf>,
     /// Files that had no changes
     pub unchanged_files: Vec<PathBuf>,
+    /// Files in Nuxt test-utils packages where upstream `vitest` imports were preserved.
+    pub preserved_vitest_files: Vec<PathBuf>,
     /// Files that had errors (path, error message)
     pub errors: Vec<(PathBuf, String)>,
 }
@@ -2021,47 +2166,60 @@ enum FileResult {
 /// }
 /// ```
 pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, Error> {
+    rewrite_imports_in_directory_with_options(root, RewriteImportsOptions::default())
+}
+
+/// Rewrite imports with package-scoped compatibility options.
+pub fn rewrite_imports_in_directory_with_options(
+    root: &Path,
+    options: RewriteImportsOptions,
+) -> Result<BatchRewriteResult, Error> {
     let walk_result = file_walker::find_ts_files(root)?;
 
-    // Pre-compute skip_packages for each file (requires mutable cache, done sequentially)
-    let mut skip_packages_cache: HashMap<PathBuf, SkipPackages> = HashMap::new();
-    let files_with_skip: Vec<(PathBuf, SkipPackages)> = walk_result
+    // Pre-compute package context for each file (requires mutable cache, done sequentially).
+    let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
+    let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
         .map(|file_path| {
-            let skip_packages =
+            let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
-                    *skip_packages_cache
+                    *package_context_cache
                         .entry(package_json_path.clone())
-                        .or_insert_with(|| get_skip_packages_from_package_json(&package_json_path))
+                        .or_insert_with(|| get_package_rewrite_context(&package_json_path))
                 } else {
-                    SkipPackages::default()
+                    PackageRewriteContext::default()
                 };
-            (file_path, skip_packages)
+            (file_path, package_context)
         })
         .collect();
 
     // Process files in parallel using rayon
-    let results: Vec<(PathBuf, FileResult)> = files_with_skip
+    let results: Vec<(PathBuf, FileResult, bool)> = files_with_context
         .into_par_iter()
-        .map(|(file_path, skip_packages)| {
+        .map(|(file_path, package_context)| {
+            let skip_packages = package_context.skip_packages;
             if skip_packages.all_skipped() {
-                return (file_path, FileResult::Unchanged);
+                return (file_path, FileResult::Unchanged, false);
             }
 
-            match rewrite_import(&file_path, &skip_packages) {
+            match rewrite_import(
+                &file_path,
+                &skip_packages,
+                options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
+            ) {
                 Ok(rewrite_result) => {
                     if rewrite_result.updated {
                         if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
-                            (file_path, FileResult::Error(e.to_string()))
+                            (file_path, FileResult::Error(e.to_string()), false)
                         } else {
-                            (file_path, FileResult::Modified)
+                            (file_path, FileResult::Modified, rewrite_result.preserved_vitest)
                         }
                     } else {
-                        (file_path, FileResult::Unchanged)
+                        (file_path, FileResult::Unchanged, rewrite_result.preserved_vitest)
                     }
                 }
-                Err(e) => (file_path, FileResult::Error(e.to_string())),
+                Err(e) => (file_path, FileResult::Error(e.to_string()), false),
             }
         })
         .collect();
@@ -2070,10 +2228,14 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
     let mut batch_result = BatchRewriteResult {
         modified_files: Vec::new(),
         unchanged_files: Vec::new(),
+        preserved_vitest_files: Vec::new(),
         errors: Vec::new(),
     };
 
-    for (file_path, file_result) in results {
+    for (file_path, file_result, preserved_vitest) in results {
+        if preserved_vitest {
+            batch_result.preserved_vitest_files.push(file_path.clone());
+        }
         match file_result {
             FileResult::Modified => batch_result.modified_files.push(file_path),
             FileResult::Unchanged => batch_result.unchanged_files.push(file_path),
@@ -2100,12 +2262,28 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
 /// Returns a `RewriteResult` containing:
 /// - `content`: The updated file content
 /// - `updated`: Whether any changes were made
-fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<RewriteResult, Error> {
+fn rewrite_import(
+    file_path: &Path,
+    skip_packages: &SkipPackages,
+    preserve_vitest_in_nuxt_package: bool,
+) -> Result<RewriteResult, Error> {
     // Read the file
     let content = std::fs::read_to_string(file_path)?;
 
-    // Rewrite the imports
-    rewrite_import_content(&content, skip_packages)
+    // Issue #2004: `vite` specifiers are rewritten only in config entry files;
+    // everything else keeps its `vite` imports (they still resolve through the
+    // core alias). This includes `declare module 'vite'` augmentations: through
+    // the alias they reach the SAME `@voidzero-dev/vite-plus-core` module whose
+    // `UserConfig` types `defineConfig` from `vite-plus`, so they keep working,
+    // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
+    // augmentation to merge with. This is layered ON TOP of the package-level
+    // skip (a skipped package stays skipped).
+    rewrite_import_content_full(
+        &content,
+        skip_packages,
+        preserve_vitest_in_nuxt_package,
+        is_vite_config_file(file_path),
+    )
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -2128,20 +2306,47 @@ fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bo
 ///
 /// This is the internal function that performs the actual rewrite using ast-grep.
 /// Packages that are in peerDependencies or dependencies will be skipped.
+#[cfg(test)]
 fn rewrite_import_content(
     content: &str,
     skip_packages: &SkipPackages,
 ) -> Result<RewriteResult, Error> {
+    rewrite_import_content_with_options(content, skip_packages, false)
+}
+
+#[cfg(test)]
+fn rewrite_import_content_with_options(
+    content: &str,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+) -> Result<RewriteResult, Error> {
+    rewrite_import_content_full(content, skip_packages, preserve_unscoped_vitest, true)
+}
+
+fn rewrite_import_content_full(
+    content: &str,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    vite_config_file: bool,
+) -> Result<RewriteResult, Error> {
     // Fast path: skip AST parsing if the file doesn't contain any target strings
     if !content_may_need_rewriting(content, skip_packages) {
-        return Ok(RewriteResult { content: content.to_string(), updated: false });
+        return Ok(RewriteResult {
+            content: content.to_string(),
+            updated: false,
+            preserved_vitest: false,
+        });
     }
 
     let mut new_content = content.to_string();
     let mut updated = false;
+    let mut preserved_vitest = false;
 
-    // Apply vite rules if not skipped (using pre-parsed rules)
-    if !skip_packages.skip_vite {
+    // Apply vite rules if not skipped (using pre-parsed rules). Issue #2004:
+    // they apply only in config entry files; every other file keeps its `vite`
+    // specifiers, including `declare module 'vite'` augmentations (see the
+    // comment in `rewrite_import`).
+    if !skip_packages.skip_vite && vite_config_file {
         let vite_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITE_RULES);
         if vite_content != new_content {
             new_content = vite_content;
@@ -2151,7 +2356,15 @@ fn rewrite_import_content(
 
     // Apply vitest rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vitest {
-        let vitest_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITEST_RULES);
+        let vitest_rules = if preserve_unscoped_vitest {
+            let upstream_rewrite =
+                ast_grep::apply_loaded_rules(&new_content, &PARSED_UNSCOPED_VITEST_RULES);
+            preserved_vitest = upstream_rewrite != new_content;
+            &*PARSED_VITEST_RULES_WITHOUT_UNSCOPED
+        } else {
+            &*PARSED_VITEST_RULES
+        };
+        let vitest_content = ast_grep::apply_loaded_rules(&new_content, vitest_rules);
         if vitest_content != new_content {
             new_content = vitest_content;
             updated = true;
@@ -2169,9 +2382,18 @@ fn rewrite_import_content(
 
     // Apply reference type rewriting (/// <reference types="..." />)
     // These cannot be handled by ast-grep because they are parsed as comments.
-    updated |= rewrite_reference_types(&mut new_content, skip_packages);
+    // `vite` reference directives are pass-through type surfaces, so they
+    // follow the Issue #2004 config-file scoping (unlike the augmentations).
+    let reference_skip_packages =
+        SkipPackages { skip_vite: skip_packages.skip_vite || !vite_config_file, ..*skip_packages };
+    updated |= rewrite_reference_types(
+        &mut new_content,
+        &reference_skip_packages,
+        preserve_unscoped_vitest,
+        &mut preserved_vitest,
+    );
 
-    Ok(RewriteResult { content: new_content, updated })
+    Ok(RewriteResult { content: new_content, updated, preserved_vitest })
 }
 
 #[cfg(test)]
@@ -2301,7 +2523,7 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result = rewrite_import(&vite_config_path, &SkipPackages::default()).unwrap();
+        let result = rewrite_import(&vite_config_path, &SkipPackages::default(), false).unwrap();
 
         assert!(result.updated);
         assert_eq!(
@@ -2723,7 +2945,7 @@ export default defineConfig({
 
         // Create test files with vite/vitest imports
         fs::write(
-            temp.path().join("src/config.ts"),
+            temp.path().join("vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 export default defineConfig({});"#,
         )
@@ -2767,7 +2989,7 @@ describe('test', () => {});"#,
         assert!(result.errors.is_empty());
 
         // Verify the files were actually modified
-        let config_content = fs::read_to_string(temp.path().join("src/config.ts")).unwrap();
+        let config_content = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
         assert!(config_content.contains("vite-plus"));
 
         let test_content = fs::read_to_string(temp.path().join("src/test.ts")).unwrap();
@@ -2776,6 +2998,187 @@ describe('test', () => {});"#,
         // Verify utils.ts was not modified
         let utils_content = fs::read_to_string(temp.path().join("src/utils.ts")).unwrap();
         assert!(!utils_content.contains("vite-plus"));
+    }
+
+    #[test]
+    fn test_vite_rewrite_scoped_to_config_files() {
+        // Issue #2004: `vite` imports must be rewritten ONLY in config entry
+        // files. A non-plugin app that declares `vite` only in devDependencies
+        // (like packages/cloudflare) must keep its programmatic/type `vite`
+        // imports on `vite`, because vite-plus is not a guaranteed superset of
+        // vite's surface (`typeof import("vite-plus")` lacks `createBuilder`).
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{"name":"my-app","devDependencies":{"vite":"^7"}}"#,
+        )
+        .unwrap();
+        fs::create_dir(temp.path().join("src")).unwrap();
+        // Config entry file: the `vite` import SHOULD be rewritten.
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            "import { defineConfig } from 'vite';\nexport default defineConfig({});",
+        )
+        .unwrap();
+        // Non-config source: programmatic + type `vite` imports MUST be preserved.
+        fs::write(
+            temp.path().join("src/deploy.ts"),
+            "import { createBuilder } from 'vite';\ntype Api = Pick<typeof import('vite'), 'createBuilder'>;\n",
+        )
+        .unwrap();
+        // Only `vite` is scoped: a non-config `vitest` import still rewrites.
+        fs::write(temp.path().join("src/app.spec.ts"), "import { describe } from 'vitest';\n")
+            .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
+        assert!(
+            config.contains("from 'vite-plus'"),
+            "config file `vite` import should be rewritten, got: {config}"
+        );
+
+        let deploy = fs::read_to_string(temp.path().join("src/deploy.ts")).unwrap();
+        assert!(
+            !deploy.contains("vite-plus"),
+            "non-config `vite` imports must be preserved, got: {deploy}"
+        );
+        assert!(deploy.contains("from 'vite'"));
+        assert!(deploy.contains("typeof import('vite')"));
+
+        let spec = fs::read_to_string(temp.path().join("src/app.spec.ts")).unwrap();
+        assert!(
+            spec.contains("from 'vite-plus/test'"),
+            "non-config `vitest` import should still be rewritten, got: {spec}"
+        );
+    }
+
+    #[test]
+    fn test_declare_module_vite_preserved_outside_config_files() {
+        // A `declare module 'vite'` augmentation must stay on `vite`: through
+        // the core alias it reaches the same `@voidzero-dev/vite-plus-core`
+        // module whose `UserConfig` types `defineConfig` from `vite-plus`.
+        // `vite-plus` re-exports no `UserConfig` symbol, so rewriting the
+        // augmentation to `declare module 'vite-plus'` would orphan it (it
+        // would merge with nothing). Users extending vite-plus itself write
+        // `declare module 'vite-plus'` by hand.
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"name":"my-app"}"#).unwrap();
+        fs::create_dir(temp.path().join("types")).unwrap();
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            "import { defineConfig } from 'vite';\nexport default defineConfig({ myPlugin: {} });",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("types/vite.d.ts"),
+            "import type { Plugin } from 'vite';\ndeclare module 'vite' {\n  interface UserConfig {\n    myPlugin?: object;\n  }\n}\n",
+        )
+        .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let dts = fs::read_to_string(temp.path().join("types/vite.d.ts")).unwrap();
+        assert!(
+            !dts.contains("vite-plus"),
+            "non-config `vite` specifiers (including augmentations) must be preserved, got: {dts}"
+        );
+        assert!(dts.contains("declare module 'vite'"));
+        let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
+        assert!(config.contains("from 'vite-plus'"));
+    }
+
+    #[test]
+    fn test_preserves_unscoped_vitest_in_nuxt_test_utils_packages() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{
+  "devDependencies": {
+    "@nuxt/test-utils": "4.0.3",
+    "vitest": "4.1.9"
+  }
+}"#,
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("nuxt.spec.ts"),
+            r#"import { vi } from 'vitest';
+export { expect } from 'vitest';
+const runtime = require('vitest');
+const dynamic = import('vitest');
+import { defineConfig } from 'vitest/config';
+import { startVitest } from 'vitest/node';
+import { page } from '@vitest/browser/context';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("ordinary.spec.ts"),
+            "/// <reference types=\"vitest/globals\" />\nimport { expect } from 'vitest';\n",
+        )
+        .unwrap();
+        // A file whose ONLY upstream vitest reference is a triple-slash
+        // directive (no import for ast-grep to see) must still be counted.
+        fs::write(
+            temp.path().join("refs-only.d.ts"),
+            "/// <reference types=\"vitest/globals\" />\nexport {};\n",
+        )
+        .unwrap();
+
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+        )
+        .unwrap();
+
+        assert_eq!(result.preserved_vitest_files.len(), 3);
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("nuxt.spec.ts")));
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("ordinary.spec.ts")));
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("refs-only.d.ts")));
+        let refs_only = fs::read_to_string(temp.path().join("refs-only.d.ts")).unwrap();
+        assert!(refs_only.contains("types=\"vitest/globals\""));
+        let nuxt = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
+        assert!(nuxt.contains("from 'vitest'"));
+        assert!(nuxt.contains("require('vitest')"));
+        assert!(nuxt.contains("import('vitest')"));
+        assert!(nuxt.contains("from 'vitest/config'"));
+        assert!(nuxt.contains("from 'vitest/node'"));
+        assert!(nuxt.contains("from 'vite-plus/test/browser/context'"));
+
+        let ordinary = fs::read_to_string(temp.path().join("ordinary.spec.ts")).unwrap();
+        assert!(ordinary.contains("from 'vitest'"));
+        assert!(ordinary.contains("types=\"vitest/globals\""));
+    }
+
+    #[test]
+    fn test_nuxt_preservation_requires_declared_test_utils_dependency() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"devDependencies":{"vitest":"4"}}"#)
+            .unwrap();
+        fs::write(
+            temp.path().join("nuxt.spec.ts"),
+            "import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';\n",
+        )
+        .unwrap();
+
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+        )
+        .unwrap();
+
+        assert!(result.preserved_vitest_files.is_empty());
+        let content = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
+        assert!(content.contains("from 'vite-plus/test'"));
     }
 
     #[test]
@@ -2836,13 +3239,19 @@ describe('app', () => {
 
         let result = rewrite_imports_in_directory(temp.path()).unwrap();
 
-        // vite.config.ts, src/index.ts, tests/unit/app.test.ts should be modified
-        assert_eq!(result.modified_files.len(), 3);
-        // Button.tsx has no vite imports
-        assert_eq!(result.unchanged_files.len(), 1);
+        // vite.config.ts (vite) and tests/unit/app.test.ts (vitest) are modified.
+        // src/index.ts keeps its non-config `vite` import (issue #2004) and
+        // Button.tsx has no relevant imports, so both are unchanged.
+        assert_eq!(result.modified_files.len(), 2);
+        assert_eq!(result.unchanged_files.len(), 2);
         assert!(result.errors.is_empty());
 
-        // Verify nested file was modified
+        // The non-config `vite` import (a programmatic API) is preserved.
+        let index_content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
+        assert!(index_content.contains("from 'vite'"));
+        assert!(!index_content.contains("vite-plus"));
+
+        // Verify the nested vitest file was modified.
         let test_content = fs::read_to_string(temp.path().join("tests/unit/app.test.ts")).unwrap();
         assert!(test_content.contains("vite-plus/test"));
         assert!(test_content.contains("vite-plus/test/browser"));
@@ -3584,6 +3993,214 @@ export default defineConfig({});"#;
         assert!(!skip.skip_tsdown);
     }
 
+    // ===================================
+    // Vite plugin name-convention tests
+    // ===================================
+
+    #[test]
+    fn test_skip_vite_when_scoped_vite_plugin_name_with_vite_devdep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Real-world case: @nkzw/vite-plugin-remdx declares vite only in
+        // devDependencies, yet is a Vite plugin consumed by plain-vite projects.
+        let pkg_json = r#"{
+  "name": "@nkzw/vite-plugin-remdx",
+  "devDependencies": {
+    "vite": "catalog:"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite); // skipped by the vite-plugin- name convention
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_unscoped_vite_plugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "vite-plugin-foo"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_app_with_vite_devdep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A regular app declaring vite as a devDependency should still be
+        // rewritten; devDependencies alone never trigger the skip.
+        let pkg_json = r#"{
+  "name": "my-app",
+  "private": true,
+  "devDependencies": {
+    "vite": "^7"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_scoped_non_plugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "@scope/not-a-plugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_vite_plugin_without_trailing_hyphen() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "vite-plugin" without the trailing hyphen is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "vite-plugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_vite_plugins_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "vite-plugins" (plural, no trailing hyphen) is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "vite-plugins"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_unscoped_unplugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // unplugin libraries (https://unplugin.unjs.io) ship a Vite entry and are
+        // consumed by vite projects, so their `vite` imports must be preserved
+        // even when `vite` is only a devDependency.
+        let pkg_json = r#"{
+  "name": "unplugin-icons",
+  "devDependencies": {
+    "vite": "^7"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_scoped_unplugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "@scope/unplugin-foo"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_unplugin_without_trailing_hyphen() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "unplugin" without the trailing hyphen is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "unplugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_unplugins_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "unplugins" (plural, no trailing hyphen) is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "unplugins"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
     #[test]
     fn test_rewrite_imports_in_directory_with_vite_dependency() {
         use std::fs;
@@ -3767,18 +4384,19 @@ import { build } from 'tsdown';"#;
         // app package.json (no peerDeps)
         fs::write(temp.path().join("packages/app/package.json"), r#"{"name": "app"}"#).unwrap();
 
-        // vite-plugin source file with vite and vitest imports
+        // Config files with vite and vitest imports. Config-file scoping (issue
+        // #2004) only rewrites `vite` in config entry files, so the per-package
+        // peerDependency skip is exercised here rather than in src.
         fs::write(
-            temp.path().join("packages/vite-plugin/src/index.ts"),
+            temp.path().join("packages/vite-plugin/vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 export default defineConfig({});"#,
         )
         .unwrap();
 
-        // app source file with vite and vitest imports
         fs::write(
-            temp.path().join("packages/app/src/index.ts"),
+            temp.path().join("packages/app/vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 export default defineConfig({});"#,
@@ -3791,9 +4409,9 @@ export default defineConfig({});"#,
         // Both files should be modified
         assert_eq!(result.modified_files.len(), 2);
 
-        // vite-plugin: vite NOT rewritten (has peerDep), vitest IS rewritten
+        // vite-plugin: vite NOT rewritten (peerDependency skip), vitest IS rewritten
         let vite_plugin_content =
-            fs::read_to_string(temp.path().join("packages/vite-plugin/src/index.ts")).unwrap();
+            fs::read_to_string(temp.path().join("packages/vite-plugin/vite.config.ts")).unwrap();
         assert_eq!(
             vite_plugin_content,
             r#"import { defineConfig } from 'vite';
@@ -3801,9 +4419,9 @@ import { describe } from 'vite-plus/test';
 export default defineConfig({});"#
         );
 
-        // app: vite IS rewritten (no peerDep), vitest IS rewritten
+        // app: vite IS rewritten (config file, no peerDep), vitest IS rewritten
         let app_content =
-            fs::read_to_string(temp.path().join("packages/app/src/index.ts")).unwrap();
+            fs::read_to_string(temp.path().join("packages/app/vite.config.ts")).unwrap();
         assert_eq!(
             app_content,
             r#"import { defineConfig } from 'vite-plus';

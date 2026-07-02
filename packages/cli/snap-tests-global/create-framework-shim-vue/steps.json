@@ -1,6 +1,9 @@
 {
   "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
   "linkCheckoutPackages": true,
+  "env": {
+    "VP_VERSION": "0.2.1"
+  },
   "commands": [
     {
       "command": "vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app",

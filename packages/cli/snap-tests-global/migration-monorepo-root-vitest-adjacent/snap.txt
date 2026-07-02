@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # root with a vitest-adjacent dep but no direct vitest still gets a direct vitest pin
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 

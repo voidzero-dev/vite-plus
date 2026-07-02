@@ -614,7 +614,7 @@ function injectPluginIntoInlineConfig<
       vitePlusCoverageVersionGuardPlugin(),
       ...(config.plugins ?? []),
     ],
-  } as T;
+  };
 }
 
 /**
@@ -710,12 +710,12 @@ export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport
  */
 function injectPluginIntoProjectExport(config: UserProjectConfigExport): UserProjectConfigExport {
   if (typeof config === 'function') {
-    return ((env: ConfigEnv) => {
+    return (env: ConfigEnv) => {
       const result = config(env);
       return result instanceof Promise
         ? result.then(injectPluginIntoInlineConfig)
         : injectPluginIntoInlineConfig(result);
-    }) as UserProjectConfigFn;
+    };
   }
   if (config instanceof Promise) {
     return config.then(injectPluginIntoInlineConfig);

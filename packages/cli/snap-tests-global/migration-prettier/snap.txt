@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should detect prettier and auto-migrate
 
 Prettier configuration detected. Auto-migrating to Oxfmt...
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Prettier migrated to Oxfmt
@@ -31,19 +31,15 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > test ! -f .prettierrc.json # check prettier config is removed
 > cat vite.config.ts # check oxfmt config merged into vite.config.ts

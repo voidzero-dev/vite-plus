@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { RuleTester } from 'oxlint/plugins-dev';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +11,15 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_SPECIFIER,
 } from '../oxlint-plugin-config.js';
 import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.js';
+
+const nuxtTestFilename = path.join(
+  import.meta.dirname,
+  'fixtures/nuxt-test-utils/component.spec.ts',
+);
+const nuxtUnitTestFilename = path.join(
+  import.meta.dirname,
+  'fixtures/nuxt-test-utils/unit.spec.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -147,24 +158,57 @@ new RuleTester({
       code: `declare module '@vitest/browser-playwright/context' {}`,
       filename: 'types.ts',
     },
+    {
+      code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      filename: nuxtTestFilename,
+    },
+    {
+      code: `import { expect } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { defineConfig } from 'vitest/config';`,
+      filename: nuxtUnitTestFilename,
+    },
+    // Issue #2004: `vite`/`vite/*` are flagged only in config entry files, so
+    // non-config files keep their `vite` imports (vite-plus is not a guaranteed
+    // superset of vite's exposed surface). vitest/tsdown/@vitest are unaffected.
+    {
+      code: `import { defineConfig } from 'vite'`,
+      filename: 'src/main.ts',
+    },
+    {
+      code: `import { createServer } from 'vite'`,
+      filename: path.join(import.meta.dirname, 'server.ts'),
+    },
+    {
+      code: `type Api = Pick<typeof import('vite'), 'createBuilder' | 'loadConfigFromFile'>`,
+      filename: 'src/deploy.ts',
+    },
+    {
+      code: `declare module 'vite' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `import 'vite/client'`,
+      filename: 'src/env.ts',
+    },
   ],
   invalid: [
     {
-      // `declare module 'vite'` IS rewritten — the vite family doesn't
-      // re-export upstream vite types so augmentation works against either id.
-      code: `declare module 'vite' {}`,
+      code: `import { page } from '@vitest/browser/context'`,
       errors: 1,
-      filename: 'types.ts',
-      output: `declare module 'vite-plus' {}`,
+      filename: nuxtUnitTestFilename,
+      output: `import { page } from 'vite-plus/test/browser/context'`,
     },
     {
+      // `vite`/`vite/*` are flagged only in config entry files (issue #2004);
+      // in every other file they are preserved (see valid cases above).
       code: `import { defineConfig } from 'vite'`,
       errors: 1,
+      filename: 'vite.config.ts',
       output: `import { defineConfig } from 'vite-plus'`,
     },
     {
       code: `export { defineConfig } from "vite"`,
       errors: 1,
+      filename: 'vitest.config.ts',
       output: `export { defineConfig } from "vite-plus"`,
     },
     {
@@ -203,13 +247,27 @@ new RuleTester({
     {
       code: `import foo = require('vite/client')`,
       errors: 1,
-      filename: 'types.ts',
+      filename: 'vite.config.cts',
       output: `import foo = require('vite-plus/client')`,
     },
     {
+      // In a config file both `vitest` and `vite` are flagged.
       code: `export * from 'vitest';\nimport { defineConfig } from 'vite';`,
       errors: 2,
+      filename: 'vite.config.ts',
       output: `export * from 'vite-plus/test';\nimport { defineConfig } from 'vite-plus';`,
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 2,
+      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      output: `import { vi } from 'vite-plus/test';\nimport { startVitest } from 'vite-plus/test/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 1,
+      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      output: `import { vi } from 'vite-plus/test';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
     },
   ],
 });
