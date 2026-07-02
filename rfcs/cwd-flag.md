@@ -4,7 +4,7 @@
 
 Add a global `-C <dir>` flag to vp, then use it to fix the app-command experience in monorepos. Everything is additive and backward compatible:
 
-1. **`-C <dir>` global flag** (the feature): for every vp command, `vp -C <dir> <cmd>` behaves exactly like `cd <dir> && vp <cmd>`, following the `git -C` / `make -C` convention. This gives vp the first-class "run there" primitive it currently lacks. All existing positional semantics stay untouched: `vp dev <path>` keeps upstream Vite semantics (`root` only), and `vp pack` positionals stay tsdown entries.
+1. **`-C <dir>` global flag** (the feature): for every vp command, `vp -C <dir> <cmd>` behaves exactly like `cd <dir> && vp <cmd>`, following the `git -C` / `make -C` convention: the first-class "run there" form vp currently lacks. Positional semantics stay untouched: `vp dev <path>` keeps upstream Vite semantics (`root` only), and `vp pack` positionals stay tsdown entries.
 2. **App-command UX built on `-C`**: running `vp dev` / `vp build` / `vp preview` / `vp pack` bare at a workspace root elicits the missing target instead of silently running against the root: an interactive fuzzy package picker in a TTY, a `defaultPackage` config for repos with one blessed target, and a clear listing plus exit 1 when non-interactive. All three are defined as an implicit `-C <dir>`.
 
 In the common flows users never type `-C`: bare `vp dev` at the root goes through the picker or `defaultPackage`, and inside a package it runs there as today. `-C` is the explicit, teachable form underneath. The commands stay singular: `vp dev` still starts exactly one Vite dev server. Fan-out stays with `vp run`.
@@ -114,7 +114,7 @@ $ vp -C packages/ui pack
 ✔ Build complete in 9ms
 ```
 
-`vp dev apps/admin` (the positional) is untouched and keeps upstream Vite semantics: `root` is set, cwd is not, so the pain point 1 pitfall remains on that form. Docs and every hint teach `-C` as the reliable way to target a directory.
+`vp dev apps/admin` (the positional) is untouched: `root` is set, cwd is not, so the pain point 1 pitfall remains on that form (see Decisions).
 
 ### 2. `vp dev` at the workspace root (interactive terminal)
 
@@ -266,13 +266,12 @@ vp -C <dir> <cmd> [args...]  ===  cd <dir> && vp <cmd> [args...]
 
 The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The parent `vp` process never calls `process.chdir()`.
 
-When the global binary parses `-C`, it also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly. Through the package's own `vp` bin the executing CLI is already chosen, so there the invariant additionally assumes a single Vite+ version per workspace, which is the supported monorepo model.
+The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model).
 
 ### Entry points and version assumption
 
-- `-C` is parsed by both the global binary and the local bin. The picker and `defaultPackage` live in the local CLI's NAPI binding (`execute_direct_subcommand`), which every entry point executes; a root-level `"dev": "vp dev"` script flows through the same logic and gets the same behavior.
-- Bare `vp dev` at an arbitrary root is primarily a global-CLI experience; local-only setups usually go through per-package scripts.
-- Pre-1.0, both the global CLI and any local install are assumed to ship this feature; no version negotiation with older CLIs is specified. In the non-workspace shape the root has no local install, so the global binary's bundled CLI executes end to end, which is equivalent under this assumption.
+- `-C` is parsed by both the global binary and the local bin; the picker and `defaultPackage` live in the local CLI's NAPI binding (`execute_direct_subcommand`), which every entry point executes. Bare `vp dev` at a root is primarily a global-CLI experience, but a root-level `"dev": "vp dev"` script flows through the same logic.
+- Pre-1.0, both the global CLI and any local install are assumed to ship this feature; no version negotiation with older CLIs is specified. In the non-workspace shape the root has no local install, so the bundled CLI executes end to end, which is equivalent under this assumption.
 
 ### Picker contents
 
@@ -300,7 +299,7 @@ export default defineConfig({
 
 ### Vite CLI parity preserved; `-C` carries the `cd` semantics
 
-The core tension: parity with `vite <path>` (positional sets `root` only, cwd untouched) and parity with `cd <path> && vp dev` cannot both hold on the same positional. An earlier draft repurposed the positional and accepted a permanent divergence from the upstream CLI. This RFC keeps the positional fully Vite-compatible and puts the `cd` semantics on a new, explicitly named channel instead, following the `git -C` / `make -C` convention. Nothing existing changes meaning, pack needs no directory-vs-entry heuristic, and the primitive generalizes to every vp command instead of four.
+The core tension: parity with `vite <path>` (positional sets `root` only, cwd untouched) and parity with `cd <path> && vp dev` cannot both hold on the same positional. An earlier draft repurposed the positional and accepted a permanent divergence from the upstream CLI. This RFC keeps the positional fully Vite-compatible and puts the `cd` semantics on a new, explicitly named channel instead. Nothing existing changes meaning, pack needs no directory-vs-entry heuristic, and the primitive generalizes to every vp command instead of four.
 
 The accepted cost: two ways to pass a directory with different semantics. Mitigation: users rarely type either (bare `vp dev` plus picker or `defaultPackage` covers the common flows), and every hint, error, and doc teaches only `-C`.
 
@@ -324,11 +323,11 @@ All changes live in the Rust layers; no upstream Vite or tsdown changes are requ
 - Picker: reuse `vite_select` and `vite_workspace`, both already dependencies via the `vite_task` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
 - `packages/cli/src/pack-bin.ts` needs no change: positional handling is untouched and `-C` never reaches it.
-- Docs: a `-C` entry in the global CLI docs, `docs/guide/monorepo.md` "App Commands", and a `docs/config/` page for the new key, all teaching `-C` as the directory-targeting form.
+- Docs: a `-C` entry in the global CLI docs, `docs/guide/monorepo.md` "App Commands", and a `docs/config/` page for the new key.
 
 ## Compatibility
 
-Fully backward compatible for every existing invocation: `vp dev <path>` keeps upstream Vite semantics, pack entries are untouched, and sub-package and non-workspace runs are unchanged. The only behavior change is the bare app command at a workspace root, which goes from "silently serve or build the root" to picker / config / clear error. A root that is itself runnable stays available as a picker entry, and `defaultPackage: '.'` restores the old behavior unconditionally.
+Every existing invocation is unchanged. The only behavior change is the bare app command at a workspace root, which goes from "silently serve or build the root" to picker / config / clear error. A runnable root stays available as a picker entry, and `defaultPackage: '.'` restores the old behavior unconditionally.
 
 ## Snap Tests
 
