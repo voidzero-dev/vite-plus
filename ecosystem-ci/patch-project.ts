@@ -165,10 +165,21 @@ const vitestOverrides = {
 // during `vp install`). Disable pnpm's minimumReleaseAge gate so a same-day
 // publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION. pnpm >= 10.6
 // only reads the PNPM_CONFIG_* spelling; older pnpm reads the lowercase form.
-const releaseAgeEnv = {
-  pnpm_config_minimum_release_age: '0',
-  PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0',
-};
+//
+// dify is the exception: it sets `resolutionMode: time-based`, and defining a
+// minimumReleaseAge (even 0, via any env spelling) activates pnpm's
+// resolution-policy engine, which vp's bundled pnpm cannot handle
+// (ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED, no
+// handleResolutionPolicyViolations callback). Its `minimumReleaseAge:` key
+// was already removed above, so with no gate env the policy stays inactive
+// and installs work.
+const releaseAgeEnv =
+  project === 'dify'
+    ? {}
+    : {
+        pnpm_config_minimum_release_age: '0',
+        PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0',
+      };
 
 const migrateEnv: NodeJS.ProcessEnv = {
   ...process.env,
