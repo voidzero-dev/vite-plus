@@ -239,6 +239,12 @@ for `cmd` in `dev`, `build`, `preview`, `pack`. Concretely: the child process sp
 
 The local `vite-plus` CLI itself is still resolved from the invocation directory, before the target directory applies. The invariant therefore assumes a workspace uses a single Vite+ version, which is already the supported monorepo model; with one version installed, both forms resolve the same CLI and the equivalence holds end to end.
 
+### Entry points and version assumption
+
+- The feature lives in the local CLI's NAPI binding (`execute_direct_subcommand`), which every entry point executes: the global `vp` binary delegates to the nearest local `vite-plus` install from the invocation directory (or to its bundled copy when none exists), and the `vite-plus` package's own `vp` bin (`pnpm exec vp dev`, `package.json` scripts) reaches the binding directly. No global-CLI routing changes are needed.
+- Typing `vp dev` at an arbitrary root is primarily a global-CLI experience; local-only setups usually reach these commands through per-package scripts that already pin the directory. A root-level script such as `"dev": "vp dev"` in the workspace root `package.json` flows through the same logic and gets the same picker and config behavior.
+- Both the global CLI and any local install are assumed to be versions that ship this feature. Vite+ is pre-1.0, so no compatibility behavior or version negotiation with older CLIs is specified. In the non-workspace shape the root has no local install, so the global binary's bundled CLI executes end to end; under this assumption that is equivalent, and re-resolving a local CLI from the target directory is out of scope for v1.
+
 ### Picker contents
 
 - One row per workspace package: package name plus relative path.
