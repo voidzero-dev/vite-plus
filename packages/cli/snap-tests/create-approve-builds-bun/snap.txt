@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager bun --directory approved-app # --approve-builds runs `bun pm trust` for the gated build script (core-js)
+> node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager bun --directory approved-app # --approve-builds runs `bun pm trust` for the gated build script (core-js)
 ◇ Scaffolded approved-app
 • Node <semver>  bun <semver>
 ✓ Dependencies installed in <variable>ms
@@ -34,7 +34,7 @@
   ]
 }
 
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --package-manager bun --directory default-app # default run surfaces the gated build with guidance, leaving it untrusted
+> node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --package-manager bun --directory default-app # default run surfaces the gated build with guidance, leaving it untrusted
 
 Build scripts were not run for: core-js.
 
@@ -71,7 +71,7 @@ These dependencies may not work until built. Run vp pm approve-builds core-js in
   }
 }
 
-> cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
+> cd default-app && node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
 bun pm trust v<semver> (<hash>)
 
 ./node_modules/core-js @<semver>

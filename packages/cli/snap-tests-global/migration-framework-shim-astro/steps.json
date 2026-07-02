@@ -1,13 +1,16 @@
 {
   "ignoredPlatforms": ["win32"],
+  "localVitePlusPackages": true,
   "env": {
-    "VP_VERSION": "0.2.1",
     "VITE_DISABLE_AUTO_INSTALL": "1",
     "CI": "",
     "VP_SKIP_INSTALL": ""
   },
   "commands": [
-    "vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected",
+    {
+      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected",
+      "timeout": 120000
+    },
     "cat src/env.d.ts # check Astro shim was written"
   ]
 }

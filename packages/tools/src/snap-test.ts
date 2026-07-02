@@ -1,10 +1,11 @@
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { cpus, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
-import { debuglog, parseArgs } from 'node:util';
+import { debuglog, parseArgs, promisify } from 'node:util';
 
 import { npath } from '@yarnpkg/fslib';
 import { execute } from '@yarnpkg/shell';
@@ -12,6 +13,77 @@ import { execute } from '@yarnpkg/shell';
 import { isPassThroughEnv, replaceUnstableOutput } from './utils.js';
 
 const debug = debuglog('vite-plus/snap-test');
+
+const execFileAsync = promisify(execFile);
+
+let localVpPackagesPromise: Promise<string> | undefined;
+
+/**
+ * Pack the checkout's `vite-plus` and `@voidzero-dev/vite-plus-core` once per
+ * run, for fixtures with `localVitePlusPackages: true`. Commands routed
+ * through `.shared/mock-npm-registry.mjs` serve these tarballs at the
+ * checkout version, so real package-manager installs work without the version
+ * being published on npm (e.g. on release branches) and exercise the actual
+ * local build.
+ */
+function packLocalVitePlusPackages(casesDir: string, tempTmpDir: string): Promise<string> {
+  localVpPackagesPromise ??= (async () => {
+    const repoRoot = resolveRepoRoot(casesDir);
+    for (const sentinel of ['cli/dist/bin.js', 'core/dist']) {
+      const sentinelPath = path.join(repoRoot, 'packages', sentinel);
+      if (!fs.existsSync(sentinelPath)) {
+        throw new Error(
+          `Cannot pack local Vite+ packages: ${sentinelPath} is missing.\n` +
+            'Run `pnpm build` before snap tests that install local Vite+ packages.',
+        );
+      }
+    }
+    // `vite-plus` packs `binding/*.node` (see its `files` field), and created
+    // projects run `vp config` (their `prepare` script) from their OWN
+    // installed vite-plus, so the host binding must exist for the installed
+    // package to be functional.
+    const bindingDir = path.join(repoRoot, 'packages', 'cli', 'binding');
+    const hostBindingPrefix = `vite-plus.${process.platform}-${process.arch}`;
+    const hasHostBinding = fs
+      .readdirSync(bindingDir)
+      .some((entry) => entry.startsWith(hostBindingPrefix) && entry.endsWith('.node'));
+    if (!hasHostBinding) {
+      throw new Error(
+        `Cannot pack local Vite+ packages: no ${hostBindingPrefix}*.node in ${bindingDir}.\n` +
+          'Run `pnpm bootstrap-cli` (or build the NAPI binding) first.',
+      );
+    }
+    const destination = path.join(tempTmpDir, 'local-vite-plus-packages');
+    fs.mkdirSync(destination, { recursive: true });
+    const startTime = Date.now();
+    await execFileAsync(
+      'pnpm',
+      [
+        '--filter',
+        'vite-plus',
+        '--filter',
+        '@voidzero-dev/vite-plus-core',
+        'pack',
+        '--pack-destination',
+        destination,
+      ],
+      { cwd: repoRoot, timeout: 120_000, shell: process.platform === 'win32' },
+    );
+    const packed = fs.readdirSync(destination).filter((entry) => entry.endsWith('.tgz'));
+    if (packed.length !== 2) {
+      throw new Error(
+        `Expected 2 packed local Vite+ packages in ${destination}, found: ${packed.join(', ') || 'none'}`,
+      );
+    }
+    console.log(
+      'Packed local Vite+ packages in %dms: %s',
+      Date.now() - startTime,
+      packed.join(', '),
+    );
+    return destination;
+  })();
+  return localVpPackagesPromise;
+}
 
 // Remove comments (starting with ' #') from command strings
 // `@yarnpkg/shell` doesn't parse comments.
@@ -483,6 +555,16 @@ interface Steps {
   env: Record<string, string>;
   commands: (string | Command)[];
   /**
+   * If true, the harness packs the checkout's `vite-plus` and
+   * `@voidzero-dev/vite-plus-core` (once per run) and exposes the tarball
+   * directory as `SNAP_LOCAL_VP_PACKAGES_DIR`. Commands wrapped with
+   * `$SNAP_SHARED_DIR/mock-npm-registry.mjs` then install these local
+   * packages at the checkout version instead of resolving it from the npm
+   * registry (which would fail on release branches before the version is
+   * published).
+   */
+  localVitePlusPackages?: boolean;
+  /**
    * If true, installed Vite+ packages in the test project are relinked to the
    * current checkout after each successful command.
    */
@@ -602,6 +684,10 @@ async function runTestCase(
     // shared helper scripts under `<casesDir>/.shared/` without
     // duplicating them into every fixture directory.
     SNAP_CASES_DIR: casesDir,
+    // Shared helper scripts live under `snap-tests/.shared/` only; expose the
+    // directory independently of the active casesDir so `snap-tests-global`
+    // fixtures can use them too.
+    SNAP_SHARED_DIR: path.join(path.dirname(casesDir), 'snap-tests', '.shared'),
     // Global CLI snap tests execute the Rust binary from --bin-dir, but the JS
     // entry should come from this checkout instead of a stale ~/.vite-plus install.
     ...(globalCliScriptsDir ? { VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: globalCliScriptsDir } : {}),
@@ -610,6 +696,10 @@ async function runTestCase(
     // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.
     ...steps.env,
   };
+
+  if (steps.localVitePlusPackages) {
+    env['SNAP_LOCAL_VP_PACKAGES_DIR'] = await packLocalVitePlusPackages(casesDir, tempTmpDir);
+  }
 
   // Unset VP_NODE_VERSION to prevent `vp env use` session overrides
   // from leaking into snap tests.

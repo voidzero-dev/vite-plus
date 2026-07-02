@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`
+> node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`
 
 Formatting code...
 

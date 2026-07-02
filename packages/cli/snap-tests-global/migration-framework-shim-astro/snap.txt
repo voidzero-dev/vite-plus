@@ -1,4 +1,4 @@
-> vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected
+> node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected
 
 Formatting code...
 

@@ -1,14 +1,20 @@
 {
+  "localVitePlusPackages": true,
   "env": {
-    "VP_VERSION": "0.2.1",
     "VP_SKIP_INSTALL": "",
     "CI": "",
     "ADBLOCK": "1"
   },
   "commands": [
-    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager yarn --directory approved-app # yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls",
+    {
+      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager yarn --directory approved-app # yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls",
+      "timeout": 120000
+    },
     "cat approved-app/package.json # core-js recorded under dependenciesMeta.built",
-    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --package-manager yarn --directory default-app # default run surfaces the gated build with guidance, leaving it disabled",
+    {
+      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --package-manager yarn --directory default-app # default run surfaces the gated build with guidance, leaving it disabled",
+      "timeout": 120000
+    },
     "cat default-app/package.json # no dependenciesMeta, the build was not run"
   ]
 }

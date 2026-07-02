@@ -1,13 +1,16 @@
 {
   "ignoredPlatforms": ["win32"],
+  "localVitePlusPackages": true,
   "env": {
-    "VP_VERSION": "0.2.1",
     "VITE_DISABLE_AUTO_INSTALL": "1",
     "CI": "",
     "VP_SKIP_INSTALL": ""
   },
   "commands": [
-    "vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml",
+    {
+      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml",
+      "timeout": 120000
+    },
     "cat package.json # check package.json has no pnpm section",
     "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog"
   ]

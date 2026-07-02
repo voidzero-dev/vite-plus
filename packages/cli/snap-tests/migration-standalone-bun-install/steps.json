@@ -1,12 +1,15 @@
 {
   "ignoredPlatforms": ["win32"],
+  "localVitePlusPackages": true,
   "env": {
-    "VP_VERSION": "0.2.1",
     "VP_SKIP_INSTALL": "",
     "CI": ""
   },
   "commands": [
-    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`",
+    {
+      "command": "node $SNAP_SHARED_DIR/mock-npm-registry.mjs -- vp migrate --no-interactive --no-hooks # standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`",
+      "timeout": 120000
+    },
     "cat package.json # vite/vite-plus stay concrete (vite via the @voidzero-dev/vite-plus-core alias); NO top-level catalog field is written"
   ]
 }
