@@ -36,7 +36,7 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
-import { createInitialCommit, initGitRepository } from '../utils/git.ts';
+import { initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
 import { displayRelative } from '../utils/path.ts';
@@ -128,7 +128,7 @@ const helpMessage = renderCliDoc({
           description: 'Write editor config files for the specified editor.',
         },
         { label: '--no-editor', description: 'Skip writing editor config files' },
-        { label: '--git', description: 'Initialize a git repository with an initial commit' },
+        { label: '--git', description: 'Initialize a git repository' },
         { label: '--no-git', description: 'Skip git repository initialization' },
         {
           label: '--hooks',
@@ -1135,16 +1135,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
-    if (shouldSetupGit) {
-      updateCreateProgress('Creating initial commit');
-      const commitResult = await createInitialCommit(fullPath);
-      if (!commitResult.success) {
-        prompts.log.warn('Initial commit failed');
-        if (commitResult.output) {
-          prompts.log.info(commitResult.output);
-        }
-      }
-    }
     clearCreateProgress();
     showCreateSummary({
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
@@ -1459,16 +1449,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
-    if (shouldSetupGit) {
-      updateCreateProgress('Creating initial commit');
-      const commitResult = await createInitialCommit(fullPath);
-      if (!commitResult.success) {
-        prompts.log.warn('Initial commit failed');
-        if (commitResult.output) {
-          prompts.log.info(commitResult.output);
-        }
-      }
-    }
   }
 
   clearCreateProgress();

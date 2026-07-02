@@ -269,6 +269,7 @@ serial_test = "3.2.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
 simdutf8 = "0.1.5"
+smallvec = { version = "1.15.1", features = ["union"] }
 string_cache = "0.9.0"
 sugar_path = { version = "2.0.1", features = ["cached_current_dir"] }
 supports-color = "3"
@@ -317,7 +318,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.137.0", features = [
+oxc = { version = "0.138.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -329,22 +330,22 @@ oxc = { version = "0.137.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.137.0", features = ["pool"] }
-oxc_ast = "0.137.0"
-oxc_ecmascript = "0.137.0"
-oxc_parser = "0.137.0"
-oxc_span = "0.137.0"
-oxc_napi = "0.137.0"
-oxc_str = "0.137.0"
-oxc_minify_napi = "0.137.0"
-oxc_parser_napi = "0.137.0"
-oxc_transform_napi = "0.137.0"
-oxc_traverse = "0.137.0"
+oxc_allocator = { version = "0.138.0", features = ["pool"] }
+oxc_ast = "0.138.0"
+oxc_ecmascript = "0.138.0"
+oxc_parser = "0.138.0"
+oxc_span = "0.138.0"
+oxc_napi = "0.138.0"
+oxc_str = "0.138.0"
+oxc_minify_napi = "0.138.0"
+oxc_parser_napi = "0.138.0"
+oxc_transform_napi = "0.138.0"
+oxc_traverse = "0.138.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }
-oxc_resolver = { version = "11.21.3", features = ["yarn_pnp"] }
-oxc_resolver_napi = { version = "11.21.3", default-features = false, features = ["yarn_pnp"] }
+oxc_resolver = { version = "11.22.0", features = ["yarn_pnp"] }
+oxc_resolver_napi = { version = "11.22.0", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "8.0.1"
 
 # rolldown crates

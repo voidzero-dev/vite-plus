@@ -137,3 +137,138 @@ jobs:
             './packages/cli' \
             './packages/core' \
             './packages/prompts'
+
+  # Build and push a preview Docker image from the pkg.pr.new build so the image
+  # can be verified before a real release. Tagged `pr-<number>`; never `latest`.
+  # See docker/Dockerfile and docs/guide/docker.md.
+  publish-docker-preview:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
+    name: Docker preview image
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+      TAG: pr-${{ github.event.pull_request.number }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Builds from the pkg.pr.new packages for this PR (VP_PR_VERSION). The
+      # platform packages must exist first, hence `needs: publish`.
+      # amd64-only: this throwaway preview avoids the slow arm64 QEMU leg; arm64
+      # is covered by the release build and the test-install-sh-arm64 job.
+      - name: Build and push preview image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: docker
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.TAG }}
+          build-args: |
+            VP_PR_VERSION=${{ github.event.pull_request.number }}
+          # Single-manifest image (no attestation index): simpler for consumers
+          # and lets the comment job read the size via `docker manifest inspect`.
+          provenance: false
+
+  # Post (or update) a single sticky PR comment with the preview image tag after
+  # it publishes. Re-runs reuse the same comment via the hidden marker instead of
+  # creating a new one.
+  comment-docker-preview:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
+    name: Comment Docker preview
+    runs-on: ubuntu-latest
+    needs: publish-docker-preview
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    env:
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Compressed download size from the registry manifest (config + layers),
+      # without pulling the image. Matches what `docker pull` transfers and what
+      # the GHCR package page shows.
+      - name: Measure image size
+        id: size
+        run: |
+          bytes=$(docker manifest inspect "${IMAGE}:pr-${PR_NUMBER}" | jq '[.config.size] + [.layers[].size] | add')
+          echo "compressed=$(numfmt --to=si --suffix=B "$bytes")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          COMPRESSED_SIZE: ${{ steps.size.outputs.compressed }}
+        with:
+          script: |
+            const image = process.env.IMAGE;
+            const pr = context.payload.pull_request.number;
+            const marker = '<!-- docker-preview -->';
+            // Built as a line array (not a template literal) so the fenced code
+            // blocks don't collide with the YAML block-scalar indentation.
+            const body = [
+              marker,
+              '## 🐳 Docker preview image',
+              '',
+              "Built from this PR's pkg.pr.new build:",
+              '',
+              '| Image | Compressed size |',
+              '| --- | --- |',
+              `| \`${image}:pr-${pr}\` | ${process.env.COMPRESSED_SIZE} |`,
+              '',
+              '```bash',
+              `# remove any stale local copy from a previous run, then pull fresh`,
+              `docker rmi ${image}:pr-${pr} 2>/dev/null; docker pull ${image}:pr-${pr}`,
+              '```',
+              '',
+              'Quick check:',
+              '',
+              '```bash',
+              `docker run --rm ${image}:pr-${pr} vp --version`,
+              '```',
+              '',
+              'See [docs/guide/docker.md](https://github.com/voidzero-dev/vite-plus/blob/main/docs/guide/docker.md) for usage.',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
