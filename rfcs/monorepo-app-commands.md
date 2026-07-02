@@ -6,7 +6,7 @@ Make the built-in app commands useful and predictable in monorepos with three ch
 
 1. **Path equivalence**: `vp dev <path>` behaves exactly like `cd <path> && vp dev`, by spawning the underlying tool with its working directory set to `<path>` instead of only forwarding the positional as Vite's `root`. This also fixes `vp pack <path>`, which today misinterprets a directory path as an entry glob.
 2. **Interactive package picker at the workspace root**: running `vp dev` / `vp build` / `vp preview` / `vp pack` at a monorepo root in an interactive terminal opens a fuzzy-searchable package selector (reusing the `vite_select` component that powers the `vp run` task picker). Selecting a package runs the command there and prints a hint teaching the direct form (`vp dev apps/web`).
-3. **`defaultProject` config**: a root `vite.config.ts` can set a default target directory so these commands skip the picker and run in a known sub-project. This also covers framework monorepos that are not JS workspaces (a Laravel, Rails, or Go repo with a `frontend/` directory), where the picker has no package list to enumerate.
+3. **`defaultPackage` config**: a root `vite.config.ts` can set a default target directory so these commands skip the picker and run in a known package. This also covers framework monorepos that are not JS workspaces (a Laravel, Rails, or Go repo with a `frontend/` directory), where the picker has no package list to enumerate.
 
 The commands stay singular: `vp dev` still starts exactly one Vite dev server. The picker only elicits the one argument the command needs, in the one place where omitting it is ambiguous. Fan-out and task orchestration remain the job of `vp run`.
 
@@ -154,7 +154,7 @@ $ echo $?
 1
 ```
 
-### 4. With `defaultProject` configured
+### 4. With `defaultPackage` configured
 
 The motivating repo shape is a framework monorepo where the Vite app lives in a subdirectory of a repo that is not a JS workspace at all, for example a Laravel, Rails, or Go server with a `frontend/` directory:
 
@@ -167,7 +167,7 @@ shop/
 └── frontend/          (the Vite app)
 ```
 
-There is no `pnpm-workspace.yaml` or `workspaces` field here, so the picker has no package list to enumerate. `defaultProject` is what makes `vp dev` at the root work in this shape:
+There is no `pnpm-workspace.yaml` or `workspaces` field here, so the picker has no package list to enumerate. `defaultPackage` is what makes `vp dev` at the root work in this shape:
 
 ```ts
 // vite-plus is not installed at this root, and that is fine: vp reads this
@@ -175,7 +175,7 @@ There is no `pnpm-workspace.yaml` or `workspaces` field here, so the picker has 
 // needed. Vite never loads this config either (the app's real config lives
 // in frontend/vite.config.ts); at this root it is purely a pointer for vp.
 export default {
-  defaultProject: './frontend',
+  defaultPackage: './frontend',
 }
 ```
 
@@ -183,14 +183,14 @@ The app commands at the root skip the picker and go straight to the configured d
 
 ```
 $ vp dev
-vp dev: using ./frontend (defaultProject)
+vp dev: using ./frontend (defaultPackage)
 
   VITE v7.1.4  ready in 301 ms
 
   ➜  Local:   http://localhost:5173/
 ```
 
-An explicit path still wins over the config: `vp dev apps/admin` ignores `defaultProject`.
+An explicit path still wins over the config: `vp dev apps/admin` ignores `defaultPackage`.
 
 The same key works in a JS workspace root, where it skips the picker for monorepos with one blessed app among many packages. There `vite-plus` is installed, so the usual `import { defineConfig } from 'vite-plus'` form applies and the key is type-checked.
 
@@ -214,7 +214,7 @@ No picker ever appears below the root. Interactive mode is root-only.
 For `vp dev`, `vp build`, `vp preview`, and `vp pack`, the target directory is resolved in this order:
 
 1. **Explicit path positional** (an existing directory): run there.
-2. **`defaultProject`** from the root `vite.config.ts`, when invoked in the directory containing that config (a workspace root, or the root of a non-workspace repo): run there, print a one-line note.
+2. **`defaultPackage`** from the root `vite.config.ts`, when invoked in the directory containing that config (a workspace root, or the root of a non-workspace repo): run there, print a one-line note.
 3. **Interactive picker**, when invoked at the workspace root in an interactive TTY (and not CI): pick, print hint, run there.
 4. **Non-interactive at the workspace root**: print the package list and the direct-form hint, exit 1.
 5. **Anywhere else** (sub-package or non-workspace project): current behavior, run in the current directory.
@@ -247,19 +247,19 @@ The local `vite-plus` CLI itself is still resolved from the invocation directory
 - If the workspace root itself looks runnable (it has a `vite.config.*` or `index.html`), it appears as a `(workspace root)` entry, mirroring the task picker's labeling. This keeps today's "run at root anyway" behavior one keystroke away.
 - If exactly one likely-runnable package exists, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
-### `defaultProject` config
+### `defaultPackage` config
 
 ```ts
 export default defineConfig({
   // Relative to the config file's directory. Used by vp dev/build/preview/pack
   // when invoked next to this config without an explicit path.
-  defaultProject: './frontend',
+  defaultPackage: './frontend',
 })
 ```
 
 - Type: `string` (a single directory). A per-command map can be added later if real demand appears; v1 stays simple.
-- Consulted when `vp` is invoked in the directory containing the root config: a workspace root, or the root of a non-workspace repo. It is deliberately not limited to JS workspaces, because the framework-monorepo shape (Laravel, Rails, a Go server with a `frontend/` directory) has no workspace metadata to enumerate, so neither the picker nor auto-select can serve it; `defaultProject` is the only mechanism of the three that covers it. An explicit positional always wins.
-- If the directory does not exist, error: `defaultProject points to a missing directory: ./frontend`.
+- Consulted when `vp` is invoked in the directory containing the root config: a workspace root, or the root of a non-workspace repo. It is deliberately not limited to JS workspaces, because the framework-monorepo shape (Laravel, Rails, a Go server with a `frontend/` directory) has no workspace metadata to enumerate, so neither the picker nor auto-select can serve it; `defaultPackage` is the only mechanism of the three that covers it. An explicit positional always wins.
+- If the directory does not exist, error: `defaultPackage points to a missing directory: ./frontend`.
 - Read via the existing static extraction path (`vite_static_config` + the NAPI config loader in `packages/cli/binding/src/cli/handler.rs`), same as `run` config. For non-workspace roots, static extraction is load-bearing rather than an optimization: `vite-plus` is typically not installed at that root, so the config file cannot be imported or executed there. The root config must therefore work without executing (a plain default-export object, no `vite-plus` import), and the value must be a static string literal. If the key cannot be statically extracted and no local install exists to execute the config, vp errors and names the construct that defeated extraction.
 
 ## Decisions
@@ -284,13 +284,13 @@ All changes live in the Rust layers; no upstream Vite or tsdown changes are requ
 
 - `packages/cli/binding/src/cli/resolver.rs`: for `Dev` / `Build` / `Preview` / `Pack`, detect a leading existing-directory positional, strip it, and carry it as the resolved target directory.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory when one was resolved.
-- `packages/cli/binding/src/cli/mod.rs` (`execute_direct_subcommand`): workspace-root detection is already available here; add the resolution order (positional, `defaultProject`, picker, non-TTY error).
+- `packages/cli/binding/src/cli/mod.rs` (`execute_direct_subcommand`): workspace-root detection is already available here; add the resolution order (positional, `defaultPackage`, picker, non-TTY error).
 - Picker: reuse `vite_select` (fuzzy search, groups, paging) and `vite_workspace` package enumeration, both already dependencies of this path via the `vite_task` crates.
-- `defaultProject`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded.
+- `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded.
 
 ### TypeScript side
 
-- `packages/cli/src/define-config.ts`: add `defaultProject?: string` to the top-level config type.
+- `packages/cli/src/define-config.ts`: add `defaultPackage?: string` to the top-level config type.
 - `packages/cli/src/pack-bin.ts`: no change needed if the binding strips the directory positional before delegation; pack continues to resolve config from its (now correct) cwd.
 
 ### Global CLI
@@ -299,14 +299,14 @@ No routing changes. `crates/vite_global_cli` already delegates dev/build/preview
 
 ### Docs
 
-- `docs/guide/monorepo.md` "App Commands": document the equivalence invariant, the root picker, and `defaultProject`.
+- `docs/guide/monorepo.md` "App Commands": document the equivalence invariant, the root picker, and `defaultPackage`.
 - `docs/config/` page for the new top-level key.
 
 ## Compatibility
 
 - `vp dev <path>` / `vp build <path>` change behavior in the cwd-dependent edge cases (cwd reads in configs and plugins, relative CLI args). The new behavior matches what `cd <path> && vp <cmd>` already does, which is the semantics users report expecting; the delta is exactly the set of cases currently reported as bugs. Local CLI resolution is unchanged (still from the invocation directory; see the equivalence invariant). Ship in a minor with a changelog note.
 - `vp pack <path>` with a directory changes from an error (or nonsense entry glob) to packing that directory. File and glob entries are unaffected.
-- Running the app commands at a workspace root changes from "silently serve or build the root" to picker / config / clear error. Monorepos that intentionally run an app at the root keep working when the root has a `vite.config.*` or `index.html` (it appears as a picker entry, and setting `defaultProject: '.'` restores the old behavior unconditionally).
+- Running the app commands at a workspace root changes from "silently serve or build the root" to picker / config / clear error. Monorepos that intentionally run an app at the root keep working when the root has a `vite.config.*` or `index.html` (it appears as a picker entry, and setting `defaultPackage: '.'` restores the old behavior unconditionally).
 - Non-workspace projects and sub-package invocations are unchanged.
 
 ## Snap Tests
@@ -315,7 +315,7 @@ Non-interactive branches are covered by snap tests:
 
 - `vp build <dir>` / `vp pack <dir>` directory positionals (none exist today).
 - App commands at a workspace root without a TTY: package listing and exit code.
-- `defaultProject`: happy path and missing-directory error.
+- `defaultPackage`: happy path and missing-directory error.
 - Equivalence checks: `vp build <dir>` and `cd <dir> && vp build` produce the same output in a fixture whose config reads `process.cwd()`.
 
 The interactive picker gets pty snapshot coverage in the `vite_task` repo style (`task_select` fixtures) if the picker lands near `vite_select`, or manual verification via tmux-driven interactive runs otherwise.
@@ -323,6 +323,24 @@ The interactive picker gets pty snapshot coverage in the `vite_task` repo style 
 ## Open Questions
 
 1. Picker relevance ranking is in v1 (likely-runnable packages sort first, nothing hidden). Is outright filtering of clearly non-runnable packages ever wanted, or does ranking plus search suffice?
-2. Config key naming: `defaultProject` vs `defaultApp` vs a `workspace.*` namespace.
+2. Should a `VP_DEFAULT_PACKAGE` environment variable override the config value? Env companions are an established pattern (`NX_DEFAULT_PROJECT`, `AMPLIFY_MONOREPO_APP_ROOT`, `VITE_RUBY_SOURCE_CODE_DIR`) and would cover per-environment CI needs; deferred from v1.
 3. Should `vp test` join? Probably not: Vitest already has first-class `projects` semantics at the root.
 4. Exact CI/non-interactive gate: same TTY check as the `vp run` picker, plus the `CI` environment check used by the global command picker?
+
+## Appendix: Naming Survey for `defaultPackage`
+
+How comparable tools name "the member a root-level command targets when none is specified":
+
+| Tool | Field | Notes |
+| --- | --- | --- |
+| Ionic CLI | `defaultProject` | active; root config with a `projects` map |
+| Nx | `defaultProject` | deprecated in favor of `NX_DEFAULT_PROJECT` env var |
+| Angular CLI | `defaultProject` | deprecated in favor of cwd inference |
+| Cargo | `workspace.default-members` | plural, fan-out semantics |
+| Salesforce DX | `default: true` on the member | marker pattern; needs member enumeration |
+| Vercel / Netlify / Amplify | `rootDirectory` / `base` / `appRoot` | per-app deploy config, not a default among many |
+| GitHub Actions | `defaults.run.working-directory` | names the mechanism (cwd) |
+
+The pattern across these tools is `default` plus the tool's own noun for the unit: Angular, Nx, and Ionic call members "projects" everywhere, Cargo says "members", Salesforce says "package directories". vp's noun is "package" (the picker, `vp run` docs, `vite_workspace`, pnpm vocabulary), hence `defaultPackage`.
+
+Rejected: `defaultProject` (collides with Vitest `test.projects`, a different kind of unit, and breaks noun consistency with the picker), `defaultWorkspace` (in vp/pnpm vocabulary "workspace" means the whole monorepo; the flags `-w`/`--workspace-root` would contradict it), `defaultMembers` (fan-out plural; "member" is meaningless in the non-workspace Laravel shape), `appRoot`/`rootDirectory`/`base` (collide with Vite's `root`/`base` options), member markers a la Salesforce (require enumeration, impossible without workspace metadata). The Angular and Nx deprecations do not transfer: Angular's reason (prefer cwd inference) is built into the resolution order, and Nx's reason (per-environment flexibility) is answered by the env override in open question 2.
