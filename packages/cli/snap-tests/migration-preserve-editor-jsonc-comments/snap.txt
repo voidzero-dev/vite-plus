@@ -1,5 +1,5 @@
 > vp migrate --no-interactive --no-hooks --editor vscode 2>&1 # merge must preserve existing .vscode JSONC comments
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 
 > cat .vscode/settings.json # top-level and nested comments survive; oxc settings are added without overwriting existing values

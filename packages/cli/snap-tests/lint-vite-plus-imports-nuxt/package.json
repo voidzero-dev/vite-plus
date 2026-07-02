@@ -1,0 +1,8 @@
+{
+  "name": "lint-vite-plus-imports-nuxt",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "@nuxt/test-utils": "^4.0.3"
+  }
+}

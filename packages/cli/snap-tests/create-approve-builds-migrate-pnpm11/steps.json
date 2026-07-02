@@ -1,5 +1,6 @@
 {
   "env": {
+    "VP_VERSION": "0.2.1",
     "VP_SKIP_INSTALL": "",
     "CI": "",
     "ADBLOCK": "1"

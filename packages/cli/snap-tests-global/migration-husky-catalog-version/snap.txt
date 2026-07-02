@@ -4,7 +4,7 @@
 ✔ Created vite.config.ts in vite.config.ts
 
 ✔ Merged staged config into vite.config.ts
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • Git hooks configured
 
@@ -34,19 +34,15 @@ packages:
 catalog:
   husky: ^9.1.7
   lint-staged: ^16.2.6
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat vite.config.ts # check staged config migrated to vite.config.ts
 import { defineConfig } from 'vite-plus';

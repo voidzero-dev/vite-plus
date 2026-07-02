@@ -1,0 +1,18 @@
+{
+  "name": "migration-upgrade-vitest-retained-references-npm",
+  "devDependencies": {
+    "vite-plus": "latest",
+    "vitest": "4.1.8"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "4.1.8"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

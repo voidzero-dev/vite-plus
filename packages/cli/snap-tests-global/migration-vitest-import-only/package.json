@@ -1,0 +1,10 @@
+{
+  "name": "migration-vitest-import-only",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  }
+}

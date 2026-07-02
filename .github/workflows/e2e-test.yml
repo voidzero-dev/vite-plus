@@ -318,6 +318,7 @@ jobs:
               # on vi.fn() calls — migration sets rule as "error" in config, --allow can't override
               vp run lint || true
               vp run test:types
+              vp test --project nuxt
               vp test --project unit
           - name: vite-plus-jest-dom-repro
             node-version: 24
@@ -326,7 +327,13 @@ jobs:
           - name: bun-vite-template
             node-version: 24
             command: |
-              vp fmt
+              # FIXME: mantine uses postcss-simple-vars (e.g. `@media (max-width:
+              # $mantine-breakpoint-md)` in src/components/Welcome/Welcome.module.css),
+              # which oxfmt's CSS parser does not support yet (regressed in oxfmt 0.57.0
+              # after the switch to oxc-css-parser). Tracking issue:
+              # https://github.com/oxc-project/oxc/issues/23969. Drop the `|| true`
+              # once postcss-simple-vars syntax is supported.
+              vp fmt || true
               vp run validate
           - name: vite-plus-vitest-global-type-minimal-repro
             node-version: 24
@@ -431,9 +438,11 @@ jobs:
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
-        run: |
-          node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
-          vp install --no-frozen-lockfile
+        # patch-project.ts runs `vp migrate` and the follow-up `vp install`,
+        # handling pnpm's minimumReleaseAge gate per project (disabled so
+        # freshly published deps install, kept off for dify's time-based
+        # resolution policy). See its comments for the details.
+        run: node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
 
       - name: Verify local tgz packages installed
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}

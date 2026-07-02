@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should merge pnpm overrides with dependency selector
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
@@ -38,23 +38,18 @@ packages:
   - packages/*
 
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 
 overrides:
-  '@vitejs/plugin-react>vite': 'npm:vite@<semver>'
-  'supertest>superagent': <semver>
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  supertest>superagent: <semver>
   react-click-away-listener>react: <semver>
+  vite: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat packages/app/package.json # check app package.json
 {

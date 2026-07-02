@@ -3,7 +3,6 @@
 AGENTS.md
 README.md
 apps
-bunfig.toml
 package.json
 packages
 tsconfig.json
@@ -30,8 +29,7 @@ vite.config.ts
     "vite-plus": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -44,9 +42,8 @@ vite.config.ts
     "node": ">=22.18.0"
   },
   "catalog": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>",
-    "vite-plus": "latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
+    "vite-plus": "<semver>"
   }
 }
 

@@ -1098,7 +1098,7 @@ async function createConditionalShim(
     entries.push(['default', `./dist/test/${shimBaseName}.js`]);
   }
 
-  return Object.fromEntries(entries) as ExportValue;
+  return Object.fromEntries(entries);
 }
 
 /**

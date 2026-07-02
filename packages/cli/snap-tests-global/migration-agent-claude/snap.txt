@@ -1,7 +1,7 @@
 > vp migrate --agent claude --no-interactive # migration with --agent claude should write CLAUDE.md
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
+• 2 config updates applied, 1 file had imports rewritten
 
 > cat CLAUDE.md | head -3 # verify CLAUDE.md was created
 <!--VITE PLUS START-->

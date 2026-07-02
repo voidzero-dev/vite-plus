@@ -2,7 +2,7 @@
   "dify": {
     "repository": "https://github.com/langgenius/dify.git",
     "branch": "main",
-    "hash": "50b3228bc7b26c9f501008916f60a6fa2dfb6e3e",
+    "hash": "baf2191ee360c5f058a9e25c2c2c26cafea2bbe6",
     "directory": "web",
     "forceFreshMigration": true
   },
@@ -94,8 +94,9 @@
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "230b7c7ddb6bb8551ce797144f0ce0f047ff8d7d",
-    "forceFreshMigration": true
+    "hash": "035776c96cf8f089c44e6011264b534b0bcde53c",
+    "forceFreshMigration": true,
+    "playwright": true
   },
   "vite-plus-jest-dom-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",

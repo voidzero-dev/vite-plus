@@ -16,7 +16,7 @@
     "core-js": "3.39.0"
   },
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "catalog:"
   },
   "dependenciesMeta": {
     "core-js": {
@@ -24,8 +24,7 @@
     }
   },
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {
@@ -58,11 +57,10 @@ These dependencies may not work until built. Enable them in the workspace root p
     "core-js": "3.39.0"
   },
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "catalog:"
   },
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {

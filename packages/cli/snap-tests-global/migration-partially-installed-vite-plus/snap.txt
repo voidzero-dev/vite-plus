@@ -1,7 +1,10 @@
 > vp migrate --no-interactive --no-hooks --no-agent --no-editor # should finish core rewrites even when vite-plus is already installed in a pnpm project
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
-• 1 config update applied, 1 file had imports rewritten
+• Dependencies:
+    vite-plus  <semver> → <semver>
+    vite              → <semver>
+• 1 file had imports rewritten
 • Package manager settings configured
 
 > cat package.json # scripts should be rewritten without adding package.json overrides
@@ -27,8 +30,8 @@
     "@vitejs/plugin-react": "^6.0.1",
     "globals": "^17.6.0",
     "typescript": "~6.0.2",
-    "vite": "^8.0.12",
-    "vite-plus": "^0.1.24"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -41,19 +44,15 @@
 
 > cat pnpm-workspace.yaml # pnpm overrides and peerDependencyRules should be configured
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat vite.config.ts # vite imports should be rewritten
 import { defineConfig } from 'vite-plus'
@@ -64,10 +63,10 @@ export default defineConfig({
   plugins: [react()],
 })
 
-> cat tsconfig.app.json # vite/client types should be rewritten
+> cat tsconfig.app.json # vite/client is preserved (issue #2004: tsconfig is not a vite.config)
 {
   "compilerOptions": {
-    "types": ["vite-plus/client"]
+    "types": ["vite/client"]
   }
 }
 

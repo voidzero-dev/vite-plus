@@ -1,5 +1,5 @@
 > vp migrate --no-interactive --no-hooks 2>&1 # must NOT duplicate fmt/lint already declared as shorthand properties (#1836)
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 
 > cat vite.config.ts # fmt/lint stay as shorthand only, no injected inline fmt:/lint: blocks

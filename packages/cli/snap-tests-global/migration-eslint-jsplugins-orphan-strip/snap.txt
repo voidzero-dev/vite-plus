@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # orphan jsPlugin / unknown plugin / dangling rule should be stripped, with warnings
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint

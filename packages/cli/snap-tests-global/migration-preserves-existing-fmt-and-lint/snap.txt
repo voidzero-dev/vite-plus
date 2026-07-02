@@ -1,5 +1,5 @@
 > vp migrate --no-interactive 2>&1 # should NOT duplicate fmt/lint blocks already in vite.config.ts (regression for vp create fate)
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

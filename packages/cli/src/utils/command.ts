@@ -5,6 +5,11 @@ export interface RunCommandOptions {
   args: string[];
   cwd: string;
   envs: NodeJS.ProcessEnv;
+  /**
+   * Kill the child and reject once exceeded. Without it a wedged child (e.g. a
+   * config worker executing a blocking plugin factory) hangs the caller forever.
+   */
+  timeoutMs?: number;
 }
 
 export interface ExecutionResult {
@@ -28,6 +33,17 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
   const promise = new Promise<RunCommandResult>((resolve, reject) => {
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let timedOut = false;
+    // SIGKILL rather than SIGTERM: the timeout exists for children wedged in
+    // arbitrary user code, which a catchable signal may never interrupt.
+    const timer =
+      options.timeoutMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGKILL');
+          }, options.timeoutMs);
+    timer?.unref();
     child.stdout?.on('data', (data) => {
       stdout.push(data);
     });
@@ -35,6 +51,11 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
       stderr.push(data);
     });
     child.on('close', (code) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        reject(new Error(`Command timed out after ${options.timeoutMs}ms: ${options.command}`));
+        return;
+      }
       resolve({
         exitCode: code ?? 0,
         stdout: Buffer.concat(stdout),
@@ -42,6 +63,7 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
       });
     });
     child.on('error', (err) => {
+      clearTimeout(timer);
       reject(err);
     });
   });

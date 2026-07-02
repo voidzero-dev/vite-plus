@@ -50,9 +50,14 @@ jobs:
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
+          predicate-quantifier: every
           filters: |
             code:
               - '!**/*.md'
+              - '!docs/**'
+              - '!.github/workflows/deploy-docs-preview.yml'
+              - '!.github/workflows/deploy-docs.yml'
+              - '!netlify.toml'
 
   download-previous-rolldown-binaries:
     needs: detect-changes
