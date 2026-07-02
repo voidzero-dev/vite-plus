@@ -412,6 +412,9 @@ Examples:
         version: String,
     },
 
+    /// Remove unused managed runtimes and package manager caches
+    Clean,
+
     /// Install a Node.js version
     #[command(visible_alias = "i")]
     Install {
