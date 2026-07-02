@@ -243,8 +243,9 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    npm view vite-plus version                       # X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
    vp upgrade && vp --version                       # bundled tool versions sane
-   docker pull ghcr.io/voidzero-dev/vite-plus:X.Y.Z
+   docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
+   The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table.
 3. **Announce on Discord** (concise format only; do not produce a shorter variant). No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
 
    ```markdown
@@ -280,5 +281,5 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished and validated
-- [ ] Installs verified (npm, `vp upgrade`, ghcr)
+- [ ] Installs verified (npm, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
 - [ ] Discord announcement posted (concise only)
