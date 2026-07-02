@@ -170,11 +170,13 @@ shop/
 There is no `pnpm-workspace.yaml` or `workspaces` field here, so the picker has no package list to enumerate. `defaultProject` is what makes `vp dev` at the root work in this shape:
 
 ```ts
-import { defineConfig } from 'vite-plus'
-
-export default defineConfig({
+// vite-plus is not installed at this root, and that is fine: vp reads this
+// key via static extraction and never executes this file, so no import is
+// needed. Vite never loads this config either (the app's real config lives
+// in frontend/vite.config.ts); at this root it is purely a pointer for vp.
+export default {
   defaultProject: './frontend',
-})
+}
 ```
 
 The app commands at the root skip the picker and go straight to the configured directory, with one line of output so it never feels magical:
@@ -190,7 +192,7 @@ vp dev: using ./frontend (defaultProject)
 
 An explicit path still wins over the config: `vp dev apps/admin` ignores `defaultProject`.
 
-The same key works in a JS workspace root, where it skips the picker for monorepos with one blessed app among many packages.
+The same key works in a JS workspace root, where it skips the picker for monorepos with one blessed app among many packages. There `vite-plus` is installed, so the usual `import { defineConfig } from 'vite-plus'` form applies and the key is type-checked.
 
 ### 5. Inside a sub-package: nothing changes
 
@@ -256,7 +258,7 @@ export default defineConfig({
 - Type: `string` (a single directory). A per-command map can be added later if real demand appears; v1 stays simple.
 - Consulted when `vp` is invoked in the directory containing the root config: a workspace root, or the root of a non-workspace repo. It is deliberately not limited to JS workspaces, because the framework-monorepo shape (Laravel, Rails, a Go server with a `frontend/` directory) has no workspace metadata to enumerate, so neither the picker nor auto-select can serve it; `defaultProject` is the only mechanism of the three that covers it. An explicit positional always wins.
 - If the directory does not exist, error: `defaultProject points to a missing directory: ./frontend`.
-- Read via the existing static extraction path (`vite_static_config` + the NAPI config loader in `packages/cli/binding/src/cli/handler.rs`), same as `run` config, so no JS boot is needed to resolve it.
+- Read via the existing static extraction path (`vite_static_config` + the NAPI config loader in `packages/cli/binding/src/cli/handler.rs`), same as `run` config. For non-workspace roots, static extraction is load-bearing rather than an optimization: `vite-plus` is typically not installed at that root, so the config file cannot be imported or executed there. The root config must therefore work without executing (a plain default-export object, no `vite-plus` import), and the value must be a static string literal. If the key cannot be statically extracted and no local install exists to execute the config, vp errors and names the construct that defeated extraction.
 
 ## Decisions
 
