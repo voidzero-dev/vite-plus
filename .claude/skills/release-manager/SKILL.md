@@ -23,6 +23,7 @@ When given a release PR (URL or number), do not start from step 1. First audit t
 - Is a pkg.pr.new build present and for the current head? (step 4)
 - Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
 - What is CI status? (`gh pr checks <PR#>`, step 5)
+- Already merged? Check the Release workflow (`gh run list --workflow Release --repo voidzero-dev/vite-plus`) and whether the GitHub release body is still the generated stub, then continue at step 7 or 8.
 
 Report the detected state before making changes, so the previous release manager's work is not redone or overwritten.
 
@@ -91,7 +92,7 @@ git show origin/release/v<curr>:pnpm-workspace.yaml                 # vitest/oxl
 ```markdown
 Release vite-plus vX.Y.Z: <theme>.
 
-<One or two sentences on the release theme. Link a blog post here when one accompanies the release.>
+<One or two sentences on the release theme. When a blog post accompanies the release, read it first (via its preview URL if not yet deployed), align the theme with it, and link the final URL here even if that URL is not live yet.>
 
 ### Highlights
 ### Features
@@ -237,15 +238,43 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
 ## 8. Post-release
 
-1. **Polish the GitHub release notes**: the auto-created release body lacks the changelog. Merge the release PR body into it with `gh release edit vX.Y.Z --repo voidzero-dev/vite-plus --notes-file ...`: changelog sections first, keep the generated Published Packages and Installation sections and the asset list, drop the `Merging this PR ...` line, and re-run the step 3 validation greps against the release body.
+1. **Polish the GitHub release notes** (ask first): the auto-created release body has only Published Packages and Installation. Build the polished notes from the final release PR body:
+   - Drop the `Release vite-plus vX.Y.Z: ...` opener line (the release title carries it) and the closing `---` / `Merging this PR ...` boilerplate.
+   - Keep every changelog section through **Full Changelog** unchanged.
+   - Append the generated Published Packages and Installation sections, and end Installation with a Docker usage block (keep the explanation to one short sentence):
+
+     ````markdown
+     **Docker:**
+     ```bash
+     docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp build
+     ```
+
+     Run any `vp` command without installing it; see the [Docker guide](https://viteplus.dev/guide/docker) for more.
+     ````
+   - **Present the draft to the release manager and apply only after approval.** Then retitle the release to match the PR theme and apply via a notes file:
+
+     ```bash
+     gh release edit vX.Y.Z --repo voidzero-dev/vite-plus \
+       --title "vite-plus vX.Y.Z: <theme>" --notes-file /tmp/release-notes.md
+     ```
+   - Re-run the step 3 validation greps against the live release body, plus `grep -c 'Merging this PR'` (must be 0).
 2. **Verify**:
    ```bash
    npm view vite-plus version                       # X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
+   npm view vite-plus dist-tags.latest              # X.Y.Z
    vp upgrade && vp --version                       # bundled tool versions sane
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
-   The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table.
+   `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
+
+   ```bash
+   TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:voidzero-dev/vite-plus:pull" \
+     | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
+   curl -sI -H "Authorization: Bearer $TOKEN" \
+     -H "Accept: application/vnd.oci.image.index.v1+json" \
+     "https://ghcr.io/v2/voidzero-dev/vite-plus/manifests/X.Y.Z" | head -1   # HTTP/2 200
+   ```
 3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
 
    ```markdown
@@ -271,6 +300,8 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
    The release-notes URL stays in `<angle brackets>` to suppress the embed; a blog post link (if any) goes bare so it unfurls.
 
+   Never post to Discord yourself. Save the draft to a file and post it as a comment on the release PR wrapped in a fenced ` ```markdown ` block, so the `@mentions` do not ping anyone on GitHub, the emoji shortcodes stay literal, and any team member can copy-paste it into Discord.
+
 ## Checklist
 
 - [ ] `prepare_release` run for the target version; release PR open
@@ -280,6 +311,6 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 - [ ] Smoke test offered to the release manager; if accepted, pkg.pr.new build published and verified via `test-pkg-pr-new-migrate`
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved; npm + GitHub release + Docker image all published
-- [ ] GitHub release notes polished and validated
-- [ ] Installs verified (npm, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
-- [ ] Discord announcement posted (concise only)
+- [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
+- [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
+- [ ] Discord announcement drafted (concise only) and shared as a fenced code block comment on the release PR
