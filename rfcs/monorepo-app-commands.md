@@ -6,7 +6,7 @@ Make the built-in app commands useful and predictable in monorepos with three ch
 
 1. **Path equivalence**: `vp dev <path>` behaves exactly like `cd <path> && vp dev`, by spawning the underlying tool with its working directory set to `<path>` instead of only forwarding the positional as Vite's `root`. This also fixes `vp pack <path>`, which today misinterprets a directory path as an entry glob.
 2. **Interactive package picker at the workspace root**: running `vp dev` / `vp build` / `vp preview` / `vp pack` at a monorepo root in an interactive terminal opens a fuzzy-searchable package selector (reusing the `vite_select` component that powers the `vp run` task picker). Selecting a package runs the command there and prints a hint teaching the direct form (`vp dev apps/web`).
-3. **`defaultProject` config**: a root `vite.config.ts` can set a default target directory so these commands skip the picker and run in a known sub-project (for example a `frontend/` directory inside a Laravel monorepo).
+3. **`defaultProject` config**: a root `vite.config.ts` can set a default target directory so these commands skip the picker and run in a known sub-project. This also covers framework monorepos that are not JS workspaces (a Laravel, Rails, or Go repo with a `frontend/` directory), where the picker has no package list to enumerate.
 
 The commands stay singular: `vp dev` still starts exactly one Vite dev server. The picker only elicits the one argument the command needs, in the one place where omitting it is ambiguous. Fan-out and task orchestration remain the job of `vp run`.
 
@@ -156,7 +156,18 @@ $ echo $?
 
 ### 4. With `defaultProject` configured
 
-Root `vite.config.ts`:
+The motivating repo shape is a framework monorepo where the Vite app lives in a subdirectory of a repo that is not a JS workspace at all, for example a Laravel, Rails, or Go server with a `frontend/` directory:
+
+```
+shop/
+├── app/               (PHP / Ruby / Go)
+├── routes/
+├── composer.json
+├── vite.config.ts     (root config below)
+└── frontend/          (the Vite app)
+```
+
+There is no `pnpm-workspace.yaml` or `workspaces` field here, so the picker has no package list to enumerate. `defaultProject` is what makes `vp dev` at the root work in this shape:
 
 ```ts
 import { defineConfig } from 'vite-plus'
@@ -166,7 +177,7 @@ export default defineConfig({
 })
 ```
 
-All four commands at the root skip the picker and go straight to the configured directory, with one line of output so it never feels magical:
+The app commands at the root skip the picker and go straight to the configured directory, with one line of output so it never feels magical:
 
 ```
 $ vp dev
@@ -178,6 +189,8 @@ vp dev: using ./frontend (defaultProject)
 ```
 
 An explicit path still wins over the config: `vp dev apps/admin` ignores `defaultProject`.
+
+The same key works in a JS workspace root, where it skips the picker for monorepos with one blessed app among many packages.
 
 ### 5. Inside a sub-package: nothing changes
 
@@ -199,7 +212,7 @@ No picker ever appears below the root. Interactive mode is root-only.
 For `vp dev`, `vp build`, `vp preview`, and `vp pack`, the target directory is resolved in this order:
 
 1. **Explicit path positional** (an existing directory): run there.
-2. **`defaultProject`** from the workspace root `vite.config.ts`, when invoked at the workspace root: run there, print a one-line note.
+2. **`defaultProject`** from the root `vite.config.ts`, when invoked in the directory containing that config (a workspace root, or the root of a non-workspace repo): run there, print a one-line note.
 3. **Interactive picker**, when invoked at the workspace root in an interactive TTY (and not CI): pick, print hint, run there.
 4. **Non-interactive at the workspace root**: print the package list and the direct-form hint, exit 1.
 5. **Anywhere else** (sub-package or non-workspace project): current behavior, run in the current directory.
@@ -235,13 +248,13 @@ for `cmd` in `dev`, `build`, `preview`, `pack`. Concretely: the child process sp
 ```ts
 export default defineConfig({
   // Relative to the config file's directory. Used by vp dev/build/preview/pack
-  // when invoked at the workspace root without an explicit path.
+  // when invoked next to this config without an explicit path.
   defaultProject: './frontend',
 })
 ```
 
 - Type: `string` (a single directory). A per-command map can be added later if real demand appears; v1 stays simple.
-- Only consulted at the workspace root. An explicit positional always wins.
+- Consulted when `vp` is invoked in the directory containing the root config: a workspace root, or the root of a non-workspace repo. It is deliberately not limited to JS workspaces, because the framework-monorepo shape (Laravel, Rails, a Go server with a `frontend/` directory) has no workspace metadata to enumerate, so neither the picker nor auto-select can serve it; `defaultProject` is the only mechanism of the three that covers it. An explicit positional always wins.
 - If the directory does not exist, error: `defaultProject points to a missing directory: ./frontend`.
 - Read via the existing static extraction path (`vite_static_config` + the NAPI config loader in `packages/cli/binding/src/cli/handler.rs`), same as `run` config, so no JS boot is needed to resolve it.
 
