@@ -205,7 +205,7 @@ $ vp dev
   ➜  Local:   http://localhost:5173/
 ```
 
-No picker ever appears below the root. Interactive mode is root-only, unless explicitly requested with `--pick`.
+No picker ever appears below the root. Interactive mode is root-only.
 
 ## Command Syntax
 
@@ -226,11 +226,11 @@ vp pack    [dir | ...entries] [pack options...]
 
 Every other argument is forwarded verbatim to the underlying tool. Relative option values (`--config`, `--outDir`, ...) resolve in the target directory, matching the `cd` form. Pack's existing directory-related flags (`--root`, `-W`/`--workspace`, `-F`/`--filter`) keep their tsdown semantics and are evaluated after the cwd change: `vp pack apps/web -F ui` equals `cd apps/web && vp pack -F ui`.
 
-### `--pick`
+### No new flags
 
-The only flag this RFC adds, available on all four commands. `--pick` forces the interactive package picker even when `defaultPackage` is set or when running inside a sub-package, and errors in a non-interactive terminal. Combining `--pick` with a `[dir]` positional is an error.
+This RFC adds zero vp-owned flags. These commands forward every flag verbatim to Vite and tsdown, and keeping that contract intact means vp never collides with the bundled tools' current or future option namespaces. The `[dir]` positional is the only vp-level input, and it refines a positional Vite already owns.
 
-It is long-form only, deliberately: these commands forward unrecognized flags to Vite and tsdown, so a short alias like `-i` (pnpm's `-i, --interactive` convention) risks colliding with the bundled tools' current or future option namespaces.
+A picker-forcing flag (`--pick`) was considered and dropped: with `defaultPackage` set, an explicit path already overrides it, and below the root the cwd already identifies the target. If real demand appears, a flag can be added compatibly later; the reverse (removing one) would be breaking.
 
 ### No `--filter` for dev/build/preview
 
@@ -242,12 +242,11 @@ Package targeting stays path-based. `-F`/`--filter` is not added because `-F` al
 
 For `vp dev`, `vp build`, `vp preview`, and `vp pack`, the target directory is resolved in this order:
 
-1. **`--pick` flag**: open the interactive picker regardless of location or config (TTY required; error otherwise).
-2. **Explicit path positional** (an existing directory): run there.
-3. **`defaultPackage`** from the root `vite.config.ts`, when invoked in the directory containing that config (a workspace root, or the root of a non-workspace repo): run there, print a one-line note.
-4. **Interactive picker**, when invoked at the workspace root in an interactive TTY (and not CI): pick, print hint, run there.
-5. **Non-interactive at the workspace root**: print the package list and the direct-form hint, exit 1.
-6. **Anywhere else** (sub-package or non-workspace project): current behavior, run in the current directory.
+1. **Explicit path positional** (an existing directory): run there.
+2. **`defaultPackage`** from the root `vite.config.ts`, when invoked in the directory containing that config (a workspace root, or the root of a non-workspace repo): run there, print a one-line note.
+3. **Interactive picker**, when invoked at the workspace root in an interactive TTY (and not CI): pick, print hint, run there.
+4. **Non-interactive at the workspace root**: print the package list and the direct-form hint, exit 1.
+5. **Anywhere else** (sub-package or non-workspace project): current behavior, run in the current directory.
 
 "Workspace root" means the current directory's package is the workspace root package, as determined by `vite_workspace::find_workspace_root` (already called on every invocation in `packages/cli/binding/src/cli/mod.rs`).
 
@@ -310,7 +309,7 @@ In-process `chdir` is a global mutation: it leaks into everything sharing the pr
 
 ### Root-only interactivity
 
-Below the root, the current directory unambiguously identifies the project, so prompting would be noise; `--pick` remains the explicit opt-in from anywhere. At the root the command is ambiguous today and silently wrong; that is exactly where a prompt earns its keep. This mirrors how bare `vp run` behaves (interactive when a TTY, informative listing when not), with one difference: the app commands exit 1 in the non-interactive case, because starting a server or build against the wrong directory is worse than failing loudly.
+Below the root, the current directory unambiguously identifies the project, so prompting would be noise. At the root the command is ambiguous today and silently wrong; that is exactly where a prompt earns its keep. This mirrors how bare `vp run` behaves (interactive when a TTY, informative listing when not), with one difference: the app commands exit 1 in the non-interactive case, because starting a server or build against the wrong directory is worse than failing loudly.
 
 ### Command scope
 
@@ -322,7 +321,7 @@ All changes live in the Rust layers; no upstream Vite or tsdown changes are requ
 
 ### NAPI binding (local CLI)
 
-- `packages/cli/binding/src/cli/resolver.rs`: for `Dev` / `Build` / `Preview` / `Pack`, detect a leading existing-directory positional and intercept `--pick`, strip both from the forwarded args, and carry the resolved target directory. All other args continue to pass through verbatim.
+- `packages/cli/binding/src/cli/resolver.rs`: for `Dev` / `Build` / `Preview` / `Pack`, detect a leading existing-directory positional, strip it, and carry it as the resolved target directory. All flags continue to pass through verbatim.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory when one was resolved.
 - `packages/cli/binding/src/cli/mod.rs` (`execute_direct_subcommand`): workspace-root detection is already available here; add the resolution order (positional, `defaultPackage`, picker, non-TTY error).
 - Picker: reuse `vite_select` (fuzzy search, groups, paging) and `vite_workspace` package enumeration, both already dependencies of this path via the `vite_task` crates.
@@ -356,7 +355,6 @@ Non-interactive branches are covered by snap tests:
 - `vp build <dir>` / `vp pack <dir>` directory positionals (none exist today).
 - App commands at a workspace root without a TTY: package listing and exit code.
 - `defaultPackage`: happy path and missing-directory error.
-- `--pick` without a TTY, and `--pick` combined with a `[dir]` positional: both error with exit 1.
 - Equivalence checks: `vp build <dir>` and `cd <dir> && vp build` produce the same output in a fixture whose config reads `process.cwd()`.
 
 The interactive picker gets pty snapshot coverage in the `vite_task` repo style (`task_select` fixtures) if the picker lands near `vite_select`, or manual verification via tmux-driven interactive runs otherwise.
