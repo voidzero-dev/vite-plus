@@ -177,12 +177,13 @@ Plugin packages (an unscoped name starting with `vite-plugin-` or
 `unplugin-`, or `vite` in `peerDependencies`/`dependencies`) skip the rewrite
 even in config files. Only the `vite` specifier is in scope for this rule.
 
-One exception goes the other way: `declare module 'vite'` augmentations are
-rewritten to `declare module 'vite-plus'` in every file, not only configs. A
-module augmentation binds to the literal specifier, so it must keep targeting
-the same module as the rewritten config import or the augmented options fail
-type-checking. (This differs from `vitest` augmentations, which are never
-rewritten; see below.)
+`declare module 'vite'` augmentations follow the same rule and are preserved
+outside config files. Through the core alias they reach the same
+`@voidzero-dev/vite-plus-core` module whose `UserConfig` types `defineConfig`
+from `vite-plus`, so they keep working after migration; `vite-plus` itself
+exports no `UserConfig` symbol, so a rewritten `declare module 'vite-plus'`
+augmentation would merge with nothing. Extensions aimed at `vite-plus`'s own
+surface are written against `vite-plus` by hand.
 
 ### `vitest` and Browser Imports
 

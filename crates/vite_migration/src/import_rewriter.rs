@@ -1571,25 +1571,6 @@ static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new
     ast_grep::load_rules(REWRITE_VITE_RULES).expect("failed to parse vite rewrite rules")
 });
 
-const VITE_DECLARE_MODULE_RULE_IDS: [&str; 2] =
-    ["rewrite-declare-module-vite", "rewrite-declare-module-vite-subpath"];
-
-/// The `declare module 'vite'` augmentation rules, applied in EVERY file (not
-/// only config entry files). The Issue #2004 config-file scoping covers value
-/// imports, whose unrewritten `vite` specifiers still resolve through the core
-/// alias; a module augmentation instead binds to the literal specifier of the
-/// import it augments, and the config's own import IS rewritten to `vite-plus`,
-/// so leaving the augmentation on `vite` would fail type-checking after
-/// migration.
-static PARSED_VITE_DECLARE_MODULE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> =
-    LazyLock::new(|| {
-        ast_grep::load_rules(REWRITE_VITE_RULES)
-            .expect("failed to parse vite rewrite rules")
-            .into_iter()
-            .filter(|rule| VITE_DECLARE_MODULE_RULE_IDS.contains(&rule.id.as_str()))
-            .collect()
-    });
-
 static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
 });
@@ -2289,12 +2270,14 @@ fn rewrite_import(
     // Read the file
     let content = std::fs::read_to_string(file_path)?;
 
-    // Issue #2004: `vite` value imports are rewritten only in config entry
-    // files; everything else keeps its `vite` imports (they still resolve
-    // through the core alias). `declare module 'vite'` augmentations are the
-    // exception and are rewritten everywhere — see
-    // `PARSED_VITE_DECLARE_MODULE_RULES`. This is layered ON TOP of the
-    // package-level skip (a skipped package stays skipped).
+    // Issue #2004: `vite` specifiers are rewritten only in config entry files;
+    // everything else keeps its `vite` imports (they still resolve through the
+    // core alias). This includes `declare module 'vite'` augmentations: through
+    // the alias they reach the SAME `@voidzero-dev/vite-plus-core` module whose
+    // `UserConfig` types `defineConfig` from `vite-plus`, so they keep working,
+    // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
+    // augmentation to merge with. This is layered ON TOP of the package-level
+    // skip (a skipped package stays skipped).
     rewrite_import_content_full(
         &content,
         skip_packages,
@@ -2359,13 +2342,12 @@ fn rewrite_import_content_full(
     let mut updated = false;
     let mut preserved_vitest = false;
 
-    // Apply vite rules if not skipped (using pre-parsed rules). Outside config
-    // entry files only the `declare module 'vite'` augmentation rules apply
-    // (Issue #2004 keeps every other `vite` specifier).
-    if !skip_packages.skip_vite {
-        let vite_rules: &[RuleConfig<SupportLang>] =
-            if vite_config_file { &PARSED_VITE_RULES } else { &PARSED_VITE_DECLARE_MODULE_RULES };
-        let vite_content = ast_grep::apply_loaded_rules(&new_content, vite_rules);
+    // Apply vite rules if not skipped (using pre-parsed rules). Issue #2004:
+    // they apply only in config entry files; every other file keeps its `vite`
+    // specifiers, including `declare module 'vite'` augmentations (see the
+    // comment in `rewrite_import`).
+    if !skip_packages.skip_vite && vite_config_file {
+        let vite_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITE_RULES);
         if vite_content != new_content {
             new_content = vite_content;
             updated = true;
@@ -3074,11 +3056,14 @@ describe('test', () => {});"#,
     }
 
     #[test]
-    fn test_declare_module_vite_rewritten_outside_config_files() {
-        // A `declare module 'vite'` augmentation binds to the literal specifier
-        // of the import it augments. The config's own import IS rewritten to
-        // `vite-plus`, so the augmentation must follow even though it lives in
-        // a non-config .d.ts (unlike value imports, which Issue #2004 keeps).
+    fn test_declare_module_vite_preserved_outside_config_files() {
+        // A `declare module 'vite'` augmentation must stay on `vite`: through
+        // the core alias it reaches the same `@voidzero-dev/vite-plus-core`
+        // module whose `UserConfig` types `defineConfig` from `vite-plus`.
+        // `vite-plus` re-exports no `UserConfig` symbol, so rewriting the
+        // augmentation to `declare module 'vite-plus'` would orphan it (it
+        // would merge with nothing). Users extending vite-plus itself write
+        // `declare module 'vite-plus'` by hand.
         use std::fs;
 
         let temp = tempdir().unwrap();
@@ -3099,35 +3084,12 @@ describe('test', () => {});"#,
 
         let dts = fs::read_to_string(temp.path().join("types/vite.d.ts")).unwrap();
         assert!(
-            dts.contains("declare module 'vite-plus'"),
-            "augmentation must track the rewritten config import, got: {dts}"
+            !dts.contains("vite-plus"),
+            "non-config `vite` specifiers (including augmentations) must be preserved, got: {dts}"
         );
-        assert!(
-            dts.contains("from 'vite'"),
-            "non-config `vite` value/type imports must be preserved, got: {dts}"
-        );
+        assert!(dts.contains("declare module 'vite'"));
         let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
         assert!(config.contains("from 'vite-plus'"));
-    }
-
-    #[test]
-    fn test_declare_module_vite_skipped_in_plugin_packages() {
-        // The package-level plugin skip stays authoritative: a vite-plugin-*
-        // package keeps its `declare module 'vite'` augmentation untouched.
-        use std::fs;
-
-        let temp = tempdir().unwrap();
-        fs::write(temp.path().join("package.json"), r#"{"name":"vite-plugin-example"}"#).unwrap();
-        fs::write(
-            temp.path().join("types.d.ts"),
-            "declare module 'vite' {\n  interface UserConfig {\n    example?: object;\n  }\n}\n",
-        )
-        .unwrap();
-
-        rewrite_imports_in_directory(temp.path()).unwrap();
-
-        let dts = fs::read_to_string(temp.path().join("types.d.ts")).unwrap();
-        assert!(dts.contains("declare module 'vite'"), "plugin package must be skipped: {dts}");
     }
 
     #[test]
