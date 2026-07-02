@@ -8,6 +8,24 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, WebFetch
 
 Run a standard vite-plus release from version bump to published announcement. Any maintainer with repo write access can follow this; the only extra privilege needed is approval rights on the `release` GitHub environment (step 7).
 
+## Usage
+
+```
+/release-manager                    # start a new release: ask for the target version, begin at step 1
+/release-manager X.Y.Z              # start a new release for that version
+/release-manager <PR URL or #N>     # take over an in-flight release
+```
+
+When given a release PR (URL or number), do not start from step 1. First audit the release's current state, then continue from the earliest unfinished step:
+
+- Is the binding version synced? (step 2: `grep -c "'<prev>'" packages/cli/binding/index.cjs` on the release branch)
+- Is the PR description still the `prepare_release` boilerplate, or already a categorized changelog? (step 4)
+- Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
+- What is CI status? (`gh pr checks <PR#>`, step 5)
+- Is a pkg.pr.new build present and for the current head? (step 3)
+
+Report the detected state before making changes, so the previous release manager's work is not redone or overwritten.
+
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
