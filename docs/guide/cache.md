@@ -45,7 +45,7 @@ The [`run.cache`](/config/run#run-cache) option in your root `vite.config.ts` co
 
 ## Automatic Data Tracking
 
-Vite Task uses [automatic data tracking](/guide/automatic-tracking) to learn what each task needs for caching so you don't have to configure it manually. Automatic data tracking has two tiers:
+Vite Task uses [automatic data tracking](/guide/automatic-data-tracking) to learn what each task needs for caching so you don't have to configure it manually. Automatic data tracking has two tiers:
 
 - **File system tracking:** Vite Task records file reads, missing-file probes, directory listings, and written output files for every task with cache enabled.
 - **Cooperative tracking:** cache-reporting tools can report metadata that file system tracking cannot infer. Vite+ supports this for `vp build` today.

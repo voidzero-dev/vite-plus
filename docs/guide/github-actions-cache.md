@@ -20,7 +20,7 @@ Use this workflow when all of these are true:
 - The task has stable input and output tracking for CI.
 - The workflow installs dependencies before restoring `node_modules/.vite/task-cache`.
 
-If the immediate second run misses, fix the task's tracking config before adding GitHub Actions cache. Check [When To Add Manual Config](/guide/automatic-tracking#when-to-add-manual-config) for common causes of unstable caching and fixes.
+If the immediate second run misses, fix the task's tracking config before adding GitHub Actions cache. Check [When To Add Manual Config](/guide/automatic-data-tracking#when-to-add-manual-config) for common causes of unstable caching and fixes.
 
 ## Measure Before Caching Across Runs
 
@@ -48,7 +48,7 @@ export default defineConfig({
 });
 ```
 
-This guide assumes each task already hits locally. If a task misses, fix its tracking config in `vite.config.ts` before adding the GitHub Actions cache steps. See [Automatic Data Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks).
+This guide assumes each task already hits locally. If a task misses, fix its tracking config in `vite.config.ts` before adding the GitHub Actions cache steps. See [Automatic Data Tracking](/guide/automatic-data-tracking) and [`run.tasks`](/config/run#tasks).
 
 Run each task twice:
 
@@ -129,7 +129,7 @@ If GitHub restores a cache but Vite Task prints a cache miss, the workflow resto
 
 ## Keep Task Tracking Stable
 
-If GitHub restores a cache but `vp run` prints a cache miss, fix the task fingerprint before changing the Actions cache key. See [Automatic Data Tracking](/guide/automatic-tracking) and [`run.tasks`](/config/run#tasks).
+If GitHub restores a cache but `vp run` prints a cache miss, fix the task fingerprint before changing the Actions cache key. See [Automatic Data Tracking](/guide/automatic-data-tracking) and [`run.tasks`](/config/run#tasks).
 
 ## Choose A Cache Key
 

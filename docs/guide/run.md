@@ -69,7 +69,7 @@ $ node compile-legacy-app.js ✗ cache miss: 'legacy/index.js' modified, executi
 
 ## Task Definitions
 
-Vite Task [automatically tracks](/guide/automatic-tracking) what each task needs for caching. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
+Vite Task [automatically tracks](/guide/automatic-data-tracking) what each task needs for caching. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
