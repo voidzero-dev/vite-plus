@@ -174,6 +174,38 @@ If the release manager says yes:
 
 The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
 
+### Example (v0.2.2, PR #2016)
+
+Changelog complete, CI green, release manager approved the smoke test. A build existed for head `06708538`; the head had since moved by a test-only merge from `main`, so that build was still valid and was not re-triggered.
+
+Pick a target project pinned to the **previous release** so the run exercises the real upgrade path (here: vibe-dashboard `main`, a pnpm monorepo on `vite-plus 0.2.1`), and pass the **full commit SHA** of the published build rather than the PR number whenever the PR head has moved past it:
+
+```bash
+.github/scripts/test-pkg-pr-new-migrate.sh \
+  06708538195014078c8ecd4c4a4df7239ac0a309 \
+  /path/to/vibe-dashboard --no-interactive
+```
+
+A passing run looks like:
+
+```
+◇ Updated . to Vite+ 0.0.0-commit.06708538...
+• Dependencies:
+    vite-plus  0.2.1 → 0.0.0-commit.06708538...
+    vite             → 8.1.2
+✓ Dependencies installed in 5.7s
+
+Migration worktree changes (.npmrc force-staged so it survives .gitignore):
+A  .npmrc                      # bridge registry written by vp migrate
+ M package.json / pnpm-workspace.yaml / pnpm-lock.yaml
+
+Found 1 version of @voidzero-dev/vite-plus-core
+Found 1 version of vite-plus
+Found 1 version of vitest
+```
+
+Pass criteria: the upgrade lands on the `0.0.0-commit.<sha>` build, the install succeeds through the bridge registry, and each of `@voidzero-dev/vite-plus-core`, `vite-plus`, and `vitest` resolves to exactly ONE version (`vitest` at the bundled upstream version). Multiple or stale versions mean the migration or install is broken: stop and treat it as a release blocker. Report the outcome to the release manager either way.
+
 ## 5. Release-branch CI
 
 Fixes for CI failures go through a **separate PR to `main`**, never as commits on the release branch (the binding sync in step 2 is the sole exception). After the fix PR merges:
