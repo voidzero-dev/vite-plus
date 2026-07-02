@@ -45,7 +45,25 @@ Directory targeting exists only via `--root` / `-W` / `-F`, inconsistent with `v
 
 **4. Neither Vite's `root` option nor in-process `chdir` can close the gap.**
 
-Vite resolves `root` without touching `process.cwd()`, by design. Calling `process.chdir()` in the CLI process would close the gap but is a global mutation that leaks into everything sharing the process. The way out: `vp` never runs Vite or tsdown in-process; the NAPI binding always spawns a fresh child (`packages/cli/binding/src/cli/execution.rs`), so setting the child's spawn cwd achieves full equivalence with no `process.chdir()` and no upstream change.
+Vite resolves `root` without touching `process.cwd()`, by design. So a cwd-relative read in a config or plugin diverges even when `root` points at the right app:
+
+```ts
+// apps/admin/vite.config.ts
+const cert = fs.readFileSync(path.resolve('certs/dev.pem')) // cwd-relative
+```
+
+```
+$ cd apps/admin && vp dev          # cwd = apps/admin, cert found
+
+  VITE v7.1.4  ready in 298 ms
+
+$ vp dev apps/admin                # root is right, cwd is still the repo root
+failed to load config from /acme/apps/admin/vite.config.ts
+error when starting dev server:
+Error: ENOENT: no such file or directory, open '/acme/certs/dev.pem'
+```
+
+Calling `process.chdir()` in the CLI process would close the gap but is a global mutation that leaks into everything sharing the process. The way out: `vp` never runs Vite or tsdown in-process; the NAPI binding always spawns a fresh child (`packages/cli/binding/src/cli/execution.rs`), so setting the child's spawn cwd achieves full equivalence with no `process.chdir()` and no upstream change.
 
 ## Proposed UX
 
