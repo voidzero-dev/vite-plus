@@ -261,7 +261,15 @@ function readPackageJsonFromTarball(tgzBytes: Buffer, sourcePath: string): Packa
   throw new Error(`package/package.json not found in ${sourcePath}`);
 }
 
+interface Packument {
+  name: string;
+  'dist-tags': Record<string, string>;
+  versions: Record<string, unknown>;
+  time: Record<string, string>;
+}
+
 const localTarballs = new Map<string, string>(); // tarball basename -> absolute path
+const localPackuments = new Map<string, Packument>(); // package name -> local-only packument
 // Far in the past so package-manager minimum-release-age gates never
 // quarantine the locally served versions.
 const LOCAL_PACKAGE_TIME = '2020-01-01T00:00:00.000Z';
@@ -274,7 +282,7 @@ if (packagesDir) {
     const bytes = readFileSync(tgzPath);
     const pkg = readPackageJsonFromTarball(bytes, tgzPath);
     localTarballs.set(basename, tgzPath);
-    manifest[pkg.name] = {
+    localPackuments.set(pkg.name, {
       name: pkg.name,
       'dist-tags': { latest: pkg.version },
       versions: {
@@ -294,12 +302,74 @@ if (packagesDir) {
         modified: LOCAL_PACKAGE_TIME,
         [pkg.version]: LOCAL_PACKAGE_TIME,
       },
-    };
+    });
   }
 }
 
 function rewriteRegistry(value: unknown, registry: string): unknown {
   return JSON.parse(JSON.stringify(value).replaceAll('{REGISTRY}', registry));
+}
+
+function fetchUpstreamPackument(name: string): Promise<Packument | null> {
+  return new Promise((resolve) => {
+    httpsGet(
+      `${UPSTREAM_REGISTRY}/${name.replace('/', '%2F')}`,
+      { headers: { accept: 'application/json', 'accept-encoding': 'gzip' }, agent: upstreamAgent },
+      (upstream) => {
+        if (upstream.statusCode !== 200) {
+          upstream.resume();
+          resolve(null);
+          return;
+        }
+        const chunks: Buffer[] = [];
+        upstream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        upstream.on('error', () => resolve(null));
+        upstream.on('end', () => {
+          try {
+            const body = Buffer.concat(chunks);
+            const json = upstream.headers['content-encoding'] === 'gzip' ? gunzipSync(body) : body;
+            resolve(JSON.parse(json.toString()) as Packument);
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    ).on('error', () => resolve(null));
+  });
+}
+
+// Serve local packages as an overlay on the real upstream packument (like the
+// production registry bridge): upstream versions, times, and dist-tags stay
+// visible, the local version is injected (winning over a published version
+// with the same number), and `latest` points at it. Projects that already
+// reference PUBLISHED Vite+ versions in their committed lockfiles (ecosystem
+// repos on a previous release) can then still verify those entries, e.g.
+// pnpm's time-based resolution policies need `time` for every lockfile entry.
+// Falls back to the local-only packument when upstream is unreachable or the
+// package has never been published.
+const mergedPackuments = new Map<string, Packument>();
+
+async function resolveLocalPackument(name: string): Promise<Packument> {
+  const local = localPackuments.get(name) as Packument;
+  const cached = mergedPackuments.get(name);
+  if (cached) {
+    return cached;
+  }
+  const upstream = await fetchUpstreamPackument(name);
+  const localVersion = local['dist-tags'].latest;
+  const merged: Packument = upstream
+    ? {
+        ...upstream,
+        name,
+        'dist-tags': { ...upstream['dist-tags'], ...local['dist-tags'] },
+        versions: { ...upstream.versions, ...local.versions },
+        // Keep upstream created/modified; only the local version's publish
+        // time is ours.
+        time: { ...local.time, ...upstream.time, [localVersion]: LOCAL_PACKAGE_TIME },
+      }
+    : local;
+  mergedPackuments.set(name, merged);
+  return merged;
 }
 
 // Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
@@ -363,14 +433,15 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
   fetchUrl(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, 5);
 }
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   const key = decodeURIComponent(req.url ?? '/').replace(/^\/+/, '');
-  if (Object.hasOwn(manifest, key)) {
+  if (localPackuments.has(key) || Object.hasOwn(manifest, key)) {
     const address = server.address();
     const registry =
       address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
+    const packument = localPackuments.has(key) ? await resolveLocalPackument(key) : manifest[key];
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(rewriteRegistry(manifest[key], registry)));
+    res.end(JSON.stringify(rewriteRegistry(packument, registry)));
     return;
   }
   const tarMatch = key.match(/\/-\/([^/]+\.tgz)$/);
@@ -437,7 +508,7 @@ server.listen(0, '127.0.0.1', () => {
       JSON.stringify({ registry, env: registryEnv }),
       '',
       `# serving local packages${packagesDir ? ` from ${packagesDir}` : ''}`,
-      ...Object.keys(manifest).map((name) => `#   ${name}`),
+      ...[...localPackuments.keys(), ...Object.keys(manifest)].map((name) => `#   ${name}`),
       '# run commands against it with:',
       ...Object.entries(registryEnv).map(([key, value]) => `export ${key}=${value}`),
     ];
