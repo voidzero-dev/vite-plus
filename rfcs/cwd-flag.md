@@ -229,11 +229,11 @@ No picker ever appears below the root.
 vp [-C <dir>] <command> [args...]
 ```
 
-### The `-C, --dir <dir>` global flag
+### The `-C <dir>` global flag
 
 - A vp-global flag, parsed before the subcommand like `git -C` / `make -C`, never forwarded to the underlying tool. It works with every vp command.
 - Semantics: run the command exactly as if invoked in `<dir>`. The directory is resolved against the invocation cwd; a missing directory errors with `directory not found`.
-- Name and long form follow pnpm exactly: pnpm's global `-C, --dir <path>` is documented as "Run as if pnpm was started in `<path>` instead of the current working directory", which is this flag's semantics verbatim. pnpm pairs it with `-w, --workspace-root`, which `vp run` already mirrors, so `-C, --dir` completes the pair.
+- The name follows pnpm: its global `-C <path>` is documented as "Run as if pnpm was started in `<path>` instead of the current working directory", which is this flag's semantics verbatim. Short form only in v1 (git style); pnpm's `--dir` long alias can be added compatibly later if wanted.
 - Because it sits before the subcommand, it cannot collide with Vite or tsdown flags, present or future. The subcommands themselves gain zero flags.
 
 ### Positionals and forwarded args: unchanged
