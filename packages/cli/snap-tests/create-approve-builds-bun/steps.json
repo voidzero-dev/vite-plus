@@ -7,15 +7,9 @@
     "ADBLOCK": "1"
   },
   "commands": [
-    {
-      "command": "node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager bun --directory approved-app # --approve-builds runs `bun pm trust` for the gated build script (core-js)",
-      "timeout": 120000
-    },
+    "node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager bun --directory approved-app # --approve-builds runs `bun pm trust` for the gated build script (core-js)",
     "cat approved-app/package.json # core-js recorded under trustedDependencies",
-    {
-      "command": "node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --package-manager bun --directory default-app # default run surfaces the gated build with guidance, leaving it untrusted",
-      "timeout": 120000
-    },
+    "node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --package-manager bun --directory default-app # default run surfaces the gated build with guidance, leaving it untrusted",
     "cat default-app/package.json # no trustedDependencies, the build was not run",
     "cd default-app && node $SNAP_LOCAL_REGISTRY -- vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build",
     "cat default-app/package.json # core-js is now recorded under trustedDependencies"

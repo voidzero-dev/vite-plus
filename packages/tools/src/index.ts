@@ -34,10 +34,16 @@ switch (subcommand) {
     await repackViteTgz();
     break;
   case 'local-npm-registry':
-    // The standalone script parses process.argv.slice(2); drop the subcommand
-    // so `tool local-npm-registry --ps` behaves like invoking it with `node`.
-    process.argv.splice(2, 1);
-    await import('./local-npm-registry.ts');
+    // Spawn the script by path instead of importing it, so the child carries
+    // the canonical `node .../local-npm-registry.ts` command line that the
+    // script's own --ps/--kill maintenance matches.
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const registryScript = fileURLToPath(new URL('./local-npm-registry.ts', import.meta.url));
+    const result = spawnSync(process.execPath, [registryScript, ...process.argv.slice(3)], {
+      stdio: 'inherit',
+    });
+    process.exit(result.status ?? 1);
     break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);

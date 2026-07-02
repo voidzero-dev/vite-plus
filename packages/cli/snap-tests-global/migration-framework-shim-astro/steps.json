@@ -7,10 +7,7 @@
     "VP_SKIP_INSTALL": ""
   },
   "commands": [
-    {
-      "command": "node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected",
-      "timeout": 120000
-    },
+    "node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected",
     "cat src/env.d.ts # check Astro shim was written"
   ]
 }

@@ -1,20 +1,18 @@
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { cpus, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
-import { debuglog, parseArgs, promisify } from 'node:util';
+import { debuglog, parseArgs } from 'node:util';
 
 import { npath } from '@yarnpkg/fslib';
 import { execute } from '@yarnpkg/shell';
 
+import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
 import { isPassThroughEnv, replaceUnstableOutput } from './utils.js';
 
 const debug = debuglog('vite-plus/snap-test');
-
-const execFileAsync = promisify(execFile);
 
 let localVpPackagesPromise: Promise<string> | undefined;
 
@@ -26,60 +24,13 @@ let localVpPackagesPromise: Promise<string> | undefined;
  * published on npm (e.g. on release branches) and exercise the actual local
  * build.
  */
-function packLocalVitePlusPackages(casesDir: string, tempTmpDir: string): Promise<string> {
+function packLocalVitePlusPackagesOnce(casesDir: string, tempTmpDir: string): Promise<string> {
   localVpPackagesPromise ??= (async () => {
-    const repoRoot = resolveRepoRoot(casesDir);
-    for (const sentinel of ['cli/dist/bin.js', 'core/dist']) {
-      const sentinelPath = path.join(repoRoot, 'packages', sentinel);
-      if (!fs.existsSync(sentinelPath)) {
-        throw new Error(
-          `Cannot pack local Vite+ packages: ${sentinelPath} is missing.\n` +
-            'Run `pnpm build` before snap tests that install local Vite+ packages.',
-        );
-      }
-    }
-    // `vite-plus` packs `binding/*.node` (see its `files` field), and created
-    // projects run `vp config` (their `prepare` script) from their OWN
-    // installed vite-plus, so the host binding must exist for the installed
-    // package to be functional.
-    const bindingDir = path.join(repoRoot, 'packages', 'cli', 'binding');
-    const hostBindingPrefix = `vite-plus.${process.platform}-${process.arch}`;
-    const hasHostBinding = fs
-      .readdirSync(bindingDir)
-      .some((entry) => entry.startsWith(hostBindingPrefix) && entry.endsWith('.node'));
-    if (!hasHostBinding) {
-      throw new Error(
-        `Cannot pack local Vite+ packages: no ${hostBindingPrefix}*.node in ${bindingDir}.\n` +
-          'Run `pnpm bootstrap-cli` (or build the NAPI binding) first.',
-      );
-    }
     const destination = path.join(tempTmpDir, 'local-vite-plus-packages');
     fs.mkdirSync(destination, { recursive: true });
     const startTime = Date.now();
-    await execFileAsync(
-      'pnpm',
-      [
-        '--filter',
-        'vite-plus',
-        '--filter',
-        '@voidzero-dev/vite-plus-core',
-        'pack',
-        '--pack-destination',
-        destination,
-      ],
-      { cwd: repoRoot, timeout: 120_000, shell: process.platform === 'win32' },
-    );
-    const packed = fs.readdirSync(destination).filter((entry) => entry.endsWith('.tgz'));
-    if (packed.length !== 2) {
-      throw new Error(
-        `Expected 2 packed local Vite+ packages in ${destination}, found: ${packed.join(', ') || 'none'}`,
-      );
-    }
-    console.log(
-      'Packed local Vite+ packages in %dms: %s',
-      Date.now() - startTime,
-      packed.join(', '),
-    );
+    await packLocalVitePlusPackages(resolveRepoRoot(casesDir), destination);
+    console.log('Packed local Vite+ packages in %dms', Date.now() - startTime);
     return destination;
   })();
   return localVpPackagesPromise;
@@ -552,7 +503,7 @@ interface PlatformFilter {
 
 interface Steps {
   ignoredPlatforms?: (string | PlatformFilter)[];
-  env: Record<string, string>;
+  env?: Record<string, string>;
   commands: (string | Command)[];
   /**
    * If true, the harness packs the checkout's `vite-plus` and
@@ -561,6 +512,8 @@ interface Steps {
    * `node $SNAP_LOCAL_REGISTRY -- ...` then install these local packages at
    * the checkout version instead of resolving it from the npm registry
    * (which would fail on release branches before the version is published).
+   * These fixtures run real cold-cache installs, so the default command
+   * timeout is raised to 120s.
    */
   localVitePlusPackages?: boolean;
   /**
@@ -679,10 +632,6 @@ async function runTestCase(
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
-    // Absolute path to the source casesDir, so fixtures can reference
-    // shared helper scripts under `<casesDir>/.shared/` without
-    // duplicating them into every fixture directory.
-    SNAP_CASES_DIR: casesDir,
     // Absolute path to the local npm registry wrapper, so fixtures can route
     // installs through it (`node $SNAP_LOCAL_REGISTRY -- vp ...`).
     SNAP_LOCAL_REGISTRY: path.join(
@@ -702,7 +651,7 @@ async function runTestCase(
   };
 
   if (steps.localVitePlusPackages) {
-    env['SNAP_LOCAL_VP_PACKAGES_DIR'] = await packLocalVitePlusPackages(casesDir, tempTmpDir);
+    env['SNAP_LOCAL_VP_PACKAGES_DIR'] = await packLocalVitePlusPackagesOnce(casesDir, tempTmpDir);
   }
 
   // Unset VP_NODE_VERSION to prevent `vp env use` session overrides
@@ -764,7 +713,9 @@ async function runTestCase(
             match: async () => [],
           },
         }),
-        setTimeout(cmd.timeout ?? 50 * 1000),
+        // Fixtures that install local Vite+ packages run real cold-cache
+        // installs, so their commands get a higher default ceiling.
+        setTimeout(cmd.timeout ?? (steps.localVitePlusPackages ? 120 : 50) * 1000),
       ]);
 
       await outputStream.close();

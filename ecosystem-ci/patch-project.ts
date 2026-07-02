@@ -1,10 +1,10 @@
 import { execSync, spawn } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
-import { ecosystemCiDir, tgzDir } from './paths.ts';
+import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
 const projects = Object.keys(repos);
@@ -26,15 +26,7 @@ const cli = process.env.VP_CLI_BIN ?? 'vp';
 // The packed local build in tmp/tgz is served through a local npm registry
 // (local-npm-registry.ts), so vp migrate pins and installs the checkout's
 // own version through the standard registry code paths, with no `file:` specs.
-// The e2e build job pins packages/cli to 0.0.0 before `pnpm pack`; a local
-// run can serve whatever version the checkout carries.
-const vitePlusVersion = readdirSync(tgzDir)
-  .map((entry) => /^vite-plus-(\d.*)\.tgz$/.exec(entry)?.[1])
-  .find(Boolean);
-if (!vitePlusVersion) {
-  console.error(`No vite-plus-<version>.tgz found in ${tgzDir}`);
-  process.exit(1);
-}
+const vitePlusVersion = vitePlusTgzVersion();
 
 const registryScript = join(
   import.meta.dirname,
@@ -166,20 +158,23 @@ const vitestOverrides = {
 // publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION. pnpm >= 10.6
 // only reads the PNPM_CONFIG_* spelling; older pnpm reads the lowercase form.
 //
-// dify is the exception: it sets `resolutionMode: time-based`, and defining a
-// minimumReleaseAge (even 0, via any env spelling) activates pnpm's
-// resolution-policy engine, which vp's bundled pnpm cannot handle
-// (ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED, no
-// handleResolutionPolicyViolations callback). Its `minimumReleaseAge:` key
-// was already removed above, so with no gate env the policy stays inactive
-// and installs work.
-const releaseAgeEnv =
-  project === 'dify'
-    ? {}
-    : {
-        pnpm_config_minimum_release_age: '0',
-        PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0',
-      };
+// Projects with `resolutionMode: time-based` (currently dify) are the
+// exception: defining a minimumReleaseAge (even 0, via any env spelling)
+// activates pnpm's resolution-policy engine there, which vp's bundled pnpm
+// cannot handle (ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED, no
+// handleResolutionPolicyViolations callback wired). Their `minimumReleaseAge:`
+// key is stripped by the per-project patches above, so with no gate env the
+// policy stays inactive and installs work.
+const workspaceYamlPath = join(repoRoot, 'pnpm-workspace.yaml');
+const timeBasedResolution =
+  existsSync(workspaceYamlPath) &&
+  /^resolutionMode:\s*time-based/m.test(readFileSync(workspaceYamlPath, 'utf-8'));
+const releaseAgeEnv = timeBasedResolution
+  ? {}
+  : {
+      pnpm_config_minimum_release_age: '0',
+      PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0',
+    };
 
 const migrateEnv: NodeJS.ProcessEnv = {
   ...process.env,

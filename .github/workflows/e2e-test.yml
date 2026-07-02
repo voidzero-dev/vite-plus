@@ -111,14 +111,13 @@ jobs:
           mkdir -p tmp/tgz
           # patch-project.ts serves these tgz through a local npm registry
           # (packages/tools/src/local-npm-registry.ts), so `vp migrate` pins
-          # and installs them like a real release. Pin both packages to 0.0.0
-          # so a correctly installed local build is always distinguishable
-          # from any published version (verify-install.ts asserts it), even on
-          # a release commit that leaves packages/{core,cli} at a published
-          # version. The bun-only vite alias tgz that the old file:-override
-          # flow needed (bun peer-dep strictness, oven-sh/bun#8406) is gone:
-          # through the registry, bun installs the standard
-          # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias.
+          # and installs them like a real release, with every package manager
+          # (including bun) resolving the standard
+          # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
+          # both packages to 0.0.0 so a correctly installed local build is
+          # always distinguishable from any published version
+          # (verify-install.ts asserts it), even on a release commit that
+          # leaves packages/{core,cli} at a published version.
           (cd packages/core && npm pkg set version=0.0.0)
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..

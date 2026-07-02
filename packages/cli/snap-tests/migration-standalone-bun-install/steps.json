@@ -6,10 +6,7 @@
     "CI": ""
   },
   "commands": [
-    {
-      "command": "node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`",
-      "timeout": 120000
-    },
+    "node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`",
     "cat package.json # vite/vite-plus stay concrete (vite via the @voidzero-dev/vite-plus-core alias); NO top-level catalog field is written"
   ]
 }

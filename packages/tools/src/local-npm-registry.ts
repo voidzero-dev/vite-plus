@@ -39,6 +39,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import {
   createServer,
   type IncomingMessage,
@@ -50,6 +51,8 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
+
+import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
 
 interface PackageManifest {
   name: string;
@@ -158,50 +161,9 @@ if (!serve && command.length === 0) {
 // The script lives at `packages/tools/src/`, so the repo root is three up.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-// Pack the checkout's publishable Vite+ packages so they can be served at the
-// checkout version. Mirrors the snap harness's `packLocalVitePlusPackages`,
-// for standalone (dev / e2e) invocations that don't run under the harness.
-function packLocalVitePlusPackages(): string {
-  for (const sentinel of ['cli/dist/bin.js', 'core/dist']) {
-    if (!existsSync(path.join(repoRoot, 'packages', sentinel))) {
-      throw new Error(
-        `Cannot pack local Vite+ packages: packages/${sentinel} is missing. Run \`pnpm build\` first.`,
-      );
-    }
-  }
-  const bindingDir = path.join(repoRoot, 'packages', 'cli', 'binding');
-  const hostBindingPrefix = `vite-plus.${process.platform}-${process.arch}`;
-  const hasHostBinding = readdirSync(bindingDir).some(
-    (entry) => entry.startsWith(hostBindingPrefix) && entry.endsWith('.node'),
-  );
-  if (!hasHostBinding) {
-    throw new Error(
-      `Cannot pack local Vite+ packages: no ${hostBindingPrefix}*.node in ${bindingDir}. ` +
-        'Run `pnpm bootstrap-cli` (or build the NAPI binding) first.',
-    );
-  }
-  const destination = mkdtempSync(path.join(tmpdir(), 'vp-local-registry-pack-'));
-  const result = spawnSync(
-    'pnpm',
-    [
-      '--filter',
-      'vite-plus',
-      '--filter',
-      '@voidzero-dev/vite-plus-core',
-      'pack',
-      '--pack-destination',
-      destination,
-    ],
-    { cwd: repoRoot, stdio: ['ignore', 'ignore', 'inherit'], shell: process.platform === 'win32' },
-  );
-  if (result.status !== 0) {
-    throw new Error(`pnpm pack failed with exit code ${result.status}`);
-  }
-  return destination;
-}
-
 if (pack && !packagesDir) {
-  packagesDir = packLocalVitePlusPackages();
+  packagesDir = mkdtempSync(path.join(tmpdir(), 'vp-local-registry-pack-'));
+  await packLocalVitePlusPackages(repoRoot, packagesDir);
 }
 
 const manifest: Record<string, unknown> = existsSync('./mock-manifest.json')
@@ -210,7 +172,10 @@ const manifest: Record<string, unknown> = existsSync('./mock-manifest.json')
 
 // Proxy through the user's configured registry (e.g. a local mirror in
 // `~/.npmrc`) when there is one, so local runs stay as fast as direct
-// installs. CI has no user registry config and uses npmjs.
+// installs. CI has no user registry config and uses npmjs. Deliberately
+// reads only `~/.npmrc` and NOT registry env vars (unlike the CLI's
+// getNpmRegistry): a leftover NPM_CONFIG_REGISTRY export from a previous
+// `--serve` session would otherwise become this server's own upstream.
 function resolveUpstreamRegistry(): string {
   try {
     const npmrc = readFileSync(path.join(homedir(), '.npmrc'), 'utf-8');
@@ -306,8 +271,10 @@ if (packagesDir) {
   }
 }
 
-function rewriteRegistry(value: unknown, registry: string): unknown {
-  return JSON.parse(JSON.stringify(value).replaceAll('{REGISTRY}', registry));
+// Serialize a manifest/packument with its `{REGISTRY}` placeholders (only our
+// local tarball URLs carry them) pointed at the live server address.
+function serializeForRegistry(value: unknown, registry: string): string {
+  return JSON.stringify(value).replaceAll('{REGISTRY}', registry);
 }
 
 function fetchUpstreamPackument(name: string): Promise<Packument | null> {
@@ -441,13 +408,15 @@ const server = createServer(async (req, res) => {
       address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
     const packument = localPackuments.has(key) ? await resolveLocalPackument(key) : manifest[key];
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(rewriteRegistry(packument, registry)));
+    res.end(serializeForRegistry(packument, registry));
     return;
   }
   const tarMatch = key.match(/\/-\/([^/]+\.tgz)$/);
   if (tarMatch) {
     try {
-      const bytes = readFileSync(
+      // Async read: local tarballs run tens of MB, and a synchronous read
+      // would stall the proxied requests of the same in-flight install.
+      const bytes = await readFile(
         localTarballs.get(tarMatch[1]) ?? path.resolve('./tarballs', tarMatch[1]),
       );
       res.writeHead(200, { 'content-type': 'application/octet-stream' });

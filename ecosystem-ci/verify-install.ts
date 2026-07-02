@@ -2,14 +2,15 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
+import { vitePlusTgzVersion } from './paths.ts';
+
 const require = createRequire(`${process.cwd()}/`);
 
-// The ecosystem-ci pack step pins packages/cli to 0.0.0 before `pnpm pack`,
-// and patch-project.ts serves that build through the local registry, so a
-// correctly installed local build always reports 0.0.0, never a published
-// registry version. A local (non-CI) run serves whatever version the checkout
-// carries; pass it via VP_EXPECTED_VERSION.
-const expectedVersion = process.env.VP_EXPECTED_VERSION ?? '0.0.0';
+// patch-project.ts serves the packed tgz through the local registry, so a
+// correctly installed local build always reports the tgz version (0.0.0 on
+// CI, where the pack step pins it precisely so a local build is never
+// mistaken for a published registry version).
+const expectedVersion = vitePlusTgzVersion();
 
 try {
   const pkgPath = require.resolve('vite-plus/package.json');
