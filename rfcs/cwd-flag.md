@@ -7,7 +7,7 @@ Add a global `-C <dir>` flag to vp, then use it to fix the app-command experienc
 1. **`-C <dir>` global flag** (the feature): for every vp command, `vp -C <dir> <cmd>` behaves exactly like `cd <dir> && vp <cmd>`, following the `git -C` / `make -C` convention: the first-class "run there" form vp currently lacks. Positional semantics stay untouched: `vp dev <path>` keeps upstream Vite semantics (`root` only), and `vp pack` positionals stay tsdown entries.
 2. **App-command UX built on `-C`**: running `vp dev` / `vp build` / `vp preview` / `vp pack` bare at a workspace root elicits the missing target instead of silently running against the root: an interactive fuzzy package picker in a TTY, a `defaultPackage` config for repos with one blessed target, and a clear listing plus exit 1 when non-interactive. All three are defined as an implicit `-C <dir>`.
 
-In the common flows users never type `-C`: bare `vp dev` at the root goes through the picker or `defaultPackage`, and inside a package it runs there as today. `-C` is the explicit, teachable form underneath. The commands stay singular: `vp dev` still starts exactly one Vite dev server. Fan-out stays with `vp run`.
+In the common flows users never type `-C`: bare `vp dev` at the root goes through the picker or `defaultPackage`, and inside a package it runs there as today. `-C` is the explicit, teachable form underneath. The commands stay singular: `vp dev` still starts exactly one Vite dev server in one directory. Running a task across many packages at once remains the job of `vp run` (`-r`, `--filter`).
 
 ## Motivation
 
@@ -311,7 +311,7 @@ Below the root the cwd already identifies the project, so prompting would be noi
 
 ### Elicitation scope
 
-`-C` is global and works with every command. The elicitation behaviors (picker, `defaultPackage`, root error) apply only to the single-target app commands, because only they are ambiguous at the root. Tree-scoped commands (`test`, `lint`, `fmt`, `check`) mean "the whole repo" there, which is their desired behavior. Workspace-state commands (`install`, `add`, `outdated`, ...) have the root as their natural home. Orchestrators (`run`, `exec`) own their selection models and remain the fan-out tools. A future command joins the elicitation set exactly when its subject is one package directory.
+`-C` is global and works with every command. The elicitation behaviors (picker, `defaultPackage`, root error) apply only to the single-target app commands, because only they are ambiguous at the root. Tree-scoped commands (`test`, `lint`, `fmt`, `check`) mean "the whole repo" there, which is their desired behavior. Workspace-state commands (`install`, `add`, `outdated`, ...) have the root as their natural home. Orchestrators (`run`, `exec`) own their selection models and remain the way to run one task across many packages. A future command joins the elicitation set exactly when its subject is one package directory.
 
 ## Implementation Architecture
 
@@ -359,11 +359,11 @@ How comparable tools name "the member a root-level command targets when none is 
 | Ionic CLI | `defaultProject` | active; root config with a `projects` map |
 | Nx | `defaultProject` | deprecated in favor of `NX_DEFAULT_PROJECT` env var |
 | Angular CLI | `defaultProject` | deprecated in favor of cwd inference |
-| Cargo | `workspace.default-members` | plural, fan-out semantics |
+| Cargo | `workspace.default-members` | plural: root `cargo build` builds all listed members |
 | Salesforce DX | `default: true` on the member | marker pattern; needs member enumeration |
 | Vercel / Netlify / Amplify | `rootDirectory` / `base` / `appRoot` | per-app deploy config, not a default among many |
 | GitHub Actions | `defaults.run.working-directory` | names the mechanism (cwd) |
 
 The pattern is `default` plus the tool's own noun for the unit: Angular, Nx, and Ionic say "project", Cargo says "members", Salesforce says "package directories". vp's noun is "package" (the picker, `vp run` docs, `vite_workspace`, pnpm vocabulary), hence `defaultPackage`.
 
-Rejected: `defaultProject` (collides with Vitest `test.projects`, and the picker says "package"), `defaultWorkspace` ("workspace" means the whole monorepo in vp/pnpm vocabulary), `defaultMembers` (fan-out plural, meaningless without a workspace), `appRoot`/`rootDirectory`/`base` (collide with Vite's `root`/`base` options), member markers (need enumeration, impossible without workspace metadata). The Angular and Nx deprecations do not transfer: cwd inference is built into the resolution order, and per-environment flexibility is open question 2.
+Rejected: `defaultProject` (collides with Vitest `test.projects`, and the picker says "package"), `defaultWorkspace` ("workspace" means the whole monorepo in vp/pnpm vocabulary), `defaultMembers` (plural, implies running in many packages; meaningless without a workspace), `appRoot`/`rootDirectory`/`base` (collide with Vite's `root`/`base` options), member markers (need enumeration, impossible without workspace metadata). The Angular and Nx deprecations do not transfer: cwd inference is built into the resolution order, and per-environment flexibility is open question 2.
