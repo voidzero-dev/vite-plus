@@ -235,15 +235,17 @@ After this RFC the following holds and is documented:
 vp <cmd> <path> [args...]  ===  cd <path> && vp <cmd> [args...]
 ```
 
-for `cmd` in `dev`, `build`, `preview`, `pack`. Concretely: the child process spawn cwd is `<path>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, relative CLI args, and local `vite-plus` resolution all behave as if the user had `cd`'d. The parent `vp` process never calls `process.chdir()`.
+for `cmd` in `dev`, `build`, `preview`, `pack`. Concretely: the child process spawn cwd is `<path>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The parent `vp` process never calls `process.chdir()`.
+
+The local `vite-plus` CLI itself is still resolved from the invocation directory, before the target directory applies. The invariant therefore assumes a workspace uses a single Vite+ version, which is already the supported monorepo model; with one version installed, both forms resolve the same CLI and the equivalence holds end to end.
 
 ### Picker contents
 
-- One row per workspace package: package name plus relative path, sorted by path.
+- One row per workspace package: package name plus relative path.
+- All workspace packages are listed; nothing is filtered out. Ranking favors likely targets: packages that look runnable for the command (a `vite.config.*` or `index.html` for `dev`/`build`/`preview`, a pack config or library entry for `pack`) sort above the rest, then by path. In a large monorepo with many libraries, `vp dev` shows the apps at the top while every package stays reachable by search, so a wrong relevance guess costs ranking, not reachability.
 - Fuzzy search over name and path via `vite_select::fuzzy_match`, paging identical to the task picker.
-- v1 lists **all** workspace packages. Filtering or annotating rows by command relevance (has `vite.config.*` / `index.html` for `dev`, has pack config for `pack`) is a possible refinement, kept out of v1 to avoid guessing wrong and hiding valid targets.
 - If the workspace root itself looks runnable (it has a `vite.config.*` or `index.html`), it appears as a `(workspace root)` entry, mirroring the task picker's labeling. This keeps today's "run at root anyway" behavior one keystroke away.
-- If exactly one candidate exists, the picker auto-selects it, printing only the `Selected package:` line and the tip.
+- If exactly one likely-runnable package exists, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
 ### `defaultProject` config
 
@@ -302,7 +304,7 @@ No routing changes. `crates/vite_global_cli` already delegates dev/build/preview
 
 ## Compatibility
 
-- `vp dev <path>` / `vp build <path>` change behavior in the cwd-dependent edge cases (cwd reads in configs and plugins, relative CLI args, local install resolution). The new behavior matches what `cd <path> && vp <cmd>` already does, which is the semantics users report expecting; the delta is exactly the set of cases currently reported as bugs. Ship in a minor with a changelog note.
+- `vp dev <path>` / `vp build <path>` change behavior in the cwd-dependent edge cases (cwd reads in configs and plugins, relative CLI args). The new behavior matches what `cd <path> && vp <cmd>` already does, which is the semantics users report expecting; the delta is exactly the set of cases currently reported as bugs. Local CLI resolution is unchanged (still from the invocation directory; see the equivalence invariant). Ship in a minor with a changelog note.
 - `vp pack <path>` with a directory changes from an error (or nonsense entry glob) to packing that directory. File and glob entries are unaffected.
 - Running the app commands at a workspace root changes from "silently serve or build the root" to picker / config / clear error. Monorepos that intentionally run an app at the root keep working when the root has a `vite.config.*` or `index.html` (it appears as a picker entry, and setting `defaultProject: '.'` restores the old behavior unconditionally).
 - Non-workspace projects and sub-package invocations are unchanged.
@@ -320,7 +322,7 @@ The interactive picker gets pty snapshot coverage in the `vite_task` repo style 
 
 ## Open Questions
 
-1. Should the picker filter to command-relevant packages (v1 lists all)?
+1. Picker relevance ranking is in v1 (likely-runnable packages sort first, nothing hidden). Is outright filtering of clearly non-runnable packages ever wanted, or does ranking plus search suffice?
 2. Config key naming: `defaultProject` vs `defaultApp` vs a `workspace.*` namespace.
 3. Should `vp test` join? Probably not: Vitest already has first-class `projects` semantics at the root.
 4. Exact CI/non-interactive gate: same TTY check as the `vp run` picker, plus the `CI` environment check used by the global command picker?
