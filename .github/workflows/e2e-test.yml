@@ -110,7 +110,7 @@ jobs:
         run: |
           mkdir -p tmp/tgz
           # patch-project.ts serves these tgz through a local npm registry
-          # (packages/tools/src/local-npm-registry.mjs), so `vp migrate` pins
+          # (packages/tools/src/local-npm-registry.ts), so `vp migrate` pins
           # and installs them like a real release. Pin both packages to 0.0.0
           # so a correctly installed local build is always distinguishable
           # from any published version (verify-install.ts asserts it), even on

@@ -24,8 +24,8 @@ const cwd = directory ? join(repoRoot, directory) : repoRoot;
 const cli = process.env.VP_CLI_BIN ?? 'vp';
 
 // The packed local build in tmp/tgz is served through a local npm registry
-// (local-npm-registry.mjs), so vp migrate pins and installs the checkout's
-// own version through the standard registry code paths — no `file:` specs.
+// (local-npm-registry.ts), so vp migrate pins and installs the checkout's
+// own version through the standard registry code paths, with no `file:` specs.
 // The e2e build job pins packages/cli to 0.0.0 before `pnpm pack`; a local
 // run can serve whatever version the checkout carries.
 const vitePlusVersion = readdirSync(tgzDir)
@@ -42,7 +42,7 @@ const registryScript = join(
   'packages',
   'tools',
   'src',
-  'local-npm-registry.mjs',
+  'local-npm-registry.ts',
 );
 // Detach the server so it can outlive this script on CI: the lockfiles
 // written below reference its tarball URLs, and later workflow steps (the

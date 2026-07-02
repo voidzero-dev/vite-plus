@@ -21,7 +21,7 @@ let localVpPackagesPromise: Promise<string> | undefined;
 /**
  * Pack the checkout's `vite-plus` and `@voidzero-dev/vite-plus-core` once per
  * run, for fixtures with `localVitePlusPackages: true`. Commands routed
- * through `local-npm-registry.mjs` serve these tarballs at the checkout
+ * through `local-npm-registry.ts` serve these tarballs at the checkout
  * version, so real package-manager installs work without the version being
  * published on npm (e.g. on release branches) and exercise the actual local
  * build.
@@ -690,7 +690,7 @@ async function runTestCase(
       'packages',
       'tools',
       'src',
-      'local-npm-registry.mjs',
+      'local-npm-registry.ts',
     ),
     // Global CLI snap tests execute the Rust binary from --bin-dir, but the JS
     // entry should come from this checkout instead of a stale ~/.vite-plus install.

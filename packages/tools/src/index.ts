@@ -33,10 +33,16 @@ switch (subcommand) {
     const { repackViteTgz } = await import('./repack-vite-tgz.ts');
     await repackViteTgz();
     break;
+  case 'local-npm-registry':
+    // The standalone script parses process.argv.slice(2); drop the subcommand
+    // so `tool local-npm-registry --ps` behaves like invoking it with `node`.
+    process.argv.splice(2, 1);
+    await import('./local-npm-registry.ts');
+    break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, repack-vite-tgz',
+      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, repack-vite-tgz, local-npm-registry',
     );
     process.exit(1);
 }

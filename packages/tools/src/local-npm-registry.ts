@@ -6,6 +6,8 @@
 // install the checkout's own version even when it is not published on npm,
 // with no `file:` specs, pkg.pr.new publish, or registry-bridge round-trip.
 //
+// Runs directly with `node` (erasable-syntax TypeScript, no loader needed).
+//
 // Used by:
 // - snap tests: the harness packs the checkout once per run (see
 //   `localVitePlusPackages` in `snap-test.ts`) and fixtures wrap commands with
@@ -17,12 +19,13 @@
 //   through the standard registry code paths.
 // - local development: run `vp migrate` / `vp create` against the checkout
 //   from any project directory without publishing anything:
-//     node <repo>/packages/tools/src/local-npm-registry.mjs --pack -- vp migrate --no-interactive
+//     node <repo>/packages/tools/src/local-npm-registry.ts --pack -- vp migrate --no-interactive
 //   or keep a server running and export the printed env for repeated runs:
-//     node <repo>/packages/tools/src/local-npm-registry.mjs --pack --serve
+//     node <repo>/packages/tools/src/local-npm-registry.ts --pack --serve
 //
 // Usage:
-//   node local-npm-registry.mjs [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]]
+//   node local-npm-registry.ts [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]]
+//   node local-npm-registry.ts --ps | --kill
 //
 //   --packages-dir <dir>  serve every *.tgz in <dir> (defaults to
 //                         $SNAP_LOCAL_VP_PACKAGES_DIR when set)
@@ -30,16 +33,29 @@
 //                         @voidzero-dev/vite-plus-core into a temp dir first
 //   --serve               keep the server running and print the registry URL
 //                         and env exports instead of wrapping a command
+//   --ps                  list running local registry processes
+//   --kill                kill them all and remove their leftover temp caches
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { createServer } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type OutgoingHttpHeaders,
+  type ServerResponse,
+} from 'node:http';
 import { Agent as HttpsAgent, get as httpsGet } from 'node:https';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
+
+interface PackageManifest {
+  name: string;
+  version: string;
+  [key: string]: unknown;
+}
 
 const args = process.argv.slice(2);
 const separatorIndex = args.indexOf('--');
@@ -49,6 +65,8 @@ const command = separatorIndex === -1 ? [] : args.slice(separatorIndex + 1);
 let packagesDir = process.env.SNAP_LOCAL_VP_PACKAGES_DIR;
 let pack = false;
 let serve = false;
+let listProcesses = false;
+let killProcesses = false;
 for (let i = 0; i < flags.length; i++) {
   if (flags[i] === '--packages-dir' && flags[i + 1]) {
     packagesDir = flags[++i];
@@ -56,14 +74,83 @@ for (let i = 0; i < flags.length; i++) {
     pack = true;
   } else if (flags[i] === '--serve') {
     serve = true;
+  } else if (flags[i] === '--ps') {
+    listProcesses = true;
+  } else if (flags[i] === '--kill') {
+    killProcesses = true;
   } else {
     console.error(`local-npm-registry: unknown option ${flags[i]}`);
     process.exit(2);
   }
 }
+
+// `--ps` / `--kill`: troubleshoot registry processes left behind by
+// interrupted runs (the wrapper and --serve clean up after themselves, but a
+// hard kill skips the handlers). A registry process is a `node` executable
+// running this script; requiring `node` as the executing binary (start of
+// the command line or preceded by a path separator) keeps shells whose
+// command STRING merely mentions the script (`sh -c 'node ...'`, this very
+// invocation's pnpm wrapper) out of the kill list.
+const REGISTRY_PROCESS_RE = /(^|[/\\])node(\.exe)?['"]?\s[^\n]*local-npm-registry\.ts/;
+
+function findRegistryProcesses(): { pid: number; command: string }[] {
+  const result =
+    process.platform === 'win32'
+      ? spawnSync(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-Command',
+            'Get-CimInstance Win32_Process -Filter "Name = \'node.exe\'" | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }',
+          ],
+          { encoding: 'utf8' },
+        )
+      : spawnSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' });
+  return (result.stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .map((line) => {
+      const space = line.indexOf(' ');
+      return { pid: Number(line.slice(0, space)), command: line.slice(space + 1).trim() };
+    })
+    .filter(
+      ({ pid, command: cmd }) =>
+        Number.isFinite(pid) && pid !== process.pid && REGISTRY_PROCESS_RE.test(cmd),
+    );
+}
+
+if (listProcesses || killProcesses) {
+  const processes = findRegistryProcesses();
+  const lines = processes.map(
+    ({ pid, command: cmd }) => `${killProcesses ? 'killed ' : ''}${pid} ${cmd}`,
+  );
+  if (processes.length === 0) {
+    lines.push('No local registry processes running');
+  }
+  if (killProcesses) {
+    for (const { pid } of processes) {
+      try {
+        process.kill(pid);
+      } catch {
+        // already gone
+      }
+    }
+    let removed = 0;
+    for (const entry of readdirSync(tmpdir())) {
+      if (entry.startsWith('vp-local-registry-')) {
+        rmSync(path.join(tmpdir(), entry), { recursive: true, force: true });
+        removed++;
+      }
+    }
+    lines.push(`Removed ${removed} leftover temp cache dir(s)`);
+  }
+  process.stdout.write(`${lines.join('\n')}\n`);
+  process.exit(0);
+}
+
 if (!serve && command.length === 0) {
   console.error(
-    'usage: node local-npm-registry.mjs [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]]',
+    'usage: node local-npm-registry.ts [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]] | --ps | --kill',
   );
   process.exit(2);
 }
@@ -74,7 +161,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 // Pack the checkout's publishable Vite+ packages so they can be served at the
 // checkout version. Mirrors the snap harness's `packLocalVitePlusPackages`,
 // for standalone (dev / e2e) invocations that don't run under the harness.
-function packLocalVitePlusPackages() {
+function packLocalVitePlusPackages(): string {
   for (const sentinel of ['cli/dist/bin.js', 'core/dist']) {
     if (!existsSync(path.join(repoRoot, 'packages', sentinel))) {
       throw new Error(
@@ -117,14 +204,14 @@ if (pack && !packagesDir) {
   packagesDir = packLocalVitePlusPackages();
 }
 
-const manifest = existsSync('./mock-manifest.json')
-  ? JSON.parse(readFileSync('./mock-manifest.json', 'utf-8'))
+const manifest: Record<string, unknown> = existsSync('./mock-manifest.json')
+  ? (JSON.parse(readFileSync('./mock-manifest.json', 'utf-8')) as Record<string, unknown>)
   : {};
 
 // Proxy through the user's configured registry (e.g. a local mirror in
 // `~/.npmrc`) when there is one, so local runs stay as fast as direct
 // installs. CI has no user registry config and uses npmjs.
-function resolveUpstreamRegistry() {
+function resolveUpstreamRegistry(): string {
   try {
     const npmrc = readFileSync(path.join(homedir(), '.npmrc'), 'utf-8');
     const registryLine = npmrc.split('\n').find((line) => line.trim().startsWith('registry='));
@@ -147,7 +234,7 @@ const upstreamAgent = new HttpsAgent({ keepAlive: true, maxSockets: 64 });
 
 // Minimal ustar walk. The manifest is always the `package/package.json` entry
 // in a pnpm-packed tarball, so long-name (pax header) handling is unnecessary.
-function readPackageJsonFromTarball(tgzBytes, sourcePath) {
+function readPackageJsonFromTarball(tgzBytes: Buffer, sourcePath: string): PackageManifest {
   const tar = gunzipSync(tgzBytes);
   for (let offset = 0; offset + 512 <= tar.length; ) {
     const rawName = tar.subarray(offset, offset + 100).toString();
@@ -165,14 +252,16 @@ function readPackageJsonFromTarball(tgzBytes, sourcePath) {
         8,
       ) || 0;
     if (name === 'package/package.json') {
-      return JSON.parse(tar.subarray(offset + 512, offset + 512 + size).toString());
+      return JSON.parse(
+        tar.subarray(offset + 512, offset + 512 + size).toString(),
+      ) as PackageManifest;
     }
     offset += 512 + Math.ceil(size / 512) * 512;
   }
   throw new Error(`package/package.json not found in ${sourcePath}`);
 }
 
-const localTarballs = new Map(); // tarball basename -> absolute path
+const localTarballs = new Map<string, string>(); // tarball basename -> absolute path
 // Far in the past so package-manager minimum-release-age gates never
 // quarantine the locally served versions.
 const LOCAL_PACKAGE_TIME = '2020-01-01T00:00:00.000Z';
@@ -209,7 +298,7 @@ if (packagesDir) {
   }
 }
 
-function rewriteRegistry(value, registry) {
+function rewriteRegistry(value: unknown, registry: string): unknown {
   return JSON.parse(JSON.stringify(value).replaceAll('{REGISTRY}', registry));
 }
 
@@ -219,24 +308,24 @@ function rewriteRegistry(value, registry) {
 // rejects any re-encoded body, so faithful streaming is what lets bun installs
 // work through the proxy (pnpm fetches tarballs from the upstream URL directly,
 // so it was never affected).
-function proxyToUpstream(req, res) {
+function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
   // Stream errors can fire after headers are already sent (e.g. the upstream
   // connection resets mid-tarball), so guard against a second writeHead.
-  const fail = (error) => {
+  const fail = (error: Error) => {
     if (!res.headersSent) {
       res.writeHead(502);
     }
     res.end(`proxy error: ${error.message}`);
   };
-  const fetchUrl = (url, redirectsLeft) => {
+  const fetchUrl = (url: string, redirectsLeft: number) => {
     // Tarballs: `accept-encoding: identity` keeps mirrors/CDNs from wrapping
     // them in an extra content-encoding layer, which some package managers
     // cannot unwrap when verifying/extracting. Metadata: honor the client's
-    // own accept-encoding — the body is streamed through verbatim with its
+    // own accept-encoding: the body is streamed through verbatim with its
     // content-encoding header, so it must be exactly what the client can
     // decode (package managers ask for gzip, which keeps huge packuments like
     // vite/typescript fast; vp's Rust registry client asks for identity).
-    const headers = {
+    const headers: OutgoingHttpHeaders = {
       accept: req.headers.accept ?? 'application/json',
       'accept-encoding': req.url?.endsWith('.tgz')
         ? 'identity'
@@ -252,18 +341,18 @@ function proxyToUpstream(req, res) {
         fetchUrl(new URL(upstream.headers.location, url).toString(), redirectsLeft - 1);
         return;
       }
-      const headers = {};
+      const responseHeaders: OutgoingHttpHeaders = {};
       // Forward `location` too, so a 3xx we stop following (or one with no
       // location to follow) still reaches the client with its redirect target.
       for (const name of ['content-type', 'content-encoding', 'content-length', 'location']) {
         if (upstream.headers[name] !== undefined) {
-          headers[name] = upstream.headers[name];
+          responseHeaders[name] = upstream.headers[name];
         }
       }
       // Default a missing content-type (parity with the prior fetch-based proxy)
       // so clients that key off it still recognize a proxied tarball.
-      headers['content-type'] ??= 'application/octet-stream';
-      res.writeHead(status, headers);
+      responseHeaders['content-type'] ??= 'application/octet-stream';
+      res.writeHead(status, responseHeaders);
       // `pipe` does not forward source errors, so listen on the response stream
       // directly; otherwise a mid-stream upstream error is uncaught and crashes
       // the mock server.
@@ -314,7 +403,7 @@ const server = createServer((req, res) => {
 // its global folder, and bun's install cache trusts name@version without
 // refetching, so a later run would reuse dead URLs or stale local package
 // bytes. Give each run throwaway caches instead.
-function buildRegistryEnv(registry) {
+function buildRegistryEnv(registry: string): Record<string, string> {
   return {
     NPM_CONFIG_REGISTRY: registry,
     npm_config_registry: registry,
@@ -326,7 +415,7 @@ function buildRegistryEnv(registry) {
   };
 }
 
-function cleanupRegistryEnv(env) {
+function cleanupRegistryEnv(env: Record<string, string>): void {
   rmSync(env.YARN_GLOBAL_FOLDER, { recursive: true, force: true });
   rmSync(env.BUN_INSTALL_CACHE_DIR, { recursive: true, force: true });
 }
@@ -365,7 +454,7 @@ server.listen(0, '127.0.0.1', () => {
     return;
   }
 
-  const [cmd, ...cmdArgs] = command;
+  const [cmd, ...cmdArgs] = command as [string, ...string[]];
   const child = spawn(cmd, cmdArgs, {
     env: { ...process.env, ...registryEnv },
     stdio: 'inherit',
