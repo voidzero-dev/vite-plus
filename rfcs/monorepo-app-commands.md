@@ -30,7 +30,27 @@ Nothing errors, nothing guides the user toward `vp dev apps/web` or `vp run`.
 
 **2. `vp dev <path>` and `cd <path> && vp dev` are not equivalent.**
 
-The positional is forwarded verbatim to Vite's `[root]`, which re-bases config lookup and `.env` loading, but `process.cwd()` of the Vite process stays at the invocation directory. So `process.cwd()` reads in configs and plugins, relative CLI arguments, and local `vite-plus` resolution all differ between the two forms. The only reliable form is `cd <path> && vp dev`, which undercuts `vp dev <path>` as the documented mechanism (`docs/guide/monorepo.md`, "App Commands").
+The positional is forwarded verbatim to Vite's `[root]`, which re-bases config lookup and `.env` loading, but `process.cwd()` of the Vite process stays at the invocation directory. Any cwd-relative read in a config or plugin diverges even though `root` points at the right app:
+
+```ts
+// apps/admin/vite.config.ts
+const cert = fs.readFileSync(path.resolve('certs/dev.pem')) // cwd-relative
+```
+
+```
+$ cd apps/admin && vp dev          # cwd = apps/admin, cert found
+
+  VITE+ v0.2.2
+
+  ➜  Local:   http://localhost:5173/
+
+$ vp dev apps/admin                # root is right, cwd is still the repo root
+failed to load config from /acme/apps/admin/vite.config.ts
+error when starting dev server:
+Error: ENOENT: no such file or directory, open '/acme/certs/dev.pem'
+```
+
+Relative CLI arguments and local `vite-plus` resolution differ the same way. The only reliable form is `cd <path> && vp dev`, which undercuts `vp dev <path>` as the documented mechanism (`docs/guide/monorepo.md`, "App Commands").
 
 **3. `vp pack <path>` does not work for directories.**
 
@@ -46,28 +66,6 @@ error: Build failed with 1 error:
 ```
 
 Directory targeting exists only via `--root` / `-W` / `-F`, inconsistent with `vp dev <path>`.
-
-**4. Neither Vite's `root` option nor in-process `chdir` can close the gap.**
-
-Vite resolves `root` without touching `process.cwd()`, by design. So a cwd-relative read in a config or plugin diverges even when `root` points at the right app:
-
-```ts
-// apps/admin/vite.config.ts
-const cert = fs.readFileSync(path.resolve('certs/dev.pem')) // cwd-relative
-```
-
-```
-$ cd apps/admin && vp dev          # cwd = apps/admin, cert found
-
-  VITE v7.1.4  ready in 298 ms
-
-$ vp dev apps/admin                # root is right, cwd is still the repo root
-failed to load config from /acme/apps/admin/vite.config.ts
-error when starting dev server:
-Error: ENOENT: no such file or directory, open '/acme/certs/dev.pem'
-```
-
-Calling `process.chdir()` in the CLI process would close the gap but is a global mutation that leaks into everything sharing the process. The way out: `vp` never runs Vite or tsdown in-process; the NAPI binding always spawns a fresh child (`packages/cli/binding/src/cli/execution.rs`), so setting the child's spawn cwd achieves full equivalence with no `process.chdir()` and no upstream change.
 
 All of the failures above are reproducible with `vite-plus@0.2.2`: https://github.com/why-reproductions-are-required/vite-plus-monorepo-app-commands-repro
 
@@ -300,6 +298,10 @@ export default defineConfig({
 - Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value. If extraction fails and no local install can execute the config, vp errors and names the offending construct.
 
 ## Decisions
+
+### Spawn cwd instead of `process.chdir()` or Vite `root`
+
+Vite resolves `root` without touching `process.cwd()` by design, so forwarding the positional as `root` can never close pain point 2. Calling `process.chdir()` in the CLI process would, but it is a global mutation that leaks into everything sharing the process. The way out: `vp` never runs Vite or tsdown in-process; the NAPI binding always spawns a fresh child (`packages/cli/binding/src/cli/execution.rs`), so setting the child's spawn cwd achieves full equivalence with no `process.chdir()` and no upstream change.
 
 ### Root-only interactivity
 
