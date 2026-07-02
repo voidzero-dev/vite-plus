@@ -32,6 +32,8 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - uses: voidzero-dev/setup-vp@13e7afb99c66525824db54e107d667216e795d37 # main
+        env:
+          VP_PR_VERSION: 0fecc75a64a39bc5600ff6a1cee8baff378a8cc1
         with:
           cache: true
           working-directory: docs
