@@ -8313,7 +8313,7 @@ dependencies = [
 
 [[package]]
 name = "vite-plus-cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8397,7 +8397,7 @@ dependencies = [
 
 [[package]]
 name = "vite_global_cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "clap",
