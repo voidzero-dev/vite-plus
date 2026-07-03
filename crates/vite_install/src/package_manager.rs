@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env, fmt,
     fs::{self, File},
-    io::{self, BufReader, IsTerminal, Write},
+    io::{self, BufReader, Write},
     path::Path,
 };
 
@@ -1385,7 +1385,7 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     }
 
     // Check if stdin is a TTY (terminal) - if not, use default
-    if !io::stdin().is_terminal() {
+    if !vite_shared::is_stdin_terminal() {
         tracing::info!("Non-interactive environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }

@@ -8,7 +8,7 @@
 //! An existing `engines.node` is never deleted or modified.
 
 use std::{
-    io::{IsTerminal, Write},
+    io::Write,
     process::ExitStatus,
 };
 
@@ -290,7 +290,7 @@ async fn pin_node_version_file(
 
     // If a devEngines.runtime range is declared and no longer satisfied, offer to
     // sync it in interactive terminals and warn otherwise (rfcs/dev-engines.md)
-    check_dev_engines_sync(cwd, resolved_version, force, std::io::stdin().is_terminal()).await?;
+    check_dev_engines_sync(cwd, resolved_version, force, vite_shared::is_stdin_terminal()).await?;
 
     Ok(true)
 }

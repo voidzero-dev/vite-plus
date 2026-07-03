@@ -3,7 +3,7 @@
 use std::{
     collections::HashMap,
     fs::File,
-    io::{IsTerminal, Read},
+    io::Read,
     process::Stdio,
     time::Duration,
 };
@@ -96,7 +96,7 @@ pub(crate) async fn latest_package_versions(
     let mut versions = HashMap::with_capacity(specs.len());
 
     let progress = ProgressBar::new(specs.len() as u64);
-    if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
+    if vite_shared::is_stderr_terminal() && std::env::var_os("CI").is_none() {
         let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
             .unwrap_or_else(|_| ProgressStyle::default_spinner())
             .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);

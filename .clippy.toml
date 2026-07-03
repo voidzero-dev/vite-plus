@@ -12,6 +12,7 @@ disallowed-methods = [
   { path = "str::replace", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replace` instead." },
   { path = "str::replacen", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
   { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vite_path::current_dir` instead." },
+  { path = "std::io::IsTerminal::is_terminal", reason = "Use `vite_powershell::is_stdin_terminal` for stdin, or `vite_shared::is_stdout_terminal` / `vite_shared::is_stderr_terminal`, which memoize the lookup." },
 ]
 
 disallowed-types = [

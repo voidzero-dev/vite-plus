@@ -3,7 +3,7 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{collections::HashSet, ffi::OsStr, io::IsTerminal, process::ExitStatus};
+use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
@@ -812,7 +812,7 @@ fn should_reinstall_node_mismatches(
         return true;
     }
 
-    if !std::io::stdin().is_terminal() || std::env::var_os("CI").is_some() {
+    if !vite_shared::is_stdin_terminal() || std::env::var_os("CI").is_some() {
         let package_names =
             packages.iter().map(|package| package.name.as_str()).collect::<Vec<_>>().join(", ");
         output::warn(&format!(

@@ -117,8 +117,8 @@ fn strip_v(version: &str) -> &str {
 
 /// Whether colored output should be emitted on stdout.
 fn use_color() -> bool {
-    use std::io::IsTerminal;
-    std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none()
+    
+    vite_shared::is_stdout_terminal() && std::env::var_os("NO_COLOR").is_none()
 }
 
 /// Filter versions based on criteria.

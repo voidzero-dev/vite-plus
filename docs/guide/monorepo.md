@@ -147,12 +147,17 @@ This keeps the behavior centralized while letting each team or package own the p
 
 The root `vite.config.ts` is most valuable for shared linting, formatting, staged checks, and task definitions. For project-specific development, build, and test behavior, use the setup that best matches each app:
 
-- Pass a folder to built-in Vite commands when you want to target one app:
+- Target one package with the global `-C` flag. It behaves exactly like `cd <dir> && vp <command>` and works with every vp command:
 
 ```bash
-vp dev apps/web
-vp build apps/web
+vp -C apps/web dev
+vp -C apps/web build
+vp -C packages/ui pack
 ```
+
+  Passing a folder as a positional (`vp dev apps/web`) still works and keeps upstream Vite semantics: it sets Vite's `root` option without changing the working directory, so cwd-relative reads in configs and plugins resolve from where you ran vp. Prefer `-C` when the package should behave as if you had `cd`'d into it.
+
+- Run a bare app command at the workspace root and vp resolves the target for you: with [`defaultPackage`](/config/#defaultpackage) configured it runs there, and otherwise it prints the workspace packages with `-C` hints instead of silently serving or building the root.
 
 - Keep package-specific scripts in each package when the command differs per app:
 

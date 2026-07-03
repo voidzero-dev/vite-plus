@@ -1,6 +1,6 @@
 //! Unified help rendering for the global CLI.
 
-use std::{fmt::Write as _, io::IsTerminal};
+use std::fmt::Write as _;
 
 use clap::{CommandFactory, error::ErrorKind};
 use owo_colors::OwoColorize;
@@ -112,7 +112,7 @@ fn write_documentation_footer(output: &mut String, documentation_url: &str) {
 }
 
 pub fn should_style_help() -> bool {
-    std::io::stdout().is_terminal()
+    vite_shared::is_stdout_terminal()
         && std::env::var_os("NO_COLOR").is_none()
         && std::env::var("CLICOLOR").map_or(true, |value| value != "0")
         && std::env::var("TERM").map_or(true, |term| term != "dumb")

@@ -8699,6 +8699,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vite_path",
+ "vite_powershell",
  "vite_str",
 ]
 

@@ -24,7 +24,7 @@ mod upgrade_check;
 
 use std::{
     env,
-    io::{IsTerminal, Write},
+    io::Write,
     process::{ExitCode, ExitStatus},
 };
 
@@ -165,7 +165,7 @@ fn is_affirmative_response(input: &str) -> bool {
 }
 
 fn should_prompt_for_correction() -> bool {
-    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+    vite_shared::is_stdin_terminal() && vite_shared::is_stderr_terminal()
 }
 
 fn prompt_to_run_suggested_command(suggestion: &str) -> bool {

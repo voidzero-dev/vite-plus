@@ -9,7 +9,6 @@
 //! - Gradient/fade generation and RGB ANSI coloring
 
 use std::{
-    io::IsTerminal,
     sync::{LazyLock, OnceLock},
 };
 #[cfg(unix)]
@@ -62,13 +61,11 @@ fn fg_rgb(color: Rgb) -> String {
 }
 
 fn should_colorize() -> bool {
-    let stdout = std::io::stdout();
-    stdout.is_terminal() && on(Stream::Stdout).is_some()
+    crate::is_stdout_terminal() && on(Stream::Stdout).is_some()
 }
 
 fn supports_true_color() -> bool {
-    let stdout = std::io::stdout();
-    stdout.is_terminal() && on(Stream::Stdout).is_some_and(|color| color.has_16m)
+    crate::is_stdout_terminal() && on(Stream::Stdout).is_some_and(|color| color.has_16m)
 }
 
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
@@ -190,7 +187,7 @@ fn parse_osc4_rgb(buffer: &str, index: u8) -> Option<Rgb> {
 fn is_osc_query_unsupported() -> bool {
     static UNSUPPORTED: OnceLock<bool> = OnceLock::new();
     *UNSUPPORTED.get_or_init(|| {
-        if !std::io::stdout().is_terminal() || !std::io::stdin().is_terminal() {
+        if !crate::is_stdout_terminal() || !crate::is_stdin_terminal() {
             return true;
         }
 
@@ -547,7 +544,7 @@ pub fn vite_plus_header() -> String {
 ///   which is where `vp check --fix` typically runs.
 #[must_use]
 pub fn should_print_header() -> bool {
-    if !std::io::stdout().is_terminal() {
+    if !crate::is_stdout_terminal() {
         return false;
     }
     if std::env::var_os("GIT_INDEX_FILE").is_some() {

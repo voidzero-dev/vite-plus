@@ -25,7 +25,10 @@ mod tracing;
 pub use env_config::{EnvConfig, TestEnvGuard};
 pub use error::format_error_chain;
 pub use home::{VP_BINARY_NAME, get_vp_home};
-pub use interactivity::{is_ci_environment, is_interactive_terminal};
+pub use interactivity::{
+    is_ci_environment, is_interactive_terminal, is_stderr_terminal, is_stdin_terminal,
+    is_stdout_terminal,
+};
 pub use http::shared_http_client;
 pub use json_edit::{JsonStyle, edit_json_object, insert_after};
 pub use package_json::{
