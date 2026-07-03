@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "@yarnpkg/fslib": "catalog:",
-    "@yarnpkg/shell": "catalog:",
-    "nanotar": "catalog:"
+    "@yarnpkg/shell": "catalog:"
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",

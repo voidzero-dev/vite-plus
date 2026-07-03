@@ -29,10 +29,6 @@ switch (subcommand) {
     const { brandVite } = await import('./brand-vite.ts');
     brandVite();
     break;
-  case 'repack-vite-tgz':
-    const { repackViteTgz } = await import('./repack-vite-tgz.ts');
-    await repackViteTgz();
-    break;
   case 'local-npm-registry':
     // Spawn the script by path instead of importing it, so the child carries
     // the canonical `node .../local-npm-registry.ts` command line that the
@@ -48,7 +44,7 @@ switch (subcommand) {
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, repack-vite-tgz, local-npm-registry',
+      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, local-npm-registry',
     );
     process.exit(1);
 }
