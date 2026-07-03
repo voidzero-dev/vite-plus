@@ -20,6 +20,11 @@ set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
 INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
+if [ -n "${VP_HOME:-}" ]; then
+  NODE_MANAGER_BIN_DISPLAY="${INSTALL_DIR%/}/bin/"
+else
+  NODE_MANAGER_BIN_DISPLAY="~/.vite-plus/bin/"
+fi
 # Use $HOME-relative path for shell config references (portable across sessions)
 if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
   INSTALL_DIR_REF_POSIX="\$HOME${INSTALL_DIR#"$HOME"}"
@@ -812,7 +817,7 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to ${NODE_MANAGER_BIN_DISPLAY} and automatically uses the right version."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty

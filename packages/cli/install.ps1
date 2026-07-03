@@ -18,6 +18,12 @@ $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
 $InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
+$NodeManagerBinDisplay = if ($env:VP_HOME) {
+    $TrimmedInstallDir = $InstallDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    (Join-Path $TrimmedInstallDir "bin") + [System.IO.Path]::DirectorySeparatorChar
+} else {
+    "~/.vite-plus/bin/"
+}
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
@@ -558,7 +564,7 @@ function Setup-NodeManager {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to $NodeManagerBinDisplay and automatically uses the right version."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
