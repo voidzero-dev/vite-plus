@@ -746,7 +746,7 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
-const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
+const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset VP_HOME=%~dp0..\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
 fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
@@ -1192,6 +1192,31 @@ mod tests {
         assert!(
             !ps1_content.contains("__VP_BIN_WIN__"),
             "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_env_files_cmd_wrapper_sets_vp_home_before_env_use() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+        let bin_dir = home.join("bin");
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+
+        create_env_files(&home).await.unwrap();
+
+        let cmd_content = tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
+        let vp_home_index =
+            cmd_content.find("set VP_HOME=%~dp0..").expect("vp-use.cmd should set VP_HOME");
+        let env_use_index = cmd_content.find("for /f").expect("vp-use.cmd should run env use");
+
+        assert!(
+            vp_home_index < env_use_index,
+            "vp-use.cmd should set VP_HOME before invoking vp env use"
+        );
+        assert!(
+            cmd_content.contains("%~dp0..\\current\\bin\\vp.exe env use %*"),
+            "vp-use.cmd should invoke the install-local vp.exe"
         );
     }
 
