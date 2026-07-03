@@ -540,6 +540,7 @@ async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath)
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
+export VP_HOME="__VP_HOME__"
 __vp_bin="__VP_BIN__"
 case ":${PATH}:" in
     *":${__vp_bin}:"*)
@@ -587,6 +588,7 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
+set -gx VP_HOME "__VP_HOME__"
 set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
@@ -622,6 +624,7 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
+$env.VP_HOME = "__VP_HOME__"
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
@@ -682,6 +685,7 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
+$env:VP_HOME = "__VP_HOME_WIN__"
 $__vp_bin = "__VP_BIN_WIN__"
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
@@ -744,35 +748,54 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
 const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
+fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
+    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
+    // This makes the env file portable across sessions where HOME may differ.
+    home_dir
+        .and_then(|h| path.strip_prefix(h).ok())
+        .map(|s| {
+            if s.as_os_str().is_empty() {
+                "$HOME".to_string()
+            } else {
+                // Normalize to forward slashes for $HOME/... paths (POSIX-style)
+                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
+            }
+        })
+        .unwrap_or_else(|| path.display().to_string().replace('\\', "/"))
+}
+
 /// Render the env-file content for `shell` against `vite_plus_home`.
 fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath) -> String {
     let bin_path = vite_plus_home.join("bin");
-
-    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
-    // This makes the env file portable across sessions where HOME may differ.
     let home_dir = vite_shared::EnvConfig::get().user_home;
-    let bin_path_ref = home_dir
-        .as_ref()
-        .and_then(|h| bin_path.as_path().strip_prefix(h).ok())
-        .map(|s| {
-            // Normalize to forward slashes for $HOME/... paths (POSIX-style)
-            format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
-        })
-        .unwrap_or_else(|| bin_path.as_path().display().to_string().replace('\\', "/"));
+    let home_dir = home_dir.as_deref();
+    let home_path_ref = render_home_relative_path(vite_plus_home.as_path(), home_dir);
+    let bin_path_ref = render_home_relative_path(bin_path.as_path(), home_dir);
 
     match shell {
-        EnvShell::Posix => ENV_TEMPLATE_POSIX.replace("__VP_BIN__", &bin_path_ref),
-        EnvShell::Fish => ENV_TEMPLATE_FISH.replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Posix => ENV_TEMPLATE_POSIX
+            .replace("__VP_HOME__", &home_path_ref)
+            .replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Fish => ENV_TEMPLATE_FISH
+            .replace("__VP_HOME__", &home_path_ref)
+            .replace("__VP_BIN__", &bin_path_ref),
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
             let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
-            ENV_TEMPLATE_NU.replace("__VP_BIN__", &bin_path_ref_nu)
+            let home_path_ref_nu =
+                vite_plus_home.as_path().display().to_string().replace('\\', "/");
+            ENV_TEMPLATE_NU
+                .replace("__VP_HOME__", &home_path_ref_nu)
+                .replace("__VP_BIN__", &bin_path_ref_nu)
         }
         EnvShell::Powershell => {
             // PowerShell uses the actual absolute path (not $HOME-relative)
+            let home_path_win = vite_plus_home.as_path().display().to_string();
             let bin_path_win = bin_path.as_path().display().to_string();
-            ENV_TEMPLATE_PS1.replace("__VP_BIN_WIN__", &bin_path_win)
+            ENV_TEMPLATE_PS1
+                .replace("__VP_HOME_WIN__", &home_path_win)
+                .replace("__VP_BIN_WIN__", &bin_path_win)
         }
     }
 }
@@ -940,6 +963,8 @@ mod tests {
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
         // Placeholder should be fully replaced
         assert!(
@@ -950,6 +975,14 @@ mod tests {
             !fish_content.contains("__VP_BIN__"),
             "env.fish file should not contain __VP_BIN__ placeholder"
         );
+        assert!(
+            !env_content.contains("__VP_HOME__") && !fish_content.contains("__VP_HOME__"),
+            "env files should not contain __VP_HOME__ placeholder"
+        );
+        assert!(
+            !nu_content.contains("__VP_HOME__") && !ps1_content.contains("__VP_HOME_WIN__"),
+            "env files should not contain VP_HOME placeholders"
+        );
 
         // Should use $HOME-relative path since install dir is under HOME
         assert!(
@@ -959,6 +992,25 @@ mod tests {
         assert!(
             fish_content.contains("$HOME/bin"),
             "env.fish file should reference $HOME/bin, got: {fish_content}"
+        );
+        assert!(
+            env_content.contains("export VP_HOME=\"$HOME\""),
+            "env file should export VP_HOME, got: {env_content}"
+        );
+        assert!(
+            fish_content.contains("set -gx VP_HOME \"$HOME\""),
+            "env.fish file should export VP_HOME, got: {fish_content}"
+        );
+
+        let expected_home = home.as_path().display().to_string();
+        let expected_home_nu = expected_home.replace('\\', "/");
+        assert!(
+            nu_content.contains(&format!("$env.VP_HOME = \"{expected_home_nu}\"")),
+            "env.nu file should set VP_HOME, got: {nu_content}"
+        );
+        assert!(
+            ps1_content.contains(&format!("$env:VP_HOME = \"{expected_home}\"")),
+            "env.ps1 file should set VP_HOME, got: {ps1_content}"
         );
     }
 
@@ -977,6 +1029,7 @@ mod tests {
         // Should use absolute path since install dir is not under HOME
         let expected_bin = home.join("bin");
         let expected_str = expected_bin.as_path().display().to_string().replace('\\', "/");
+        let expected_home = home.as_path().display().to_string().replace('\\', "/");
         assert!(
             env_content.contains(&expected_str),
             "env file should use absolute path {expected_str}, got: {env_content}"
@@ -984,6 +1037,14 @@ mod tests {
         assert!(
             fish_content.contains(&expected_str),
             "env.fish file should use absolute path {expected_str}, got: {fish_content}"
+        );
+        assert!(
+            env_content.contains(&format!("export VP_HOME=\"{expected_home}\"")),
+            "env file should export absolute VP_HOME {expected_home}, got: {env_content}"
+        );
+        assert!(
+            fish_content.contains(&format!("set -gx VP_HOME \"{expected_home}\"")),
+            "env.fish file should export absolute VP_HOME {expected_home}, got: {fish_content}"
         );
 
         // Should NOT use $HOME-relative path
