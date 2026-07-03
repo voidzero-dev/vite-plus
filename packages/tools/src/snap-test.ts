@@ -23,6 +23,14 @@ let localVpPackagesPromise: Promise<string> | undefined;
  * version, so real package-manager installs work without the version being
  * published on npm (e.g. on release branches) and exercise the actual local
  * build.
+ *
+ * The destination lives inside the run's temp root rather than a fixed
+ * directory on purpose: a fresh pack per run (~2s) guarantees the served
+ * tarballs match the current checkout build (a reused fixed directory would
+ * silently serve stale tarballs after a rebuild unless it grew its own
+ * invalidation scheme), the run's exit cleanup deletes it for free, and
+ * concurrent snap-test processes (local + global) cannot overwrite each
+ * other's tarballs mid-read.
  */
 function packLocalVitePlusPackagesOnce(casesDir: string, tempTmpDir: string): Promise<string> {
   localVpPackagesPromise ??= (async () => {
