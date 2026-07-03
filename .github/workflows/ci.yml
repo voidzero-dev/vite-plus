@@ -84,6 +84,15 @@ jobs:
           # install instead of installing the whole workspace.
           mkdir -p node_modules
           ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" node_modules/vite-plus
+          # vp resolves oxfmt project-first, so install the repo's pinned oxfmt
+          # (the pnpm catalog entry) and link it in; otherwise formatting would
+          # follow whatever oxfmt version the released vite-plus bundles.
+          oxfmt_version=$(sed -n 's/^ *oxfmt: *=*//p' pnpm-workspace.yaml)
+          npm install --prefix "$RUNNER_TEMP/oxfmt" "oxfmt@${oxfmt_version:?oxfmt version not found in pnpm-workspace.yaml catalog}"
+          ln -s "$RUNNER_TEMP/oxfmt/node_modules/oxfmt" node_modules/oxfmt
+          # oxfmt reads the fmt block from vite.config.ts itself and resolves
+          # that import from its own realpath, so it needs a sibling link too.
+          ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" "$RUNNER_TEMP/oxfmt/node_modules/vite-plus"
           vp fmt --check
 
   download-previous-rolldown-binaries:
