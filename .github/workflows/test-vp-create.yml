@@ -453,18 +453,23 @@ jobs:
         if: matrix.template.name == 'monorepo'
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          # Under npm, `vp run ready` reaches 100% cache hit only on the
-          # third invocation (#1638): vite-task's directory-listing
+          # Under npm and yarn, `vp run ready` reaches 100% cache hit only on
+          # the third invocation (#1638): vite-task's directory-listing
           # fingerprint and fspy read/write tracking surface false-positive
           # misses on run #2 because `packages/utils/node_modules/` is born
-          # during run #1. pnpm/yarn/bun pre-create per-package
-          # `node_modules/` at install time and reach 100% on run #2.
+          # during run #1. pnpm and bun pre-create per-package
+          # `node_modules/` at install time and reach 100% on run #2; Yarn
+          # Berry did too under the old file: overrides (per-package copies),
+          # but with registry-resolved semver specs it hoists the workspace
+          # deps like a real install, so it now behaves like npm here.
           # The preceding `Verify project builds` step already invoked
           # `vp run ready` once (verify-command for monorepo), so one
-          # extra warm-up here is enough under npm.
-          if [ "${{ matrix.package-manager }}" = "npm" ]; then
-            vp run ready >/dev/null 2>&1
-          fi
+          # extra warm-up here is enough.
+          case "${{ matrix.package-manager }}" in
+            npm|yarn)
+              vp run ready >/dev/null 2>&1
+              ;;
+          esac
           output=$(vp run ready 2>&1)
           echo "$output"
           if ! echo "$output" | grep -q 'cache hit (100%)'; then
