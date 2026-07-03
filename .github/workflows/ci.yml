@@ -70,6 +70,17 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      - name: Restore the vp build from main
+        id: vp-main
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/vp-main-install
+          key: vp-main-install-${{ github.sha }}
+          restore-keys: |
+            vp-main-install-
+
+      # Provides Node.js for the local CLI, and the released vp as the
+      # fallback launcher when no main build cache is available yet.
       - uses: voidzero-dev/setup-vp@35171c92dd08b67d5a9d3f2a4327800e58396f2a # v1.13.0
         with:
           # The workspace `vite-plus` version can be ahead of the registry, so
@@ -79,21 +90,32 @@ jobs:
 
       - name: Run vp fmt --check
         run: |
+          # Prefer the vp built from source on main (a docs-only change leaves
+          # the code identical to a recent main), falling back to the release.
+          if [ -x "$HOME/vp-main-install/node_modules/.bin/vp" ]; then
+            echo "Using the vp build cached from main (${{ steps.vp-main.outputs.cache-matched-key }})"
+            vp_bin="$HOME/vp-main-install/node_modules/.bin/vp"
+            vite_plus_pkg="$HOME/vp-main-install/node_modules/vite-plus"
+          else
+            echo "No main build cache; using the released vite-plus"
+            vp_bin=vp
+            vite_plus_pkg="$HOME/.vite-plus/current/node_modules/vite-plus"
+          fi
           # `vp fmt` loads the root vite.config.ts, whose `import ... from 'vite-plus'`
-          # must resolve at runtime. Link the released package out of the global
-          # install instead of installing the whole workspace.
+          # must resolve at runtime. Link the package instead of installing the
+          # whole workspace.
           mkdir -p node_modules
-          ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" node_modules/vite-plus
+          ln -s "$vite_plus_pkg" node_modules/vite-plus
           # vp resolves oxfmt project-first, so install the repo's pinned oxfmt
-          # (the pnpm catalog entry) and link it in; otherwise formatting would
-          # follow whatever oxfmt version the released vite-plus bundles.
+          # (the pnpm catalog entry) and link it in; this keeps the formatter at
+          # the PR's own pin even when the cached or released vp bundles another.
           oxfmt_version=$(sed -n 's/^ *oxfmt: *=*//p' pnpm-workspace.yaml)
           npm install --prefix "$RUNNER_TEMP/oxfmt" "oxfmt@${oxfmt_version:?oxfmt version not found in pnpm-workspace.yaml catalog}"
           ln -s "$RUNNER_TEMP/oxfmt/node_modules/oxfmt" node_modules/oxfmt
           # oxfmt reads the fmt block from vite.config.ts itself and resolves
           # that import from its own realpath, so it needs a sibling link too.
-          ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" "$RUNNER_TEMP/oxfmt/node_modules/vite-plus"
-          vp fmt --check
+          ln -s "$vite_plus_pkg" "$RUNNER_TEMP/oxfmt/node_modules/vite-plus"
+          "$vp_bin" fmt --check
 
   download-previous-rolldown-binaries:
     needs: detect-changes
@@ -305,6 +327,23 @@ jobs:
           which vp
           vp --version
           vp -h
+
+      # Snapshot the freshly bootstrapped install (taken before the upgrade and
+      # implode tests below mutate it) so docs-fmt can reuse the vp built from
+      # main instead of the released package. `current` is a symlink to the
+      # local-dev install dir, so copy through it to a stable path.
+      - name: Stage the vp install for the docs-fmt cache
+        if: github.ref_name == 'main' && matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          mkdir -p "$HOME/vp-main-install"
+          cp -a "$HOME/.vite-plus/current/." "$HOME/vp-main-install/"
+
+      - name: Save the vp build for docs-fmt reuse
+        if: github.ref_name == 'main' && matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/vp-main-install
+          key: vp-main-install-${{ github.sha }}
 
       - name: Run vp check
         run: vp check
