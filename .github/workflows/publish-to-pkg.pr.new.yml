@@ -143,22 +143,34 @@ jobs:
       # Publish this commit build to the pkg.pr.new registry bridge so it can be
       # installed as the npm version 0.0.0-commit.<sha>
       # (https://github.com/voidzero-dev/pkg-pr-registry-bridge). The bridge action
-      # downloads each pkg.pr.new package (the two preview packages and every
-      # platform binary), re-packs them under the commit version with matching
-      # integrity, uploads them to the bridge, and registers the ref (the CPU
-      # work that previously ran in the bridge's GitHub webhook). pkg-pr-new
-      # publishes under the PR head commit, so pass that SHA (not the merge
-      # commit github.sha). Restricted to same-repo PRs because fork PRs do not
-      # receive the admin token secret; never fails the publish if the bridge is
+      # packs the locally built package directories prepared above (the two
+      # preview packages and every platform binary), re-packs them under the
+      # commit version with matching integrity, uploads them to the bridge, and
+      # registers the ref. It packs from disk with `pnpm pack`, so it no longer
+      # downloads from pkg.pr.new and is independent of the publish step above
+      # (it just needs the workspace installed, which it is). This build publishes
+      # under the PR head commit, so pass that SHA (not the merge commit
+      # github.sha). Restricted to same-repo PRs because fork PRs do not receive
+      # the admin token secret; never fails the publish if the bridge is
       # unreachable.
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: voidzero-dev/pkg-pr-registry-bridge@4072b814c54de94d12d11b5174d6eb2a74496b7c # main
+        # Pinned to the PR #56 branch head for verification; repin to main once it merges.
+        uses: voidzero-dev/pkg-pr-registry-bridge@72ef590d3d6c82ddbd21fc4d029c7e7641300755 # feat/action-local-pack (PR #56)
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
+          # The locally built directories to pack and publish, matching the
+          # pkg-pr-new publish list above so the two stay in sync. (This is also
+          # the action's default, passed explicitly for review parity.)
+          packages: |
+            packages/cli/npm/*
+            packages/cli/cli-npm/*
+            packages/cli
+            packages/core
+            packages/prompts
           # Surfaced by the bridge's /-/refs so a registered ref links back to its
           # PR. Always present here (this workflow only runs on pull_request).
           pr-url: ${{ github.event.pull_request.html_url }}
