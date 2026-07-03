@@ -65,7 +65,8 @@ jobs:
     # Docs-only changes skip the full CI matrix, so nothing else format-checks
     # them (code changes get `vp check` in cli-e2e-test). Non-blocking:
     # intentionally not listed in the `done` job's needs.
-    if: needs.detect-changes.outputs.code-changed == 'false'
+    # TEMPORARY demo: condition lifted so the job runs on this PR (ci.yml is
+    # a code change). Restored before merge.
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -333,13 +334,15 @@ jobs:
       # main instead of the released package. `current` is a symlink to the
       # local-dev install dir, so copy through it to a stable path.
       - name: Stage the vp install for the docs-fmt cache
-        if: github.ref_name == 'main' && matrix.target == 'x86_64-unknown-linux-gnu'
+        # TEMPORARY demo: main-only restriction lifted. Restored before merge.
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           mkdir -p "$HOME/vp-main-install"
           cp -a "$HOME/.vite-plus/current/." "$HOME/vp-main-install/"
 
       - name: Save the vp build for docs-fmt reuse
-        if: github.ref_name == 'main' && matrix.target == 'x86_64-unknown-linux-gnu'
+        # TEMPORARY demo: main-only restriction lifted. Restored before merge.
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/vp-main-install
