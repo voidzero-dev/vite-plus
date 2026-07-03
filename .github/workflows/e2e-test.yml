@@ -142,7 +142,7 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ contains(matrix.target, 'windows') && 'true' || 'false' }}
+          skip-native: ${{ contains(matrix.target, 'windows') }}
 
       - name: Pack packages into tgz
         run: |

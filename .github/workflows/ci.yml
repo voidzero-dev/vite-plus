@@ -357,7 +357,7 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' && 'true' || 'false' }}
+          skip-native: ${{ runner.os == 'Windows' }}
 
       - name: Ensure no unexpected file changes after build
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
@@ -950,7 +950,7 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' && 'true' || 'false' }}
+          skip-native: ${{ runner.os == 'Windows' }}
 
       - name: Install Global CLI vp
         run: |
@@ -1183,7 +1183,7 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' && 'true' || 'false' }}
+          skip-native: ${{ runner.os == 'Windows' }}
 
       - name: Build CLI
         run: |
