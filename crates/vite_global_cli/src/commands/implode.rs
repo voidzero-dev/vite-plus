@@ -490,8 +490,25 @@ mod tests {
 
     use super::*;
 
+    fn test_absolute_path(posix: &str, windows: &str) -> AbsolutePathBuf {
+        let path = if cfg!(windows) { windows } else { posix };
+        AbsolutePathBuf::new(path.into()).unwrap()
+    }
+
+    fn default_user_home() -> AbsolutePathBuf {
+        test_absolute_path("/home/user", r"C:\Users\user")
+    }
+
+    fn custom_user_home() -> AbsolutePathBuf {
+        test_absolute_path("/Users/test", r"C:\Users\test")
+    }
+
+    fn shell_path(path: &AbsolutePathBuf) -> Str {
+        normalize_path_separators(&path.as_path().display().to_string())
+    }
+
     fn default_source_matcher() -> VitePlusSourceMatcher {
-        let user_home = AbsolutePathBuf::new("/home/user".into()).unwrap();
+        let user_home = default_user_home();
         let home_dir = user_home.join(".vite-plus");
         VitePlusSourceMatcher::new(&home_dir, &user_home)
     }
@@ -521,26 +538,30 @@ mod tests {
 
     #[test]
     fn test_remove_vite_plus_lines_absolute_path() {
-        let matcher = default_source_matcher();
-        let content = "# existing\n. \"/home/user/.vite-plus/env\"\n";
-        let result = remove_vite_plus_lines(content, &matcher, "env");
+        let user_home = default_user_home();
+        let home_dir = user_home.join(".vite-plus");
+        let matcher = source_matcher_for(&home_dir, &user_home);
+        let env_path = shell_path(&home_dir.join("env"));
+        let content = vite_str::format!("# existing\n. \"{env_path}\"\n");
+        let result = remove_vite_plus_lines(&content, &matcher, "env");
         assert_eq!(&*result, "# existing\n");
     }
 
     #[test]
     fn test_remove_vite_plus_lines_custom_absolute_path() {
-        let user_home = AbsolutePathBuf::new("/Users/test".into()).unwrap();
-        let home_dir = user_home.join("tools/vp");
+        let user_home = custom_user_home();
+        let home_dir = user_home.join("tools").join("vp");
         let matcher = source_matcher_for(&home_dir, &user_home);
-        let content = "# existing\n. \"/Users/test/tools/vp/env\"\n";
-        let result = remove_vite_plus_lines(content, &matcher, "env");
+        let env_path = shell_path(&home_dir.join("env"));
+        let content = vite_str::format!("# existing\n. \"{env_path}\"\n");
+        let result = remove_vite_plus_lines(&content, &matcher, "env");
         assert_eq!(&*result, "# existing\n");
     }
 
     #[test]
     fn test_remove_vite_plus_lines_custom_home_relative_path() {
-        let user_home = AbsolutePathBuf::new("/Users/test".into()).unwrap();
-        let home_dir = user_home.join("tools/vp");
+        let user_home = custom_user_home();
+        let home_dir = user_home.join("tools").join("vp");
         let matcher = source_matcher_for(&home_dir, &user_home);
         let content = "# existing\n. \"$HOME/tools/vp/env\"\n";
         let result = remove_vite_plus_lines(content, &matcher, "env");
@@ -549,8 +570,8 @@ mod tests {
 
     #[test]
     fn test_remove_vite_plus_lines_custom_tilde_path() {
-        let user_home = AbsolutePathBuf::new("/Users/test".into()).unwrap();
-        let home_dir = user_home.join("tools/vp");
+        let user_home = custom_user_home();
+        let home_dir = user_home.join("tools").join("vp");
         let matcher = source_matcher_for(&home_dir, &user_home);
         let content = "# existing\nsource '~/tools/vp/env.nu'\n";
         let result = remove_vite_plus_lines(content, &matcher, "env.nu");
