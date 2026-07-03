@@ -46,7 +46,7 @@ import {
   type OutgoingHttpHeaders,
   type ServerResponse,
 } from 'node:http';
-import { Agent as HttpsAgent, get as httpsGet } from 'node:https';
+import { Agent as HttpsAgent, get as httpsGet, request as httpsRequest } from 'node:https';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -161,32 +161,44 @@ if (!serve && command.length === 0) {
 // The script lives at `packages/tools/src/`, so the repo root is three up.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
+// Tracked so the normal cleanup paths remove the packed tarballs; a hard
+// kill leaves it behind, which `--kill` sweeps up with the other
+// vp-local-registry-* leftovers.
+let packedDir: string | undefined;
 if (pack && !packagesDir) {
-  packagesDir = mkdtempSync(path.join(tmpdir(), 'vp-local-registry-pack-'));
-  await packLocalVitePlusPackages(repoRoot, packagesDir);
+  packedDir = mkdtempSync(path.join(tmpdir(), 'vp-local-registry-pack-'));
+  await packLocalVitePlusPackages(repoRoot, packedDir);
+  packagesDir = packedDir;
 }
 
 const manifest: Record<string, unknown> = existsSync('./mock-manifest.json')
   ? (JSON.parse(readFileSync('./mock-manifest.json', 'utf-8')) as Record<string, unknown>)
   : {};
 
-// Proxy through the user's configured registry (e.g. a local mirror in
-// `~/.npmrc`) when there is one, so local runs stay as fast as direct
-// installs. CI has no user registry config and uses npmjs. Deliberately
-// reads only `~/.npmrc` and NOT registry env vars (unlike the CLI's
+// Proxy through the configured registry (the project's `.npmrc` in cwd, then
+// the user's `~/.npmrc`, e.g. a local mirror) when there is one, so runs stay
+// as fast as direct installs and projects that rely on a custom registry keep
+// resolving from it. CI has no registry config and uses npmjs. Deliberately
+// reads only `.npmrc` files and NOT registry env vars (unlike the CLI's
 // getNpmRegistry): a leftover NPM_CONFIG_REGISTRY export from a previous
-// `--serve` session would otherwise become this server's own upstream.
+// `--serve` session would otherwise become this server's own upstream (the
+// https-only guard below rejects such http URLs for the same reason).
+// Known out-of-scope for this test tool: HTTP(S)_PROXY tunneling and
+// authenticated upstream registries; the environments it serves (repo CI and
+// local dev) need neither.
 function resolveUpstreamRegistry(): string {
-  try {
-    const npmrc = readFileSync(path.join(homedir(), '.npmrc'), 'utf-8');
-    const registryLine = npmrc.split('\n').find((line) => line.trim().startsWith('registry='));
-    const registry = registryLine?.split('=')[1]?.trim().replace(/\/+$/, '');
-    // The proxy fetches with node:https, so only accept https upstreams.
-    if (registry?.startsWith('https://')) {
-      return registry;
+  for (const npmrcPath of [path.resolve('.npmrc'), path.join(homedir(), '.npmrc')]) {
+    try {
+      const npmrc = readFileSync(npmrcPath, 'utf-8');
+      const registryLine = npmrc.split('\n').find((line) => line.trim().startsWith('registry='));
+      const registry = registryLine?.split('=')[1]?.trim().replace(/\/+$/, '');
+      // The proxy fetches with node:https, so only accept https upstreams.
+      if (registry?.startsWith('https://')) {
+        return registry;
+      }
+    } catch {
+      // no such .npmrc: try the next one
     }
-  } catch {
-    // no user .npmrc: use the default registry
   }
   return 'https://registry.npmjs.org';
 }
@@ -354,6 +366,13 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
     }
     res.end(`proxy error: ${error.message}`);
   };
+  // Forward the original method and body: npm-based clients POST to registry
+  // endpoints too (e.g. the audit bulk advisories). The body can only be
+  // streamed into the FIRST upstream request, so redirects are followed only
+  // for body-less methods; a redirect on anything else is forwarded to the
+  // client as-is (its `location` header survives below).
+  const method = req.method ?? 'GET';
+  const bodyless = method === 'GET' || method === 'HEAD';
   const fetchUrl = (url: string, redirectsLeft: number) => {
     // Tarballs: `accept-encoding: identity` keeps mirrors/CDNs from wrapping
     // them in an extra content-encoding layer, which some package managers
@@ -368,34 +387,55 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
         ? 'identity'
         : (req.headers['accept-encoding'] ?? 'identity'),
     };
-    httpsGet(url, { headers, agent: upstreamAgent }, (upstream) => {
-      const status = upstream.statusCode ?? 502;
-      if (status >= 300 && status < 400 && upstream.headers.location && redirectsLeft > 0) {
-        // Draining can still emit 'error' (e.g. the socket resets mid-redirect),
-        // so guard it here too — otherwise it's uncaught and crashes the server.
-        upstream.on('error', fail);
-        upstream.resume();
-        fetchUrl(new URL(upstream.headers.location, url).toString(), redirectsLeft - 1);
-        return;
+    for (const name of ['content-type', 'content-length'] as const) {
+      if (req.headers[name] !== undefined) {
+        headers[name] = req.headers[name];
       }
-      const responseHeaders: OutgoingHttpHeaders = {};
-      // Forward `location` too, so a 3xx we stop following (or one with no
-      // location to follow) still reaches the client with its redirect target.
-      for (const name of ['content-type', 'content-encoding', 'content-length', 'location']) {
-        if (upstream.headers[name] !== undefined) {
-          responseHeaders[name] = upstream.headers[name];
+    }
+    const upstreamRequest = httpsRequest(
+      url,
+      { method, headers, agent: upstreamAgent },
+      (upstream) => {
+        const status = upstream.statusCode ?? 502;
+        if (
+          status >= 300 &&
+          status < 400 &&
+          upstream.headers.location &&
+          redirectsLeft > 0 &&
+          bodyless
+        ) {
+          // Draining can still emit 'error' (e.g. the socket resets mid-redirect),
+          // so guard it here too — otherwise it's uncaught and crashes the server.
+          upstream.on('error', fail);
+          upstream.resume();
+          fetchUrl(new URL(upstream.headers.location, url).toString(), redirectsLeft - 1);
+          return;
         }
-      }
-      // Default a missing content-type (parity with the prior fetch-based proxy)
-      // so clients that key off it still recognize a proxied tarball.
-      responseHeaders['content-type'] ??= 'application/octet-stream';
-      res.writeHead(status, responseHeaders);
-      // `pipe` does not forward source errors, so listen on the response stream
-      // directly; otherwise a mid-stream upstream error is uncaught and crashes
-      // the mock server.
-      upstream.on('error', fail);
-      upstream.pipe(res);
-    }).on('error', fail);
+        const responseHeaders: OutgoingHttpHeaders = {};
+        // Forward `location` too, so a 3xx we stop following (or one with no
+        // location to follow) still reaches the client with its redirect target.
+        for (const name of ['content-type', 'content-encoding', 'content-length', 'location']) {
+          if (upstream.headers[name] !== undefined) {
+            responseHeaders[name] = upstream.headers[name];
+          }
+        }
+        // Default a missing content-type (parity with the prior fetch-based proxy)
+        // so clients that key off it still recognize a proxied tarball.
+        responseHeaders['content-type'] ??= 'application/octet-stream';
+        res.writeHead(status, responseHeaders);
+        // `pipe` does not forward source errors, so listen on the response stream
+        // directly; otherwise a mid-stream upstream error is uncaught and crashes
+        // the mock server.
+        upstream.on('error', fail);
+        upstream.pipe(res);
+      },
+    );
+    upstreamRequest.on('error', fail);
+    if (bodyless) {
+      upstreamRequest.end();
+    } else {
+      req.pipe(upstreamRequest);
+    }
   };
   fetchUrl(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, 5);
 }
@@ -458,6 +498,9 @@ function buildRegistryEnv(registry: string): Record<string, string> {
 function cleanupRegistryEnv(env: Record<string, string>): void {
   rmSync(env.YARN_GLOBAL_FOLDER, { recursive: true, force: true });
   rmSync(env.BUN_INSTALL_CACHE_DIR, { recursive: true, force: true });
+  if (packedDir) {
+    rmSync(packedDir, { recursive: true, force: true });
+  }
 }
 
 server.listen(0, '127.0.0.1', () => {
