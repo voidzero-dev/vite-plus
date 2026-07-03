@@ -65,9 +65,7 @@ jobs:
     # Docs-only changes skip the full CI matrix, so nothing else format-checks
     # them (code changes get `vp check` in cli-e2e-test). Non-blocking:
     # intentionally not listed in the `done` job's needs.
-    # TEMPORARY: the code-changed == 'false' condition is lifted on this PR so
-    # the job runs here (ci.yml itself is a code change) and demonstrably fails
-    # on the canary file. Reverted before merge.
+    if: needs.detect-changes.outputs.code-changed == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
