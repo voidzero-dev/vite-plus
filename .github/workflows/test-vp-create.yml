@@ -211,14 +211,26 @@ jobs:
         # completes while the server keeps running.
         run: |
           node "$GITHUB_WORKSPACE/packages/tools/src/local-npm-registry.ts" --serve --packages-dir "$GITHUB_WORKSPACE/tmp/tgz" > "$RUNNER_TEMP/local-registry.out" 2>&1 &
-          until head -1 "$RUNNER_TEMP/local-registry.out" 2>/dev/null | grep -q registry; do sleep 0.2; done
-          head -1 "$RUNNER_TEMP/local-registry.out" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{for(const [k,v] of Object.entries(JSON.parse(s).env)) console.log(k+'='+v)})" >> "$GITHUB_ENV"
-          head -1 "$RUNNER_TEMP/local-registry.out"
+          server_pid=$!
+          until grep -q '"registry"' "$RUNNER_TEMP/local-registry.out" 2>/dev/null; do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "local registry failed to start:"
+              cat "$RUNNER_TEMP/local-registry.out"
+              exit 1
+            fi
+            sleep 0.2
+          done
+          handshake=$(head -1 "$RUNNER_TEMP/local-registry.out")
+          echo "$handshake"
+          echo "$handshake" | node -e 'const { env } = JSON.parse(require("node:fs").readFileSync(0, "utf8")); for (const [k, v] of Object.entries(env)) console.log(`${k}=${v}`)' >> "$GITHUB_ENV"
 
+      # No VP_OVERRIDE_PACKAGES: with VP_VERSION=0.0.0 the product default
+      # override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@0.0.0
+      # and `vitest` to the bundled version (see VITE_PLUS_OVERRIDE_PACKAGES in
+      # packages/cli/src/utils/constants.ts), and stays correct across vitest
+      # bumps without editing this workflow.
       - name: Run vp create ${{ matrix.template.name }} with ${{ matrix.package-manager }}
         working-directory: ${{ runner.temp }}
-        env:
-          VP_OVERRIDE_PACKAGES: '{"vite":"npm:@voidzero-dev/vite-plus-core@0.0.0","vitest":"4.1.9","@vitest/expect":"4.1.9","@vitest/runner":"4.1.9","@vitest/snapshot":"4.1.9","@vitest/spy":"4.1.9","@vitest/utils":"4.1.9","@vitest/mocker":"4.1.9","@vitest/pretty-format":"4.1.9","@vitest/coverage-v8":"4.1.9","@vitest/coverage-istanbul":"4.1.9"}'
         run: |
           vp create ${{ matrix.template.create-args }} \
             --no-interactive \
