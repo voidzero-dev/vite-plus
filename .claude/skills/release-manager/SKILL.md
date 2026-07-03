@@ -180,7 +180,15 @@ If the release manager says yes:
 2. Wait for the `Publish to pkg.pr.new` workflow run on the release branch to succeed (the pkg-pr-new bot comments install URLs on the PR).
 3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the pkg.pr.new commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
 
-**Choosing a target project.** The catalog of smoke-test projects is the [`vite-plus-ecosystem-ci` org](https://github.com/orgs/vite-plus-ecosystem-ci/repositories): ~60 forked real-world apps spanning package managers (pnpm, npm, yarn, bun) and frameworks (Vue, Nuxt, Svelte, React/Next, plus Rust/napi and PHP/Laravel projects). Pick one whose stack matches the release's risk area (e.g. a pnpm monorepo for catalog/override changes, a bun project for bun install-path changes, a napi project for native binding changes). Their pinned `vite-plus` versions vary (some on the immediately previous release, some older); prefer one on the previous release for the common upgrade path, and confirm the pin is older than the release under test so migrate does a real upgrade rather than a no-op. `test-pkg-pr-new-migrate` needs a **local** checkout, so clone the chosen repo (or reuse an existing local fork) and pass its path. When in doubt, ask the release manager which project(s) to target.
+**Choosing a target project.** The catalog of smoke-test projects is the [`vite-plus-ecosystem-ci` org](https://github.com/orgs/vite-plus-ecosystem-ci/repositories): ~60 forked real-world apps spanning package managers (pnpm, npm, yarn, bun) and frameworks (Vue, Nuxt, Svelte, React/Next, plus Rust/napi and PHP/Laravel projects). Pick one whose stack matches the release's risk area (e.g. a pnpm monorepo for catalog/override changes, a bun project for bun install-path changes, a napi project for native binding changes). Their pinned `vite-plus` versions vary (some on the immediately previous release, some older); prefer one on the previous release for the common upgrade path, and confirm the pin is older than the release under test so migrate does a real upgrade rather than a no-op. `test-pkg-pr-new-migrate` needs a **local** checkout, so clone the chosen repo (or reuse an existing local fork) and pass its path. Check it out under `~/git/github.com/vite-plus-ecosystem-ci/<repo>` so all smoke-test clones live in one directory and the whole test environment can be cleaned up in one step afterward:
+
+```bash
+gh repo clone vite-plus-ecosystem-ci/<repo> ~/git/github.com/vite-plus-ecosystem-ci/<repo>
+# ... run the harness against it ...
+# cleanup after the release: rm -rf ~/git/github.com/vite-plus-ecosystem-ci
+```
+
+When in doubt, ask the release manager which project(s) to target.
 
 The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
 
@@ -191,7 +199,7 @@ Changelog complete, CI green, release manager approved the smoke test. A build e
 Here the target was vibe-dashboard `main` (a `vite-plus-ecosystem-ci` fork, pnpm monorepo on `vite-plus 0.2.1`, i.e. the previous release), so the run exercised the common upgrade path. Pass the release PR number; the harness resolves it through the bridge to the latest published immutable commit and prints the resolved SHA (confirm it matches the build you expect). Pass a full commit SHA instead only to pin a specific build when several have been published:
 
 ```bash
-.github/scripts/test-pkg-pr-new-migrate.sh 2016 /path/to/vibe-dashboard --no-interactive
+.github/scripts/test-pkg-pr-new-migrate.sh 2016 ~/git/github.com/vite-plus-ecosystem-ci/vibe-dashboard --no-interactive
 ```
 
 A passing run looks like:
