@@ -20,7 +20,7 @@
           rel="noopener noreferrer"
           class="button"
         >
-          Read the Announcement
+          Read the Beta Announcement
         </a>
         <CopyPrompt />
       </div>
