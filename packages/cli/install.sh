@@ -137,6 +137,90 @@ write_release_age_override() {
   fi
 }
 
+normalize_existing_dir() {
+  local dir="${1%/}"
+  if [ -z "$dir" ]; then
+    dir="/"
+  fi
+
+  if [ -d "$dir" ]; then
+    (cd "$dir" 2>/dev/null && pwd -P) || printf '%s\n' "$dir"
+  else
+    printf '%s\n' "$dir"
+  fi
+}
+
+is_safe_install_dir_to_remove() {
+  local dir="$1"
+  [ -n "$dir" ] || return 1
+
+  case "$dir" in
+    "/" | "$HOME" | "/bin" | "/opt" | "/usr" | "/usr/bin" | "/usr/local" | "/usr/local/bin")
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+
+is_vite_plus_install_dir() {
+  local dir="$1"
+  [ -d "$dir" ] || return 1
+  [ -d "$dir/bin" ] || return 1
+  [ -e "$dir/current" ] || return 1
+  [ -e "$dir/bin/vp" ] || [ -e "$dir/bin/vp.exe" ] || [ -e "$dir/bin/vp.cmd" ]
+}
+
+detect_previous_install_dir() {
+  [ -n "${VP_HOME:-}" ] || return 1
+
+  local vp_path
+  if command -v which > /dev/null 2>&1; then
+    vp_path="$(which vp 2>/dev/null | head -n 1 || true)"
+  else
+    vp_path="$(command -v vp 2>/dev/null || true)"
+  fi
+  [ -n "$vp_path" ] || return 1
+
+  case "$(basename "$vp_path")" in
+    vp | vp.exe | vp.cmd) ;;
+    *) return 1 ;;
+  esac
+
+  local old_dir install_dir
+  old_dir="$(normalize_existing_dir "$(dirname "$(dirname "$vp_path")")")"
+  install_dir="$(normalize_existing_dir "$INSTALL_DIR")"
+  [ "$old_dir" != "$install_dir" ] || return 1
+
+  is_safe_install_dir_to_remove "$old_dir" || return 1
+  is_vite_plus_install_dir "$old_dir" || return 1
+
+  printf '%s\n' "$old_dir"
+}
+
+prompt_remove_previous_install_dir() {
+  local old_dir="$1"
+  [ -n "$old_dir" ] || return 0
+  [ -e /dev/tty ] && [ -t 1 ] || return 0
+
+  echo "" > /dev/tty
+  echo -e "${YELLOW}warn${NC}: Found a previous Vite+ install at $old_dir." > /dev/tty
+  echo "The new VP_HOME is $INSTALL_DIR." > /dev/tty
+  printf "Remove the previous install directory? (y/N): " > /dev/tty
+
+  local response
+  read -r response < /dev/tty || return 0
+  case "$response" in
+    y | Y | yes | YES)
+      if rm -rf -- "$old_dir"; then
+        success "Removed previous Vite+ install at $old_dir."
+      else
+        warn "Could not remove previous Vite+ install at $old_dir."
+      fi
+      ;;
+  esac
+}
+
 # Resolve a PR number or commit SHA to the registry bridge's immutable commit
 # version (0.0.0-commit.<sha>). A full commit SHA maps directly to the bridge's
 # deterministic version; a PR number (or short ref) is resolved via the bridge
@@ -885,6 +969,9 @@ main() {
 
   check_requirements
 
+  local previous_install_dir
+  previous_install_dir="$(detect_previous_install_dir || true)"
+
   local platform
   platform=$(detect_platform)
 
@@ -1075,6 +1162,8 @@ WRAPPER_EOF
 
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
+
+  prompt_remove_previous_install_dir "$previous_install_dir"
 
   # Use ~ shorthand if install dir is under HOME, otherwise show full path
   local display_dir="${INSTALL_DIR/#$HOME/~}"

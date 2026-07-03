@@ -205,6 +205,124 @@ function Write-ReleaseAgeOverride {
     }
 }
 
+function Normalize-InstallDir {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $Path
+    }
+
+    try {
+        if (Test-Path -LiteralPath $Path -PathType Container) {
+            return (Resolve-Path -LiteralPath $Path).ProviderPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        }
+
+        return [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    } catch {
+        return $Path.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    }
+}
+
+function Test-SafeInstallDirToRemove {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    $normalized = Normalize-InstallDir $Path
+    $root = [System.IO.Path]::GetPathRoot($normalized)
+    $home = Normalize-InstallDir $env:USERPROFILE
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $unsafeDirs = @(
+        $root
+        $home
+        (Normalize-InstallDir $env:SystemRoot)
+        (Normalize-InstallDir $env:ProgramFiles)
+        (Normalize-InstallDir $programFilesX86)
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    return $unsafeDirs -notcontains $normalized
+}
+
+function Test-VitePlusInstallDir {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $false
+    }
+
+    $binDir = Join-Path $Path "bin"
+    if (-not (Test-Path -LiteralPath $binDir -PathType Container)) {
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path "current"))) {
+        return $false
+    }
+
+    return (Test-Path -LiteralPath (Join-Path $binDir "vp.exe")) `
+        -or (Test-Path -LiteralPath (Join-Path $binDir "vp.cmd")) `
+        -or (Test-Path -LiteralPath (Join-Path $binDir "vp"))
+}
+
+function Get-PreviousInstallDir {
+    if (-not $env:VP_HOME) {
+        return $null
+    }
+
+    $vpCommand = Get-Command vp -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $vpCommand) {
+        return $null
+    }
+
+    $vpPath = if ($vpCommand.Source) { $vpCommand.Source } else { $vpCommand.Path }
+    if (-not $vpPath) {
+        return $null
+    }
+
+    $vpFileName = [System.IO.Path]::GetFileName($vpPath)
+    if ($vpFileName -notin @("vp", "vp.exe", "vp.cmd")) {
+        return $null
+    }
+
+    $oldDir = Normalize-InstallDir (Split-Path -Parent (Split-Path -Parent $vpPath))
+    $newDir = Normalize-InstallDir $InstallDir
+    if ($oldDir -eq $newDir) {
+        return $null
+    }
+    if (-not (Test-SafeInstallDirToRemove $oldDir)) {
+        return $null
+    }
+    if (-not (Test-VitePlusInstallDir $oldDir)) {
+        return $null
+    }
+
+    return $oldDir
+}
+
+function Prompt-RemovePreviousInstallDir {
+    param([string]$PreviousInstallDir)
+    if (-not $PreviousInstallDir) {
+        return
+    }
+    if ($env:CI -eq "true") {
+        return
+    }
+    if (-not [Environment]::UserInteractive) {
+        return
+    }
+
+    Write-Host ""
+    Write-Warn "Found a previous Vite+ install at $PreviousInstallDir."
+    Write-Host "The new VP_HOME is $InstallDir."
+    $response = Read-Host "Remove the previous install directory? (y/N)"
+    if ($response -match "^(?i:y|yes)$") {
+        try {
+            Remove-Item -LiteralPath $PreviousInstallDir -Recurse -Force -ErrorAction Stop
+            Write-Success "Removed previous Vite+ install at $PreviousInstallDir."
+        } catch {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: $_"
+        }
+    }
+}
+
 # Resolve a PR number or commit SHA to the registry bridge's immutable commit
 # version (0.0.0-commit.<sha>). A full commit SHA maps directly to the bridge's
 # deterministic version; a PR number (or short ref) is resolved via the bridge
@@ -587,6 +705,8 @@ function Main {
         Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
     }
 
+    $previousInstallDir = Get-PreviousInstallDir
+
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
 
@@ -812,6 +932,8 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
+
+    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
