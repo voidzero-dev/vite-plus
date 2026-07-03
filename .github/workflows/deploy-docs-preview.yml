@@ -44,6 +44,7 @@ jobs:
           path: docs/node_modules/.vite/task-cache
           key: vite-task-docs-${{ runner.os }}-${{ runner.arch }}-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
           # Prefer this PR's newest cache, then fall back to main for new PRs.
+          # Cache fallback probe: a workflow-only PR should be able to replay main.
           restore-keys: |
             vite-task-docs-${{ runner.os }}-${{ runner.arch }}-pr-${{ github.event.pull_request.number }}-
             vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-
