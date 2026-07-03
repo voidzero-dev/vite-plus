@@ -37,8 +37,26 @@ jobs:
           working-directory: docs
           cache-dependency-path: docs/pnpm-lock.yaml
 
+      - name: Restore docs Vite Task cache
+        id: vite-task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: docs/node_modules/.vite/task-cache
+          key: vite-task-docs-${{ runner.os }}-${{ runner.arch }}-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          # Prefer this PR's newest cache, then fall back to main for new PRs.
+          restore-keys: |
+            vite-task-docs-${{ runner.os }}-${{ runner.arch }}-pr-${{ github.event.pull_request.number }}-
+            vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-
+
       - run: vp run build
         working-directory: docs
+
+      - name: Save docs Vite Task cache
+        if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: docs/node_modules/.vite/task-cache
+          key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 
       - run: vpx void deploy --dir docs/.vitepress/dist
         env:

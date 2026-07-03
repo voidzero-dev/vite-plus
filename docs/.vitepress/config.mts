@@ -15,6 +15,10 @@ const taskRunnerGuideItems = [
   {
     text: 'Task Caching',
     link: '/guide/cache',
+    items: [
+      { text: 'Automatic Data Tracking', link: '/guide/automatic-data-tracking' },
+      { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
+    ],
   },
   {
     text: 'Running Binaries',
@@ -150,7 +154,7 @@ export default extendConfig(
               { text: 'Releases', link: 'https://github.com/voidzero-dev/vite-plus/releases' },
               {
                 text: 'Announcement',
-                link: 'https://voidzero.dev/posts/announcing-vite-plus-alpha',
+                link: 'https://voidzero.dev/posts/announcing-vite-plus-beta',
               },
               {
                 text: 'Contributing',
