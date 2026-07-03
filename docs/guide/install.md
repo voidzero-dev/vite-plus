@@ -72,7 +72,7 @@ Use the `-g` flag for installing, updating or removing globally installed packag
 ::: warning
 These commands do **NOT** interact with the underlying package manager's global installation directory.
 
-Instead, Vite+ manages its own global packages under `~/.vite-plus/packages`, allowing them to remain available across different Node.js versions.
+Instead, Vite+ manages its own global packages under `VP_HOME/packages`, allowing them to remain available across different Node.js versions.
 
 As a result, commands such as `vp link` do not affect Vite+'s global packages and will not appear in `vp list -g`.
 :::
