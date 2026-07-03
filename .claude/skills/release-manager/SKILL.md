@@ -59,6 +59,13 @@ Apply two whole-file text replacements (`<prev>` is the previous release version
 1. `'<prev>'` -> `'<curr>'`
 2. `expected <prev> but got` -> `expected <curr> but got`
 
+Then confirm the replacement took; both counts must now be zero:
+
+```bash
+grep -c "'<prev>'" packages/cli/binding/index.cjs                 # 0
+grep -c "expected <prev> but got" packages/cli/binding/index.cjs  # 0
+```
+
 Do not regenerate via a full build; the text replace is deterministic and byte-identical to what `napi build` would produce for a version-only bump. Commit with this exact message shape (it makes `git log --grep` find the sync across releases) and push:
 
 ```
@@ -213,7 +220,7 @@ Fixes for CI failures go through a **separate PR to `main`**, never as commits o
 git checkout release/vX.Y.Z && git merge origin/main --no-edit && git push origin release/vX.Y.Z
 ```
 
-Then add the fix PR to the changelog (rerun the step 3 validation; the `generate-notes` count grows by one per merged PR).
+Do not assume the merge brought in only the fix PR: `main` may have accumulated several. Before merging, list everything that will come in with `git log origin/release/vX.Y.Z..origin/main --oneline`, then add a changelog entry for **every** newly included PR and rerun the step 3 validation (its missing/extra diff against `generate-notes` catches any entry you missed).
 
 Known release-branch-only failure modes:
 
@@ -232,7 +239,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 1. `check`: compares the local version against `unpkg.com/vite-plus@latest`; everything below is skipped unless it changed.
 2. `build-rust`: full multi-platform build.
 3. `request-approval`: posts an approval request to the releases Discord channel, and the `Release` job waits on the `release` GitHub environment. **A person with environment approval rights must approve the run in the Actions UI.**
-4. `Release`: publishes `@voidzero-dev/vite-plus-core` and `vite-plus` to npm (`--tag latest`), creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
+4. `Release`: publishes the platform-native CLI packages (`@voidzero-dev/vite-plus-cli-<platform>`, via `packages/cli/publish-native-addons.ts`) and then `@voidzero-dev/vite-plus-core` and `vite-plus` to npm (`--tag latest`), creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
 5. `publish-docker`: multi-arch toolchain image to `ghcr.io/voidzero-dev/vite-plus`, after npm publish (the image installs vp from npm).
 6. `discord-notify`: announces to Discord with a link to the release.
 
@@ -262,6 +269,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    ```bash
    npm view vite-plus version                       # X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
+   npm view @voidzero-dev/vite-plus-cli-darwin-arm64 version   # X.Y.Z, spot-check a native platform package
    npm view vite-plus dist-tags.latest              # X.Y.Z
    vp upgrade && vp --version                       # bundled tool versions sane
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
