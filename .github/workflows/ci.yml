@@ -59,6 +59,29 @@ jobs:
               - '!.github/workflows/deploy-docs.yml'
               - '!netlify.toml'
 
+  actionlint:
+    needs: optimize-ci
+    if: needs.optimize-ci.outputs.skip == 'false'
+    name: Lint GitHub Actions workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Download actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          # download-actionlint.bash pinned to v1.7.12.
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash \
+            --output "$RUNNER_TEMP/download-actionlint.bash"
+          bash "$RUNNER_TEMP/download-actionlint.bash" "$ACTIONLINT_VERSION" "$RUNNER_TEMP"
+
+      - name: Check workflow files
+        run: |
+          # Keep results independent of optional external linters on the runner image.
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
+
   download-previous-rolldown-binaries:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -1244,6 +1267,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - actionlint
       - test
       - build-windows-tests
       - test-windows

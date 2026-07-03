@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - namespace-profile-linux-x64-default
+    - namespace-profile-mac-default
