@@ -59,6 +59,33 @@ jobs:
               - '!.github/workflows/deploy-docs.yml'
               - '!netlify.toml'
 
+  docs-fmt:
+    name: Docs format check
+    needs: detect-changes
+    # Docs-only changes skip the full CI matrix, so nothing else format-checks
+    # them (code changes get `vp check` in cli-e2e-test). Non-blocking:
+    # intentionally not listed in the `done` job's needs.
+    if: needs.detect-changes.outputs.code-changed == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: voidzero-dev/setup-vp@35171c92dd08b67d5a9d3f2a4327800e58396f2a # v1.13.0
+        with:
+          # The workspace `vite-plus` version can be ahead of the registry, so
+          # pin the released build instead of auto-detecting from package.json.
+          version: latest
+          run-install: false
+
+      - name: Run vp fmt --check
+        run: |
+          # `vp fmt` loads the root vite.config.ts, whose `import ... from 'vite-plus'`
+          # must resolve at runtime. Link the released package out of the global
+          # install instead of installing the whole workspace.
+          mkdir -p node_modules
+          ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" node_modules/vite-plus
+          vp fmt --check
+
   download-previous-rolldown-binaries:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
