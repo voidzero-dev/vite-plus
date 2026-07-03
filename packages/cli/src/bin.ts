@@ -10,6 +10,7 @@
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { run } from '../binding/index.js';
@@ -37,6 +38,27 @@ function getErrorMessage(err: unknown): string {
 
 // Parse command line arguments
 let args = process.argv.slice(2);
+
+// Global `-C <dir>` flag: run as if vp was started in <dir>. The global Rust
+// CLI parses this itself and spawns bin.js with the target cwd already set;
+// this branch covers direct local-bin invocations (`pnpm exec vp -C <dir> ...`).
+if (args[0] === '-C' || (args[0]?.startsWith('-C') && args[0].length > 2)) {
+  const inline = args[0] !== '-C';
+  const dir = inline ? args[0].slice(2) : args[1];
+  if (!dir) {
+    errorMsg('-C requires a directory argument');
+    process.exit(1);
+  }
+  const target = path.resolve(dir);
+  const stat = fs.statSync(target, { throwIfNoEntry: false });
+  if (!stat?.isDirectory()) {
+    errorMsg(`directory not found: ${dir}`);
+    process.exit(1);
+  }
+  process.chdir(target);
+  args = args.slice(inline ? 1 : 2);
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
 
 // Transform `vp help [command]` into `vp [command] --help`
 if (args[0] === 'help' && args[1]) {

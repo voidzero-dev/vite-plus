@@ -3,6 +3,7 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
+mod app_target;
 mod execution;
 mod handler;
 mod help;
@@ -46,6 +47,16 @@ async fn execute_direct_subcommand(
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
 ) -> Result<ExitStatus, Error> {
+    // A bare app command at a workspace root resolves its target first
+    // (defaultPackage, package listing); the command then runs as if invoked
+    // in the resolved directory (rfcs/cwd-flag.md).
+    let elicited_cwd = match app_target::resolve_app_target(&subcommand, cwd)? {
+        app_target::AppTarget::CurrentDir => None,
+        app_target::AppTarget::Dir(dir) => Some(dir),
+        app_target::AppTarget::Exit(status) => return Ok(status),
+    };
+    let cwd = elicited_cwd.as_ref().unwrap_or(cwd);
+
     let (workspace_root, _) = vite_workspace::find_workspace_root(cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 

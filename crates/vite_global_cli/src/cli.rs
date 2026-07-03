@@ -53,6 +53,10 @@ pub struct Args {
     #[arg(short = 'V', long = "version")]
     pub version: bool,
 
+    /// Run as if vp was started in <DIR> instead of the current working directory
+    #[arg(short = 'C', value_name = "DIR")]
+    pub chdir: Option<String>,
+
     #[clap(subcommand)]
     pub command: Option<Commands>,
 }
@@ -851,10 +855,19 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
 /// Run the CLI command with rendering options.
 pub async fn run_command_with_options(
-    cwd: AbsolutePathBuf,
+    mut cwd: AbsolutePathBuf,
     args: Args,
     render_options: RenderOptions,
 ) -> Result<ExitStatus, Error> {
+    // Apply the global `-C <dir>` flag before anything reads cwd, so local CLI
+    // resolution and command execution behave as if vp was started in <dir>.
+    if let Some(dir) = &args.chdir {
+        cwd.push(dir);
+        if !cwd.as_path().is_dir() {
+            return Err(Error::UserMessage(format!("directory not found: {dir}").into()));
+        }
+    }
+
     // Handle --version flag (Category B: delegates to JS)
     if args.version {
         return commands::version::execute(cwd).await;

@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp pack # bare pack at the root follows defaultPackage",
+    "ls packages/hello/dist # output lands in the configured package"
+  ]
+}
