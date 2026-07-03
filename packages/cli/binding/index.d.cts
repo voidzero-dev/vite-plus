@@ -41,7 +41,7 @@ export interface CompressOptions {
    *
    * @default 'esnext'
    *
-   * @see [esbuild#target](https://esbuild.github.io/api/#target)
+   * @see [oxc#target](https://oxc.rs/docs/guide/usage/transformer/lowering#target)
    */
   target?: string | Array<string>;
   /**
@@ -1231,7 +1231,10 @@ export interface StyledComponentsOptions {
    * Transpiles styled-components tagged template literals to a smaller representation
    * than what Babel normally creates, helping to reduce bundle size.
    *
-   * @default true
+   * Disabled by default because Oxc does not down-level template literals, so this
+   * transform only increases output size.
+   *
+   * @default false
    */
   transpileTemplateLiterals?: boolean;
   /**
@@ -1302,6 +1305,13 @@ export declare function transform(
 /**
  * Options for transforming a JavaScript or TypeScript file.
  *
+ * Options are listed in evaluation order: the source is parsed (`lang`,
+ * `sourceType`), declarations are emitted (`typescript.declaration`), then
+ * transforms run (`typescript`, `decorator`, `plugins`,
+ * `jsx`, `target`), followed by the `inject` and `define` plugins, and
+ * finally codegen (`sourcemap`). `helpers` configures the runtime helpers
+ * the transforms emit.
+ *
  * @see {@link transform}
  */
 export interface TransformOptions {
@@ -1314,23 +1324,23 @@ export interface TransformOptions {
    * options.
    */
   cwd?: string;
-  /**
-   * Enable source map generation.
-   *
-   * When `true`, the `sourceMap` field of transform result objects will be populated.
-   *
-   * @default false
-   *
-   * @see {@link SourceMap}
-   */
-  sourcemap?: boolean;
   /** Set assumptions in order to produce smaller output. */
   assumptions?: CompilerAssumptions;
   /**
    * Configure how TypeScript is transformed.
+   *
+   * `typescript.declaration` is evaluated before all transforms.
+   *
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/typescript}
    */
   typescript?: TypeScriptOptions;
+  /** Decorator plugin */
+  decorator?: DecoratorOptions;
+  /**
+   * Third-party plugins to use.
+   * @see {@link https://oxc.rs/docs/guide/usage/transformer/plugins}
+   */
+  plugins?: PluginsOptions;
   /**
    * Configure how TSX and JSX are transformed.
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/jsx}
@@ -1354,22 +1364,31 @@ export interface TransformOptions {
   /** Behaviour for runtime helpers. */
   helpers?: Helpers;
   /**
+   * Inject Plugin
+   *
+   * Runs after all transforms.
+   *
+   * @see {@link https://oxc.rs/docs/guide/usage/transformer/global-variable-replacement#inject}
+   */
+  inject?: Record<string, string | [string, string]>;
+  /**
    * Define Plugin
+   *
+   * Runs after the inject plugin.
+   *
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/global-variable-replacement#define}
    */
   define?: Record<string, string>;
   /**
-   * Inject Plugin
-   * @see {@link https://oxc.rs/docs/guide/usage/transformer/global-variable-replacement#inject}
+   * Enable source map generation.
+   *
+   * When `true`, the `sourceMap` field of transform result objects will be populated.
+   *
+   * @default false
+   *
+   * @see {@link SourceMap}
    */
-  inject?: Record<string, string | [string, string]>;
-  /** Decorator plugin */
-  decorator?: DecoratorOptions;
-  /**
-   * Third-party plugins to use.
-   * @see {@link https://oxc.rs/docs/guide/usage/transformer/plugins}
-   */
-  plugins?: PluginsOptions;
+  sourcemap?: boolean;
 }
 
 export interface TransformResult {
@@ -1918,11 +1937,6 @@ export declare class ParallelJsPluginRegistry {
   constructor(workerCount: number);
 }
 
-export declare class ScheduledBuild {
-  wait(): Promise<void>;
-  alreadyScheduled(): boolean;
-}
-
 export declare class TraceSubscriberGuard {
   close(): void;
 }
@@ -1977,7 +1991,6 @@ export declare const enum BindingBuiltinPluginName {
   ViteReporter = 'builtin:vite-reporter',
   ViteResolve = 'builtin:vite-resolve',
   ViteTransform = 'builtin:vite-transform',
-  ViteWasmFallback = 'builtin:vite-wasm-fallback',
   ViteWebWorkerPost = 'builtin:vite-web-worker-post',
   OxcRuntime = 'builtin:oxc-runtime',
 }
@@ -1996,7 +2009,16 @@ export interface BindingBundlerOptions {
 }
 
 export interface BindingBundleState {
-  lastFullBuildFailed: boolean;
+  lastBuildErrored: boolean;
+  /**
+   * The stage of the last incremental failure, when `last_build_errored`
+   * is true and the engine is in an incremental-failure state. Absent on
+   * success and for an initial full-build failure (use
+   * `last_build_errored` to detect that). The consumer can force a full
+   * rebuild on the next page load when this is `Hmr`. See
+   * `internal-docs/dev-engine/implementation.md` §12.
+   */
+  lastErrorStage?: BindingErrorStage;
   hasStaleOutput: boolean;
 }
 
@@ -2083,6 +2105,12 @@ export interface BindingDevOptions {
     | undefined
     | ((result: BindingResult<[BindingClientHmrUpdate[], string[]]>) => void | Promise<void>);
   onOutput?: undefined | ((result: BindingResult<BindingOutputs>) => void | Promise<void>);
+  /**
+   * Called with assets emitted while generating an HMR patch or compiling a
+   * lazy entry. These never go through `on_output`, so a consumer (e.g. Vite)
+   * must register this to serve them (e.g. write them to its in-memory files).
+   */
+  onAdditionalAssets?: undefined | ((output: BindingOutputs) => void | Promise<void>);
   rebuildStrategy?: BindingRebuildStrategy;
   watch?: BindingDevWatchOptions;
 }
@@ -2265,6 +2293,20 @@ export interface BindingErrors {
   isBindingErrors: boolean;
 }
 
+/**
+ * Which stage of an incremental dev build produced the last error.
+ *
+ * Mirrors `rolldown_dev::ErrorStage`. Surfaced on
+ * [`crate::binding_dev_engine::BindingBundleState`] so the consumer can
+ * treat an `Hmr`-stage failure as recoverable by forcing a full rebuild
+ * on the next page load (HMR generation may itself be buggy). See
+ * `internal-docs/dev-engine/implementation.md` §12.
+ */
+export declare const enum BindingErrorStage {
+  Hmr = 'Hmr',
+  Rebuild = 'Rebuild',
+}
+
 export interface BindingEsmExternalRequirePluginConfig {
   external: Array<BindingStringOrRegex>;
   skipDuplicateCheck?: boolean;
@@ -2300,10 +2342,6 @@ export interface BindingGeneratedCodeOptions {
   symbols?: boolean;
   preset?: string;
 }
-
-export type BindingGenerateHmrPatchReturn =
-  | { type: 'Ok'; field0: Array<BindingHmrUpdate> }
-  | { type: 'Error'; field0: Array<BindingError> };
 
 export interface BindingHmrBoundaryOutput {
   boundary: string;
@@ -2411,6 +2449,8 @@ export interface BindingIndentOptions {
   exclude?: Array<Array<number>> | Array<number>;
 }
 
+export type BindingInjectImport = BindingInjectImportNamed | BindingInjectImportNamespace;
+
 export interface BindingInjectImportNamed {
   tagNamed: true;
   imported: string;
@@ -2450,7 +2490,7 @@ export interface BindingInputOptions {
   moduleTypes?: Record<string, string>;
   define?: Array<[string, string]>;
   dropLabels?: Array<string>;
-  inject?: Array<BindingInjectImportNamed | BindingInjectImportNamespace>;
+  inject?: Array<BindingInjectImport>;
   experimental?: BindingExperimentalOptions;
   profilerNames?: boolean;
   transform?: TransformOptions;
@@ -2568,7 +2608,7 @@ export interface BindingModules {
 export interface BindingModuleSideEffectsRule {
   test?: RegExp | undefined;
   sideEffects: boolean;
-  external?: boolean | undefined;
+  external?: boolean;
 }
 
 export interface BindingOptimization {
@@ -2907,6 +2947,13 @@ export interface BindingTsconfigCompilerOptions {
   experimentalDecorators?: boolean;
   /** Enables decorator metadata emission. */
   emitDecoratorMetadata?: boolean;
+  /** Enables all strict type-checking options. Used as the fallback for `strictNullChecks`. */
+  strict?: boolean;
+  /**
+   * Enables strict null checks. Controls whether `null`/`undefined` are elided from
+   * nullable-union `design:type` decorator metadata.
+   */
+  strictNullChecks?: boolean;
   /** Preserves module structure of imports/exports. */
   verbatimModuleSyntax?: boolean;
   /** Configures how class fields are emitted. */
@@ -2953,18 +3000,6 @@ export interface BindingViteBuildImportAnalysisPluginConfig {
   optimizeModulePreloadRelativePaths: boolean;
   renderBuiltUrl: boolean;
   isRelativeBase: boolean;
-  v2?: BindingViteBuildImportAnalysisPluginV2Config;
-}
-
-export interface BindingViteBuildImportAnalysisPluginV2Config {
-  isSsr: boolean;
-  urlBase: string;
-  decodedBase: string;
-  modulePreload: false | BindingModulePreloadOptions;
-  renderBuiltUrl?: (
-    filename: string,
-    type: BindingRenderBuiltUrlConfig,
-  ) => undefined | string | BindingRenderBuiltUrlRet;
 }
 
 export interface BindingViteDynamicImportVarsPluginConfig {
@@ -2991,7 +3026,6 @@ export type BindingViteJsonPluginStringify = boolean | string;
 export interface BindingViteManifestPluginConfig {
   root: string;
   outPath: string;
-  isEnableV2?: boolean;
   isLegacy?: (args: BindingNormalizedOptions) => boolean;
   cssEntries: () => Record<string, string>;
 }
@@ -3238,6 +3272,8 @@ export interface BatchRewriteError {
 export interface BatchRewriteResult {
   /** Files that were modified */
   modifiedFiles: Array<string>;
+  /** Files in Nuxt test-utils packages where upstream `vitest` imports were preserved */
+  preservedVitestFiles: Array<string>;
   /** Files that had errors */
   errors: Array<BatchRewriteError>;
 }
@@ -3470,6 +3506,8 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
  * # Arguments
  *
  * * `root` - The root directory to search for files
+ * * `preserve_vitest_in_nuxt_packages` - Preserve `vitest` and `vitest/*`
+ *   specifiers throughout packages that declare `@nuxt/test-utils`
  *
  * # Returns
  *
@@ -3487,7 +3525,10 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
  * }
  * ```
  */
-export declare function rewriteImportsInDirectory(root: string): BatchRewriteResult;
+export declare function rewriteImportsInDirectory(
+  root: string,
+  preserveVitestInNuxtPackages?: boolean | undefined | null,
+): BatchRewriteResult;
 
 /**
  * Rewrite Prettier scripts: rename `prettier` → `vp fmt` and strip Prettier-only flags.

@@ -29,6 +29,18 @@ app-b
 warn: No packages matched the filter 'nonexistent-pkg'
 warn: No packages matched the filter(s)
 
+[1]> vp exec --fail-if-no-match --filter nonexistent-pkg -- echo hello # unmatched filter strict error
+error: No packages matched the filter: nonexistent-pkg
+
+[1]> vp exec --fail-if-no-match --filter nonexistent-pkg --filter app-a -- echo hello # unmatched + matched strict error
+error: No packages matched the filter: nonexistent-pkg
+
+[1]> vp exec --fail-if-no-match --filter nope1 --filter nope2 -- echo hello # multiple unmatched strict error
+error: No packages matched the filter: nope1, nope2
+
+> vp exec --fail-if-no-match --filter app-a -- echo hello # strict succeeds when filter matches
+hello
+
 > vp exec --filter nonexistent-pkg --filter app-a -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # unmatched + matched filter
 warn: No packages matched the filter 'nonexistent-pkg'
 app-a

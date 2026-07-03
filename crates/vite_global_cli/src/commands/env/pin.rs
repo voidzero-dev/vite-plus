@@ -155,7 +155,7 @@ async fn do_pin(
         }
         PinTarget::DevEngines => {
             if !package_json_exists {
-                return Err(Error::ConfigError(
+                return Err(Error::Other(
                     format!(
                         "cannot pin to devEngines: no {} in {}",
                         PACKAGE_JSON_FILE,
@@ -398,7 +398,7 @@ async fn write_dev_engines_node_version(cwd: &AbsolutePathBuf, version: &str) ->
     let updated = vite_shared::edit_json_object(&content, |obj| {
         set_dev_engines_runtime_node(obj, version);
     })
-    .map_err(|e| Error::ConfigError(format!("failed to update package.json: {e}").into()))?;
+    .map_err(|e| Error::Other(format!("failed to update package.json: {e}").into()))?;
     tokio::fs::write(&package_json_path, updated).await?;
     Ok(())
 }
@@ -493,7 +493,7 @@ async fn remove_dev_engines_runtime_node(cwd: &AbsolutePathBuf) -> Result<bool, 
             obj.remove("devEngines");
         }
     })
-    .map_err(|e| Error::ConfigError(format!("failed to update package.json: {e}").into()))?;
+    .map_err(|e| Error::Other(format!("failed to update package.json: {e}").into()))?;
 
     if removed {
         tokio::fs::write(&package_json_path, updated).await?;

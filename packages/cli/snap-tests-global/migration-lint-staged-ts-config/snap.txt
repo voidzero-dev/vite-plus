@@ -2,7 +2,7 @@
 > vp migrate --no-interactive # migration should warn about unsupported TS lint-staged config
 
 ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 
@@ -30,19 +30,15 @@
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat lint-staged.config.ts # check TS config is not modified
 export default {

@@ -1,0 +1,16 @@
+{
+  "name": "migration-upgrade-browser-peer-only-pnpm",
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@vitest/browser-playwright": "^4.0.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

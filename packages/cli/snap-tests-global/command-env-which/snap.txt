@@ -28,7 +28,7 @@ info: Installing 1 global package with Node.js <semver>
   Bins: cowsay, cowthink
 
 > vp env which cowsay # Global package - shows binary path with metadata
-<vite-plus-home>/packages/cowsay/lib/node_modules/cowsay/./cli.js
+<vite-plus-home>/packages/cowsay<install-id>/lib/node_modules/cowsay/./cli.js
   Package:    cowsay@<semver>
   Binaries:   cowsay, cowthink
   Node:       <semver>

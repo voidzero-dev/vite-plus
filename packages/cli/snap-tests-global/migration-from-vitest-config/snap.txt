@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should rewrite imports to vite-plus
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 
@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 import { foo } from '@foo/vite-plugin-foo';
 import { playwright } from 'vite-plus/test/browser-playwright';
-import { server } from 'vite-plus/test/browser-playwright/context';
+import { server } from 'vite-plus/test/browser/context';
 import { preview } from 'vite-plus/test/browser-preview';
 import { webdriverio } from 'vite-plus/test/browser-webdriverio';
 import { userEvent } from 'vite-plus/test/browser/context';
@@ -40,8 +40,12 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
+    "@vitest/browser-webdriverio": "catalog:",
+    "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"
   },
@@ -56,9 +60,15 @@ export default defineConfig({
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vitest: <semver>
+  vite-plus: <semver>
+  '@vitest/browser-webdriverio': <semver>
+  '@vitest/browser-playwright': <semver>
+  '@vitest/coverage-v8': <semver>
+allowBuilds:
+  edgedriver: true
+  geckodriver: true
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

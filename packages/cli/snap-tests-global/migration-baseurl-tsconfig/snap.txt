@@ -1,6 +1,6 @@
 > chmod +x fix-baseurl.mjs # setup baseUrl fixer
 > vp migrate --no-interactive # migration should auto-fix tsconfig baseUrl
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 3 config updates applied
 
@@ -43,6 +43,7 @@ export default defineConfig({
 > cat package.json # check package.json
 {
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -59,16 +60,12 @@ export default defineConfig({
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'

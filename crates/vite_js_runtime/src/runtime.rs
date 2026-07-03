@@ -10,7 +10,7 @@ use crate::{
     Error, Platform,
     dev_engines::{PackageJson, read_node_version_file},
     download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
-    provider::{HashVerification, JsRuntimeProvider},
+    provider::{HashVerification, JsRuntimeProvider, ShasumsSignature},
     providers::NodeProvider,
 };
 
@@ -115,6 +115,57 @@ pub async fn download_runtime(
     }
 }
 
+/// Fetch the SHASUMS content to parse for the expected archive hash.
+///
+/// With a signature, fetch and PGP-verify the clearsigned `.asc`. When no
+/// signature is available (the unofficial musl builds, or a custom mirror that
+/// publishes only `SHASUMS256.txt`) it falls back to the plain SHASUMS and warns
+/// that the download is verified by checksum only. The official source requires
+/// the signature, and a downloaded but invalid signature always fails.
+async fn resolve_shasums_content(
+    plain_url: &str,
+    signature: Option<&ShasumsSignature>,
+    archive_filename: &str,
+) -> Result<String, Error> {
+    // Escape hatch: skip PGP verification entirely (e.g. to work around a stale
+    // keyring or a signature-fetch failure). The SHA-256 checksum still runs, so
+    // this only drops authenticity, not integrity. Warn loudly, including in CI,
+    // since it is a deliberate security downgrade the operator opted into.
+    if vite_shared::EnvConfig::get().node_skip_signature_verify {
+        vite_shared::output::warn(&format!(
+            "PGP signature verification skipped for {archive_filename} \
+             (VP_NODE_SKIP_SIGNATURE_VERIFY set); verifying SHA-256 checksum only"
+        ));
+        return download_text(plain_url).await;
+    }
+    let Some(signature) = signature else {
+        // No signature is published for this source (e.g. unofficial musl builds).
+        log_checksum_only(archive_filename);
+        return download_text(plain_url).await;
+    };
+    match download_text(&signature.url).await {
+        Ok(signed) => crate::pgp_verify::verify_signed_shasums(signed, archive_filename).await,
+        Err(e) if signature.required => Err(e),
+        Err(_) => {
+            // A custom mirror may publish only the plain SHASUMS256.txt.
+            log_checksum_only(archive_filename);
+            download_text(plain_url).await
+        }
+    }
+}
+
+/// Record that a runtime download is verified by SHA-256 checksum only because
+/// no PGP signature is available (the unofficial musl builds, or a custom mirror
+/// that publishes only `SHASUMS256.txt`).
+///
+/// This is an expected, non-actionable condition for those sources, so it is a
+/// debug log (visible via `VITE_LOG`) rather than a user-facing warning.
+fn log_checksum_only(archive_filename: &str) {
+    tracing::debug!(
+        "no PGP signature available for {archive_filename}; verifying SHA-256 checksum only"
+    );
+}
+
 /// Download and cache a JavaScript runtime using a provider
 ///
 /// This is the generic download function that works with any `JsRuntimeProvider`.
@@ -175,12 +226,15 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
     let archive_path = temp_path.join(&download_info.archive_filename);
 
-    // Resolve the expected hash once. The SHASUMS fetch/parse is deterministic
-    // (parse failures are permanent and the fetch already retries internally),
-    // so it stays outside the content-integrity retry below.
+    // Resolve the expected hash once. The SHASUMS fetch/verify/parse is
+    // deterministic (parse and signature failures are permanent and the fetch
+    // already retries internally), so it stays outside the content-integrity
+    // retry below.
     let expected_hash: Option<Str> = match &download_info.hash_verification {
-        HashVerification::ShasumsFile { url } => {
-            let shasums_content = download_text(url).await?;
+        HashVerification::ShasumsFile { url, signature } => {
+            let shasums_content =
+                resolve_shasums_content(url, signature.as_ref(), &download_info.archive_filename)
+                    .await?;
             Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
         }
         HashVerification::None => None,
@@ -392,9 +446,7 @@ pub async fn resolve_node_version(
 ///
 /// # Note
 /// Currently only supports Node.js runtime.
-pub async fn download_runtime_for_project(
-    project_path: &AbsolutePath,
-) -> Result<(JsRuntime, Option<VersionSource>), Error> {
+pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result<JsRuntime, Error> {
     let provider = NodeProvider::new();
     let cache_dir = crate::cache::get_cache_dir()?;
 
@@ -444,7 +496,7 @@ pub async fn download_runtime_for_project(
     tracing::info!("Resolved Node.js version: {version}");
     let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
 
-    Ok((runtime, source))
+    Ok(runtime)
 }
 
 /// Resolve version requirement to an exact version.
@@ -676,7 +728,7 @@ mod tests {
         let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
         // Version should be >= 20.18.0 and < 21.0.0
@@ -706,7 +758,7 @@ mod tests {
         }"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         // Should use node runtime (deno is not supported yet)
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
@@ -724,7 +776,7 @@ mod tests {
         let package_json = r#"{"name": "test-project"}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         // Should download Node.js
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
@@ -764,7 +816,7 @@ mod tests {
 "#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let _runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let _runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         // .node-version should NOT be written (auto-write was removed)
         assert!(
@@ -795,7 +847,7 @@ mod tests {
 "#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         let version = runtime.version();
         let parsed = node_semver::Version::parse(version).unwrap();
         assert_eq!(parsed.major, 20);
@@ -817,7 +869,7 @@ mod tests {
         let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"v20.18.0"}}}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
         // Version should be normalized (without 'v' prefix)
@@ -834,7 +886,7 @@ mod tests {
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
         // No package.json file
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         // Should download latest Node.js
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
@@ -859,7 +911,7 @@ mod tests {
         tokio::fs::create_dir_all(&subdir).await.unwrap();
         tokio::fs::write(subdir.join("package.json"), r#"{"name": "foo"}"#).await.unwrap();
 
-        let runtime = download_runtime_for_project(&subdir).await.unwrap().0;
+        let runtime = download_runtime_for_project(&subdir).await.unwrap();
 
         // Should inherit version from parent's .node-version
         assert_eq!(runtime.version(), "20.18.0");
@@ -1038,7 +1090,7 @@ mod tests {
         let package_json = r#"{"engines":{"node":">=22.0.0"}}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         assert_eq!(runtime.version(), "20.18.0");
 
         // Should NOT write back since .node-version had exact version
@@ -1059,7 +1111,7 @@ mod tests {
 }"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         // devEngines.runtime is the dev-environment requirement and wins over the
         // consumer-facing engines.node range (rfcs/dev-engines.md)
         let version = runtime.version();
@@ -1076,7 +1128,7 @@ mod tests {
         let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         let version = runtime.version();
         let parsed = node_semver::Version::parse(version).unwrap();
         assert_eq!(parsed.major, 20);
@@ -1093,7 +1145,7 @@ mod tests {
         // Create .node-version with partial version (two parts)
         tokio::fs::write(temp_path.join(".node-version"), "20.18\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         let version = runtime.version();
         let parsed = node_semver::Version::parse(version).unwrap();
         // Should resolve to a 20.18.x or higher version in 20.x line
@@ -1115,7 +1167,7 @@ mod tests {
         // Create .node-version with single-part version
         tokio::fs::write(temp_path.join(".node-version"), "20\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         let version = runtime.version();
         let parsed = node_semver::Version::parse(version).unwrap();
         // Should resolve to a 20.x.x version
@@ -1151,7 +1203,7 @@ mod tests {
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
         // Should fall through to fetch latest LTS since .node-version is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
         // Should have a valid version (latest LTS)
@@ -1170,7 +1222,7 @@ mod tests {
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
         // Should fall through to fetch latest LTS since engines.node is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
         // Should have a valid version (latest LTS)
@@ -1189,7 +1241,7 @@ mod tests {
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
         // Should fall through to fetch latest LTS since devEngines.runtime is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
         // Should have a valid version (latest LTS)
@@ -1211,7 +1263,7 @@ mod tests {
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
         // Should use engines.node since .node-version is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         let version = runtime.version();
         let parsed = node_semver::Version::parse(version).unwrap();
         assert_eq!(parsed.major, 20);
@@ -1230,7 +1282,7 @@ mod tests {
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
         // Should use devEngines.runtime since engines.node is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
         let version = runtime.version();
         let parsed = node_semver::Version::parse(version).unwrap();
         assert_eq!(parsed.major, 20);
@@ -1363,7 +1415,7 @@ mod tests {
         // Create .node-version with LTS alias
         tokio::fs::write(temp_path.join(".node-version"), "lts/iron\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
         // lts/iron should resolve to v20.x
@@ -1385,7 +1437,7 @@ mod tests {
         // Create .node-version with lts/* alias
         tokio::fs::write(temp_path.join(".node-version"), "lts/*\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
         // lts/* should resolve to latest LTS (at least v22.x as of 2026)
@@ -1407,7 +1459,7 @@ mod tests {
         // Create .node-version with "latest" alias
         tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap().0;
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
         // "latest" should resolve to the absolute latest version (including non-LTS)

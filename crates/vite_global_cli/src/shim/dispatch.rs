@@ -268,7 +268,7 @@ fn check_npm_global_install_result(
             // Skip protected shims (core shims and default env shims). Tell
             // the user for the non-core names (e.g. `npm i -g corepack`):
             // npm installed the package, but the binary stays unlinked.
-            if is_protected_shim(&bin_name) {
+            if is_protected_shim(&bin_name, false) {
                 if !crate::commands::global::CORE_SHIMS.contains(&bin_name.as_str()) {
                     let hint = if bin_name == "corepack" {
                         " Use `vp install -g corepack` to manage its version."
@@ -530,7 +530,7 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
         // Skip protected shims: a stale Npm BinConfig (e.g. a pre-default-shim
         // `npm install -g corepack`) must not let `npm uninstall -g` delete a
         // default shim that `vp env setup` now owns.
-        if is_protected_shim(bin_name) {
+        if is_protected_shim(bin_name, false) {
             continue;
         }
 
@@ -714,6 +714,23 @@ async fn resolve_matching_package_manager_tool(
     Ok(Some(package_manager_bin_path(&install_dir, bin_name)))
 }
 
+async fn prepend_js_child_process_path_env(
+    cwd: &AbsolutePath,
+    node_bin_dir: &AbsolutePath,
+) -> Result<(), Error> {
+    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+
+    let Some(npm_path) = resolve_matching_package_manager_tool(cwd, "npm").await? else {
+        return Ok(());
+    };
+    if let Some(pm_bin_dir) = npm_path.parent()
+        && pm_bin_dir != node_bin_dir
+    {
+        let _ = prepend_to_path_env(pm_bin_dir, PrependOptions::default());
+    }
+    Ok(())
+}
+
 /// Main shim dispatch entry point.
 ///
 /// Called when the binary is invoked as node, npm, npx, corepack, or a
@@ -861,7 +878,10 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // version was selected from `packageManager`, put that PM bin dir first so
     // nested invocations see the same PM version while recursion prevention is set.
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
-    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    if let Err(e) = prepend_js_child_process_path_env(&cwd, node_bin_dir).await {
+        eprintln!("vp: Failed to resolve package manager for child process PATH: {e}");
+        return 1;
+    }
     if let Some(pm_bin_dir) = tool_path.parent()
         && pm_bin_dir != node_bin_dir
     {
@@ -960,10 +980,15 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
                         match ensure_installed(&node_version).await {
                             Ok(node_path) => {
                                 if let Some(node_bin_dir) = node_path.parent() {
-                                    let _ = prepend_to_path_env(
-                                        node_bin_dir,
-                                        PrependOptions::default(),
-                                    );
+                                    if let Err(e) =
+                                        prepend_js_child_process_path_env(&cwd, node_bin_dir).await
+                                    {
+                                        eprintln!(
+                                            "vp: Failed to resolve package manager for child \
+                                             process PATH: {e}"
+                                        );
+                                        return 1;
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -1060,13 +1085,19 @@ pub(crate) async fn package_binary_invocation(
         .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?;
 
     // Locate the actual binary in the package directory
-    let binary_path = locate_package_binary(&metadata.name, tool)
+    let binary_path = locate_package_binary(metadata, tool)
         .map_err(|e| format!("Binary '{tool}' not found: {e}"))?;
 
     // Prepare environment for recursive invocations
     let node_bin_dir =
         node_path.parent().ok_or_else(|| "Node has no parent directory".to_string())?;
-    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    if let Ok(cwd) = current_dir() {
+        prepend_js_child_process_path_env(&cwd, node_bin_dir).await.map_err(|e| {
+            format!("Failed to resolve package manager for child process PATH: {e}")
+        })?;
+    } else {
+        let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    }
 
     // JS binaries (determined at install time and stored in metadata) run
     // through node; native executables run directly.
@@ -1095,11 +1126,11 @@ pub(crate) async fn find_package_for_binary(
 
 /// Locate a binary within a package's installation directory.
 pub(crate) fn locate_package_binary(
-    package_name: &str,
+    metadata: &PackageMetadata,
     binary_name: &str,
 ) -> Result<AbsolutePathBuf, String> {
-    let packages_dir = config::get_packages_dir().map_err(|e| format!("{e}"))?;
-    let package_dir = packages_dir.join(package_name);
+    let package_dir = metadata.installation_dir().map_err(|e| format!("{e}"))?;
+    let package_name = &metadata.name;
 
     // The binary is referenced in package.json's bin field
     // npm uses different layouts: Unix=lib/node_modules, Windows=node_modules
@@ -1214,14 +1245,16 @@ pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveC
     let mut cache = cache_path.as_ref().map(|p| ResolveCache::load(p)).unwrap_or_default();
 
     // Check cache hit
-    if let Some(entry) = cache.get(cwd) {
+    if let Some(entry) = cache.get(cwd).cloned()
+        && cached_project_source_still_current(cwd, &entry).await?
+    {
         tracing::debug!(
             "Cache hit for {}: {} (from {})",
             cwd.as_path().display(),
             entry.version,
             entry.source
         );
-        return Ok(entry.clone());
+        return Ok(entry);
     }
 
     // Cache miss - resolve version
@@ -1253,6 +1286,24 @@ pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveC
     }
 
     Ok(entry)
+}
+
+async fn cached_project_source_still_current(
+    cwd: &AbsolutePathBuf,
+    entry: &ResolveCacheEntry,
+) -> Result<bool, String> {
+    let Some(current) =
+        config::resolve_project_version_source(cwd, false).await.map_err(|e| format!("{e}"))?
+    else {
+        return Ok(!matches!(
+            entry.source.as_str(),
+            ".node-version" | "devEngines.runtime" | "engines.node"
+        ));
+    };
+
+    let current_source_path = current.source_path.as_path().display().to_string();
+    Ok(entry.source == current.source
+        && entry.source_path.as_deref() == Some(current_source_path.as_str()))
 }
 
 /// Ensure Node.js is installed.
@@ -1438,6 +1489,45 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn cache_entry(source: &str, source_path: Option<&AbsolutePathBuf>) -> ResolveCacheEntry {
+        ResolveCacheEntry {
+            version: "24.18.0".to_string(),
+            source: source.to_string(),
+            project_root: None,
+            resolved_at: cache::now_timestamp(),
+            version_file_mtime: 0,
+            source_path: source_path.map(|p| p.as_path().display().to_string()),
+            is_range: false,
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_with_cache_bypasses_stale_lts_after_dev_engines_is_added() {
+        let temp = TempDir::new().unwrap();
+        let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
+        std::fs::create_dir(&cwd).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(vp_home.as_path()),
+        );
+
+        let mut cache = ResolveCache::default();
+        cache.insert(&cwd, cache_entry("lts", None));
+        cache.save(&cache::get_cache_path().unwrap());
+
+        std::fs::write(
+            cwd.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_with_cache(&cwd).await.unwrap();
+
+        assert_eq!(resolved.version, "22.22.0");
+        assert_eq!(resolved.source, "devEngines.runtime");
     }
 
     #[test]

@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration does not create bunfig.toml",
+    "test ! -f bunfig.toml # check Bun configuration remains absent"
+  ]
+}

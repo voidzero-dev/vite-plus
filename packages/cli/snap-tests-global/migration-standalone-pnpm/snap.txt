@@ -1,5 +1,9 @@
 > vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml
-◇ Migrated . to Vite+
+
+Formatting code...
+
+Code formatted
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 ✓ Dependencies installed in <variable>ms
 • 1 config update applied
@@ -9,7 +13,6 @@
   "name": "migration-standalone-pnpm",
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
@@ -17,16 +20,12 @@
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
-    vite: '*'
-    vitest: '*'
+    vite: "*"

@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
@@ -74,6 +74,7 @@ export default defineConfig({
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
+    "@vitest/browser-playwright": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",
@@ -90,9 +91,10 @@ export default defineConfig({
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vitest: <semver>
+  vite-plus: <semver>
+  '@vitest/browser-playwright': <semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

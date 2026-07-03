@@ -253,35 +253,6 @@ impl Commands {
 
 /// Arguments for the `env` command
 #[derive(clap::Args, Debug)]
-#[command(after_help = "\
-Examples:
-  Setup:
-    vp env setup                  # Create shims for node, npm, npx, corepack
-    vp env on                     # Use vite-plus managed Node.js
-    vp env print                  # Print shell snippet for this session
-
-  Manage:
-    vp env pin lts                # Pin to latest LTS version
-    vp env install                # Install version from .node-version / package.json
-    vp env use 20                 # Use Node.js 20 for this shell session
-    vp env use --unset            # Remove session override
-
-  Inspect:
-    vp env current                # Show current resolved environment
-    vp env current --json         # JSON output for automation
-    vp env doctor                 # Check environment configuration
-    vp env which node             # Show which node binary will be used
-    vp env list-remote --lts      # List only LTS versions
-
-  Execute:
-    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
-    vp env exec node -v           # Shim mode (version auto-resolved)
-
-Related Commands:
-  vp install -g <package>       # Install a package globally
-  vp uninstall -g <package>     # Uninstall a package globally
-  vp update -g [package]        # Update global packages
-  vp list -g [package]          # List global packages")]
 pub struct EnvArgs {
     /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]
@@ -816,9 +787,7 @@ async fn managed_update(
 }
 
 async fn get_current_node_version() -> Result<String, Error> {
-    let cwd = vite_path::current_dir().map_err(|error| {
-        Error::ConfigError(format!("Cannot get current directory: {error}").into())
-    })?;
+    let cwd = vite_path::current_dir()?;
     Ok(resolve_version(&cwd).await?.version)
 }
 

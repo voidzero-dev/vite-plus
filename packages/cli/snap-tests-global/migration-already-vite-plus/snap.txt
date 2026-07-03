@@ -1,21 +1,26 @@
-> vp migrate --no-interactive # should detect existing vite-plus and exit without setup defaults
-This project is already using Vite+! Happy coding!
-
+> vp migrate --no-interactive # common existing project removes the stale wrapper override, no hooks/agent setup defaults
+◇ Updated . to Vite+ <semver>
+• Node <semver>  npm <semver>
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
+• Package manager settings configured
 
 > vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project
-◇ Updated .
+◇ Updated . to Vite+ <semver>
 • Node <semver>  npm <semver>
+• Dependencies:
+    vite   → <semver>
 • 2 config updates applied
 
 > cat package.json # prepare script should be configured for vp config
 {
   "name": "migration-already-vite-plus",
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {

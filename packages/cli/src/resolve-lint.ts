@@ -13,7 +13,7 @@
 
 import { dirname, join } from 'node:path';
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve } from './utils/constants.ts';
 import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
 
 export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
@@ -50,6 +50,9 @@ export async function lint(): Promise<{
     envs: {
       ...DEFAULT_ENVS,
       OXLINT_TSGOLINT_PATH: oxlintTsgolintPath,
+      // oxlint loads vite.config.ts only to read the `lint` block, so skip the
+      // user's Vite plugin factory (lazyPlugins) while it evaluates the config.
+      [CONFIG_METADATA_ENV]: '1',
     },
   };
   return result;

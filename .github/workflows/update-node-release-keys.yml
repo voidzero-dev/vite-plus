@@ -1,0 +1,47 @@
+name: Update Node release keys
+
+on:
+  schedule:
+    # Weekly: Monday 00:30 UTC
+    - cron: '30 0 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  update:
+    if: github.repository == 'voidzero-dev/vite-plus' && github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Regenerate vendored Node.js release keyring
+        env:
+          # The script writes a PR body with a before/after key diff here.
+          KEYRING_SUMMARY_FILE: ${{ runner.temp }}/keyring-pr-body.md
+        run: .github/scripts/update-node-release-keys.sh
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Create or update PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          base: main
+          branch: chore/update-node-release-keys
+          title: 'chore(runtime): refresh Node.js release keyring'
+          sign-commits: true
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: 'chore(runtime): refresh Node.js release keyring'
+          add-paths: |
+            crates/vite_js_runtime/src/assets/node-release-keys.asc
+          body-path: ${{ runner.temp }}/keyring-pr-body.md

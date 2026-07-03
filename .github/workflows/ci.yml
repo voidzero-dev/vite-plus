@@ -32,7 +32,7 @@ jobs:
         id: check_skip
         # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
         # https://github.com/withgraphite/graphite-ci-action
-        uses: withgraphite/graphite-ci-action@9bc969adfd43bb790da3b64b543c78c75cef9689 # v0.0.9
+        uses: withgraphite/graphite-ci-action@402a89bc8aa6db18ae1f9c61953d001d5f9d828f # v0.0.11
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
 
@@ -50,9 +50,14 @@ jobs:
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
+          predicate-quantifier: every
           filters: |
             code:
               - '!**/*.md'
+              - '!docs/**'
+              - '!.github/workflows/deploy-docs-preview.yml'
+              - '!.github/workflows/deploy-docs.yml'
+              - '!netlify.toml'
 
   download-previous-rolldown-binaries:
     needs: detect-changes
@@ -412,7 +417,6 @@ jobs:
           Get-Command tsc
 
           # Test 2: Verify the package was installed correctly
-          Get-ChildItem (Join-Path $vpHome "packages/typescript")
           Get-ChildItem $vpBin
 
           # Test 3: Uninstall
@@ -504,7 +508,6 @@ jobs:
           which tsc
 
           # Test 2: Verify the package was installed correctly
-          ls -la ~/.vite-plus/packages/typescript/
           ls -la ~/.vite-plus/bin/
 
           # Test 3: Uninstall

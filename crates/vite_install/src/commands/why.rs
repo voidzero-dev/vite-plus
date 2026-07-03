@@ -126,12 +126,13 @@ impl PackageManager {
                 args.push(options.packages[0].clone());
 
                 // yarn@2+ supports --recursive
-                if options.recursive && !self.version.starts_with("1.") {
+                let is_berry = self.is_yarn_berry();
+                if options.recursive && is_berry {
                     args.push("--recursive".into());
                 }
 
                 // yarn@2+: Add --peers by default unless --exclude-peers is set
-                if !self.version.starts_with("1.") && !options.exclude_peers {
+                if is_berry && !options.exclude_peers {
                     args.push("--peers".into());
                 }
 

@@ -1,0 +1,9 @@
+{
+  "name": "migration-inline-config-shorthand",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "oxfmt": "1",
+    "oxlint": "1"
+  }
+}

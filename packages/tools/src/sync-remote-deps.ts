@@ -626,10 +626,12 @@ export function mergePnpmWorkspaces(
     ...(rolldownVite.minimumReleaseAgeExclude || []),
   ]);
 
-  // Copy patchedDependencies from vite (with path prefix)
-  if (rolldownVite.patchedDependencies) {
-    result.patchedDependencies = {};
-    for (const [dep, patchPath] of Object.entries(rolldownVite.patchedDependencies)) {
+  // Merge patchedDependencies: start with vite-plus root patches so they are
+  // preserved across syncs (e.g. patches/@vitest__mocker@*), then layer vite's
+  // patches with the `vite/` directory prefix on top.
+  if (main.patchedDependencies || rolldownVite.patchedDependencies) {
+    result.patchedDependencies = { ...main.patchedDependencies };
+    for (const [dep, patchPath] of Object.entries(rolldownVite.patchedDependencies ?? {})) {
       // Prepend vite directory to patch paths
       result.patchedDependencies[dep] = patchPath.startsWith('./')
         ? `./${VITE_DIR}/${patchPath.slice(2)}`
@@ -738,7 +740,7 @@ export function mergeWorkspaceYaml(
     return yaml.stringify(merged, stringifyOptions);
   }
 
-  reconcileMap(mainDoc.contents, merged as Record<string, unknown>, yaml);
+  reconcileMap(mainDoc.contents, merged, yaml);
 
   return mainDoc.toString(stringifyOptions);
 }

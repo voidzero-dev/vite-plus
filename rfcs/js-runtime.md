@@ -95,8 +95,17 @@ pub enum ArchiveFormat {
 
 /// How to verify the integrity of a downloaded archive
 pub enum HashVerification {
-    ShasumsFile { url: Str },  // Download and parse SHASUMS file
-    None,                       // No verification
+    ShasumsFile {
+        url: Str,                          // plain SHASUMS file
+        signature: Option<ShasumsSignature>, // PGP-verify the clearsigned SHASUMS when set
+    },
+    None,                                  // No verification
+}
+
+/// PGP signature verification details for a SHASUMS file.
+pub struct ShasumsSignature {
+    pub url: Str,       // clearsigned SHASUMS256.txt.asc
+    pub required: bool, // mandatory for the official source; best-effort for mirrors
 }
 
 /// Information needed to download a runtime
@@ -218,7 +227,7 @@ let runtime = download_runtime_for_project(&project_path).await?;
 Following the PackageManager pattern:
 
 ```
-$VITE_PLUS_HOME/js_runtime/{runtime}/{version}/
+$VP_HOME/js_runtime/{runtime}/{version}/
 ```
 
 Examples:
@@ -232,7 +241,7 @@ Examples:
 The Node.js version index is cached locally to avoid repeated network requests:
 
 ```
-$VITE_PLUS_HOME/js_runtime/node/index_cache.json
+$VP_HOME/js_runtime/node/index_cache.json
 ```
 
 Cache structure:
@@ -444,20 +453,29 @@ VP_NODE_DIST_MIRROR=https://example.com/mirrors/node vp build
 
 The mirror URL should have the same directory structure as the official distribution. Trailing slashes are automatically trimmed.
 
-### Integrity Verification
+### Integrity and Authenticity Verification
 
-Node.js provides SHASUMS256.txt for each release:
+Node.js publishes `SHASUMS256.txt` and a PGP-clearsigned `SHASUMS256.txt.asc`
+(signed by a Node.js releaser) for each release:
 
 ```
 https://nodejs.org/dist/v{version}/SHASUMS256.txt
+https://nodejs.org/dist/v{version}/SHASUMS256.txt.asc
 ```
 
-The implementation verifies download integrity automatically:
+The implementation verifies both authenticity and integrity automatically:
 
-1. Download SHASUMS256.txt for the target version
-2. Parse and extract the SHA256 hash for the target archive filename
+1. Download the clearsigned `SHASUMS256.txt.asc` and verify its PGP signature
+   against an embedded copy of the Node.js release keys, then parse the
+   verified plaintext (see [verify-node-shasums-signature.md](./verify-node-shasums-signature.md))
+2. Extract the SHA256 hash for the target archive filename
 3. After downloading the archive, verify it against the expected hash
-4. Fail with error if hash doesn't match (corrupted download)
+4. Fail with error if the signature is invalid or the hash doesn't match
+
+Signature verification is mandatory for the official `nodejs.org` source. The
+unofficial musl builds and custom mirrors that publish only `SHASUMS256.txt`
+fall back to hash-only verification (`signature: None`, or best-effort when the
+`.asc` is absent).
 
 Example SHASUMS256.txt content:
 
@@ -490,7 +508,7 @@ i9j0k1l2...  node-v22.13.1-linux-arm64.tar.gz
 
 5. Download with atomic operations
    ├── Create temp directory
-   ├── Download SHASUMS file and parse expected hash (via provider)
+   ├── Download SHASUMS (PGP-verify the signed .asc when available) and parse expected hash
    ├── Download archive with retry logic
    ├── Verify archive hash
    ├── Extract archive (tar.gz or zip based on format)
@@ -678,7 +696,7 @@ pub enum Error {
 
 1. ✅ Can download and cache Node.js by exact version specification
 2. ✅ Works on Linux, macOS, and Windows (x64 and ARM64)
-3. ✅ Verifies download integrity using SHASUMS256.txt
+3. ✅ Verifies download authenticity and integrity (PGP-signed SHASUMS256.txt)
 4. ✅ Handles concurrent downloads safely
 5. ✅ Returns version and binary path
 6. ✅ Comprehensive test coverage

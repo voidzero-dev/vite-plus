@@ -11,32 +11,22 @@ import {
   type WorkspaceInfoOptional,
   type WorkspacePackage,
 } from '../types/index.ts';
-import {
-  detectAgentConflicts,
-  detectExistingAgentTargetPaths,
-  selectAgentTargetPaths,
-  writeAgentInstructions,
-} from '../utils/agent.ts';
-import { isForceOverrideMode } from '../utils/constants.ts';
-import {
-  detectEditorConflicts,
-  type EditorId,
-  selectEditor,
-  writeEditorConfigs,
-} from '../utils/editor.ts';
+import { writeAgentInstructions } from '../utils/agent.ts';
+import { isForceOverrideMode, VITE_PLUS_VERSION } from '../utils/constants.ts';
+import { writeEditorConfigs } from '../utils/editor.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
+  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
-  promptGitHooks,
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted, printHeader } from '../utils/terminal.ts';
+import { accent, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -44,19 +34,21 @@ import {
 } from '../utils/tsconfig.ts';
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
+import { checkRolldownCompatibility } from './compat/runner.ts';
+import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,
   checkVitestVersion,
   checkViteVersion,
-  confirmEslintMigration,
+  collectToolchainVersionChanges,
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
-  detectIncompatibleEslintIntegration,
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
   detectVitePlusBootstrapPending,
+  detectYarnPnpMode,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   hasFrameworkShim,
@@ -67,17 +59,17 @@ import {
   migrateEslintToOxlint,
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
-  preflightGitHooksSetup,
+  configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
-  warnIncompatibleEslintIntegration,
-  warnLegacyEslintConfig,
-  warnPackageLevelEslint,
   warnPackageLevelPrettier,
   type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
+import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
+import type { MigrationOptions } from './options.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
+import { collectMigrationSetupPlan, type MigrationSetupPlan } from './setup-plan.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -120,6 +112,45 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     }
     return confirmed;
   }
+  return true;
+}
+
+async function confirmYarnNodeModulesMode(
+  rootDir: string,
+  packageManager: PackageManager | undefined,
+  packageManagerVersion: string,
+  interactive: boolean,
+): Promise<boolean> {
+  if (packageManager !== PackageManager.yarn) {
+    return false;
+  }
+
+  const pnp = detectYarnPnpMode(rootDir, packageManagerVersion);
+  if (!pnp) {
+    return false;
+  }
+
+  prompts.log.warn(`⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).`);
+  if (pnp.source === 'environment') {
+    cancelAndExit(
+      'YARN_NODE_LINKER=pnp overrides project configuration. Set it to node-modules or unset it, then re-run `vp migrate`.',
+      1,
+    );
+  }
+
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message: 'Switch this project to Yarn node-modules mode and continue?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    if (!confirmed) {
+      cancelAndExit('Migration cancelled. Vite+ requires Yarn node-modules mode.');
+    }
+  }
+
   return true;
 }
 
@@ -178,13 +209,28 @@ function hasBaseUrlInWorkspace(workspaceInfo: {
   rootDir: string;
   packages?: WorkspacePackage[];
 }): boolean {
-  for (const projectPath of getWorkspaceProjectPaths(workspaceInfo)) {
-    if (!hasBaseUrlInTsconfig(projectPath)) {
-      continue;
-    }
-    return true;
+  return getWorkspaceProjectPaths(workspaceInfo).some(hasBaseUrlInTsconfig);
+}
+
+// Check the root and each workspace package for Rolldown-incompatible config
+// patterns, reporting per-package progress. Each package spawns its own Vite
+// config resolution, so on a large monorepo this is the slowest silent phase;
+// the running counter + package path keeps the spinner moving instead of
+// stalling on a stale message.
+async function checkWorkspaceRolldownCompatibility(
+  workspaceInfo: { rootDir: string; packages?: WorkspacePackage[] },
+  report: MigrationReport,
+  updateProgress?: (message: string) => void,
+): Promise<void> {
+  const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
+  for (const [index, projectPath] of projectPaths.entries()) {
+    const counter = projectPaths.length > 1 ? ` (${index + 1}/${projectPaths.length})` : '';
+    // Empty for the root (displayRelative(rootDir, rootDir) === ''), else the
+    // package's relative path.
+    const label = displayRelative(projectPath, workspaceInfo.rootDir);
+    updateProgress?.(`Checking config compatibility${counter}${label ? `: ${label}` : ''}`);
+    await checkRolldownCompatibility(projectPath, report);
   }
-  return false;
 }
 
 const helpMessage = renderCliDoc({
@@ -220,6 +266,11 @@ const helpMessage = renderCliDoc({
           description: 'Set up pre-commit hooks (default in non-interactive mode)',
         },
         { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
+        {
+          label: '--full',
+          description:
+            'Existing Vite+ projects: also run the full setup (hooks, editor, agent files, ESLint/Prettier migration, framework shims, tsconfig baseUrl, .node-version). Without it, `vp migrate` only upgrades the toolchain version.',
+        },
         {
           label: '--no-interactive',
           description: 'Run in non-interactive mode (skip prompts and use defaults)',
@@ -284,14 +335,6 @@ const helpMessage = renderCliDoc({
   ],
 });
 
-export interface MigrationOptions {
-  interactive: boolean;
-  help?: boolean;
-  agent?: string | string[] | false;
-  editor?: string | false;
-  hooks?: boolean;
-}
-
 function parseArgs() {
   const args = process.argv.slice(3); // Skip 'node', 'vite', 'migrate'
 
@@ -301,9 +344,10 @@ function parseArgs() {
     agent?: string | string[] | false;
     editor?: string | false;
     hooks?: boolean;
+    full?: boolean;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'interactive', 'hooks'],
+    boolean: ['help', 'interactive', 'hooks', 'full'],
     default: { interactive: defaultInteractive() },
   });
   const interactive = parsed.interactive;
@@ -323,23 +367,16 @@ function parseArgs() {
       agent: parsed.agent,
       editor: parsed.editor,
       hooks: parsed.hooks,
+      full: parsed.full,
     } as MigrationOptions,
   };
 }
 
-interface MigrationSetupPlan {
-  shouldSetupHooks: boolean;
-  selectedAgentTargetPaths?: string[];
-  agentConflictDecisions: Map<string, 'append' | 'skip'>;
-  selectedEditor?: EditorId;
-  editorConflictDecisions: Map<string, 'merge' | 'skip'>;
-  migrateEslint: boolean;
-  eslintConfigFile?: string;
-}
-
 interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
+  convertYarnPnp: boolean;
   migratePrettier: boolean;
+  hasPrettierDependency: boolean;
   prettierConfigFile?: string;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
@@ -440,185 +477,19 @@ function hasExistingVitePlusMigrationCandidates(
   );
 }
 
-async function collectGitHooksDecision(
-  rootDir: string,
-  packageManager: PackageManager | undefined,
-  options: MigrationOptions,
-): Promise<boolean> {
-  let shouldSetupHooks = await promptGitHooks(options);
-  if (shouldSetupHooks) {
-    const reason = preflightGitHooksSetup(rootDir, packageManager);
-    if (reason) {
-      prompts.log.warn(`⚠ ${reason}`);
-      shouldSetupHooks = false;
-    }
-  }
-  return shouldSetupHooks;
-}
-
-async function collectAgentInstructionPlan(
-  rootDir: string,
-  options: MigrationOptions,
-): Promise<{
-  selectedAgentTargetPaths?: string[];
-  agentConflictDecisions: Map<string, 'append' | 'skip'>;
-}> {
-  const existingAgentTargetPaths =
-    options.agent !== undefined || !options.interactive
-      ? undefined
-      : detectExistingAgentTargetPaths(rootDir);
-  const selectedAgentTargetPaths =
-    existingAgentTargetPaths !== undefined
-      ? existingAgentTargetPaths
-      : await selectAgentTargetPaths({
-          interactive: options.interactive,
-          agent: options.agent,
-          onCancel: () => cancelAndExit(),
-        });
-
-  const agentConflicts = await detectAgentConflicts({
-    projectRoot: rootDir,
-    targetPaths: selectedAgentTargetPaths,
-  });
-  const agentConflictDecisions = new Map<string, 'append' | 'skip'>();
-  for (const conflict of agentConflicts) {
-    if (options.interactive) {
-      const action = await prompts.select({
-        message:
-          `Agent instructions already exist at ${conflict.targetPath}.\n  ` +
-          styleText(
-            'gray',
-            'The Vite+ template includes guidance on `vp` commands, the build pipeline, and project conventions.',
-          ),
-        options: [
-          { label: 'Append', value: 'append' as const, hint: 'Add template content to the end' },
-          { label: 'Skip', value: 'skip' as const, hint: 'Leave existing file unchanged' },
-        ],
-        initialValue: 'skip' as const,
-      });
-      if (prompts.isCancel(action)) {
-        cancelAndExit();
-      }
-      agentConflictDecisions.set(conflict.targetPath, action);
-    } else {
-      agentConflictDecisions.set(conflict.targetPath, 'skip');
-    }
-  }
-
-  return { selectedAgentTargetPaths, agentConflictDecisions };
-}
-
-async function collectEditorConfigPlan(
-  rootDir: string,
-  options: MigrationOptions,
-): Promise<{
-  selectedEditor?: EditorId;
-  editorConflictDecisions: Map<string, 'merge' | 'skip'>;
-}> {
-  const selectedEditor = await selectEditor({
-    interactive: options.interactive,
-    editor: options.editor,
-    onCancel: () => cancelAndExit(),
-  });
-
-  const editorConflicts = detectEditorConflicts({
-    projectRoot: rootDir,
-    editorId: selectedEditor,
-  });
-  const editorConflictDecisions = new Map<string, 'merge' | 'skip'>();
-  for (const conflict of editorConflicts) {
-    if (options.interactive) {
-      const action = await prompts.select({
-        message:
-          `${conflict.displayPath} already exists.\n  ` +
-          styleText(
-            'gray',
-            'Vite+ adds editor settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.',
-          ),
-        options: [
-          {
-            label: 'Merge',
-            value: 'merge' as const,
-            hint: 'Merge new settings into existing file',
-          },
-          { label: 'Skip', value: 'skip' as const, hint: 'Leave existing file unchanged' },
-        ],
-        initialValue: 'skip' as const,
-      });
-      if (prompts.isCancel(action)) {
-        cancelAndExit();
-      }
-      editorConflictDecisions.set(conflict.fileName, action);
-    } else {
-      editorConflictDecisions.set(conflict.fileName, 'merge');
-    }
-  }
-
-  return { selectedEditor, editorConflictDecisions };
-}
-
-async function collectEslintMigrationDecision(
-  rootDir: string,
-  options: MigrationOptions,
-  packages?: WorkspacePackage[],
-): Promise<{ migrateEslint: boolean; eslintConfigFile?: string }> {
-  const eslintProject = detectEslintProject(rootDir, packages);
-  const incompatibleEslintIntegration = detectIncompatibleEslintIntegration(rootDir, packages);
-  let migrateEslint = false;
-  if (incompatibleEslintIntegration) {
-    // e.g. `@nuxt/eslint` — skip the entire ESLint migration; preserve
-    // the user's current ESLint setup and let them migrate by hand.
-    warnIncompatibleEslintIntegration(incompatibleEslintIntegration);
-  } else if (
-    eslintProject.hasDependency &&
-    !eslintProject.configFile &&
-    eslintProject.legacyConfigFile
-  ) {
-    warnLegacyEslintConfig(eslintProject.legacyConfigFile);
-  } else if (eslintProject.hasDependency && eslintProject.configFile) {
-    migrateEslint = await confirmEslintMigration(options.interactive);
-  } else if (eslintProject.hasDependency) {
-    warnPackageLevelEslint();
-  }
-
-  return { migrateEslint, eslintConfigFile: eslintProject.configFile };
-}
-
-async function collectMigrationSetupPlan(
-  rootDir: string,
-  packageManager: PackageManager | undefined,
-  options: MigrationOptions,
-  packages?: WorkspacePackage[],
-  includeEslint = true,
-): Promise<MigrationSetupPlan> {
-  const shouldSetupHooks = await collectGitHooksDecision(rootDir, packageManager, options);
-  const agentPlan = await collectAgentInstructionPlan(rootDir, options);
-  const editorPlan = await collectEditorConfigPlan(rootDir, options);
-  const eslintPlan = includeEslint
-    ? await collectEslintMigrationDecision(rootDir, options, packages)
-    : { migrateEslint: false };
-
-  return {
-    shouldSetupHooks,
-    ...agentPlan,
-    ...editorPlan,
-    ...eslintPlan,
-  };
-}
-
 function getExistingVitePlusSetupOptions(
   options: MigrationOptions,
-  legacyGitHooksMigrationCandidate: boolean,
   useFullMigrationDefaults = false,
 ): MigrationOptions {
   if (useFullMigrationDefaults) {
     return options;
   }
+  // On a plain version-update, defer all setup (hooks, agent, editor) to
+  // `vp migrate --full`; legacy git-hooks migration (husky/lint-staged) is not
+  // auto-applied here. Explicit per-action flags (e.g. --hooks) still opt in.
   return {
     ...options,
-    hooks:
-      options.hooks ??
-      (legacyGitHooksMigrationCandidate ? (options.interactive ? undefined : true) : false),
+    hooks: options.hooks ?? false,
     agent: options.agent ?? false,
     editor: options.editor ?? false,
   };
@@ -627,12 +498,19 @@ function getExistingVitePlusSetupOptions(
 async function collectMigrationPlan(
   rootDir: string,
   detectedPackageManager: PackageManager | undefined,
+  detectedPackageManagerVersion: string,
   options: MigrationOptions,
   packages?: WorkspacePackage[],
 ): Promise<MigrationPlan> {
   // 1. Package manager selection
   const packageManager =
     detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
+  const convertYarnPnp = await confirmYarnNodeModulesMode(
+    rootDir,
+    packageManager,
+    detectedPackageManager ? detectedPackageManagerVersion : 'latest',
+    options.interactive,
+  );
 
   // 2. Shared setup/tooling decisions
   const setupPlan = await collectMigrationSetupPlan(rootDir, packageManager, options, packages);
@@ -666,8 +544,10 @@ async function collectMigrationPlan(
 
   const plan: MigrationPlan = {
     packageManager,
+    convertYarnPnp,
     ...setupPlan,
     migratePrettier,
+    hasPrettierDependency: prettierProject.hasDependency,
     prettierConfigFile: prettierProject.configFile,
     fixBaseUrl,
     migrateNodeVersionFile,
@@ -689,21 +569,66 @@ function formatDuration(durationMs: number) {
   return `${Math.round(durationSeconds)}s`;
 }
 
+/**
+ * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
+ * duration counter and exit-code state. `runViteInstall` returns
+ * `{ status: 'failed', exitCode }` without throwing; treating that as a success
+ * (incrementing duration unconditionally) would let the migration claim
+ * "Dependencies installed" while node_modules is desynced from the just-mutated
+ * package.json. This helper centralizes the right handling: credit duration on
+ * success, warn + flip exitCode on failure, stay silent on skip.
+ */
+function handleInstallResult(
+  installSummary: CommandRunSummary,
+  rootDir: string,
+  report: MigrationReport,
+  // The pre-migration "initial" install is best-effort: the migration proceeds
+  // regardless of its outcome, and a post-migration "final" install runs with
+  // `--force` / `--no-frozen-lockfile` as the authoritative recovery. Only that
+  // final install's failure should flip `process.exitCode` so a successful
+  // recovery yields exit 0; the initial failure is still surfaced via
+  // `report.warnings` + the warn message.
+  options?: { propagateExitCode?: boolean },
+): number {
+  if (installSummary.status === 'installed') {
+    return installSummary.durationMs;
+  }
+  if (installSummary.status === 'failed') {
+    const exitCode = installSummary.exitCode ?? 1;
+    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+    warnMsg(message);
+    report.warnings.push(message);
+    if (options?.propagateExitCode !== false) {
+      process.exitCode = exitCode;
+    }
+    return 0;
+  }
+  return 0;
+}
+
+// Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
+// the "already using Vite+" early-exit and the post-migration summary.
+const FULL_MIGRATION_HINT = `${styleText('gray', '•')} Skipped editor, hooks, and lint setup. Run \`vp migrate --full\` to apply them.`;
+
 function showMigrationSummary(options: {
   projectRoot: string;
   packageManager: string;
   packageManagerVersion: string;
   installDurationMs: number;
+  finalInstallOk: boolean;
   report: MigrationReport;
   updatedExistingVitePlus?: boolean;
+  suggestFullMigration?: boolean;
 }) {
   const {
     projectRoot,
     packageManager,
     packageManagerVersion,
     installDurationMs,
+    finalInstallOk,
     report,
     updatedExistingVitePlus,
+    suggestFullMigration,
   } = options;
   const projectLabel = displayRelative(projectRoot) || '.';
   const configUpdates =
@@ -716,14 +641,33 @@ function showMigrationSummary(options: {
     report.wrappedPluginConfigCount;
 
   log(
-    `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
-      updatedExistingVitePlus ? '' : ' to Vite+'
-    }`,
+    `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)} to Vite+ ${VITE_PLUS_VERSION}`,
   );
   log(
     `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
   );
-  if (installDurationMs > 0) {
+  // Toolchain version-upgrade table (existing-Vite+ path only; the fresh path
+  // leaves `dependencyUpgrades` empty). One aligned row per changed dependency:
+  // name padded to the longest name, the old `from` padded to the longest from
+  // and rendered muted, the new `to` rendered green.
+  if (report.dependencyUpgrades.length > 0) {
+    const nameWidth = Math.max(...report.dependencyUpgrades.map((change) => change.name.length));
+    const fromWidth = Math.max(
+      ...report.dependencyUpgrades.map((change) => (change.from ?? '').length),
+    );
+    log(`${styleText('gray', '•')} Dependencies:`);
+    for (const change of report.dependencyUpgrades) {
+      const name = change.name.padEnd(nameWidth);
+      const from = muted((change.from ?? '').padEnd(fromWidth));
+      const to = styleText('green', change.to);
+      log(`    ${name}  ${from} → ${to}`);
+    }
+  }
+  // Gate the green success line on the FINAL install actually succeeding.
+  // A nonzero duration could come from a successful pre-migration install
+  // followed by a failed post-migration reinstall — in that case node_modules
+  // is desynced and reporting success would mislead the user.
+  if (finalInstallOk && installDurationMs > 0) {
     log(
       `${styleText('green', '✓')} Dependencies installed in ${formatDuration(installDurationMs)}`,
     );
@@ -743,6 +687,13 @@ function showMigrationSummary(options: {
       );
     }
     log(`${styleText('gray', '•')} ${parts.join(', ')}`);
+  }
+  if (report.preservedUpstreamVitestImportFileCount > 0) {
+    log(
+      `${styleText('gray', '•')} Kept upstream \`vitest\` imports in ${report.preservedUpstreamVitestImportFileCount} ${
+        report.preservedUpstreamVitestImportFileCount === 1 ? 'file' : 'files'
+      } for @nuxt/test-utils compatibility`,
+    );
   }
   if (report.eslintMigrated) {
     log(`${styleText('gray', '•')} ESLint rules migrated to Oxlint`);
@@ -767,6 +718,9 @@ function showMigrationSummary(options: {
   if (report.packageManagerBootstrapConfigured) {
     log(`${styleText('gray', '•')} Package manager settings configured`);
   }
+  if (suggestFullMigration) {
+    log(FULL_MIGRATION_HINT);
+  }
   if (report.warnings.length > 0) {
     log(`${styleText('yellow', '!')} Warnings:`);
     for (const warning of report.warnings) {
@@ -778,22 +732,6 @@ function showMigrationSummary(options: {
     for (const step of report.manualSteps) {
       log(`  - ${step}`);
     }
-  }
-}
-
-async function checkRolldownCompatibility(rootDir: string, report: MigrationReport): Promise<void> {
-  try {
-    const { resolveConfig } = await import('../index.js');
-    const { checkManualChunksCompat } = await import('./compat.js');
-    // Use 'runner' configLoader to avoid Rolldown bundling the config file,
-    // which prints UNRESOLVED_IMPORT warnings that cannot be suppressed via logLevel.
-    const config = await resolveConfig(
-      { root: rootDir, logLevel: 'silent', configLoader: 'runner' },
-      'build',
-    );
-    checkManualChunksCompat(config.build?.rollupOptions?.output, report);
-  } catch {
-    // Config resolution may fail — skip compatibility check silently
   }
 }
 
@@ -855,8 +793,10 @@ async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
   interactive: boolean,
+  preExistingChangedPaths?: ReadonlySet<string>,
 ): Promise<{
   installDurationMs: number;
+  finalInstallOk: boolean;
   packageManagerVersion: string;
   report: MigrationReport;
 }> {
@@ -902,6 +842,14 @@ async function executeMigrationPlan(
     downloadPackageManager: downloadResult,
   };
 
+  if (plan.convertYarnPnp) {
+    updateMigrationProgress('Configuring Yarn node-modules mode');
+    report.packageManagerBootstrapConfigured = configureYarnNodeModulesMode(workspaceInfo.rootDir);
+    if (report.packageManagerBootstrapConfigured) {
+      prompts.log.success('✔ Switched Yarn to node-modules mode');
+    }
+  }
+
   // 3. Migrate node version manager file → .node-version (independent of vite version)
   if (plan.migrateNodeVersionFile && plan.nodeVersionDetection) {
     updateMigrationProgress('Migrating node version file');
@@ -931,13 +879,7 @@ async function executeMigrationPlan(
   }
 
   // 5. Check for Rolldown-incompatible config patterns (root + workspace packages)
-  updateMigrationProgress('Checking config compatibility');
-  await checkRolldownCompatibility(workspaceInfo.rootDir, report);
-  if (workspaceInfo.packages) {
-    for (const pkg of workspaceInfo.packages) {
-      await checkRolldownCompatibility(path.join(workspaceInfo.rootDir, pkg.path), report);
-    }
-  }
+  await checkWorkspaceRolldownCompatibility(workspaceInfo, report, updateMigrationProgress);
 
   await fixBaseUrlForWorkspace(workspaceInfo, plan.fixBaseUrl, updateMigrationProgress, report);
 
@@ -1028,11 +970,17 @@ async function executeMigrationPlan(
   );
 
   // 12. Reinstall after migration
-  // npm needs --force to re-resolve packages with newly added overrides,
-  // otherwise the stale lockfile prevents override resolution.
+  // The migration intentionally rewrites overrides/catalogs/deps, so the
+  // existing lockfile is guaranteed to be stale. Tell each package manager to
+  // re-resolve instead of refusing the install (pnpm/yarn default to
+  // frozen-lockfile under CI, npm/bun need an explicit --force).
   const installArgs =
     plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
       ? ['--force']
+      : ['--no-frozen-lockfile'];
+  const npmReinstallPreparation =
+    plan.packageManager === PackageManager.npm
+      ? prepareNpmViteAliasReinstall(workspaceInfo.rootDir, getWorkspaceProjectPaths(workspaceInfo))
       : undefined;
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
@@ -1045,10 +993,39 @@ async function executeMigrationPlan(
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     },
   );
+  if (finalInstallSummary.status === 'failed') {
+    npmReinstallPreparation?.restore();
+  } else {
+    npmReinstallPreparation?.commit();
+  }
 
   clearMigrationProgress();
+  // Process the initial install first so the final install's exit code "wins":
+  // if the initial install failed but the final install succeeded, the
+  // migration should still report success (exit 0). The initial call opts out
+  // of exitCode propagation; only the final call may flip process.exitCode.
+  const initialInstallDurationMs = handleInstallResult(
+    initialInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+    { propagateExitCode: false },
+  );
+  const finalInstallDurationMs = handleInstallResult(
+    finalInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+  );
+  if (
+    finalInstallSummary.status === 'installed' &&
+    canFormatWithOxfmt(plan.hasPrettierDependency, plan.migratePrettier)
+  ) {
+    await formatMigratedProject(workspaceInfo.rootDir, interactive, report, {
+      excludedPaths: preExistingChangedPaths,
+    });
+  }
   return {
-    installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
+    installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
+    finalInstallOk: finalInstallSummary.status === 'installed',
     packageManagerVersion: downloadResult.version,
     report,
   };
@@ -1066,6 +1043,8 @@ async function main() {
   printHeader();
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
+  const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
+  const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
 
   // Early return if already using Vite+ (only finalization/setup migrations may be needed)
@@ -1074,8 +1053,20 @@ async function main() {
     workspaceInfoOptional.rootDir,
   ) as PackageDependencies | null;
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
+    // Runs with the detected package manager, which may be undefined for an
+    // existing Vite+ project that has no lockfile/`packageManager` pin. In that
+    // case `confirmYarnNodeModulesMode` no-ops here and the guard is re-run
+    // below once the package manager is actually resolved.
+    let convertYarnPnp = await confirmYarnNodeModulesMode(
+      workspaceInfoOptional.rootDir,
+      workspaceInfoOptional.packageManager,
+      workspaceInfoOptional.packageManagerVersion,
+      options.interactive,
+    );
     let didMigrate = false;
     let installDurationMs = 0;
+    let finalInstallOk = true;
+    let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
     const report = createMigrationReport();
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
@@ -1106,12 +1097,11 @@ async function main() {
     };
 
     const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
-    const legacyGitHooksMigrationCandidate = detectLegacyGitHooksMigrationCandidate(
-      workspaceInfoOptional.rootDir,
-    );
     const vitePlusBootstrapPending = detectVitePlusBootstrapPending(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
+      workspaceInfoOptional.packages,
+      workspaceInfoOptional.packageManagerVersion,
     );
     let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??
@@ -1143,6 +1133,41 @@ async function main() {
       await ensureExistingPackageManager();
     }
 
+    // The package-manager download above starts the "Preparing migration"
+    // spinner. Stop it before gathering interactive decisions below: a live
+    // spinner keeps re-rendering its timer line over the prompts and corrupts
+    // them (the spinner is restarted for the bootstrap/install phase).
+    clearMigrationProgress();
+
+    // The early guard ran before the package manager was resolved. If it was
+    // only determined to be Yarn afterwards (e.g. selected because the project
+    // had no detectable manager), re-run the guard so a `YARN_NODE_LINKER=pnp`
+    // override is still rejected instead of silently writing config for an
+    // unsupported PnP layout.
+    if (
+      !convertYarnPnp &&
+      workspaceInfoOptional.packageManager === undefined &&
+      packageManager === PackageManager.yarn
+    ) {
+      convertYarnPnp = await confirmYarnNodeModulesMode(
+        workspaceInfoOptional.rootDir,
+        packageManager,
+        packageManagerVersion,
+        options.interactive,
+      );
+    }
+
+    // Capture the toolchain version changes BEFORE the reconcile mutates the
+    // manifest, so the `from` values still reflect the pre-migration versions
+    // (raw vite is read from the untouched node_modules).
+    report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
+
+    // finalizeCoreMigrationForExistingVitePlus rewrites Vite/Vitest imports across
+    // every workspace package via a synchronous native directory walk; on a large
+    // monorepo it is the slowest phase (several seconds) and blocks the event loop,
+    // so surface it first instead of leaving the spinner silent. The spinner paints
+    // this message synchronously on start(), before the walk begins.
+    updateMigrationProgress('Rewriting toolchain imports across the workspace');
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1157,41 +1182,59 @@ async function main() {
       didMigrate = true;
     }
 
+    // finalizeCore has finished; stop the spinner before the interactive setup
+    // prompts below (collectMigrationSetupPlan / framework shims, in --full mode)
+    // so they don't render on top of the still-running progress line.
+    clearMigrationProgress();
+
+    // On an existing Vite+ project, `vp migrate` only upgrades the toolchain
+    // version. The full setup bucket (hooks, editor, agent files, ESLint/Prettier
+    // migration, framework shims, tsconfig baseUrl, .node-version) runs only with
+    // `--full`; the per-action flags (--hooks/--agent/--editor) still opt into a
+    // single action without `--full`.
+    const fullSetup = options.full === true;
+    // Hint at `--full` only on a bare upgrade that left setup actions on the
+    // table. Suppress it when the user passed an explicit per-action flag
+    // (--hooks/--agent/--editor): that ran the action they asked for, so a
+    // "Skipped ... hooks ... setup" line would contradict the action above it.
+    const skippedSetupCandidates =
+      !fullSetup &&
+      !hasExplicitExistingVitePlusSetupRequest(options) &&
+      hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options);
+
     if (
       !didMigrate &&
+      !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
-      !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
+      !(fullSetup
+        ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
+        : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
+      if (skippedSetupCandidates) {
+        log(FULL_MIGRATION_HINT);
+      }
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
 
-    const fullMigrationSummary =
-      vitePlusBootstrapPending ||
-      coreMigrationResult.scripts ||
-      coreMigrationResult.tsconfigTypes ||
-      coreMigrationResult.imports;
-    const useFullMigrationDefaults = options.interactive && fullMigrationSummary;
-    const setupOptions = getExistingVitePlusSetupOptions(
-      options,
-      legacyGitHooksMigrationCandidate,
-      useFullMigrationDefaults,
-    );
+    const setupOptions = getExistingVitePlusSetupOptions(options, fullSetup);
     const plan = await collectMigrationSetupPlan(
       workspaceInfoOptional.rootDir,
       packageManager,
       setupOptions,
       workspaceInfoOptional.packages,
+      fullSetup,
     );
-    const frameworkShimFrameworks = await collectFrameworkShimFrameworks(
-      workspaceInfoOptional.rootDir,
-      options,
-      workspaceInfoOptional.packages,
-    );
+    const frameworkShimFrameworks = fullSetup
+      ? await collectFrameworkShimFrameworks(
+          workspaceInfoOptional.rootDir,
+          options,
+          workspaceInfoOptional.packages,
+        )
+      : undefined;
 
     let needsInstall = false;
-    let forceInstall = false;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
@@ -1206,15 +1249,19 @@ async function main() {
         );
         didMigrate = bootstrapResult.changed || didMigrate;
         needsInstall = bootstrapResult.changed || needsInstall;
-        forceInstall =
-          bootstrapResult.changed &&
-          (packageManager === PackageManager.npm || packageManager === PackageManager.bun);
       }
     }
 
-    const fixBaseUrl = hasBaseUrlInWorkspace(workspaceInfoOptional)
-      ? await confirmBaseUrlFix(options.interactive)
-      : false;
+    let fixBaseUrl = false;
+    if (fullSetup && hasBaseUrlInWorkspace(workspaceInfoOptional)) {
+      // Interactive only: stop the "Configuring package manager" spinner so it
+      // does not animate beneath the confirm prompt; the next progress update
+      // restarts it. Non-interactive shows no prompt, so its output is unchanged.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      fixBaseUrl = await confirmBaseUrlFix(options.interactive);
+    }
 
     // Check if tsconfig baseUrl migration is needed
     const fixedBaseUrlProjectPaths = await fixBaseUrlForWorkspace(
@@ -1250,45 +1297,74 @@ async function main() {
       eslintMigrated = true;
     }
 
+    // Detect Prettier unconditionally so the formatting gate below skips Oxfmt on
+    // a project that still uses Prettier, even on a bare (non-`--full`) upgrade
+    // that rewrites imports/scripts. The Prettier MIGRATION itself stays in the
+    // full-setup bucket.
     const prettierProject = detectPrettierProject(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packages,
     );
     let prettierMigrated = false;
-    if (prettierProject.hasDependency && prettierProject.configFile) {
-      const migratePrettier = await confirmPrettierMigration(options.interactive);
-      if (migratePrettier) {
-        await ensureExistingPackageManager();
-        updateMigrationProgress('Migrating Prettier');
-        const prettierOk = await migratePrettierToOxfmt(
-          workspaceInfoOptional.rootDir,
-          options.interactive,
-          prettierProject.configFile,
-          workspaceInfoOptional.packages,
-          { silent: true, report },
-        );
-        if (!prettierOk) {
+    if (fullSetup) {
+      if (prettierProject.hasDependency && prettierProject.configFile) {
+        // Interactive only: stop any active spinner (e.g. "Migrating ESLint") so
+        // it does not animate beneath the confirm prompt.
+        if (options.interactive) {
           clearMigrationProgress();
-          cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
         }
-        prettierMigrated = true;
+        const migratePrettier = await confirmPrettierMigration(options.interactive);
+        if (migratePrettier) {
+          await ensureExistingPackageManager();
+          updateMigrationProgress('Migrating Prettier');
+          const prettierOk = await migratePrettierToOxfmt(
+            workspaceInfoOptional.rootDir,
+            options.interactive,
+            prettierProject.configFile,
+            workspaceInfoOptional.packages,
+            { silent: true, report },
+          );
+          if (!prettierOk) {
+            clearMigrationProgress();
+            cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+          }
+          prettierMigrated = true;
+        }
+      } else if (prettierProject.hasDependency) {
+        warnPackageLevelPrettier();
       }
-    } else if (prettierProject.hasDependency) {
-      warnPackageLevelPrettier();
     }
 
-    // Check if node version manager file migration is needed
-    const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
-    if (nodeVersionDetection) {
-      const confirmed = await confirmNodeVersionFileMigration(
-        options.interactive,
-        nodeVersionDetection,
-      );
-      if (
-        confirmed &&
-        migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)
-      ) {
+    // Check if node version manager file migration is needed (full setup only)
+    if (fullSetup) {
+      const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
+      if (nodeVersionDetection) {
+        // Interactive only: stop any active spinner so it does not animate beneath
+        // the confirm prompt.
+        if (options.interactive) {
+          clearMigrationProgress();
+        }
+        const confirmed = await confirmNodeVersionFileMigration(
+          options.interactive,
+          nodeVersionDetection,
+        );
+        if (
+          confirmed &&
+          migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)
+        ) {
+          didMigrate = true;
+        }
+      }
+    }
+
+    if (convertYarnPnp) {
+      updateMigrationProgress('Configuring Yarn node-modules mode');
+      const yarnPnpConverted = configureYarnNodeModulesMode(workspaceInfoOptional.rootDir);
+      if (yarnPnpConverted) {
+        prompts.log.success('✔ Switched Yarn to node-modules mode');
+        report.packageManagerBootstrapConfigured = true;
         didMigrate = true;
+        needsInstall = true;
       }
     }
 
@@ -1332,24 +1408,48 @@ async function main() {
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
       const resolvedVersion = resolved?.version ?? packageManagerVersion;
+      const npmReinstallPreparation =
+        packageManager === PackageManager.npm
+          ? prepareNpmViteAliasReinstall(
+              workspaceInfoOptional.rootDir,
+              getWorkspaceProjectPaths(workspaceInfoOptional),
+            )
+          : undefined;
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
-        forceInstall ? ['--force'] : undefined,
+        // Migration steps rewrote package.json/config, so the lockfile is now
+        // stale; tell each package manager to re-resolve instead of refusing
+        // (pnpm/yarn default to frozen-lockfile under CI, npm/bun need --force).
+        packageManager === PackageManager.npm || packageManager === PackageManager.bun
+          ? ['--force']
+          : ['--no-frozen-lockfile'],
         {
           silent: true,
           packageManager,
           packageManagerVersion: resolvedVersion,
         },
       );
-      installDurationMs += installSummary.durationMs;
+      // Route the install result through the shared helper (mirrors the full
+      // migration path and is enforced by install-failure-guard.spec): a failed
+      // install warns, appends to report.warnings, and flips process.exitCode
+      // rather than being silently credited as a successful migration. Clear the
+      // spinner first only on failure so the warning isn't interleaved with it;
+      // on success handleInstallResult returns durationMs, so the credited
+      // duration is unchanged.
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
-        cancelAndExit(
-          'Dependency installation failed. Run `vp install` manually and re-run `vp migrate`.',
-          1,
-        );
+        npmReinstallPreparation?.restore();
+      } else {
+        npmReinstallPreparation?.commit();
       }
+      finalInstallOk = installSummary.status !== 'failed';
+      canFormatMigratedProject = finalInstallOk && canFormatMigratedProject;
+      installDurationMs += handleInstallResult(
+        installSummary,
+        workspaceInfoOptional.rootDir,
+        report,
+      );
     }
 
     if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
@@ -1377,14 +1477,22 @@ async function main() {
     }
 
     // Check for Rolldown-incompatible config patterns (root + workspace packages)
-    await checkRolldownCompatibility(workspaceInfoOptional.rootDir, report);
-    if (workspaceInfoOptional.packages) {
-      for (const pkg of workspaceInfoOptional.packages) {
-        await checkRolldownCompatibility(
-          path.join(workspaceInfoOptional.rootDir, pkg.path),
-          report,
-        );
-      }
+    await checkWorkspaceRolldownCompatibility(
+      workspaceInfoOptional,
+      report,
+      updateMigrationProgress,
+    );
+
+    if (
+      didMigrate &&
+      finalInstallOk &&
+      canFormatMigratedProject &&
+      canFormatWithOxfmt(prettierProject.hasDependency, prettierMigrated)
+    ) {
+      clearMigrationProgress();
+      await formatMigratedProject(workspaceInfoOptional.rootDir, options.interactive, report, {
+        excludedPaths: preExistingChangedPaths,
+      });
     }
 
     if (didMigrate || report.warnings.length > 0) {
@@ -1394,10 +1502,22 @@ async function main() {
         packageManager: packageManager ?? resolvedPackageManager,
         packageManagerVersion,
         installDurationMs,
+        finalInstallOk,
         report,
-        updatedExistingVitePlus: !fullMigrationSummary,
+        // The existing-Vite+ branch always updates an existing project, so the
+        // headline reads "Updated <project> to Vite+ <version>".
+        updatedExistingVitePlus: true,
+        suggestFullMigration: skippedSetupCandidates,
       });
     } else {
+      // Stop the "Checking config compatibility" spinner that
+      // checkWorkspaceRolldownCompatibility left running before printing the
+      // hint and outro; the sibling branches above already clear it, and
+      // without this its timer line keeps re-rendering underneath them.
+      clearMigrationProgress();
+      if (skippedSetupCandidates) {
+        log(FULL_MIGRATION_HINT);
+      }
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
     }
     return;
@@ -1407,17 +1527,24 @@ async function main() {
   const plan = await collectMigrationPlan(
     workspaceInfoOptional.rootDir,
     workspaceInfoOptional.packageManager,
+    workspaceInfoOptional.packageManagerVersion,
     options,
     workspaceInfoOptional.packages,
   );
 
   // Phase 2: Execute without prompts
-  const result = await executeMigrationPlan(workspaceInfoOptional, plan, options.interactive);
+  const result = await executeMigrationPlan(
+    workspaceInfoOptional,
+    plan,
+    options.interactive,
+    preExistingChangedPaths,
+  );
   showMigrationSummary({
     projectRoot: workspaceInfoOptional.rootDir,
     packageManager: plan.packageManager,
     packageManagerVersion: result.packageManagerVersion,
     installDurationMs: result.installDurationMs,
+    finalInstallOk: result.finalInstallOk,
     report: result.report,
   });
 }

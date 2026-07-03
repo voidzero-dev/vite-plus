@@ -15,6 +15,7 @@ pub(crate) struct ResolvedUniversalViteConfig {
     pub(crate) config_file: Option<String>,
     pub(crate) lint: Option<serde_json::Value>,
     pub(crate) fmt: Option<serde_json::Value>,
+    pub(crate) check: Option<serde_json::Value>,
     pub(crate) run: Option<serde_json::Value>,
 }
 
@@ -94,23 +95,6 @@ pub enum SynthesizableSubcommand {
         #[arg(trailing_var_arg = true)]
         paths: Vec<String>,
     },
-}
-
-impl SynthesizableSubcommand {
-    /// Return the command name string for use in `VP_COMMAND` env var.
-    pub(super) fn command_name(&self) -> &'static str {
-        match self {
-            Self::Lint { .. } => "lint",
-            Self::Fmt { .. } => "fmt",
-            Self::Build { .. } => "build",
-            Self::Test { .. } => "test",
-            Self::Pack { .. } => "pack",
-            Self::Dev { .. } => "dev",
-            Self::Preview { .. } => "preview",
-            Self::Doc { .. } => "doc",
-            Self::Check { .. } => "check",
-        }
-    }
 }
 
 /// Top-level CLI argument parser for vite-plus.

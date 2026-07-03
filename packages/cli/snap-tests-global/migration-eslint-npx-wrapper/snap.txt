@@ -1,10 +1,10 @@
-> vp migrate --no-interactive # migration should rewrite bare eslint but leave npx wrappers unchanged
-◇ Migrated . to Vite+
+> vp migrate --no-interactive # migration should rewrite bare and bunx eslint but leave other wrappers unchanged
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint
 
-> cat package.json # check eslint removed, bare eslint rewritten, npx/pnpm exec/bunx wrappers unchanged
+> cat package.json # check eslint removed, bare and bunx eslint rewritten, npx/pnpm exec unchanged
 {
   "name": "migration-eslint-npx-wrapper",
   "scripts": {
@@ -12,7 +12,7 @@
     "build": "vp build",
     "lint": "npx eslint .",
     "lint:fix": "pnpm exec eslint --fix .",
-    "lint:bunx": "bunx eslint .",
+    "lint:bunx": "bunx vp lint .",
     "lint:bare": "vp lint --fix .",
     "prepare": "vp config"
   },
@@ -31,18 +31,14 @@
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > test ! -f eslint.config.mjs # check eslint config is removed

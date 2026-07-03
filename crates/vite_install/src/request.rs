@@ -54,23 +54,14 @@ impl HttpClient {
     /// * `Err(e)` - If the request fails
     pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>, Error> {
         tracing::debug!("Fetching bytes from: {}", url);
-        let response = self.get(url).await?;
-        Ok(response.bytes().await?.to_vec())
-    }
 
-    async fn get(&self, url: &str) -> Result<Response, Error> {
-        self.get_with_accept(url, None).await
-    }
-
-    async fn get_with_accept(&self, url: &str, accept: Option<&str>) -> Result<Response, Error> {
         let client = vite_shared::shared_http_client();
 
-        let response = (|| async {
-            let mut request = client.get(url);
-            if let Some(accept) = accept {
-                request = request.header(reqwest::header::ACCEPT, accept);
-            }
-            request.send().await?.error_for_status()
+        // Read the body inside the retry so a mid-body connection drop gets
+        // retried instead of failing outright, like `download_file`.
+        let bytes = (|| async {
+            let response = client.get(url).send().await?.error_for_status()?;
+            Ok::<_, Error>(response.bytes().await?)
         })
         .retry(
             ExponentialBuilder::default()
@@ -80,7 +71,7 @@ impl HttpClient {
         )
         .await?;
 
-        Ok(response)
+        Ok(bytes.to_vec())
     }
 
     /// Get JSON data from a URL
@@ -94,11 +85,7 @@ impl HttpClient {
     /// * `Ok(T)` - Deserialized JSON data
     /// * `Err(e)` - If the request fails or JSON deserialization fails
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
-        tracing::debug!("Fetching JSON from: {}", url);
-
-        let response = self.get(url).await?;
-        let data = response.json::<T>().await?;
-        Ok(data)
+        self.get_json_with_optional_accept(url, None).await
     }
 
     /// Get JSON data from a URL with a custom Accept header
@@ -119,11 +106,32 @@ impl HttpClient {
         url: &str,
         accept: &str,
     ) -> Result<T, Error> {
-        tracing::debug!("Fetching JSON from: {} (accept: {})", url, accept);
+        self.get_json_with_optional_accept(url, Some(accept)).await
+    }
 
-        let response = self.get_with_accept(url, Some(accept)).await?;
-        let data = response.json::<T>().await?;
-        Ok(data)
+    async fn get_json_with_optional_accept<T: DeserializeOwned>(
+        &self,
+        url: &str,
+        accept: Option<&str>,
+    ) -> Result<T, Error> {
+        tracing::debug!("Fetching JSON from: {} (accept: {:?})", url, accept);
+
+        let client = vite_shared::shared_http_client();
+        (|| async {
+            let mut request = client.get(url);
+            if let Some(accept) = accept {
+                request = request.header(reqwest::header::ACCEPT, accept);
+            }
+            let response = request.send().await?.error_for_status()?;
+            Ok::<T, Error>(response.json::<T>().await?)
+        })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(self.min_delay))
+                .with_max_times(self.max_times),
+        )
+        .await
     }
 
     /// Download a file to a specified path
@@ -722,6 +730,69 @@ mod tests {
         );
     }
 
+    /// `get_bytes` used to read the body outside the retry, so a connection
+    /// dropped mid-body never got retried. The server truncates the first
+    /// response, then sends the whole body — `get_bytes` should retry and succeed.
+    #[tokio::test]
+    async fn test_get_bytes_retries_on_truncated_body() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let body = b"the complete body payload that must arrive intact";
+        let len = body.len();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let connections = Arc::new(AtomicUsize::new(0));
+
+        let server_connections = Arc::clone(&connections);
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let attempt = server_connections.fetch_add(1, Ordering::SeqCst);
+
+                // Drain the request before replying.
+                let mut scratch = [0u8; 1024];
+                let _ = socket.read(&mut scratch).await;
+
+                let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {len}\r\n\r\n");
+                socket.write_all(head.as_bytes()).await.unwrap();
+                if attempt == 0 {
+                    // First attempt: send half the body, then drop the connection.
+                    socket.write_all(&body[..len / 2]).await.unwrap();
+                } else {
+                    // Retry: send the whole body.
+                    socket.write_all(body).await.unwrap();
+                }
+                socket.flush().await.unwrap();
+            }
+        });
+
+        let client = HttpClient::with_config(3, 10);
+        let url = format!("http://{addr}/");
+        let result = client.get_bytes(&url).await;
+
+        server.abort();
+
+        let attempts = connections.load(Ordering::SeqCst);
+        assert!(
+            result.is_ok(),
+            "get_bytes must retry a truncated body and eventually succeed, but got {result:?} after {attempts} attempt(s)"
+        );
+        assert_eq!(result.unwrap(), body);
+        assert!(
+            attempts >= 2,
+            "a body-level failure must be retried, but get_bytes only made {attempts} connection(s)"
+        );
+    }
+
     #[tokio::test]
     #[ignore] // Flaky on musl/Alpine — temp file race condition
     async fn test_verify_file_hash_sha1() {
@@ -814,15 +885,16 @@ mod tests {
         let server = MockServer::start();
 
         // Mock response with invalid JSON
-        server.mock(|when, then| {
+        let mock = server.mock(|when, then| {
             when.method(GET).path("/invalid.json");
             then.status(200).header("content-type", "application/json").body("not valid json");
         });
 
-        let client = HttpClient::new();
+        let client = HttpClient::with_config(2, 1);
         let url = format!("{}/invalid.json", server.base_url());
 
         let result: Result<TestData, _> = client.get_json(&url).await;
         assert!(result.is_err(), "Expected JSON parsing to fail");
+        mock.assert_hits(3);
     }
 }

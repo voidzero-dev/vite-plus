@@ -107,7 +107,7 @@ mod tests {
             std::env::set_var("PATH", &new_path);
         }
 
-        // Clear any existing VITE_PLUS_HOME env var by using a test config without it
+        // Clear any existing VP_HOME env var by using a test config without it
         EnvConfig::test_scope(EnvConfig::for_test(), || {
             // Test: get_vp_home should return /tmp/xxx/.vite-plus
             let home = get_vp_home().unwrap();

@@ -22,8 +22,13 @@ type LatestTag = {
   tag: string;
 };
 
+type LatestTagOptions = {
+  stableOnly?: boolean;
+};
+
 type NpmLatestResponse = {
   version?: unknown;
+  dependencies?: Record<string, string>;
 };
 
 type UpstreamVersions = {
@@ -38,6 +43,7 @@ type UpstreamVersions = {
 type PnpmWorkspaceVersions = {
   vitest: string;
   tsdown: string;
+  lightningcss: string;
   oxcNodeCli: string;
   oxcNodeCore: string;
   oxfmt: string;
@@ -61,6 +67,8 @@ type PackageJson = {
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 };
+
+const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -89,13 +97,21 @@ function recordChange(
 }
 
 // ============ GitHub API ============
-async function getLatestTag(owner: string, repo: string): Promise<LatestTag> {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags?per_page=1`, {
-    headers: {
-      Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      Accept: 'application/vnd.github.v3+json',
+async function getLatestTag(
+  owner: string,
+  repo: string,
+  options: LatestTagOptions = {},
+): Promise<LatestTag> {
+  const perPage = options.stableOnly ? 100 : 1;
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/tags?per_page=${perPage}`,
+    {
+      headers: {
+        Authorization: `token ${process.env.GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
     },
-  });
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
   }
@@ -103,7 +119,12 @@ async function getLatestTag(owner: string, repo: string): Promise<LatestTag> {
   if (!Array.isArray(tags) || !tags.length) {
     throw new Error(`No tags found for ${owner}/${repo}`);
   }
-  const [latest] = tags;
+  const latest = options.stableOnly
+    ? tags.find((tag) => typeof tag.name === 'string' && STABLE_SEMVER_TAG_RE.test(tag.name))
+    : tags[0];
+  if (!latest) {
+    throw new Error(`No stable semver tags found for ${owner}/${repo}`);
+  }
   if (typeof latest?.commit?.sha !== 'string' || typeof latest.name !== 'string') {
     throw new Error(`Invalid tag structure for ${owner}/${repo}: missing SHA or name`);
   }
@@ -112,18 +133,35 @@ async function getLatestTag(owner: string, repo: string): Promise<LatestTag> {
 }
 
 // ============ npm Registry ============
-async function getLatestNpmVersion(packageName: string): Promise<string> {
+async function fetchNpmLatest(packageName: string): Promise<NpmLatestResponse> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
-      `Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`,
+      `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  const data = (await res.json()) as NpmLatestResponse;
+  return (await res.json()) as NpmLatestResponse;
+}
+
+async function getLatestNpmVersion(packageName: string): Promise<string> {
+  const data = await fetchNpmLatest(packageName);
   if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
   return data.version;
+}
+
+// Read a dependency range from the latest published version of `packageName`,
+// e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
+async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
+  const data = await fetchNpmLatest(packageName);
+  const range = data.dependencies?.[dependencyName];
+  if (typeof range !== 'string') {
+    throw new Error(
+      `Invalid npm response for ${packageName}: missing dependencies.${dependencyName}`,
+    );
+  }
+  return range;
 }
 
 // ============ Update .upstream-versions.json ============
@@ -135,7 +173,7 @@ async function updateUpstreamVersions(): Promise<void> {
   const oldViteHash = data.vite.hash;
   const [rolldown, vite] = await Promise.all([
     getLatestTag('rolldown', 'rolldown'),
-    getLatestTag('vitejs', 'vite'),
+    getLatestTag('vitejs', 'vite', { stableOnly: true }),
   ]);
   data.rolldown.hash = rolldown.sha;
   data.vite.hash = vite.sha;
@@ -152,18 +190,72 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
+  // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
+  // to the same exact version as `vitest` itself, otherwise the catalog drifts
+  // from VITEST_VERSION.
+  const vitestExactVersionPackages = [
+    '@vitest/browser',
+    '@vitest/browser-playwright',
+    '@vitest/browser-preview',
+    '@vitest/browser-webdriverio',
+    '@vitest/expect',
+    '@vitest/mocker',
+    '@vitest/pretty-format',
+    '@vitest/runner',
+    '@vitest/snapshot',
+    '@vitest/spy',
+    '@vitest/utils',
+  ];
+  const vitestExactVersionEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
+    name: pkg,
+    pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
+    replacement: `'${pkg}': ${versions.vitest}`,
+    newVersion: versions.vitest,
+  }));
   const entries: PnpmWorkspaceEntry[] = [
     {
       name: 'vitest',
-      pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `vitest-dev: npm:vitest@^${versions.vitest}`,
+      // The `@voidzero-dev/vite-plus-test` wrapper (which used to be aliased
+      // here via `vitest-dev: npm:vitest@^…`) has been removed. Vitest is now
+      // a plain catalog entry pinned to an exact version (`vitest: x.y.z`),
+      // so match that shape directly. The leading newline anchor disambiguates
+      // from neighbouring keys like `vitepress-*` and `@vitest/browser`.
+      pattern: /\n {2}vitest: ([\d.]+(?:-[\w.]+)?)\n/,
+      replacement: `\n  vitest: ${versions.vitest}\n`,
       newVersion: versions.vitest,
     },
+    ...vitestExactVersionEntries,
     {
       name: 'tsdown',
       pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
       replacement: `tsdown: ^${versions.tsdown}`,
       newVersion: versions.tsdown,
+    },
+    // `@tsdown/css` and `@tsdown/exe` are bundled into core and published in
+    // lockstep with tsdown (they exact-peer-depend on the same tsdown version),
+    // so pin both catalog entries to the tsdown version to avoid drift.
+    {
+      name: '@tsdown/css',
+      pattern: /'@tsdown\/css': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/css': ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
+    {
+      name: '@tsdown/exe',
+      pattern: /'@tsdown\/exe': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/exe': ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
+    // `lightningcss` is a core dependency consumed by the bundled `@tsdown/css`.
+    // Track exactly what `@tsdown/css` requires (already an `^x.y.z` range) so a
+    // tsdown upgrade that bumps lightningcss is mirrored here.
+    {
+      name: 'lightningcss',
+      // Match any range value (not just `^x.y.z`) so the pattern can re-match
+      // whatever `@tsdown/css` declares (`~`, `>=`, compound ranges) on the next run.
+      pattern: /\n {2}lightningcss: ([^\n]+)\n/,
+      replacement: `\n  lightningcss: ${versions.lightningcss}\n`,
+      newVersion: versions.lightningcss,
     },
     {
       name: '@oxc-node/cli',
@@ -246,34 +338,129 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   console.log('Updated pnpm-workspace.yaml');
 }
 
-// ============ Update packages/test/package.json ============
-async function updateTestPackage(vitestVersion: string): Promise<void> {
-  const filePath = path.join(ROOT, 'packages/test/package.json');
-  const pkg: PackageJson = readJsonFile(filePath);
-  const devDependencies = pkg.devDependencies;
-  if (!devDependencies) {
-    throw new Error('packages/test/package.json is missing devDependencies');
+// ============ Update VITEST_VERSION constant ============
+// Keeps the TypeScript source-of-truth (`packages/cli/src/utils/constants.ts`)
+// in sync with the `vitest:` catalog entry in pnpm-workspace.yaml. The
+// constant is consumed by both `packages/cli` and `ecosystem-ci/patch-project.ts`
+// (which re-imports it), so daily upstream bumps must update it here too.
+async function updateVitestVersionConstant(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, 'packages/cli/src/utils/constants.ts');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const pattern = /export const VITEST_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
+  let oldVersion: string | undefined;
+  const updated = content.replace(pattern, (_match: string, captured: string) => {
+    oldVersion = captured;
+    return `export const VITEST_VERSION = '${vitestVersion}';`;
+  });
+  if (oldVersion === undefined) {
+    throw new Error(
+      `Failed to match VITEST_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
+        `please update it in .github/scripts/upgrade-deps.ts`,
+    );
   }
+  fs.writeFileSync(filePath, updated);
+  recordChange('VITEST_VERSION constant', oldVersion, vitestVersion);
+  console.log('Updated packages/cli/src/utils/constants.ts');
+}
 
-  // Update all @vitest/* devDependencies
-  for (const dep of Object.keys(devDependencies)) {
-    if (dep.startsWith('@vitest/')) {
-      devDependencies[dep] = vitestVersion;
+// ============ Update .github/workflows/test-vp-create.yml ============
+// The `vp create` smoke-test workflow pins every vitest-family package via the
+// `VP_OVERRIDE_PACKAGES` env var so that template installs use the bundled
+// version. Daily upstream bumps must rewrite those pins so the workflow does
+// not drift behind the rest of the repo.
+async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, '.github/workflows/test-vp-create.yml');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const vitestKeys = [
+    'vitest',
+    '@vitest/expect',
+    '@vitest/runner',
+    '@vitest/snapshot',
+    '@vitest/spy',
+    '@vitest/utils',
+    '@vitest/mocker',
+    '@vitest/pretty-format',
+    '@vitest/coverage-v8',
+    '@vitest/coverage-istanbul',
+  ];
+  let updated = content;
+  let oldVersion: string | undefined;
+  for (const key of vitestKeys) {
+    const pattern = new RegExp(`"${key.replaceAll('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
+    let matched = false;
+    updated = updated.replace(pattern, (_match: string, captured: string) => {
+      matched = true;
+      oldVersion ??= captured;
+      return `"${key}":"${vitestVersion}"`;
+    });
+    if (!matched) {
+      throw new Error(
+        `Failed to match "${key}" in ${filePath} — the pattern ${pattern} is stale, ` +
+          `please update it in .github/scripts/upgrade-deps.ts`,
+      );
     }
   }
+  fs.writeFileSync(filePath, updated);
+  recordChange('test-vp-create workflow', oldVersion ?? null, vitestVersion);
+  console.log('Updated .github/workflows/test-vp-create.yml');
+}
 
-  // Update vitest-dev devDependency
-  if (devDependencies['vitest-dev']) {
-    devDependencies['vitest-dev'] = `^${vitestVersion}`;
+// ============ Update README.md manual-migration vitest pins ============
+// The manual-migration guide pins `vitest` to an exact version in three places —
+// the npm/Bun `overrides` block, the pnpm-workspace `overrides` block, and the
+// Yarn `resolutions` block — so a hand-migrated project shares one Vitest copy
+// with the bundled `vp test`. Those literals are NOT interpolated from
+// VITEST_VERSION, so a daily bump must rewrite them or the guide drifts behind the
+// bundled version. The packages/cli/README.md mirror (refreshed from the root
+// README's suffix at build time) is kept in sync here too so the daily PR stays
+// self-consistent without depending on a build step running first.
+async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
+  const readmePaths = [path.join(ROOT, 'README.md'), path.join(ROOT, 'packages/cli/README.md')];
+  // JSON form: `"vitest": "4.1.9"` — npm/Bun `overrides` + Yarn `resolutions` (2 blocks)
+  const jsonPattern = /("vitest": ")[\d.]+(?:-[\w.]+)?(")/g;
+  // YAML form: `  vitest: 4.1.9` — pnpm-workspace `overrides` (1 block)
+  const yamlPattern = /(\n\s*vitest: )[\d.]+(?:-[\w.]+)?(\n)/g;
+  // Both READMEs carry the same three manual-migration pins (the cli copy mirrors the
+  // root's suffix). Assert the exact shape so a daily run fails loudly — like every
+  // other updater here — if a block is reworded or removed, instead of silently
+  // shipping a README where only some pins were bumped.
+  const EXPECTED_JSON = 2;
+  const EXPECTED_YAML = 1;
+  let oldVersion: string | undefined;
+  const capture = (match: string): void => {
+    const found = /(\d[\d.]*(?:-[\w.]+)?)/.exec(match)?.[1];
+    if (found && oldVersion === undefined) {
+      oldVersion = found;
+    }
+  };
+  for (const filePath of readmePaths) {
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+    const content = fs.readFileSync(filePath, 'utf8');
+    let jsonMatched = 0;
+    let yamlMatched = 0;
+    let updated = content.replace(jsonPattern, (match: string, pre: string, post: string) => {
+      jsonMatched++;
+      capture(match);
+      return `${pre}${vitestVersion}${post}`;
+    });
+    updated = updated.replace(yamlPattern, (match: string, pre: string, post: string) => {
+      yamlMatched++;
+      capture(match);
+      return `${pre}${vitestVersion}${post}`;
+    });
+    if (jsonMatched !== EXPECTED_JSON || yamlMatched !== EXPECTED_YAML) {
+      throw new Error(
+        `Expected ${EXPECTED_JSON} JSON + ${EXPECTED_YAML} YAML vitest pins in ${filePath}, ` +
+          `found ${jsonMatched} + ${yamlMatched} — the manual-migration section changed, ` +
+          `please update updateReadmeVitestPins in .github/scripts/upgrade-deps.ts`,
+      );
+    }
+    fs.writeFileSync(filePath, updated);
+    console.log(`Updated ${path.relative(ROOT, filePath)}`);
   }
-
-  // Update @vitest/ui peerDependency if present
-  if (pkg.peerDependencies?.['@vitest/ui']) {
-    pkg.peerDependencies['@vitest/ui'] = vitestVersion;
-  }
-
-  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
-  console.log('Updated packages/test/package.json');
+  recordChange('README vitest pins', oldVersion ?? null, vitestVersion);
 }
 
 // ============ Update packages/core/package.json ============
@@ -374,6 +561,7 @@ console.log('Fetching latest versions…');
 const [
   vitestVersion,
   tsdownVersion,
+  lightningcssVersion,
   devtoolsVersion,
   oxcNodeCliVersion,
   oxcNodeCoreVersion,
@@ -388,6 +576,8 @@ const [
 ] = await Promise.all([
   getLatestNpmVersion('vitest'),
   getLatestNpmVersion('tsdown'),
+  // Mirror exactly what the bundled @tsdown/css depends on.
+  getNpmDependencyRange('@tsdown/css', 'lightningcss'),
   getLatestNpmVersion('@vitejs/devtools'),
   getLatestNpmVersion('@oxc-node/cli'),
   getLatestNpmVersion('@oxc-node/core'),
@@ -403,6 +593,7 @@ const [
 
 console.log(`vitest: ${vitestVersion}`);
 console.log(`tsdown: ${tsdownVersion}`);
+console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
 console.log(`@vitejs/devtools: ${devtoolsVersion}`);
 console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
 console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
@@ -419,6 +610,7 @@ await updateUpstreamVersions();
 await updatePnpmWorkspace({
   vitest: vitestVersion,
   tsdown: tsdownVersion,
+  lightningcss: lightningcssVersion,
   oxcNodeCli: oxcNodeCliVersion,
   oxcNodeCore: oxcNodeCoreVersion,
   oxfmt: oxfmtVersion,
@@ -430,7 +622,9 @@ await updatePnpmWorkspace({
   oxcParser: oxcParserVersion,
   oxcTransform: oxcTransformVersion,
 });
-await updateTestPackage(vitestVersion);
+await updateVitestVersionConstant(vitestVersion);
+await updateTestVpCreateWorkflow(vitestVersion);
+await updateReadmeVitestPins(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();

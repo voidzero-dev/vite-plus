@@ -9,9 +9,10 @@
 #   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
-#   VP_PR_VERSION - PR number or commit SHA to install from pkg.pr.new
+#   VP_PR_VERSION - PR number or commit SHA to install from the registry bridge
 #                   (for temporary testing of unreleased builds, e.g. VP_PR_VERSION=1569).
-#                   When set, overrides VP_VERSION and bypasses the npm registry.
+#                   When set, overrides VP_VERSION and installs the clearly-defined
+#                   0.0.0-commit.<sha> build through the bridge instead of npm.
 
 $ErrorActionPreference = "Stop"
 
@@ -23,10 +24,15 @@ $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd(
 $LocalTgz = $env:VP_LOCAL_TGZ
 # Local binary path (set by install-global-cli.ts for local dev)
 $LocalBinary = $env:VP_LOCAL_BINARY
-# pkg.pr.new PR number or commit SHA (for temporary testing of unreleased builds)
+# PR number or commit SHA to install as a test build (registry bridge mode)
 $PrVersion = $env:VP_PR_VERSION
-# pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
-$PkgPrNewBase = "https://pkg.pr.new/voidzero-dev/vite-plus"
+# Registry bridge that serves pkg.pr.new builds as clearly-versioned packages.
+# The pkg.pr.new-style download URL (BridgeDownloadBase) 302-redirects to a
+# canonical 0.0.0-commit.<sha> tarball; the registry (BridgeRegistry) resolves
+# those commit versions (and proxies everything else to npmjs) so a full install
+# pulls a coherent, clearly-defined test build.
+$BridgeDownloadBase = "https://registry-bridge.viteplus.dev/voidzero-dev/vite-plus"
+$BridgeRegistry = "https://registry-bridge.viteplus.dev/"
 
 function Write-Info {
     param([string]$Message)
@@ -46,11 +52,87 @@ function Write-Warn {
     Write-Host $Message
 }
 
+# Exit code when a Windows native binary cannot load required DLLs (STATUS_DLL_NOT_FOUND).
+$script:DllNotFoundExitCode = -1073741515
+
+function Test-IsDllNotFoundExitCode {
+    param([int]$ExitCode)
+    if ($ExitCode -eq $script:DllNotFoundExitCode) {
+        return $true
+    }
+    if ($ExitCode -eq 3221225781) {
+        return $true
+    }
+    if ($ExitCode -lt 0) {
+        $hex = '{0:X8}' -f ($ExitCode -band 0xFFFFFFFF)
+        return $hex -eq 'C0000135'
+    }
+    return $false
+}
+
+function Get-DllNotFoundInstallMessage {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+    $vcUrl = if ($arch -eq "arm64") {
+        "https://aka.ms/vs/17/release/vc_redist.arm64.exe"
+    } else {
+        "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    }
+    return @"
+vp.exe could not start (exit code 0xC0000135).
+This usually means Microsoft Visual C++ 2015-2022 Redistributable ($arch) is not installed.
+
+Install: $vcUrl
+Then re-run: irm https://vite.plus/ps1 | iex
+"@
+}
+
+# Internal stop signal: halts install without re-printing an error we already wrote.
+$script:InstallStopSignal = 'VP_INSTALL_STOP'
+
+function Test-IsInstallStopException {
+    param(
+        [System.Management.Automation.ErrorRecord]$ErrorRecord
+    )
+    return $ErrorRecord.Exception.Message -eq $script:InstallStopSignal
+}
+
+function Test-ShouldKeepShellOpenAfterFailure {
+    # Only `irm ... | iex` typed in an already-open interactive shell should keep the
+    # session alive. CI, script files, and `powershell -Command "..."` must exit non-zero.
+    if ($env:CI -eq "true") {
+        return $false
+    }
+    if ($PSCommandPath) {
+        return $false
+    }
+    if (-not [Environment]::UserInteractive) {
+        return $false
+    }
+    try {
+        $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").CommandLine
+        if ($commandLine -match '(^|\s)-Command(\s|$)') {
+            return $false
+        }
+    } catch {
+        return $false
+    }
+    return $true
+}
+
+function Exit-Installer {
+    param([int]$Code = 1)
+    $global:LASTEXITCODE = $Code
+    if (-not (Test-ShouldKeepShellOpenAfterFailure)) {
+        exit $Code
+    }
+    throw $script:InstallStopSignal
+}
+
 function Write-Error-Exit {
     param([string]$Message)
     Write-Host "error: " -ForegroundColor Red -NoNewline
     Write-Host $Message
-    exit 1
+    Exit-Installer
 }
 
 function Test-ReleaseAgeError {
@@ -110,15 +192,55 @@ function Confirm-ReleaseAgeOverride {
 }
 
 function Write-ReleaseAgeOverride {
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
+    # Append idempotently so a bridge registry line written for PR builds survives.
+    $npmrc = Join-Path $VersionDir ".npmrc"
+    if ((-not (Test-Path $npmrc)) -or (-not (Select-String -Path $npmrc -Pattern '^minimum-release-age=' -Quiet))) {
+        Add-Content -Path $npmrc -Value "minimum-release-age=0"
+    }
+}
+
+# Resolve a PR number or commit SHA to the registry bridge's immutable commit
+# version (0.0.0-commit.<sha>). A full commit SHA maps directly to the bridge's
+# deterministic version; a PR number (or short ref) is resolved via the bridge
+# download URL's `x-commit-key: <owner>:<repo>:<sha>` header (HEAD).
+function Resolve-BridgeCommitVersion {
+    param([string]$Ref)
+    $sha = $Ref
+    if ($Ref -notmatch '^[0-9a-fA-F]{40}$') {
+        try {
+            $resp = Invoke-WebRequest -Uri "$BridgeDownloadBase@$Ref" -Method Head -UseBasicParsing -ErrorAction Stop
+        } catch {
+            return $null
+        }
+        $commitKey = @($resp.Headers['x-commit-key'])[0]
+        if (-not $commitKey) { return $null }
+        $sha = ($commitKey -split ':')[-1]
+    }
+    if ($sha -notmatch '^[0-9a-fA-F]{40}$') { return $null }
+    return "0.0.0-commit.$sha"
 }
 
 function Write-InstallFailure {
-    param([string]$LogPath)
+    param(
+        [string]$LogPath,
+        [int]$ExitCode = 0
+    )
+
+    if (Test-IsDllNotFoundExitCode $ExitCode) {
+        $message = Get-DllNotFoundInstallMessage
+        if ($env:CI -eq "true") {
+            Write-Host "error: " -ForegroundColor Red -NoNewline
+            Write-Host $message
+            Exit-Installer
+        }
+        Write-Error-Exit $message
+    }
+
     if ($env:CI -eq "true") {
         Write-Host "error: " -ForegroundColor Red -NoNewline
         Write-Host "Failed to install dependencies. Log output:"
         Get-Content -Path $LogPath | ForEach-Object { Write-Host $_ }
+        Exit-Installer
     } else {
         Write-Error-Exit "Failed to install dependencies. See log for details: $LogPath"
     }
@@ -157,6 +279,7 @@ function Get-PackageMetadata {
         try {
             $script:PackageMetadata = Invoke-RestMethod $metadataUrl
         } catch {
+            if (Test-IsInstallStopException $_) { throw }
             # Try to extract npm error message from response
             $errorMsg = $_.ErrorDetails.Message
             if ($errorMsg) {
@@ -166,6 +289,7 @@ function Get-PackageMetadata {
                         Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)`n  URL: $metadataUrl"
                     }
                 } catch {
+                    if (Test-IsInstallStopException $_) { throw }
                     # JSON parsing failed, fall through to generic error
                 }
             }
@@ -179,6 +303,7 @@ function Get-PackageMetadata {
             try {
                 $script:PackageMetadata = $script:PackageMetadata | ConvertFrom-Json
             } catch {
+                if (Test-IsInstallStopException $_) { throw }
                 # Not valid JSON - treat as plain string error
                 Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata`n  URL: $metadataUrl"
             }
@@ -473,11 +598,16 @@ function Main {
             $ViteVersion = "local-dev"
         }
     } elseif ($PrVersion) {
-        # pkg.pr.new mode: skip npm metadata, use a synthetic version label.
-        # Non-semver label keeps the directory out of Cleanup-OldVersions and
-        # makes it obvious in ~/.vite-plus which install is the PR build.
+        # Registry bridge mode: resolve the requested PR/SHA to the bridge's
+        # immutable commit version (0.0.0-commit.<sha>), the clearly-defined test
+        # version we install. The directory label stays non-semver so it keeps
+        # out of Cleanup-OldVersions and makes the PR build obvious in ~/.vite-plus.
+        $PrCommitVersion = Resolve-BridgeCommitVersion -Ref $PrVersion
+        if (-not $PrCommitVersion) {
+            Write-Error-Exit "Could not resolve a registry bridge build for $PrVersion"
+        }
         $ViteVersion = "pkg-pr-new-$PrVersion"
-        Write-Info "Using pkg.pr.new version: $PrVersion"
+        Write-Info "Using registry bridge build: $PrCommitVersion"
     } else {
         # Fetch package metadata and resolve version from npm
         $ViteVersion = Get-VersionFromMetadata
@@ -509,11 +639,12 @@ function Main {
             Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
         }
     } else {
-        # Download CLI platform tarball — npm registry or pkg.pr.new (when PrVersion is set)
+        # Download CLI platform tarball — npm registry or registry bridge (when PrVersion is set)
         $platformSuffix = Get-PlatformSuffix -Platform $platform
         if ($PrVersion) {
-            # pkg.pr.new redirects this URL to the platform tarball for the matching PR/commit
-            $platformUrl = "$PkgPrNewBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
+            # The registry bridge redirects this URL to the platform tarball for
+            # the matching commit build (0.0.0-commit.<sha>).
+            $platformUrl = "$BridgeDownloadBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
         } else {
             $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
             $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
@@ -555,9 +686,19 @@ function Main {
     # Generate wrapper package.json that declares vite-plus as a dependency.
     # pnpm will install vite-plus and all transitive deps via `vp install`.
     # The packageManager field pins pnpm to a known-good version.
-    # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
-    # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
-    $vitePlusSpec = if ($PrVersion) { "$PkgPrNewBase@$PrVersion" } else { $ViteVersion }
+    # In PR mode, pin vite-plus to the bridge's clearly-defined commit version and
+    # resolve it (plus its platform binaries and transitive deps) through the
+    # bridge registry written to .npmrc below. The bridge rewrites a preview
+    # tarball's transitive deps to versions, not self-contained URLs, so a full
+    # install must go through the registry rather than the bare download URL.
+    $vitePlusSpec = if ($PrVersion) { $PrCommitVersion } else { $ViteVersion }
+    if ($PrVersion) {
+        # Bridge registry; drop any stale wrapper lockfile (see install.sh for why):
+        # the reused pkg-pr-new-<ref> dir must re-resolve a lockfile matching the
+        # spec we just wrote, not fail under CI's frozen-lockfile default.
+        Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "registry=$BridgeRegistry"
+        Remove-Item -Path (Join-Path $VersionDir "pnpm-lock.yaml") -ErrorAction SilentlyContinue
+    }
     $wrapperJson = @{
         name = "vp-global"
         version = $ViteVersion
@@ -593,16 +734,14 @@ function Main {
                         $retryExitCode = $LASTEXITCODE
                         $retryOutput | Out-File $installLog
                         if ($retryExitCode -ne 0) {
-                            Write-InstallFailure $installLog
-                            exit 1
+                            Write-InstallFailure -LogPath $installLog -ExitCode $retryExitCode
                         }
                     } else {
                         Write-ReleaseAgeFailure $installLog
-                        exit 1
+                        Exit-Installer
                     }
                 } else {
-                    Write-InstallFailure $installLog
-                    exit 1
+                    Write-InstallFailure -LogPath $installLog -ExitCode $installExitCode
                 }
             }
         } finally {
@@ -749,4 +888,14 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     Write-Host ""
 }
 
-Main
+try {
+    Main
+} catch {
+    if (Test-IsInstallStopException $_) {
+        if (Test-ShouldKeepShellOpenAfterFailure) {
+            return
+        }
+        exit $global:LASTEXITCODE
+    }
+    throw
+}

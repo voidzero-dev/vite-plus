@@ -2,7 +2,7 @@
 > vp migrate --no-interactive # migration should not support non-json format lintstagedrc
 
 ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 
@@ -30,6 +30,7 @@ export default {
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -43,16 +44,12 @@ export default {
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'

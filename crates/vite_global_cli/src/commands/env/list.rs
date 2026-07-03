@@ -20,7 +20,7 @@ struct InstalledVersionJson {
 }
 
 /// Scan the node versions directory and return sorted version strings.
-fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String> {
+pub(super) fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String> {
     let entries = match std::fs::read_dir(node_dir) {
         Ok(entries) => entries,
         Err(_) => return Vec::new(),
@@ -52,8 +52,7 @@ fn compare_versions(a: &str, b: &str) -> Ordering {
 
 /// Execute the list command (local installed versions).
 pub async fn execute(cwd: AbsolutePathBuf, json_output: bool) -> Result<ExitStatus, Error> {
-    let home_dir =
-        vite_shared::get_vp_home().map_err(|e| Error::ConfigError(format!("{e}").into()))?;
+    let home_dir = vite_shared::get_vp_home()?;
     let node_dir = home_dir.join("js_runtime").join("node");
 
     let versions = list_installed_versions(node_dir.as_path());

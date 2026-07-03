@@ -1,0 +1,7 @@
+{
+  "name": "vp-fmt-cache-test",
+  "type": "module",
+  "scripts": {
+    "fmt": "vp fmt"
+  }
+}

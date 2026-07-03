@@ -2,8 +2,8 @@
 
 Use this page when something in Vite+ is not behaving the way you expect.
 
-::: warning
-Vite+ is still in alpha. We are making frequent changes, adding features quickly, and we want feedback to help make it great.
+::: info
+Vite+ is in beta: stable, but not yet complete. We are adding features on the road to 1.0 and prioritize community feedback, so please [reach out](#asking-for-help) if something does not work as expected.
 :::
 
 ## Supported Tool Versions
@@ -67,9 +67,9 @@ export default defineConfig({
 
 ## Slow config loading caused by heavy plugins
 
-When `vite.config.ts` imports heavy plugins at the top level, every `import` is evaluated eagerly, even for commands like `vp lint` or `vp fmt` that don't need those plugins. This can make config loading noticeably slow.
+When `vite.config.ts` imports plugins at the top level, they are evaluated for every command, including `vp lint`, `vp fmt`, editor integrations, and long-lived background processes. This can make config loading slow and may trigger plugin setup side effects, such as reading files, starting watchers, or connecting to services.
 
-Use `lazyPlugins` to wrap plugin loading. Plugins are only loaded for commands that need them (`dev`, `build`, `test`, `preview`), and skipped for everything else:
+Use `lazyPlugins` to skip the plugin factory when vite-plus loads your config only to read a metadata block (`lint`, `fmt`, `check`, `staged`, `pack`, `create`, the `run`/`cache` task lookup, and editor tooling). The plugins still load whenever Vite actually runs, `dev`, `build`, `test`, `preview`, and any build your own scripts spawn (a `vp run` task, `vp exec`):
 
 ```ts [vite.config.ts]
 import { defineConfig, lazyPlugins } from 'vite-plus';

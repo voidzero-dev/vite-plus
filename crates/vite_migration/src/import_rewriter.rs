@@ -17,8 +17,20 @@ use crate::{ast_grep, file_walker};
 /// This rewrites:
 /// - `import { ... } from 'vite'` → `import { ... } from 'vite-plus'`
 /// - `import { ... } from 'vite/{name}'` → `import { ... } from 'vite-plus/{name}'`
+/// - `require('vite')` → `require('vite-plus')`
+/// - `require('vite/{name}')` → `require('vite-plus/{name}')`
 /// - `declare module 'vite' { ... }` → `declare module 'vite-plus' { ... }`
 /// - `declare module 'vite/{name}' { ... }` → `declare module 'vite-plus/{name}' { ... }`
+///
+/// The `require(...)` sibling rules constrain themselves to a literal `require`
+/// callee so unrelated calls like `my_require('vite')` or `require.cache['vite']`
+/// are NOT touched. The `*-dynamic-import` sibling rules match dynamic
+/// `import('vite')` calls (and TS type-position `typeof import('vite')`) by
+/// pinning the call_expression's `function` field to the `import` token kind,
+/// which excludes ordinary identifier calls. Together with the upstream
+/// `import_statement` rule (covering ES `import { ... } from 'vite'`), this
+/// gives full coverage of static imports/exports, dynamic imports, and
+/// CommonJS requires.
 const REWRITE_VITE_RULES: &str = r#"---
 id: rewrite-vite-import
 language: TypeScript
@@ -36,6 +48,64 @@ transform:
       by: "vite-plus"
 fix: $NEW_IMPORT
 ---
+id: rewrite-vite-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite
+      by: "vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite
+      by: "vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite
+      by: "vite-plus"
+fix: $NEW_IMPORT
+---
 id: rewrite-vite-subpath-import
 language: TypeScript
 rule:
@@ -44,6 +114,64 @@ rule:
   regex: ^['"]vite/.+['"]$
   inside:
     kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite/
+      by: "vite-plus/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-subpath-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite/.+['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite/
+      by: "vite-plus/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-subpath-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite/.+['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite/
+      by: "vite-plus/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-subpath-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite/.+['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
 transform:
   NEW_IMPORT:
     replace:
@@ -85,31 +213,53 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
-/// ast-grep rules for rewriting vitest imports and declare module statements
+/// ast-grep rules for rewriting vitest imports.
 ///
-/// This rewrites:
+/// This rewrites (the canonical mapping shared with the `oxlint-plugin.ts`
+/// `rewriteVitePlusImportSpecifier` autofix — both implementations MUST stay
+/// in sync and only produce targets that exist in the `vite-plus` package
+/// `exports` map, otherwise Node fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`):
 /// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
 /// - `import { ... } from 'vitest/config'` → `import { ... } from 'vite-plus'`
 /// - `import { ... } from 'vitest/{name}'` → `import { ... } from 'vite-plus/test/{name}'`
 /// - `import { ... } from '@vitest/browser'` → `import { ... } from 'vite-plus/test/browser'`
-/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from 'vite-plus/test/browser/{name}'`
+/// - `import { ... } from '@vitest/browser/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser/client'` → `import { ... } from 'vite-plus/test/client'`
+/// - `import { ... } from '@vitest/browser/locators'` → `import { ... } from 'vite-plus/test/locators'`
+/// - `import { ... } from '@vitest/browser/matchers'` → `import { ... } from 'vite-plus/test/matchers'`
+/// - `import { ... } from '@vitest/browser/utils'` → `import { ... } from 'vite-plus/test/utils'`
+///
+///   Note: `vite-plus` only exports `./test/browser/context` under the nested
+///   `browser/` path; `client`, `locators`, `matchers` and `utils` are exposed
+///   at the bare `./test/{name}` surface, so the `/browser/` segment is stripped.
 /// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from 'vite-plus/test/browser-playwright'`
-/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from 'vite-plus/test/browser-playwright/{name}'`
+/// - `import { ... } from '@vitest/browser-playwright/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser-playwright/provider'` → `import { ... } from 'vite-plus/test/browser/providers/playwright'`
 /// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from 'vite-plus/test/browser-preview'`
-/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from 'vite-plus/test/browser-preview/{name}'`
+/// - `import { ... } from '@vitest/browser-preview/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser-preview/provider'` → `import { ... } from 'vite-plus/test/browser/providers/preview'`
 /// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from 'vite-plus/test/browser-webdriverio'`
-/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from 'vite-plus/test/browser-webdriverio/{name}'`
-/// - `declare module 'vitest' { ... }` → `declare module 'vite-plus/test' { ... }`
-/// - `declare module 'vitest/config' { ... }` → `declare module 'vite-plus' { ... }`
-/// - `declare module 'vitest/{name}' { ... }` → `declare module 'vite-plus/test/{name}' { ... }`
-/// - `declare module '@vitest/browser' { ... }` → `declare module 'vite-plus/test/browser' { ... }`
-/// - `declare module '@vitest/browser/{name}' { ... }` → `declare module 'vite-plus/test/browser/{name}' { ... }`
-/// - `declare module '@vitest/browser-playwright' { ... }` → `declare module 'vite-plus/test/browser-playwright' { ... }`
-/// - `declare module '@vitest/browser-playwright/{name}' { ... }` → `declare module 'vite-plus/test/browser-playwright/{name}' { ... }`
-/// - `declare module '@vitest/browser-preview' { ... }` → `declare module 'vite-plus/test/browser-preview' { ... }`
-/// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module 'vite-plus/test/browser-preview/{name}' { ... }`
-/// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module 'vite-plus/test/browser-webdriverio' { ... }`
-/// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module 'vite-plus/test/browser-webdriverio/{name}' { ... }`
+/// - `import { ... } from '@vitest/browser-webdriverio/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser-webdriverio/provider'` → `import { ... } from 'vite-plus/test/browser/providers/webdriverio'`
+///
+/// `declare module 'vitest' { ... }` (and the subpath/`@vitest/*` variants) are
+/// intentionally NOT rewritten — the `vite-plus/test*` subpaths are thin shims
+/// that `export * from 'vitest'` (and the browser provider packages), so the
+/// underlying type identity is upstream. Augmenting `'vite-plus/test'` would
+/// only augment the shim module and would not merge into the upstream types
+/// the user actually sees through their `import { expect } from 'vite-plus/test'`
+/// statements. Leaving the `declare module 'vitest' { ... }` alone keeps
+/// augmentations targeting the real upstream module identity.
+///
+/// `vitest/package.json` is also intentionally NOT rewritten. It is a
+/// metadata-access pattern (typically used to read the vitest version) and
+/// `vite-plus`'s generated exports map deliberately does not expose
+/// `./test/package.json` (see `syncTestPackageExports()` in
+/// `packages/cli/build.ts`, which skips the upstream `./package.json`
+/// export). Rewriting it would yield `vite-plus/test/package.json`, which
+/// fails at runtime with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The original
+/// specifier still resolves through the transitively-installed `vitest`
+/// dependency.
 const REWRITE_VITEST_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
@@ -119,6 +269,64 @@ rule:
   regex: ^['"]vitest/config['"]$
   inside:
     kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/config
+      by: "vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-config-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/config['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/config
+      by: "vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-config-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/config['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/config
+      by: "vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-config-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/config['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
 transform:
   NEW_IMPORT:
     replace:
@@ -143,20 +351,950 @@ transform:
       by: "vite-plus/test"
 fix: $NEW_IMPORT
 ---
-id: rewrite-vitest-scoped-import
+id: rewrite-vitest-export
 language: TypeScript
 rule:
   pattern: $STR
   kind: string
-  regex: ^['"]@vitest/(browser-playwright|browser-preview|browser-webdriverio|browser)(/.*)?['"]$
+  regex: ^['"]vitest['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest
+      by: "vite-plus/test"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest
+      by: "vite-plus/test"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest
+      by: "vite-plus/test"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser['"]$
   inside:
     kind: import_statement
 transform:
   NEW_IMPORT:
     replace:
       source: $STR
-      replace: "@vitest/"
+      replace: "@vitest/browser"
+      by: "vite-plus/test/browser"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser"
+      by: "vite-plus/test/browser"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser"
+      by: "vite-plus/test/browser"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser"
+      by: "vite-plus/test/browser"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-context-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/context['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-context-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-context-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-flat-subpath-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/(client|locators|matchers|utils)['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/"
       by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-flat-subpath-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/(client|locators|matchers|utils)['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/"
+      by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-flat-subpath-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/(client|locators|matchers|utils)['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/"
+      by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-flat-subpath-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/(client|locators|matchers|utils)['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/"
+      by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright"
+      by: "vite-plus/test/browser-playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright"
+      by: "vite-plus/test/browser-playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright"
+      by: "vite-plus/test/browser-playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright"
+      by: "vite-plus/test/browser-playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-context-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/context['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-context-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-context-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-provider-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/provider['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/provider"
+      by: "vite-plus/test/browser/providers/playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-provider-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/provider['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/provider"
+      by: "vite-plus/test/browser/providers/playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-provider-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/provider['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/provider"
+      by: "vite-plus/test/browser/providers/playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-provider-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/provider['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/provider"
+      by: "vite-plus/test/browser/providers/playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview"
+      by: "vite-plus/test/browser-preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview"
+      by: "vite-plus/test/browser-preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview"
+      by: "vite-plus/test/browser-preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview"
+      by: "vite-plus/test/browser-preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-context-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/context['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-context-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-context-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-provider-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/provider['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/provider"
+      by: "vite-plus/test/browser/providers/preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-provider-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/provider['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/provider"
+      by: "vite-plus/test/browser/providers/preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-provider-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/provider['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/provider"
+      by: "vite-plus/test/browser/providers/preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-provider-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/provider['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/provider"
+      by: "vite-plus/test/browser/providers/preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio"
+      by: "vite-plus/test/browser-webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio"
+      by: "vite-plus/test/browser-webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio"
+      by: "vite-plus/test/browser-webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio"
+      by: "vite-plus/test/browser-webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-context-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/context['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-context-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-context-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/context['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-provider-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/provider"
+      by: "vite-plus/test/browser/providers/webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-provider-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/provider"
+      by: "vite-plus/test/browser/providers/webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-provider-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/provider"
+      by: "vite-plus/test/browser/providers/webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-provider-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/provider"
+      by: "vite-plus/test/browser/providers/webdriverio"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vitest-subpath-import
@@ -165,6 +1303,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
     kind: import_statement
 transform:
@@ -175,62 +1315,62 @@ transform:
       by: "vite-plus/test/"
 fix: $NEW_IMPORT
 ---
-id: rewrite-declare-module-vitest-config
+id: rewrite-vitest-subpath-export
 language: TypeScript
 rule:
   pattern: $STR
   kind: string
-  regex: ^['\"]vitest/config['\"]$
+  regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
-    kind: module
+    kind: export_statement
 transform:
   NEW_IMPORT:
     replace:
       source: $STR
-      replace: vitest/config
-      by: "vite-plus"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vitest
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]vitest['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vitest
-      by: "vite-plus/test"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vitest-scoped
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]@vitest/(browser-playwright|browser-preview|browser-webdriverio|browser)(/.*)?['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/"
+      replace: vitest/
       by: "vite-plus/test/"
 fix: $NEW_IMPORT
 ---
-id: rewrite-declare-module-vitest-subpath
+id: rewrite-vitest-subpath-require
 language: TypeScript
 rule:
   pattern: $STR
   kind: string
-  regex: ^['\"]vitest/.+['\"]$
+  regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
-    kind: module
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/
+      by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-subpath-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/(package\.json|config)['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
 transform:
   NEW_IMPORT:
     replace:
@@ -254,6 +1394,64 @@ rule:
   regex: ^['"]tsdown['"]$
   inside:
     kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown
+      by: "vite-plus/pack"
+fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown
+      by: "vite-plus/pack"
+fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown
+      by: "vite-plus/pack"
+fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
 transform:
   NEW_IMPORT:
     replace:
@@ -294,6 +1492,64 @@ transform:
       by: "vite-plus/pack/client"
 fix: $NEW_IMPORT
 ---
+id: rewrite-tsdown-client-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-client-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-client-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
+---
 id: rewrite-declare-module-tsdown-client
 language: TypeScript
 rule:
@@ -319,6 +1575,40 @@ static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::n
     ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
 });
 
+const BARE_VITEST_RULE_IDS: [&str; 4] = [
+    "rewrite-vitest-import",
+    "rewrite-vitest-export",
+    "rewrite-vitest-require",
+    "rewrite-vitest-dynamic-import",
+];
+
+fn is_bare_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
+    BARE_VITEST_RULE_IDS.contains(&rule.id.as_str())
+}
+
+fn is_unscoped_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
+    is_bare_vitest_rule(rule)
+        || rule.id.starts_with("rewrite-vitest-config-")
+        || rule.id.starts_with("rewrite-vitest-subpath-")
+}
+
+static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_VITEST_RULES)
+        .expect("failed to parse vitest rewrite rules")
+        .into_iter()
+        .filter(is_unscoped_vitest_rule)
+        .collect()
+});
+
+static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
+    LazyLock::new(|| {
+        ast_grep::load_rules(REWRITE_VITEST_RULES)
+            .expect("failed to parse vitest rewrite rules")
+            .into_iter()
+            .filter(|rule| !is_unscoped_vitest_rule(rule))
+            .collect()
+    });
+
 static PARSED_TSDOWN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_TSDOWN_RULES).expect("failed to parse tsdown rewrite rules")
 });
@@ -341,16 +1631,56 @@ static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
 });
 
-/// `@vitest/{pkg}[/{subpath}]` → `vite-plus/test/{pkg}[/{subpath}]`
-/// Only matches packages and subpaths that vite-plus actually exports:
+/// `@vitest/browser[/{subpath}]` references that map onto the *nested*
+/// `vite-plus/test/browser[/{subpath}]` surface (a plain `@vitest/` → `vite-plus/test/`
+/// swap is correct here):
 ///   - `@vitest/browser` → `vite-plus/test/browser`
 ///   - `@vitest/browser/context` → `vite-plus/test/browser/context`
 ///   - `@vitest/browser/providers/{name}` → `vite-plus/test/browser/providers/{name}`
-///   - `@vitest/browser-playwright[/{subpath}]` → `vite-plus/test/browser-playwright[/{subpath}]`
-///   - `@vitest/browser-preview[/{subpath}]` → `vite-plus/test/browser-preview[/{subpath}]`
-///   - `@vitest/browser-webdriverio[/{subpath}]` → `vite-plus/test/browser-webdriverio[/{subpath}]`
-static RE_REF_VITEST_SCOPED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio)(?:/.+?)?|browser(?:/(?:context|providers/.+?))?)(["']\s*/>)"#).unwrap()
+static RE_REF_VITEST_SCOPED_BROWSER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser(?:/(?:context|providers/.+?))?)(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser/{client,locators,matchers,utils}` references. `vite-plus` only
+/// exposes these four at the *bare* `./test/{name}` surface (NOT under `./test/browser/`),
+/// so the `/browser/` segment is stripped: `@vitest/browser/{name}` → `vite-plus/test/{name}`.
+static RE_REF_VITEST_SCOPED_BROWSER_FLAT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser/(client|locators|matchers|utils)(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser-{provider}` (exact, no subpath) →
+/// `vite-plus/test/browser-{provider}` — a plain `@vitest/` → `vite-plus/test/` swap.
+static RE_REF_VITEST_SCOPED_PROVIDER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser-playwright|browser-preview|browser-webdriverio)(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser-{provider}/context` references. `vite-plus` projects every
+/// provider's `context` onto the shared `./test/browser/context` export, so the
+/// provider segment is dropped: → `vite-plus/test/browser/context`.
+static RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/context(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser-{provider}/provider` references. `vite-plus` exposes provider
+/// entry points at `./test/browser/providers/{provider}`, so the subpath is
+/// rewritten accordingly: → `vite-plus/test/browser/providers/{provider}`.
+static RE_REF_VITEST_SCOPED_PROVIDER_ENTRY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/provider(["']\s*/>)"#,
+    )
+    .unwrap()
 });
 
 /// bare `vite` → `vite-plus`
@@ -393,7 +1723,12 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
 /// to match TypeScript semantics and avoid false positives inside string/template literals.
 /// Allocates only for preamble lines, leaving the file body untouched.
 /// Returns whether any changes were made.
-fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
+fn rewrite_reference_types(
+    content: &mut String,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    preserved_vitest: &mut bool,
+) -> bool {
     // Fast path: skip files with no triple-slash reference directives.
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
     if !content.contains("///") {
@@ -506,11 +1841,63 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         }
         // Each line matches at most one pattern; use early exit to skip remaining regexes.
         if !skip_packages.skip_vitest {
+            // Nuxt exception: unscoped `vitest` reference directives are
+            // preserved, and the preservation must be reported so the migrate
+            // summary counts files whose only upstream reference is a
+            // triple-slash directive (ast-grep never sees those).
+            if preserve_unscoped_vitest
+                && (RE_REF_VITEST_CONFIG.is_match(line)
+                    || RE_REF_VITEST_SUBPATH.is_match(line)
+                    || RE_REF_VITEST.is_match(line))
+            {
+                *preserved_vitest = true;
+                continue;
+            }
             if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}") {
+            // `@vitest/browser-{provider}/{context,provider}` must be matched before the
+            // bare provider regex so the more specific subpath rewrite wins.
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT,
+                "${1}vite-plus/test/browser/context${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_PROVIDER_ENTRY,
+                "${1}vite-plus/test/browser/providers/${2}${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_PROVIDER,
+                "${1}vite-plus/test/${2}${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            // `@vitest/browser/{client,locators,matchers,utils}` strips the `/browser/`
+            // segment; the generic `@vitest/browser[/...]` rule keeps it.
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_BROWSER_FLAT,
+                "${1}vite-plus/test/${2}${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_BROWSER,
+                "${1}vite-plus/test/${2}${3}",
+            ) {
                 changed = true;
                 continue;
             }
@@ -569,6 +1956,20 @@ struct SkipPackages {
     skip_tsdown: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct PackageRewriteContext {
+    skip_packages: SkipPackages,
+    uses_nuxt_test_utils: bool,
+}
+
+/// Options controlling directory-wide import rewriting.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RewriteImportsOptions {
+    /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
+    /// whose nearest package.json declares `@nuxt/test-utils`.
+    pub preserve_vitest_in_nuxt_packages: bool,
+}
+
 impl SkipPackages {
     /// Check if all packages should be skipped (file can be skipped entirely)
     const fn all_skipped(&self) -> bool {
@@ -599,17 +2000,68 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Canonical Vite/Vitest config entry basenames, the single source shared with
+/// the `prefer-vite-plus-imports` oxlint rule. The list lives in
+/// `packages/cli/src/vite-config-entry-basenames.json` and is embedded here at
+/// compile time so the two implementations cannot drift. The `vitest.config.*`
+/// family is included because a Vitest config can also import the unified
+/// `defineConfig` from `vite`. Matched by basename, so it covers configs at any
+/// monorepo depth.
+static VITE_CONFIG_FILE_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../packages/cli/src/vite-config-entry-basenames.json"))
+        .expect("invalid vite-config-entry-basenames.json")
+});
+
+/// Whether a file is a Vite/Vitest config entry file, where rewriting `vite`
+/// imports to `vite-plus` is correct (the unified `defineConfig`). Issue #2004:
+/// `vite` imports are rewritten ONLY in these files; every other file keeps its
+/// `vite` imports, since vite-plus is not a guaranteed superset of vite's exposed
+/// surface. Matched by basename, so it covers configs at any monorepo depth.
+fn is_vite_config_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| VITE_CONFIG_FILE_NAMES.iter().any(|config_name| config_name == name))
+}
+
+/// Returns whether the package follows a published-plugin naming convention
+/// whose code is consumed by Vite projects: its unscoped name starts with
+/// `vite-plugin-` (<https://vite.dev/guide/api-plugin>) or `unplugin-`
+/// (<https://unplugin.unjs.io/guide/plugin-conventions.html>; cross-bundler
+/// plugins that ship a Vite entry and are used by Vite projects).
+///
+/// For a scoped name like `@scope/vite-plugin-foo`, the part after the first `/`
+/// is the unscoped name; for an unscoped name the whole name is used. The
+/// trailing hyphen is required, so `vite-plugin`, `unplugin`, and their plurals
+/// do not match.
+fn package_name_is_plugin(pkg: &serde_json::Value) -> bool {
+    let Some(name) = pkg.get("name").and_then(|v| v.as_str()) else {
+        return false;
+    };
+
+    // Strip a leading `@scope/` for scoped packages, otherwise use the name as-is.
+    let unscoped = if name.starts_with('@') {
+        match name.split_once('/') {
+            Some((_, rest)) => rest,
+            None => return false,
+        }
+    } else {
+        name
+    };
+
+    unscoped.starts_with("vite-plugin-") || unscoped.starts_with("unplugin-")
+}
+
 /// Parse package.json and check which packages are in peerDependencies or dependencies.
 /// Returns default (no skipping) if package.json doesn't exist or can't be parsed.
-fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages {
+fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContext {
     let content = match std::fs::read_to_string(package_json_path) {
         Ok(c) => c,
-        Err(_) => return SkipPackages::default(),
+        Err(_) => return PackageRewriteContext::default(),
     };
 
     let pkg: serde_json::Value = match serde_json::from_str(&content) {
         Ok(p) => p,
-        Err(_) => return SkipPackages::default(),
+        Err(_) => return PackageRewriteContext::default(),
     };
 
     // Helper to check if a package exists in a dependencies object
@@ -619,14 +2071,39 @@ fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages
             .is_some_and(|deps| deps.contains_key(package_name))
     };
 
-    // Check both peerDependencies and dependencies
-    SkipPackages {
-        skip_vite: has_package("peerDependencies", "vite") || has_package("dependencies", "vite"),
-        skip_vitest: has_package("peerDependencies", "vitest")
-            || has_package("dependencies", "vitest"),
-        skip_tsdown: has_package("peerDependencies", "tsdown")
-            || has_package("dependencies", "tsdown"),
+    // Peer and runtime dependencies preserve the existing whole-package skip
+    // behavior. Nuxt compatibility is narrower and accepts the three install
+    // groups where @nuxt/test-utils is normally declared.
+    //
+    // `vite` is additionally skipped when the package follows a published-plugin
+    // naming convention: an unscoped name starting with `vite-plugin-`
+    // (<https://vite.dev/guide/api-plugin>) or `unplugin-`
+    // (<https://unplugin.unjs.io/guide/plugin-conventions.html>). Such libraries
+    // are consumed by both vite and vite-plus projects, so rewriting their
+    // `vite` imports to `vite-plus` would break plain-vite consumers; many
+    // declare `vite` only in devDependencies and would otherwise be missed by
+    // the dependency checks above. Only the name is used (not `keywords`, which
+    // is too broad), and this convention skip is scoped to `vite` (never
+    // vitest/tsdown).
+    PackageRewriteContext {
+        skip_packages: SkipPackages {
+            skip_vite: has_package("peerDependencies", "vite")
+                || has_package("dependencies", "vite")
+                || package_name_is_plugin(&pkg),
+            skip_vitest: has_package("peerDependencies", "vitest")
+                || has_package("dependencies", "vitest"),
+            skip_tsdown: has_package("peerDependencies", "tsdown")
+                || has_package("dependencies", "tsdown"),
+        },
+        uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
+            .into_iter()
+            .any(|key| has_package(key, "@nuxt/test-utils")),
     }
+}
+
+#[cfg(test)]
+fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages {
+    get_package_rewrite_context(package_json_path).skip_packages
 }
 
 /// Result of rewriting imports in a file
@@ -636,6 +2113,8 @@ struct RewriteResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
+    /// Whether an upstream `vitest` specifier was intentionally preserved.
+    pub preserved_vitest: bool,
 }
 
 /// Result of rewriting imports in multiple files
@@ -645,6 +2124,8 @@ pub struct BatchRewriteResult {
     pub modified_files: Vec<PathBuf>,
     /// Files that had no changes
     pub unchanged_files: Vec<PathBuf>,
+    /// Files in Nuxt test-utils packages where upstream `vitest` imports were preserved.
+    pub preserved_vitest_files: Vec<PathBuf>,
     /// Files that had errors (path, error message)
     pub errors: Vec<(PathBuf, String)>,
 }
@@ -685,47 +2166,60 @@ enum FileResult {
 /// }
 /// ```
 pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, Error> {
+    rewrite_imports_in_directory_with_options(root, RewriteImportsOptions::default())
+}
+
+/// Rewrite imports with package-scoped compatibility options.
+pub fn rewrite_imports_in_directory_with_options(
+    root: &Path,
+    options: RewriteImportsOptions,
+) -> Result<BatchRewriteResult, Error> {
     let walk_result = file_walker::find_ts_files(root)?;
 
-    // Pre-compute skip_packages for each file (requires mutable cache, done sequentially)
-    let mut skip_packages_cache: HashMap<PathBuf, SkipPackages> = HashMap::new();
-    let files_with_skip: Vec<(PathBuf, SkipPackages)> = walk_result
+    // Pre-compute package context for each file (requires mutable cache, done sequentially).
+    let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
+    let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
         .map(|file_path| {
-            let skip_packages =
+            let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
-                    *skip_packages_cache
+                    *package_context_cache
                         .entry(package_json_path.clone())
-                        .or_insert_with(|| get_skip_packages_from_package_json(&package_json_path))
+                        .or_insert_with(|| get_package_rewrite_context(&package_json_path))
                 } else {
-                    SkipPackages::default()
+                    PackageRewriteContext::default()
                 };
-            (file_path, skip_packages)
+            (file_path, package_context)
         })
         .collect();
 
     // Process files in parallel using rayon
-    let results: Vec<(PathBuf, FileResult)> = files_with_skip
+    let results: Vec<(PathBuf, FileResult, bool)> = files_with_context
         .into_par_iter()
-        .map(|(file_path, skip_packages)| {
+        .map(|(file_path, package_context)| {
+            let skip_packages = package_context.skip_packages;
             if skip_packages.all_skipped() {
-                return (file_path, FileResult::Unchanged);
+                return (file_path, FileResult::Unchanged, false);
             }
 
-            match rewrite_import(&file_path, &skip_packages) {
+            match rewrite_import(
+                &file_path,
+                &skip_packages,
+                options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
+            ) {
                 Ok(rewrite_result) => {
                     if rewrite_result.updated {
                         if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
-                            (file_path, FileResult::Error(e.to_string()))
+                            (file_path, FileResult::Error(e.to_string()), false)
                         } else {
-                            (file_path, FileResult::Modified)
+                            (file_path, FileResult::Modified, rewrite_result.preserved_vitest)
                         }
                     } else {
-                        (file_path, FileResult::Unchanged)
+                        (file_path, FileResult::Unchanged, rewrite_result.preserved_vitest)
                     }
                 }
-                Err(e) => (file_path, FileResult::Error(e.to_string())),
+                Err(e) => (file_path, FileResult::Error(e.to_string()), false),
             }
         })
         .collect();
@@ -734,10 +2228,14 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
     let mut batch_result = BatchRewriteResult {
         modified_files: Vec::new(),
         unchanged_files: Vec::new(),
+        preserved_vitest_files: Vec::new(),
         errors: Vec::new(),
     };
 
-    for (file_path, file_result) in results {
+    for (file_path, file_result, preserved_vitest) in results {
+        if preserved_vitest {
+            batch_result.preserved_vitest_files.push(file_path.clone());
+        }
         match file_result {
             FileResult::Modified => batch_result.modified_files.push(file_path),
             FileResult::Unchanged => batch_result.unchanged_files.push(file_path),
@@ -764,12 +2262,28 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
 /// Returns a `RewriteResult` containing:
 /// - `content`: The updated file content
 /// - `updated`: Whether any changes were made
-fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<RewriteResult, Error> {
+fn rewrite_import(
+    file_path: &Path,
+    skip_packages: &SkipPackages,
+    preserve_vitest_in_nuxt_package: bool,
+) -> Result<RewriteResult, Error> {
     // Read the file
     let content = std::fs::read_to_string(file_path)?;
 
-    // Rewrite the imports
-    rewrite_import_content(&content, skip_packages)
+    // Issue #2004: `vite` specifiers are rewritten only in config entry files;
+    // everything else keeps its `vite` imports (they still resolve through the
+    // core alias). This includes `declare module 'vite'` augmentations: through
+    // the alias they reach the SAME `@voidzero-dev/vite-plus-core` module whose
+    // `UserConfig` types `defineConfig` from `vite-plus`, so they keep working,
+    // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
+    // augmentation to merge with. This is layered ON TOP of the package-level
+    // skip (a skipped package stays skipped).
+    rewrite_import_content_full(
+        &content,
+        skip_packages,
+        preserve_vitest_in_nuxt_package,
+        is_vite_config_file(file_path),
+    )
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -792,20 +2306,47 @@ fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bo
 ///
 /// This is the internal function that performs the actual rewrite using ast-grep.
 /// Packages that are in peerDependencies or dependencies will be skipped.
+#[cfg(test)]
 fn rewrite_import_content(
     content: &str,
     skip_packages: &SkipPackages,
 ) -> Result<RewriteResult, Error> {
+    rewrite_import_content_with_options(content, skip_packages, false)
+}
+
+#[cfg(test)]
+fn rewrite_import_content_with_options(
+    content: &str,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+) -> Result<RewriteResult, Error> {
+    rewrite_import_content_full(content, skip_packages, preserve_unscoped_vitest, true)
+}
+
+fn rewrite_import_content_full(
+    content: &str,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    vite_config_file: bool,
+) -> Result<RewriteResult, Error> {
     // Fast path: skip AST parsing if the file doesn't contain any target strings
     if !content_may_need_rewriting(content, skip_packages) {
-        return Ok(RewriteResult { content: content.to_string(), updated: false });
+        return Ok(RewriteResult {
+            content: content.to_string(),
+            updated: false,
+            preserved_vitest: false,
+        });
     }
 
     let mut new_content = content.to_string();
     let mut updated = false;
+    let mut preserved_vitest = false;
 
-    // Apply vite rules if not skipped (using pre-parsed rules)
-    if !skip_packages.skip_vite {
+    // Apply vite rules if not skipped (using pre-parsed rules). Issue #2004:
+    // they apply only in config entry files; every other file keeps its `vite`
+    // specifiers, including `declare module 'vite'` augmentations (see the
+    // comment in `rewrite_import`).
+    if !skip_packages.skip_vite && vite_config_file {
         let vite_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITE_RULES);
         if vite_content != new_content {
             new_content = vite_content;
@@ -815,7 +2356,15 @@ fn rewrite_import_content(
 
     // Apply vitest rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vitest {
-        let vitest_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITEST_RULES);
+        let vitest_rules = if preserve_unscoped_vitest {
+            let upstream_rewrite =
+                ast_grep::apply_loaded_rules(&new_content, &PARSED_UNSCOPED_VITEST_RULES);
+            preserved_vitest = upstream_rewrite != new_content;
+            &*PARSED_VITEST_RULES_WITHOUT_UNSCOPED
+        } else {
+            &*PARSED_VITEST_RULES
+        };
+        let vitest_content = ast_grep::apply_loaded_rules(&new_content, vitest_rules);
         if vitest_content != new_content {
             new_content = vitest_content;
             updated = true;
@@ -833,9 +2382,18 @@ fn rewrite_import_content(
 
     // Apply reference type rewriting (/// <reference types="..." />)
     // These cannot be handled by ast-grep because they are parsed as comments.
-    updated |= rewrite_reference_types(&mut new_content, skip_packages);
+    // `vite` reference directives are pass-through type surfaces, so they
+    // follow the Issue #2004 config-file scoping (unlike the augmentations).
+    let reference_skip_packages =
+        SkipPackages { skip_vite: skip_packages.skip_vite || !vite_config_file, ..*skip_packages };
+    updated |= rewrite_reference_types(
+        &mut new_content,
+        &reference_skip_packages,
+        preserve_unscoped_vitest,
+        &mut preserved_vitest,
+    );
 
-    Ok(RewriteResult { content: new_content, updated })
+    Ok(RewriteResult { content: new_content, updated, preserved_vitest })
 }
 
 #[cfg(test)]
@@ -965,7 +2523,7 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result = rewrite_import(&vite_config_path, &SkipPackages::default()).unwrap();
+        let result = rewrite_import(&vite_config_path, &SkipPackages::default(), false).unwrap();
 
         assert!(result.updated);
         assert_eq!(
@@ -1100,6 +2658,8 @@ export default context;"#
 
     #[test]
     fn test_rewrite_import_content_vitest_browser_playwright_subpath() {
+        // `@vitest/browser-{provider}/context` maps onto the shared
+        // `vite-plus/test/browser/context` export (the provider segment is dropped).
         let vite_config = r#"import { something } from "@vitest/browser-playwright/context";
 
 export default something;"#;
@@ -1108,9 +2668,27 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "vite-plus/test/browser-playwright/context";
+            r#"import { something } from "vite-plus/test/browser/context";
 
 export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_playwright_provider() {
+        // `@vitest/browser-{provider}/provider` maps to the provider entry point
+        // under `vite-plus/test/browser/providers/{provider}`.
+        let vite_config = r#"import { playwright } from '@vitest/browser-playwright/provider';
+
+export default playwright;"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { playwright } from 'vite-plus/test/browser/providers/playwright';
+
+export default playwright;"#
         );
     }
 
@@ -1140,9 +2718,25 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "vite-plus/test/browser-preview/context";
+            r#"import { something } from "vite-plus/test/browser/context";
 
 export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_preview_provider() {
+        let vite_config = r#"import { preview } from '@vitest/browser-preview/provider';
+
+export default preview;"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { preview } from 'vite-plus/test/browser/providers/preview';
+
+export default preview;"#
         );
     }
 
@@ -1172,10 +2766,60 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "vite-plus/test/browser-webdriverio/context";
+            r#"import { something } from "vite-plus/test/browser/context";
 
 export default something;"#
         );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_webdriverio_provider() {
+        let vite_config = r#"import { webdriverio } from '@vitest/browser-webdriverio/provider';
+
+export default webdriverio;"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { webdriverio } from 'vite-plus/test/browser/providers/webdriverio';
+
+export default webdriverio;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_flat_subpaths() {
+        // `@vitest/browser/{client,locators,matchers,utils}` are exposed by
+        // vite-plus at the *bare* `./test/{name}` surface, so the `/browser/`
+        // segment must be stripped (the nested `./test/browser/{name}` keys
+        // do NOT exist in the exports map → ERR_PACKAGE_PATH_NOT_EXPORTED).
+        for (sub, expected) in [
+            ("client", "vite-plus/test/client"),
+            ("locators", "vite-plus/test/locators"),
+            ("matchers", "vite-plus/test/matchers"),
+            ("utils", "vite-plus/test/utils"),
+        ] {
+            let single = format!("import x from '@vitest/browser/{sub}';");
+            let result = rewrite_import_content(&single, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "single-quoted @vitest/browser/{sub} should be rewritten");
+            assert_eq!(result.content, format!("import x from '{expected}';"));
+
+            let double = format!("import x from \"@vitest/browser/{sub}\";");
+            let result = rewrite_import_content(&double, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "double-quoted @vitest/browser/{sub} should be rewritten");
+            assert_eq!(result.content, format!("import x from \"{expected}\";"));
+        }
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_context_kept_nested() {
+        // `@vitest/browser/context` keeps the nested path — `./test/browser/context`
+        // IS exported.
+        let vite_config = r#"import { context } from '@vitest/browser/context';"#;
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import { context } from 'vite-plus/test/browser/context';"#);
     }
 
     #[test]
@@ -1301,7 +2945,7 @@ export default defineConfig({
 
         // Create test files with vite/vitest imports
         fs::write(
-            temp.path().join("src/config.ts"),
+            temp.path().join("vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 export default defineConfig({});"#,
         )
@@ -1345,7 +2989,7 @@ describe('test', () => {});"#,
         assert!(result.errors.is_empty());
 
         // Verify the files were actually modified
-        let config_content = fs::read_to_string(temp.path().join("src/config.ts")).unwrap();
+        let config_content = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
         assert!(config_content.contains("vite-plus"));
 
         let test_content = fs::read_to_string(temp.path().join("src/test.ts")).unwrap();
@@ -1354,6 +2998,187 @@ describe('test', () => {});"#,
         // Verify utils.ts was not modified
         let utils_content = fs::read_to_string(temp.path().join("src/utils.ts")).unwrap();
         assert!(!utils_content.contains("vite-plus"));
+    }
+
+    #[test]
+    fn test_vite_rewrite_scoped_to_config_files() {
+        // Issue #2004: `vite` imports must be rewritten ONLY in config entry
+        // files. A non-plugin app that declares `vite` only in devDependencies
+        // (like packages/cloudflare) must keep its programmatic/type `vite`
+        // imports on `vite`, because vite-plus is not a guaranteed superset of
+        // vite's surface (`typeof import("vite-plus")` lacks `createBuilder`).
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{"name":"my-app","devDependencies":{"vite":"^7"}}"#,
+        )
+        .unwrap();
+        fs::create_dir(temp.path().join("src")).unwrap();
+        // Config entry file: the `vite` import SHOULD be rewritten.
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            "import { defineConfig } from 'vite';\nexport default defineConfig({});",
+        )
+        .unwrap();
+        // Non-config source: programmatic + type `vite` imports MUST be preserved.
+        fs::write(
+            temp.path().join("src/deploy.ts"),
+            "import { createBuilder } from 'vite';\ntype Api = Pick<typeof import('vite'), 'createBuilder'>;\n",
+        )
+        .unwrap();
+        // Only `vite` is scoped: a non-config `vitest` import still rewrites.
+        fs::write(temp.path().join("src/app.spec.ts"), "import { describe } from 'vitest';\n")
+            .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
+        assert!(
+            config.contains("from 'vite-plus'"),
+            "config file `vite` import should be rewritten, got: {config}"
+        );
+
+        let deploy = fs::read_to_string(temp.path().join("src/deploy.ts")).unwrap();
+        assert!(
+            !deploy.contains("vite-plus"),
+            "non-config `vite` imports must be preserved, got: {deploy}"
+        );
+        assert!(deploy.contains("from 'vite'"));
+        assert!(deploy.contains("typeof import('vite')"));
+
+        let spec = fs::read_to_string(temp.path().join("src/app.spec.ts")).unwrap();
+        assert!(
+            spec.contains("from 'vite-plus/test'"),
+            "non-config `vitest` import should still be rewritten, got: {spec}"
+        );
+    }
+
+    #[test]
+    fn test_declare_module_vite_preserved_outside_config_files() {
+        // A `declare module 'vite'` augmentation must stay on `vite`: through
+        // the core alias it reaches the same `@voidzero-dev/vite-plus-core`
+        // module whose `UserConfig` types `defineConfig` from `vite-plus`.
+        // `vite-plus` re-exports no `UserConfig` symbol, so rewriting the
+        // augmentation to `declare module 'vite-plus'` would orphan it (it
+        // would merge with nothing). Users extending vite-plus itself write
+        // `declare module 'vite-plus'` by hand.
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"name":"my-app"}"#).unwrap();
+        fs::create_dir(temp.path().join("types")).unwrap();
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            "import { defineConfig } from 'vite';\nexport default defineConfig({ myPlugin: {} });",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("types/vite.d.ts"),
+            "import type { Plugin } from 'vite';\ndeclare module 'vite' {\n  interface UserConfig {\n    myPlugin?: object;\n  }\n}\n",
+        )
+        .unwrap();
+
+        rewrite_imports_in_directory(temp.path()).unwrap();
+
+        let dts = fs::read_to_string(temp.path().join("types/vite.d.ts")).unwrap();
+        assert!(
+            !dts.contains("vite-plus"),
+            "non-config `vite` specifiers (including augmentations) must be preserved, got: {dts}"
+        );
+        assert!(dts.contains("declare module 'vite'"));
+        let config = fs::read_to_string(temp.path().join("vite.config.ts")).unwrap();
+        assert!(config.contains("from 'vite-plus'"));
+    }
+
+    #[test]
+    fn test_preserves_unscoped_vitest_in_nuxt_test_utils_packages() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{
+  "devDependencies": {
+    "@nuxt/test-utils": "4.0.3",
+    "vitest": "4.1.9"
+  }
+}"#,
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("nuxt.spec.ts"),
+            r#"import { vi } from 'vitest';
+export { expect } from 'vitest';
+const runtime = require('vitest');
+const dynamic = import('vitest');
+import { defineConfig } from 'vitest/config';
+import { startVitest } from 'vitest/node';
+import { page } from '@vitest/browser/context';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("ordinary.spec.ts"),
+            "/// <reference types=\"vitest/globals\" />\nimport { expect } from 'vitest';\n",
+        )
+        .unwrap();
+        // A file whose ONLY upstream vitest reference is a triple-slash
+        // directive (no import for ast-grep to see) must still be counted.
+        fs::write(
+            temp.path().join("refs-only.d.ts"),
+            "/// <reference types=\"vitest/globals\" />\nexport {};\n",
+        )
+        .unwrap();
+
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+        )
+        .unwrap();
+
+        assert_eq!(result.preserved_vitest_files.len(), 3);
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("nuxt.spec.ts")));
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("ordinary.spec.ts")));
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("refs-only.d.ts")));
+        let refs_only = fs::read_to_string(temp.path().join("refs-only.d.ts")).unwrap();
+        assert!(refs_only.contains("types=\"vitest/globals\""));
+        let nuxt = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
+        assert!(nuxt.contains("from 'vitest'"));
+        assert!(nuxt.contains("require('vitest')"));
+        assert!(nuxt.contains("import('vitest')"));
+        assert!(nuxt.contains("from 'vitest/config'"));
+        assert!(nuxt.contains("from 'vitest/node'"));
+        assert!(nuxt.contains("from 'vite-plus/test/browser/context'"));
+
+        let ordinary = fs::read_to_string(temp.path().join("ordinary.spec.ts")).unwrap();
+        assert!(ordinary.contains("from 'vitest'"));
+        assert!(ordinary.contains("types=\"vitest/globals\""));
+    }
+
+    #[test]
+    fn test_nuxt_preservation_requires_declared_test_utils_dependency() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("package.json"), r#"{"devDependencies":{"vitest":"4"}}"#)
+            .unwrap();
+        fs::write(
+            temp.path().join("nuxt.spec.ts"),
+            "import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';\n",
+        )
+        .unwrap();
+
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+        )
+        .unwrap();
+
+        assert!(result.preserved_vitest_files.is_empty());
+        let content = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
+        assert!(content.contains("from 'vite-plus/test'"));
     }
 
     #[test]
@@ -1414,13 +3239,19 @@ describe('app', () => {
 
         let result = rewrite_imports_in_directory(temp.path()).unwrap();
 
-        // vite.config.ts, src/index.ts, tests/unit/app.test.ts should be modified
-        assert_eq!(result.modified_files.len(), 3);
-        // Button.tsx has no vite imports
-        assert_eq!(result.unchanged_files.len(), 1);
+        // vite.config.ts (vite) and tests/unit/app.test.ts (vitest) are modified.
+        // src/index.ts keeps its non-config `vite` import (issue #2004) and
+        // Button.tsx has no relevant imports, so both are unchanged.
+        assert_eq!(result.modified_files.len(), 2);
+        assert_eq!(result.unchanged_files.len(), 2);
         assert!(result.errors.is_empty());
 
-        // Verify nested file was modified
+        // The non-config `vite` import (a programmatic API) is preserved.
+        let index_content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
+        assert!(index_content.contains("from 'vite'"));
+        assert!(!index_content.contains("vite-plus"));
+
+        // Verify the nested vitest file was modified.
         let test_content = fs::read_to_string(temp.path().join("tests/unit/app.test.ts")).unwrap();
         assert!(test_content.contains("vite-plus/test"));
         assert!(test_content.contains("vite-plus/test/browser"));
@@ -1468,6 +3299,9 @@ describe('app', () => {
 
     #[test]
     fn test_rewrite_declare_module_vitest() {
+        // `declare module 'vitest'` is intentionally NOT rewritten — the
+        // `vite-plus/test` subpath is a thin shim that re-exports vitest's
+        // types, so augmentations must target the upstream module identity.
         let content = r#"declare module 'vitest' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
@@ -1475,19 +3309,15 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test' {
-  interface JestAssertion<T = any> {
-    toBeCustom(): void;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_config() {
+        // `declare module 'vitest/config'` is intentionally NOT rewritten —
+        // `vite-plus` re-exports `vitest/config`, so augmentations must target
+        // the upstream module identity to merge correctly.
         let content = r#"declare module 'vitest/config' {
   interface UserConfig {
     test?: TestConfig;
@@ -1495,15 +3325,8 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus' {
-  interface UserConfig {
-    test?: TestConfig;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1528,6 +3351,9 @@ describe('app', () => {
 
     #[test]
     fn test_rewrite_declare_module_vitest_subpath() {
+        // `declare module 'vitest/node'` stays — the `vite-plus/test/node`
+        // shim re-exports from upstream, so augmentations must target the
+        // upstream module identity.
         let content = r#"declare module 'vitest/node' {
   export interface VitestOptions {
     custom?: boolean;
@@ -1535,19 +3361,14 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/node' {
-  export interface VitestOptions {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser() {
+        // `declare module '@vitest/browser'` stays — the
+        // `vite-plus/test/browser` shim re-exports from upstream.
         let content = r#"declare module '@vitest/browser' {
   interface BrowserContext {
     custom?: boolean;
@@ -1555,19 +3376,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser' {
-  interface BrowserContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_subpath() {
+        // `declare module '@vitest/browser/context'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser/context' {
   export interface Context {
     custom?: boolean;
@@ -1575,19 +3390,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_playwright() {
+        // `declare module '@vitest/browser-playwright'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser-playwright' {
   interface PlaywrightContext {
     custom?: boolean;
@@ -1595,19 +3404,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-playwright' {
-  interface PlaywrightContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_preview() {
+        // `declare module '@vitest/browser-preview'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser-preview' {
   interface PreviewContext {
     custom?: boolean;
@@ -1615,19 +3418,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-preview' {
-  interface PreviewContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_webdriverio() {
+        // `declare module '@vitest/browser-webdriverio'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser-webdriverio' {
   interface WebDriverContext {
     custom?: boolean;
@@ -1635,19 +3432,16 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-webdriverio' {
-  interface WebDriverContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_mixed_imports_and_declare_modules() {
+        // Imports are rewritten; `declare module 'vite' { ... }` is rewritten
+        // (vite-plus bundles vite, owning the type identity), but
+        // `declare module 'vitest' { ... }` stays put — the shim re-exports
+        // upstream and augmentations must target the upstream identity.
         let content = r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 
@@ -1678,7 +3472,7 @@ declare module 'vite-plus' {
   }
 }
 
-declare module 'vite-plus/test' {
+declare module 'vitest' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
@@ -1703,6 +3497,10 @@ export default defineConfig({});"#
 
     #[test]
     fn test_rewrite_multiple_declare_modules() {
+        // `declare module 'vite'` / `'vite/<sub>'` get rewritten (vite-plus
+        // bundles vite, owning the type identity), but `declare module 'vitest'`
+        // and `declare module '@vitest/browser'` are preserved — vite-plus
+        // shims re-export upstream and augmentations must target upstream.
         let content = r#"declare module 'vite' {
   interface UserConfig {
     custom?: boolean;
@@ -1743,13 +3541,13 @@ declare module 'vite-plus/module-runner' {
   }
 }
 
-declare module 'vite-plus/test' {
+declare module 'vitest' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
 }
 
-declare module 'vite-plus/test/browser' {
+declare module '@vitest/browser' {
   interface BrowserContext {
     custom?: boolean;
   }
@@ -1759,6 +3557,8 @@ declare module 'vite-plus/test/browser' {
 
     #[test]
     fn test_rewrite_declare_module_vitest_double_quotes() {
+        // Double-quoted `declare module "vitest"` is preserved for the same
+        // reason as the single-quoted variant — shim re-exports.
         let content = r#"declare module "vitest" {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
@@ -1766,15 +3566,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module "vite-plus/test" {
-  interface JestAssertion<T = any> {
-    toBeCustom(): void;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1786,15 +3579,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-playwright/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1806,15 +3592,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-preview/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1826,15 +3605,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-webdriverio/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -2221,6 +3993,214 @@ export default defineConfig({});"#;
         assert!(!skip.skip_tsdown);
     }
 
+    // ===================================
+    // Vite plugin name-convention tests
+    // ===================================
+
+    #[test]
+    fn test_skip_vite_when_scoped_vite_plugin_name_with_vite_devdep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Real-world case: @nkzw/vite-plugin-remdx declares vite only in
+        // devDependencies, yet is a Vite plugin consumed by plain-vite projects.
+        let pkg_json = r#"{
+  "name": "@nkzw/vite-plugin-remdx",
+  "devDependencies": {
+    "vite": "catalog:"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite); // skipped by the vite-plugin- name convention
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_unscoped_vite_plugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "vite-plugin-foo"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_app_with_vite_devdep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A regular app declaring vite as a devDependency should still be
+        // rewritten; devDependencies alone never trigger the skip.
+        let pkg_json = r#"{
+  "name": "my-app",
+  "private": true,
+  "devDependencies": {
+    "vite": "^7"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_scoped_non_plugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "@scope/not-a-plugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_vite_plugin_without_trailing_hyphen() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "vite-plugin" without the trailing hyphen is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "vite-plugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_vite_plugins_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "vite-plugins" (plural, no trailing hyphen) is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "vite-plugins"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_unscoped_unplugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // unplugin libraries (https://unplugin.unjs.io) ship a Vite entry and are
+        // consumed by vite projects, so their `vite` imports must be preserved
+        // even when `vite` is only a devDependency.
+        let pkg_json = r#"{
+  "name": "unplugin-icons",
+  "devDependencies": {
+    "vite": "^7"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        // Scope check: name convention only affects skip_vite.
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_skip_vite_when_scoped_unplugin_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "@scope/unplugin-foo"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_unplugin_without_trailing_hyphen() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "unplugin" without the trailing hyphen is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "unplugin"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_no_skip_vite_for_unplugins_name() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // "unplugins" (plural, no trailing hyphen) is not the plugin convention.
+        let pkg_json = r#"{
+  "name": "unplugins"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
     #[test]
     fn test_rewrite_imports_in_directory_with_vite_dependency() {
         use std::fs;
@@ -2404,18 +4384,19 @@ import { build } from 'tsdown';"#;
         // app package.json (no peerDeps)
         fs::write(temp.path().join("packages/app/package.json"), r#"{"name": "app"}"#).unwrap();
 
-        // vite-plugin source file with vite and vitest imports
+        // Config files with vite and vitest imports. Config-file scoping (issue
+        // #2004) only rewrites `vite` in config entry files, so the per-package
+        // peerDependency skip is exercised here rather than in src.
         fs::write(
-            temp.path().join("packages/vite-plugin/src/index.ts"),
+            temp.path().join("packages/vite-plugin/vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 export default defineConfig({});"#,
         )
         .unwrap();
 
-        // app source file with vite and vitest imports
         fs::write(
-            temp.path().join("packages/app/src/index.ts"),
+            temp.path().join("packages/app/vite.config.ts"),
             r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 export default defineConfig({});"#,
@@ -2428,9 +4409,9 @@ export default defineConfig({});"#,
         // Both files should be modified
         assert_eq!(result.modified_files.len(), 2);
 
-        // vite-plugin: vite NOT rewritten (has peerDep), vitest IS rewritten
+        // vite-plugin: vite NOT rewritten (peerDependency skip), vitest IS rewritten
         let vite_plugin_content =
-            fs::read_to_string(temp.path().join("packages/vite-plugin/src/index.ts")).unwrap();
+            fs::read_to_string(temp.path().join("packages/vite-plugin/vite.config.ts")).unwrap();
         assert_eq!(
             vite_plugin_content,
             r#"import { defineConfig } from 'vite';
@@ -2438,14 +4419,291 @@ import { describe } from 'vite-plus/test';
 export default defineConfig({});"#
         );
 
-        // app: vite IS rewritten (no peerDep), vitest IS rewritten
+        // app: vite IS rewritten (config file, no peerDep), vitest IS rewritten
         let app_content =
-            fs::read_to_string(temp.path().join("packages/app/src/index.ts")).unwrap();
+            fs::read_to_string(temp.path().join("packages/app/vite.config.ts")).unwrap();
         assert_eq!(
             app_content,
             r#"import { defineConfig } from 'vite-plus';
 import { describe } from 'vite-plus/test';
 export default defineConfig({});"#
+        );
+    }
+
+    // ====================================
+    // CommonJS `require(...)` Rewriting Tests
+    // ====================================
+    //
+    // These tests cover the require-shape sibling rules that mirror the
+    // `import_statement` rewrites for `.cjs` / `.cts` and other CJS sources.
+    // The rules MUST only match a literal `require(...)` callee — not
+    // `my_require(...)`, not `require.cache[...]`, and not dynamic
+    // `import('...')` (the import_statement rules already cover ESM).
+
+    #[test]
+    fn test_rewrite_require_vite() {
+        let content = r#"const { defineConfig } = require('vite');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { defineConfig } = require('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vite_double_quotes() {
+        let content = r#"const { defineConfig } = require("vite");"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { defineConfig } = require("vite-plus");"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vite_subpath() {
+        let content = r#"const { ModuleRunner } = require('vite/module-runner');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const { ModuleRunner } = require('vite-plus/module-runner');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest() {
+        let content = r#"const vi = require('vitest');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const vi = require('vite-plus/test');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_config() {
+        let content = r#"const { defineConfig } = require('vitest/config');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { defineConfig } = require('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_subpath() {
+        let content = r#"const { startVitest } = require('vitest/node');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { startVitest } = require('vite-plus/test/node');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser() {
+        let content = r#"const x = require('@vitest/browser');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_context() {
+        let content = r#"const { context } = require('@vitest/browser/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const { context } = require('vite-plus/test/browser/context');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_flat_subpaths() {
+        // `@vitest/browser/{client,locators,matchers,utils}` get the `/browser/`
+        // segment stripped, mirroring the import_statement rule.
+        for (sub, expected) in [
+            ("client", "vite-plus/test/client"),
+            ("locators", "vite-plus/test/locators"),
+            ("matchers", "vite-plus/test/matchers"),
+            ("utils", "vite-plus/test/utils"),
+        ] {
+            let single = format!("const x = require('@vitest/browser/{sub}');");
+            let result = rewrite_import_content(&single, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "single-quoted require @vitest/browser/{sub} should rewrite");
+            assert_eq!(result.content, format!("const x = require('{expected}');"));
+
+            let double = format!("const x = require(\"@vitest/browser/{sub}\");");
+            let result = rewrite_import_content(&double, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "double-quoted require @vitest/browser/{sub} should rewrite");
+            assert_eq!(result.content, format!("const x = require(\"{expected}\");"));
+        }
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_playwright() {
+        let content = r#"const x = require('@vitest/browser-playwright');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser-playwright');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_playwright_context() {
+        let content = r#"const x = require('@vitest/browser-playwright/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser/context');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_playwright_provider() {
+        let content = r#"const x = require('@vitest/browser-playwright/provider');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const x = require('vite-plus/test/browser/providers/playwright');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_preview() {
+        let content = r#"const x = require('@vitest/browser-preview');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser-preview');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_preview_context() {
+        let content = r#"const x = require('@vitest/browser-preview/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser/context');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_preview_provider() {
+        let content = r#"const x = require('@vitest/browser-preview/provider');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const x = require('vite-plus/test/browser/providers/preview');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_webdriverio() {
+        let content = r#"const x = require('@vitest/browser-webdriverio');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser-webdriverio');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_webdriverio_context() {
+        let content = r#"const x = require('@vitest/browser-webdriverio/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser/context');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_vitest_browser_webdriverio_provider() {
+        let content = r#"const x = require('@vitest/browser-webdriverio/provider');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const x = require('vite-plus/test/browser/providers/webdriverio');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_require_tsdown() {
+        let content = r#"const { defineConfig } = require('tsdown');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { defineConfig } = require('vite-plus/pack');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_tsdown_client() {
+        let content = r#"require('tsdown/client');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"require('vite-plus/pack/client');"#);
+    }
+
+    #[test]
+    fn test_rewrite_require_mixed_in_cjs_config() {
+        // Mirrors a realistic `vitest.config.cjs` containing both the config
+        // import and direct test specifier requires.
+        let content = r#"const { defineConfig } = require('vitest/config');
+const vi = require('vitest');
+const { context } = require('@vitest/browser/context');
+const { defineConfig: defineViteConfig } = require('vite');
+const { build } = require('tsdown');
+
+module.exports = defineConfig({});"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const { defineConfig } = require('vite-plus');
+const vi = require('vite-plus/test');
+const { context } = require('vite-plus/test/browser/context');
+const { defineConfig: defineViteConfig } = require('vite-plus');
+const { build } = require('vite-plus/pack');
+
+module.exports = defineConfig({});"#
+        );
+    }
+
+    // -- Negative tests: require-shape rules must NOT match these --
+
+    #[test]
+    fn test_rewrite_require_does_not_match_custom_require_function() {
+        // `my_require('vitest')` is NOT a literal `require` callee, so the
+        // require-shape rules must leave it alone. (The string `'vitest'` is
+        // also outside an import_statement / module / require call, so the
+        // import-shape rules can't see it either.)
+        let content = r#"const x = my_require('vitest');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_require_does_not_match_require_cache_index() {
+        // `require.cache['vitest']` is a member access + index — there is no
+        // `require(...)` call here, so the require-shape rules must not match.
+        let content = r#"const x = require.cache['vitest'];"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_require_does_not_match_require_resolve() {
+        // `require.resolve('vitest')` is a method call on `require`, not a
+        // bare `require(...)` call — the rule constrains the callee to the
+        // literal identifier `require`, so this is left alone.
+        let content = r#"const x = require.resolve('vitest');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_require_respects_skip_vitest_peer_dependency() {
+        // When vitest is in peerDependencies, the require-shape rule must
+        // also be skipped (parity with the import-shape rule).
+        let content = r#"const vi = require('vitest');
+const { defineConfig } = require('vite');"#;
+        let skip_packages =
+            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(result.updated);
+        // vitest require is NOT rewritten; vite require IS rewritten.
+        assert_eq!(
+            result.content,
+            r#"const vi = require('vitest');
+const { defineConfig } = require('vite-plus');"#
         );
     }
 
@@ -2510,12 +4768,20 @@ export default defineConfig({});"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_matchers_not_rewritten() {
-        // @vitest/browser/matchers is NOT exported by vite-plus — should not be rewritten
-        let content = r#"/// <reference types="@vitest/browser/matchers" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(!result.updated);
-        assert_eq!(result.content, content);
+    fn test_rewrite_reference_types_vitest_scoped_browser_flat_subpaths() {
+        // `@vitest/browser/{client,locators,matchers,utils}` are exposed at the
+        // *bare* `vite-plus/test/{name}` surface — the `/browser/` segment is stripped.
+        for (sub, expected) in [
+            ("client", "vite-plus/test/client"),
+            ("locators", "vite-plus/test/locators"),
+            ("matchers", "vite-plus/test/matchers"),
+            ("utils", "vite-plus/test/utils"),
+        ] {
+            let content = format!(r#"/// <reference types="@vitest/browser/{sub}" />"#);
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "@vitest/browser/{sub} reference should be rewritten");
+            assert_eq!(result.content, format!(r#"/// <reference types="{expected}" />"#));
+        }
     }
 
     #[test]
@@ -2557,6 +4823,38 @@ export default defineConfig({});"#
             result.content,
             r#"/// <reference types="vite-plus/test/browser/providers/webdriverio" />"#
         );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vitest_scoped_provider_context() {
+        // `@vitest/browser-{provider}/context` references map onto the shared
+        // `vite-plus/test/browser/context` export (the provider segment is dropped).
+        for provider in ["playwright", "preview", "webdriverio"] {
+            let content =
+                format!(r#"/// <reference types="@vitest/browser-{provider}/context" />"#);
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "@vitest/browser-{provider}/context should be rewritten");
+            assert_eq!(
+                result.content,
+                r#"/// <reference types="vite-plus/test/browser/context" />"#
+            );
+        }
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vitest_scoped_provider_entry() {
+        // `@vitest/browser-{provider}/provider` references map to the provider
+        // entry point under `vite-plus/test/browser/providers/{provider}`.
+        for provider in ["playwright", "preview", "webdriverio"] {
+            let content =
+                format!(r#"/// <reference types="@vitest/browser-{provider}/provider" />"#);
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "@vitest/browser-{provider}/provider should be rewritten");
+            assert_eq!(
+                result.content,
+                format!(r#"/// <reference types="vite-plus/test/browser/providers/{provider}" />"#)
+            );
+        }
     }
 
     #[test]
@@ -2919,5 +5217,486 @@ export default defineConfig({});"#
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);
+    }
+
+    // ====================================
+    // Re-export (`export ... from '...'`) Rewriting Tests
+    // ====================================
+    //
+    // These mirror the `import_statement` rewrites for the `export_statement`
+    // tree-sitter kind, which covers `export { x } from 'mod'`,
+    // `export * from 'mod'`, `export * as ns from 'mod'`, and
+    // `export type { x } from 'mod'`. Without these sibling rules, projects
+    // that re-export from `@vitest/browser-playwright` (or the other browser
+    // provider packages that `rewritePackageJson()` removes from package.json)
+    // would silently end up with `ERR_PACKAGE_PATH_NOT_EXPORTED` at runtime.
+
+    #[test]
+    fn test_rewrite_export_named_from_vite() {
+        let content = r#"export { defineConfig } from 'vite';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { defineConfig } from 'vite-plus';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_named_from_tsdown() {
+        let content = r#"export { defineConfig } from 'tsdown';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { defineConfig } from 'vite-plus/pack';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_named_from_vitest_browser_context() {
+        // `export { page } from '@vitest/browser/context'` — the regression
+        // case called out in the chatgpt-codex review.
+        let content = r#"export { page } from '@vitest/browser/context';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { page } from 'vite-plus/test/browser/context';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_star_from_vitest_browser_playwright() {
+        // `export * from '@vitest/browser-playwright'` — the package is dropped
+        // from package.json by `rewritePackageJson()`, so it MUST be rewritten
+        // to avoid `ERR_PACKAGE_PATH_NOT_EXPORTED` under strict pnpm/PnP.
+        let content = r#"export * from '@vitest/browser-playwright';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export * from 'vite-plus/test/browser-playwright';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_star_as_ns_from_vitest() {
+        // `export * as ns from 'vitest'` (namespace re-export).
+        let content = r#"export * as vi from 'vitest';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export * as vi from 'vite-plus/test';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_type_from_vitest_config() {
+        // `export type { Config } from 'vitest/config'` — type-only re-export.
+        // `vitest/config` collapses to bare `vite-plus` (matches the
+        // import-shape rule).
+        let content = r#"export type { Config } from 'vitest/config';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export type { Config } from 'vite-plus';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_named_from_vitest_browser_preview() {
+        let content = r#"export { preview } from "@vitest/browser-preview";"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { preview } from "vite-plus/test/browser-preview";"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_star_from_vitest_browser_webdriverio_provider() {
+        // `@vitest/browser-{provider}/provider` maps onto the shared
+        // `vite-plus/test/browser/providers/{provider}` entry point.
+        let content = r#"export * from '@vitest/browser-webdriverio/provider';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"export * from 'vite-plus/test/browser/providers/webdriverio';"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_export_named_from_vite_subpath() {
+        let content = r#"export { ModuleRunner } from 'vite/module-runner';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { ModuleRunner } from 'vite-plus/module-runner';"#);
+    }
+
+    #[test]
+    fn test_rewrite_export_value_with_vitest_string_literal_not_rewritten() {
+        // A plain value declaration whose initializer is the string `'vitest'`
+        // is NOT a re-export — the string literal is outside any
+        // import_statement / export_statement / require call and must be left
+        // alone.
+        let content = r#"export const foo = 'vitest';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    // =========================================
+    // Dynamic import() and TS import-type tests
+    // =========================================
+
+    #[test]
+    fn test_rewrite_dynamic_import_vite() {
+        let content = r#"const m = await import('vite');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vite_subpath() {
+        let content = r#"const m = await import("vite/module-runner");"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import("vite-plus/module-runner");"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest() {
+        let content = r#"const m = await import('vitest');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus/test');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_config() {
+        let content = r#"const m = await import('vitest/config');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_subpath() {
+        let content = r#"const m = await import('vitest/node');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus/test/node');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser() {
+        let content = r#"const provider = await import('@vitest/browser');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const provider = await import('vite-plus/test/browser');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_context() {
+        let content = r#"const ctx = await import('@vitest/browser/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const ctx = await import('vite-plus/test/browser/context');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_flat_subpath() {
+        // `@vitest/browser/{client,locators,matchers,utils}` strips the
+        // `/browser/` segment, matching the static-import rule.
+        for (sub, expected) in [
+            ("client", "vite-plus/test/client"),
+            ("locators", "vite-plus/test/locators"),
+            ("matchers", "vite-plus/test/matchers"),
+            ("utils", "vite-plus/test/utils"),
+        ] {
+            let content = format!("const x = await import('@vitest/browser/{sub}');");
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "dynamic import of @vitest/browser/{sub} should be rewritten");
+            assert_eq!(result.content, format!("const x = await import('{expected}');"));
+        }
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_playwright() {
+        let content = r#"const p = await import('@vitest/browser-playwright');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const p = await import('vite-plus/test/browser-playwright');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_playwright_context() {
+        let content = r#"const p = await import('@vitest/browser-playwright/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const p = await import('vite-plus/test/browser/context');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_playwright_provider() {
+        let content = r#"const p = await import('@vitest/browser-playwright/provider');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const p = await import('vite-plus/test/browser/providers/playwright');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_preview_provider() {
+        let content = r#"const p = await import('@vitest/browser-preview/provider');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const p = await import('vite-plus/test/browser/providers/preview');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_vitest_browser_webdriverio_provider() {
+        let content = r#"const p = await import('@vitest/browser-webdriverio/provider');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"const p = await import('vite-plus/test/browser/providers/webdriverio');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_tsdown() {
+        let content = r#"const m = await import('tsdown');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus/pack');"#);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_tsdown_client() {
+        let content = r#"const m = await import('tsdown/client');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus/pack/client');"#);
+    }
+
+    #[test]
+    fn test_rewrite_ts_import_type_vitest_browser_context() {
+        // TS type-position `typeof import('@vitest/browser/context')` is also
+        // a `call_expression` with the special `import` token as callee, so
+        // the same rule covers it.
+        let content = r#"type C = typeof import('@vitest/browser/context');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"type C = typeof import('vite-plus/test/browser/context');"#);
+    }
+
+    #[test]
+    fn test_rewrite_ts_import_type_vitest_browser_playwright() {
+        let content = r#"type P = typeof import('@vitest/browser-playwright');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"type P = typeof import('vite-plus/test/browser-playwright');"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_does_not_touch_string_literal_args() {
+        // A string literal that *contains* an `import('@vitest/browser')`-looking
+        // payload must NOT be rewritten — it is not a real dynamic import.
+        let content = r#"const x = "import('@vitest/browser')";"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_does_not_touch_member_call_named_import() {
+        // A property-access call like `obj.import('@vitest/browser')` is a
+        // user-defined function, not a dynamic import expression. Its callee
+        // node-kind is `member_expression`, not `import`, so the rule must
+        // not match.
+        let content = r#"const p = obj.import('@vitest/browser');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_dynamic_import_mixed_with_static_imports() {
+        // Verifies a mixed file with static, dynamic, and TS-type imports.
+        let content = r#"import { describe } from 'vitest';
+const browser = await import('@vitest/browser');
+type C = typeof import('@vitest/browser/context');
+const provider = await import('@vitest/browser-playwright');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { describe } from 'vite-plus/test';
+const browser = await import('vite-plus/test/browser');
+type C = typeof import('vite-plus/test/browser/context');
+const provider = await import('vite-plus/test/browser-playwright');"#
+        );
+    }
+
+    // `vitest/package.json` is a metadata-access pattern (typically used to
+    // read the vitest version). Rewriting it to `vite-plus/test/package.json`
+    // would fail at runtime with `ERR_PACKAGE_PATH_NOT_EXPORTED` because
+    // `syncTestPackageExports()` deliberately skips the upstream
+    // `./package.json` export. The catch-all `vitest/*` subpath rules MUST
+    // leave it alone so the original specifier still resolves through the
+    // transitively-installed `vitest` dependency.
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_static_import() {
+        let content = r#"import pkg from 'vitest/package.json';
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_static_import_double_quotes() {
+        let content = r#"import pkg from "vitest/package.json";
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_require() {
+        let content = r#"const pkg = require('vitest/package.json');
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_dynamic_import() {
+        let content = r#"const pkg = await import('vitest/package.json');
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_typeof_import() {
+        let content = r#"type Pkg = typeof import('vitest/package.json');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_export_from() {
+        let content = r#"export { version } from 'vitest/package.json';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_still_rewritten() {
+        // Sanity check: the `package.json` exclusion must not interfere with
+        // the existing `vitest/config` → `vite-plus` rule (which produces a
+        // bare `vite-plus` target, NOT `vite-plus/test/config`).
+        let content = r#"import 'vitest/config';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import 'vite-plus';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_like_suffix_still_rewritten() {
+        // Sanity check: only the exact `vitest/package.json` subpath is
+        // skipped. A subpath that merely starts with `package.json` (e.g.,
+        // `package.json.js`) MUST still be rewritten by the catch-all rule.
+        let content = r#"import 'vitest/package.json.js';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import 'vite-plus/test/package.json.js';"#);
+    }
+
+    // The `rewrite-vitest-subpath-*` rules now explicitly exclude `vitest/config`
+    // via `not: regex: ^['"]vitest/(package\.json|config)['"]$` to make the intent
+    // robust against rule-reordering or ast-grep conflict-resolution changes.
+    // These tests verify the exclusion holds for all 4 import shapes and that
+    // a similar-but-distinct path like `vitest/config-extra` is NOT excluded.
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_export_not_subpath_rewritten() {
+        // `export ... from 'vitest/config'` must collapse to `vite-plus` (bare),
+        // NOT `vite-plus/test/config`. The subpath rule's `not` exclusion prevents
+        // the wrong fix from firing.
+        let content = r#"export type { Config } from 'vitest/config';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export type { Config } from 'vite-plus';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_require_not_subpath_rewritten() {
+        // `require('vitest/config')` must collapse to `vite-plus` (bare),
+        // NOT `vite-plus/test/config`.
+        let content = r#"const { defineConfig } = require('vitest/config');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { defineConfig } = require('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_dynamic_import_not_subpath_rewritten() {
+        // `import('vitest/config')` must collapse to `vite-plus` (bare),
+        // NOT `vite-plus/test/config`.
+        let content = r#"const m = await import('vitest/config');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_static_import() {
+        // `vitest/config-extra` is NOT `vitest/config` — the subpath exclusion
+        // must not be too broad. It should still be rewritten by the catch-all
+        // subpath rule to `vite-plus/test/config-extra`.
+        let content = r#"import { something } from 'vitest/config-extra';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import { something } from 'vite-plus/test/config-extra';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_export() {
+        // Same sanity check for export_statement shape.
+        let content = r#"export { something } from 'vitest/config-extra';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { something } from 'vite-plus/test/config-extra';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_require() {
+        // Same sanity check for require() shape.
+        let content = r#"const m = require('vitest/config-extra');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = require('vite-plus/test/config-extra');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_dynamic_import() {
+        // Same sanity check for dynamic import() shape.
+        let content = r#"const m = await import('vitest/config-extra');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus/test/config-extra');"#);
     }
 }

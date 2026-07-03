@@ -2,7 +2,9 @@
 //!
 //! This crate provides functionality to download and cache JavaScript runtimes
 //! like Node.js. It supports automatic platform detection, integrity verification
-//! via SHASUMS256.txt, and atomic operations for concurrent-safe caching.
+//! via SHASUMS256.txt (whose PGP signature is verified against the Node.js release
+//! keys before any checksum is trusted), and atomic operations for concurrent-safe
+//! caching.
 //!
 //! # Example
 //!
@@ -45,6 +47,7 @@ mod cache;
 mod dev_engines;
 mod download;
 mod error;
+mod pgp_verify;
 mod platform;
 mod provider;
 mod providers;
@@ -55,8 +58,10 @@ pub use dev_engines::{
 };
 pub use error::Error;
 pub use platform::{Arch, Os, Platform};
-pub use provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider};
-pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry};
+pub use provider::{
+    ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider, ShasumsSignature,
+};
+pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry, resolve_version_from_list};
 pub use runtime::{
     JsRuntime, JsRuntimeType, VersionResolution, VersionSource, download_runtime,
     download_runtime_for_project, download_runtime_with_provider, is_valid_version,

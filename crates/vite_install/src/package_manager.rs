@@ -871,7 +871,9 @@ pub async fn download_package_manager(
     // Use tempfile::TempDir for robust temporary directory creation
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
-    let target_dir_tmp = tempfile::tempdir_in(parent_dir)?.path().to_path_buf();
+    // Keep the TempDir guard alive so a failure path cleans up the temp dir.
+    let tmp_dir = tempfile::tempdir_in(parent_dir)?;
+    let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     download_and_extract_tgz_with_hash(&tgz_url, &target_dir_tmp, expected_hash).await.map_err(
         |err| {
@@ -987,7 +989,9 @@ async fn download_bun_package_manager(
 
     // Download the platform-specific package directly
     let platform_tgz_url = get_npm_package_tgz_url(platform_package_name, version);
-    let target_dir_tmp = tempfile::tempdir_in(parent_dir)?.path().to_path_buf();
+    // Keep the TempDir guard alive so a failure path cleans up the temp dir.
+    let tmp_dir = tempfile::tempdir_in(parent_dir)?;
+    let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, None).await.map_err(
         |err| {
@@ -3247,8 +3251,8 @@ mod tests {
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
 
-    #[tokio::test]
-    async fn test_detect_package_manager_priority_order_lock_over_config() {
+    #[test]
+    fn test_detect_package_manager_priority_order_lock_over_config() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
@@ -3272,14 +3276,19 @@ mod tests {
         fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 3}"#)
             .expect("Failed to write package-lock.json");
 
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect npm from package-lock.json");
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (package_manager_type, version, hash, source) =
+            get_package_manager_type_and_version(&workspace_root, None)
+                .expect("Should detect npm from package-lock.json");
         assert_eq!(
-            result.bin_name, "npm",
+            package_manager_type,
+            PackageManagerType::Npm,
             "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
         );
+        assert_eq!(version, "latest");
+        assert_eq!(hash, None);
+        assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
     #[tokio::test]
@@ -3474,5 +3483,48 @@ mod tests {
 
         // Release lock
         lock_file1.unlock().expect("Failed to unlock file 1");
+    }
+
+    /// A failed install must not leak its temporary directory into
+    /// `package_manager/<name>/`. The temp dir is created via a `TempDir` guard,
+    /// so an early return on failure drops it and cleans up.
+    #[tokio::test]
+    async fn test_download_package_manager_cleans_temp_dir_on_failure() {
+        use httpmock::prelude::*;
+
+        let vp_home = create_temp_dir();
+        let server = MockServer::start();
+        // A 200 body that is not a valid gzip: the download succeeds but
+        // extraction fails, so the install errors out after the temp dir exists.
+        server.mock(|when, then| {
+            when.method(GET).path("/pnpm/-/pnpm-10.0.0.tgz");
+            then.status(200)
+                .header("content-type", "application/octet-stream")
+                .body("this is not a valid gzip archive");
+        });
+
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            npm_registry: server.base_url().into(),
+            vite_plus_home: Some(vp_home.path().to_path_buf()),
+            ..EnvConfig::for_test()
+        });
+
+        let result = download_package_manager(PackageManagerType::Pnpm, "10.0.0", None).await;
+        assert!(result.is_err(), "corrupt tarball should fail the install, got {result:?}");
+
+        // The per-install temp dir must be gone after the failure.
+        let pnpm_dir = vp_home.path().join("package_manager").join("pnpm");
+        let leftovers: Vec<_> = fs::read_dir(&pnpm_dir)
+            .map(|rd| {
+                rd.filter_map(Result::ok)
+                    .filter(|e| e.path().is_dir())
+                    .map(|e| e.file_name())
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(
+            leftovers.is_empty(),
+            "failed install leaked temp dir(s) in {pnpm_dir:?}: {leftovers:?}"
+        );
     }
 }

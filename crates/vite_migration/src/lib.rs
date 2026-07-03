@@ -16,7 +16,10 @@ mod script_rewrite;
 mod vite_config;
 
 pub use file_walker::{WalkResult, find_ts_files};
-pub use import_rewriter::{BatchRewriteResult, rewrite_imports_in_directory};
+pub use import_rewriter::{
+    BatchRewriteResult, RewriteImportsOptions, rewrite_imports_in_directory,
+    rewrite_imports_in_directory_with_options,
+};
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
 pub use vite_config::{
     MergeResult, has_config_key, merge_json_config, merge_tsdown_config, upsert_json_config,

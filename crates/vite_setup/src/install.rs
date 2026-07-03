@@ -4,6 +4,7 @@
 //! and version cleanup.
 
 use std::{
+    env,
     io::{Cursor, IsTerminal, Read as _, Write as _},
     path::Path,
     process::{self, Output},
@@ -12,6 +13,8 @@ use std::{
 
 use flate2::read::GzDecoder;
 use tar::Archive;
+use vite_install::{PackageManagerType, download_package_manager};
+use vite_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
@@ -91,7 +94,7 @@ pub async fn extract_platform_package(
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
-const PINNED_PNPM_VERSION: &str = "pnpm@10.33.0";
+const PINNED_PNPM_VERSION: &str = "10.33.0";
 
 /// Generate a wrapper `package.json` that declares `vite-plus` as a dependency.
 ///
@@ -106,7 +109,7 @@ pub async fn generate_wrapper_package_json(
         "name": "vp-global",
         "version": version,
         "private": true,
-        "packageManager": PINNED_PNPM_VERSION,
+        "packageManager": format!("pnpm@{PINNED_PNPM_VERSION}"),
         "dependencies": {
             "vite-plus": version
         }
@@ -238,9 +241,9 @@ pub async fn write_upgrade_log(
     }
 }
 
-/// Install production dependencies using the new version's binary.
+/// Install production dependencies with managed Node.js LTS and pinned pnpm.
 ///
-/// Spawns: `{version_dir}/bin/vp install [--registry <url>]` with `CI=true`.
+/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install [--registry <url>]` with `CI=true`.
 /// On failure, writes stdout+stderr to `{version_dir}/upgrade.log` for debugging.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
@@ -248,15 +251,7 @@ pub async fn install_production_deps(
     silent: bool,
     new_version: &str,
 ) -> Result<(), Error> {
-    let vp_binary = version_dir.join("bin").join(crate::VP_BINARY_NAME);
-
-    if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
-        return Err(Error::Setup(
-            format!("New binary not found at {}", vp_binary.as_path().display()).into(),
-        ));
-    }
-
-    tracing::debug!("Running vp install in {}", version_dir.as_path().display());
+    tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
 
     // Do not pass `--silent` to the inner install: pnpm suppresses the
     // release-age error body in silent mode, which would leave upgrade.log
@@ -264,12 +259,32 @@ pub async fn install_production_deps(
     // process captures the output and only surfaces it through the log.
     let mut args = vec!["install"];
     if let Some(registry_url) = registry {
-        args.push("--");
         args.push("--registry");
         args.push(registry_url);
     }
 
-    let output = run_vp_install(version_dir, &vp_binary, &args).await?;
+    let node_version = NodeProvider::new().resolve_latest_version().await.map_err(|error| {
+        Error::Setup(format!("Failed to resolve the latest Node.js LTS version: {error}").into())
+    })?;
+    let node_runtime =
+        download_runtime(JsRuntimeType::Node, &node_version).await.map_err(|error| {
+            Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
+        })?;
+    let (pnpm_dir, _, _) =
+        download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
+            .await
+            .map_err(|error| {
+                Error::Setup(
+                    format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into(),
+                )
+            })?;
+    let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
+    if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
+        return Err(Error::Setup(
+            format!("pnpm entry not found at {}", pnpm_entry.as_path().display()).into(),
+        ));
+    }
+    let output = run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry).await?;
 
     if !output.status.success() {
         let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
@@ -301,7 +316,8 @@ pub async fn install_production_deps(
         // Only create the local override after explicit consent. This preserves
         // minimumReleaseAge protection for the default and non-interactive paths.
         write_release_age_overrides(version_dir).await?;
-        let retry_output = run_vp_install(version_dir, &vp_binary, &args).await?;
+        let retry_output =
+            run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry).await?;
         if !retry_output.status.success() {
             let retry_log_path =
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
@@ -319,18 +335,35 @@ pub async fn install_production_deps(
     Ok(())
 }
 
-async fn run_vp_install(
+async fn run_pnpm_install(
     version_dir: &AbsolutePath,
-    vp_binary: &AbsolutePath,
+    node_runtime: &vite_js_runtime::JsRuntime,
+    pnpm_entry: &AbsolutePath,
     args: &[&str],
+    registry: Option<&str>,
 ) -> Result<Output, Error> {
-    let output = tokio::process::Command::new(vp_binary.as_path())
+    let node_bin = node_runtime.get_bin_prefix();
+    let pnpm_bin = pnpm_entry.parent().ok_or_else(|| {
+        Error::Setup(format!("pnpm entry has no parent: {}", pnpm_entry.as_path().display()).into())
+    })?;
+    let current_path = env::var_os("PATH").unwrap_or_default();
+    let mut path_entries = vec![node_bin.as_path().to_path_buf(), pnpm_bin.as_path().to_path_buf()];
+    path_entries.extend(env::split_paths(&current_path));
+    let path = env::join_paths(path_entries)
+        .map_err(|error| Error::Setup(format!("Failed to build PATH for pnpm: {error}").into()))?;
+
+    let mut cmd = tokio::process::Command::new(node_runtime.get_binary_path().as_path());
+    cmd.arg(pnpm_entry.as_path())
         .args(args)
         .current_dir(version_dir)
         .env("CI", "true")
-        .output()
-        .await?;
+        .env("PATH", path);
 
+    if let Some(registry_url) = registry {
+        cmd.env(vite_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
+    }
+
+    let output = cmd.output().await?;
     Ok(output)
 }
 
@@ -821,6 +854,88 @@ mod tests {
             !version_dir.join("bunfig.toml").as_path().exists(),
             "bunfig.toml should not be created"
         );
+    }
+
+    /// Build a fake managed Node.js runtime that records how `run_pnpm_install`
+    /// invokes it: arguments to `invocation.txt`, `$PATH` to `path.txt`, and
+    /// `$npm_config_registry` to `registry.txt` (all relative to `version_dir`).
+    #[cfg(unix)]
+    async fn fake_pnpm_runtime(
+        version_dir: &AbsolutePath,
+    ) -> (AbsolutePathBuf, AbsolutePathBuf, vite_js_runtime::JsRuntime, AbsolutePathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let node_bin = version_dir.join("node").join("bin");
+        let pnpm_bin = version_dir.join("pnpm").join("bin");
+        tokio::fs::create_dir_all(&node_bin).await.unwrap();
+        tokio::fs::create_dir_all(&pnpm_bin).await.unwrap();
+
+        let node_binary = node_bin.join("node");
+        tokio::fs::write(
+            &node_binary,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > invocation.txt\nprintf '%s' \"$PATH\" > path.txt\nprintf '%s' \"$npm_config_registry\" > registry.txt\n",
+        )
+        .await
+        .unwrap();
+        tokio::fs::set_permissions(&node_binary, std::fs::Permissions::from_mode(0o755))
+            .await
+            .unwrap();
+        let pnpm_entry = pnpm_bin.join("pnpm.cjs");
+        tokio::fs::write(&pnpm_entry, "").await.unwrap();
+        let node_runtime =
+            vite_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, node_binary);
+
+        (node_bin, pnpm_bin, node_runtime, pnpm_entry)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn run_pnpm_install_uses_managed_node_directly() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let (node_bin, pnpm_bin, node_runtime, pnpm_entry) = fake_pnpm_runtime(&version_dir).await;
+
+        let output = run_pnpm_install(&version_dir, &node_runtime, &pnpm_entry, &["install"], None)
+            .await
+            .unwrap();
+        assert!(output.status.success());
+
+        let invocation =
+            tokio::fs::read_to_string(version_dir.join("invocation.txt")).await.unwrap();
+        assert_eq!(invocation, format!("{}\ninstall\n", pnpm_entry.as_path().display()));
+
+        let path = tokio::fs::read_to_string(version_dir.join("path.txt")).await.unwrap();
+        let path_entries = env::split_paths(&path).collect::<Vec<_>>();
+        assert_eq!(path_entries[0], node_bin.as_path());
+        assert_eq!(path_entries[1], pnpm_bin.as_path());
+
+        // Without a custom registry, npm_config_registry must not be set so pnpm
+        // falls back to its default registry.
+        let registry = tokio::fs::read_to_string(version_dir.join("registry.txt")).await.unwrap();
+        assert_eq!(registry, "");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn run_pnpm_install_passes_custom_registry_env() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let (_, _, node_runtime, pnpm_entry) = fake_pnpm_runtime(&version_dir).await;
+
+        let registry_url = "https://registry.example.com/";
+        let output = run_pnpm_install(
+            &version_dir,
+            &node_runtime,
+            &pnpm_entry,
+            &["install"],
+            Some(registry_url),
+        )
+        .await
+        .unwrap();
+        assert!(output.status.success());
+
+        let registry = tokio::fs::read_to_string(version_dir.join("registry.txt")).await.unwrap();
+        assert_eq!(registry, registry_url);
     }
 
     #[test]

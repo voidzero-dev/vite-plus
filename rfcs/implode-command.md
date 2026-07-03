@@ -225,7 +225,7 @@ crates/vite_global_cli/
 - `test_remove_vite_plus_lines_absolute_path` — handles `/home/user/.vite-plus/env` variant
 - `test_remove_vite_plus_lines_preserves_surrounding` — other content untouched
 - `test_clean_shell_profile_integration` — tempdir-based integration test
-- `test_execute_not_installed` — points `VITE_PLUS_HOME` at non-existent path, verifies success
+- `test_execute_not_installed` — points `VP_HOME` at non-existent path, verifies success
 
 ### CI Tests
 

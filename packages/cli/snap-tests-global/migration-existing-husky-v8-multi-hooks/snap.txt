@@ -2,7 +2,7 @@
 > vp migrate --no-interactive # should warn about husky v8 and skip hooks setup
 
 ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 
@@ -29,19 +29,15 @@
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat .husky/pre-commit # hook file should be unchanged (still has bootstrap)
 . "$(dirname -- "$0")/_/husky.sh"

@@ -1,0 +1,10 @@
+{
+  "name": "vite-plugin-gherkin",
+  "version": "0.2.0",
+  "exports": {
+    ".": "./index.js"
+  },
+  "peerDependencies": {
+    "vitest": "^4.1.0"
+  }
+}

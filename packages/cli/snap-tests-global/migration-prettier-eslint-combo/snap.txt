@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should detect both eslint and prettier and auto-migrate
 
 Prettier configuration detected. Auto-migrating to Oxfmt...
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint
@@ -33,19 +33,15 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > test ! -f eslint.config.mjs # check eslint config is removed
 > test ! -f .prettierrc.json # check prettier config is removed

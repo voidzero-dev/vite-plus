@@ -8,9 +8,12 @@ use serde::{Deserialize, Serialize};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 
+// Only referenced on non-musl builds, where official releases are signed.
+#[cfg(not(target_env = "musl"))]
+use crate::provider::ShasumsSignature;
 use crate::{
     Error, Platform,
-    download::fetch_with_cache_headers,
+    download::fetch_json_with_cache_headers,
     platform::Os,
     provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider},
 };
@@ -234,7 +237,8 @@ impl NodeProvider {
         let base_url = get_dist_url();
         let index_url = vite_str::format!("{base_url}/index.json");
 
-        let response = fetch_with_cache_headers(&index_url, Some(etag)).await?;
+        let response =
+            fetch_json_with_cache_headers::<Vec<NodeVersionEntry>>(&index_url, Some(etag)).await?;
 
         if response.not_modified {
             // Server confirmed data hasn't changed, refresh TTL
@@ -249,10 +253,9 @@ impl NodeProvider {
         }
 
         // Got new data
-        let body = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
+        let versions = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
             reason: "Empty response body".into(),
         })?;
-        let versions: Vec<NodeVersionEntry> = serde_json::from_str(&body)?;
 
         let new_cache = VersionIndexCache {
             expires_at: calculate_expires_at(response.max_age),
@@ -273,12 +276,12 @@ impl NodeProvider {
         let index_url = vite_str::format!("{base_url}/index.json");
 
         tracing::debug!("Fetching version index from {index_url}");
-        let response = fetch_with_cache_headers(&index_url, None).await?;
+        let response =
+            fetch_json_with_cache_headers::<Vec<NodeVersionEntry>>(&index_url, None).await?;
 
-        let body = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
+        let versions = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
             reason: "Empty response body".into(),
         })?;
-        let versions: Vec<NodeVersionEntry> = serde_json::from_str(&body)?;
 
         let cache = VersionIndexCache {
             expires_at: calculate_expires_at(response.max_age),
@@ -494,7 +497,7 @@ fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Er
 /// # Errors
 ///
 /// Returns an error if no matching version is found or if the version requirement is invalid.
-fn resolve_version_from_list(
+pub fn resolve_version_from_list(
     version_req: &str,
     versions: &[NodeVersionEntry],
 ) -> Result<Str, Error> {
@@ -566,6 +569,27 @@ fn get_dist_url() -> Str {
     )
 }
 
+/// Whether `base_url` points at the official `nodejs.org` distribution, which
+/// always publishes the clearsigned `SHASUMS256.txt.asc`. Signature
+/// verification is required for the official host (even when reached through
+/// `VP_NODE_DIST_MIRROR`) and best-effort for any other mirror.
+#[cfg(not(target_env = "musl"))]
+fn is_official_dist_host(base_url: &str) -> bool {
+    let authority =
+        base_url.split_once("://").map_or(base_url, |(_, rest)| rest).split(['/', '?', '#']).next();
+    let host = authority
+        .unwrap_or_default()
+        // Drop any `userinfo@` prefix and `:port` suffix, then a trailing dot.
+        .rsplit('@')
+        .next()
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.');
+    host.eq_ignore_ascii_case("nodejs.org")
+}
+
 #[async_trait]
 impl JsRuntimeProvider for NodeProvider {
     fn name(&self) -> &'static str {
@@ -602,11 +626,28 @@ impl JsRuntimeProvider for NodeProvider {
         let shasums_url = vite_str::format!("{base_url}/v{version}/SHASUMS256.txt");
         let extracted_dir_name = vite_str::format!("node-v{version}-{platform_str}");
 
+        // Official nodejs.org releases publish a clearsigned SHASUMS256.txt.asc
+        // signed by a Node.js releaser; verify it. The unofficial musl builds
+        // (unofficial-builds.nodejs.org) publish no signature, so fall back to
+        // the plain SHASUMS256.txt there.
+        #[cfg(not(target_env = "musl"))]
+        let signature = Some(ShasumsSignature {
+            url: vite_str::format!("{base_url}/v{version}/SHASUMS256.txt.asc"),
+            // Require the signature based on the resolved host: official
+            // nodejs.org always ships it (including when VP_NODE_DIST_MIRROR
+            // points back at nodejs.org). A custom mirror (e.g. an internal
+            // Artifactory) may publish only the archives and SHASUMS256.txt, so
+            // there the signature is best-effort.
+            required: is_official_dist_host(&base_url),
+        });
+        #[cfg(target_env = "musl")]
+        let signature = None;
+
         DownloadInfo {
             archive_url,
             archive_filename,
             archive_format: format,
-            hash_verification: HashVerification::ShasumsFile { url: shasums_url },
+            hash_verification: HashVerification::ShasumsFile { url: shasums_url, signature },
             extracted_dir_name,
         }
     }
@@ -680,7 +721,11 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        let info = provider.get_download_info("22.13.1", platform);
+        // for_test() leaves node_dist_mirror unset, so this exercises the
+        // official (default) source where signature verification is required.
+        let info = vite_shared::EnvConfig::test_scope(vite_shared::EnvConfig::for_test(), || {
+            provider.get_download_info("22.13.1", platform)
+        });
 
         #[cfg(not(target_env = "musl"))]
         {
@@ -690,8 +735,11 @@ mod tests {
                 "https://nodejs.org/dist/v22.13.1/node-v22.13.1-linux-x64.tar.gz"
             );
             assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64");
-            if let HashVerification::ShasumsFile { url } = &info.hash_verification {
+            if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
                 assert_eq!(url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt");
+                let signature = signature.as_ref().expect("official builds are signature-verified");
+                assert_eq!(signature.url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt.asc");
+                assert!(signature.required, "official builds must require signature verification");
             } else {
                 panic!("Expected ShasumsFile verification");
             }
@@ -704,16 +752,91 @@ mod tests {
                 "https://unofficial-builds.nodejs.org/download/release/v22.13.1/node-v22.13.1-linux-x64-musl.tar.gz"
             );
             assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64-musl");
-            if let HashVerification::ShasumsFile { url } = &info.hash_verification {
+            if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
                 assert_eq!(
                     url,
                     "https://unofficial-builds.nodejs.org/download/release/v22.13.1/SHASUMS256.txt"
                 );
+                // Unofficial musl builds publish no PGP signature.
+                assert!(signature.is_none(), "musl builds have no signature to verify");
             } else {
                 panic!("Expected ShasumsFile verification");
             }
         }
         assert_eq!(info.archive_format, ArchiveFormat::TarGz);
+    }
+
+    // A custom mirror (VP_NODE_DIST_MIRROR) may publish only the archives and
+    // plain SHASUMS256.txt, so signature verification there is best-effort.
+    #[cfg(not(target_env = "musl"))]
+    #[test]
+    fn test_get_download_info_custom_mirror_signature_optional() {
+        let provider = NodeProvider::new();
+        let platform = Platform { os: Os::Linux, arch: Arch::X64 };
+
+        let info = vite_shared::EnvConfig::test_scope(
+            vite_shared::EnvConfig {
+                node_dist_mirror: Some("https://mirror.example/node".into()),
+                ..vite_shared::EnvConfig::for_test()
+            },
+            || provider.get_download_info("22.13.1", platform),
+        );
+
+        if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
+            assert_eq!(url, "https://mirror.example/node/v22.13.1/SHASUMS256.txt");
+            let signature =
+                signature.as_ref().expect("signature URL is still provided for mirrors");
+            assert_eq!(signature.url, "https://mirror.example/node/v22.13.1/SHASUMS256.txt.asc");
+            assert!(!signature.required, "custom mirror signature must be best-effort");
+        } else {
+            panic!("Expected ShasumsFile verification");
+        }
+    }
+
+    // A mirror pointed back at the official nodejs.org host must still require
+    // the signature (required is based on the resolved host, not merely whether
+    // VP_NODE_DIST_MIRROR is set).
+    #[cfg(not(target_env = "musl"))]
+    #[test]
+    fn test_get_download_info_official_mirror_requires_signature() {
+        let provider = NodeProvider::new();
+        let platform = Platform { os: Os::Linux, arch: Arch::X64 };
+
+        let info = vite_shared::EnvConfig::test_scope(
+            vite_shared::EnvConfig {
+                node_dist_mirror: Some("https://nodejs.org/download/release".into()),
+                ..vite_shared::EnvConfig::for_test()
+            },
+            || provider.get_download_info("22.13.1", platform),
+        );
+
+        if let HashVerification::ShasumsFile { signature, .. } = &info.hash_verification {
+            let signature = signature.as_ref().expect("official host is signature-verified");
+            assert!(
+                signature.required,
+                "an official nodejs.org mirror URL must still require the signature"
+            );
+        } else {
+            panic!("Expected ShasumsFile verification");
+        }
+    }
+
+    #[cfg(not(target_env = "musl"))]
+    #[test]
+    fn test_is_official_dist_host() {
+        assert!(is_official_dist_host("https://nodejs.org/dist"));
+        assert!(is_official_dist_host("https://nodejs.org/download/release"));
+        assert!(is_official_dist_host("https://NODEJS.ORG/dist"));
+        // Official host reached via userinfo, port, or a trailing dot still counts.
+        assert!(is_official_dist_host("https://user@nodejs.org/dist"));
+        assert!(is_official_dist_host("https://nodejs.org:443/dist"));
+        assert!(is_official_dist_host("https://nodejs.org./dist"));
+        assert!(!is_official_dist_host("https://npmmirror.com/mirrors/node"));
+        assert!(!is_official_dist_host("https://unofficial-builds.nodejs.org/download/release"));
+        assert!(!is_official_dist_host("https://artifactory.internal/node"));
+        // A look-alike host must not be mistaken for the official one.
+        assert!(!is_official_dist_host("https://nodejs.org.evil.com/dist"));
+        assert!(!is_official_dist_host("https://evil.com/nodejs.org"));
     }
 
     #[test]

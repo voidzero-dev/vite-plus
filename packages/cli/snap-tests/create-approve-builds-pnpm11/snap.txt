@@ -8,19 +8,15 @@
 allowBuilds:
   core-js: true
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
 > node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --directory default-app # default run surfaces the gated build with guidance, leaving it unapproved
 
@@ -36,19 +32,15 @@ These dependencies may not work until built. Run vp pm approve-builds in the pro
 allowBuilds:
   core-js: set this to true or false
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
 > cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
 .../core-js@<semver>/node_modules/core-js postinstall$ node -e "try{require('./postinstall')}catch(e){}"
@@ -58,16 +50,12 @@ peerDependencyRules:
 allowBuilds:
   core-js: true
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"

@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should work with bun object-form workspaces
 
 ✔ Merged .oxlintrc.json into vite.config.ts
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  bun <semver>
 • 2 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
@@ -44,9 +44,9 @@ export default defineConfig({
       "packages/*"
     ],
     "catalog": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-      "vite-plus": "latest"
+      "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
+      "vitest": "<semver>",
+      "vite-plus": "<semver>"
     }
   },
   "scripts": {

@@ -1,0 +1,3 @@
+> vp check
+note: Lint skipped (check.lint: false in vite.config.ts)
+pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)

@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { withConfigMetadataResolution } from './define-config.ts';
+
 // Mirrors Vite's own DEFAULT_CONFIG_FILES order so finders here pick the same
 // file Vite loads when a directory contains more than one config (e.g. a
 // `vite.config.js` next to a stray `vite.config.ts`). Readers evaluate via
@@ -96,17 +98,21 @@ export interface ResolveViteConfigOptions {
 export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
   const { resolveConfig } = await import('./index.js');
 
-  if (options?.traverseUp && !hasViteConfig(cwd)) {
-    const workspaceRoot = findWorkspaceRoot(cwd);
-    if (workspaceRoot) {
-      const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
-      if (configFile) {
-        return resolveConfig({ root: cwd, configFile }, 'build');
+  // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
+  // staged/create…), so skip the user's plugin factory while it evaluates.
+  return withConfigMetadataResolution(async () => {
+    if (options?.traverseUp && !hasViteConfig(cwd)) {
+      const workspaceRoot = findWorkspaceRoot(cwd);
+      if (workspaceRoot) {
+        const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
+        if (configFile) {
+          return resolveConfig({ root: cwd, configFile }, 'build');
+        }
       }
     }
-  }
 
-  return resolveConfig({ root: cwd }, 'build');
+    return resolveConfig({ root: cwd }, 'build');
+  });
 }
 
 export async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
@@ -120,6 +126,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
       configFile: config.configFile,
       lint: config.lint,
       fmt: config.fmt,
+      check: config.check,
       run: config.run,
       staged: config.staged,
     });

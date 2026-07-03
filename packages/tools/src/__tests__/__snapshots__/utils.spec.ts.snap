@@ -121,7 +121,7 @@ exports[`replaceUnstableOutput() > replace unstable vite-plus hash version 1`] =
 
 exports[`replaceUnstableOutput() > replace vite-plus home paths 1`] = `
 "<vite-plus-home>/js_runtime/node/v<semver>/bin/node
-<vite-plus-home>/packages/cowsay/lib/node_modules/cowsay/./cli.js
+<vite-plus-home>/packages/cowsay<install-id>/lib/node_modules/cowsay/./cli.js
 <vite-plus-home>
 <vite-plus-home>/bin"
 `;

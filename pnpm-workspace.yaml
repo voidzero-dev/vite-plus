@@ -5,24 +5,26 @@ packages:
   - vite
   - vite/packages/*
 catalog:
-  '@babel/core': ^7.24.7
-  '@babel/preset-env': ^7.24.7
-  '@babel/preset-typescript': ^7.24.7
+  '@babel/core': ^7.29.7
+  '@babel/preset-env': ^7.29.7
+  '@babel/preset-typescript': ^7.29.7
   '@clack/core': ^1.0.0
   '@iconify/vue': ^5.0.0
-  '@napi-rs/cli': ^3.6.1
-  '@napi-rs/wasm-runtime': ^1.1.4
+  '@napi-rs/cli': ^3.7.2
+  '@napi-rs/wasm-runtime': ^1.1.6
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.135.0
-  '@oxc-project/types': =0.135.0
+  '@oxc-project/runtime': =0.138.0
+  '@oxc-project/types': =0.138.0
   '@oxlint/plugins': =1.68.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
+  '@tsdown/css': ^0.22.3
+  '@tsdown/exe': ^0.22.3
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -40,13 +42,22 @@ catalog:
   '@types/ws': ^8.18.0
   '@typescript/native-preview': 7.0.0-dev.20260605.1
   '@vitejs/plugin-react': ^5.1.2
-  '@vitest/browser': ^4.1.6
-  '@vitest/browser-playwright': ^4.1.6
+  '@vitest/browser': 4.1.9
+  '@vitest/browser-playwright': 4.1.9
+  '@vitest/browser-preview': 4.1.9
+  '@vitest/browser-webdriverio': 4.1.9
+  '@vitest/expect': 4.1.9
+  '@vitest/mocker': 4.1.9
+  '@vitest/pretty-format': 4.1.9
+  '@vitest/runner': 4.1.9
+  '@vitest/snapshot': 4.1.9
+  '@vitest/spy': 4.1.9
+  '@vitest/utils': 4.1.9
   '@voidzero-dev/vitepress-theme': 4.8.4
   '@vueuse/core': ^14.0.0
   '@yarnpkg/fslib': ^3.1.3
   '@yarnpkg/shell': ^4.1.3
-  acorn: ^8.12.1
+  acorn: ^8.17.0
   acorn-import-assertions: ^1.9.0
   astring: ^1.9.0
   bingo: ^0.9.3
@@ -72,6 +83,8 @@ catalog:
   glob: ^13.0.0
   husky: ^9.1.7
   jsonc-parser: ^3.3.1
+  # Kept in lockstep with the bundled @tsdown/css by .github/scripts/upgrade-deps.ts
+  lightningcss: ^1.32.0
   lint-staged: ^16.2.6
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
@@ -80,12 +93,12 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.135.0
-  oxc-parser: =0.135.0
-  oxc-transform: =0.135.0
-  oxfmt: =0.54.0
-  oxlint: =1.69.0
-  oxlint-tsgolint: =0.23.0
+  oxc-minify: =0.138.0
+  oxc-parser: =0.138.0
+  oxc-transform: =0.138.0
+  oxfmt: =0.57.0
+  oxlint: =1.72.0
+  oxlint-tsgolint: =0.24.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -94,7 +107,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.34.1
-  rolldown-plugin-dts: ^0.25.1
+  rolldown-plugin-dts: ^0.26.0
   rollup: ^4.60.4
   semver: ^7.8.0
   serve-static: ^2.0.0
@@ -105,7 +118,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.22.2
+  tsdown: ^0.22.3
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -116,8 +129,8 @@ catalog:
   vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0
   vitepress-plugin-og: ^0.0.5
-  vitest: ^4.1.6
-  vue: ^3.5.21
+  vitest: 4.1.9
+  vue: ^3.5.35
   web-tree-sitter: ^0.26.0
   ws: ^8.20.1
   yaml: ^2.8.1
@@ -129,6 +142,7 @@ catalogMode: prefer
 ignoreScripts: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - '@babel/*'
   - '@napi-rs/*'
   - '@nkzw/*'
   - '@oxc-node/*'
@@ -152,6 +166,7 @@ minimumReleaseAgeExclude:
   - oxfmt
   - oxlint
   - oxlint-tsgolint
+  - ast-kit
   - lightningcss
   - lightningcss-*
   - baseline-browser-mapping
@@ -172,26 +187,30 @@ minimumReleaseAgeExclude:
   - vitest
   - vue-virtual-scroller
   - lodash-es@4.18.1
+  - '@emnapi/core@1.11.1'
+  - '@emnapi/runtime@1.11.1'
+  - emnapi@1.11.1
+  - vite-plus
+  - '@rolldown/binding-*'
+  - vitepress-plugin-feedback-tracker@0.2.0-alpha.1
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
-  vite-plus: workspace:*
-  vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.8
+  vite-plus: workspace:vite-plus@*
 packageExtensions:
+  '@rollup/plugin-dynamic-import-vars':
+    dependencies:
+      '@types/estree': ^1.0.0
   sass-embedded:
     peerDependencies:
       source-map-js: '*'
     peerDependenciesMeta:
       source-map-js:
         optional: true
-  '@rollup/plugin-dynamic-import-vars':
-    dependencies:
-      '@types/estree': ^1.0.0
 patchedDependencies:
-  sirv@3.0.2: vite/patches/sirv@3.0.2.patch
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
+  sirv@3.0.2: vite/patches/sirv@3.0.2.patch
 peerDependencyRules:
   allowAny:
     - vite

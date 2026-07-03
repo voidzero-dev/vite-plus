@@ -406,7 +406,7 @@ export function addYarnBuiltDependenciesMeta(
   for (const name of packages) {
     const current = meta[name];
     meta[name] = {
-      ...(current && typeof current === 'object' ? (current as Record<string, unknown>) : {}),
+      ...(current && typeof current === 'object' ? current : {}),
       built: true,
     };
   }

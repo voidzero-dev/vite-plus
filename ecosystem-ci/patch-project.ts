@@ -2,11 +2,9 @@ import { execSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import cliPkg from '../packages/cli/package.json' with { type: 'json' };
+import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import { ecosystemCiDir, tgzDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
-
-const vpVersion = cliPkg.version;
 
 const projects = Object.keys(repos);
 
@@ -21,7 +19,9 @@ const repoRoot = join(ecosystemCiDir, project);
 const repoConfig = repos[project as keyof typeof repos];
 const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
 const cwd = directory ? join(repoRoot, directory) : repoRoot;
-const vitePlusTgz = `file:${tgzDir}/vite-plus-${vpVersion}.tgz`;
+// The e2e build job pins packages/cli to 0.0.0 before `pnpm pack`, so the
+// artifact is always vite-plus-0.0.0.tgz regardless of the committed version.
+const vitePlusTgz = `file:${tgzDir}/vite-plus-0.0.0.tgz`;
 // run vp migrate
 const cli = process.env.VP_CLI_BIN ?? 'vp';
 
@@ -45,6 +45,19 @@ if (project === 'vinext') {
     throw new Error(`vinext patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
   }
   await writeFile(workspacePath, patched, 'utf-8');
+
+  // The single in-process `integration` project runs serially and its ISR
+  // revalidation test sits right at the 30s ceiling under CI load (observed
+  // 26.8s on green main runs, 30.0s here) — a borderline timeout, not a real
+  // regression (the vitest runner is byte-identical across this bump). Give it
+  // headroom so the ecosystem run isn't flaky.
+  const viteConfigPath = join(repoRoot, 'vite.config.ts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const patchedConfig = viteConfig.replace('testTimeout: 30000', 'testTimeout: 60000');
+  if (patchedConfig === viteConfig) {
+    throw new Error(`vinext patch: \`testTimeout: 30000\` not found in ${viteConfigPath}`);
+  }
+  await writeFile(viteConfigPath, patchedConfig, 'utf-8');
 }
 
 if (project === 'dify') {
@@ -66,21 +79,75 @@ if (project === 'dify') {
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
 
-execSync(`${cli} migrate --no-agent --no-interactive`, {
-  cwd,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
-    VP_OVERRIDE_PACKAGES: JSON.stringify({
-      vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
-      vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
-      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
-      '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
-    }),
-    VP_VERSION: vitePlusTgz,
-  },
-});
+// Bun is uniquely strict about vitest's `peer vite ^6 || ^7 || ^8` resolution
+// (https://github.com/oven-sh/bun/issues/8406): it checks both the override
+// target's package name and version. Point bun-based projects at the
+// vite-7.99.0 alias tgz (a copy of core renamed to "vite" with a satisfying
+// version); pnpm/npm/yarn must keep pointing at the real core tgz, otherwise
+// they trip a registry lookup for "vite@<version>" when a workspace
+// sub-package and the override both reference the same vite-named alias.
+const isBunProject = project === 'bun-vite-template';
+const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
+
+// Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. The `@vitest/*` family
+// are exact deps of `vitest`, so a single `vitest` override cascades them.
+//
+// Coverage providers are intentionally NOT in the shipped override map (the
+// product leaves them user-owned; the runtime guard fail-fasts on a skew). But
+// this rig FORCE-INSTALLS the locally built vitest, and many ecosystem projects
+// pin an older `@vitest/coverage-*` in their lockfile. Without alignment, the
+// forced runner (4.1.9) skews from the project's pinned provider and the guard
+// aborts `vp test --coverage` — testing an incoherent combo no real install has.
+// Pin the providers here so the E2E coverage step runs against a consistent
+// runner+provider pair, exactly as a user who followed the guard's advice would.
+const vitestOverrides = {
+  vitest: VITEST_VERSION,
+  '@vitest/coverage-v8': VITEST_VERSION,
+  '@vitest/coverage-istanbul': VITEST_VERSION,
+};
+
+const migrateEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
+  VP_OVERRIDE_PACKAGES: JSON.stringify({
+    vite: `file:${tgzDir}/${viteOverrideTgz}`,
+    '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+    ...vitestOverrides,
+  }),
+  VP_VERSION: vitePlusTgz,
+  // E2E intentionally installs just-published toolchain packages (e.g.
+  // @oxlint/migrate during `vp migrate`). Disable pnpm's minimumReleaseAge gate
+  // so a same-day publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION.
+  // This is scoped to the migrate subprocess; the workflow's follow-up
+  // `vp install` runs without it (see the dify note below).
+  pnpm_config_minimum_release_age: '0',
+};
+
+const isDify = project === 'dify';
+
+try {
+  execSync(`${cli} migrate --no-agent --no-interactive`, {
+    cwd,
+    stdio: 'inherit',
+    env: migrateEnv,
+  });
+} catch (err) {
+  // dify sets `resolutionMode: time-based`, so the gate var above re-activates
+  // pnpm's resolution policy during migrate's auto-install. vp's bundled pnpm
+  // has no handleResolutionPolicyViolations callback, so the local `file:` tgz
+  // overrides (no publish timestamp) crash it with
+  // ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Tolerate it: migrate still
+  // generated the config and import rewrites, and the workflow's follow-up
+  // `vp install` (run without the gate var, so the policy stays inactive) does
+  // the real install. Other projects must still fail hard.
+  if (!isDify) {
+    throw err;
+  }
+  console.warn(
+    'dify: `vp migrate` auto-install failed (expected with the age gate active); ' +
+      'continuing, `vp install` will resync node_modules.',
+  );
+}
 
 const packageJsonPath = join(cwd, 'package.json');
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as {
@@ -96,3 +163,21 @@ if (packageJson.dependencies?.['vite-plus']) {
 }
 
 await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf-8');
+
+// Install with the local tgz overrides now wired into package.json. Disable
+// pnpm's minimumReleaseAge gate so the freshly published bumped deps (e.g.
+// @oxc-project/runtime, @oxfmt/binding-*) pass `vp install`'s lockfile
+// supply-chain check instead of failing with
+// ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION.
+//
+// dify is the exception: it sets `resolutionMode: time-based`, so the gate var
+// re-activates pnpm's resolution policy and vp's bundled pnpm (no
+// handleResolutionPolicyViolations callback) crashes on the local file: tgz
+// overrides with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED. Its
+// `minimumReleaseAge:` key was already removed above, so the policy stays
+// inactive when the var is unset.
+const installEnv: NodeJS.ProcessEnv = { ...process.env };
+if (!isDify) {
+  installEnv.pnpm_config_minimum_release_age = '0';
+}
+execSync(`${cli} install --no-frozen-lockfile`, { cwd, stdio: 'inherit', env: installEnv });

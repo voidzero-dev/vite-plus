@@ -2,9 +2,10 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fs::{File, OpenOptions, TryLockError},
     io::{IsTerminal, Read, Write},
-    process::{self, Stdio},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    process::Stdio,
+    time::Duration,
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
@@ -12,19 +13,19 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use tokio::process::Command;
+use uuid::Uuid;
 use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
+#[cfg(test)]
+use crate::commands::env::package_metadata::INSTALL_ID_LENGTH;
 use crate::{
     commands::{
         env::{
             bin_config::BinConfig,
-            config::{
-                get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
-                resolve_version_alias,
-            },
-            package_metadata::PackageMetadata,
+            config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
+            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata, is_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
@@ -40,12 +41,8 @@ struct InstalledPackage {
     installed_version: String,
     bin_names: Vec<String>,
     js_bins: HashSet<String>,
-    backup: Option<PackageBackup>,
-}
-
-struct PackageBackup {
-    package_dir: AbsolutePathBuf,
-    backup_dir: AbsolutePathBuf,
+    install_id: String,
+    install_dir: AbsolutePathBuf,
 }
 
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
@@ -75,7 +72,9 @@ pub(crate) fn is_vp_shim_target(
 /// created for packages either, with one exception: `vp install -g corepack`
 /// may take BinConfig ownership of the corepack shim (see
 /// `create_package_shim`).
-pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
+pub(crate) fn is_protected_shim(bin_name: &str, ignore_case: bool) -> bool {
+    let bin_name =
+        if cfg!(target_os = "linux") || !ignore_case { bin_name } else { &bin_name.to_lowercase() };
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
@@ -85,7 +84,7 @@ pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
 /// resolution order. The exemption is scoped to the package name; any other
 /// package declaring a `corepack` bin must not take BinConfig ownership.
 pub(crate) fn package_may_own_bin(package_name: &str, bin_name: &str) -> bool {
-    !is_protected_shim(bin_name) || (bin_name == "corepack" && package_name == "corepack")
+    !is_protected_shim(bin_name, true) || (bin_name == "corepack" && package_name == "corepack")
 }
 
 /// Options for [`install`].
@@ -129,11 +128,7 @@ pub async fn install(
         // Resolve from current directory
         let cwd = match current_dir() {
             Ok(cwd) => cwd,
-            Err(error) => {
-                let error =
-                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
-                return Err((None, error));
-            }
+            Err(error) => return Err((None, error.into())),
         };
         let resolution = match resolve_version(&cwd).await {
             Ok(resolution) => resolution,
@@ -199,6 +194,7 @@ pub async fn install(
     let mut package_names = package_names.iter();
 
     let mut installs = FuturesUnordered::new();
+    let mut install_locks = HashMap::<String, File>::new();
     let mut first_error = None;
     let mut stop_scheduling = false;
     loop {
@@ -219,9 +215,10 @@ pub async fn install(
         }
 
         match installs.next().await {
-            Some((package_name, Ok(installed_package))) => {
+            Some((package_name, Ok((installed_package, lock_file)))) => {
                 progress.inc(1);
-                packages.get_mut(&package_name).unwrap().install = Some(installed_package)
+                packages.get_mut(&package_name).unwrap().install = Some(installed_package);
+                install_locks.insert(package_name, lock_file);
             }
             Some((package_name, Err(error))) => {
                 stop_scheduling = true;
@@ -237,8 +234,14 @@ pub async fn install(
     // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
-        let Some(InstalledPackage { installed_version, mut bin_names, mut js_bins, mut backup }) =
-            install
+        let lock_file = install_locks.remove(&package_name);
+        let Some(InstalledPackage {
+            installed_version,
+            mut bin_names,
+            mut js_bins,
+            install_id,
+            install_dir,
+        }) = install
         else {
             continue;
         };
@@ -248,7 +251,7 @@ pub async fn install(
         let previous_metadata = match PackageMetadata::load(&package_name).await {
             Ok(metadata) => metadata,
             Err(error) => {
-                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                let _ = cleanup_failed_install(&install_dir).await;
                 if first_error.is_none() {
                     first_error = Some(package_error(&package_name, error));
                 }
@@ -299,7 +302,7 @@ pub async fn install(
         {
             Ok(bin_names) => bin_names,
             Err(error) => {
-                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                let _ = cleanup_failed_install(&install_dir).await;
                 if first_error.is_none() {
                     first_error = Some(package_error(&package_name, error));
                 }
@@ -327,7 +330,7 @@ pub async fn install(
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                    let _ = cleanup_failed_install(&install_dir).await;
                     if first_error.is_none() {
                         first_error = Some(package_error(&package_name, error));
                     }
@@ -352,7 +355,7 @@ pub async fn install(
                         pkg, package_name
                     ));
                     if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
-                        let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                        let _ = cleanup_failed_install(&install_dir).await;
                         if first_error.is_none() {
                             first_error = Some(package_error(&package_name, error));
                         }
@@ -364,7 +367,7 @@ pub async fn install(
                     continue;
                 }
             } else {
-                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                let _ = cleanup_failed_install(&install_dir).await;
                 if first_error.is_none() {
                     first_error = Some((
                         Some(package_name.clone()),
@@ -379,11 +382,11 @@ pub async fn install(
             }
         }
 
-        // 4.3 Persist package-level metadata for uninstall, list, and dispatch.
+        // 4.3 Prepare metadata and remove binaries that the new install no longer provides.
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
-                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                let _ = cleanup_failed_install(&install_dir).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -400,65 +403,81 @@ pub async fn install(
             js_bins,
             "npm".to_string(),
         );
+        metadata.install_id = install_id.clone();
         metadata.bins_restricted = bins_restricted;
+
+        let mut finalized = true;
+        for bin_name in &stale_bin_names {
+            let result = async {
+                remove_package_shim(&bin_dir, bin_name).await?;
+                BinConfig::delete(bin_name).await?;
+                Ok::<(), Error>(())
+            }
+            .await;
+
+            if let Err(error) = result.map_err(|error| package_error(&package_name, error)) {
+                restore_previous_install_state(
+                    &bin_dir,
+                    &package_name,
+                    previous_metadata.as_ref(),
+                    &bin_names,
+                )
+                .await;
+                let _ = cleanup_failed_install(&install_dir).await;
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+                finalized = false;
+                break;
+            }
+        }
+
+        if !finalized {
+            continue;
+        }
+
+        // 4.4 Activate the new installation through metadata.
         if let Err(error) =
             metadata.save().await.map_err(|error| package_error(&package_name, error))
         {
-            let _ = cleanup_failed_install(&package_name, backup.take()).await;
+            restore_previous_install_state(
+                &bin_dir,
+                &package_name,
+                previous_metadata.as_ref(),
+                &bin_names,
+            )
+            .await;
+            let _ = cleanup_failed_install(&install_dir).await;
             if first_error.is_none() {
                 first_error = Some(error);
             }
             continue;
         }
 
-        // 4.4 Expose each binary by creating shims and per-binary ownership config.
-        let mut finalized = true;
+        // 4.5 Expose each binary and record its ownership.
         for bin_name in &bin_names {
-            if let Err(error) = create_package_shim(&bin_dir, bin_name, &package_name)
-                .await
-                .map_err(|error| package_error(&package_name, error))
-            {
-                finalized = false;
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                break;
-            }
-
-            let bin_config = BinConfig::new(
-                bin_name.clone(),
-                package_name.clone(),
-                installed_version.clone(),
-                node_version.clone(),
-            );
-            if let Err(error) =
-                bin_config.save().await.map_err(|error| package_error(&package_name, error))
-            {
-                finalized = false;
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                break;
-            }
-            bin_owners.insert(bin_name.clone(), package_name.clone());
-        }
-
-        if !finalized {
-            let _ = cleanup_failed_install(&package_name, backup.take()).await;
-            continue;
-        }
-
-        // 4.5 Remove shims for binaries the package used to expose but no longer declares.
-        for bin_name in stale_bin_names {
             let result = async {
-                remove_package_shim(&bin_dir, &bin_name).await?;
-                BinConfig::delete(&bin_name).await?;
-                Ok::<(), Error>(())
+                create_package_shim(&bin_dir, bin_name, &package_name).await?;
+                BinConfig::new(
+                    bin_name.clone(),
+                    package_name.clone(),
+                    installed_version.clone(),
+                    node_version.clone(),
+                )
+                .save()
+                .await
             }
             .await;
 
             if let Err(error) = result.map_err(|error| package_error(&package_name, error)) {
-                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                restore_previous_install_state(
+                    &bin_dir,
+                    &package_name,
+                    previous_metadata.as_ref(),
+                    &bin_names,
+                )
+                .await;
+                let _ = cleanup_failed_install(&install_dir).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -471,10 +490,13 @@ pub async fn install(
             continue;
         }
 
-        // 4.6 Commit the install by discarding the backup and reporting the installed bins.
-        if let Some(backup) = backup {
-            backup.discard().await;
+        for bin_name in &bin_names {
+            bin_owners.insert(bin_name.clone(), package_name.clone());
         }
+
+        // 4.6 Remove stale installations for this package.
+        cleanup_stale_installations(&package_name, &install_id).await;
+        drop(lock_file);
 
         // 4.7 Print success message
         output::success(&format!(
@@ -500,24 +522,24 @@ pub async fn install(
     if let Some(error) = first_error { Err(error) } else { Ok(()) }
 }
 
-/// Install one package into its final prefix.
+/// Install one package into a unique final prefix.
 async fn install_one(
     package_name: &str,
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
-) -> Result<InstalledPackage, Error> {
-    // 1. Backup a installed package, create directories
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(package_name);
-    let backup = PackageBackup::create(package_name, &package_dir).await?;
-    tokio::fs::create_dir_all(&package_dir).await?;
+) -> Result<(InstalledPackage, File), Error> {
+    // 1. Create an immutable install directory.
+    let install_id = new_install_id();
+    let install_dir = PackageMetadata::installation_dir_for(package_name, &install_id)?;
+    let lock_file = lock_install_dir(&install_dir)?;
+    tokio::fs::create_dir_all(&install_dir).await?;
 
-    // 2. Run npm install with prefix set to the final package directory
+    // 2. Run npm install with prefix set to the final installation directory.
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
     let output = Command::new(npm_path.as_path())
         .args(["install", "-g", "--no-fund", &package_spec])
-        .env("npm_config_prefix", package_dir.as_path())
+        .env("npm_config_prefix", install_dir.as_path())
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -534,18 +556,18 @@ async fn install_one(
             let _ = std::io::stdout().write_all(&output.stdout);
         }
         let _ = std::io::stderr().write_all(&output.stderr);
-        cleanup_failed_install(package_name, backup).await?;
-        return Err(Error::ConfigError(
+        cleanup_failed_install(&install_dir).await?;
+        return Err(Error::Other(
             format!("npm install failed with exit code: {:?}", output.status.code()).into(),
         ));
     }
 
-    let node_modules_dir = get_node_modules_dir(&package_dir, package_name);
+    let node_modules_dir = get_node_modules_dir(&install_dir, package_name);
     let package_json_path = node_modules_dir.join("package.json");
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        cleanup_failed_install(package_name, backup).await?;
-        return Err(Error::ConfigError(
+        cleanup_failed_install(&install_dir).await?;
+        return Err(Error::Other(
             format!(
                 "Package was not installed correctly, package.json not found at {}",
                 package_json_path.as_path().display()
@@ -557,17 +579,15 @@ async fn install_one(
     let package_json_content = match tokio::fs::read_to_string(&package_json_path).await {
         Ok(content) => content,
         Err(error) => {
-            cleanup_failed_install(package_name, backup).await?;
+            cleanup_failed_install(&install_dir).await?;
             return Err(error.into());
         }
     };
     let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
         Ok(package_json) => package_json,
         Err(error) => {
-            cleanup_failed_install(package_name, backup).await?;
-            return Err(Error::ConfigError(
-                format!("Failed to parse package.json: {error}").into(),
-            ));
+            cleanup_failed_install(&install_dir).await?;
+            return Err(Error::Other(format!("Failed to parse package.json: {error}").into()));
         }
     };
 
@@ -584,85 +604,79 @@ async fn install_one(
         }
     }
 
-    Ok(InstalledPackage { installed_version, bin_names, js_bins, backup })
+    Ok((
+        InstalledPackage { installed_version, bin_names, js_bins, install_id, install_dir },
+        lock_file,
+    ))
 }
 
-impl PackageBackup {
-    async fn create(
-        package_name: &str,
-        package_dir: &AbsolutePathBuf,
-    ) -> Result<Option<Self>, Error> {
-        if !tokio::fs::try_exists(package_dir).await.unwrap_or(false) {
-            return Ok(None);
-        }
+fn new_install_id() -> String {
+    format!("{INSTALL_ID_PREFIX}{}", Uuid::new_v4())
+}
 
-        let backup_dir = unique_backup_dir(package_name)?;
-        if let Some(parent) = backup_dir.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-        if let Some(parent) = package_dir.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        match tokio::fs::rename(package_dir, &backup_dir).await {
-            Ok(()) => Ok(Some(Self { package_dir: package_dir.clone(), backup_dir })),
-            // The package dir vanished between the existence check and the
-            // rename (a concurrent install/uninstall of the same package):
-            // treat it as no previous install.
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+async fn restore_package_metadata(package_name: &str, previous_metadata: Option<&PackageMetadata>) {
+    let result = match previous_metadata {
+        Some(metadata) => metadata.save().await,
+        None => PackageMetadata::delete(package_name).await,
+    };
+    if let Err(error) = result {
+        tracing::warn!("Failed to restore global package metadata for {package_name}: {error}");
     }
+}
 
-    async fn restore(self) -> Result<(), Error> {
-        remove_dir_all_if_exists(&self.package_dir).await?;
-        if tokio::fs::try_exists(&self.backup_dir).await.unwrap_or(false) {
-            if let Some(parent) = self.package_dir.parent() {
-                tokio::fs::create_dir_all(parent).await?;
+async fn restore_previous_install_state(
+    bin_dir: &AbsolutePath,
+    package_name: &str,
+    previous_metadata: Option<&PackageMetadata>,
+    current_bin_names: &[String],
+) {
+    restore_package_metadata(package_name, previous_metadata).await;
+
+    let previous_bin_names = previous_metadata
+        .map(|metadata| metadata.bins.iter().cloned().collect::<HashSet<_>>())
+        .unwrap_or_default();
+    let bin_names =
+        current_bin_names.iter().chain(previous_bin_names.iter()).cloned().collect::<HashSet<_>>();
+
+    for bin_name in bin_names {
+        let result = if previous_bin_names.contains(&bin_name) {
+            async {
+                create_package_shim(bin_dir, &bin_name, package_name).await?;
+                if let Some(metadata) = previous_metadata {
+                    BinConfig::new(
+                        bin_name.clone(),
+                        package_name.to_string(),
+                        metadata.version.clone(),
+                        metadata.platform.node.clone(),
+                    )
+                    .save()
+                    .await
+                } else {
+                    Ok(())
+                }
             }
-            tokio::fs::rename(&self.backup_dir, &self.package_dir).await?;
-        }
+            .await
+        } else {
+            async {
+                remove_package_shim(bin_dir, &bin_name).await?;
+                BinConfig::delete(&bin_name).await
+            }
+            .await
+        };
 
-        Ok(())
-    }
-
-    async fn discard(self) {
-        if let Err(error) = remove_dir_all_if_exists(&self.backup_dir).await {
+        if let Err(error) = result {
             tracing::warn!(
-                "Failed to remove old global package backup at {}: {}",
-                self.backup_dir.as_path().display(),
+                "Failed to restore '{}' binary state for global package '{}': {}",
+                bin_name,
+                package_name,
                 error
             );
         }
     }
 }
 
-fn unique_backup_dir(package_name: &str) -> Result<AbsolutePathBuf, Error> {
-    let base = get_tmp_dir()?.join("packages").join(package_name);
-    let package_dir_name =
-        base.as_path().file_name().and_then(|name| name.to_str()).unwrap_or("package");
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
-    let backup_name = format!("{package_dir_name}.{}.{}.old", process::id(), timestamp);
-
-    let mut backup_path = base.as_path().to_path_buf();
-    backup_path.set_file_name(backup_name);
-
-    AbsolutePathBuf::new(backup_path)
-        .ok_or_else(|| Error::ConfigError("Invalid global package backup path".into()))
-}
-
-async fn cleanup_failed_install(
-    package_name: &str,
-    backup: Option<PackageBackup>,
-) -> Result<(), Error> {
-    match backup {
-        Some(backup) => {
-            remove_dir_all_if_exists(&backup.package_dir).await?;
-            backup.restore().await?;
-        }
-        None => cleanup_installed_package(package_name).await?,
-    }
-    Ok(())
+async fn cleanup_failed_install(install_dir: &AbsolutePathBuf) -> Result<(), Error> {
+    remove_dir_all_if_exists(install_dir).await
 }
 
 async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
@@ -673,28 +687,160 @@ async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
     }
 }
 
-async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
-    let bin_dir = get_bin_dir()?;
-    if let Some(metadata) = PackageMetadata::load(package_name).await? {
-        for bin_name in metadata.bins {
-            remove_package_shim(&bin_dir, &bin_name).await?;
-            BinConfig::delete(&bin_name).await?;
+fn install_dir_lock_path(install_dir: &AbsolutePathBuf) -> Result<AbsolutePathBuf, Error> {
+    let parent = install_dir.as_path().parent().ok_or_else(|| {
+        Error::ConfigError(
+            format!(
+                "Global package installation path has no parent: {}",
+                install_dir.as_path().display()
+            )
+            .into(),
+        )
+    })?;
+    let file_name =
+        install_dir.as_path().file_name().and_then(|name| name.to_str()).ok_or_else(|| {
+            Error::ConfigError(
+                format!(
+                    "Global package installation path has no file name: {}",
+                    install_dir.as_path().display()
+                )
+                .into(),
+            )
+        })?;
+    AbsolutePathBuf::new(parent.join(format!("{file_name}.lock"))).ok_or_else(|| {
+        Error::ConfigError(
+            format!(
+                "Invalid global package installation lock path for {}",
+                install_dir.as_path().display()
+            )
+            .into(),
+        )
+    })
+}
+
+fn open_install_dir_lock_file(
+    install_dir: &AbsolutePathBuf,
+) -> Result<(AbsolutePathBuf, File), Error> {
+    let lock_path = install_dir_lock_path(install_dir)?;
+    if let Some(parent) = lock_path.as_path().parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(lock_path.as_path())?;
+
+    Ok((lock_path, lock_file))
+}
+
+fn lock_install_dir(install_dir: &AbsolutePathBuf) -> Result<File, Error> {
+    let (_, lock_file) = open_install_dir_lock_file(install_dir)?;
+    lock_file.lock()?;
+    Ok(lock_file)
+}
+
+fn try_lock_install_dir(
+    install_dir: &AbsolutePathBuf,
+) -> Result<Option<(AbsolutePathBuf, File)>, Error> {
+    let (lock_path, lock_file) = open_install_dir_lock_file(install_dir)?;
+    match lock_file.try_lock() {
+        Ok(()) => Ok(Some((lock_path, lock_file))),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => Err(error.into()),
+    }
+}
+
+async fn cleanup_stale_installations(package_name: &str, current_install_id: &str) {
+    let Ok(stale_dirs) = stale_installation_dirs(package_name, current_install_id).await else {
+        return;
+    };
+
+    for install_dir in stale_dirs {
+        let (lock_path, lock_file) = match try_lock_install_dir(&install_dir) {
+            Ok(Some(lock)) => lock,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to lock stale global package installation at {}: {}",
+                    install_dir.as_path().display(),
+                    error
+                );
+                continue;
+            }
+        };
+
+        if let Err(error) = remove_dir_all_if_exists(&install_dir).await {
+            tracing::warn!(
+                "Failed to remove stale global package installation at {}: {}",
+                install_dir.as_path().display(),
+                error
+            );
+            continue;
+        }
+
+        drop(lock_file);
+        if let Err(error) = tokio::fs::remove_file(&lock_path).await {
+            tracing::warn!(
+                "Failed to remove stale global package installation lock at {}: {}",
+                lock_path.as_path().display(),
+                error
+            );
+        }
+    }
+}
+
+async fn stale_installation_dirs(
+    package_name: &str,
+    current_install_id: &str,
+) -> Result<Vec<AbsolutePathBuf>, Error> {
+    let legacy_install_dir = PackageMetadata::installation_dir_for(package_name, "")?;
+    let Some(parent) = legacy_install_dir.as_path().parent() else {
+        return Ok(Vec::new());
+    };
+    if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+        return Ok(Vec::new());
+    }
+
+    let Some(base_name) = legacy_install_dir.as_path().file_name().and_then(|name| name.to_str())
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut stale_dirs = Vec::new();
+    let mut entries = tokio::fs::read_dir(parent).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if !entry.file_type().await?.is_dir() {
+            continue;
+        }
+
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Some(install_id) = stale_install_id(base_name, file_name) else {
+            continue;
+        };
+        if install_id == current_install_id {
+            continue;
+        }
+        if let Some(path) = AbsolutePathBuf::new(entry.path()) {
+            stale_dirs.push(path);
         }
     }
 
-    for bin_name in BinConfig::find_by_package(package_name).await? {
-        remove_package_shim(&bin_dir, &bin_name).await?;
-        BinConfig::delete(&bin_name).await?;
+    Ok(stale_dirs)
+}
+
+fn stale_install_id<'a>(base_name: &str, file_name: &'a str) -> Option<&'a str> {
+    if file_name == base_name {
+        return Some("");
     }
 
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(package_name);
-    if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
-        tokio::fs::remove_dir_all(&package_dir).await?;
-    }
-    PackageMetadata::delete(package_name).await?;
-
-    Ok(())
+    let install_id = file_name.strip_prefix(base_name)?;
+    if is_install_id(install_id) { Some(install_id) } else { None }
 }
 
 async fn stale_bin_names_for_package(
@@ -723,7 +869,7 @@ async fn stale_bin_names_for_package(
 pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     if is_local_package_spec(package_name) {
         // We can't resolve local packages for uninstall, follow npm's behavior
-        return Err(Error::ConfigError(
+        return Err(Error::Other(
             format!(
                 "Local path {} can't be resolved, please enter a package name instead",
                 package_name
@@ -734,30 +880,31 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 
     let (package_name, _) = parse_package_spec(package_name).unwrap();
 
-    // Phase 1: Try to use PackageMetadata for binary list
-    let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+    // Phase 1: Try to use PackageMetadata for binary list and installation path.
+    let metadata = PackageMetadata::load(&package_name).await?;
+    let bins = if let Some(metadata) = &metadata {
         metadata.bins.clone()
     } else {
         // Phase 2: Fallback - scan BinConfig files for orphaned binaries
         let orphan_bins = BinConfig::find_by_package(&package_name).await?;
         if orphan_bins.is_empty() {
-            return Err(Error::ConfigError(
-                format!("Package {} is not installed", package_name).into(),
-            ));
+            return Err(Error::Other(format!("Package {} is not installed", package_name).into()));
         }
         orphan_bins
     };
 
     if dry_run {
         let bin_dir = get_bin_dir()?;
-        let packages_dir = get_packages_dir()?;
-        let package_dir = packages_dir.join(&package_name);
+        let package_dir = match &metadata {
+            Some(metadata) => metadata.installation_dir()?,
+            None => PackageMetadata::installation_dir_for(&package_name, "")?,
+        };
         let metadata_path = PackageMetadata::metadata_path(&package_name)?;
 
         output::raw(&format!("Would uninstall {}:", package_name));
         for bin_name in &bins {
             // Protected shims survive the real uninstall; keep dry-run honest.
-            if is_protected_shim(bin_name) {
+            if is_protected_shim(bin_name, false) {
                 output::raw(&format!(
                     "  - shim: {} (kept: default shim)",
                     bin_dir.join(bin_name).as_path().display()
@@ -779,8 +926,10 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     }
 
     // Remove package directory
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(&package_name);
+    let package_dir = match &metadata {
+        Some(metadata) => metadata.installation_dir()?,
+        None => PackageMetadata::installation_dir_for(&package_name, "")?,
+    };
     if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
         tokio::fs::remove_dir_all(&package_dir).await?;
     }
@@ -946,7 +1095,7 @@ async fn remove_package_shim(
     // Don't remove protected shims (e.g., `vp remove -g corepack` must keep
     // the default corepack shim so it falls back to the Node-bundled or
     // auto-installed corepack).
-    if is_protected_shim(bin_name) {
+    if is_protected_shim(bin_name, false) {
         return Ok(());
     }
 
@@ -1081,6 +1230,13 @@ mod tests {
 
         // Regular bins are unrestricted
         assert!(package_may_own_bin("typescript", "tsc"));
+
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "NPM"));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "Node"));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "VP"));
     }
 
     #[tokio::test]
@@ -1203,7 +1359,7 @@ mod tests {
         }
 
         // Create metadata with bins
-        let metadata = PackageMetadata::new(
+        let mut metadata = PackageMetadata::new(
             "typescript".to_string(),
             "5.9.3".to_string(),
             "20.18.0".to_string(),
@@ -1212,11 +1368,11 @@ mod tests {
             HashSet::from(["tsc".to_string(), "tsserver".to_string()]),
             "npm".to_string(),
         );
+        metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
         metadata.save().await.unwrap();
 
-        // Create package directory (needed for uninstall)
-        let packages_dir = AbsolutePathBuf::new(temp_path.join("packages")).unwrap();
-        let package_dir = packages_dir.join("typescript");
+        // Create identified package directory (needed for uninstall)
+        let package_dir = metadata.installation_dir().unwrap();
         tokio::fs::create_dir_all(&package_dir).await.unwrap();
 
         // Verify metadata was saved
@@ -1245,48 +1401,92 @@ mod tests {
                 "tsserver.exe shim should be removed"
             );
         }
+        assert!(!package_dir.as_path().exists(), "identified package directory should be removed");
     }
 
     #[tokio::test]
-    async fn test_package_backup_uses_unique_tmp_dir_for_scoped_package() {
+    #[cfg_attr(windows, serial_test::serial)]
+    async fn test_restore_previous_install_state_removes_partial_new_bins() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
+        #[cfg(windows)]
+        let _trampoline_guard = FakeTrampolineGuard::new(&temp_path);
         let _env_guard = vite_shared::EnvConfig::test_guard(
             vite_shared::EnvConfig::for_test_with_home(&temp_path),
         );
+        let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
 
-        let package_dir =
-            AbsolutePathBuf::new(temp_path.join("packages").join("@scope").join("pkg")).unwrap();
-        tokio::fs::create_dir_all(&package_dir).await.unwrap();
-        tokio::fs::write(package_dir.join("marker").as_path(), "current").await.unwrap();
+        let mut previous_metadata = PackageMetadata::new(
+            "test-package".to_string(),
+            "1.0.0".to_string(),
+            "20.0.0".to_string(),
+            None,
+            vec!["keep".to_string(), "drop".to_string()],
+            HashSet::from(["keep".to_string(), "drop".to_string()]),
+            "npm".to_string(),
+        );
+        previous_metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
 
-        let stale_backup =
-            AbsolutePathBuf::new(temp_path.join("tmp").join("packages").join("@scope").join("pkg"))
-                .unwrap();
-        tokio::fs::create_dir_all(&stale_backup).await.unwrap();
-        tokio::fs::write(stale_backup.join("stale").as_path(), "locked").await.unwrap();
+        let mut new_metadata = PackageMetadata::new(
+            "test-package".to_string(),
+            "2.0.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec!["keep".to_string(), "new".to_string()],
+            HashSet::from(["keep".to_string(), "new".to_string()]),
+            "npm".to_string(),
+        );
+        new_metadata.install_id = "#987e6543-e21b-42d3-a456-426614174000".to_string();
+        new_metadata.save().await.unwrap();
 
-        let backup = PackageBackup::create("@scope/pkg", &package_dir)
+        for bin_name in ["keep", "new"] {
+            create_package_shim(&bin_dir, bin_name, "test-package").await.unwrap();
+            BinConfig::new(
+                bin_name.to_string(),
+                "test-package".to_string(),
+                "2.0.0".to_string(),
+                "22.0.0".to_string(),
+            )
+            .save()
             .await
-            .unwrap()
-            .expect("existing package should be backed up");
+            .unwrap();
+        }
 
-        assert_ne!(backup.backup_dir.as_path(), stale_backup.as_path());
-        assert!(
-            stale_backup.join("stale").as_path().exists(),
-            "stale fixed backup should be left untouched"
-        );
-        assert!(
-            backup.backup_dir.join("marker").as_path().exists(),
-            "current package should be moved into the unique backup"
-        );
-        assert!(
-            !package_dir.as_path().exists(),
-            "original package directory should be moved out before reinstall"
-        );
+        restore_previous_install_state(
+            &bin_dir,
+            "test-package",
+            Some(&previous_metadata),
+            &new_metadata.bins,
+        )
+        .await;
+
+        let restored = PackageMetadata::load("test-package").await.unwrap().unwrap();
+        assert_eq!(restored.install_id, previous_metadata.install_id);
+        assert_eq!(BinConfig::load("keep").await.unwrap().unwrap().version, "1.0.0");
+        assert_eq!(BinConfig::load("drop").await.unwrap().unwrap().version, "1.0.0");
+        assert!(BinConfig::load("new").await.unwrap().is_none());
+        #[cfg(unix)]
+        {
+            assert!(std::fs::symlink_metadata(bin_dir.join("drop").as_path()).is_ok());
+            assert!(std::fs::symlink_metadata(bin_dir.join("new").as_path()).is_err());
+        }
+        #[cfg(windows)]
+        {
+            assert!(bin_dir.join("drop.exe").as_path().exists());
+            assert!(!bin_dir.join("new.exe").as_path().exists());
+        }
+    }
+
+    #[test]
+    fn test_new_install_id_has_fixed_reserved_shape() {
+        let install_id = new_install_id();
+
+        assert!(is_install_id(&install_id));
+        assert_eq!(install_id.len(), INSTALL_ID_LENGTH);
+        assert!(install_id.starts_with(INSTALL_ID_PREFIX));
     }
 
     #[test]

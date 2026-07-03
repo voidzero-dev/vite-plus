@@ -31,39 +31,81 @@ impl PackageManager {
     }
 
     /// Resolve the view command.
-    /// All package managers delegate to npm view (pnpm and yarn use npm internally).
-    /// Bun uses `bun info` as a native alternative.
+    /// npm/pnpm/bun use their native `view`/`info` subcommand,
+    /// yarn uses `yarn info` (Classic) and `yarn npm info` (Berry).
     #[must_use]
     pub fn resolve_view_command(&self, options: &ViewCommandOptions) -> ResolveCommandResult {
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
 
-        let bin_name: String = if self.client == PackageManagerType::Bun {
-            args.push("info".into());
-            args.push(options.package.to_string());
+        let bin_name: String = match self.client {
+            PackageManagerType::Bun => {
+                args.push("info".into());
+                args.push(options.package.to_string());
 
-            if let Some(field) = options.field {
-                args.push(field.to_string());
+                if let Some(field) = options.field {
+                    args.push(field.to_string());
+                }
+
+                if options.json {
+                    args.push("--json".into());
+                }
+
+                "bun".into()
             }
+            PackageManagerType::Yarn => {
+                if self.is_yarn_berry() {
+                    args.push("npm".into());
+                    args.push("info".into());
+                    args.push(options.package.to_string());
 
-            if options.json {
-                args.push("--json".into());
+                    if let Some(field) = options.field {
+                        args.push("--fields".into());
+                        args.push(field.to_string());
+                    }
+                } else {
+                    args.push("info".into());
+                    args.push(options.package.to_string());
+
+                    if let Some(field) = options.field {
+                        args.push(field.to_string());
+                    }
+                }
+
+                if options.json {
+                    args.push("--json".into());
+                }
+
+                "yarn".into()
             }
+            PackageManagerType::Npm => {
+                args.push("view".into());
+                args.push(options.package.to_string());
 
-            "bun".into()
-        } else {
-            args.push("view".into());
-            args.push(options.package.to_string());
+                if let Some(field) = options.field {
+                    args.push(field.to_string());
+                }
 
-            if let Some(field) = options.field {
-                args.push(field.to_string());
+                if options.json {
+                    args.push("--json".into());
+                }
+
+                "npm".into()
             }
+            PackageManagerType::Pnpm => {
+                args.push("view".into());
+                args.push(options.package.to_string());
 
-            if options.json {
-                args.push("--json".into());
+                if let Some(field) = options.field {
+                    args.push(field.to_string());
+                }
+
+                if options.json {
+                    args.push("--json".into());
+                }
+
+                "pnpm".into()
             }
-
-            "npm".into()
         };
 
         // Add pass-through args
@@ -106,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pnpm_view_uses_npm() {
+    fn test_pnpm_view_uses_pnpm() {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
         let result = pm.resolve_view_command(&ViewCommandOptions {
             package: "react",
@@ -114,7 +156,7 @@ mod tests {
             json: false,
             pass_through_args: None,
         });
-        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["view", "react"]);
     }
 
@@ -132,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_view_uses_npm() {
+    fn test_yarn_view_uses_info() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.0");
         let result = pm.resolve_view_command(&ViewCommandOptions {
             package: "lodash",
@@ -140,8 +182,34 @@ mod tests {
             json: true,
             pass_through_args: None,
         });
-        assert_eq!(result.bin_path, "npm");
-        assert_eq!(result.args, vec!["view", "lodash", "--json"]);
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["info", "lodash", "--json"]);
+    }
+
+    #[test]
+    fn test_yarn_berry_view_uses_yarn_npm_info() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_view_command(&ViewCommandOptions {
+            package: "lodash",
+            field: None,
+            json: true,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "info", "lodash", "--json"]);
+    }
+
+    #[test]
+    fn test_yarn_berry_view_uses_fields_option_for_view_field() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_view_command(&ViewCommandOptions {
+            package: "lodash",
+            field: Some("dist.tarball"),
+            json: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "info", "lodash", "--fields", "dist.tarball"]);
     }
 
     #[test]
@@ -153,7 +221,7 @@ mod tests {
             json: false,
             pass_through_args: None,
         });
-        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["view", "react", "dist.tarball"]);
     }
 }

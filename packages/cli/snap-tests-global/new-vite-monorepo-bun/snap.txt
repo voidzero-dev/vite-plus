@@ -25,11 +25,11 @@ vite.config.ts
     "prepare": "vp config"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -42,9 +42,8 @@ vite.config.ts
     "node": ">=22.18.0"
   },
   "catalog": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
+    "vite-plus": "<semver>"
   }
 }
 

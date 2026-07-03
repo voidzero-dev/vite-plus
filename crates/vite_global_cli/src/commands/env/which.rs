@@ -18,7 +18,8 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{
-    config::{VERSION_ENV_VAR, get_node_modules_dir, get_packages_dir, resolve_version},
+    bin_config::{BinConfig, BinSource},
+    config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
@@ -43,7 +44,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
         // state is unusable, so the diagnostic matches what actually runs.
         if tool == "corepack" {
             match crate::shim::dispatch::find_package_for_binary(tool).await {
-                Ok(Some(metadata)) => match locate_package_binary(&metadata.name, tool) {
+                Ok(Some(metadata)) => match locate_package_binary(&metadata, tool) {
                     Ok(_) => return execute_package_binary(tool, &metadata).await,
                     Err(e) => warn_unusable_managed_corepack(&e.to_string()),
                 },
@@ -55,8 +56,8 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     }
 
     // Check if this is a global package binary
-    if let Some(metadata) = PackageMetadata::find_by_binary(tool).await? {
-        return execute_package_binary(tool, &metadata).await;
+    if let Some(bin_config) = BinConfig::load(tool).await? {
+        return execute_bin_config_binary(tool, &bin_config).await;
     }
 
     // Unknown tool
@@ -64,6 +65,84 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     eprintln!("Not a core tool (node, npm, npx, corepack) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
+}
+
+async fn execute_bin_config_binary(
+    tool: &str,
+    bin_config: &BinConfig,
+) -> Result<ExitStatus, Error> {
+    match bin_config.source {
+        BinSource::Vp => {
+            if let Some(metadata) = PackageMetadata::load(&bin_config.package).await? {
+                return execute_package_binary(tool, &metadata).await;
+            }
+            output::error(&format!("binary '{}' not found", tool.bold()));
+            eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+            eprintln!("Run 'vp install -g {}' to reinstall.", bin_config.package);
+            Ok(exit_status(1))
+        }
+        BinSource::Npm => execute_npm_link_binary(tool, bin_config).await,
+    }
+}
+
+async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<ExitStatus, Error> {
+    let binary_path = match locate_npm_link_binary(tool).await {
+        Ok(path) if tokio::fs::try_exists(&path).await.unwrap_or(false) => path,
+        _ => {
+            output::error(&format!("binary '{}' not found", tool.bold()));
+            eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+            eprintln!("Run 'npm install -g {}' to recreate the link.", bin_config.package);
+            return Ok(exit_status(1));
+        }
+    };
+
+    println!("{}", binary_path.as_path().display());
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Package:".dimmed(),
+        bin_config.package.as_str().bright_blue()
+    );
+    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), "npm".dimmed());
+    println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), bin_config.node_version.bright_green());
+
+    Ok(ExitStatus::default())
+}
+
+#[cfg(unix)]
+async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
+    let link_path = get_bin_dir()?.join(tool);
+    let target = tokio::fs::read_link(&link_path).await?;
+    let binary_path = if target.is_absolute() {
+        target
+    } else {
+        let parent = link_path
+            .parent()
+            .ok_or_else(|| Error::Other(format!("Invalid npm link path for {tool}").into()))?;
+        parent.join(target).into_path_buf()
+    };
+    let canonical_path = tokio::fs::canonicalize(&binary_path).await?;
+    AbsolutePathBuf::new(canonical_path)
+        .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()))
+}
+
+#[cfg(windows)]
+async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
+    let cmd_path = get_bin_dir()?.join(format!("{tool}.cmd"));
+    let content = tokio::fs::read_to_string(&cmd_path).await?;
+    let mut lines = content.lines();
+    let source = match (lines.next(), lines.next(), lines.next(), lines.next()) {
+        (Some("@echo off"), Some(line), Some("exit /b %ERRORLEVEL%"), None)
+            if line.starts_with('"') && line.ends_with("\" %*") =>
+        {
+            &line[1..line.len() - "\" %*".len()]
+        }
+        _ => {
+            return Err(Error::Other(format!("Invalid npm link wrapper for {tool}").into()));
+        }
+    };
+
+    AbsolutePathBuf::new(std::path::PathBuf::from(source))
+        .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()))
 }
 
 async fn execute_package_manager_tool(
@@ -188,7 +267,7 @@ async fn execute_package_binary(
     metadata: &PackageMetadata,
 ) -> Result<ExitStatus, Error> {
     // Locate the binary path
-    let binary_path = locate_package_binary(&metadata.name, tool)?;
+    let binary_path = locate_package_binary(metadata, tool)?;
 
     // Check if binary exists
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
@@ -219,9 +298,12 @@ async fn execute_package_binary(
 }
 
 /// Locate a binary within a package's installation directory.
-fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<AbsolutePathBuf, Error> {
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(package_name);
+fn locate_package_binary(
+    metadata: &PackageMetadata,
+    binary_name: &str,
+) -> Result<AbsolutePathBuf, Error> {
+    let package_dir = metadata.installation_dir()?;
+    let package_name = &metadata.name;
 
     // The binary is referenced in package.json's bin field
     // npm uses different layouts: Unix=lib/node_modules, Windows=node_modules
@@ -229,13 +311,13 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
     let package_json_path = node_modules_dir.join("package.json");
 
     if !package_json_path.as_path().exists() {
-        return Err(Error::ConfigError(format!("Package {} not found", package_name).into()));
+        return Err(Error::Other(format!("Package {} not found", package_name).into()));
     }
 
     // Read package.json to find the binary path
     let content = std::fs::read_to_string(package_json_path.as_path())?;
     let package_json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| Error::ConfigError(format!("Failed to parse package.json: {e}").into()))?;
+        .map_err(|e| Error::Other(format!("Failed to parse package.json: {e}").into()))?;
 
     let binary_path = match package_json.get("bin") {
         Some(serde_json::Value::String(path)) => {
@@ -245,7 +327,7 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
             if expected_name == binary_name {
                 node_modules_dir.join(path)
             } else {
-                return Err(Error::ConfigError(
+                return Err(Error::Other(
                     format!("Binary {} not found in package", binary_name).into(),
                 ));
             }
@@ -255,13 +337,13 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
             if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
                 node_modules_dir.join(path)
             } else {
-                return Err(Error::ConfigError(
+                return Err(Error::Other(
                     format!("Binary {} not found in package", binary_name).into(),
                 ));
             }
         }
         _ => {
-            return Err(Error::ConfigError(
+            return Err(Error::Other(
                 format!("No bin field in package.json for {}", package_name).into(),
             ));
         }

@@ -1,4 +1,9 @@
+import { createRequire } from 'node:module';
+
 import { defineConfig } from 'tsdown';
+
+const require = createRequire(import.meta.url);
+const lintStagedPackageJson = require('lint-staged/package.json') as { version: string };
 
 /**
  * Rewrite `../versions.js` → `./versions.js` at resolve time.
@@ -13,6 +18,22 @@ const fixVersionsPathPlugin = {
   resolveId(source: string) {
     if (source === '../versions.js') {
       return { id: './versions.js', external: true };
+    }
+    return undefined;
+  },
+};
+
+/**
+ * Replace lint-staged's lib/version.js with a build-time version value.
+ *
+ * The original module reads ../package.json at runtime when debug logging is enabled,
+ * but that file does not exist in the bundled dist/staged/bin.js.
+ */
+const inlineLintStagedVersionPlugin = {
+  name: 'inline-lint-staged-version',
+  load(id: string) {
+    if (id.replaceAll('\\', '/').endsWith('/lint-staged/lib/version.js')) {
+      return `export const getVersion = async () => ${JSON.stringify(lintStagedPackageJson.version)};\n`;
     }
     return undefined;
   },
@@ -36,6 +57,7 @@ export default defineConfig([
       // Without these, tsdown inlines them into bin.js, breaking on-demand loading.
       'create/bin': './src/create/bin.ts',
       'migration/bin': './src/migration/bin.ts',
+      'migration/compat/worker': './src/migration/compat/worker.ts',
       version: './src/version.ts',
       'config/bin': './src/config/bin.ts',
       'staged/bin': './src/staged/bin.ts',
@@ -56,7 +78,7 @@ export default defineConfig([
         mainFields: ['module', 'main'],
       },
     },
-    plugins: [fixVersionsPathPlugin],
+    plugins: [fixVersionsPathPlugin, inlineLintStagedVersionPlugin],
   },
 
   // CJS — dual-format entries

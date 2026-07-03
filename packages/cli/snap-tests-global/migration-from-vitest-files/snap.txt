@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should rewrite imports to vite-plus
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 
@@ -15,6 +15,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",
@@ -31,9 +32,10 @@
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vitest: <semver>
+  vite-plus: <semver>
+  '@vitest/browser-playwright': <semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
@@ -46,7 +48,7 @@ peerDependencyRules:
     vitest: '*'
 
 > cat test/hello.ts # check test/hello.ts
-import { server } from 'vite-plus/test/browser-playwright/context';
+import { server } from 'vite-plus/test/browser/context';
 import { test, describe, expect, it } from 'vite-plus/test';
 
 const { readFile } = server.commands;

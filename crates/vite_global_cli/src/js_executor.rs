@@ -5,21 +5,16 @@
 
 use std::process::{ExitStatus, Output};
 
-use node_semver::{Range, Version};
 use tokio::process::Command;
 use vite_js_runtime::{
     JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, is_valid_version,
     read_package_json, resolve_node_version,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{
-    PackageJson, PrependOptions, PrependResult,
-    env_vars::{self, VP_NODE_VERSION},
-    format_path_with_prepend,
-};
+use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
 use crate::{
-    commands::env::config::{self, SESSION_VERSION_FILE, ShimMode},
+    commands::env::config::{self, ShimMode},
     error::Error,
     shim,
 };
@@ -117,14 +112,6 @@ impl JsExecutor {
         cmd
     }
 
-    /// Return the `engines.node` requirement from the CLI's `package.json`.
-    /// It must be embedded at compile time. As cli package may not exist while upgrading.
-    fn get_cli_engines_requirement() -> Option<String> {
-        let pkg: PackageJson =
-            serde_json::from_str(include_str!("../../../packages/cli/package.json")).ok()?;
-        pkg.engines?.node.map(|s| s.to_string())
-    }
-
     /// Get the CLI's package.json directory (parent of `scripts_dir`).
     ///
     /// This is used for resolving the CLI's default Node.js version
@@ -153,7 +140,7 @@ impl JsExecutor {
 
             let cli_dir = self.get_cli_package_dir()?;
             tracing::debug!("Resolving CLI runtime from {:?}", cli_dir);
-            let runtime = download_runtime_for_project(&cli_dir).await?.0;
+            let runtime = download_runtime_for_project(&cli_dir).await?;
             self.cli_runtime = Some(runtime);
         }
         Ok(self.cli_runtime.as_ref().unwrap())
@@ -185,20 +172,9 @@ impl JsExecutor {
                 .map(|v| v.trim().to_string())
                 .filter(|v| !v.is_empty())
             {
-                self.check_runtime_compatibility(&session_version, Some(VP_NODE_VERSION), false)
-                    .await?;
-                Some(session_version)
-            } else if let Some(session_version) = config::read_session_version().await {
-                // Read from file
-                self.check_runtime_compatibility(
-                    &session_version,
-                    Some(SESSION_VERSION_FILE),
-                    false,
-                )
-                .await?;
                 Some(session_version)
             } else {
-                None
+                config::read_session_version().await
             };
             if let Some(version) = session_version {
                 let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
@@ -216,80 +192,15 @@ impl JsExecutor {
                 // At least one valid project source exists — delegate to
                 // download_runtime_for_project for cache-aware range resolution
                 // and intra-project fallback chain
-                let (runtime, source) = download_runtime_for_project(project_path).await?;
-                self.check_runtime_compatibility(
-                    &runtime.version,
-                    source.map(|s| format!("{s}")).as_deref(),
-                    true,
-                )
-                .await?;
-                runtime
+                download_runtime_for_project(project_path).await?
             } else {
-                // No valid project source — check user default from config, then LTS
+                // No valid project source, fall back to user default from config, then LTS
                 let resolution = config::resolve_version(project_path).await?;
-                self.check_runtime_compatibility(
-                    &resolution.version,
-                    Some(&resolution.source),
-                    false,
-                )
-                .await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
             self.project_runtime = Some(runtime);
         }
         Ok(self.project_runtime.as_ref().unwrap())
-    }
-
-    /// Check that a runtime's version satisfies vp's engine requirements.
-    ///
-    /// Skips silently when:
-    /// - The runtime is a system install (version == `"system"`)
-    /// - The version or requirement strings cannot be parsed as semver
-    ///
-    /// Returns [`Error::NodeVersionIncompatible`] when the version is parsable but
-    /// outside the required range.
-    async fn check_runtime_compatibility(
-        &self,
-        version: &str,
-        source: Option<&str>,
-        is_project_runtime: bool,
-    ) -> Result<(), Error> {
-        let Some(requirement) = Self::get_cli_engines_requirement() else { return Ok(()) };
-
-        // System runtimes report "system" — we cannot inspect the actual version cheaply,
-        // and the user has explicitly opted in via `vp env off`.
-        if version == "system" {
-            return Ok(());
-        }
-
-        let normalized = version.strip_prefix('v').unwrap_or(version);
-        let Ok(version) = Version::parse(normalized) else {
-            return Ok(()); // unparsable version — skip silently
-        };
-        let Ok(range) = Range::parse(&requirement) else {
-            return Ok(()); // invalid range in package.json — skip silently
-        };
-
-        if !range.satisfies(&version) {
-            let version_source =
-                source.map(|s| format!("\nResolved from: {s}\n")).unwrap_or_default();
-
-            let help = (if is_project_runtime {
-                "Fix this project: vp env pin lts"
-            } else {
-                "Set a compatible version globally: vp env default lts"
-            })
-            .to_owned();
-            let help = format!("{help}\nTemporary override: vp env use lts");
-
-            return Err(Error::NodeVersionIncompatible {
-                version: version.to_string(),
-                requirement: requirement.to_string(),
-                version_source,
-                help,
-            });
-        }
-        Ok(())
     }
 
     /// Download a specific Node.js version.
@@ -334,6 +245,36 @@ impl JsExecutor {
         let node_binary = runtime.get_binary_path();
         let bin_prefix = runtime.get_bin_prefix();
         self.run_js_entry_output(project_path, &node_binary, &bin_prefix, args).await
+    }
+
+    /// Delegate `migrate`, escalating to the global CLI when the project's local
+    /// `vite-plus` is older than this global `vp`. A stale local CLI predates the
+    /// upgrade logic and would otherwise run (and leave the project unmigrated),
+    /// so the newer global CLI must perform the upgrade; it re-pins `vite-plus`,
+    /// so the next invocation resolves the upgraded local CLI. When local == global
+    /// (or local is newer, or none is installed) keep local-first semantics
+    /// (`delegate_to_local_cli` already falls back to the global bin when no local
+    /// vite-plus is resolvable).
+    pub async fn delegate_migrate(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        // CARGO_PKG_VERSION is stamped to the published version at build time
+        // (the release version, or `0.0.0-commit.<sha>` for a pkg.pr.new build),
+        // so a preview global build compares as a preview and wins. No need to
+        // read the installed package.json.
+        let global = env!("CARGO_PKG_VERSION");
+        let escalate = resolve_local_vite_plus_version(project_path)
+            .is_some_and(|local| local_vite_plus_is_older(&local, global));
+        if escalate {
+            tracing::debug!(
+                "Local vite-plus is older than global vp {global}; running migrate from the global CLI"
+            );
+            self.delegate_to_global_cli(project_path, args).await
+        } else {
+            self.delegate_to_local_cli(project_path, args).await
+        }
     }
 
     /// Delegate to the global vite-plus CLI entrypoint directly.
@@ -453,6 +394,58 @@ impl JsExecutor {
     }
 }
 
+/// Resolve the version of the project-local `vite-plus`, if one is installed.
+fn resolve_local_vite_plus_version(project_path: &AbsolutePath) -> Option<String> {
+    use oxc_resolver::{ResolveOptions, Resolver};
+
+    let resolver = Resolver::new(ResolveOptions {
+        condition_names: vec!["import".into(), "node".into()],
+        ..ResolveOptions::default()
+    });
+    let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
+    read_package_json_version(resolved.path())
+}
+
+/// Read the top-level `version` string from a package.json. Returns `None` when
+/// the file is missing, unreadable, or has no string `version`.
+fn read_package_json_version(pkg_json: impl AsRef<std::path::Path>) -> Option<String> {
+    let content = std::fs::read_to_string(pkg_json).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    value.get("version")?.as_str().map(str::to_string)
+}
+
+/// True when a version is a pkg.pr.new / registry-bridge preview build.
+///
+/// Preview builds are published as `0.0.0-commit.<sha>` (and, more generally,
+/// any `0.0.0-<prerelease>`). A real release is never `0.0.0`, so this reliably
+/// flags a build under test.
+fn is_preview_version(version: &str) -> bool {
+    version.starts_with("0.0.0-")
+}
+
+/// True when the local `vite-plus` should be treated as older than `global`, so
+/// migrate escalates to the global CLI.
+///
+/// A preview build (`0.0.0-commit.<sha>`) is an unreleased build under test and
+/// can't be semver-ranked against a release or another preview. When either side
+/// is a preview, the global is the build the user is currently running, so
+/// escalate to it unless local and global are the exact same build (already on
+/// it: a no-op, so stay local). This lets `vp migrate` move a project off a
+/// leftover preview onto the latest preview or the shipped release.
+///
+/// When neither side is a preview, semver-compare and return false if a version
+/// fails to parse (be conservative: never escalate on a version we can't
+/// understand).
+fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
+    if is_preview_version(local) || is_preview_version(global) {
+        return local != global;
+    }
+    match (node_semver::Version::parse(local), node_semver::Version::parse(global)) {
+        (Ok(local_v), Ok(global_v)) => local_v < global_v,
+        _ => false,
+    }
+}
+
 /// Check whether a project directory has at least one valid version source.
 ///
 /// Uses `is_valid_version` (no warning side effects) to avoid duplicate
@@ -517,6 +510,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_local_vite_plus_is_older() {
+        // Older local should escalate.
+        assert!(local_vite_plus_is_older("0.1.24", "0.2.1"));
+        // Equal versions keep local-first semantics.
+        assert!(!local_vite_plus_is_older("0.2.1", "0.2.1"));
+        // Newer local keeps local-first semantics.
+        assert!(!local_vite_plus_is_older("0.3.0", "0.2.1"));
+        // Unparsable versions are conservative: never escalate.
+        assert!(!local_vite_plus_is_older("latest", "0.2.1"));
+    }
+
+    #[test]
+    fn test_preview_version_routing() {
+        // A preview on either side is a build the user explicitly chose and can't
+        // be semver-ranked; the global is what they are running now, so escalate to
+        // it unless the local is already that exact build.
+
+        // Preview local, stable-release global: escalate. A leftover preview build
+        // under test is upgraded to the shipped release once it lands and you run
+        // migrate with the released global.
+        assert!(local_vite_plus_is_older("0.0.0-commit.abc1234", "0.2.1"));
+        // Stable-release local, preview global: escalate to the build under test,
+        // even from a newer-looking release local.
+        assert!(local_vite_plus_is_older("0.2.1", "0.0.0-commit.abc1234"));
+        assert!(local_vite_plus_is_older("0.3.0", "0.0.0-commit.abc1234"));
+        // Two different preview builds: escalate to the global (the latest test
+        // build the user installed) instead of reporting "already using Vite+".
+        assert!(local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.bbb"));
+        // Same preview build on both sides: already on it, stay local (no-op).
+        assert!(!local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.aaa"));
+    }
+
+    #[test]
+    fn test_is_preview_version() {
+        assert!(is_preview_version("0.0.0-commit.abc1234"));
+        assert!(is_preview_version("0.0.0-pr.1891"));
+        assert!(!is_preview_version("0.2.1"));
+        assert!(!is_preview_version("0.0.1"));
+        assert!(!is_preview_version("0.0.0"));
+        assert!(!is_preview_version("latest"));
+    }
+
+    #[test]
     fn test_js_executor_new() {
         let executor = JsExecutor::new(None);
         assert!(executor.cli_runtime.is_none());
@@ -560,41 +596,6 @@ mod tests {
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
     }
 
-    /// Pin Node.js to 20.0.0
-    /// and any vp command should be blocked with a clear error instead of crashing
-    #[tokio::test]
-    async fn incompatible_node_version_should_be_blocked() {
-        use tempfile::TempDir;
-        use vite_shared::EnvConfig;
-
-        // `engines.node`` is now embedded at compile time
-        // So we just need to direct to a random directory
-        let scripts_dir =
-            AbsolutePathBuf::new(TempDir::new().unwrap().path().to_path_buf()).unwrap();
-
-        // Use any existing directory as project_path; the session override
-        // fires before any project-source lookup or network download.
-        let temp_dir = TempDir::new().unwrap();
-        let project_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Simulate `.node-version: 20.0.0` / `vp env use 20.0.0` via a session override.
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            node_version: Some("20.0.0".to_string()),
-            ..EnvConfig::for_test()
-        });
-
-        let mut executor = JsExecutor::new(Some(scripts_dir));
-        let err = executor
-            .ensure_project_runtime(&project_path)
-            .await
-            .expect_err("Node.js 20.0.0 should be rejected as incompatible with vp requirements");
-
-        assert!(
-            matches!(&err, Error::NodeVersionIncompatible { version, .. } if version == "20.0.0"),
-            "expected NodeVersionIncompatible for 20.0.0, got: {err:?}"
-        );
-    }
-
     #[tokio::test]
     #[serial]
     async fn test_delegate_to_local_cli_prints_node_version() {
@@ -618,5 +619,46 @@ mod tests {
         let status = executor.delegate_to_local_cli(&scripts_dir, &[]).await.unwrap();
 
         assert!(status.success(), "Script should execute successfully");
+    }
+
+    /// Regression for reverting the Node.js version enforcement (#1360):
+    /// a project pinning an *older* Node that the declared `engines.node` range
+    /// no longer lists (20.0.0 was dropped in #1813) must still resolve,
+    /// download, and run, instead of being blocked with an incompatibility error.
+    #[tokio::test]
+    async fn ensure_project_runtime_allows_older_unsupported_node() {
+        use tempfile::TempDir;
+        use vite_shared::EnvConfig;
+
+        // Isolate VP_HOME so config defaults to managed mode (no `vp env off`)
+        // and the runtime download cache stays inside the test sandbox.
+        let vp_home = TempDir::new().unwrap();
+        let _guard =
+            EnvConfig::test_guard(EnvConfig::for_test_with_home(vp_home.path().to_path_buf()));
+
+        // Pin Node 20.0.0 via `.node-version`: well below the declared floor and
+        // exactly the case the removed gate rejected (see the deleted
+        // `runtime-with-incompatible-project-node` snap test).
+        let project = TempDir::new().unwrap();
+        tokio::fs::write(project.path().join(".node-version"), "20.0.0\n").await.unwrap();
+        let project_path = AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
+
+        let mut executor = JsExecutor::new(None);
+        let runtime = executor
+            .ensure_project_runtime(&project_path)
+            .await
+            .expect("older Node 20.0.0 must be usable, not blocked");
+
+        assert_eq!(runtime.version(), "20.0.0");
+
+        // The downloaded runtime must actually run.
+        let output = Command::new(runtime.get_binary_path().as_path())
+            .arg("--version")
+            .output()
+            .await
+            .expect("node --version should run");
+        assert!(output.status.success(), "node --version failed: {output:?}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.trim().starts_with("v20.0.0"), "unexpected node version: {stdout}");
     }
 }
