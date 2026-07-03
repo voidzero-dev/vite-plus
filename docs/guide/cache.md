@@ -1,5 +1,7 @@
 # Task Caching
 
+<!-- cache miss probe: markdown input changed -->
+
 Vite Task can automatically track dependencies and cache tasks run through `vp run`.
 
 ## Overview
