@@ -42,9 +42,10 @@ let args = process.argv.slice(2);
 // Global `-C <dir>` flag: run as if vp was started in <dir>. The global Rust
 // CLI parses this itself and spawns bin.js with the target cwd already set;
 // this branch covers direct local-bin invocations (`pnpm exec vp -C <dir> ...`).
-if (args[0] === '-C' || (args[0]?.startsWith('-C') && args[0].length > 2)) {
-  const inline = args[0] !== '-C';
-  const dir = inline ? args[0].slice(2) : args[1];
+// Accepts `-C dir`, `-Cdir`, and `-C=dir`, matching the clap grammar.
+if (args[0]?.startsWith('-C')) {
+  const inline = args[0].length > 2;
+  const dir = inline ? args[0].slice(args[0][2] === '=' ? 3 : 2) : args[1];
   if (!dir) {
     errorMsg('-C requires a directory argument');
     process.exit(1);

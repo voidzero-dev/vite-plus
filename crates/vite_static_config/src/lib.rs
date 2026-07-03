@@ -95,6 +95,11 @@ const CONFIG_FILE_NAMES: &[&str] = &[
     "vite.config.cts",
 ];
 
+/// Returns true when `dir` directly contains a Vite config file.
+pub fn has_config_file(dir: &AbsolutePath) -> bool {
+    resolve_config_path(dir).is_some()
+}
+
 /// Resolve the vite config file path in the given directory.
 ///
 /// Tries each config file name in priority order and returns the first one that exists.

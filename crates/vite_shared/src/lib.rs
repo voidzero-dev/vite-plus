@@ -11,6 +11,7 @@ mod env_config;
 pub mod env_vars;
 mod error;
 pub mod header;
+mod interactivity;
 mod home;
 mod http;
 mod json_edit;
@@ -24,6 +25,7 @@ mod tracing;
 pub use env_config::{EnvConfig, TestEnvGuard};
 pub use error::format_error_chain;
 pub use home::{VP_BINARY_NAME, get_vp_home};
+pub use interactivity::{is_ci_environment, is_interactive_terminal};
 pub use http::shared_http_client;
 pub use json_edit::{JsonStyle, edit_json_object, insert_after};
 pub use package_json::{

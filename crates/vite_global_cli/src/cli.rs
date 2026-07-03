@@ -861,8 +861,9 @@ pub async fn run_command_with_options(
 ) -> Result<ExitStatus, Error> {
     // Apply the global `-C <dir>` flag before anything reads cwd, so local CLI
     // resolution and command execution behave as if vp was started in <dir>.
+    // `clean()` normalizes `.`/`..` so upward workspace walks never see them.
     if let Some(dir) = &args.chdir {
-        cwd.push(dir);
+        cwd = cwd.join(dir).clean();
         if !cwd.as_path().is_dir() {
             return Err(Error::UserMessage(format!("directory not found: {dir}").into()));
         }
