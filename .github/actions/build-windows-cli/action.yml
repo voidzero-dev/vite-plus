@@ -18,18 +18,20 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    # Must use the same hashFiles input set as build-upstream's "Compute NAPI
-    # binding cache key" step (keep the lists in sync, or a stale cross-built
-    # artifact is served on a cache that should have missed), but under a
-    # distinct prefix: this cache stores Linux-relative paths and must never
-    # mix with the caches build-upstream saves on other runners. Sharing this
-    # one key across ci.yml and e2e-test.yml lets whichever workflow builds
+    # The shared action is the single source of truth for inputs that affect
+    # the native binaries and generated bindings.
+    - uses: ./.github/actions/compute-native-cache-input-hash
+      id: native-cache-inputs
+
+    # Use a distinct prefix: this cache stores Linux-relative paths and must
+    # never mix with the caches build-upstream saves on other runners. Sharing
+    # this one key across ci.yml and e2e-test.yml lets whichever workflow builds
     # first serve the other.
     - name: Compute binaries cache key
       id: cache-key
       shell: bash
       run: |
-        echo "key=windows-cli-xwin-v1-${{ hashFiles('packages/tools/.upstream-versions.json', 'rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', '.cargo/config.toml', 'crates/**', 'packages/cli/binding/src/**', 'packages/cli/binding/build.rs', 'packages/cli/binding/Cargo.toml', 'packages/cli/binding/index.*', 'packages/cli/src/vite-config-entry-basenames.json', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts', '.github/actions/build-upstream/action.yml', '.github/actions/build-windows-cli/action.yml', '.github/actions/setup-xwin/action.yml') }}" >> "$GITHUB_OUTPUT"
+        echo "key=windows-cli-xwin-v1-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
 
     - name: Restore binaries cache
       id: binaries-cache
