@@ -13,4 +13,31 @@ runs:
       id: compute
       shell: bash
       run: |
-        echo "hash=${{ hashFiles('packages/tools/.upstream-versions.json', 'rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', '.cargo/config.toml', 'crates/**', 'packages/cli/binding/src/**', 'packages/cli/binding/build.rs', 'packages/cli/binding/Cargo.toml', 'packages/cli/binding/index.*', 'packages/cli/src/vite-config-entry-basenames.json', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts', '.github/actions/build-upstream/action.yml', '.github/actions/build-windows-cli/action.yml', '.github/actions/compute-native-cache-input-hash/action.yml', '.github/actions/setup-xwin/action.yml') }}" >> "$GITHUB_OUTPUT"
+        echo "hash=$NATIVE_CACHE_INPUT_HASH" >> "$GITHUB_OUTPUT"
+      env:
+        NATIVE_CACHE_INPUT_HASH: >-
+          ${{
+            hashFiles(
+              'packages/tools/.upstream-versions.json',
+              'rust-toolchain.toml',
+              'Cargo.lock',
+              'Cargo.toml',
+              '.cargo/config.toml',
+              'crates/**',
+              'packages/cli/binding/src/**',
+              'packages/cli/binding/build.rs',
+              'packages/cli/binding/Cargo.toml',
+              'packages/cli/binding/index.*',
+              'packages/cli/src/vite-config-entry-basenames.json',
+              'package.json',
+              'pnpm-lock.yaml',
+              'pnpm-workspace.yaml',
+              'packages/cli/package.json',
+              'packages/cli/build.ts',
+              'packages/cli/tsdown.config.ts',
+              '.github/actions/build-upstream/action.yml',
+              '.github/actions/build-windows-cli/action.yml',
+              '.github/actions/compute-native-cache-input-hash/action.yml',
+              '.github/actions/setup-xwin/action.yml'
+            )
+          }}

@@ -33,15 +33,24 @@ runs:
       run: |
         echo "key=windows-cli-xwin-v1-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
 
+    - name: Define binary paths
+      id: binary-paths
+      shell: bash
+      run: |
+        {
+          echo 'paths<<EOF'
+          echo 'packages/cli/binding/*.node'
+          echo 'target/x86_64-pc-windows-msvc/release/vp.exe'
+          echo 'target/x86_64-pc-windows-msvc/release/vp-shim.exe'
+          echo 'target/x86_64-pc-windows-msvc/release/vp-setup.exe'
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
     - name: Restore binaries cache
       id: binaries-cache
       uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
-        path: |
-          packages/cli/binding/*.node
-          target/x86_64-pc-windows-msvc/release/vp.exe
-          target/x86_64-pc-windows-msvc/release/vp-shim.exe
-          target/x86_64-pc-windows-msvc/release/vp-setup.exe
+        path: ${{ steps.binary-paths.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
 
     - uses: ./.github/actions/setup-xwin
@@ -84,20 +93,12 @@ runs:
         # (index.cjs etc.) is NOT included: those files are committed, and the
         # unformatted copies this action produces (--skip-format) must not
         # overwrite them in consumer checkouts (vp check would flag them).
-        path: |
-          packages/cli/binding/*.node
-          target/x86_64-pc-windows-msvc/release/vp.exe
-          target/x86_64-pc-windows-msvc/release/vp-shim.exe
-          target/x86_64-pc-windows-msvc/release/vp-setup.exe
+        path: ${{ steps.binary-paths.outputs.paths }}
         if-no-files-found: error
         retention-days: 7
 
     - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       with:
-        path: |
-          packages/cli/binding/*.node
-          target/x86_64-pc-windows-msvc/release/vp.exe
-          target/x86_64-pc-windows-msvc/release/vp-shim.exe
-          target/x86_64-pc-windows-msvc/release/vp-setup.exe
+        path: ${{ steps.binary-paths.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
