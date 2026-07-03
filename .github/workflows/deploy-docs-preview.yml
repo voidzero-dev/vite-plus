@@ -19,38 +19,8 @@ defaults:
     shell: bash
 
 jobs:
-  export-vite-task-caches:
-    if: github.event.pull_request.number == 2026
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: 92362796
-            key: vite-task-docs-Linux-X64-pr-2026-92362796f7d05cdaafba0037c5cb0fe0cb16eeef
-          - name: cddbc65b
-            key: vite-task-docs-Linux-X64-pr-2026-cddbc65b2eca6bfa7c9ecd36e99ad23d191037f4
-    steps:
-      - name: Restore ${{ matrix.name }} cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: docs/node_modules/.vite/task-cache
-          key: ${{ matrix.key }}
-          fail-on-cache-miss: true
-
-      - name: Export ${{ matrix.name }} cache
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vite-task-cache-${{ matrix.name }}
-          path: docs/node_modules/.vite/task-cache
-          include-hidden-files: true
-          compression-level: 0
-          retention-days: 1
-
   staging-deploy:
-    if: false
+    if: github.repository == 'voidzero-dev/vite-plus'
     runs-on: ubuntu-latest
     permissions:
       contents: read
