@@ -265,7 +265,7 @@ For every vp command:
 vp -C <dir> <cmd> [args...]  ===  cd <dir> && vp <cmd> [args...]
 ```
 
-The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The parent `vp` process never calls `process.chdir()`.
+The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The Rust layers never mutate their own cwd; the one exception is the local `vp` bin, which applies `-C` by changing its process cwd at startup before any dispatch, indistinguishable from having been started in `<dir>`.
 
 The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model).
 
