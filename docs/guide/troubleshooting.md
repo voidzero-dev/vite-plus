@@ -2,8 +2,8 @@
 
 Use this page when something in Vite+ is not behaving the way you expect.
 
-::: warning
-Vite+ is still in alpha. We are making frequent changes, adding features quickly, and we want feedback to help make it great.
+::: info
+Vite+ is in beta: stable, but not yet complete. We are adding features on the road to 1.0 and prioritize community feedback, so please [reach out](#asking-for-help) if something does not work as expected.
 :::
 
 ## Supported Tool Versions
