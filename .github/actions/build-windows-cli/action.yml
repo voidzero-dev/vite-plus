@@ -29,7 +29,7 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=windows-cli-xwin-v1-${{ hashFiles('packages/tools/.upstream-versions.json', 'rust-toolchain.toml', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> "$GITHUB_OUTPUT"
+        echo "key=windows-cli-xwin-v1-${{ hashFiles('packages/tools/.upstream-versions.json', 'rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', '.cargo/config.toml', 'crates/**', 'packages/cli/binding/src/**', 'packages/cli/binding/build.rs', 'packages/cli/binding/Cargo.toml', 'packages/cli/binding/index.*', 'packages/cli/src/vite-config-entry-basenames.json', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts', '.github/actions/build-upstream/action.yml', '.github/actions/build-windows-cli/action.yml', '.github/actions/setup-xwin/action.yml') }}" >> "$GITHUB_OUTPUT"
 
     - name: Restore binaries cache
       id: binaries-cache
