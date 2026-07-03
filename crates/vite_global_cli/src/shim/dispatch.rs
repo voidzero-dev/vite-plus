@@ -231,8 +231,6 @@ fn check_npm_global_install_result(
     node_dir: &AbsolutePath,
     node_version: &str,
 ) {
-    
-
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)

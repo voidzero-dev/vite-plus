@@ -19,7 +19,7 @@ For `dev`/`build`/`preview`, the positional is forwarded verbatim to Vite's `[ro
 
 ```ts
 // apps/admin/vite.config.ts
-const cert = fs.readFileSync(path.resolve('certs/dev.pem')) // cwd-relative
+const cert = fs.readFileSync(path.resolve('certs/dev.pem')); // cwd-relative
 ```
 
 ```
@@ -194,7 +194,7 @@ There is no `pnpm-workspace.yaml` or `workspaces` field to enumerate, so the pic
 // config either; at this root it is purely a pointer for vp.
 export default {
   defaultPackage: './frontend',
-}
+};
 ```
 
 Bare app commands at the root now behave as `vp -C ./frontend <cmd>`, with one line of output so it never feels magical:
@@ -288,7 +288,7 @@ export default defineConfig({
   // Relative to the config file's directory. Used by vp dev/build/preview/pack
   // when invoked bare next to this config: an implicit -C.
   defaultPackage: './frontend',
-})
+});
 ```
 
 - Type: `string`, a single directory. A per-command map can come later if real demand appears.
@@ -354,15 +354,15 @@ The interactive picker gets pty snapshot coverage in the `vite_task` repo style 
 
 How comparable tools name "the member a root-level command targets when none is specified":
 
-| Tool | Field | Notes |
-| --- | --- | --- |
-| Ionic CLI | `defaultProject` | active; root config with a `projects` map |
-| Nx | `defaultProject` | deprecated in favor of `NX_DEFAULT_PROJECT` env var |
-| Angular CLI | `defaultProject` | deprecated in favor of cwd inference |
-| Cargo | `workspace.default-members` | plural: root `cargo build` builds all listed members |
-| Salesforce DX | `default: true` on the member | marker pattern; needs member enumeration |
-| Vercel / Netlify / Amplify | `rootDirectory` / `base` / `appRoot` | per-app deploy config, not a default among many |
-| GitHub Actions | `defaults.run.working-directory` | names the mechanism (cwd) |
+| Tool                       | Field                                | Notes                                                |
+| -------------------------- | ------------------------------------ | ---------------------------------------------------- |
+| Ionic CLI                  | `defaultProject`                     | active; root config with a `projects` map            |
+| Nx                         | `defaultProject`                     | deprecated in favor of `NX_DEFAULT_PROJECT` env var  |
+| Angular CLI                | `defaultProject`                     | deprecated in favor of cwd inference                 |
+| Cargo                      | `workspace.default-members`          | plural: root `cargo build` builds all listed members |
+| Salesforce DX              | `default: true` on the member        | marker pattern; needs member enumeration             |
+| Vercel / Netlify / Amplify | `rootDirectory` / `base` / `appRoot` | per-app deploy config, not a default among many      |
+| GitHub Actions             | `defaults.run.working-directory`     | names the mechanism (cwd)                            |
 
 The pattern is `default` plus the tool's own noun for the unit: Angular, Nx, and Ionic say "project", Cargo says "members", Salesforce says "package directories". vp's noun is "package" (the picker, `vp run` docs, `vite_workspace`, pnpm vocabulary), hence `defaultPackage`.
 

@@ -8,9 +8,7 @@
 //! - Stream-based response parsing (modelled after `terminal-colorsaurus`)
 //! - Gradient/fade generation and RGB ANSI coloring
 
-use std::{
-    sync::{LazyLock, OnceLock},
-};
+use std::sync::{LazyLock, OnceLock};
 #[cfg(unix)]
 use std::{
     io::Write,

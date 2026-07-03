@@ -120,8 +120,8 @@ pub(super) fn resolve_app_target(
         return Ok(AppTarget::CurrentDir);
     }
 
-    let graph = vite_workspace::load_package_graph(&workspace_root)
-        .map_err(|e| Error::Anyhow(e.into()))?;
+    let graph =
+        vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
     let mut rows: Vec<PackageRow> = graph
         .node_weights()
         .filter(|info| !info.path.as_str().is_empty())

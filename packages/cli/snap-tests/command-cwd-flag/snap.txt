@@ -26,9 +26,8 @@ cwd base: hello
 cwd base: hello
 
 
-> vp -C packages/missing build || echo 'errored as expected' # missing directory errors
+[1]> vp -C packages/missing build # missing directory errors
 error: directory not found: packages/missing
-errored as expected
 
 > vp pack packages/hello # positional stays a tsdown entry resolved from the invocation directory
 ℹ entry: packages/hello

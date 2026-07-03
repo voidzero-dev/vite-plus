@@ -1,12 +1,6 @@
 //! Managed global package utilities.
 
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::Read,
-    process::Stdio,
-    time::Duration,
-};
+use std::{collections::HashMap, fs::File, io::Read, process::Stdio, time::Duration};
 
 use flate2::read::GzDecoder;
 use futures::{StreamExt, stream::FuturesUnordered};

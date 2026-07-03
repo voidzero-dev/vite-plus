@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp build || echo 'exited non-zero' # bare build at the workspace root lists packages instead of building the root",
-    "vp dev || echo 'exited non-zero' # bare dev at the root no longer starts a server against the root"
+    "vp build # bare build at the workspace root lists packages instead of building the root",
+    "vp dev # bare dev at the root no longer starts a server against the root"
   ]
 }

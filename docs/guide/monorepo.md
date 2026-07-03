@@ -155,7 +155,7 @@ vp -C apps/web build
 vp -C packages/ui pack
 ```
 
-  Passing a folder as a positional (`vp dev apps/web`) still works and keeps upstream Vite semantics: it sets Vite's `root` option without changing the working directory, so cwd-relative reads in configs and plugins resolve from where you ran vp. Prefer `-C` when the package should behave as if you had `cd`'d into it.
+Passing a folder as a positional (`vp dev apps/web`) still works and keeps upstream Vite semantics: it sets Vite's `root` option without changing the working directory, so cwd-relative reads in configs and plugins resolve from where you ran vp. Prefer `-C` when the package should behave as if you had `cd`'d into it.
 
 - Run a bare app command at the workspace root and vp resolves the target for you: with [`defaultPackage`](/config/#defaultpackage) configured it runs there, and otherwise it prints the workspace packages with `-C` hints instead of silently serving or building the root.
 

@@ -7,10 +7,7 @@
 //! directory has no package.json. An explicit `--target` flag overrides the selection.
 //! An existing `engines.node` is never deleted or modified.
 
-use std::{
-    io::Write,
-    process::ExitStatus,
-};
+use std::{io::Write, process::ExitStatus};
 
 use vite_js_runtime::NodeProvider;
 use vite_path::AbsolutePathBuf;

@@ -1,9 +1,6 @@
 //! `vp implode` — completely remove vp and all its data from this system.
 
-use std::{
-    io::Write,
-    process::ExitStatus,
-};
+use std::{io::Write, process::ExitStatus};
 
 use directories::BaseDirs;
 use owo_colors::OwoColorize;

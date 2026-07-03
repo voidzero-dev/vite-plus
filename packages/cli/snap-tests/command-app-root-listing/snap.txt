@@ -1,4 +1,4 @@
-> vp build || echo 'exited non-zero' # bare build at the workspace root lists packages instead of building the root
+[1]> vp build # bare build at the workspace root lists packages instead of building the root
 error: `vp build` at the workspace root needs a target package.
 
   Packages in this workspace:
@@ -7,9 +7,8 @@ error: `vp build` at the workspace root needs a target package.
 
   Pass a directory:  vp -C packages/web build
   Or run every package's build script:  vp run -r build
-exited non-zero
 
-> vp dev || echo 'exited non-zero' # bare dev at the root no longer starts a server against the root
+[1]> vp dev # bare dev at the root no longer starts a server against the root
 error: `vp dev` at the workspace root needs a target package.
 
   Packages in this workspace:
@@ -18,4 +17,3 @@ error: `vp dev` at the workspace root needs a target package.
 
   Pass a directory:  vp -C packages/web dev
   Or run every package's dev script:  vp run -r dev
-exited non-zero

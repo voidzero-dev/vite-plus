@@ -1,5 +1,3 @@
 {
-  "commands": [
-    "vp build || echo 'errored as expected' # defaultPackage pointing at a missing directory errors"
-  ]
+  "commands": ["vp build # defaultPackage pointing at a missing directory errors"]
 }
