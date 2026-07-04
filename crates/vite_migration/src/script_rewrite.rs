@@ -497,7 +497,14 @@ fn strip_flags_from_suffix(
                     break;
                 }
                 if val == conv.dedup_flag {
-                    conversion_emitted[ci] = true;
+                    // Drop a duplicate if the target flag was already emitted;
+                    // otherwise keep this one and mark it emitted.
+                    if conversion_emitted[ci] {
+                        converted = true;
+                    } else {
+                        conversion_emitted[ci] = true;
+                    }
+                    break;
                 }
             }
             if converted {

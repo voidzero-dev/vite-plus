@@ -37,12 +37,7 @@ export function error(text: string) {
 }
 
 // Standard message prefix functions matching the Rust CLI convention.
-// info/note go to stdout (normal output), warn/error go to stderr (diagnostics).
-
-export function infoMsg(msg: string) {
-  /* oxlint-disable-next-line no-console */
-  console.log(styleText(['blue', 'bold'], 'info:'), msg);
-}
+// warn/error go to stderr (diagnostics).
 
 export function warnMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
@@ -52,9 +47,4 @@ export function warnMsg(msg: string) {
 export function errorMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
   console.error(styleText(['red', 'bold'], 'error:'), msg);
-}
-
-export function noteMsg(msg: string) {
-  /* oxlint-disable-next-line no-console */
-  console.log(styleText(['gray', 'bold'], 'note:'), msg);
 }
