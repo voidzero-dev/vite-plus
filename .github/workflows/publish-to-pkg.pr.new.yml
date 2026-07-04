@@ -151,12 +151,12 @@ jobs:
       # (it just needs the workspace installed, which it is). This build publishes
       # under the PR head commit, so pass that SHA (not the merge commit
       # github.sha). Restricted to same-repo PRs because fork PRs do not receive
-      # the admin token secret; never fails the publish if the bridge is
-      # unreachable.
+      # the admin token secret. A bridge failure fails the job: install.sh and
+      # the Docker preview install PR builds through the bridge, so a silently
+      # missing ref would only surface later as a broken install.
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
         # Pinned to the PR #56 branch head for verification; repin to main once it merges.
         uses: voidzero-dev/pkg-pr-registry-bridge@72ef590d3d6c82ddbd21fc4d029c7e7641300755 # feat/action-local-pack (PR #56)
         with:
@@ -177,8 +177,8 @@ jobs:
 
       # Once the bridge has the commit build, post (or update) a sticky PR comment
       # with the resolved npm versions and per-package-manager registry config, so
-      # reviewers can install the build directly. Gated on the bridge step's real
-      # outcome (it is continue-on-error) and skipped for fork PRs.
+      # reviewers can install the build directly. The outcome gate skips this on
+      # fork PRs, where the bridge step itself is skipped.
       - name: Comment bridge version on the PR
         if: steps.bridge.outcome == 'success'
         continue-on-error: true
