@@ -493,12 +493,23 @@ const server = createServer(async (req, res) => {
 // refetching, so a later run would reuse dead URLs or stale local package
 // bytes. Give each run throwaway caches instead.
 function buildRegistryEnv(registry: string): Record<string, string> {
+  // In a proxied environment (HTTP_PROXY/HTTPS_PROXY without a loopback
+  // no-proxy entry), package managers would send the 127.0.0.1 registry
+  // requests through the proxy and never reach this server; extend the
+  // no-proxy list so loopback traffic always goes direct.
+  const noProxy = [process.env.NO_PROXY ?? process.env.no_proxy, '127.0.0.1']
+    .filter(Boolean)
+    .join(',');
   return {
     NPM_CONFIG_REGISTRY: registry,
     npm_config_registry: registry,
     PNPM_CONFIG_REGISTRY: registry,
     YARN_NPM_REGISTRY_SERVER: registry,
     YARN_UNSAFE_HTTP_WHITELIST: '127.0.0.1',
+    NO_PROXY: noProxy,
+    no_proxy: noProxy,
+    NPM_CONFIG_NOPROXY: noProxy,
+    npm_config_noproxy: noProxy,
     YARN_GLOBAL_FOLDER: mkdtempSync(path.join(tmpdir(), 'vp-local-registry-yarn-')),
     BUN_INSTALL_CACHE_DIR: mkdtempSync(path.join(tmpdir(), 'vp-local-registry-bun-')),
   };
