@@ -1,6 +1,12 @@
-name: Publish to pkg.pr.new
+name: Publish preview build
 
-# https://pkg.pr.new/~/voidzero-dev/vite-plus
+# Publishes a labeled PR's commit build to the registry bridge
+# (https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves it as
+# the npm version 0.0.0-commit.<sha>. Registered builds:
+# https://registry-bridge.viteplus.dev/-/refs
+# The `pkg.pr.new` label name predates the bridge and is kept for muscle
+# memory, as is this workflow's file name (renaming it would sever the Actions
+# run history).
 
 permissions: {}
 
@@ -56,12 +62,12 @@ jobs:
       - prepare
       - build-rust
     permissions:
-      # pkg-pr-new comments on PRs and posts run statuses with this token.
       contents: read
-      pull-requests: write
       # The "Comment bridge version" step creates/updates a sticky comment via
-      # github.rest.issues.createComment/updateComment; creating an issue comment
-      # is gated on issues:write (the create path runs on PRs without one yet).
+      # github.rest.issues.createComment/updateComment; comment writes on PRs
+      # are gated on pull-requests:write, and creating an issue comment is
+      # gated on issues:write (the create path runs on PRs without one yet).
+      pull-requests: write
       issues: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -127,33 +133,22 @@ jobs:
           pattern: vite-global-cli-*
 
       # Stops short of `npm publish` and leaves packages/cli/{npm,cli-npm}/*
-      # on disk for pkg-pr-new to upload.
+      # on disk for the bridge action to pack.
       - name: Prepare native addon and CLI binary packages
         run: node ./packages/cli/publish-native-addons.ts --mode pkg-pr-new
 
-      - name: Publish to pkg.pr.new
-        run: |
-          pnpm dlx pkg-pr-new publish --compact --pnpm \
-            './packages/cli/npm/*' \
-            './packages/cli/cli-npm/*' \
-            './packages/cli' \
-            './packages/core' \
-            './packages/prompts'
-
-      # Publish this commit build to the pkg.pr.new registry bridge so it can be
-      # installed as the npm version 0.0.0-commit.<sha>
-      # (https://github.com/voidzero-dev/pkg-pr-registry-bridge). The bridge action
-      # packs the locally built package directories prepared above (the two
-      # preview packages and every platform binary), re-packs them under the
-      # commit version with matching integrity, uploads them to the bridge, and
-      # registers the ref. It packs from disk with `pnpm pack`, so it no longer
-      # downloads from pkg.pr.new and is independent of the publish step above
-      # (it just needs the workspace installed, which it is). This build publishes
-      # under the PR head commit, so pass that SHA (not the merge commit
-      # github.sha). Restricted to same-repo PRs because fork PRs do not receive
-      # the admin token secret. A bridge failure fails the job: install.sh and
-      # the Docker preview install PR builds through the bridge, so a silently
-      # missing ref would only surface later as a broken install.
+      # Publish this commit build to the registry bridge so it can be installed
+      # as the npm version 0.0.0-commit.<sha>
+      # (https://github.com/voidzero-dev/pkg-pr-registry-bridge). The bridge
+      # action packs the locally built package directories prepared above (the
+      # two preview packages and every platform binary) with `pnpm pack`,
+      # re-packs them under the commit version with matching integrity, uploads
+      # them to the bridge, and registers the ref. This build publishes under
+      # the PR head commit, so pass that SHA (not the merge commit github.sha).
+      # Restricted to same-repo PRs because fork PRs do not receive the admin
+      # token secret. A bridge failure fails the job: install.sh and the Docker
+      # preview install PR builds through the bridge, so a silently missing ref
+      # would only surface later as a broken install.
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
@@ -161,9 +156,9 @@ jobs:
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
-          # The locally built directories to pack and publish, matching the
-          # pkg-pr-new publish list above so the two stay in sync. (This is also
-          # the action's default, passed explicitly for review parity.)
+          # The locally built directories to pack and publish. (This is also
+          # the action's default, passed explicitly so the published set is
+          # reviewable here.)
           packages: |
             packages/cli/npm/*
             packages/cli/cli-npm/*
@@ -200,7 +195,7 @@ jobs:
               '',
               `### Registry bridge build (\`${shortSha}\`)`,
               '',
-              'This commit is published to pkg.pr.new and registered with the [registry bridge](https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
+              'This commit build is published to the [registry bridge](https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
               '',
               '| Package | Version |',
               '| --- | --- |',
@@ -264,9 +259,9 @@ jobs:
               });
             }
 
-  # Build and push a preview Docker image from the pkg.pr.new build so the image
-  # can be verified before a real release. Tagged `pr-<number>`; never `latest`.
-  # See docker/Dockerfile and docs/guide/docker.md.
+  # Build and push a preview Docker image from the registry bridge build so the
+  # image can be verified before a real release. Tagged `pr-<number>`; never
+  # `latest`. See docker/Dockerfile and docs/guide/docker.md.
   publish-docker-preview:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
@@ -292,8 +287,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Builds from the pkg.pr.new packages for this PR (VP_PR_VERSION). The
-      # platform packages must exist first, hence `needs: publish`.
+      # Builds from this PR's registry bridge build (VP_PR_VERSION resolves it
+      # through the bridge). The bridge must have the commit build first, hence
+      # `needs: publish`.
       # amd64-only: this throwaway preview avoids the slow arm64 QEMU leg; arm64
       # is covered by the release build and the test-install-sh-arm64 job.
       - name: Build and push preview image
@@ -358,7 +354,7 @@ jobs:
               marker,
               '## 🐳 Docker preview image',
               '',
-              "Built from this PR's pkg.pr.new build:",
+              "Built from this PR's registry bridge build:",
               '',
               '| Image | Compressed size |',
               '| --- | --- |',
