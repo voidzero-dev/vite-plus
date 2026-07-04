@@ -1,6 +1,6 @@
 ---
 name: release-manager
-description: Run the standard vite-plus release process end-to-end as the release manager. Covers preparing the release PR, syncing the NAPI binding version, writing the categorized changelog, smoke-testing via pkg.pr.new, handling release-branch CI failures, merging, and post-release verification and announcements. Use when asked to cut, prepare, or manage a vite-plus release (e.g. "release v0.2.3", "act as release manager").
+description: Run the standard vite-plus release process end-to-end as the release manager. Covers preparing the release PR, syncing the NAPI binding version, writing the categorized changelog, smoke-testing via a preview build, handling release-branch CI failures, merging, and post-release verification and announcements. Use when asked to cut, prepare, or manage a vite-plus release (e.g. "release v0.2.3", "act as release manager").
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, WebFetch
 ---
 
@@ -20,7 +20,7 @@ When given a release PR (URL or number), do not start from step 1. First audit t
 
 - Is the binding version synced? (step 2: `grep -c "'<prev>'" packages/cli/binding/index.cjs` on the release branch)
 - Is the PR description still the `prepare_release` boilerplate, or already a categorized changelog? (step 3)
-- Is a pkg.pr.new build present and for the current head? (step 4)
+- Is a preview build present and for the current head? (step 4)
 - Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
 - What is CI status? (`gh pr checks <PR#>`, step 5)
 - Already merged? Check the Release workflow (`gh run list --workflow Release --repo voidzero-dev/vite-plus`) and whether the GitHub release body is still the generated stub, then continue at step 7 or 8.
@@ -30,7 +30,7 @@ Report the detected state before making changes, so the previous release manager
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
-2. Release manager: sync `binding/index.cjs`, write the changelog PR description, optionally smoke-test via pkg.pr.new, get CI green.
+2. Release manager: sync `binding/index.cjs`, write the changelog PR description, optionally smoke-test via a preview build, get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
@@ -165,20 +165,20 @@ echo "$BODY" | grep -c '\\`'                                                    
 echo "$BODY" | tail -1                                                          # boilerplate closing line intact
 ```
 
-## 4. Optional: pkg.pr.new smoke test (before merging)
+## 4. Optional: preview build smoke test (before merging)
 
 This step is optional and runs **after the changelog (step 3) is complete and before merging (step 6)**. **Ask the release manager whether to run it**; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes).
 
 If the release manager says yes:
 
-1. Add the `pkg.pr.new` label to the release PR to publish installable `0.0.0-commit.<head-sha>` builds:
+1. Add the `preview-build` label to the release PR to publish installable `0.0.0-commit.<head-sha>` builds through the registry bridge:
 
    ```bash
-   gh pr edit <PR#> --repo voidzero-dev/vite-plus --add-label "pkg.pr.new"
+   gh pr edit <PR#> --repo voidzero-dev/vite-plus --add-label "preview-build"
    ```
 
-2. Wait for the `Publish to pkg.pr.new` workflow run on the release branch to succeed (the pkg-pr-new bot comments install URLs on the PR).
-3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the pkg.pr.new commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
+2. Wait for the `Publish preview build` workflow run on the release branch to succeed (it packs the built package directories and registers the commit with the registry bridge, then comments the build info on the PR).
+3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the preview commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
 
 **Choosing a target project.** The smoke-test catalog and the local-setup rules live in the ecosystem-ci org: [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md), with the machine-readable list in [`ecosystem.json`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/ecosystem.json) (each fork's upstream, tracked branch, and package manager). Pick one whose stack matches the release's risk area (a pnpm monorepo for catalog/override changes, a bun project for install-path changes, an `other`/native project for binding changes); filter `ecosystem.json` with `jq`. Prefer a fork pinned to the immediately previous release, so migrate does a real upgrade rather than a no-op.
 
@@ -246,7 +246,7 @@ Known release-branch-only failure modes:
 
 ## 6. Merge
 
-Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding synced, and (if used) the pkg.pr.new build verified.
+Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding synced, and (if used) the preview build verified.
 
 ## 7. Automated release pipeline (what happens after merge)
 
@@ -332,7 +332,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
 - [ ] PR description written from the head branch data; every PR exactly once; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
-- [ ] Smoke test offered to the release manager; if accepted, pkg.pr.new build published and verified via `test-pkg-pr-new-migrate`
+- [ ] Smoke test offered to the release manager; if accepted, preview build published and verified via `test-pkg-pr-new-migrate`
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
