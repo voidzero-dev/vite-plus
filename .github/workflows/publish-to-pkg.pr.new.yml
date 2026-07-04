@@ -157,8 +157,7 @@ jobs:
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
-        # Pinned to the PR #56 branch head for verification; repin to main once it merges.
-        uses: voidzero-dev/pkg-pr-registry-bridge@72ef590d3d6c82ddbd21fc4d029c7e7641300755 # feat/action-local-pack (PR #56)
+        uses: voidzero-dev/pkg-pr-registry-bridge@711e22a2e1ae55d809fc5fab514c1180a41ac91e # main
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
