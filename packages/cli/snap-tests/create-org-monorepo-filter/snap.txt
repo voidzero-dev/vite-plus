@@ -1,4 +1,4 @@
-[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
+[1]> node $SNAP_LOCAL_REGISTRY -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
 
 A template name is required when running `vp create @your-org` in non-interactive mode.
 
