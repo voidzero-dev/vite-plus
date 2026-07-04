@@ -10,7 +10,7 @@ const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 /// Get the vite-plus home directory.
 ///
 /// Uses `EnvConfig::get().vite_plus_home` if set,
-/// or the `vp` executable's grandparent directory,
+/// or the `vpr` executable's grandparent directory,
 /// otherwise defaults to `~/.vite-plus`.
 /// Falls back to `$CWD/.vite-plus` if the home directory cannot be determined.
 pub fn get_vp_home() -> std::io::Result<AbsolutePathBuf> {
@@ -21,9 +21,9 @@ pub fn get_vp_home() -> std::io::Result<AbsolutePathBuf> {
         return Ok(path);
     }
 
-    // Get from `vp` executable file's grandparent directory (~/.vite-plus/bin/vp)
+    // Get from `vpr` executable file's grandparent directory (~/.vite-plus/bin/vpr)
     // For the case where `VP_HOME` is missing
-    if let Ok(path) = which("vp")
+    if let Ok(path) = which("vpr")
         && let Some(parent) = path.parent()
         && let Some(grandparent) = parent.parent()
     {
@@ -78,15 +78,15 @@ mod tests {
         std::fs::create_dir_all(&bin_dir).unwrap();
 
         #[cfg(windows)]
-        let vp_path = bin_dir.join("vp.exe");
+        let vp_path = bin_dir.join("vpr.exe");
         #[cfg(not(windows))]
-        let vp_path = bin_dir.join("vp");
+        let vp_path = bin_dir.join("vpr");
 
         #[cfg(windows)]
         std::fs::write(&vp_path, b"MZ").unwrap();
         #[cfg(not(windows))]
         {
-            std::fs::write(&vp_path, "#!/bin/sh\necho 'fake vp'").unwrap();
+            std::fs::write(&vp_path, "#!/bin/sh\necho 'fake vpr'").unwrap();
             use std::os::unix::fs::PermissionsExt;
             let mut perms = std::fs::metadata(&vp_path).unwrap().permissions();
             perms.set_mode(0o755);
