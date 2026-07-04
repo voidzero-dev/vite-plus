@@ -237,6 +237,7 @@ is_nested_install_dir() {
 prompt_remove_previous_install_dir() {
   local old_dir="$1"
   [ -n "$old_dir" ] || return 0
+  [ -z "${CI:-}" ] || return 0
   [ -e /dev/tty ] && [ -t 1 ] || return 0
 
   echo "" > /dev/tty
