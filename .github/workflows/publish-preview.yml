@@ -5,8 +5,8 @@ name: Publish preview build
 # the npm version 0.0.0-commit.<sha>. Registered builds:
 # https://registry-bridge.viteplus.dev/-/refs
 # The `pkg.pr.new` label name predates the bridge and is kept for muscle
-# memory, as is this workflow's file name (renaming it would sever the Actions
-# run history).
+# memory. Renamed from publish-to-pkg.pr.new.yml; older runs live under that
+# workflow entry in the Actions UI.
 
 permissions: {}
 
