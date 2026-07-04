@@ -1,17 +1,21 @@
 {
-  "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
+  "ignoredPlatforms": [
+    "win32",
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
+  ],
   "linkCheckoutPackages": true,
-  "env": {
-    "VP_VERSION": "0.2.1"
-  },
+  "localVitePlusPackages": true,
   "commands": [
     {
-      "command": "vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app",
+      "command": "node $SNAP_LOCAL_REGISTRY -- vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app",
       "ignoreOutput": true
     },
     "cat vite-plus-application/src/env.d.ts # check Vue shim was added",
     {
-      "command": "cd vite-plus-application && vp install # install dependencies",
+      "command": "cd vite-plus-application && node $SNAP_LOCAL_REGISTRY -- vp install # install dependencies",
       "ignoreOutput": true
     },
     "cd vite-plus-application && vp check --fix # fix generated formatting and ensure no errors"
