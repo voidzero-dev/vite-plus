@@ -26,7 +26,6 @@ pub fn get_vp_home() -> std::io::Result<AbsolutePathBuf> {
     if let Ok(path) = which("vp")
         && let Some(parent) = path.parent()
         && let Some(grandparent) = parent.parent()
-        && grandparent.ends_with(VITE_PLUS_HOME_DIR)
     {
         return Ok(AbsolutePathBuf::new(grandparent.to_path_buf()).unwrap());
     }
