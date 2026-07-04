@@ -147,9 +147,10 @@ export const VITEST_BROWSER_DEP_NAMES = [
 // untouched (those are direct-usage signals handled elsewhere).
 //
 // The removal only applies when `vitest` is a key vite-plus actually manages in
-// the active override config. In force-override / CI mode (`VP_OVERRIDE_PACKAGES`
-// with file: tgz aliases) `vitest` is NOT in the override set, so a `vitest`
-// entry there is the user's own and must be left untouched.
+// the active override config. When a caller-supplied `VP_OVERRIDE_PACKAGES`
+// omits the `vitest` key (see the migration-vitest-unmanaged-override snap
+// test), `vitest` is NOT managed, so a `vitest` entry there is the user's own
+// and must be left untouched.
 export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGES;
 
 // Fallback specs used when normalizing a stale wrapper alias. Real user

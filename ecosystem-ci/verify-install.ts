@@ -2,13 +2,15 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
+import { vitePlusTgzVersion } from './paths.ts';
+
 const require = createRequire(`${process.cwd()}/`);
 
-// The ecosystem-ci pack step pins packages/cli to 0.0.0 before `pnpm pack`, so
-// a correctly installed local build always reports 0.0.0 — never the published
-// registry version (which `patch-project.ts` likewise references as a fixed
-// `vite-plus-0.0.0.tgz`).
-const expectedVersion = '0.0.0';
+// patch-project.ts serves the packed tgz through the local registry, so a
+// correctly installed local build always reports the tgz version (0.0.0 on
+// CI, where the pack step pins it precisely so a local build is never
+// mistaken for a published registry version).
+const expectedVersion = vitePlusTgzVersion();
 
 try {
   const pkgPath = require.resolve('vite-plus/package.json');
@@ -31,11 +33,15 @@ try {
   const vitePlusSpec =
     projectPkg.dependencies?.['vite-plus'] ?? projectPkg.devDependencies?.['vite-plus'];
 
-  const isFileSpec = vitePlusSpec?.startsWith('file:') ?? false;
-  const isPnpmFileInstall = pkgPath.includes(`${path.sep}.pnpm${path.sep}vite-plus@file+`);
-  if (!isFileSpec && !isPnpmFileInstall) {
+  // The migration must pin the local version as a plain registry spec
+  // (resolved through the local registry), exactly like a real migration,
+  // not a file:/link: escape hatch. pnpm workspace projects reference the
+  // pinned version through the catalog instead of an inline version; the
+  // installed `pkg.version` assertion above already proves which version the
+  // catalog resolved to.
+  if (vitePlusSpec !== expectedVersion && !vitePlusSpec?.startsWith('catalog:')) {
     console.error(
-      `x vite-plus: expected local file: install, got spec ${vitePlusSpec ?? '<missing>'}`,
+      `x vite-plus: expected exact registry spec ${expectedVersion} (or a catalog reference), got ${vitePlusSpec ?? '<missing>'}`,
     );
     console.error(`  resolved to ${pkgPath}`);
     process.exit(1);
@@ -55,7 +61,7 @@ try {
     process.exit(1);
   }
 
-  console.log(`ok vite-plus@${pkg.version} (${vitePlusSpec ?? 'unknown spec'})`);
+  console.log(`ok vite-plus@${pkg.version} (${vitePlusSpec})`);
   console.log(`ok oxlint@${oxlintPkg.version} from vite-plus dependency tree`);
 } catch (error) {
   console.error('x vite-plus: not installed or incomplete');

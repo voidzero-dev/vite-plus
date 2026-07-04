@@ -1,16 +1,14 @@
 {
   "ignoredPlatforms": ["win32"],
-  "env": {
-    "VP_VERSION": "0.2.1"
-  },
+  "localVitePlusPackages": true,
   "commands": [
     {
-      "command": "vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app",
+      "command": "node $SNAP_LOCAL_REGISTRY -- vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app",
       "ignoreOutput": true
     },
     "cat my-astro-app/src/env.d.ts # check Astro shim",
     {
-      "command": "cd my-astro-app && vp install --ignore-scripts -- --no-frozen-lockfile # install dependencies",
+      "command": "cd my-astro-app && node $SNAP_LOCAL_REGISTRY -- vp install --ignore-scripts -- --no-frozen-lockfile # install dependencies",
       "ignoreOutput": true
     },
     {

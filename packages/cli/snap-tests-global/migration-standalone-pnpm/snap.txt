@@ -1,4 +1,4 @@
-> vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml
+> node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml
 
 Formatting code...
 

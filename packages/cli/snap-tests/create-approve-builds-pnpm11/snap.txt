@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --directory approved-app # --approve-builds auto-approves and runs the gated build script (core-js)
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --approve-builds --directory approved-app # --approve-builds auto-approves and runs the gated build script (core-js)
 ◇ Scaffolded approved-app
 • Node <semver>  pnpm <semver>
 ✓ Dependencies installed in <variable>ms
@@ -18,7 +18,7 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
 
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --directory default-app # default run surfaces the gated build with guidance, leaving it unapproved
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --directory default-app # default run surfaces the gated build with guidance, leaving it unapproved
 
 Build scripts were not run for: core-js.
 
@@ -42,7 +42,7 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
 
-> cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
+> cd default-app && node $SNAP_LOCAL_REGISTRY -- vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
 .../core-js@<semver>/node_modules/core-js postinstall$ node -e "try{require('./postinstall')}catch(e){}"
 .../core-js@<semver>/node_modules/core-js postinstall: Done
 
