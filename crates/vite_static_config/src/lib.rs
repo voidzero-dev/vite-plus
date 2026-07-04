@@ -115,24 +115,7 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> FieldMap {
 
     let extension = config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
 
-    if extension == "json" {
-        return parse_json_config(&source);
-    }
-
     parse_js_ts_config(&source, extension)
-}
-
-/// Parse a JSON config file into a map of field names to values.
-/// All fields in a valid JSON object are fully static.
-fn parse_json_config(source: &str) -> FieldMap {
-    let Ok(serde_json::Value::Object(obj)) = serde_json::from_str(source) else {
-        return FieldMap::unanalyzable();
-    };
-    let mut map = FxHashMap::with_capacity_and_hasher(obj.len(), Default::default());
-    for (k, v) in &obj {
-        map.insert(Box::from(k.as_str()), FieldValue::Json(v.clone()));
-    }
-    FieldMap(FieldMapInner::Closed(map))
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
@@ -518,10 +501,10 @@ mod tests {
         assert!(result.get("run").is_none());
     }
 
-    // ── JSON config parsing ─────────────────────────────────────────────
+    // ── resolve_static_config from a config file─────────────────────────────────────────────
 
     #[test]
-    fn parses_json_config() {
+    fn resolve_static_config_reads_run_from_config_file() {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(
