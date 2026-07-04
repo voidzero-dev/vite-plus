@@ -16,7 +16,7 @@ Required inputs: a `<PR-or-SHA>` (the build to verify) and a `<project-path>`. I
 .github/scripts/test-pkg-pr-new-migrate.sh 1891 /path/to/npmx.dev --no-interactive
 ```
 
-- First arg is a PR number or commit SHA; the script resolves the immutable commit via the bridge `x-commit-key` header and verifies the bridge serves it (the preview publish workflow, triggered by the `pkg.pr.new` label, registers each commit).
+- First arg is a PR number or commit SHA; the script resolves the immutable commit via the bridge `x-commit-key` header and verifies the bridge serves it (the preview publish workflow, triggered by the `preview-build` label, registers each commit).
 - Never touches `~/.vite-plus`; clears only the workspace ROOT lockfile + `node_modules` before migrating; refuses a dirty worktree unless `ALLOW_DIRTY=1`; prints the project's `git status`/`diff` at the end — inspect that to confirm the migration result.
 
 **The build under test must include the "migrate writes the bridge registry" feature** (this session's work / current branch head onward). The harness no longer writes the registry itself — it relies on `vp migrate` doing it. Testing an older build with this harness would leave the project with no bridge registry, so its deps resolve from npmjs (`ERR_PNPM_NO_MATCHING_VERSION` on the `0.0.0-commit.<sha>` version). Always verify a fresh build of the branch, not a stale published commit.

@@ -109,13 +109,14 @@ commit_version="0.0.0-commit.$resolved_ref"
 vite_core_spec="npm:@voidzero-dev/vite-plus-core@$commit_version"
 
 # The bridge only serves commit builds published by the preview publish
-# workflow (triggered by the `pkg.pr.new` label). Fail early with an actionable
-# message instead of letting the project install hit an opaque registry miss.
+# workflow (triggered by the `preview-build` label). Fail early with an
+# actionable message instead of letting the project install hit an opaque
+# registry miss.
 if ! curl -fsS "${bridge_registry}@voidzero-dev/vite-plus-core" 2>/dev/null |
   grep -q "0.0.0-commit.$resolved_ref"; then
   echo "error: the registry bridge has no build for commit $resolved_ref" >&2
-  echo "Publish it by re-adding the pkg.pr.new label to the PR (the preview publish" >&2
-  echo "workflow packs, uploads, and registers each labeled commit)." >&2
+  echo "Publish it by re-adding the preview-build label to the PR (the preview" >&2
+  echo "publish workflow packs, uploads, and registers each labeled commit)." >&2
   exit 1
 fi
 

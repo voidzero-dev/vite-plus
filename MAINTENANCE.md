@@ -2,8 +2,7 @@
 
 ## Publishing Preview Packages
 
-Add the `pkg.pr.new` label to the PR (the label name predates the registry
-bridge). Each labeled commit is published to the
+Add the `preview-build` label to the PR. Each labeled commit is published to the
 [registry bridge](https://registry-bridge.viteplus.dev/-/refs) as the npm
 version `0.0.0-commit.<sha>`; the PR gets a sticky comment with the exact
 version and install steps.
