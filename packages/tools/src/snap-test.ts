@@ -9,9 +9,40 @@ import { debuglog, parseArgs } from 'node:util';
 import { npath } from '@yarnpkg/fslib';
 import { execute } from '@yarnpkg/shell';
 
+import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
 import { isPassThroughEnv, replaceUnstableOutput } from './utils.js';
 
 const debug = debuglog('vite-plus/snap-test');
+
+let localVpPackagesPromise: Promise<string> | undefined;
+
+/**
+ * Pack the checkout's `vite-plus` and `@voidzero-dev/vite-plus-core` once per
+ * run, for fixtures with `localVitePlusPackages: true`. Commands routed
+ * through `local-npm-registry.ts` serve these tarballs at the checkout
+ * version, so real package-manager installs work without the version being
+ * published on npm (e.g. on release branches) and exercise the actual local
+ * build.
+ *
+ * The destination lives inside the run's temp root rather than a fixed
+ * directory on purpose: a fresh pack per run (~2s) guarantees the served
+ * tarballs match the current checkout build (a reused fixed directory would
+ * silently serve stale tarballs after a rebuild unless it grew its own
+ * invalidation scheme), the run's exit cleanup deletes it for free, and
+ * concurrent snap-test processes (local + global) cannot overwrite each
+ * other's tarballs mid-read.
+ */
+function packLocalVitePlusPackagesOnce(casesDir: string, tempTmpDir: string): Promise<string> {
+  localVpPackagesPromise ??= (async () => {
+    const destination = path.join(tempTmpDir, 'local-vite-plus-packages');
+    fs.mkdirSync(destination, { recursive: true });
+    const startTime = Date.now();
+    await packLocalVitePlusPackages(resolveRepoRoot(casesDir), destination);
+    console.log('Packed local Vite+ packages in %dms', Date.now() - startTime);
+    return destination;
+  })();
+  return localVpPackagesPromise;
+}
 
 // Remove comments (starting with ' #') from command strings
 // `@yarnpkg/shell` doesn't parse comments.
@@ -480,8 +511,19 @@ interface PlatformFilter {
 
 interface Steps {
   ignoredPlatforms?: (string | PlatformFilter)[];
-  env: Record<string, string>;
+  env?: Record<string, string>;
   commands: (string | Command)[];
+  /**
+   * If true, the harness packs the checkout's `vite-plus` and
+   * `@voidzero-dev/vite-plus-core` (once per run) and exposes the tarball
+   * directory as `SNAP_LOCAL_VP_PACKAGES_DIR`. Commands wrapped with
+   * `node $SNAP_LOCAL_REGISTRY -- ...` then install these local packages at
+   * the checkout version instead of resolving it from the npm registry
+   * (which would fail on release branches before the version is published).
+   * These fixtures run real cold-cache installs, so the default command
+   * timeout is raised to 120s.
+   */
+  localVitePlusPackages?: boolean;
   /**
    * If true, installed Vite+ packages in the test project are relinked to the
    * current checkout after each successful command.
@@ -598,10 +640,15 @@ async function runTestCase(
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
-    // Absolute path to the source casesDir, so fixtures can reference
-    // shared helper scripts under `<casesDir>/.shared/` without
-    // duplicating them into every fixture directory.
-    SNAP_CASES_DIR: casesDir,
+    // Absolute path to the local npm registry wrapper, so fixtures can route
+    // installs through it (`node $SNAP_LOCAL_REGISTRY -- vp ...`).
+    SNAP_LOCAL_REGISTRY: path.join(
+      resolveRepoRoot(casesDir),
+      'packages',
+      'tools',
+      'src',
+      'local-npm-registry.ts',
+    ),
     // Global CLI snap tests execute the Rust binary from --bin-dir, but the JS
     // entry should come from this checkout instead of a stale ~/.vite-plus install.
     ...(globalCliScriptsDir ? { VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: globalCliScriptsDir } : {}),
@@ -610,6 +657,10 @@ async function runTestCase(
     // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.
     ...steps.env,
   };
+
+  if (steps.localVitePlusPackages) {
+    env['SNAP_LOCAL_VP_PACKAGES_DIR'] = await packLocalVitePlusPackagesOnce(casesDir, tempTmpDir);
+  }
 
   // Unset VP_NODE_VERSION to prevent `vp env use` session overrides
   // from leaking into snap tests.
@@ -670,7 +721,9 @@ async function runTestCase(
             match: async () => [],
           },
         }),
-        setTimeout(cmd.timeout ?? 50 * 1000),
+        // Fixtures that install local Vite+ packages run real cold-cache
+        // installs, so their commands get a higher default ceiling.
+        setTimeout(cmd.timeout ?? (steps.localVitePlusPackages ? 120 : 50) * 1000),
       ]);
 
       await outputStream.close();

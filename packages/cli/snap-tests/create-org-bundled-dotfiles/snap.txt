@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:demo --no-interactive --directory my-demo-app # bundled template with _gitignore/_npmrc
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:demo --no-interactive --directory my-demo-app # bundled template with _gitignore/_npmrc
 ◇ Scaffolded my-demo-app
 • Node <semver>  pnpm <semver>
 → Next: cd my-demo-app && vp run
