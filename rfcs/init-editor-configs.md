@@ -81,12 +81,12 @@ When a config file already exists:
 
 Mirrors `packages/cli/src/utils/agent.ts` structure:
 
-| agent.ts                          | editor.ts                |
-| --------------------------------- | ------------------------ |
-| `AGENTS` array                    | `EDITORS` array          |
-| `selectAgentTargetPath()`         | `selectEditor()`         |
-| `detectExistingAgentTargetPath()` | `detectExistingEditor()` |
-| `writeAgentInstructions()`        | `writeEditorConfigs()`   |
+| agent.ts                           | editor.ts                 |
+| ---------------------------------- | ------------------------- |
+| `AGENTS` array                     | `EDITORS` array           |
+| `selectAgentTargetPaths()`         | `selectEditors()`         |
+| `detectExistingAgentTargetPaths()` | `detectExistingEditors()` |
+| `writeAgentInstructions()`         | `writeEditorConfigs()`    |
 
 Key difference from agent.ts: Uses JSON merge (via `utils/json.ts`) instead of file copy/append, since IDE configs are structured JSON.
 
