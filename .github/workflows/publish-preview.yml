@@ -4,9 +4,7 @@ name: Publish preview build
 # (https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves it as
 # the npm version 0.0.0-commit.<sha>. Registered builds:
 # https://registry-bridge.viteplus.dev/-/refs
-# Triggered by adding the `preview-build` label (renamed from `pkg.pr.new`,
-# which predates the bridge). Renamed from publish-to-pkg.pr.new.yml; older
-# runs live under that workflow entry in the Actions UI.
+# Triggered by adding the `preview-build` label.
 
 permissions: {}
 
