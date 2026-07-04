@@ -1,0 +1,19 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp build 2>&1 | grep '^NODE_ENV=' # direct build",
+    "node -e \"const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))\"",
+    "rm -rf dist",
+    "vp run build 2>&1 | grep '^NODE_ENV=' # task runner build",
+    "node -e \"const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))\"",
+    "rm -rf dist",
+    "vp run --no-cache deploy 2>&1 | grep '^NODE_ENV=' # build dependency of deploy",
+    "node -e \"const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))\"",
+    "rm -rf dist",
+    "NODE_ENV=test vp build 2>&1 | grep '^NODE_ENV=' # direct build with explicit NODE_ENV",
+    "node -e \"const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))\"",
+    "rm -rf dist",
+    "NODE_ENV=test vp run build 2>&1 | grep '^NODE_ENV=' # task runner build with explicit NODE_ENV",
+    "node -e \"const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))\""
+  ]
+}

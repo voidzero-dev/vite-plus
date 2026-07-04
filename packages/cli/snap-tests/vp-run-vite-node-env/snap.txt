@@ -1,0 +1,33 @@
+> vp build 2>&1 | grep '^NODE_ENV=' # direct build
+NODE_ENV="production"
+
+> node -e "const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))"
+{"DEV":false,"MODE":"production","PROD":true}
+
+> rm -rf dist
+> vp run build 2>&1 | grep '^NODE_ENV=' # task runner build
+NODE_ENV="production"
+
+> node -e "const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))"
+{"DEV":false,"MODE":"production","PROD":true}
+
+> rm -rf dist
+> vp run --no-cache deploy 2>&1 | grep '^NODE_ENV=' # build dependency of deploy
+NODE_ENV="production"
+
+> node -e "const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))"
+{"DEV":false,"MODE":"production","PROD":true}
+
+> rm -rf dist
+> NODE_ENV=test vp build 2>&1 | grep '^NODE_ENV=' # direct build with explicit NODE_ENV
+NODE_ENV="test"
+
+> node -e "const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))"
+{"DEV":true,"MODE":"production","PROD":false}
+
+> rm -rf dist
+> NODE_ENV=test vp run build 2>&1 | grep '^NODE_ENV=' # task runner build with explicit NODE_ENV
+NODE_ENV="test"
+
+> node -e "const fs=require('node:fs');require('./dist/assets/'+fs.readdirSync('dist/assets').find(f=>f.endsWith('.js')))"
+{"DEV":true,"MODE":"production","PROD":false}
