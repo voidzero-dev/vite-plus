@@ -23,7 +23,7 @@ mod tracing;
 
 pub use env_config::{EnvConfig, TestEnvGuard};
 pub use error::format_error_chain;
-pub use home::get_vp_home;
+pub use home::{VP_BINARY_NAME, get_vp_home};
 pub use http::shared_http_client;
 pub use json_edit::{JsonStyle, edit_json_object, insert_after};
 pub use package_json::{

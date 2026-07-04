@@ -20,11 +20,6 @@ set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
 INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
-if [ -n "${VP_HOME:-}" ]; then
-  NODE_MANAGER_BIN_DISPLAY="${INSTALL_DIR%/}/bin/"
-else
-  NODE_MANAGER_BIN_DISPLAY="~/.vite-plus/bin/"
-fi
 # Use $HOME-relative path for shell config references (portable across sessions)
 if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
   INSTALL_DIR_REF_POSIX="\$HOME${INSTALL_DIR#"$HOME"}"
@@ -146,21 +141,16 @@ normalize_existing_dir() {
   if [ -d "$dir" ]; then
     (cd "$dir" 2>/dev/null && pwd -P) || printf '%s\n' "$dir"
   else
-    local parent base parent_dir
-    parent="$(dirname "$dir")"
+    local base parent_dir
     base="$(basename "$dir")"
-    if [ -d "$parent" ]; then
-      parent_dir="$(cd "$parent" 2>/dev/null && pwd -P)" || parent_dir=""
-      if [ -n "$parent_dir" ]; then
-        if [ "$parent_dir" = "/" ]; then
-          printf '/%s\n' "$base"
-        else
-          printf '%s/%s\n' "$parent_dir" "$base"
-        fi
-        return 0
-      fi
+    parent_dir="$(cd "$(dirname "$dir")" 2>/dev/null && pwd -P)" || parent_dir=""
+    if [ -z "$parent_dir" ]; then
+      printf '%s\n' "$dir"
+    elif [ "$parent_dir" = "/" ]; then
+      printf '/%s\n' "$base"
+    else
+      printf '%s/%s\n' "$parent_dir" "$base"
     fi
-    printf '%s\n' "$dir"
   fi
 }
 
@@ -189,11 +179,7 @@ detect_previous_install_dir() {
   [ -n "${VP_HOME:-}" ] || return 1
 
   local vp_path
-  if command -v which > /dev/null 2>&1; then
-    vp_path="$(which vp 2>/dev/null | head -n 1 || true)"
-  else
-    vp_path="$(command -v vp 2>/dev/null || true)"
-  fi
+  vp_path="$(command -v vp 2>/dev/null || true)"
   [ -n "$vp_path" ] || return 1
 
   case "$(basename "$vp_path")" in
@@ -951,7 +937,7 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to ${NODE_MANAGER_BIN_DISPLAY} and automatically uses the right version."
+    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$INSTALL_DIR")/bin/ and automatically uses the right version."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty

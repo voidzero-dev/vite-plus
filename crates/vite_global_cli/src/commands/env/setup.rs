@@ -783,8 +783,10 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath)
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
             let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
-            let home_path_ref_nu =
-                vite_plus_home.as_path().display().to_string().replace('\\', "/");
+            // `~` is only expanded in Nushell path-literal positions, not general
+            // strings, so a `~/...` VP_HOME would leak literally into the env var;
+            // bake the absolute path instead (`None` skips $HOME-relativization).
+            let home_path_ref_nu = render_home_relative_path(vite_plus_home.as_path(), None);
             ENV_TEMPLATE_NU
                 .replace("__VP_HOME__", &home_path_ref_nu)
                 .replace("__VP_BIN__", &bin_path_ref_nu)
@@ -1206,13 +1208,9 @@ mod tests {
         create_env_files(&home).await.unwrap();
 
         let cmd_content = tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
-        let vp_home_index =
-            cmd_content.find("set VP_HOME=%~dp0..").expect("vp-use.cmd should set VP_HOME");
-        let env_use_index = cmd_content.find("for /f").expect("vp-use.cmd should run env use");
-
         assert!(
-            vp_home_index < env_use_index,
-            "vp-use.cmd should set VP_HOME before invoking vp env use"
+            cmd_content.contains("set VP_HOME=%~dp0..\r\nfor /f"),
+            "vp-use.cmd should set VP_HOME before invoking vp env use, got: {cmd_content}"
         );
         assert!(
             cmd_content.contains("%~dp0..\\current\\bin\\vp.exe env use %*"),

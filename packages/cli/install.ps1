@@ -18,12 +18,8 @@ $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
 $InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
-$NodeManagerBinDisplay = if ($env:VP_HOME) {
-    $TrimmedInstallDir = $InstallDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    (Join-Path $TrimmedInstallDir "bin") + [System.IO.Path]::DirectorySeparatorChar
-} else {
-    "~/.vite-plus/bin/"
-}
+# Use ~ shorthand if install dir is under USERPROFILE, matching the final summary output
+$NodeManagerBinDisplay = (Join-Path $InstallDir.TrimEnd('\', '/') "bin") -replace [regex]::Escape($env:USERPROFILE), '~'
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
@@ -272,7 +268,7 @@ function Get-PreviousInstallDir {
         return $null
     }
 
-    $vpPath = if ($vpCommand.Source) { $vpCommand.Source } else { $vpCommand.Path }
+    $vpPath = $vpCommand.Path
     if (-not $vpPath) {
         return $null
     }
@@ -312,8 +308,9 @@ function Test-NestedInstallDir {
         return $false
     }
 
-    $oldPrefix = $oldDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    $newPrefix = $newDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    # Normalize-InstallDir already trimmed trailing separators
+    $oldPrefix = $oldDir + [System.IO.Path]::DirectorySeparatorChar
+    $newPrefix = $newDir + [System.IO.Path]::DirectorySeparatorChar
     return $oldPrefix.StartsWith($newPrefix, [System.StringComparison]::OrdinalIgnoreCase) `
         -or $newPrefix.StartsWith($oldPrefix, [System.StringComparison]::OrdinalIgnoreCase)
 }
