@@ -146,6 +146,20 @@ normalize_existing_dir() {
   if [ -d "$dir" ]; then
     (cd "$dir" 2>/dev/null && pwd -P) || printf '%s\n' "$dir"
   else
+    local parent base parent_dir
+    parent="$(dirname "$dir")"
+    base="$(basename "$dir")"
+    if [ -d "$parent" ]; then
+      parent_dir="$(cd "$parent" 2>/dev/null && pwd -P)" || parent_dir=""
+      if [ -n "$parent_dir" ]; then
+        if [ "$parent_dir" = "/" ]; then
+          printf '/%s\n' "$base"
+        else
+          printf '%s/%s\n' "$parent_dir" "$base"
+        fi
+        return 0
+      fi
+    fi
     printf '%s\n' "$dir"
   fi
 }
@@ -196,6 +210,28 @@ detect_previous_install_dir() {
   is_vite_plus_install_dir "$old_dir" || return 1
 
   printf '%s\n' "$old_dir"
+}
+
+is_nested_install_dir() {
+  [ -n "$1" ] && [ -n "$2" ] || return 1
+
+  local old_dir install_dir
+  old_dir="$(normalize_existing_dir "$1")"
+  install_dir="$(normalize_existing_dir "$2")"
+
+  [ "$old_dir" != "$install_dir" ] || return 1
+  if [ "$old_dir" = "/" ] || [ "$install_dir" = "/" ]; then
+    return 0
+  fi
+
+  case "$old_dir" in
+    "$install_dir"/*) return 0 ;;
+  esac
+  case "$install_dir" in
+    "$old_dir"/*) return 0 ;;
+  esac
+
+  return 1
 }
 
 prompt_remove_previous_install_dir() {
@@ -984,7 +1020,9 @@ main() {
 
   local previous_install_dir
   previous_install_dir="$(detect_previous_install_dir || true)"
-  prompt_remove_previous_install_dir "$previous_install_dir"
+  if [ -n "$previous_install_dir" ] && is_nested_install_dir "$previous_install_dir" "$INSTALL_DIR"; then
+    error "Previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Choose a separate VP_HOME or remove the previous install first."
+  fi
 
   local platform
   platform=$(detect_platform)
@@ -1176,6 +1214,8 @@ WRAPPER_EOF
 
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
+
+  prompt_remove_previous_install_dir "$previous_install_dir"
 
   # Use ~ shorthand if install dir is under HOME, otherwise show full path
   local display_dir="${INSTALL_DIR/#$HOME/~}"

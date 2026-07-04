@@ -297,6 +297,27 @@ function Get-PreviousInstallDir {
     return $oldDir
 }
 
+function Test-NestedInstallDir {
+    param(
+        [string]$OldDir,
+        [string]$NewDir
+    )
+    if ([string]::IsNullOrWhiteSpace($OldDir) -or [string]::IsNullOrWhiteSpace($NewDir)) {
+        return $false
+    }
+
+    $oldDir = Normalize-InstallDir $OldDir
+    $newDir = Normalize-InstallDir $NewDir
+    if ([string]::IsNullOrWhiteSpace($oldDir) -or [string]::IsNullOrWhiteSpace($newDir) -or $oldDir -eq $newDir) {
+        return $false
+    }
+
+    $oldPrefix = $oldDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $newPrefix = $newDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    return $oldPrefix.StartsWith($newPrefix, [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $newPrefix.StartsWith($oldPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Prompt-RemovePreviousInstallDir {
     param([string]$PreviousInstallDir)
     if (-not $PreviousInstallDir) {
@@ -723,7 +744,9 @@ function Main {
     }
 
     $previousInstallDir = Get-PreviousInstallDir
-    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
+    if ($previousInstallDir -and (Test-NestedInstallDir -OldDir $previousInstallDir -NewDir $InstallDir)) {
+        Write-Error-Exit "Previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Choose a separate VP_HOME or remove the previous install first."
+    }
 
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
@@ -950,6 +973,8 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
+
+    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
