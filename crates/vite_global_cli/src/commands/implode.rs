@@ -104,19 +104,16 @@ fn collect_affected_profiles(
         let path = resolve_profile_path(profile, user_home);
         let name = abbreviate_home_path(&path, user_home);
 
-        // For snippets, check if the file exists only
-        if matches!(profile.kind, ShellProfileKind::Snippet) {
-            if let Ok(true) = std::fs::exists(&path) {
-                affected.push(AffectedProfile { name, path, kind: AffectedProfileKind::Snippet })
-            }
-            continue;
-        }
         // Read directly — if the file doesn't exist, read_to_string returns Err
         // which .ok().filter() handles gracefully (no redundant exists() check).
         if let Some(content) = std::fs::read_to_string(&path)
             .ok()
             .filter(|c| contains_vite_plus_source_line(c, source_matcher, profile.env_file))
         {
+            if matches!(profile.kind, ShellProfileKind::Snippet) {
+                affected.push(AffectedProfile { name, path, kind: AffectedProfileKind::Snippet });
+                continue;
+            }
             affected.push(AffectedProfile {
                 name,
                 path,
@@ -277,35 +274,23 @@ fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::p
 }
 
 struct VitePlusSourceMatcher {
-    env: Vec<Str>,
-    env_fish: Vec<Str>,
-    env_nu: Vec<Str>,
+    roots: Vec<Str>,
 }
 
 impl VitePlusSourceMatcher {
     fn new(home_dir: &AbsolutePathBuf, user_home: &AbsolutePathBuf) -> Self {
-        let roots = vite_plus_home_refs(home_dir, user_home);
-        Self {
-            env: build_env_path_refs(&roots, "env", false),
-            env_fish: build_env_path_refs(&roots, "env.fish", false),
-            env_nu: build_env_path_refs(&roots, "env.nu", true),
-        }
+        Self { roots: vite_plus_home_refs(home_dir, user_home) }
     }
 
     fn is_vite_plus_source_line(&self, line: &str, env_file: &str) -> bool {
         let Some(arg) = source_line_arg(line) else {
             return false;
         };
-        self.candidates_for(env_file).iter().any(|candidate| arg == &**candidate)
-    }
 
-    fn candidates_for(&self, env_file: &str) -> &[Str] {
-        match env_file {
-            "env" => &self.env,
-            "env.fish" => &self.env_fish,
-            "env.nu" => &self.env_nu,
-            _ => &[],
-        }
+        self.roots.iter().any(|root| {
+            let path = join_path_ref(root, env_file);
+            arg == &*path || (env_file == "env.nu" && arg == &*path_ref_with_backslashes(&path))
+        })
     }
 }
 
@@ -325,29 +310,7 @@ fn vite_plus_home_refs(home_dir: &AbsolutePathBuf, user_home: &AbsolutePathBuf) 
         }
     }
 
-    // Keep legacy default roots so a later VP_HOME change does not strand old lines.
-    push_path_ref(&mut refs, Str::from("$HOME/.vite-plus"));
-    push_path_ref(&mut refs, Str::from("~/.vite-plus"));
-    let legacy_home = user_home.join(".vite-plus");
-    push_path_ref(&mut refs, vite_str::format!("{}", legacy_home.as_path().display()));
-    push_path_ref(
-        &mut refs,
-        normalize_path_separators(&legacy_home.as_path().display().to_string()),
-    );
-
     refs
-}
-
-fn build_env_path_refs(roots: &[Str], env_file: &str, include_backslash: bool) -> Vec<Str> {
-    let mut paths = Vec::new();
-    for root in roots {
-        let path = join_path_ref(root, env_file);
-        push_path_ref(&mut paths, path.clone());
-        if include_backslash {
-            push_path_ref(&mut paths, path_ref_with_backslashes(&path));
-        }
-    }
-    paths
 }
 
 fn push_path_ref(paths: &mut Vec<Str>, path: Str) {
@@ -384,18 +347,7 @@ fn contains_vite_plus_source_line(
     source_matcher: &VitePlusSourceMatcher,
     env_file: &str,
 ) -> bool {
-    let mut previous_line_was_marker = false;
-
-    for line in content.lines() {
-        if source_matcher.is_vite_plus_source_line(line, env_file)
-            || (previous_line_was_marker && is_source_command_line(line))
-        {
-            return true;
-        }
-        previous_line_was_marker = line.contains(VITE_PLUS_COMMENT);
-    }
-
-    false
+    content.lines().any(|line| source_matcher.is_vite_plus_source_line(line, env_file))
 }
 
 fn source_line_arg(line: &str) -> Option<&str> {
@@ -407,10 +359,6 @@ fn source_line_arg(line: &str) -> Option<&str> {
         return rest.find('\'').map(|end| &rest[..end]);
     }
     rest.split_whitespace().next()
-}
-
-fn is_source_command_line(line: &str) -> bool {
-    source_command_remainder(line).is_some()
 }
 
 fn source_command_remainder(line: &str) -> Option<&str> {
@@ -428,9 +376,7 @@ fn remove_vite_plus_lines(
     let mut remove_indices = Vec::new();
 
     for (i, line) in lines.iter().enumerate() {
-        let marker_fallback =
-            i > 0 && lines[i - 1].contains(VITE_PLUS_COMMENT) && is_source_command_line(line);
-        if source_matcher.is_vite_plus_source_line(line, env_file) || marker_fallback {
+        if source_matcher.is_vite_plus_source_line(line, env_file) {
             remove_indices.push(i);
             // Also remove the comment line above
             if i > 0 && lines[i - 1].contains(VITE_PLUS_COMMENT) {
@@ -579,11 +525,11 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_vite_plus_lines_marker_fallback_for_stale_custom_path() {
+    fn test_remove_vite_plus_lines_ignores_marker_with_unmatched_path() {
         let matcher = default_source_matcher();
         let content = "# existing\n\n# Vite+ bin (https://viteplus.dev)\n. \"/opt/old-vp/env\"\n";
         let result = remove_vite_plus_lines(content, &matcher, "env");
-        assert_eq!(&*result, "# existing\n");
+        assert_eq!(&*result, content);
     }
 
     #[test]
@@ -710,7 +656,7 @@ mod tests {
         std::fs::write(home.join(".zshrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
         // Unrelated profile (should be ignored)
         std::fs::write(home.join(".bashrc"), "export PATH=/usr/bin\n").unwrap();
-        // Snippet file (just needs to exist)
+        // Snippet file with a matching Vite+ source line
         let fish_dir = home.join(".config/fish/conf.d");
         std::fs::create_dir_all(&fish_dir).unwrap();
         std::fs::write(fish_dir.join("vite-plus.fish"), "source ~/.vite-plus/env.fish\n").unwrap();
@@ -733,7 +679,10 @@ mod tests {
         let _guard = ProfileEnvGuard::new(None, None, None);
 
         std::fs::write(home.join(".zshrc"), ". \"$HOME/tools/vp/env\"\n").unwrap();
-        std::fs::write(home.join(".bashrc"), "export PATH=/usr/bin\n").unwrap();
+        std::fs::write(home.join(".bashrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+        let fish_dir = home.join(".config/fish/conf.d");
+        std::fs::create_dir_all(&fish_dir).unwrap();
+        std::fs::write(fish_dir.join("vite-plus.fish"), "source ~/.vite-plus/env.fish\n").unwrap();
 
         let profiles = collect_affected_profiles(&home, &matcher);
         assert_eq!(profiles.len(), 1);
@@ -831,7 +780,8 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::create_dir_all(&fish_dir).unwrap();
 
-        std::fs::write(fish_dir.join("vite-plus.fish"), "").unwrap();
+        std::fs::write(fish_dir.join("vite-plus.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
+            .unwrap();
 
         let _guard = ProfileEnvGuard::new(None, Some(&xdg_config), None);
         let matcher = source_matcher_for(&home.join(".vite-plus"), &home);
