@@ -2,6 +2,10 @@
   "commands": [
     "vp -C packages/hello pack # -C packs the package from the workspace root",
     "ls packages/hello/dist # output lands in the target package",
+    {
+      "command": "rm -rf packages/hello/dist # reset so both forms produce identical output",
+      "ignoreOutput": true
+    },
     "cd packages/hello && vp pack # the cd form is equivalent",
     "vp -C packages/hello run where # -C applies to vp run as well",
     "cd packages/hello && vp run where # equivalent cd form for run",

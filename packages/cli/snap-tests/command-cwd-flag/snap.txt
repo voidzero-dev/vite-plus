@@ -8,10 +8,10 @@
 > ls packages/hello/dist # output lands in the target package
 index.mjs
 
+> rm -rf packages/hello/dist # reset so both forms produce identical output
 > cd packages/hello && vp pack # the cd form is equivalent
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ Cleaning 1 files
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
