@@ -196,6 +196,8 @@ git -C ~/git/github.com/vite-plus-ecosystem-ci/$repo checkout "$branch"
 
 The `.github` repo also ships `scripts/setup-local.sh <repo>`, which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step. When in doubt, ask the release manager which project(s) to target.
 
+**Validate in the project's own CI (optional, deeper).** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
+
 The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
 
 ### Example (v0.2.2, PR #2016)
