@@ -193,6 +193,7 @@ minimumReleaseAgeExclude:
   - vite-plus
   - '@rolldown/binding-*'
   - vitepress-plugin-feedback-tracker@0.2.0-alpha.1
+  - es-module-lexer@2.3.0
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
