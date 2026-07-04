@@ -26,7 +26,7 @@ $LocalTgz = $env:VP_LOCAL_TGZ
 $LocalBinary = $env:VP_LOCAL_BINARY
 # PR number or commit SHA to install as a test build (registry bridge mode)
 $PrVersion = $env:VP_PR_VERSION
-# Registry bridge that serves pkg.pr.new builds as clearly-versioned packages.
+# Registry bridge that serves PR preview builds as clearly-versioned packages.
 # The pkg.pr.new-style download URL (BridgeDownloadBase) 302-redirects to a
 # canonical 0.0.0-commit.<sha> tarball; the registry (BridgeRegistry) resolves
 # those commit versions (and proxies everything else to npmjs) so a full install
