@@ -8625,6 +8625,7 @@ dependencies = [
  "tracing-subscriber",
  "vite_path",
  "vite_str",
+ "which",
 ]
 
 [[package]]
