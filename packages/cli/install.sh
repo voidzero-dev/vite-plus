@@ -212,10 +212,23 @@ prompt_remove_previous_install_dir() {
   read -r response < /dev/tty || return 0
   case "$response" in
     y | Y | yes | YES)
-      if rm -rf -- "$old_dir"; then
+      local vp_bin="$old_dir/current/bin/vp"
+      if [ ! -f "$vp_bin" ]; then
+        vp_bin="$old_dir/current/bin/vp.exe"
+      fi
+      if [ ! -f "$vp_bin" ]; then
+        warn "Could not remove previous Vite+ install at $old_dir: vp binary not found."
+        return 0
+      fi
+
+      local implode_output
+      if implode_output=$(VP_HOME="$old_dir" "$vp_bin" implode --yes 2>&1); then
         success "Removed previous Vite+ install at $old_dir."
       else
         warn "Could not remove previous Vite+ install at $old_dir."
+        if [ -n "$implode_output" ]; then
+          printf '%s\n' "$implode_output" >&2
+        fi
       fi
       ;;
   esac
@@ -971,6 +984,7 @@ main() {
 
   local previous_install_dir
   previous_install_dir="$(detect_previous_install_dir || true)"
+  prompt_remove_previous_install_dir "$previous_install_dir"
 
   local platform
   platform=$(detect_platform)
@@ -1162,8 +1176,6 @@ WRAPPER_EOF
 
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
-
-  prompt_remove_previous_install_dir "$previous_install_dir"
 
   # Use ~ shorthand if install dir is under HOME, otherwise show full path
   local display_dir="${INSTALL_DIR/#$HOME/~}"

@@ -314,11 +314,28 @@ function Prompt-RemovePreviousInstallDir {
     Write-Host "The new VP_HOME is $InstallDir."
     $response = Read-Host "Remove the previous install directory? (y/N)"
     if ($response -match "^(?i:y|yes)$") {
+        $vpBin = Join-Path $PreviousInstallDir "current\bin\vp.exe"
+        if (-not (Test-Path -LiteralPath $vpBin)) {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: vp binary not found."
+            return
+        }
+
+        $previousVpHome = $env:VP_HOME
         try {
-            Remove-Item -LiteralPath $PreviousInstallDir -Recurse -Force -ErrorAction Stop
-            Write-Success "Removed previous Vite+ install at $PreviousInstallDir."
+            $env:VP_HOME = $PreviousInstallDir
+            $output = & $vpBin implode --yes 2>&1
+            $exitCode = $LASTEXITCODE
         } catch {
-            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: $_"
+            $output = $_
+            $exitCode = 1
+        } finally {
+            $env:VP_HOME = $previousVpHome
+        }
+
+        if ($exitCode -eq 0) {
+            Write-Success "Removed previous Vite+ install at $PreviousInstallDir."
+        } else {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: $output"
         }
     }
 }
@@ -706,6 +723,7 @@ function Main {
     }
 
     $previousInstallDir = Get-PreviousInstallDir
+    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
 
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
@@ -932,8 +950,6 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
-
-    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
