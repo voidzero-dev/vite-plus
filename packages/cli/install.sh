@@ -1209,13 +1209,13 @@ WRAPPER_EOF
   fi
   "$vp_bin" env setup --env-only > /dev/null
 
-  # Configure shell PATH (always attempted)
-  configure_shell_path
-
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
 
   prompt_remove_previous_install_dir "$previous_install_dir"
+
+  # Configure shell PATH after the install is otherwise complete.
+  configure_shell_path
 
   # Use ~ shorthand if install dir is under HOME, otherwise show full path
   local display_dir="${INSTALL_DIR/#$HOME/~}"

@@ -965,16 +965,14 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 
-    # Configure Windows-native shell access via the User PATH
-    $pathResult = Configure-UserPath
-
-    # Configure Nushell autoload if Nushell is installed
-    $nushellResult = Configure-Nushell
-
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
 
     Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
+
+    # Configure shell access after the install is otherwise complete.
+    $pathResult = Configure-UserPath
+    $nushellResult = Configure-Nushell
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
