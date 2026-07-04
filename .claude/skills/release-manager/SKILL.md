@@ -180,15 +180,21 @@ If the release manager says yes:
 2. Wait for the `Publish to pkg.pr.new` workflow run on the release branch to succeed (the pkg-pr-new bot comments install URLs on the PR).
 3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the pkg.pr.new commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
 
-**Choosing a target project.** The catalog of smoke-test projects is the [`vite-plus-ecosystem-ci` org](https://github.com/orgs/vite-plus-ecosystem-ci/repositories): ~60 forked real-world apps spanning package managers (pnpm, npm, yarn, bun) and frameworks (Vue, Nuxt, Svelte, React/Next, plus Rust/napi and PHP/Laravel projects). Pick one whose stack matches the release's risk area (e.g. a pnpm monorepo for catalog/override changes, a bun project for bun install-path changes, a napi project for native binding changes). Their pinned `vite-plus` versions vary (some on the immediately previous release, some older); prefer one on the previous release for the common upgrade path, and confirm the pin is older than the release under test so migrate does a real upgrade rather than a no-op. `test-pkg-pr-new-migrate` needs a **local** checkout, so clone the chosen repo (or reuse an existing local fork) and pass its path. Check it out under `~/git/github.com/vite-plus-ecosystem-ci/<repo>` so all smoke-test clones live in one directory and the whole test environment can be cleaned up in one step afterward:
+**Choosing a target project.** The smoke-test catalog and the local-setup rules live in the ecosystem-ci org: [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md), with the machine-readable list in [`ecosystem.json`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/ecosystem.json) (each fork's upstream, tracked branch, and package manager). Pick one whose stack matches the release's risk area (a pnpm monorepo for catalog/override changes, a bun project for install-path changes, an `other`/native project for binding changes); filter `ecosystem.json` with `jq`. Prefer a fork pinned to the immediately previous release, so migrate does a real upgrade rather than a no-op.
+
+> **Mandatory: open any test PR against the `vite-plus-ecosystem-ci` fork, never the upstream repo.** `gh pr create` inside a fork defaults its base repo to the parent (upstream), so pass `--repo vite-plus-ecosystem-ci/<repo>` (or run `gh repo set-default vite-plus-ecosystem-ci/<repo>` first). See TESTING.md.
+
+`test-pkg-pr-new-migrate` needs a **local** checkout on the fork's **tracked branch** (often not the default branch, e.g. `vue-core` tracks `minor`). Clone under one directory so the whole test environment cleans up in one step:
 
 ```bash
-gh repo clone vite-plus-ecosystem-ci/<repo> ~/git/github.com/vite-plus-ecosystem-ci/<repo>
-# ... run the harness against it ...
+repo=<repo>; branch=<tracked-branch>   # from ecosystem.json
+git clone git@github.com:vite-plus-ecosystem-ci/$repo.git ~/git/github.com/vite-plus-ecosystem-ci/$repo
+git -C ~/git/github.com/vite-plus-ecosystem-ci/$repo checkout "$branch"
+# ... run the harness against ~/git/github.com/vite-plus-ecosystem-ci/$repo ...
 # cleanup after the release: rm -rf ~/git/github.com/vite-plus-ecosystem-ci
 ```
 
-When in doubt, ask the release manager which project(s) to target.
+The `.github` repo also ships `scripts/setup-local.sh <repo>`, which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step. When in doubt, ask the release manager which project(s) to target.
 
 The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
 
