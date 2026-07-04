@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono --git # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:workspace --no-interactive --directory my-mono --git # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
 ◇ Scaffolded my-mono
 • Node <semver>  pnpm <semver>
 → Next: cd my-mono && vp run
