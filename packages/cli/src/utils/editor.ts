@@ -273,10 +273,6 @@ export async function selectEditors({
   return undefined;
 }
 
-export function detectExistingEditor(projectRoot: string): EditorId | undefined {
-  return detectExistingEditors(projectRoot)?.[0];
-}
-
 export function detectExistingEditors(projectRoot: string): EditorId[] | undefined {
   const editors: EditorId[] = [];
   for (const option of EDITORS) {
