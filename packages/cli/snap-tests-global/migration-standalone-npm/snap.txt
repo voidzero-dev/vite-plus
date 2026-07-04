@@ -1,4 +1,4 @@
-> vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile
+> node $SNAP_LOCAL_REGISTRY -- vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile
 
 Formatting code...
 

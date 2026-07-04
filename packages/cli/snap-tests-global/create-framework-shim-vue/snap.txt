@@ -1,4 +1,4 @@
-> vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app
+> node $SNAP_LOCAL_REGISTRY -- vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app
 > cat vite-plus-application/src/env.d.ts # check Vue shim was added
 declare module '*.vue' {
   import type { DefineComponent } from 'vue';
@@ -6,7 +6,7 @@ declare module '*.vue' {
   export default component;
 }
 
-> cd vite-plus-application && vp install # install dependencies
+> cd vite-plus-application && node $SNAP_LOCAL_REGISTRY -- vp install # install dependencies
 > cd vite-plus-application && vp check --fix # fix generated formatting and ensure no errors
 pass: Formatting completed for checked files (<variable>ms)
 pass: Found no warnings, lint errors, or type errors in 5 files (<variable>ms, <variable> threads)
