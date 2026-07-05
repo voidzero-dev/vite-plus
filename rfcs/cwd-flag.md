@@ -290,6 +290,8 @@ Used only for ranking and single-candidate auto-select, never to hide a package:
 | `dev` / `build` / `preview` | its directory directly contains one of Vite's config file names (`vite.config.{js,mjs,ts,cjs,mts,cts}`, the exact list Vite probes), **or** an `index.html` at the package root (Vite's default app entry) |
 | `pack`                      | its `vite.config.*` declares a `pack` block (read via static extraction; a Vite config without `pack` does not count), **or** `src/index.ts` exists (tsdown's only default entry)                          |
 
+Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vite_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
+
 "Exactly one likely-runnable package" means: after sorting rows runnable-first, the first row is runnable and the second is not. Auto-select additionally requires an interactive terminal.
 
 Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is immediately visible (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
