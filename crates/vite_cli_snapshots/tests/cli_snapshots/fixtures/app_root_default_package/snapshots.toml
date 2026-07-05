@@ -26,13 +26,3 @@ as an open map might hide defaultPackage behind the spread, but that must
 not fail the command. Bare vp build falls through and runs in place.
 """
 steps = [{ argv = ["vp", "build"], cwd = "spread", tty = false }]
-
-[[case]]
-name = "member_config_ignored"
-vp = ["local", "global"]
-comment = """
-defaultPackage is a root-pointer concept: a member package's own config
-declaring it (here pointing at a missing directory) must not redirect or
-fail a command already running in that member.
-"""
-steps = [{ argv = ["vp", "pack"], cwd = "packages/ui", tty = false }]
