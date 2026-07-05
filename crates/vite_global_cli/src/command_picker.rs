@@ -117,7 +117,7 @@ const COMMANDS: &[CommandEntry] = &[
 pub fn pick_top_level_command_if_interactive(
     cwd: &AbsolutePath,
 ) -> io::Result<TopLevelCommandPick> {
-    if !should_enable_picker() {
+    if !vite_shared::is_interactive_terminal() {
         return Ok(TopLevelCommandPick::Skipped);
     }
 
@@ -127,10 +127,6 @@ pub fn pick_top_level_command_if_interactive(
         Some(selection) => TopLevelCommandPick::Selected(selection),
         None => TopLevelCommandPick::Cancelled,
     })
-}
-
-fn should_enable_picker() -> bool {
-    vite_shared::is_interactive_terminal()
 }
 
 fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {

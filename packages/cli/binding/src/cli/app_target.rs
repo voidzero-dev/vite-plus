@@ -26,8 +26,8 @@ pub(super) enum AppTarget {
 }
 
 struct PackageRow {
-    name: String,
-    path: String,
+    name: vite_str::Str,
+    path: vite_str::Str,
     absolute: AbsolutePathBuf,
     runnable: bool,
 }
@@ -49,9 +49,8 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
 /// disables elicitation; help/version requests are answered by the underlying
 /// tool and must never be redirected.
 fn is_bare(args: &[String]) -> bool {
-    args.iter().all(|arg| {
-        arg.starts_with('-') && !matches!(arg.as_str(), "-h" | "--help" | "-V" | "--version")
-    })
+    args.iter()
+        .all(|arg| arg.starts_with('-') && !super::help::is_app_tool_help_or_version_flag(arg))
 }
 
 /// Heuristic ranking signal: does `dir` look runnable for `command`?
@@ -62,9 +61,11 @@ fn looks_runnable(dir: &AbsolutePathBuf, command: &str) -> bool {
     match command {
         // Bare `vp pack` succeeds when the config declares a `pack` block or
         // tsdown's default entry exists; a Vite config without `pack` does
-        // not make a package packable.
+        // not make a package packable. `contains` deliberately counts configs
+        // with spreads (`pack` may exist behind them): the right direction
+        // for a never-hide ranking signal.
         "pack" => {
-            vite_static_config::resolve_static_config(dir).get("pack").is_some()
+            vite_static_config::resolve_static_config(dir).contains("pack")
                 || dir.as_path().join("src/index.ts").is_file()
         }
         _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
@@ -107,8 +108,8 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         .iter()
         .map(|row| vite_select::SelectItem {
             label: vite_str::format!("{} {}", row.name, row.path),
-            display_name: vite_str::Str::from(row.name.as_str()),
-            description: vite_str::Str::from(row.path.as_str()),
+            display_name: row.name.clone(),
+            description: row.path.clone(),
             group: None,
         })
         .collect();
@@ -181,8 +182,8 @@ pub(super) fn resolve_app_target(
         .map(|info| {
             let absolute = info.absolute_path.to_absolute_path_buf();
             PackageRow {
-                name: info.package_json.name.to_string(),
-                path: info.path.as_str().to_string(),
+                name: info.package_json.name.clone(),
+                path: vite_str::Str::from(info.path.as_str()),
                 runnable: looks_runnable(&absolute, command),
                 absolute,
             }
@@ -198,14 +199,13 @@ pub(super) fn resolve_app_target(
     // otherwise the fuzzy picker runs.
     if vite_shared::is_interactive_terminal() {
         let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
-        let row = if single_runnable {
-            &rows[0]
-        } else {
-            match run_package_picker(command, &rows)? {
-                Some(index) => &rows[index],
-                None => return Ok(AppTarget::Exit(ExitStatus(130))),
-            }
+        let picked = if single_runnable { Some(0) } else { run_package_picker(command, &rows)? };
+        let Some(index) = picked else {
+            return Ok(AppTarget::Exit(ExitStatus(130)));
         };
+        let row = &rows[index];
+        // Deliberately stdout via println!: these lines belong to the
+        // command's own output stream, like the tool output that follows.
         println!("Selected package: {} ({})", row.name, row.path);
         println!("Tip: run this directly with `vp -C {} {command}`", row.path);
         return Ok(AppTarget::Dir(row.absolute.clone()));
@@ -244,18 +244,19 @@ mod tests {
         assert!(!is_bare(&to_args(&["--help"])));
         assert!(!is_bare(&to_args(&["-h"])));
         assert!(!is_bare(&to_args(&["--watch", "--version"])));
+        // Vite and tsdown are cac-based and use `-v` for version.
+        assert!(!is_bare(&to_args(&["-v"])));
     }
 
     #[test]
     fn only_app_commands_elicit() {
-        let args = vec![];
         for (subcommand, expected) in [
-            (SynthesizableSubcommand::Dev { args: args.clone() }, Some("dev")),
-            (SynthesizableSubcommand::Build { args: args.clone() }, Some("build")),
-            (SynthesizableSubcommand::Preview { args: args.clone() }, Some("preview")),
-            (SynthesizableSubcommand::Pack { args: args.clone() }, Some("pack")),
-            (SynthesizableSubcommand::Lint { args: args.clone() }, None),
-            (SynthesizableSubcommand::Test { args: args.clone() }, None),
+            (SynthesizableSubcommand::Dev { args: vec![] }, Some("dev")),
+            (SynthesizableSubcommand::Build { args: vec![] }, Some("build")),
+            (SynthesizableSubcommand::Preview { args: vec![] }, Some("preview")),
+            (SynthesizableSubcommand::Pack { args: vec![] }, Some("pack")),
+            (SynthesizableSubcommand::Lint { args: vec![] }, None),
+            (SynthesizableSubcommand::Test { args: vec![] }, None),
         ] {
             assert_eq!(app_command_parts(&subcommand).map(|(name, _)| name), expected);
         }

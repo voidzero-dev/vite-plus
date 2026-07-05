@@ -51,12 +51,10 @@ async fn execute_direct_subcommand(
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
     let target = app_target::resolve_app_target(&subcommand, cwd)?;
-    if let app_target::AppTarget::Exit(status) = target {
-        return Ok(status);
-    }
     let cwd = match &target {
+        app_target::AppTarget::Exit(status) => return Ok(*status),
         app_target::AppTarget::Dir(dir) => dir,
-        _ => cwd,
+        app_target::AppTarget::CurrentDir => cwd,
     };
 
     let (workspace_root, _) = vite_workspace::find_workspace_root(cwd)?;

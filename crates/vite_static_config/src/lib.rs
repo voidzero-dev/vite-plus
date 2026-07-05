@@ -77,6 +77,17 @@ impl FieldMap {
             }
         }
     }
+
+    /// Presence check with the same semantics as [`get`](Self::get) returning
+    /// `Some`, without cloning the field's value. In an open map (spread or
+    /// computed keys) every key may exist and therefore counts as present.
+    #[must_use]
+    pub fn contains(&self, key: &str) -> bool {
+        match &self.0 {
+            FieldMapInner::Closed(map) => map.contains_key(key),
+            FieldMapInner::Open(_) => true,
+        }
+    }
 }
 
 /// Config file names to try, in priority order.

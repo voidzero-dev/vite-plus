@@ -36,6 +36,13 @@ fn is_vitest_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
 }
 
+/// Help/version flags of the forwarded app tools (Vite and tsdown are
+/// cac-based: `-v, --version`; vp's own clap surface uses `-V`). Requests for
+/// these must always reach the tool, never target elicitation.
+pub(super) fn is_app_tool_help_or_version_flag(arg: &str) -> bool {
+    matches!(arg, "-h" | "--help" | "-v" | "-V" | "--version")
+}
+
 fn is_vitest_watch_flag(arg: &str) -> bool {
     matches!(arg, "-w" | "--watch")
 }
