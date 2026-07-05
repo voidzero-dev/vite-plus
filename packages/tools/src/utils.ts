@@ -48,7 +48,10 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // semver version
       // e.g.: ` v1.0.0` -> ` <semver>`
       // e.g.: `/1.0.0` -> `/<semver>`
-      .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-.*)?/g, '$1<semver>')
+      // The prerelease is bounded to version characters so a long
+      // `@0.0.0-commit.<sha>` npm alias inside JSON does not greedily swallow the
+      // closing quote/comma (e.g. `"npm:...core@0.0.0-commit.<sha>",`).
+      .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-[\w.+-]*)?/g, '$1<semver>')
       // vitest-family pins written as JSON values (catalog blocks, devDependencies,
       // overrides/resolutions) all track the bundled VITEST_VERSION and so change on
       // every daily upgrade-deps bump. The quote-preceded value is not caught by the
@@ -71,6 +74,14 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // visible — masking it would hide a stale/accidentally-rewritten user pin.
       .replaceAll(
         /("(?:vitest|@vitest\/(?!coverage-)[\w-]+)": ")(?:[4-9]|[1-9]\d+)\.\d+\.\d+(?:-[\w.]+)?(")/g,
+        '$1<semver>$2',
+      )
+      // Vite+ and its core package are written as exact lockstep versions by
+      // create/migrate. Mask JSON dependency values so release bumps do not
+      // create unrelated snapshot churn (YAML values and npm aliases are
+      // already covered by the generic semver normalization above).
+      .replaceAll(
+        /("(?:vite-plus|@voidzero-dev\/vite-plus-core)": ")\d+\.\d+\.\d+(?:-[\w.]+)?(")/g,
         '$1<semver>$2',
       )
       // devEngines.packageManager auto-pin writes the exact resolved version

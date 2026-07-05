@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   COPILOT_SETUP_WORKFLOW_PATH,
   detectExistingAgentTargetPaths,
-  detectExistingAgentTargetPath,
   hasExistingAgentInstructions,
   replaceMarkedAgentInstructionsSection,
   resolveAgentOptions,
@@ -376,7 +375,7 @@ describe('selectAgentTargetPaths', () => {
   });
 });
 
-describe('detectExistingAgentTargetPath', () => {
+describe('detectExistingAgentTargetPaths', () => {
   it('detects all existing regular agent files', async () => {
     const dir = await createProjectDir();
     await mockFs.writeFile(path.join(dir, 'AGENTS.md'), '# Agents');
@@ -389,14 +388,14 @@ describe('detectExistingAgentTargetPath', () => {
     const dir = await createProjectDir();
     await mockFs.writeFile(path.join(dir, 'CLAUDE.md'), '# Claude');
 
-    expect(detectExistingAgentTargetPath(dir)).toBe('CLAUDE.md');
+    expect(detectExistingAgentTargetPaths(dir)).toEqual(['CLAUDE.md']);
   });
 
   it('ignores symlinked agent files', async () => {
     const dir = await createProjectDir();
     await mockFs.symlink('AGENTS.md', path.join(dir, 'CLAUDE.md'));
 
-    expect(detectExistingAgentTargetPath(dir)).toBeUndefined();
+    expect(detectExistingAgentTargetPaths(dir)).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 [build]
 base = "docs/"
-command = "pnpm build"
+command = "pnpm build:netlify"
 publish = ".vitepress/dist"
 
 # Windows installer redirect

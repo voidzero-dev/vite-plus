@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager yarn --directory approved-app # yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager yarn --directory approved-app # yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls
 ◇ Scaffolded approved-app
 • Node <semver>  yarn <semver>
 ✓ Dependencies installed in <variable>ms
@@ -16,7 +16,7 @@
     "core-js": "3.39.0"
   },
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "catalog:"
   },
   "dependenciesMeta": {
     "core-js": {
@@ -24,8 +24,7 @@
     }
   },
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {
@@ -36,7 +35,7 @@
   }
 }
 
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --package-manager yarn --directory default-app # default run surfaces the gated build with guidance, leaving it disabled
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --package-manager yarn --directory default-app # default run surfaces the gated build with guidance, leaving it disabled
 
 Build scripts were not run for: core-js.
 
@@ -58,11 +57,10 @@ These dependencies may not work until built. Enable them in the workspace root p
     "core-js": "3.39.0"
   },
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "catalog:"
   },
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {

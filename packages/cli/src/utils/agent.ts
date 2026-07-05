@@ -174,19 +174,6 @@ export async function selectAgentTargetPaths({
   return selection.targetPaths;
 }
 
-export async function selectAgentTargetPath({
-  interactive,
-  agent,
-  onCancel,
-}: {
-  interactive: boolean;
-  agent?: AgentSelection;
-  onCancel: () => void;
-}) {
-  const targetPaths = await selectAgentTargetPaths({ interactive, agent, onCancel });
-  return targetPaths?.[0];
-}
-
 export function detectExistingAgentTargetPaths(projectRoot: string) {
   const detectedPaths: string[] = [];
   const seenTargetPaths = new Set<string>();
@@ -201,10 +188,6 @@ export function detectExistingAgentTargetPaths(projectRoot: string) {
     }
   }
   return detectedPaths.length > 0 ? detectedPaths : undefined;
-}
-
-export function detectExistingAgentTargetPath(projectRoot: string) {
-  return detectExistingAgentTargetPaths(projectRoot)?.[0];
 }
 
 export function hasExistingAgentInstructions(projectRoot: string): boolean {
@@ -257,10 +240,6 @@ export function updateExistingAgentInstructions(projectRoot: string): void {
 
 export function resolveAgentTargetPaths(agent?: string | string[]) {
   return getAgentTargetPaths(resolveAgentOptions(agent));
-}
-
-export function resolveAgentTargetPath(agent?: string) {
-  return resolveAgentTargetPaths(agent)[0] ?? 'AGENTS.md';
 }
 
 export function resolveAgentOptions(agent?: string | string[]) {

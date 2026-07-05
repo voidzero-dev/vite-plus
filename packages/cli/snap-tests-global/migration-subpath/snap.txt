@@ -2,7 +2,7 @@
 > vp migrate foo --no-interactive # migration work with subpath
 
 ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
-◇ Migrated foo to Vite+
+◇ Migrated foo to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 
@@ -44,16 +44,12 @@ core.hooksPath is not set
 
 > cat foo/pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'

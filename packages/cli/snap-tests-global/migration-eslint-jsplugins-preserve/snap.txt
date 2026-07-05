@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # plugin referenced via lint.jsPlugins must be preserved through cleanup AND sanitization
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint

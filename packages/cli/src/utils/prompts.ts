@@ -5,6 +5,7 @@ import { downloadPackageManager as downloadPackageManagerBinding } from '../../b
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { runCommandSilently } from './command.ts';
+import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
 
@@ -108,6 +109,15 @@ export async function runViteInstall(
     detectIgnoredBuilds?: boolean;
   },
 ) {
+  // Reconcile the project's registry with this build before installing: a
+  // preview/test build points it at the registry bridge so the
+  // `0.0.0-commit.<sha>` versions migrate/create just pinned resolve (npmjs has
+  // no such version); a real release removes any bridge registry a prior preview
+  // run left behind so installs don't hit the test bridge. No-op for a real build
+  // with no leftover. Done before the VP_SKIP_INSTALL return so it persists for
+  // the project's own CI even when this run skips the install.
+  reconcilePreviewBridgeRegistry(cwd, undefined, options?.packageManager);
+
   // install dependencies on non-CI environment
   if (process.env.VP_SKIP_INSTALL) {
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
@@ -171,15 +181,15 @@ export async function runViteFmt(
   cwd: string,
   interactive?: boolean,
   paths?: string[],
-  options?: { silent?: boolean },
+  options?: { silent?: boolean; command?: string; commandArgs?: string[] },
 ) {
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['fmt', '--write', ...(paths ?? [])],
+    command: options?.command ?? process.env.VP_CLI_BIN ?? 'vp',
+    args: [...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])],
     cwd,
     envs: process.env,
   });
@@ -195,8 +205,16 @@ export async function runViteFmt(
     spinner.stop(`Format failed`);
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
-    const relativePaths = (paths ?? []).length > 0 ? ` ${(paths ?? []).join(' ')}` : '';
-    prompts.log.info(`You may need to run "vp fmt --write${relativePaths}" manually in ${cwd}`);
+    // Migration can pass batches of thousands of paths; interpolating them all
+    // would bury the formatter's diagnostic above under one enormous line.
+    const joinedPaths = (paths ?? []).join(' ');
+    const hint =
+      joinedPaths.length === 0
+        ? `You may need to run "vp fmt" manually in ${cwd}`
+        : joinedPaths.length <= 256
+          ? `You may need to run "vp fmt ${joinedPaths}" manually in ${cwd}`
+          : `You may need to run "vp fmt" manually on the ${paths?.length} changed files in ${cwd}`;
+    prompts.log.info(hint);
     return {
       durationMs: Date.now() - startTime,
       exitCode,
@@ -260,7 +278,7 @@ export async function promptGitInit(options: {
   }
   if (options.interactive) {
     const selected = await prompts.confirm({
-      message: 'Initialize a git repository with an initial commit?',
+      message: 'Initialize a git repository?',
       initialValue: true,
     });
     if (prompts.isCancel(selected)) {

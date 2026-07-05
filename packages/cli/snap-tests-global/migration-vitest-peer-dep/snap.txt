@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # vitest should be added to devDeps when vitest-browser-svelte is present
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 
@@ -29,9 +29,9 @@
 
 > cat pnpm-workspace.yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vitest: <semver>
-  vite-plus: latest
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

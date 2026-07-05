@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --directory approved-app # template ships Prettier, so create installs+migrates before the main install; the gated build (core-js) must still be surfaced and approved
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --approve-builds --directory approved-app # template ships Prettier, so create installs+migrates before the main install; the gated build (core-js) must still be surfaced and approved
 
 Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.
 ◇ Scaffolded approved-app
@@ -10,21 +10,17 @@ Prettier detected in workspace packages but no root config found. Package-level 
 allowBuilds:
   core-js: true
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --directory default-app # default run surfaces the gated build with guidance, leaving it unapproved
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:with-build-dep --no-interactive --directory default-app # default run surfaces the gated build with guidance, leaving it unapproved
 
 Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.
 
@@ -40,21 +36,17 @@ These dependencies may not work until built. Run vp pm approve-builds in the pro
 allowBuilds:
   core-js: set this to true or false
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
-> cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
+> cd default-app && node $SNAP_LOCAL_REGISTRY -- vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
 .../core-js@<semver>/node_modules/core-js postinstall$ node -e "try{require('./postinstall')}catch(e){}"
 .../core-js@<semver>/node_modules/core-js postinstall: Done
 
@@ -62,16 +54,12 @@ peerDependencyRules:
 allowBuilds:
   core-js: true
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"

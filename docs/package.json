@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
+    "build": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vp run build:site",
+    "build:netlify": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
     "preview": "vitepress preview",
     "update-trusted-stack-stats": "node .vitepress/theme/data/fetch-trusted-stack-stats.ts"
   },
@@ -25,5 +26,5 @@
     "tailwindcss": "^4.1.18",
     "vitepress": "2.0.0-alpha.17"
   },
-  "packageManager": "pnpm@10.33.2"
+  "packageManager": "pnpm@10.34.4"
 }

@@ -11,12 +11,12 @@ catalog:
   '@clack/core': ^1.0.0
   '@iconify/vue': ^5.0.0
   '@napi-rs/cli': ^3.7.2
-  '@napi-rs/wasm-runtime': ^1.1.5
+  '@napi-rs/wasm-runtime': ^1.1.6
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.137.0
-  '@oxc-project/types': =0.137.0
+  '@oxc-project/runtime': =0.138.0
+  '@oxc-project/types': =0.138.0
   '@oxlint/plugins': =1.68.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
@@ -93,12 +93,12 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.137.0
-  oxc-parser: =0.137.0
-  oxc-transform: =0.137.0
-  oxfmt: =0.56.0
-  oxlint: =1.71.0
-  oxlint-tsgolint: =0.23.0
+  oxc-minify: =0.138.0
+  oxc-parser: =0.138.0
+  oxc-transform: =0.138.0
+  oxfmt: =0.57.0
+  oxlint: =1.72.0
+  oxlint-tsgolint: =0.24.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -107,7 +107,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.34.1
-  rolldown-plugin-dts: ^0.25.2
+  rolldown-plugin-dts: ^0.26.0
   rollup: ^4.60.4
   semver: ^7.8.0
   serve-static: ^2.0.0
@@ -192,6 +192,8 @@ minimumReleaseAgeExclude:
   - emnapi@1.11.1
   - vite-plus
   - '@rolldown/binding-*'
+  - vitepress-plugin-feedback-tracker@0.2.0-alpha.1
+  - es-module-lexer@2.3.0
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*

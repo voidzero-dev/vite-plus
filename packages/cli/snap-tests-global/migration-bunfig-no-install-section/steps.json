@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration preserves bunfig.toml without an install section",
+    "cat bunfig.toml # check Bun configuration is unchanged"
+  ]
+}

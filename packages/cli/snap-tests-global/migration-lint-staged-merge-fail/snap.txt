@@ -1,6 +1,6 @@
 > git init
 > vp migrate --no-interactive # should handle merge failure gracefully
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 ! Warnings:
   - Failed to merge staged config into vite.config.ts
@@ -35,19 +35,15 @@ Please add staged config to vite.config.ts manually, see https://viteplus.dev/gu
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat vite.config.ts # vite config should be unchanged (merge failed)
 const config = { plugins: [] };

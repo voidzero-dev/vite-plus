@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # @nuxt/eslint detected — ESLint migration is skipped with a warning
 
 @nuxt/eslint detected — automatic ESLint migration is skipped. @nuxt/eslint wires ESLint into a framework-specific flow that Vite+ cannot migrate cleanly yet. Your ESLint setup is preserved. To migrate manually, remove @nuxt/eslint from package.json and re-run `vp migrate`.
-◇ Migrated . to Vite+
+◇ Migrated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 

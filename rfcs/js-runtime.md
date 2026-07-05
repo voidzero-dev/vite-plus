@@ -227,7 +227,7 @@ let runtime = download_runtime_for_project(&project_path).await?;
 Following the PackageManager pattern:
 
 ```
-$VITE_PLUS_HOME/js_runtime/{runtime}/{version}/
+$VP_HOME/js_runtime/{runtime}/{version}/
 ```
 
 Examples:
@@ -241,7 +241,7 @@ Examples:
 The Node.js version index is cached locally to avoid repeated network requests:
 
 ```
-$VITE_PLUS_HOME/js_runtime/node/index_cache.json
+$VP_HOME/js_runtime/node/index_cache.json
 ```
 
 Cache structure:

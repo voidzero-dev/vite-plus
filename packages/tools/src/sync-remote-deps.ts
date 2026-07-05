@@ -740,7 +740,7 @@ export function mergeWorkspaceYaml(
     return yaml.stringify(merged, stringifyOptions);
   }
 
-  reconcileMap(mainDoc.contents, merged as Record<string, unknown>, yaml);
+  reconcileMap(mainDoc.contents, merged, yaml);
 
   return mainDoc.toString(stringifyOptions);
 }

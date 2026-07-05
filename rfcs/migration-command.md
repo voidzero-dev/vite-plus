@@ -32,7 +32,7 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 
 - ✅ **Dependencies**: vite, vitest, oxlint, oxfmt → vite-plus
 - ✅ **Overrides**: Force vite → vite-plus (for all dependencies)
-  - pnpm (no existing `pnpm` config): Writes `overrides`, `peerDependencyRules`, and `catalog` to `pnpm-workspace.yaml`
+  - pnpm (workspace settings): Writes `overrides` and `peerDependencyRules` to `pnpm-workspace.yaml`; reuses an existing managed/default catalog or creates top-level `catalog` when none exists
   - pnpm (existing `pnpm` config): Adds `pnpm.overrides` and `pnpm.peerDependencyRules` in `package.json`
   - npm/bun: Adds `overrides.vite` mapping in `package.json`
   - yarn: Adds `resolutions.vite` mapping in `package.json`
@@ -202,14 +202,17 @@ Wrote agent instructions to AGENTS.md
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
     "@vitejs/plugin-react": "^4.2.0"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
   }
 }
 ```
+
+`<vite-plus-version>` is the concrete version bundled with the CLI running the
+migration; migration does not persist the mutable `latest` tag.
 
 **After (pnpm, no existing `pnpm` config) -- `package.json`:**
 
@@ -240,8 +243,8 @@ Wrote agent instructions to AGENTS.md
 
 ```yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<vite-plus-version>
+  vite-plus: <vite-plus-version>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:
@@ -252,6 +255,11 @@ peerDependencyRules:
     vitest: '*'
 ```
 
+This example shows the fallback top-level default catalog. If the workspace
+already uses `catalogs.default`, migration keeps that form. If an existing named
+catalog owns the Vite+ toolchain, migration keeps package references and the
+managed override on that named catalog instead of introducing a default.
+
 **After (pnpm, existing `pnpm` config) -- `package.json`:**
 
 Projects that already have a `pnpm` field in `package.json` (e.g., with `overrides` or `onlyBuiltDependencies`) keep using `package.json` for pnpm config:
@@ -260,12 +268,12 @@ Projects that already have a `pnpm` field in `package.json` (e.g., with `overrid
 {
   "name": "my-package",
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vite-plus": "<vite-plus-version>"
   },
   "pnpm": {
     "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+      "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
     },
     "peerDependencyRules": {
       "allowAny": ["vite"],
@@ -497,14 +505,14 @@ export default defineConfig({
 
 ### for pnpm
 
-For monorepo projects and standalone projects without existing `pnpm` config in `package.json`, overrides, peerDependencyRules, and catalog are written to `pnpm-workspace.yaml`. Projects with existing `pnpm` config in `package.json` keep using `package.json`.
+For monorepo projects and standalone projects without existing `pnpm` config in `package.json`, overrides and peerDependencyRules are written to `pnpm-workspace.yaml`. Catalog-backed projects reuse their existing managed/default catalog layout; migration creates top-level `catalog` only when no suitable catalog exists. Projects with existing `pnpm` config in `package.json` keep using `package.json`.
 
 `pnpm-workspace.yaml`
 
 ```yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<vite-plus-version>
+  vite-plus: <vite-plus-version>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:
@@ -522,10 +530,10 @@ peerDependencyRules:
 ```json
 {
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
   }
 }
 ```
@@ -536,7 +544,7 @@ peerDependencyRules:
 
 ```yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite: npm:@voidzero-dev/vite-plus-core@<vite-plus-version>
 ```
 
 `package.json`
@@ -567,6 +575,29 @@ A successful migration should:
 8. ✅ Handle monorepo migrations efficiently
 9. ✅ Be safe and transparent about what changes
 
+## Bunx Script Rewriting
+
+The normal script rules rewrite `vite`, `vitest`, `oxlint`, `oxfmt`, `tsdown`,
+and `lint-staged` to their corresponding `vp` commands. When one of these tools
+is launched through `bunx`, migration preserves `bunx` and its `--bun` runtime
+override, and rewrites only the inner command. For example,
+`bunx --bun vite build` becomes `bunx --bun vp build` and
+`bunx --bun vitest run` becomes `bunx --bun vp test run`.
+
+The same behavior applies to `eslint` and `prettier` when their optional
+migrations run. Nested launcher forms such as
+`portless --tailscale run bunx --bun vite` are also handled. Other package
+executors remain unchanged and can be addressed separately.
+
+## Post-Migration Formatting
+
+After a successful install, migration runs the formatter only on files changed
+during migration, excluding paths that were already dirty in the Git worktree.
+Oxfmt selects the supported formats. This formats manifests, generated config,
+and rewritten source without reformatting unrelated files in a large project.
+Non-Git projects retain full-project formatting. Projects that still use
+Prettier are not formatted automatically.
+
 ## ESLint Migration
 
 When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint` dependency are detected, `vp migrate` offers to convert the ESLint configuration to oxlint using [`@oxlint/migrate`](https://www.npmjs.com/package/@oxlint/migrate).
@@ -585,15 +616,16 @@ When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint
 
 **Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
 
-| Before                                     | After                                        |
-| ------------------------------------------ | -------------------------------------------- |
-| `eslint .`                                 | `vp lint .`                                  |
-| `eslint --cache --ext .ts --fix .`         | `vp lint --fix .`                            |
-| `NODE_ENV=test eslint --cache .`           | `NODE_ENV=test vp lint .`                    |
-| `cross-env NODE_ENV=test eslint --cache .` | `cross-env NODE_ENV=test vp lint .`          |
-| `eslint . && vite build`                   | `vp lint . && vite build`                    |
-| `if [ -f .eslintrc ]; then eslint .; fi`   | `if [ -f .eslintrc ]; then vp lint . fi`     |
-| `npx eslint .`                             | `npx eslint .` (npx/bunx wrappers preserved) |
+| Before                                     | After                                    |
+| ------------------------------------------ | ---------------------------------------- |
+| `eslint .`                                 | `vp lint .`                              |
+| `eslint --cache --ext .ts --fix .`         | `vp lint --fix .`                        |
+| `NODE_ENV=test eslint --cache .`           | `NODE_ENV=test vp lint .`                |
+| `cross-env NODE_ENV=test eslint --cache .` | `cross-env NODE_ENV=test vp lint .`      |
+| `eslint . && vite build`                   | `vp lint . && vite build`                |
+| `if [ -f .eslintrc ]; then eslint .; fi`   | `if [ -f .eslintrc ]; then vp lint . fi` |
+| `bunx --bun eslint .`                      | `bunx --bun vp lint .`                   |
+| `npx eslint .`                             | `npx eslint .` (unchanged)               |
 
 Stripped ESLint-only flags: `--cache`, `--ext`, `--parser`, `--parser-options`, `--plugin`, `--rulesdir`, `--resolve-plugins-relative-to`, `--output-file`, `--env`, `--no-eslintrc`, `--no-error-on-unmatched-pattern`, `--debug`, `--no-inline-config`
 
@@ -636,19 +668,20 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 
 **Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
 
-| Before                                            | After                                                  |
-| ------------------------------------------------- | ------------------------------------------------------ |
-| `prettier .`                                      | `vp fmt .`                                             |
-| `prettier --write .`                              | `vp fmt .`                                             |
-| `prettier --check .`                              | `vp fmt --check .`                                     |
-| `prettier --list-different .`                     | `vp fmt --check .`                                     |
-| `prettier -l .`                                   | `vp fmt --check .`                                     |
-| `prettier --write --single-quote --tab-width 4 .` | `vp fmt .`                                             |
-| `prettier --config .prettierrc --write .`         | `vp fmt .`                                             |
-| `prettier --plugin prettier-plugin-tailwindcss .` | `vp fmt .`                                             |
-| `cross-env NODE_ENV=test prettier --write .`      | `cross-env NODE_ENV=test vp fmt .`                     |
-| `prettier --write . && eslint --fix .`            | `vp fmt . && eslint --fix .`                           |
-| `npx prettier --write .`                          | `npx prettier --write .` (npx/bunx wrappers preserved) |
+| Before                                            | After                                |
+| ------------------------------------------------- | ------------------------------------ |
+| `prettier .`                                      | `vp fmt .`                           |
+| `prettier --write .`                              | `vp fmt .`                           |
+| `prettier --check .`                              | `vp fmt --check .`                   |
+| `prettier --list-different .`                     | `vp fmt --check .`                   |
+| `prettier -l .`                                   | `vp fmt --check .`                   |
+| `prettier --write --single-quote --tab-width 4 .` | `vp fmt .`                           |
+| `prettier --config .prettierrc --write .`         | `vp fmt .`                           |
+| `prettier --plugin prettier-plugin-tailwindcss .` | `vp fmt .`                           |
+| `cross-env NODE_ENV=test prettier --write .`      | `cross-env NODE_ENV=test vp fmt .`   |
+| `prettier --write . && eslint --fix .`            | `vp fmt . && eslint --fix .`         |
+| `bunx --bun prettier --write .`                   | `bunx --bun vp fmt .`                |
+| `npx prettier --write .`                          | `npx prettier --write .` (unchanged) |
 
 **Stripped Prettier-only flags**:
 

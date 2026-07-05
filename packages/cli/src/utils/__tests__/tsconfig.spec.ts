@@ -240,28 +240,20 @@ describe('rewriteTypesInTsconfig', () => {
     `);
   });
 
-  it('rewrites vite/client to vite-plus/client', () => {
+  it('preserves vite/client (issue #2004: vite refs stay outside config files)', () => {
     const filePath = path.join(tmpDir, 'tsconfig.json');
-    fs.writeFileSync(
-      filePath,
-      `{
+    const original = `{
   "compilerOptions": {
     "types": ["vite/client"]
   }
-}`,
-    );
+}`;
+    fs.writeFileSync(filePath, original);
 
-    expect(rewriteTypesInTsconfig(filePath)).toBe(true);
-    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
-      "{
-        "compilerOptions": {
-          "types": ["vite-plus/client"]
-        }
-      }"
-    `);
+    expect(rewriteTypesInTsconfig(filePath)).toBe(false);
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe(original);
   });
 
-  it('rewrites both in the same array', () => {
+  it('rewrites tsdown/client but preserves vite/client in the same array', () => {
     const filePath = path.join(tmpDir, 'tsconfig.json');
     fs.writeFileSync(
       filePath,
@@ -276,7 +268,7 @@ describe('rewriteTypesInTsconfig', () => {
     expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
       "{
         "compilerOptions": {
-          "types": ["vite-plus/pack/client", "vite-plus/client"]
+          "types": ["vite-plus/pack/client", "vite/client"]
         }
       }"
     `);

@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+
+catalog:
+  vite-plus: latest
+  vitest: ^4.0.2
+
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest

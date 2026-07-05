@@ -1,0 +1,13 @@
+{
+  "name": "migration-preserve-plugin-vite-import",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "pnpm@10.18.0"
+}

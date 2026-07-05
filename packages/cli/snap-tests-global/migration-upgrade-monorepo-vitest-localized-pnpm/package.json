@@ -1,0 +1,14 @@
+{
+  "name": "migration-upgrade-monorepo-vitest-localized-pnpm",
+  "private": true,
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

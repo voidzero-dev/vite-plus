@@ -717,14 +717,14 @@ For users who prefer standalone installation without npm:
 # https://vite.plus
 #
 # Environment variables:
-#   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_INSTALL_DIR - Installation directory (default: ~/.vite-plus)
+#   VP_VERSION - Version to install (default: latest)
+#   VP_HOME - Installation directory (default: ~/.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 set -e
 
-VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
-INSTALL_DIR="${VITE_PLUS_INSTALL_DIR:-$HOME/.vite-plus}"
+VP_VERSION="${VP_VERSION:-latest}"
+INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
 
@@ -732,7 +732,7 @@ NPM_REGISTRY="${NPM_REGISTRY%/}"
 # (platform detection code omitted for brevity)
 
 # Set up version-specific directories
-VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
+VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
 BIN_DIR="$VERSION_DIR/bin"
 DIST_DIR="$VERSION_DIR/dist"
 CURRENT_LINK="$INSTALL_DIR/current"
@@ -741,15 +741,15 @@ CURRENT_LINK="$INSTALL_DIR/current"
 mkdir -p "$BIN_DIR" "$DIST_DIR"
 
 # Download platform package (binary + .node files)
-platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${package_suffix}-${VITE_PLUS_VERSION}.tgz"
+platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${package_suffix}-${VP_VERSION}.tgz"
 # Extract to temp dir, copy binary to BIN_DIR, copy .node files to DIST_DIR
 
 # Download main package (JS scripts + package.json)
-main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"
+main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VP_VERSION}.tgz"
 # Extract dist/* to DIST_DIR, copy package.json to VERSION_DIR
 
 # Create/update current symlink
-ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
+ln -sfn "$VP_VERSION" "$CURRENT_LINK"
 
 # Cleanup old versions (keep max 3)
 cleanup_old_versions
@@ -768,14 +768,14 @@ For Windows users, provide a PowerShell script:
 # https://vite.plus/ps1
 #
 # Environment variables:
-#   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_INSTALL_DIR - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   VP_VERSION - Version to install (default: latest)
+#   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 $ErrorActionPreference = "Stop"
 
-$ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "latest" }
-$InstallDir = if ($env:VITE_PLUS_INSTALL_DIR) { $env:VITE_PLUS_INSTALL_DIR } else { "$env:USERPROFILE\.vite-plus" }
+$ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
+$InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 
 # Detect architecture and get version...

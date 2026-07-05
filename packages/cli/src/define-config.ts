@@ -31,6 +31,26 @@ declare module '@voidzero-dev/vite-plus-core' {
 
     fmt?: OxfmtConfig;
 
+    /**
+     * Defaults for the `vp check` composite command. Each flag mirrors the
+     * matching CLI option (`--no-fmt` / `--no-lint`) and only affects
+     * `vp check`; standalone `vp fmt` / `vp lint` are unaffected.
+     */
+    check?: {
+      /**
+       * Run the format step in `vp check`.
+       * @default true
+       */
+      fmt?: boolean;
+
+      /**
+       * Run the lint step in `vp check`. Type-check still runs when both
+       * `lint.options.typeAware` and `lint.options.typeCheck` are enabled.
+       * @default true
+       */
+      lint?: boolean;
+    };
+
     pack?: PackUserConfig | PackUserConfig[];
 
     run?: RunConfig;
@@ -594,7 +614,7 @@ function injectPluginIntoInlineConfig<
       vitePlusCoverageVersionGuardPlugin(),
       ...(config.plugins ?? []),
     ],
-  } as T;
+  };
 }
 
 /**
@@ -690,12 +710,12 @@ export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport
  */
 function injectPluginIntoProjectExport(config: UserProjectConfigExport): UserProjectConfigExport {
   if (typeof config === 'function') {
-    return ((env: ConfigEnv) => {
+    return (env: ConfigEnv) => {
       const result = config(env);
       return result instanceof Promise
         ? result.then(injectPluginIntoInlineConfig)
         : injectPluginIntoInlineConfig(result);
-    }) as UserProjectConfigFn;
+    };
   }
   if (config instanceof Promise) {
     return config.then(injectPluginIntoInlineConfig);

@@ -1,0 +1,8 @@
+{
+  "name": "app",
+  "devDependencies": {
+    "@vitest/ui": "^4.1.8",
+    "vite-plus": "^0.1.24",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.24"
+  }
+}

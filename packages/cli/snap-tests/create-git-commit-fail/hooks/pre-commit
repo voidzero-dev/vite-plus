@@ -1,3 +1,0 @@
-#!/bin/sh
-echo "Mock pre-commit hook rejecting the initial commit" >&2
-exit 1

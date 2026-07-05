@@ -53,7 +53,7 @@ Spec semantics that matter for this RFC:
 
 **Node.js resolution chain** (`crates/vite_global_cli/src/commands/env/config.rs`, `crates/vite_js_runtime/src/runtime.rs`):
 
-1. `VITE_PLUS_NODE_VERSION` env var (session)
+1. `VP_NODE_VERSION` env var (session)
 2. `~/.vite-plus/.session-node-version` (session)
 3. `.node-version` (walk up)
 4. `package.json#engines.node` (walk up)
@@ -127,7 +127,7 @@ Parsing rules:
 
 Proposed chain (change marked):
 
-1. `VITE_PLUS_NODE_VERSION` env var (session)
+1. `VP_NODE_VERSION` env var (session)
 2. `.session-node-version` (session)
 3. `.node-version` (walk up)
 4. **`package.json#devEngines.runtime[name="node"]` (walk up)** (moved above `engines.node`)
@@ -373,7 +373,7 @@ A small shared Rust helper (in `vite_shared`) will own "edit one field in packag
 - Managing non-Node runtimes (`deno`, `bun` as a runtime) via `devEngines.runtime`.
 - Validating `devEngines.os` / `cpu` / `libc`.
 - Acting as a general enforcement layer for arbitrary package manager names beyond pnpm / yarn / npm / bun.
-- Changing session-override behavior (`vp env use`, `VITE_PLUS_NODE_VERSION`).
+- Changing session-override behavior (`vp env use`, `VP_NODE_VERSION`).
 
 ## Deferred / Future Work
 

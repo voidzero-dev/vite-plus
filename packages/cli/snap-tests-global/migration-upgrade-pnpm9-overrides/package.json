@@ -1,0 +1,16 @@
+{
+  "name": "migration-upgrade-pnpm9-overrides",
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.1.6",
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
+    "vite-plus": "^0.1.20",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.20"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "overrides": {
+      "vite": "catalog:",
+      "vitest": "catalog:"
+    }
+  }
+}

@@ -83,15 +83,13 @@ impl LintMessageKind {
 /// analysis must be on for TypeScript diagnostics to surface.
 pub(super) fn lint_config_type_check_enabled(lint_config: Option<&serde_json::Value>) -> bool {
     let options = lint_config.and_then(|config| config.get("options"));
-    let type_aware = options
-        .and_then(|options| options.get("typeAware"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let type_check = options
-        .and_then(|options| options.get("typeCheck"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    type_aware && type_check
+    json_bool(options, "typeAware", false) && json_bool(options, "typeCheck", false)
+}
+
+/// Read a boolean `key` from a JSON object, falling back to `default` when the
+/// object is absent, the key is missing, or the value is not a boolean.
+pub(super) fn json_bool(value: Option<&serde_json::Value>, key: &str, default: bool) -> bool {
+    value.and_then(|value| value.get(key)).and_then(serde_json::Value::as_bool).unwrap_or(default)
 }
 
 fn parse_check_summary(line: &str) -> Option<CheckSummary> {
@@ -247,7 +245,7 @@ pub(super) fn analyze_lint_output(output: &str) -> Option<Result<LintSuccess, Li
 mod tests {
     use serde_json::json;
 
-    use super::{LintMessageKind, lint_config_type_check_enabled};
+    use super::{LintMessageKind, json_bool, lint_config_type_check_enabled};
 
     #[test]
     fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
@@ -294,6 +292,26 @@ mod tests {
         assert!(!lint_config_type_check_enabled(Some(&json!({
             "options": { "typeAware": true, "typeCheck": null }
         }))));
+    }
+
+    #[test]
+    fn json_bool_falls_back_for_absent_or_non_bool() {
+        // An absent object, an absent key, or a non-bool value all use the default.
+        assert!(json_bool(None, "fmt", true));
+        assert!(json_bool(Some(&json!({})), "fmt", true));
+        assert!(json_bool(Some(&json!({ "lint": false })), "fmt", true));
+        assert!(json_bool(Some(&json!({ "fmt": "false" })), "fmt", true));
+        assert!(json_bool(Some(&json!({ "fmt": 0 })), "fmt", true));
+        assert!(json_bool(Some(&json!({ "fmt": null })), "fmt", true));
+        assert!(!json_bool(None, "fmt", false));
+    }
+
+    #[test]
+    fn json_bool_respects_explicit_booleans() {
+        assert!(!json_bool(Some(&json!({ "fmt": false })), "fmt", true));
+        assert!(json_bool(Some(&json!({ "fmt": true })), "fmt", false));
+        assert!(!json_bool(Some(&json!({ "lint": false })), "lint", true));
+        assert!(json_bool(Some(&json!({ "lint": true })), "lint", false));
     }
 
     #[test]

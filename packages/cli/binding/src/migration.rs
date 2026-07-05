@@ -197,6 +197,8 @@ pub struct BatchRewriteError {
 pub struct BatchRewriteResult {
     /// Files that were modified
     pub modified_files: Vec<String>,
+    /// Files in Nuxt test-utils packages where upstream `vitest` imports were preserved
+    pub preserved_vitest_files: Vec<String>,
     /// Files that had errors
     pub errors: Vec<BatchRewriteError>,
 }
@@ -266,6 +268,8 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
 /// # Arguments
 ///
 /// * `root` - The root directory to search for files
+/// * `preserve_vitest_in_nuxt_packages` - Preserve `vitest` and `vitest/*`
+///   specifiers throughout packages that declare `@nuxt/test-utils`
 ///
 /// # Returns
 ///
@@ -283,13 +287,26 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
 /// }
 /// ```
 #[napi]
-pub fn rewrite_imports_in_directory(root: String) -> Result<BatchRewriteResult> {
-    let result = vite_migration::rewrite_imports_in_directory(Path::new(&root))
-        .map_err(anyhow::Error::from)?;
+pub fn rewrite_imports_in_directory(
+    root: String,
+    preserve_vitest_in_nuxt_packages: Option<bool>,
+) -> Result<BatchRewriteResult> {
+    let result = vite_migration::rewrite_imports_in_directory_with_options(
+        Path::new(&root),
+        vite_migration::RewriteImportsOptions {
+            preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
+        },
+    )
+    .map_err(anyhow::Error::from)?;
 
     Ok(BatchRewriteResult {
         modified_files: result
             .modified_files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect(),
+        preserved_vitest_files: result
+            .preserved_vitest_files
             .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect(),

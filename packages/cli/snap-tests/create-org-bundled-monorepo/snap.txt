@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono --git # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
+> node $SNAP_LOCAL_REGISTRY -- vp create @your-org:workspace --no-interactive --directory my-mono --git # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
 ◇ Scaffolded my-mono
 • Node <semver>  pnpm <semver>
 → Next: cd my-mono && vp run
@@ -25,19 +25,15 @@ packages:
   - apps/*
   - packages/*
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
 > test -d my-mono/.git && echo 'Git initialized' # git-init prompt covers bundled monorepo path
 Git initialized

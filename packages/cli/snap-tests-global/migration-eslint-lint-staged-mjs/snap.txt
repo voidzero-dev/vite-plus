@@ -1,11 +1,11 @@
 > vp migrate --no-interactive # migration should preserve non-JSON lint-staged config when hooks are not requested
-◇ Migrated . to Vite+
+◇ Updated . to Vite+ <semver>
 • Node <semver>  pnpm <semver>
-• 3 config updates applied
-• ESLint rules migrated to Oxlint
+• Dependencies:
+    vite-plus  latest → <semver>
+    vite              → <semver>
 • Package manager settings configured
-! Warnings:
-  - lint-staged.config.mjs — please update eslint references manually
+• Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
 
 > cat lint-staged.config.mjs # verify non-JSON lint-staged config is preserved unchanged
 export default {

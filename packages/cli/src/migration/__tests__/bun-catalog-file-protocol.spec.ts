@@ -123,13 +123,7 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     expect(pkg.devDependencies.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
   });
 
-  it('writes bunfig.toml with `peer = false` so vitest peer-dep on vite does not break install', () => {
-    // vitest@4.1.9 declares peer vite^6/^7/^8. With overrides.vite pointing at
-    // file:vite-plus-core@0.0.0 (whose package.json version does not match),
-    // bun aborts the install. pnpm/yarn/npm tolerate this; bun has no equivalent
-    // to pnpm's peerDependencyRules and only respects the `[install] peer = false`
-    // setting in bunfig.toml. The migrator must emit that file or every bun
-    // user hits `error: vite@^6.0.0 || ^7.0.0 || ^8.0.0 failed to resolve`.
+  it('does not create bunfig.toml', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -140,9 +134,7 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     );
     rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
 
-    const bunfigPath = path.join(tmpDir, 'bunfig.toml');
-    expect(fs.existsSync(bunfigPath)).toBe(true);
-    expect(fs.readFileSync(bunfigPath, 'utf8')).toMatch(/^\[install\][\s\S]*peer\s*=\s*false/m);
+    expect(fs.existsSync(path.join(tmpDir, 'bunfig.toml'))).toBe(false);
   });
 
   it('preserves an existing bunfig.toml `peer` setting (does not overwrite user intent)', () => {
@@ -161,7 +153,7 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     expect(fs.readFileSync(path.join(tmpDir, 'bunfig.toml'), 'utf8')).toMatch(/peer\s*=\s*true/);
   });
 
-  it('appends `peer = false` under an existing [install] section without `peer` setting', () => {
+  it('preserves an existing bunfig.toml without adding a peer setting', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -178,7 +170,7 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
 
     const bunfig = fs.readFileSync(path.join(tmpDir, 'bunfig.toml'), 'utf8');
     expect(bunfig).toMatch(/registry\s*=\s*"https:\/\/registry\.npmjs\.org\/"/);
-    expect(bunfig).toMatch(/peer\s*=\s*false/);
+    expect(bunfig).not.toMatch(/peer\s*=/);
   });
 
   it('does not write file: paths into peer dependencies', () => {
@@ -195,12 +187,29 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true);
 
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
+    // With no catalog resolver available, use a public fallback rather than
+    // leaking either a dangling catalog reference or the managed file: path.
+    expect(pkg.peerDependencies.vitest).toBe('*');
     expect(pkg.optionalDependencies.vite).toBe(
       'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
     );
     expect(
       (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
     ).toBe('file:/tmp/tgz/vite-plus-0.0.0.tgz');
+  });
+
+  it('does not align Vitest ecosystem packages when Vitest is unmanaged', () => {
+    const pkg = {
+      devDependencies: {
+        vite: '^7.0.0',
+        vitest: '4.0.13',
+        '@vitest/ui': '4.0.13',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm);
+
+    expect(pkg.devDependencies.vitest).toBe('4.0.13');
+    expect(pkg.devDependencies['@vitest/ui']).toBe('4.0.13');
   });
 });

@@ -130,7 +130,7 @@ mod tests {
             "if [ -f .prettierrc ]; then vp fmt .; fi"
         );
 
-        // npx wrappers unchanged
+        // non-Bun package executors remain outside this migration rule
         assert_eq!(rewrite_prettier_script("npx prettier --write ."), "npx prettier --write .");
 
         // already rewritten (no-op)
@@ -192,6 +192,22 @@ mod tests {
     }
 
     #[test]
+    fn test_rewrite_prettier_bunx() {
+        assert_eq!(
+            rewrite_prettier_script("bunx --bun prettier --write --single-quote ."),
+            "bunx --bun vp fmt ."
+        );
+        assert_eq!(
+            rewrite_prettier_script("dotenv -e .env -- bunx --bun prettier --check ."),
+            "dotenv -e .env -- bunx --bun vp fmt --check ."
+        );
+        assert_eq!(
+            rewrite_prettier_script("bunx --bun prettier-plugin-foo"),
+            "bunx --bun prettier-plugin-foo"
+        );
+    }
+
+    #[test]
     fn test_rewrite_prettier_list_different_to_check() {
         // --list-different → --check
         assert_eq!(rewrite_prettier_script("prettier --list-different ."), "vp fmt --check .");
@@ -209,6 +225,15 @@ mod tests {
             rewrite_prettier_script("prettier --check --list-different ."),
             "vp fmt --check ."
         );
+
+        // --list-different + --check (the other order) → still a single --check
+        assert_eq!(
+            rewrite_prettier_script("prettier --list-different --check ."),
+            "vp fmt --check ."
+        );
+
+        // two literal --check → still a single --check
+        assert_eq!(rewrite_prettier_script("prettier --check --check ."), "vp fmt --check .");
     }
 
     #[test]

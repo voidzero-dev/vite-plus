@@ -15,12 +15,7 @@ const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
 
 function pluginName(p: unknown): string | undefined {
-  if (
-    p &&
-    typeof p === 'object' &&
-    'name' in p &&
-    typeof (p as { name: unknown }).name === 'string'
-  ) {
+  if (p && typeof p === 'object' && 'name' in p && typeof p.name === 'string') {
     return (p as { name: string }).name;
   }
   return undefined;

@@ -9,24 +9,32 @@
 #   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
-#   VP_PR_VERSION - PR number or commit SHA to install from pkg.pr.new
+#   VP_PR_VERSION - PR number or commit SHA to install from the registry bridge
 #                   (for temporary testing of unreleased builds, e.g. VP_PR_VERSION=1569).
-#                   When set, overrides VP_VERSION and bypasses the npm registry.
+#                   When set, overrides VP_VERSION and installs the clearly-defined
+#                   0.0.0-commit.<sha> build through the bridge instead of npm.
 
 $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
 $InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
+# Use ~ shorthand if install dir is under USERPROFILE, matching the final summary output
+$NodeManagerBinDisplay = (Join-Path $InstallDir.TrimEnd('\', '/') "bin") -replace [regex]::Escape($env:USERPROFILE), '~'
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
 $LocalTgz = $env:VP_LOCAL_TGZ
 # Local binary path (set by install-global-cli.ts for local dev)
 $LocalBinary = $env:VP_LOCAL_BINARY
-# pkg.pr.new PR number or commit SHA (for temporary testing of unreleased builds)
+# PR number or commit SHA to install as a test build (registry bridge mode)
 $PrVersion = $env:VP_PR_VERSION
-# pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
-$PkgPrNewBase = "https://pkg.pr.new/voidzero-dev/vite-plus"
+# Registry bridge that serves pkg.pr.new builds as clearly-versioned packages.
+# The pkg.pr.new-style download URL (BridgeDownloadBase) 302-redirects to a
+# canonical 0.0.0-commit.<sha> tarball; the registry (BridgeRegistry) resolves
+# those commit versions (and proxies everything else to npmjs) so a full install
+# pulls a coherent, clearly-defined test build.
+$BridgeDownloadBase = "https://registry-bridge.viteplus.dev/voidzero-dev/vite-plus"
+$BridgeRegistry = "https://registry-bridge.viteplus.dev/"
 
 function Write-Info {
     param([string]$Message)
@@ -186,7 +194,189 @@ function Confirm-ReleaseAgeOverride {
 }
 
 function Write-ReleaseAgeOverride {
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
+    # Append idempotently so a bridge registry line written for PR builds survives.
+    $npmrc = Join-Path $VersionDir ".npmrc"
+    if ((-not (Test-Path $npmrc)) -or (-not (Select-String -Path $npmrc -Pattern '^minimum-release-age=' -Quiet))) {
+        Add-Content -Path $npmrc -Value "minimum-release-age=0"
+    }
+}
+
+function Normalize-InstallDir {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $Path
+    }
+
+    try {
+        if (Test-Path -LiteralPath $Path -PathType Container) {
+            return (Resolve-Path -LiteralPath $Path).ProviderPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        }
+
+        return [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    } catch {
+        return $Path.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    }
+}
+
+function Test-SafeInstallDirToRemove {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    $normalized = Normalize-InstallDir $Path
+    $root = [System.IO.Path]::GetPathRoot($normalized)
+    $home = Normalize-InstallDir $env:USERPROFILE
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $unsafeDirs = @(
+        $root
+        $home
+        (Normalize-InstallDir $env:SystemRoot)
+        (Normalize-InstallDir $env:ProgramFiles)
+        (Normalize-InstallDir $programFilesX86)
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    return $unsafeDirs -notcontains $normalized
+}
+
+function Test-VitePlusInstallDir {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $false
+    }
+
+    $binDir = Join-Path $Path "bin"
+    if (-not (Test-Path -LiteralPath $binDir -PathType Container)) {
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path "current"))) {
+        return $false
+    }
+
+    return (Test-Path -LiteralPath (Join-Path $binDir "vp.exe")) `
+        -or (Test-Path -LiteralPath (Join-Path $binDir "vp.cmd")) `
+        -or (Test-Path -LiteralPath (Join-Path $binDir "vp"))
+}
+
+function Get-PreviousInstallDir {
+    if (-not $env:VP_HOME) {
+        return $null
+    }
+
+    $vpCommand = Get-Command vp -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $vpCommand) {
+        return $null
+    }
+
+    $vpPath = $vpCommand.Path
+    if (-not $vpPath) {
+        return $null
+    }
+
+    $vpFileName = [System.IO.Path]::GetFileName($vpPath)
+    if ($vpFileName -notin @("vp", "vp.exe", "vp.cmd")) {
+        return $null
+    }
+
+    $oldDir = Normalize-InstallDir (Split-Path -Parent (Split-Path -Parent $vpPath))
+    $newDir = Normalize-InstallDir $InstallDir
+    if ($oldDir -eq $newDir) {
+        return $null
+    }
+    if (-not (Test-SafeInstallDirToRemove $oldDir)) {
+        return $null
+    }
+    if (-not (Test-VitePlusInstallDir $oldDir)) {
+        return $null
+    }
+
+    return $oldDir
+}
+
+function Test-NestedInstallDir {
+    param(
+        [string]$OldDir,
+        [string]$NewDir
+    )
+    if ([string]::IsNullOrWhiteSpace($OldDir) -or [string]::IsNullOrWhiteSpace($NewDir)) {
+        return $false
+    }
+
+    $oldDir = Normalize-InstallDir $OldDir
+    $newDir = Normalize-InstallDir $NewDir
+    if ([string]::IsNullOrWhiteSpace($oldDir) -or [string]::IsNullOrWhiteSpace($newDir) -or $oldDir -eq $newDir) {
+        return $false
+    }
+
+    # Normalize-InstallDir already trimmed trailing separators
+    $oldPrefix = $oldDir + [System.IO.Path]::DirectorySeparatorChar
+    $newPrefix = $newDir + [System.IO.Path]::DirectorySeparatorChar
+    return $oldPrefix.StartsWith($newPrefix, [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $newPrefix.StartsWith($oldPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Prompt-RemovePreviousInstallDir {
+    param([string]$PreviousInstallDir)
+    if (-not $PreviousInstallDir) {
+        return
+    }
+    if ($env:CI -eq "true") {
+        return
+    }
+    if (-not [Environment]::UserInteractive) {
+        return
+    }
+
+    Write-Host ""
+    Write-Warn "Found a previous Vite+ install at $PreviousInstallDir."
+    Write-Host "The new VP_HOME is $InstallDir."
+    $response = Read-Host "Remove the previous install directory? (y/N)"
+    if ($response -match "^(?i:y|yes)$") {
+        $vpBin = Join-Path $PreviousInstallDir "current\bin\vp.exe"
+        if (-not (Test-Path -LiteralPath $vpBin)) {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: vp binary not found."
+            return
+        }
+
+        $previousVpHome = $env:VP_HOME
+        try {
+            $env:VP_HOME = $PreviousInstallDir
+            $output = & $vpBin implode --yes 2>&1
+            $exitCode = $LASTEXITCODE
+        } catch {
+            $output = $_
+            $exitCode = 1
+        } finally {
+            $env:VP_HOME = $previousVpHome
+        }
+
+        if ($exitCode -eq 0) {
+            Write-Success "Removed previous Vite+ install at $PreviousInstallDir."
+        } else {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: $output"
+        }
+    }
+}
+
+# Resolve a PR number or commit SHA to the registry bridge's immutable commit
+# version (0.0.0-commit.<sha>). A full commit SHA maps directly to the bridge's
+# deterministic version; a PR number (or short ref) is resolved via the bridge
+# download URL's `x-commit-key: <owner>:<repo>:<sha>` header (HEAD).
+function Resolve-BridgeCommitVersion {
+    param([string]$Ref)
+    $sha = $Ref
+    if ($Ref -notmatch '^[0-9a-fA-F]{40}$') {
+        try {
+            $resp = Invoke-WebRequest -Uri "$BridgeDownloadBase@$Ref" -Method Head -UseBasicParsing -ErrorAction Stop
+        } catch {
+            return $null
+        }
+        $commitKey = @($resp.Headers['x-commit-key'])[0]
+        if (-not $commitKey) { return $null }
+        $sha = ($commitKey -split ':')[-1]
+    }
+    if ($sha -notmatch '^[0-9a-fA-F]{40}$') { return $null }
+    return "0.0.0-commit.$sha"
 }
 
 function Write-InstallFailure {
@@ -527,7 +717,7 @@ function Setup-NodeManager {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to $NodeManagerBinDisplay and automatically uses the right version."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
@@ -550,6 +740,11 @@ function Main {
         Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
     }
 
+    $previousInstallDir = Get-PreviousInstallDir
+    if ($previousInstallDir -and (Test-NestedInstallDir -OldDir $previousInstallDir -NewDir $InstallDir)) {
+        Write-Error-Exit "Previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Choose a separate VP_HOME or remove the previous install first."
+    }
+
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
 
@@ -567,11 +762,16 @@ function Main {
             $ViteVersion = "local-dev"
         }
     } elseif ($PrVersion) {
-        # pkg.pr.new mode: skip npm metadata, use a synthetic version label.
-        # Non-semver label keeps the directory out of Cleanup-OldVersions and
-        # makes it obvious in ~/.vite-plus which install is the PR build.
+        # Registry bridge mode: resolve the requested PR/SHA to the bridge's
+        # immutable commit version (0.0.0-commit.<sha>), the clearly-defined test
+        # version we install. The directory label stays non-semver so it keeps
+        # out of Cleanup-OldVersions and makes the PR build obvious in ~/.vite-plus.
+        $PrCommitVersion = Resolve-BridgeCommitVersion -Ref $PrVersion
+        if (-not $PrCommitVersion) {
+            Write-Error-Exit "Could not resolve a registry bridge build for $PrVersion"
+        }
         $ViteVersion = "pkg-pr-new-$PrVersion"
-        Write-Info "Using pkg.pr.new version: $PrVersion"
+        Write-Info "Using registry bridge build: $PrCommitVersion"
     } else {
         # Fetch package metadata and resolve version from npm
         $ViteVersion = Get-VersionFromMetadata
@@ -603,11 +803,12 @@ function Main {
             Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
         }
     } else {
-        # Download CLI platform tarball — npm registry or pkg.pr.new (when PrVersion is set)
+        # Download CLI platform tarball — npm registry or registry bridge (when PrVersion is set)
         $platformSuffix = Get-PlatformSuffix -Platform $platform
         if ($PrVersion) {
-            # pkg.pr.new redirects this URL to the platform tarball for the matching PR/commit
-            $platformUrl = "$PkgPrNewBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
+            # The registry bridge redirects this URL to the platform tarball for
+            # the matching commit build (0.0.0-commit.<sha>).
+            $platformUrl = "$BridgeDownloadBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
         } else {
             $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
             $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
@@ -649,9 +850,19 @@ function Main {
     # Generate wrapper package.json that declares vite-plus as a dependency.
     # pnpm will install vite-plus and all transitive deps via `vp install`.
     # The packageManager field pins pnpm to a known-good version.
-    # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
-    # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
-    $vitePlusSpec = if ($PrVersion) { "$PkgPrNewBase@$PrVersion" } else { $ViteVersion }
+    # In PR mode, pin vite-plus to the bridge's clearly-defined commit version and
+    # resolve it (plus its platform binaries and transitive deps) through the
+    # bridge registry written to .npmrc below. The bridge rewrites a preview
+    # tarball's transitive deps to versions, not self-contained URLs, so a full
+    # install must go through the registry rather than the bare download URL.
+    $vitePlusSpec = if ($PrVersion) { $PrCommitVersion } else { $ViteVersion }
+    if ($PrVersion) {
+        # Bridge registry; drop any stale wrapper lockfile (see install.sh for why):
+        # the reused pkg-pr-new-<ref> dir must re-resolve a lockfile matching the
+        # spec we just wrote, not fail under CI's frozen-lockfile default.
+        Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "registry=$BridgeRegistry"
+        Remove-Item -Path (Join-Path $VersionDir "pnpm-lock.yaml") -ErrorAction SilentlyContinue
+    }
     $wrapperJson = @{
         name = "vp-global"
         version = $ViteVersion
@@ -751,14 +962,14 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 
-    # Configure Windows-native shell access via the User PATH
-    $pathResult = Configure-UserPath
-
-    # Configure Nushell autoload if Nushell is installed
-    $nushellResult = Configure-Nushell
-
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
+
+    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
+
+    # Configure shell access after the install is otherwise complete.
+    $pathResult = Configure-UserPath
+    $nushellResult = Configure-Nushell
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'

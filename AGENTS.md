@@ -48,10 +48,13 @@ vite-plus/
 - **Package-manager commands**: start at `crates/vite_pm_cli/` and `crates/vite_install/`.
 - **Managed Node runtime / shims**: start at `crates/vite_js_runtime/`.
 - **Static `vite.config.ts` extraction**: start at `crates/vite_static_config/README.md` and `packages/cli/src/resolve-vite-config.ts`.
+- **Migration behavior**: `docs/guide/migrate-rules.md`.
+- **Migrator code (`vp migrate`)**: category modules under `packages/cli/src/migration/migrator/` behind the `migrator.ts` barrel; follow `migrator/README.md` when changing migrator code.
 - **Bundled toolchain surfaces**: start with `packages/core/BUNDLING.md`, `packages/cli/BUNDLING.md`, and `packages/test/BUNDLING.md`.
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
 - **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
 - **CLI output behavior**: inspect the relevant code plus `packages/cli/snap-tests/` or `packages/cli/snap-tests-global/`.
+- **Install-testing against the local build**: `packages/tools/src/local-npm-registry.ts` serves the packed checkout behind a real registry interface; used by install snap fixtures (`localVitePlusPackages`), ecosystem e2e (`ecosystem-ci/patch-project.ts`), and local `vp migrate`/`vp create` iteration (see `CONTRIBUTING.md`).
 
 ## Command and Config Model
 
