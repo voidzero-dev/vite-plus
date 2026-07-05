@@ -2,8 +2,36 @@
 name = "listing"
 vp = ["local", "global"]
 comment = """
-A bare app command at a workspace root with several candidate packages prints
+A bare app command at a workspace root without an interactive terminal prints
 the ranked package listing with -C hints and exits 1 instead of building the
-root, even in an interactive terminal (rfcs/cwd-flag.md).
+root (rfcs/cwd-flag.md).
 """
-steps = [["vp", "build"]]
+steps = [{ argv = ["vp", "build"], tty = false }]
+
+[[case]]
+name = "picker_select"
+vp = ["local", "global"]
+comment = """
+A bare app command at a workspace root with several candidates opens the
+fuzzy package picker (the vp run selector component); typing filters, Enter
+runs the selection as an implicit -C (rfcs/cwd-flag.md).
+"""
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "web" },
+    { "expect-milestone" = "package-select:web:0" },
+    { "write-key" = "enter" },
+  ] },
+]
+
+[[case]]
+name = "picker_cancel"
+vp = ["local", "global"]
+comment = "Ctrl+C in the package picker cancels with exit 130 and runs nothing."
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]

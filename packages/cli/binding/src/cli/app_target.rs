@@ -4,8 +4,8 @@
 //! and would silently run against the root. Resolution order (rfcs/cwd-flag.md):
 //! explicit `-C` and positional targets are handled before this code and skip
 //! elicitation entirely; then `defaultPackage` from the config in the
-//! invocation directory, then the workspace package listing (interactive
-//! picker planned once `vite_select` supports a custom prompt), then exit 1.
+//! invocation directory, then the interactive package picker (a package
+//! listing plus exit 1 when the terminal is not interactive).
 
 use vite_error::Error;
 use vite_path::AbsolutePathBuf;
@@ -91,6 +91,52 @@ fn resolve_default_package(command: &str, cwd: &AbsolutePathBuf) -> Option<AppTa
     }
 }
 
+/// Fuzzy package picker on `vite_select`, the same component behind the
+/// `vp run` task selector. Returns the selected row index, or `None` on
+/// Ctrl+C. Every render emits a `package-select:<query>:<index>` milestone
+/// (invisible OSC 8 hyperlinks) so PTY snapshot tests can synchronize.
+fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>, Error> {
+    let items: Vec<vite_select::SelectItem> = rows
+        .iter()
+        .map(|row| vite_select::SelectItem {
+            label: vite_str::format!("{} {}", row.name, row.path),
+            display_name: vite_str::Str::from(row.name.as_str()),
+            description: vite_str::Str::from(row.path.as_str()),
+            group: None,
+        })
+        .collect();
+    let prompt =
+        format!("Select a package to {command} (\u{2191}/\u{2193}, Enter to run, type to search):");
+    let params = vite_select::SelectParams {
+        items: &items,
+        query: None,
+        header: None,
+        prompt: &prompt,
+        page_size: 12,
+    };
+    let mut selected_index = 0usize;
+    let mut stdout = std::io::stdout();
+    let result = vite_select::select_list(
+        &mut stdout,
+        &params,
+        vite_select::Mode::Interactive { selected_index: &mut selected_index },
+        |state| {
+            use std::io::Write as _;
+            let milestone =
+                vite_str::format!("package-select:{}:{}", state.query, state.selected_index);
+            let bytes = pty_terminal_test_client::encoded_milestone(&milestone);
+            let mut out = std::io::stdout();
+            let _ = out.write_all(&bytes);
+            let _ = out.flush();
+        },
+    )
+    .map_err(Error::Anyhow)?;
+    Ok(match result {
+        vite_select::SelectResult::Selected => Some(selected_index),
+        vite_select::SelectResult::Cancelled => None,
+    })
+}
+
 pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
@@ -140,11 +186,19 @@ pub(super) fn resolve_app_target(
     }
     rows.sort_by(|a, b| (!a.runnable, a.path.as_str()).cmp(&(!b.runnable, b.path.as_str())));
 
-    // With exactly one likely-runnable package (rows are sorted runnable
-    // first), an interactive terminal auto-selects it (the degenerate picker).
-    let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
-    if single_runnable && vite_shared::is_interactive_terminal() {
-        let row = &rows[0];
+    // In an interactive terminal, pick the target: exactly one likely-runnable
+    // package (rows are sorted runnable first) auto-selects without a menu;
+    // otherwise the fuzzy picker runs.
+    if vite_shared::is_interactive_terminal() {
+        let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
+        let row = if single_runnable {
+            &rows[0]
+        } else {
+            match run_package_picker(command, &rows)? {
+                Some(index) => &rows[index],
+                None => return Ok(AppTarget::Exit(ExitStatus(130))),
+            }
+        };
         println!("Selected package: {} ({})", row.name, row.path);
         println!("Tip: run this directly with `vp -C {} {command}`", row.path);
         return Ok(AppTarget::Dir(row.absolute.clone()));

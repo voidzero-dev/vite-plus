@@ -164,10 +164,28 @@ Tip: run this directly with `vp -C apps/web dev`
   ➜  Network: use --host to expose
 ```
 
-When several packages could be the target, vp lists them with ready-to-copy commands instead of guessing:
+When several packages could be the target, vp opens a fuzzy package picker (the same selector as `vp run`). Typing filters, Enter runs the selection, and vp prints the direct command for next time:
 
 ```
 $ vp build
+Select a package to build (↑/↓, Enter to run, type to search):
+
+  › admin apps/admin
+    web   apps/web
+    ui    packages/ui
+```
+
+```
+Selected package: web (apps/web)
+Tip: run this directly with `vp -C apps/web build`
+
+  ✓ built in 187ms
+```
+
+In non-interactive shells (CI, pipes, redirection), vp prints the same packages as a plain listing with ready-to-copy commands and exits 1:
+
+```
+$ vp build | cat
 error: `vp build` at the workspace root needs a target package.
 
   Packages in this workspace:
@@ -179,7 +197,7 @@ error: `vp build` at the workspace root needs a target package.
   Or run every package's build script:  vp run -r build
 ```
 
-Packages that look runnable for the command (an `index.html` or `vite.config.*` for `dev` / `build` / `preview`, a library entry for `pack`) are listed first.
+Packages that look runnable for the command (an `index.html` or `vite.config.*` for `dev` / `build` / `preview`, a library entry for `pack`) are ranked first in both the picker and the listing.
 
 ### Targeting a package with `-C`
 
