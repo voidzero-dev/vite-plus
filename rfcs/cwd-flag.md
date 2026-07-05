@@ -246,7 +246,7 @@ Rejected alternatives: repurposing the app-command positional to mean "run there
 
 ### Target directory resolution
 
-An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). Flags keep it bare, including the forwarded tool's known required-value flags together with their values (`--port 3000` for Vite commands, `--env-file .env` for pack); a token following an unknown or optional-value flag is ambiguous with a positional target and conservatively counts as one. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
+An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). The classification mirrors the tools' own cac parsing: a non-flag token following any non-boolean flag is that flag's value — required and optional values alike (`--port 3000`, `--host 0.0.0.0`) — because the tool itself would never treat it as a positional; only a token no flag consumes is a positional target, and any positional disables elicitation. The boolean-flag tables come from the shipped `--help` of each tool and are command-specific (`--minify` is optional-value for Vite build but boolean for pack). pack's workspace selectors (`-W`/`--workspace`, `-F`/`--filter`) already define their own target set and always disable elicitation. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
 
 1. **`-C <dir>`**: run there. Never triggers the picker.
 2. **Positional target present**: forward as today, upstream semantics, vp does not interfere.
@@ -267,7 +267,7 @@ vp -C <dir> <cmd> [args...]  ===  cd <dir> && vp <cmd> [args...]
 
 The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The POSIX `PWD` environment variable is refreshed too (by both entry points and for elicitation-retargeted tools), so `process.env.PWD` readers match the `cd` form. Both entry points apply `-C` by changing their own process cwd at startup, before any argument normalization, picker, or command logic runs, which is indistinguishable from having been started in `<dir>`: the global binary consumes the flag first thing in `main` (so command aliases, the no-command picker, and in-process helpers that read the process cwd are all covered), and the local `vp` bin does the same before dispatch.
 
-The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model).
+The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model). The implicit `-C` forms (picker, auto-select, `defaultPackage`) run inside the already-chosen CLI under the same assumption: the spawned tool gets the target's cwd and `PWD`, but the executing CLI and its runtime were resolved at the invocation directory. Within one workspace the two coincide; a `defaultPackage` target carrying its own Vite+ install or runtime pin is resolved by the invoking CLI today (full re-delegation is tracked as follow-up work).
 
 ### Entry points and version assumption
 
