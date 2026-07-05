@@ -7,7 +7,16 @@ if (module.enableCompileCache) {
 
 // Insert `run` after a leading global `-C <dir>` so `vpr -C <dir> <task>`
 // behaves like `vp -C <dir> run <task>` (bin.ts consumes -C before dispatch).
+// A bare `vpr -C` (missing value) inserts nothing: bin.ts then reports the
+// missing-argument error instead of misreading `run` as the directory.
 const first = process.argv[2];
-const chdirTokens = first === '-C' ? 2 : first?.startsWith('-C') && first.length > 2 ? 1 : 0;
-process.argv.splice(2 + chdirTokens, 0, 'run');
+if (first === '-C') {
+  if (process.argv[3] !== undefined) {
+    process.argv.splice(4, 0, 'run');
+  }
+} else if (first?.startsWith('-C') && first.length > 2) {
+  process.argv.splice(3, 0, 'run');
+} else {
+  process.argv.splice(2, 0, 'run');
+}
 await import('../dist/bin.js');

@@ -246,7 +246,7 @@ Rejected alternatives: repurposing the app-command positional to mean "run there
 
 ### Target directory resolution
 
-An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). Flags keep it bare, including known value-taking flags together with their values (`--port 3000`, `--mode production`); a token following an unknown or optional-value flag is ambiguous with a positional target and conservatively counts as one. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
+An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). Flags keep it bare, including the forwarded tool's known required-value flags together with their values (`--port 3000` for Vite commands, `--env-file .env` for pack); a token following an unknown or optional-value flag is ambiguous with a positional target and conservatively counts as one. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
 
 1. **`-C <dir>`**: run there. Never triggers the picker.
 2. **Positional target present**: forward as today, upstream semantics, vp does not interfere.

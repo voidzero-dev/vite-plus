@@ -44,49 +44,74 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
     }
 }
 
-/// Flags of the app tools (Vite dev/build/preview and tsdown) that always
-/// consume the next argv token as their value. Space-separated values of
-/// these flags are not positional targets. Flags with optional values
-/// (`--host`, `--sourcemap`, `--minify`, ...) are deliberately absent: a
-/// token after them stays ambiguous and keeps the conservative fallback.
-const VALUE_TAKING_FLAGS: &[&str] = &[
+/// Required-value flags of the Vite CLI (dev/build/preview). Space-separated
+/// values of these flags are not positional targets. Optional-value flags
+/// (`--host`, `--open`, `--debug`, `--ssr`, `--sourcemap`, `--minify`, ...)
+/// are deliberately absent: a token after them stays ambiguous and keeps the
+/// conservative fallback.
+const VITE_VALUE_FLAGS: &[&str] = &[
     "-c",
     "--config",
-    "-m",
-    "--mode",
+    "--base",
     "-l",
     "--logLevel",
+    "-m",
+    "--mode",
+    "--configLoader",
+    "-f",
+    "--filter",
     "--port",
-    "--base",
     "--outDir",
     "--assetsDir",
     "--assetsInlineLimit",
-    "--filter",
-    "--configLoader",
-    "--config-loader",
-    "--tsconfig",
-    "--log-level",
-    "--deps.never-bundle",
-    "-d",
-    "--out-dir",
     "--target",
-    "-f",
-    "--format",
-    "--platform",
 ];
 
-/// Bare = no positional target and no help-like flag. Values of known
-/// value-taking flags (`--port 3000`) are skipped; any other non-flag token
-/// may be a positional target and conservatively disables elicitation.
-/// Help/version requests are answered by the underlying tool and must never
-/// be redirected.
-fn is_bare(args: &[String]) -> bool {
+/// Required-value flags of the bundled pack CLI (see pack-bin.ts; cac accepts
+/// both camelCase and kebab-case spellings). Optional-value flags (`--debug`,
+/// `--watch`, `--from-vite`) are deliberately absent, as above.
+const PACK_VALUE_FLAGS: &[&str] = &[
+    "--config-loader",
+    "--configLoader",
+    "-f",
+    "--format",
+    "--deps.never-bundle",
+    "--target",
+    "-l",
+    "--logLevel",
+    "--log-level",
+    "-d",
+    "--out-dir",
+    "--outDir",
+    "--platform",
+    "--tsconfig",
+    "--ignore-watch",
+    "--ignoreWatch",
+    "--env-file",
+    "--envFile",
+    "--env-prefix",
+    "--envPrefix",
+    "--on-success",
+    "--onSuccess",
+    "--copy",
+    "--public-dir",
+    "--publicDir",
+];
+
+/// Bare = no positional target and no help-like flag. Values of the
+/// forwarded tool's known required-value flags (`--port 3000`) are skipped;
+/// any other non-flag token may be a positional target and conservatively
+/// disables elicitation. Help/version requests are answered by the
+/// underlying tool and must never be redirected.
+fn is_bare(command: &str, args: &[String]) -> bool {
+    let value_flags = if command == "pack" { PACK_VALUE_FLAGS } else { VITE_VALUE_FLAGS };
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
         if !arg.starts_with('-') || super::help::is_app_tool_help_or_version_flag(arg) {
             return false;
         }
-        if VALUE_TAKING_FLAGS.contains(&arg.as_str()) {
+        // `--env.NAME <value>` defines a compile-time env variable in pack.
+        if value_flags.contains(&arg.as_str()) || (command == "pack" && arg.starts_with("--env.")) {
             // Consume the flag's value; a missing value is the tool's error.
             iter.next();
         }
@@ -204,10 +229,10 @@ pub(super) fn needs_elicitation(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
 ) -> bool {
-    let Some((_, args)) = app_command_parts(subcommand) else {
+    let Some((command, args)) = app_command_parts(subcommand) else {
         return false;
     };
-    if !is_bare(args) {
+    if !is_bare(command, args) {
         return false;
     }
     if vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage").is_some() {
@@ -227,7 +252,7 @@ pub(super) fn resolve_app_target(
     let Some((command, args)) = app_command_parts(subcommand) else {
         return Ok(AppTarget::CurrentDir);
     };
-    if !is_bare(args) {
+    if !is_bare(command, args) {
         return Ok(AppTarget::CurrentDir);
     }
 
@@ -314,26 +339,32 @@ mod tests {
     #[test]
     fn bare_means_no_positional_target_and_no_help() {
         let to_args = |args: &[&str]| args.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        assert!(is_bare(&to_args(&[])));
-        assert!(is_bare(&to_args(&["--watch"])));
-        assert!(is_bare(&to_args(&["-w", "--minify"])));
+        assert!(is_bare("dev", &to_args(&[])));
+        assert!(is_bare("dev", &to_args(&["--watch"])));
+        assert!(is_bare("build", &to_args(&["-w", "--minify"])));
         // A positional target disables elicitation.
-        assert!(!is_bare(&to_args(&["apps/web"])));
-        // Known value-taking flags consume their value.
-        assert!(is_bare(&to_args(&["--port", "3000"])));
-        assert!(is_bare(&to_args(&["--mode", "production", "--minify"])));
-        assert!(is_bare(&to_args(&["--assetsDir", "assets"])));
-        assert!(is_bare(&to_args(&["--port=3000"])));
+        assert!(!is_bare("dev", &to_args(&["apps/web"])));
+        // Known required-value flags consume their value, per command.
+        assert!(is_bare("dev", &to_args(&["--port", "3000"])));
+        assert!(is_bare("build", &to_args(&["--mode", "production", "--minify"])));
+        assert!(is_bare("build", &to_args(&["--assetsDir", "assets"])));
+        assert!(is_bare("build", &to_args(&["--port=3000"])));
+        assert!(is_bare("pack", &to_args(&["--env-file", ".env"])));
+        assert!(is_bare("pack", &to_args(&["-d", "out", "--env.FOO", "1"])));
+        // The tables are command-specific: pack's flags mean nothing to Vite,
+        // and Vite's optional-value `-d, --debug [feat]` must not consume.
+        assert!(!is_bare("dev", &to_args(&["--env-file", ".env"])));
+        assert!(!is_bare("dev", &to_args(&["-d", "apps/web"])));
         // A token after an unknown or optional-value flag is ambiguous with a
         // positional target, so it conservatively counts as non-bare.
-        assert!(!is_bare(&to_args(&["--watch", "apps/web"])));
-        assert!(!is_bare(&to_args(&["--host", "0.0.0.0"])));
+        assert!(!is_bare("build", &to_args(&["--watch", "apps/web"])));
+        assert!(!is_bare("dev", &to_args(&["--host", "0.0.0.0"])));
         // Help/version requests go to the underlying tool, never elicitation.
-        assert!(!is_bare(&to_args(&["--help"])));
-        assert!(!is_bare(&to_args(&["-h"])));
-        assert!(!is_bare(&to_args(&["--watch", "--version"])));
+        assert!(!is_bare("dev", &to_args(&["--help"])));
+        assert!(!is_bare("dev", &to_args(&["-h"])));
+        assert!(!is_bare("build", &to_args(&["--watch", "--version"])));
         // Vite and tsdown are cac-based and use `-v` for version.
-        assert!(!is_bare(&to_args(&["-v"])));
+        assert!(!is_bare("build", &to_args(&["-v"])));
     }
 
     #[test]
