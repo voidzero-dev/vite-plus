@@ -9,8 +9,8 @@ VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ dist/index.mjs  0.11 kB │ gzip: 0.11 kB
-ℹ 1 files, total: 0.11 kB
+ℹ dist/index.mjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
 ✔ Build complete in <duration>
 ```
 

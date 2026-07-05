@@ -12,8 +12,8 @@ errors, and the positional keeps upstream tsdown entry semantics
 ```
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ dist/index.mjs  0.10 kB │ gzip: 0.11 kB
-ℹ 1 files, total: 0.10 kB
+ℹ dist/index.mjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
 ✔ Build complete in <duration>
 ```
 
@@ -39,8 +39,8 @@ the cd form is equivalent
 ```
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ dist/index.mjs  0.10 kB │ gzip: 0.11 kB
-ℹ 1 files, total: 0.10 kB
+ℹ dist/index.mjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
 ✔ Build complete in <duration>
 ```
 
@@ -79,8 +79,8 @@ positional stays a tsdown entry resolved from the invocation directory
 ```
 ℹ entry: packages/hello
 ℹ Build start
-ℹ dist/hello.mjs  0.12 kB │ gzip: 0.12 kB
-ℹ 1 files, total: 0.12 kB
+ℹ dist/hello.mjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
 ✔ Build complete in <duration>
 ```
 

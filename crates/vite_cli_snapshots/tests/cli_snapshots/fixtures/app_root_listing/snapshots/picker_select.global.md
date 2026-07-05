@@ -40,7 +40,7 @@ Tip: run this directly with `vp -C apps/web build`
 vite <version> building client environment for production...
 ✓ 2 modules transformed.
 computing gzip size...
-dist/index.html  0.06 kB │ gzip: 0.06 kB
+dist/index.html  <size> kB │ gzip: <size> kB
 
 ✓ built in <duration>
 ```

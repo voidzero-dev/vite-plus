@@ -12,8 +12,8 @@ VITE+ - The Unified Toolchain for the Web
 note: vp pack: using ./packages/ui (defaultPackage)
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ dist/index.mjs  0.10 kB │ gzip: 0.11 kB
-ℹ 1 files, total: 0.10 kB
+ℹ dist/index.mjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
 ✔ Build complete in <duration>
 ```
 

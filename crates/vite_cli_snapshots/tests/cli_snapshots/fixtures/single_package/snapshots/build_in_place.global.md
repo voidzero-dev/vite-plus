@@ -13,7 +13,7 @@ VITE+ - The Unified Toolchain for the Web
 vite <version> building client environment for production...
 ✓ 2 modules transformed.
 computing gzip size...
-dist/index.html  0.07 kB │ gzip: 0.08 kB
+dist/index.html  <size> kB │ gzip: <size> kB
 
 ✓ built in <duration>
 ```
