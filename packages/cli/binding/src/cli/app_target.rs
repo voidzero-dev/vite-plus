@@ -75,12 +75,16 @@ fn looks_runnable(dir: &AbsolutePathBuf, command: &str) -> bool {
 /// `defaultPackage` from the `vite.config.*` in `cwd`, read via static
 /// extraction so it works at roots without a vite-plus install (non-workspace
 /// framework repos). The value must be a static string literal.
+///
+/// `get_declared` keeps this to explicitly written fields: a config that is
+/// unanalyzable or hides fields behind a spread simply falls through to the
+/// picker/current-dir resolution instead of failing every bare app command.
 fn resolve_default_package(command: &str, cwd: &AbsolutePathBuf) -> Option<AppTarget> {
     let fail = |msg: &str| {
         output::error(msg);
         Some(AppTarget::Exit(ExitStatus(1)))
     };
-    match vite_static_config::resolve_static_config(cwd).get("defaultPackage") {
+    match vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage") {
         Some(vite_static_config::FieldValue::Json(serde_json::Value::String(dir))) => {
             let target = cwd.join(&dir).clean();
             if !target.as_path().is_dir() {

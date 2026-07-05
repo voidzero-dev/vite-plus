@@ -265,7 +265,7 @@ For every vp command:
 vp -C <dir> <cmd> [args...]  ===  cd <dir> && vp <cmd> [args...]
 ```
 
-The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The Rust layers never mutate their own cwd; the one exception is the local `vp` bin, which applies `-C` by changing its process cwd at startup before any dispatch, indistinguishable from having been started in `<dir>`.
+The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. Both entry points apply `-C` by changing their own process cwd at startup, before any argument normalization, picker, or command logic runs, which is indistinguishable from having been started in `<dir>`: the global binary consumes the flag first thing in `main` (so command aliases, the no-command picker, and in-process helpers that read the process cwd are all covered), and the local `vp` bin does the same before dispatch.
 
 The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model).
 
@@ -312,7 +312,8 @@ export default defineConfig({
 - Type: `string`, a single directory. A per-command map can come later if real demand appears.
 - Consulted when a bare app command runs in the directory containing the root config: a workspace root, or a non-workspace repo root. The non-workspace shape has no package list, so `defaultPackage` is the only mechanism that covers it. An explicit `-C` always wins.
 - A missing directory errors: `defaultPackage points to a missing directory: ./frontend`.
-- Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value. If extraction fails and no local install can execute the config, vp errors and names the offending construct.
+- Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.
+- Only an explicitly declared `defaultPackage` changes behavior. A declared but non-static value (e.g. `process.env.DIR`) errors; a config that is unanalyzable or hides fields behind a spread is treated as not declaring the key and falls through to the picker or current-dir resolution, so an exotic config can never break unrelated bare commands.
 
 ## Decisions
 

@@ -39,6 +39,23 @@ use crate::cli::{
     try_parse_args_from_with_options,
 };
 
+/// Parse a leading `-C <dir>` / `-C=<dir>` / `-C<dir>` as the first user
+/// argument, mirroring clap's short-option grammar (and bin.ts on the local
+/// path). Returns the directory and how many argv tokens it consumed.
+fn parse_leading_chdir(args: &[String]) -> Option<(String, usize)> {
+    let first = args.get(1)?;
+    if first == "-C" {
+        return args.get(2).map(|dir| (dir.clone(), 2));
+    }
+    if let Some(rest) = first.strip_prefix("-C") {
+        let dir = rest.strip_prefix('=').unwrap_or(rest);
+        if !dir.is_empty() {
+            return Some((dir.to_string(), 1));
+        }
+    }
+    None
+}
+
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
@@ -323,13 +340,31 @@ async fn main() -> ExitCode {
     }
 
     // Normal CLI mode - get current working directory
-    let cwd = match vite_path::current_dir() {
+    let mut cwd = match vite_path::current_dir() {
         Ok(path) => path,
         Err(e) => {
             output::error(&format!("Failed to get current directory: {e}"));
             return ExitCode::FAILURE;
         }
     };
+
+    // Consume a leading `-C <dir>` here, before anything inspects args or cwd,
+    // so alias normalization, the command picker, and in-process helpers all
+    // behave exactly as if vp had been started in <dir>. Setting the process
+    // cwd (before any command logic runs) keeps `vite_path::current_dir()`
+    // callers deep inside command implementations equivalent to the cd form.
+    if let Some((dir, consumed)) = parse_leading_chdir(&args) {
+        cwd = cwd.join(&dir).clean();
+        if !cwd.as_path().is_dir() {
+            output::raw_stderr(&format!("directory not found: {dir}"));
+            return ExitCode::FAILURE;
+        }
+        if let Err(e) = std::env::set_current_dir(cwd.as_path()) {
+            output::error(&format!("Failed to change directory to {dir}: {e}"));
+            return ExitCode::FAILURE;
+        }
+        args.drain(1..=consumed);
+    }
 
     if args.len() == 1 {
         match command_picker::pick_top_level_command_if_interactive(&cwd) {
@@ -467,6 +502,23 @@ mod tests {
         let input = s(&["vp", "node", "script.js", "foo", "--flag"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "env", "exec", "node", "script.js", "foo", "--flag"]));
+    }
+
+    #[test]
+    fn parse_leading_chdir_accepts_all_clap_short_forms() {
+        // `main` consumes these before alias normalization and the picker, so
+        // `vp -C dir node --version` normalizes like `cd dir && vp node ...`.
+        assert_eq!(parse_leading_chdir(&s(&["vp", "-C", "apps/web", "dev"])), some_dir(2));
+        assert_eq!(parse_leading_chdir(&s(&["vp", "-Capps/web", "dev"])), some_dir(1));
+        assert_eq!(parse_leading_chdir(&s(&["vp", "-C=apps/web", "dev"])), some_dir(1));
+        // Missing or empty value falls through to clap's own error.
+        assert_eq!(parse_leading_chdir(&s(&["vp", "-C"])), None);
+        assert_eq!(parse_leading_chdir(&s(&["vp", "-C="])), None);
+        assert_eq!(parse_leading_chdir(&s(&["vp", "dev"])), None);
+    }
+
+    fn some_dir(consumed: usize) -> Option<(String, usize)> {
+        Some(("apps/web".to_string(), consumed))
     }
 
     #[test]

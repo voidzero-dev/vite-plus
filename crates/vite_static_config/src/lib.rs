@@ -88,6 +88,20 @@ impl FieldMap {
             FieldMapInner::Open(_) => true,
         }
     }
+
+    /// Like [`get`](Self::get), but only for fields the config explicitly
+    /// declares. Unlike `get`, an open map (spread, computed keys, or an
+    /// unanalyzable config) does NOT report undeclared keys as `NonStatic`:
+    /// they return `None`. Use this when a merely-possible field must not
+    /// change behavior (e.g. `defaultPackage`, where erroring on every
+    /// unanalyzable config would break unrelated commands).
+    #[must_use]
+    pub fn get_declared(&self, key: &str) -> Option<FieldValue> {
+        match &self.0 {
+            FieldMapInner::Closed(map) => map.get(key).cloned(),
+            FieldMapInner::Open(map) => map.get(key).map(|v| FieldValue::Json(v.clone())),
+        }
+    }
 }
 
 /// Config file names to try, in priority order.
@@ -548,6 +562,24 @@ mod tests {
     /// Shorthand for asserting a field extracted as JSON.
     fn assert_json(map: &FieldMap, key: &str, expected: serde_json::Value) {
         assert_eq!(map.get(key), Some(FieldValue::Json(expected)));
+    }
+
+    #[test]
+    fn get_declared_ignores_undeclared_keys_in_open_maps() {
+        // A spread makes the map open: `get` reports any key as possibly
+        // present, but `get_declared` only reports explicitly written ones.
+        let map = parse("const base = {};\nexport default { ...base, run: { tasks: {} } };");
+        assert_eq!(map.get("defaultPackage"), Some(FieldValue::NonStatic));
+        assert_eq!(map.get_declared("defaultPackage"), None);
+        assert!(map.get_declared("run").is_some());
+
+        // Closed map: explicitly declared non-static values still surface.
+        let map = parse("export default { defaultPackage: process.env.DIR };");
+        assert_eq!(map.get_declared("defaultPackage"), Some(FieldValue::NonStatic));
+
+        // Closed map without the key: definitively absent either way.
+        let map = parse("export default { run: {} };");
+        assert_eq!(map.get_declared("defaultPackage"), None);
     }
 
     /// Shorthand for asserting a field is `NonStatic`.
