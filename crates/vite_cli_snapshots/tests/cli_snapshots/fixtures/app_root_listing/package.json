@@ -1,0 +1,1 @@
+{ "name": "app-root-listing", "private": true, "workspaces": ["apps/*", "packages/*"] }

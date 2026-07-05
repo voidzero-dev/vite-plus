@@ -1,0 +1,9 @@
+[[case]]
+name = "default_package"
+vp = ["local", "global"]
+comment = """
+defaultPackage in the root config acts as an implicit -C for bare app
+commands, including at a root that is not a JS workspace; vp prints a note
+line and runs in the configured directory (rfcs/cwd-flag.md).
+"""
+steps = [["vp", "pack"]]

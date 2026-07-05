@@ -1,0 +1,10 @@
+[[case]]
+name = "auto_select"
+vp = ["local", "global"]
+comment = """
+With exactly one likely-runnable package, a bare app command in an interactive
+terminal auto-selects it, prints the Selected/Tip teaching lines, and runs
+there (rfcs/cwd-flag.md). This TTY-only branch was untestable in the old
+harness.
+"""
+steps = [["vp", "build"]]
