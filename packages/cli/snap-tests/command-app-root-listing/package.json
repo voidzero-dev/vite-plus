@@ -1,8 +1,0 @@
-{
-  "name": "command-app-root-listing",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "type": "module"
-}

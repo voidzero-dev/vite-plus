@@ -16,3 +16,11 @@ note: vp pack: using ./packages/ui (defaultPackage)
 ℹ 1 files, total: 0.10 kB
 ✔ Build complete in <duration>
 ```
+
+## `vpt list-dir packages/ui/dist`
+
+output lands in the configured package
+
+```
+index.mjs
+```

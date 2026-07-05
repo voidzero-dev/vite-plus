@@ -1,0 +1,20 @@
+[[case]]
+name = "cwd_flag"
+vp = ["local", "global"]
+comment = """
+The global -C flag runs any command as if vp was started in the directory:
+pack and run behave byte-identically to the cd forms, a missing directory
+errors, and the positional keeps upstream tsdown entry semantics
+(rfcs/cwd-flag.md).
+"""
+steps = [
+  { argv = ["vp", "-C", "packages/hello", "pack"], comment = "-C packs the package from the workspace root" },
+  { argv = ["vpt", "list-dir", "packages/hello/dist"], comment = "output lands in the target package" },
+  { argv = ["vpt", "rm", "-rf", "packages/hello/dist"], comment = "reset so both forms produce identical output" },
+  { argv = ["vp", "pack"], cwd = "packages/hello", comment = "the cd form is equivalent" },
+  { argv = ["vp", "-C", "packages/hello", "run", "where"], comment = "-C applies to vp run as well" },
+  { argv = ["vp", "run", "where"], cwd = "packages/hello", comment = "equivalent cd form for run" },
+  { argv = ["vp", "-C", "packages/missing", "build"], comment = "missing directory errors" },
+  { argv = ["vp", "pack", "packages/hello"], comment = "positional stays a tsdown entry resolved from the invocation directory" },
+  { argv = ["vpt", "list-dir", "dist"], comment = "upstream semantics: output lands at the invocation directory" },
+]

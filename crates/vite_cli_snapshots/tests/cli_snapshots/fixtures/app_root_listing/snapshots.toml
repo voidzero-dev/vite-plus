@@ -6,7 +6,10 @@ A bare app command at a workspace root without an interactive terminal prints
 the ranked package listing with -C hints and exits 1 instead of building the
 root (rfcs/cwd-flag.md).
 """
-steps = [{ argv = ["vp", "build"], tty = false }]
+steps = [
+  { argv = ["vp", "build"], tty = false },
+  { argv = ["vp", "dev"], tty = false, comment = "dev at the root no longer starts a server against the root" },
+]
 
 [[case]]
 name = "picker_select"

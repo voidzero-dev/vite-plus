@@ -1,3 +1,0 @@
-{
-  "commands": ["vp build # defaultPackage pointing at a missing directory errors"]
-}

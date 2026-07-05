@@ -1,2 +1,0 @@
-[1]> vp build # defaultPackage pointing at a missing directory errors
-error: defaultPackage points to a missing directory: ./packages/nope

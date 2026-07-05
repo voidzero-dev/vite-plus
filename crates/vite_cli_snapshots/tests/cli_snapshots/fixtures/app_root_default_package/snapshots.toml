@@ -6,4 +6,13 @@ defaultPackage in the root config acts as an implicit -C for bare app
 commands, including at a root that is not a JS workspace; vp prints a note
 line and runs in the configured directory (rfcs/cwd-flag.md).
 """
-steps = [["vp", "pack"]]
+steps = [
+  ["vp", "pack"],
+  { argv = ["vpt", "list-dir", "packages/ui/dist"], comment = "output lands in the configured package" },
+]
+
+[[case]]
+name = "default_package_missing"
+vp = ["local", "global"]
+comment = "defaultPackage pointing at a missing directory errors before any workspace lookup."
+steps = [{ argv = ["vp", "build"], cwd = "missing" }]
