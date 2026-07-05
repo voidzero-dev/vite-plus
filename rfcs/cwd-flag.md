@@ -278,17 +278,17 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 
 - One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
 - Fuzzy search over name and path via `vite_select::fuzzy_match`, paging identical to the task picker.
-- A runnable workspace root appears as a `(workspace root)` entry, keeping today's "run at root" behavior one keystroke away.
+- A runnable workspace root appears as a `.` entry, keeping today's "run at root" behavior one keystroke away. The root needs a stronger signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
 - With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
 ### The likely-runnable heuristic
 
 Used only for ranking and single-candidate auto-select, never to hide a package: a misjudged package still appears in the picker and listing, just lower. Judged per package directory from file existence and static config extraction; nothing is executed, and parent directories never count.
 
-| Command                     | A package is likely runnable when                                                                                                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev` / `build` / `preview` | its directory directly contains one of Vite's config file names (`vite.config.{js,mjs,ts,cjs,mts,cts}`, the exact list Vite probes), **or** an `index.html` at the package root (Vite's default app entry) |
-| `pack`                      | its `vite.config.*` declares a `pack` block (read via static extraction; a Vite config without `pack` does not count), **or** `src/index.ts` exists (tsdown's only default entry)                          |
+| Command                     | A package is likely runnable when                                                                                                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev` / `build` / `preview` | its directory directly contains one of Vite's config file names (`vite.config.{js,mjs,ts,cjs,mts,cts}`, the exact list Vite probes), **or** an `index.html` at the package root (Vite's default app entry)                                   |
+| `pack`                      | its `vite.config.*` explicitly declares a `pack` block (read via static extraction; neither a config without `pack` nor one that merely might contain it behind a spread counts), **or** `src/index.ts` exists (tsdown's only default entry) |
 
 Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vite_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
 

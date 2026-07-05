@@ -39,13 +39,14 @@ use crate::cli::{
     try_parse_args_from_with_options,
 };
 
-/// Parse a leading `-C <dir>` / `-C=<dir>` / `-C<dir>` as the first user
-/// argument, mirroring clap's short-option grammar (and bin.ts on the local
-/// path). Returns the directory and how many argv tokens it consumed.
-fn parse_leading_chdir(args: &[String]) -> Option<(String, usize)> {
-    let first = args.get(1)?;
+/// Parse a leading `-C <dir>` / `-C=<dir>` / `-C<dir>` at the start of the
+/// user arguments (argv without the binary name), mirroring clap's
+/// short-option grammar (and bin.ts on the local path). Returns the
+/// directory and how many tokens it consumed.
+pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize)> {
+    let first = user_args.first()?;
     if first == "-C" {
-        return args.get(2).map(|dir| (dir.clone(), 2));
+        return user_args.get(1).map(|dir| (dir.clone(), 2));
     }
     if let Some(rest) = first.strip_prefix("-C") {
         let dir = rest.strip_prefix('=').unwrap_or(rest);
@@ -329,7 +330,7 @@ async fn main() -> ExitCode {
     // the target directory here too: cwd-sensitive completers (run tasks)
     // should suggest from <dir>, where the completed command will run.
     if env::var_os("VP_COMPLETE").is_some()
-        && let Some((dir, _)) = parse_leading_chdir(&args)
+        && let Some((dir, _)) = parse_leading_chdir(&args[1..])
         && let Ok(current) = vite_path::current_dir()
     {
         let target = current.join(&dir).clean();
@@ -365,7 +366,7 @@ async fn main() -> ExitCode {
     // behave exactly as if vp had been started in <dir>. Setting the process
     // cwd (before any command logic runs) keeps `vite_path::current_dir()`
     // callers deep inside command implementations equivalent to the cd form.
-    if let Some((dir, consumed)) = parse_leading_chdir(&args) {
+    if let Some((dir, consumed)) = parse_leading_chdir(&args[1..]) {
         cwd = cwd.join(&dir).clean();
         if !cwd.as_path().is_dir() {
             output::raw_stderr(&format!("directory not found: {dir}"));
@@ -527,13 +528,13 @@ mod tests {
     fn parse_leading_chdir_accepts_all_clap_short_forms() {
         // `main` consumes these before alias normalization and the picker, so
         // `vp -C dir node --version` normalizes like `cd dir && vp node ...`.
-        assert_eq!(parse_leading_chdir(&s(&["vp", "-C", "apps/web", "dev"])), some_dir(2));
-        assert_eq!(parse_leading_chdir(&s(&["vp", "-Capps/web", "dev"])), some_dir(1));
-        assert_eq!(parse_leading_chdir(&s(&["vp", "-C=apps/web", "dev"])), some_dir(1));
+        assert_eq!(parse_leading_chdir(&s(&["-C", "apps/web", "dev"])), some_dir(2));
+        assert_eq!(parse_leading_chdir(&s(&["-Capps/web", "dev"])), some_dir(1));
+        assert_eq!(parse_leading_chdir(&s(&["-C=apps/web", "dev"])), some_dir(1));
         // Missing or empty value falls through to clap's own error.
-        assert_eq!(parse_leading_chdir(&s(&["vp", "-C"])), None);
-        assert_eq!(parse_leading_chdir(&s(&["vp", "-C="])), None);
-        assert_eq!(parse_leading_chdir(&s(&["vp", "dev"])), None);
+        assert_eq!(parse_leading_chdir(&s(&["-C"])), None);
+        assert_eq!(parse_leading_chdir(&s(&["-C="])), None);
+        assert_eq!(parse_leading_chdir(&s(&["dev"])), None);
     }
 
     fn some_dir(consumed: usize) -> Option<(String, usize)> {

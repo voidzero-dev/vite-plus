@@ -59,6 +59,9 @@ const VALUE_TAKING_FLAGS: &[&str] = &[
     "--port",
     "--base",
     "--outDir",
+    "--assetsDir",
+    "--assetsInlineLimit",
+    "--filter",
     "-d",
     "--out-dir",
     "--target",
@@ -90,17 +93,22 @@ fn is_bare(args: &[String]) -> bool {
 /// Used for ordering and single-candidate auto-selection, never for hiding.
 /// The rules are documented in rfcs/cwd-flag.md ("The likely-runnable
 /// heuristic"); keep both in sync.
-fn looks_runnable(dir: &AbsolutePathBuf, command: &str) -> bool {
+///
+/// The workspace root needs a stronger signal than member packages: a shared
+/// root `vite.config.ts` (lint/fmt/tasks) is the normal monorepo setup and
+/// must not make the root look like an app, or auto-select would run the
+/// silent root build this feature exists to prevent.
+fn looks_runnable(dir: &AbsolutePathBuf, command: &str, is_root: bool) -> bool {
     match command {
-        // Bare `vp pack` succeeds when the config declares a `pack` block or
-        // tsdown's default entry exists; a Vite config without `pack` does
-        // not make a package packable. `contains` deliberately counts configs
-        // with spreads (`pack` may exist behind them): the right direction
-        // for a never-hide ranking signal.
+        // Bare `vp pack` succeeds when the config explicitly declares a
+        // `pack` block or tsdown's default entry exists. A spread that only
+        // might contain `pack` does not count: auto-select acts on this
+        // signal, so a false positive runs tsdown in a non-packable package.
         "pack" => {
-            vite_static_config::resolve_static_config(dir).contains("pack")
+            vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
                 || dir.as_path().join("src/index.ts").is_file()
         }
+        _ if is_root => dir.as_path().join("index.html").is_file(),
         _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
@@ -217,8 +225,8 @@ pub(super) fn resolve_app_target(
         .node_weights()
         .filter_map(|info| {
             let absolute = info.absolute_path.to_absolute_path_buf();
-            let runnable = looks_runnable(&absolute, command);
             let is_root = info.path.as_str().is_empty();
+            let runnable = looks_runnable(&absolute, command, is_root);
             // The root itself is a valid target only when it looks runnable;
             // `.` keeps the -C hint and the selection working there.
             if is_root && !runnable {
@@ -284,6 +292,7 @@ mod tests {
         // Known value-taking flags consume their value.
         assert!(is_bare(&to_args(&["--port", "3000"])));
         assert!(is_bare(&to_args(&["--mode", "production", "--minify"])));
+        assert!(is_bare(&to_args(&["--assetsDir", "assets"])));
         assert!(is_bare(&to_args(&["--port=3000"])));
         // A token after an unknown or optional-value flag is ambiguous with a
         // positional target, so it conservatively counts as non-bare.

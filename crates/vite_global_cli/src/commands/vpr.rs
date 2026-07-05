@@ -10,11 +10,32 @@ use vite_shared::output;
 ///
 /// Called from shim dispatch when `argv[0]` is `vpr`.
 pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
+    // `vpr -C <dir> <task>` mirrors `vp -C <dir> run <task>`: consume the
+    // global flag before treating the rest as run arguments.
+    let mut args = args;
+    let mut cwd_buf = cwd.to_absolute_path_buf();
+    if let Some((dir, consumed)) = crate::parse_leading_chdir(args) {
+        cwd_buf = cwd_buf.join(&dir).clean();
+        if !cwd_buf.as_path().is_dir() {
+            output::raw_stderr(&format!("directory not found: {dir}"));
+            return 1;
+        }
+        if std::env::set_current_dir(cwd_buf.as_path()).is_err() {
+            output::error(&format!("Failed to change directory to {dir}"));
+            return 1;
+        }
+        #[cfg(unix)]
+        // SAFETY: single-threaded startup, before any command logic runs.
+        unsafe {
+            std::env::set_var("PWD", cwd_buf.as_path());
+        }
+        args = &args[consumed..];
+    }
+
     if crate::help::maybe_print_unified_delegate_help("run", args, true) {
         return 0;
     }
 
-    let cwd_buf = cwd.to_absolute_path_buf();
     match super::delegate::execute(cwd_buf, "run", args).await {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
