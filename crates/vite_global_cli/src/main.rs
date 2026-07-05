@@ -510,7 +510,8 @@ mod tests {
 
     use super::{
         extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        normalize_args, replace_top_level_typoed_subcommand, try_parse_args_from,
+        normalize_args, parse_leading_chdir, replace_top_level_typoed_subcommand,
+        try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
