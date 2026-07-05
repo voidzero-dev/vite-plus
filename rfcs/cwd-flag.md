@@ -314,6 +314,7 @@ export default defineConfig({
 - A missing directory errors: `defaultPackage points to a missing directory: ./frontend`.
 - Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.
 - Only an explicitly declared `defaultPackage` changes behavior. A declared but non-static value (e.g. `process.env.DIR`) errors; a config that is unanalyzable or hides fields behind a spread is treated as not declaring the key and falls through to the picker or current-dir resolution, so an exotic config can never break unrelated bare commands.
+- Consulted only at the invocation root (a workspace root, a standalone package root, or a directory with no `package.json` ancestry). Below a workspace root the current directory already identifies the target, so a member package's own config never redirects.
 
 ## Decisions
 

@@ -52,6 +52,11 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
 const VITE_VALUE_FLAGS: &[&str] = &[
     "-c",
     "--config",
+    "--config-loader",
+    "--log-level",
+    "--out-dir",
+    "--assets-dir",
+    "--assets-inline-limit",
     "--base",
     "-l",
     "--logLevel",
@@ -71,6 +76,11 @@ const VITE_VALUE_FLAGS: &[&str] = &[
 /// both camelCase and kebab-case spellings). Optional-value flags (`--debug`,
 /// `--watch`, `--from-vite`) are deliberately absent, as above.
 const PACK_VALUE_FLAGS: &[&str] = &[
+    "--root",
+    "-F",
+    "--filter",
+    "-c",
+    "--config",
     "--config-loader",
     "--configLoader",
     "-f",
@@ -110,8 +120,11 @@ fn is_bare(command: &str, args: &[String]) -> bool {
         if !arg.starts_with('-') || super::help::is_app_tool_help_or_version_flag(arg) {
             return false;
         }
-        // `--env.NAME <value>` defines a compile-time env variable in pack.
-        if value_flags.contains(&arg.as_str()) || (command == "pack" && arg.starts_with("--env.")) {
+        // `--env.NAME <value>` defines a compile-time env variable in pack;
+        // the inline `--env.NAME=value` form already carries its value.
+        if value_flags.contains(&arg.as_str())
+            || (command == "pack" && arg.starts_with("--env.") && !arg.contains('='))
+        {
             // Consume the flag's value; a missing value is the tool's error.
             iter.next();
         }
@@ -235,14 +248,27 @@ pub(super) fn needs_elicitation(
     if !is_bare(command, args) {
         return false;
     }
-    if vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage").is_some() {
+    let workspace = vite_workspace::find_workspace_root(cwd);
+    if at_invocation_root(workspace.as_ref().ok().map(|(_, rel)| rel.as_str()))
+        && vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage").is_some()
+    {
         return true;
     }
-    let Ok((workspace_root, rel_from_root)) = vite_workspace::find_workspace_root(cwd) else {
+    let Ok((workspace_root, rel_from_root)) = workspace else {
         return false;
     };
     rel_from_root.as_str().is_empty()
         && !matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_))
+}
+
+/// `defaultPackage` is a root-pointer concept: it applies where the
+/// invocation directory is its own root (a workspace root, a standalone
+/// package, or a framework directory with no package.json ancestry — pass
+/// the workspace lookup's `rel_from_root`, or `None` when the lookup
+/// failed). Below a workspace root the current directory already identifies
+/// the target package, so a member's own config must not redirect.
+fn at_invocation_root(rel_from_root: Option<&str>) -> bool {
+    rel_from_root.is_none_or(str::is_empty)
 }
 
 pub(super) fn resolve_app_target(
@@ -256,16 +282,20 @@ pub(super) fn resolve_app_target(
         return Ok(AppTarget::CurrentDir);
     }
 
-    // `defaultPackage` comes before any workspace lookup: the non-workspace
-    // framework shape (a Laravel-style root with a vite.config.ts pointer and
-    // no package.json up-tree) has no workspace metadata at all.
-    if let Some(target) = resolve_default_package(command, cwd) {
+    // `defaultPackage` is consulted before the workspace-shape dispatch (the
+    // non-workspace framework shape has no workspace metadata at all), but
+    // only at the invocation root: a member package's config must not
+    // redirect a command already running in that member.
+    let workspace = vite_workspace::find_workspace_root(cwd);
+    if at_invocation_root(workspace.as_ref().ok().map(|(_, rel)| rel.as_str()))
+        && let Some(target) = resolve_default_package(command, cwd)
+    {
         return Ok(target);
     }
 
     // The package listing needs workspace metadata; anything unresolvable
     // keeps today's behavior (the caller surfaces its own workspace errors).
-    let Ok((workspace_root, rel_from_root)) = vite_workspace::find_workspace_root(cwd) else {
+    let Ok((workspace_root, rel_from_root)) = workspace else {
         return Ok(AppTarget::CurrentDir);
     };
     if !rel_from_root.as_str().is_empty()
