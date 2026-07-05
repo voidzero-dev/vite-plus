@@ -17,13 +17,16 @@ fs.mkdirSync(path.join('home', 'package_manager', 'npm', '11.0.0', 'npm', 'bin')
 });
 fs.mkdirSync('fake-bin', { recursive: true });
 
-fs.writeFileSync(
-  path.join('fake-bin', 'corepack'),
-  '#!/bin/sh\nmkdir -p "$VP_HOME"\ntouch "$VP_HOME/corepack-cleaned"\n',
-  { mode: 0o755 },
-);
-fs.writeFileSync(
-  path.join('fake-bin', 'corepack.cmd'),
-  '@echo off\r\nif not exist "%VP_HOME%" mkdir "%VP_HOME%"\r\ntype nul > "%VP_HOME%\\corepack-cleaned"\r\n',
-);
+if (process.platform === 'win32') {
+  fs.writeFileSync(
+    path.join('fake-bin', 'corepack.cmd'),
+    '@echo off\r\nif not exist "%VP_HOME%" mkdir "%VP_HOME%"\r\ntype nul > "%VP_HOME%\\corepack-cleaned"\r\n',
+  );
+} else {
+  fs.writeFileSync(
+    path.join('fake-bin', 'corepack'),
+    '#!/bin/sh\nmkdir -p "$VP_HOME"\ntouch "$VP_HOME/corepack-cleaned"\n',
+    { mode: 0o755 },
+  );
+}
 fs.writeFileSync(path.join('home', 'config.json'), '{"defaultNodeVersion":"24.11.0"}\n');

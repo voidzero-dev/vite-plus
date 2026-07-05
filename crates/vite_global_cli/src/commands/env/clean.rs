@@ -110,12 +110,18 @@ async fn remove_dir_all_if_exists(path: &Path) -> Result<bool, Error> {
 }
 
 async fn run_corepack_cache_clean(cwd: &AbsolutePathBuf) -> Result<bool, Error> {
-    if corepack_cache_clean_would_auto_install(cwd).await? {
+    let corepack_path = match resolve_corepack_from_path(cwd) {
+        Some(path) => path,
+        None => return Ok(false),
+    };
+
+    if corepack_cache_clean_would_auto_install(cwd, &corepack_path).await? {
         return Ok(false);
     }
 
-    let result = tokio::process::Command::new("corepack")
+    let result = tokio::process::Command::new(corepack_path.as_path())
         .args(["cache", "clean"])
+        .current_dir(cwd.as_path())
         .env_remove(env_vars::VP_TOOL_RECURSION)
         .output()
         .await;
@@ -128,12 +134,10 @@ async fn run_corepack_cache_clean(cwd: &AbsolutePathBuf) -> Result<bool, Error> 
     }
 }
 
-async fn corepack_cache_clean_would_auto_install(cwd: &AbsolutePathBuf) -> Result<bool, Error> {
-    let corepack_path = match resolve_corepack_from_path(cwd) {
-        Some(path) => path,
-        None => return Ok(false),
-    };
-
+async fn corepack_cache_clean_would_auto_install(
+    cwd: &AbsolutePathBuf,
+    corepack_path: &AbsolutePath,
+) -> Result<bool, Error> {
     let bin_dir = config::get_bin_dir()?;
     if corepack_path.parent() != Some(&bin_dir) {
         return Ok(false);
