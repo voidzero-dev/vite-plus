@@ -276,10 +276,26 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 
 ### Picker contents
 
-- One row per workspace package: name plus relative path. Nothing is filtered out; packages that look runnable for the command (`vite.config.*` or `index.html` for `dev`/`build`/`preview`, a pack config or library entry for `pack`) rank first, then by path, so apps surface at the top while everything stays searchable.
+- One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
 - Fuzzy search over name and path via `vite_select::fuzzy_match`, paging identical to the task picker.
 - A runnable workspace root appears as a `(workspace root)` entry, keeping today's "run at root" behavior one keystroke away.
 - With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
+
+### The likely-runnable heuristic
+
+Used only for ranking and single-candidate auto-select, never to hide a package: a misjudged package still appears in the picker and listing, just lower. Judged per package directory from file existence and static config extraction; nothing is executed, and parent directories never count.
+
+| Command                     | A package is likely runnable when                                                                                                                                                                          |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev` / `build` / `preview` | its directory directly contains one of Vite's config file names (`vite.config.{js,mjs,ts,cjs,mts,cts}`, the exact list Vite probes), **or** an `index.html` at the package root (Vite's default app entry) |
+| `pack`                      | its `vite.config.*` declares a `pack` block (read via static extraction; a Vite config without `pack` does not count), **or** `src/index.ts` exists (tsdown's only default entry)                          |
+
+"Exactly one likely-runnable package" means: after sorting rows runnable-first, the first row is runnable and the second is not. Auto-select additionally requires an interactive terminal.
+
+Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is immediately visible (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
+
+- A library whose `vite.config.*` exists only for Vitest or lint settings ranks as runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
+- An app whose `index.html` lives outside the package root (custom Vite `root`) or whose config is inherited from a parent directory is not ranked first, and never auto-selects.
 
 ### `defaultPackage` config
 

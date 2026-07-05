@@ -197,7 +197,7 @@ error: `vp build` at the workspace root needs a target package.
   Or run every package's build script:  vp run -r build
 ```
 
-Packages that look runnable for the command (an `index.html` or `vite.config.*` for `dev` / `build` / `preview`, a library entry for `pack`) are ranked first in both the picker and the listing.
+Packages that look runnable for the command are ranked first in both the picker and the listing: a `vite.config.*` or root `index.html` for `dev` / `build` / `preview`, and a `pack` config block or tsdown's default `src/index.ts` entry for `pack`.
 
 ### Targeting a package with `-C`
 

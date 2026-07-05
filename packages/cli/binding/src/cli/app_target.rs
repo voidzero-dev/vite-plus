@@ -56,11 +56,18 @@ fn is_bare(args: &[String]) -> bool {
 
 /// Heuristic ranking signal: does `dir` look runnable for `command`?
 /// Used for ordering and single-candidate auto-selection, never for hiding.
+/// The rules are documented in rfcs/cwd-flag.md ("The likely-runnable
+/// heuristic"); keep both in sync.
 fn looks_runnable(dir: &AbsolutePathBuf, command: &str) -> bool {
-    let has_vite_config = vite_static_config::has_config_file(dir);
     match command {
-        "pack" => has_vite_config || dir.as_path().join("src/index.ts").is_file(),
-        _ => has_vite_config || dir.as_path().join("index.html").is_file(),
+        // Bare `vp pack` succeeds when the config declares a `pack` block or
+        // tsdown's default entry exists; a Vite config without `pack` does
+        // not make a package packable.
+        "pack" => {
+            vite_static_config::resolve_static_config(dir).get("pack").is_some()
+                || dir.as_path().join("src/index.ts").is_file()
+        }
+        _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
 
