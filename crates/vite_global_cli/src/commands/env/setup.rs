@@ -624,7 +624,7 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-$env.VP_HOME = "__VP_HOME__"
+$env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
@@ -764,6 +764,14 @@ fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path
         .unwrap_or_else(|| path.display().to_string().replace('\\', "/"))
 }
 
+fn render_nu_path_ref(path_ref: &str) -> String {
+    match path_ref.strip_prefix("$HOME") {
+        Some("") => "~".to_string(),
+        Some(suffix) if suffix.starts_with('/') => format!("~{suffix}"),
+        _ => path_ref.to_string(),
+    }
+}
+
 /// Render the env-file content for `shell` against `vite_plus_home`.
 fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath) -> String {
     let bin_path = vite_plus_home.join("bin");
@@ -782,11 +790,8 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath)
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
-            let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
-            // `~` is only expanded in Nushell path-literal positions, not general
-            // strings, so a `~/...` VP_HOME would leak literally into the env var;
-            // bake the absolute path instead (`None` skips $HOME-relativization).
-            let home_path_ref_nu = render_home_relative_path(vite_plus_home.as_path(), None);
+            let home_path_ref_nu = render_nu_path_ref(&home_path_ref);
+            let bin_path_ref_nu = render_nu_path_ref(&bin_path_ref);
             ENV_TEMPLATE_NU
                 .replace("__VP_HOME__", &home_path_ref_nu)
                 .replace("__VP_BIN__", &bin_path_ref_nu)
@@ -958,8 +963,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_replaces_placeholder_with_home_relative_path() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("vp_home")).unwrap();
         let _guard = home_guard(temp_dir.path());
+        tokio::fs::create_dir_all(&home).await.unwrap();
 
         create_env_files(&home).await.unwrap();
 
@@ -988,28 +994,31 @@ mod tests {
 
         // Should use $HOME-relative path since install dir is under HOME
         assert!(
-            env_content.contains("$HOME/bin"),
-            "env file should reference $HOME/bin, got: {env_content}"
+            env_content.contains("$HOME/vp_home/bin"),
+            "env file should reference $HOME/vp_home/bin, got: {env_content}"
         );
         assert!(
-            fish_content.contains("$HOME/bin"),
-            "env.fish file should reference $HOME/bin, got: {fish_content}"
+            fish_content.contains("$HOME/vp_home/bin"),
+            "env.fish file should reference $HOME/vp_home/bin, got: {fish_content}"
         );
         assert!(
-            env_content.contains("export VP_HOME=\"$HOME\""),
+            env_content.contains("export VP_HOME=\"$HOME/vp_home\""),
             "env file should export VP_HOME, got: {env_content}"
         );
         assert!(
-            fish_content.contains("set -gx VP_HOME \"$HOME\""),
+            fish_content.contains("set -gx VP_HOME \"$HOME/vp_home\""),
             "env.fish file should export VP_HOME, got: {fish_content}"
+        );
+        assert!(
+            nu_content.contains("$env.VP_HOME = (\"~/vp_home\" | path expand --no-symlink)"),
+            "env.nu file should set home-relative VP_HOME, got: {nu_content}"
+        );
+        assert!(
+            nu_content.contains("~/vp_home/bin"),
+            "env.nu file should reference ~/vp_home/bin, got: {nu_content}"
         );
 
         let expected_home = home.as_path().display().to_string();
-        let expected_home_nu = expected_home.replace('\\', "/");
-        assert!(
-            nu_content.contains(&format!("$env.VP_HOME = \"{expected_home_nu}\"")),
-            "env.nu file should set VP_HOME, got: {nu_content}"
-        );
         assert!(
             ps1_content.contains(&format!("$env:VP_HOME = \"{expected_home}\"")),
             "env.ps1 file should set VP_HOME, got: {ps1_content}"
