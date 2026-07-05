@@ -101,3 +101,17 @@ upstream semantics: output lands at the invocation directory
 ```
 hello.mjs
 ```
+
+## `vp run where:hello`
+
+a script whose command starts with vp -C runs verbatim and honors the directory
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+$ vp -C packages/hello run where ⊘ cache disabled
+VITE+ - The Unified Toolchain for the Web
+
+~/packages/hello$ node -e "console.log('cwd base: ' + require('node:path').basename(process.cwd()))" ⊘ cache disabled
+cwd base: hello
+```

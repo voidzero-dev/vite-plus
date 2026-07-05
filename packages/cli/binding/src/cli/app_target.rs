@@ -62,6 +62,11 @@ const VALUE_TAKING_FLAGS: &[&str] = &[
     "--assetsDir",
     "--assetsInlineLimit",
     "--filter",
+    "--configLoader",
+    "--config-loader",
+    "--tsconfig",
+    "--log-level",
+    "--deps.never-bundle",
     "-d",
     "--out-dir",
     "--target",
@@ -188,6 +193,31 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         vite_select::SelectResult::Selected => Some(selected_index),
         vite_select::SelectResult::Cancelled => None,
     })
+}
+
+/// Pure predicate for the vp-script interception: would `resolve_app_target`
+/// do anything other than run in `cwd`? Never prints and never runs the
+/// picker. Slightly over-approximates (an empty workspace reports true), in
+/// which case the script merely spawns the real binary, which then behaves
+/// identically to a direct invocation.
+pub(super) fn needs_elicitation(
+    subcommand: &SynthesizableSubcommand,
+    cwd: &AbsolutePathBuf,
+) -> bool {
+    let Some((_, args)) = app_command_parts(subcommand) else {
+        return false;
+    };
+    if !is_bare(args) {
+        return false;
+    }
+    if vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage").is_some() {
+        return true;
+    }
+    let Ok((workspace_root, rel_from_root)) = vite_workspace::find_workspace_root(cwd) else {
+        return false;
+    };
+    rel_from_root.as_str().is_empty()
+        && !matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_))
 }
 
 pub(super) fn resolve_app_target(

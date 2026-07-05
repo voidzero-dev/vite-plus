@@ -1,1 +1,10 @@
-{ "name": "cwd-flag", "private": true, "workspaces": ["packages/*"] }
+{
+  "name": "cwd-flag",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "where:hello": "vp -C packages/hello run where"
+  }
+}

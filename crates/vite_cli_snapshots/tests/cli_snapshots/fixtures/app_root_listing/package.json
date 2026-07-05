@@ -1,1 +1,11 @@
-{ "name": "app-root-listing", "private": true, "workspaces": ["apps/*", "packages/*"] }
+{
+  "name": "app-root-listing",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "vp build"
+  }
+}

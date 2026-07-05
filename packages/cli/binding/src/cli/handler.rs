@@ -44,6 +44,17 @@ impl CommandHandler for VitePlusCommandHandler {
         if program != "vp" && program != "vpr" {
             return Ok(HandledCommand::Verbatim);
         }
+        // A leading global `-C` runs verbatim: CLIArgs has no global flags, and
+        // the spawned vp/vpr binary applies the directory change (and target
+        // elicitation) exactly like a direct invocation.
+        if command
+            .args
+            .first()
+            .map(Str::as_str)
+            .is_some_and(|arg| arg == "-C" || (arg.starts_with("-C") && arg.len() > 2))
+        {
+            return Ok(HandledCommand::Verbatim);
+        }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
         let cli_args = match CLIArgs::try_parse_from(
@@ -72,6 +83,14 @@ impl CommandHandler for VitePlusCommandHandler {
                 )))
             }
             CLIArgs::Synthesizable(subcmd) => {
+                // Bare app commands in scripts get the same workspace-root
+                // target elicitation as direct invocations: spawn the real
+                // binary, which elicits (defaultPackage note, listing +
+                // exit 1) identically instead of silently running the root.
+                let cwd = command.cwd.to_absolute_path_buf();
+                if super::app_target::needs_elicitation(&subcmd, &cwd) {
+                    return Ok(HandledCommand::Verbatim);
+                }
                 let resolved = self.resolver.resolve(subcmd, None, &command.envs).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }

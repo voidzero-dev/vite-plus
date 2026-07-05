@@ -17,4 +17,5 @@ steps = [
   { argv = ["vp", "-C", "packages/missing", "build"], comment = "missing directory errors" },
   { argv = ["vp", "pack", "packages/hello"], comment = "positional stays a tsdown entry resolved from the invocation directory" },
   { argv = ["vpt", "list-dir", "dist"], comment = "upstream semantics: output lands at the invocation directory" },
+  { argv = ["vp", "run", "where:hello"], comment = "a script whose command starts with vp -C runs verbatim and honors the directory" },
 ]

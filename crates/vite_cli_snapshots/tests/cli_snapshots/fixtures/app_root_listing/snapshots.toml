@@ -38,3 +38,13 @@ steps = [
     { "write-key" = "ctrl-c" },
   ] },
 ]
+
+[[case]]
+name = "script_at_root_elicits"
+vp = ["local", "global"]
+comment = """
+A root package script "build": "vp build" run through vp run gets the same
+target elicitation as a direct bare invocation: the spawned vp prints the
+listing and the task fails instead of silently building the root.
+"""
+steps = [{ argv = ["vp", "run", "build"], tty = false }]
