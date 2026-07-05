@@ -201,6 +201,7 @@ pub(super) fn print_help() {
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
 
 Options:
+  -C <DIR>    Run as if vp was started in <DIR> instead of the current working directory
   -h, --help  Print help"
     );
 }
