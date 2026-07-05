@@ -44,13 +44,46 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
     }
 }
 
-/// Bare = no positional target and no help-like flag. A non-flag token may be
-/// a flag value (`--port 3000`), so any non-flag argument conservatively
-/// disables elicitation; help/version requests are answered by the underlying
-/// tool and must never be redirected.
+/// Flags of the app tools (Vite dev/build/preview and tsdown) that always
+/// consume the next argv token as their value. Space-separated values of
+/// these flags are not positional targets. Flags with optional values
+/// (`--host`, `--sourcemap`, `--minify`, ...) are deliberately absent: a
+/// token after them stays ambiguous and keeps the conservative fallback.
+const VALUE_TAKING_FLAGS: &[&str] = &[
+    "-c",
+    "--config",
+    "-m",
+    "--mode",
+    "-l",
+    "--logLevel",
+    "--port",
+    "--base",
+    "--outDir",
+    "-d",
+    "--out-dir",
+    "--target",
+    "-f",
+    "--format",
+    "--platform",
+];
+
+/// Bare = no positional target and no help-like flag. Values of known
+/// value-taking flags (`--port 3000`) are skipped; any other non-flag token
+/// may be a positional target and conservatively disables elicitation.
+/// Help/version requests are answered by the underlying tool and must never
+/// be redirected.
 fn is_bare(args: &[String]) -> bool {
-    args.iter()
-        .all(|arg| arg.starts_with('-') && !super::help::is_app_tool_help_or_version_flag(arg))
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        if !arg.starts_with('-') || super::help::is_app_tool_help_or_version_flag(arg) {
+            return false;
+        }
+        if VALUE_TAKING_FLAGS.contains(&arg.as_str()) {
+            // Consume the flag's value; a missing value is the tool's error.
+            iter.next();
+        }
+    }
+    true
 }
 
 /// Heuristic ranking signal: does `dir` look runnable for `command`?
@@ -182,15 +215,22 @@ pub(super) fn resolve_app_target(
         vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
     let mut rows: Vec<PackageRow> = graph
         .node_weights()
-        .filter(|info| !info.path.as_str().is_empty())
-        .map(|info| {
+        .filter_map(|info| {
             let absolute = info.absolute_path.to_absolute_path_buf();
-            PackageRow {
-                name: info.package_json.name.clone(),
-                path: vite_str::Str::from(info.path.as_str()),
-                runnable: looks_runnable(&absolute, command),
-                absolute,
+            let runnable = looks_runnable(&absolute, command);
+            let is_root = info.path.as_str().is_empty();
+            // The root itself is a valid target only when it looks runnable;
+            // `.` keeps the -C hint and the selection working there.
+            if is_root && !runnable {
+                return None;
             }
+            let path = if is_root { "." } else { info.path.as_str() };
+            Some(PackageRow {
+                name: info.package_json.name.clone(),
+                path: vite_str::Str::from(path),
+                runnable,
+                absolute,
+            })
         })
         .collect();
     if rows.is_empty() {
@@ -241,9 +281,14 @@ mod tests {
         assert!(is_bare(&to_args(&["-w", "--minify"])));
         // A positional target disables elicitation.
         assert!(!is_bare(&to_args(&["apps/web"])));
-        // A flag value is indistinguishable from a positional without knowing
-        // the tool's flag arity, so it conservatively counts as non-bare.
-        assert!(!is_bare(&to_args(&["--port", "3000"])));
+        // Known value-taking flags consume their value.
+        assert!(is_bare(&to_args(&["--port", "3000"])));
+        assert!(is_bare(&to_args(&["--mode", "production", "--minify"])));
+        assert!(is_bare(&to_args(&["--port=3000"])));
+        // A token after an unknown or optional-value flag is ambiguous with a
+        // positional target, so it conservatively counts as non-bare.
+        assert!(!is_bare(&to_args(&["--watch", "apps/web"])));
+        assert!(!is_bare(&to_args(&["--host", "0.0.0.0"])));
         // Help/version requests go to the underlying tool, never elicitation.
         assert!(!is_bare(&to_args(&["--help"])));
         assert!(!is_bare(&to_args(&["-h"])));

@@ -66,11 +66,18 @@ async fn execute_direct_subcommand(
         SubcommandResolver::new(Arc::clone(&workspace_path))
     };
 
-    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new(
-        std::env::vars_os()
+    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new({
+        let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
             .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
-            .collect(),
-    );
+            .collect();
+        // The tool runs with `cwd` as its working directory; keep the POSIX
+        // PWD consistent with it, like a real `cd` (matters when elicitation
+        // retargeted the command to another package).
+        if cfg!(unix) {
+            envs.insert(Arc::from(OsStr::new("PWD")), Arc::from(cwd.as_path().as_os_str()));
+        }
+        envs
+    });
     let envs = envs_with_explicit_package_manager_path(cwd, envs).await?;
 
     let status = match subcommand {

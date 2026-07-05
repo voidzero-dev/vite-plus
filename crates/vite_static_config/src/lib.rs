@@ -37,12 +37,13 @@ pub enum FieldValue {
 ///   The map is exhaustive: every field is accounted for, absent keys do not exist.
 ///
 /// - [`FieldMapInner::Open`] — the object had at least one spread or computed-key
-///   property. The map contains only [`serde_json::Value`] entries for keys
-///   explicitly declared **after** the last such entry. Absent keys may exist via
-///   the spread and are treated as [`FieldValue::NonStatic`] by [`FieldMap::get`].
+///   property. The map contains entries only for keys explicitly declared
+///   **after** the last such entry (both static and `NonStatic` values). Absent
+///   keys may exist via the spread and are treated as [`FieldValue::NonStatic`]
+///   by [`FieldMap::get`], but not by [`FieldMap::get_declared`].
 enum FieldMapInner {
     Closed(FxHashMap<Box<str>, FieldValue>),
-    Open(FxHashMap<Box<str>, serde_json::Value>),
+    Open(FxHashMap<Box<str>, FieldValue>),
 }
 
 /// Extracted fields from a vite config object.
@@ -65,15 +66,15 @@ impl FieldMap {
     ///
     /// - [`Closed`](FieldMapInner::Closed): returns the stored value, or `None`
     ///   if the field is definitively absent.
-    /// - [`Open`](FieldMapInner::Open): returns the stored `Json` value if
-    ///   explicitly declared after the last spread/computed key, or
-    ///   `Some(NonStatic)` for any other key (it may exist in the spread).
+    /// - [`Open`](FieldMapInner::Open): returns the stored value if explicitly
+    ///   declared after the last spread/computed key, or `Some(NonStatic)` for
+    ///   any other key (it may exist in the spread).
     #[must_use]
     pub fn get(&self, key: &str) -> Option<FieldValue> {
         match &self.0 {
             FieldMapInner::Closed(map) => map.get(key).cloned(),
             FieldMapInner::Open(map) => {
-                Some(map.get(key).map_or(FieldValue::NonStatic, |v| FieldValue::Json(v.clone())))
+                Some(map.get(key).cloned().unwrap_or(FieldValue::NonStatic))
             }
         }
     }
@@ -99,7 +100,7 @@ impl FieldMap {
     pub fn get_declared(&self, key: &str) -> Option<FieldValue> {
         match &self.0 {
             FieldMapInner::Closed(map) => map.get(key).cloned(),
-            FieldMapInner::Open(map) => map.get(key).map(|v| FieldValue::Json(v.clone())),
+            FieldMapInner::Open(map) => map.get(key).cloned(),
         }
     }
 }
@@ -456,11 +457,12 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
                 map.insert(Box::from(key.as_ref()), value);
             }
             FieldMapInner::Open(map) => {
-                // Only Json values are meaningful in Open — NonStatic is already implied
-                // for any absent key, so there's no need to record it explicitly.
-                if let Some(json) = expr_to_json(&prop.value) {
-                    map.insert(Box::from(key.as_ref()), json);
-                }
+                // Record explicit declarations, including NonStatic ones:
+                // `get_declared` must distinguish a written `key: expr` from a
+                // key that merely might exist behind the spread.
+                let value =
+                    expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
+                map.insert(Box::from(key.as_ref()), value);
             }
         }
     }
@@ -575,6 +577,12 @@ mod tests {
 
         // Closed map: explicitly declared non-static values still surface.
         let map = parse("export default { defaultPackage: process.env.DIR };");
+        assert_eq!(map.get_declared("defaultPackage"), Some(FieldValue::NonStatic));
+
+        // Open map: an explicit non-static declaration after a spread is
+        // still a declaration, not an unknown.
+        let map =
+            parse("const base = {};\nexport default { ...base, defaultPackage: process.env.DIR };");
         assert_eq!(map.get_declared("defaultPackage"), Some(FieldValue::NonStatic));
 
         // Closed map without the key: definitively absent either way.

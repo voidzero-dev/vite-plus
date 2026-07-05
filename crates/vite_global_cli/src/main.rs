@@ -325,6 +325,18 @@ async fn main() -> ExitCode {
     }
 
     // Handle shell completion
+    // `complete()` exits before the normal `-C` handling below runs, so apply
+    // the target directory here too: cwd-sensitive completers (run tasks)
+    // should suggest from <dir>, where the completed command will run.
+    if env::var_os("VP_COMPLETE").is_some()
+        && let Some((dir, _)) = parse_leading_chdir(&args)
+        && let Ok(current) = vite_path::current_dir()
+    {
+        let target = current.join(&dir).clean();
+        if target.as_path().is_dir() {
+            let _ = std::env::set_current_dir(target.as_path());
+        }
+    }
     CompleteEnv::with_factory(command_with_help).var("VP_COMPLETE").complete();
 
     // Check for shim mode (invoked as node, npm, or npx)
@@ -362,6 +374,13 @@ async fn main() -> ExitCode {
         if let Err(e) = std::env::set_current_dir(cwd.as_path()) {
             output::error(&format!("Failed to change directory to {dir}: {e}"));
             return ExitCode::FAILURE;
+        }
+        // Keep the POSIX PWD in sync, like a real `cd`: Node tools commonly
+        // read process.env.PWD.
+        #[cfg(unix)]
+        // SAFETY: single-threaded startup, before any command logic runs.
+        unsafe {
+            std::env::set_var("PWD", cwd.as_path());
         }
         args.drain(1..=consumed);
     }

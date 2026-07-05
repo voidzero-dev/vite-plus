@@ -1,0 +1,15 @@
+[[case]]
+name = "auto_select_root"
+vp = ["local", "global"]
+comment = """
+A workspace root that is itself the only runnable app stays selectable: bare
+vp build auto-selects the root (shown as `.`) and runs in place, matching
+today's behavior for root apps (rfcs/cwd-flag.md, picker contents).
+"""
+steps = [["vp", "build"]]
+
+[[case]]
+name = "listing_includes_root"
+vp = ["local", "global"]
+comment = "The non-interactive listing offers the runnable root as a `.` row."
+steps = [{ argv = ["vp", "build"], tty = false }]

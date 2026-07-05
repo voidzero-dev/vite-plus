@@ -57,6 +57,10 @@ if (args[0]?.startsWith('-C')) {
     process.exit(1);
   }
   process.chdir(target);
+  if (process.platform !== 'win32') {
+    // Keep the POSIX PWD in sync, like a real `cd`.
+    process.env.PWD = target;
+  }
   args = args.slice(inline ? 1 : 2);
   process.argv = process.argv.slice(0, 2).concat(args);
 }
