@@ -56,7 +56,12 @@ if (args[0]?.startsWith('-C')) {
     errorMsg(`directory not found: ${dir}`);
     process.exit(1);
   }
-  process.chdir(target);
+  try {
+    process.chdir(target);
+  } catch (err) {
+    errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+    process.exit(1);
+  }
   if (process.platform !== 'win32') {
     // Keep the POSIX PWD in sync, like a real `cd`.
     process.env.PWD = target;

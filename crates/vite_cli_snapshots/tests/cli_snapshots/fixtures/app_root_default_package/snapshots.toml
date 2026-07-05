@@ -25,4 +25,7 @@ Regression guard for spread/unanalyzable configs: a config that only parses
 as an open map might hide defaultPackage behind the spread, but that must
 not fail the command. Bare vp build falls through and runs in place.
 """
-steps = [{ argv = ["vp", "build"], cwd = "spread", tty = false }]
+# PTY-rendered (not tty = false): non-TTY steps record raw bytes, and the
+# raw Windows byte stream of a vite build differs invisibly from macOS; the
+# grid rendering normalizes that and is what the assertion needs anyway.
+steps = [{ argv = ["vp", "build"], cwd = "spread" }]

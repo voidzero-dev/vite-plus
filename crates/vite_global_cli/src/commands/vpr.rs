@@ -14,6 +14,14 @@ pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
     // global flag before treating the rest as run arguments.
     let mut args = args;
     let mut cwd_buf = cwd.to_absolute_path_buf();
+    // A bare `-C` with no value must error like the vp binary would, not
+    // fall through as a run argument (there is no clap parse on this path).
+    if args.first().is_some_and(|arg| matches!(arg.as_str(), "-C" | "-C="))
+        && crate::parse_leading_chdir(args).is_none()
+    {
+        output::raw_stderr("-C requires a directory argument");
+        return 1;
+    }
     if let Some((dir, consumed)) = crate::parse_leading_chdir(args) {
         cwd_buf = cwd_buf.join(&dir).clean();
         if !cwd_buf.as_path().is_dir() {

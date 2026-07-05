@@ -98,7 +98,15 @@ fn is_bare(command: &str, args: &[String]) -> bool {
         if !arg.starts_with('-') || super::help::is_app_tool_help_or_version_flag(arg) {
             return false;
         }
-        if is_pack && matches!(arg.as_str(), "-W" | "--workspace" | "-F" | "--filter") {
+        // `--` terminates options: whatever follows is an explicit positional.
+        if arg == "--" {
+            return iter.next().is_none();
+        }
+        if is_pack
+            && ["-W", "--workspace", "-F", "--filter"]
+                .iter()
+                .any(|f| arg == f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
+        {
             return false;
         }
         let is_boolean = booleans.contains(&arg.as_str()) || arg.starts_with("--no-");
@@ -371,10 +379,17 @@ mod tests {
         assert!(!is_bare("pack", &to_args(&["--minify", "src/index.ts"])));
         assert!(!is_bare("pack", &to_args(&["--env.FOO", "bar", "src/cli.ts"])));
         assert!(is_bare("build", &to_args(&["--minify", "esbuild"])));
-        // pack workspace selectors define their own target set.
+        // pack workspace selectors define their own target set, in both the
+        // spaced and inline-value forms.
         assert!(!is_bare("pack", &to_args(&["-W"])));
         assert!(!is_bare("pack", &to_args(&["--workspace", "packages/a"])));
         assert!(!is_bare("pack", &to_args(&["-F", "ui"])));
+        assert!(!is_bare("pack", &to_args(&["--filter=ui"])));
+        assert!(!is_bare("pack", &to_args(&["--workspace=packages/a"])));
+        // `--` terminates options; a token after it is an explicit positional.
+        assert!(!is_bare("build", &to_args(&["--", "apps/web"])));
+        assert!(!is_bare("pack", &to_args(&["--minify", "--", "src/index.ts"])));
+        assert!(is_bare("build", &to_args(&["--"])));
         // Help/version requests go to the underlying tool, never elicitation.
         assert!(!is_bare("dev", &to_args(&["--help"])));
         assert!(!is_bare("dev", &to_args(&["-h"])));

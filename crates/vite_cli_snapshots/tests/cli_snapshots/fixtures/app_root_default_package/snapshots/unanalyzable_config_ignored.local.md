@@ -8,8 +8,7 @@ not fail the command. Bare vp build falls through and runs in place.
 
 ```
 vite <version> building client environment for production...
-[2Ktransforming...✓ 2 modules transformed.
-rendering chunks...
+✓ 2 modules transformed.
 computing gzip size...
 dist/index.html  <size> kB │ gzip: <size> kB
 
