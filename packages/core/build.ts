@@ -759,12 +759,16 @@ async function mergePackageJson() {
   destPkg.peerDependencies = {
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
+    'vite-plus': destPkg.version,
   };
 
   // Merge peerDependenciesMeta from tsdown and vite
   destPkg.peerDependenciesMeta = {
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,
+    'vite-plus': {
+      optional: true,
+    },
   };
 
   // `@tsdown/exe` and `@tsdown/css` are bundled into core (see bundleTsdown), so

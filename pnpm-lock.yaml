@@ -564,6 +564,9 @@ importers:
       unrun:
         specifier: '*'
         version: 0.3.1
+      vite-plus:
+        specifier: workspace:vite-plus@*
+        version: link:../cli
       yaml:
         specifier: ^2.4.2
         version: 2.9.0

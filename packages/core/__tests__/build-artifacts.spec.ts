@@ -6,8 +6,16 @@ import { describe, expect, it } from 'vitest';
 
 const coreDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(coreDir, 'dist');
+const packageJsonPath = path.join(coreDir, 'package.json');
 
 describe('build artifacts', () => {
+  it('should declare vite-plus as an optional peer for native binding resolution', () => {
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+    expect(pkg.peerDependencies['vite-plus']).toBe(pkg.version);
+    expect(pkg.peerDependenciesMeta['vite-plus']).toEqual({ optional: true });
+  });
+
   it('should include esm-shims.js in dist for tsdown shims support', () => {
     const shimsPath = path.join(distDir, 'esm-shims.js');
     expect(fs.existsSync(shimsPath), `${shimsPath} should exist`).toBe(true);

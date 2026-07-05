@@ -150,6 +150,7 @@
     "typescript": "^5.0.0 || ^6.0.0",
     "unplugin-unused": "^0.5.0",
     "unrun": "*",
+    "vite-plus": "0.2.2",
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
@@ -202,6 +203,9 @@
       "optional": true
     },
     "yaml": {
+      "optional": true
+    },
+    "vite-plus": {
       "optional": true
     }
   },
