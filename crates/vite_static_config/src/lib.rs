@@ -6,13 +6,18 @@
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind, ModuleExportName,
-    ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
+    BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind, ObjectPropertyKind,
+    Program, Statement, VariableDeclarationKind,
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
+
+/// The package that exports the `defineConfig` helper static extraction trusts.
+const VITE_PLUS_PACKAGE: &str = "vite-plus";
+/// The name of the config helper static extraction trusts.
+const DEFINE_CONFIG: &str = "defineConfig";
 
 /// The result of statically analyzing a single config field's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,13 +152,11 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 3. `module.exports = defineConfig({ ... })` with `defineConfig` trusted from `vite-plus`
 /// 4. `module.exports = { ... }`
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
-    let mut has_trusted_define_config_binding = has_trusted_define_config_import(program);
+    let has_trusted_define_config_binding = program.body.iter().any(|stmt| {
+        is_trusted_define_config_import(stmt) || has_trusted_define_config_cjs_binding(stmt)
+    });
 
     for stmt in &program.body {
-        if has_trusted_define_config_cjs_binding(stmt) {
-            has_trusted_define_config_binding = true;
-        }
-
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
@@ -261,35 +264,25 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
     FieldMap::unanalyzable()
 }
 
-fn has_trusted_define_config_import(program: &Program<'_>) -> bool {
-    program.body.iter().any(|stmt| {
-        let Statement::ImportDeclaration(import_decl) = stmt else {
-            return false;
-        };
-        if import_decl.import_kind != ImportOrExportKind::Value
-            || import_decl.source.value != "vite-plus"
-        {
-            return false;
-        }
-        import_decl.specifiers.as_ref().is_some_and(|specifiers| {
-            specifiers.iter().any(|specifier| {
-                let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
-                    return false;
-                };
-                specifier.import_kind == ImportOrExportKind::Value
-                    && specifier.local.name == "defineConfig"
-                    && module_export_name_is_define_config(&specifier.imported)
-            })
+fn is_trusted_define_config_import(stmt: &Statement<'_>) -> bool {
+    let Statement::ImportDeclaration(import_decl) = stmt else {
+        return false;
+    };
+    if import_decl.import_kind != ImportOrExportKind::Value
+        || import_decl.source.value != VITE_PLUS_PACKAGE
+    {
+        return false;
+    }
+    import_decl.specifiers.as_ref().is_some_and(|specifiers| {
+        specifiers.iter().any(|specifier| {
+            let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
+                return false;
+            };
+            specifier.import_kind == ImportOrExportKind::Value
+                && specifier.local.name == DEFINE_CONFIG
+                && specifier.imported.name() == DEFINE_CONFIG
         })
     })
-}
-
-fn module_export_name_is_define_config(name: &ModuleExportName<'_>) -> bool {
-    match name {
-        ModuleExportName::IdentifierName(id) => id.name == "defineConfig",
-        ModuleExportName::IdentifierReference(id) => id.name == "defineConfig",
-        ModuleExportName::StringLiteral(lit) => lit.value == "defineConfig",
-    }
 }
 
 fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
@@ -299,7 +292,7 @@ fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
                 && decl.declarations.iter().any(|declarator| {
                     declarator.init.as_ref().is_some_and(|init| match &declarator.id {
                         BindingPattern::BindingIdentifier(id) => {
-                            id.name == "defineConfig" && is_require_vite_plus_define_config(init)
+                            id.name == DEFINE_CONFIG && is_require_vite_plus_define_config(init)
                         }
                         BindingPattern::ObjectPattern(pattern) => {
                             is_require_vite_plus(init)
@@ -308,11 +301,11 @@ fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
                                         && prop
                                             .key
                                             .static_name()
-                                            .is_some_and(|key| key == "defineConfig")
+                                            .is_some_and(|key| key == DEFINE_CONFIG)
                                         && matches!(
                                             &prop.value,
                                             BindingPattern::BindingIdentifier(id)
-                                                if id.name == "defineConfig"
+                                                if id.name == DEFINE_CONFIG
                                         )
                                 })
                         }
@@ -326,7 +319,7 @@ fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
 
 fn is_require_vite_plus_define_config(expr: &Expression<'_>) -> bool {
     expr.without_parentheses().as_member_expression().is_some_and(|member| {
-        member.static_property_name() == Some("defineConfig")
+        member.static_property_name() == Some(DEFINE_CONFIG)
             && is_require_vite_plus(member.object())
     })
 }
@@ -335,7 +328,7 @@ fn is_require_vite_plus(expr: &Expression<'_>) -> bool {
     matches!(
         expr.without_parentheses(),
         Expression::CallExpression(call)
-            if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
+            if call.common_js_require().is_some_and(|source| source.value == VITE_PLUS_PACKAGE)
     )
 }
 
