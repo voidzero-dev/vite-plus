@@ -339,10 +339,22 @@ export async function readOrgManifest(
   }
   let templates = validateManifest(meta, packageName);
   if (!templates && meta.createConfig === undefined && meta.dist?.tarball) {
-    // `createConfig` absent (not merely empty) → the registry stripped it from
-    // the version metadata; recover it from the published tarball. See
+    // `createConfig` absent (not merely empty) → either the registry stripped
+    // it from the version metadata, or the package simply has no manifest.
+    // Probe the published tarball to tell the two apart. See
     // `readPackageJsonFromTarball` for the full rationale.
-    const packageJson = await readPackageJsonFromTarball(meta.dist.tarball, meta.dist.integrity);
+    //
+    // The probe is best-effort: a download/size/integrity/parse failure must
+    // not block normal `@scope/create` packages that never had a manifest
+    // from reaching the passthrough path, so it degrades to "no manifest".
+    // A manifest that IS present but malformed still throws below —
+    // `validateManifest` runs outside the try so schema errors stay loud.
+    let packageJson: unknown = null;
+    try {
+      packageJson = await readPackageJsonFromTarball(meta.dist.tarball, meta.dist.integrity);
+    } catch {
+      packageJson = null;
+    }
     templates = validateManifest(packageJson, packageName);
   }
   if (!templates) {

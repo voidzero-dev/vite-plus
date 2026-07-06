@@ -258,6 +258,23 @@ describe('readOrgManifest', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it('treats a tarball probe failure as "no manifest" so passthrough still works', async () => {
+    // A normal @scope/create package (no manifest anywhere) whose tarball
+    // cannot be probed — e.g. a download error — must not turn into a hard
+    // failure; `null` lets the caller fall through to the passthrough path.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('.tgz')) {
+        throw new Error('network unreachable');
+      }
+      return new Response(
+        JSON.stringify(packument(undefined, { dist: { tarball: TARBALL_URL } })),
+        { status: 200 },
+      );
+    });
+    expect(await readOrgManifest('@your-org')).toBeNull();
+  });
+
   it('returns null when createConfig.templates is an empty array', async () => {
     mockFetchJson(packument([]));
     expect(await readOrgManifest('@your-org')).toBeNull();
