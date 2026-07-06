@@ -82,7 +82,9 @@ export function installGlobalCli() {
   }
 
   try {
-    const installDir = path.join(os.homedir(), '.vite-plus');
+    const installDir = process.env.VP_HOME
+      ? path.resolve(process.env.VP_HOME)
+      : path.join(os.homedir(), '.vite-plus');
 
     // Locate the Rust vp binary (built by cargo or copied by CI)
     const binaryName = isWindows ? 'vp.exe' : 'vp';
