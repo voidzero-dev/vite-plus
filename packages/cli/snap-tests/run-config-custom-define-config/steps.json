@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp run selected # defineConfig from a local module must use runtime config resolution"
+  ]
+}
