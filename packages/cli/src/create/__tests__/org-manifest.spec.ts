@@ -141,6 +141,8 @@ describe('filterManifestForContext', () => {
   });
 });
 
+const TARBALL_URL = 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz';
+
 function packument(
   vpTemplates: unknown,
   extra: Record<string, unknown> = {},
@@ -153,7 +155,7 @@ function packument(
       '1.0.0': {
         version: '1.0.0',
         dist: {
-          tarball: 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz',
+          tarball: TARBALL_URL,
           integrity: 'sha512-fake',
         },
         createConfig: vpTemplates !== undefined ? { templates: vpTemplates } : undefined,
@@ -174,7 +176,10 @@ function mockFetchJson(body: unknown, status = 200): ReturnType<typeof vi.spyOn>
   } as unknown as Response);
 }
 
-const TARBALL_URL = 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz';
+/** Resolve the requested URL from any of `fetch`'s accepted input shapes. */
+function requestUrl(input: string | URL | Request): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
 
 /** A real npm-pack-shaped tarball containing only a package.json. */
 async function tarballWith(packageJson: unknown): Promise<Uint8Array> {
@@ -195,9 +200,8 @@ function mockFetchPackumentAndTarball(
   tarBytes: Uint8Array,
 ): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (url.endsWith('.tgz')) {
-      return new Response(tarBytes.slice().buffer, { status: 200 });
+    if (requestUrl(input).endsWith('.tgz')) {
+      return new Response(tarBytes, { status: 200 });
     }
     return new Response(JSON.stringify(packumentBody), { status: 200 });
   });
@@ -263,8 +267,7 @@ describe('readOrgManifest', () => {
     // cannot be probed — e.g. a download error — must not turn into a hard
     // failure; `null` lets the caller fall through to the passthrough path.
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.endsWith('.tgz')) {
+      if (requestUrl(input).endsWith('.tgz')) {
         throw new Error('network unreachable');
       }
       return new Response(
