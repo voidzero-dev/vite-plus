@@ -180,9 +180,12 @@ fn resolve_default_package(command: &str, cwd: &AbsolutePathBuf) -> Option<AppTa
 
 /// Fuzzy package picker on `vite_select`, the same component behind the
 /// `vp run` task selector. Returns the selected row index, or `None` on
-/// Ctrl+C. Every render emits a `package-select:<query>:<index>` milestone
-/// (invisible OSC 8 hyperlinks) so PTY snapshot tests can synchronize.
+/// Ctrl+C. When the PTY snapshot harness sets `VP_EMIT_MILESTONES=1`, every
+/// render emits a `package-select:<query>:<index>` milestone (invisible
+/// OSC 8 hyperlinks) for the tests to synchronize on — same gate as
+/// packages/prompts/src/milestone.ts; real terminals never see the bytes.
 fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>, Error> {
+    let emit_milestones = std::env::var_os("VP_EMIT_MILESTONES").is_some_and(|value| value == "1");
     let items: Vec<vite_select::SelectItem> = rows
         .iter()
         .map(|row| vite_select::SelectItem {
@@ -209,6 +212,9 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         vite_select::Mode::Interactive { selected_index: &mut selected_index },
         |state| {
             use std::io::Write as _;
+            if !emit_milestones {
+                return;
+            }
             let milestone =
                 vite_str::format!("package-select:{}:{}", state.query, state.selected_index);
             let bytes = pty_terminal_test_client::encoded_milestone(&milestone);
