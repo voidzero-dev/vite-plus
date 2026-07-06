@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 fspy = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process", "signal"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 vite_error = { workspace = true }
@@ -19,7 +19,7 @@ vite_shared = { workspace = true }
 which = { workspace = true, features = ["tracing"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-nix = { workspace = true, features = ["signal", "term"] }
+nix = { workspace = true, features = ["term"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

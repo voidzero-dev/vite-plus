@@ -86,31 +86,71 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
     cmd
 }
 
-/// Execute a command while preserving terminal state.
+/// Execute a command while preserving terminal state and waiting through
+/// Ctrl+C.
 ///
-/// This prevents escape sequences from appearing in the prompt when the child process
-/// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
+/// The terminal delivers an interrupt to the whole foreground process
+/// group; the child's tree owns the graceful shutdown, and this process
+/// must outlive it, or the terminal is handed back to the shell while the
+/// dying tree still writes to it and restores terminal modes, which is how
+/// the stray escape sequences of issue #2036 ended up on the prompt.
+/// Interrupts are therefore swallowed while the child runs, and the
+/// child's own exit decides when this returns. Swallowing uses a signal
+/// handler rather than `SIG_IGN`: an ignored disposition survives exec
+/// into the entire child tree, which would make tasks without their own
+/// SIGINT handler uninterruptible. A second interrupt force-kills the
+/// child so a task that ignores the first one cannot make the CLI
+/// unstoppable.
 ///
-/// On Unix, saves the terminal state before spawning the child process and restores
-/// it after the child exits. On Windows, this is a simple pass-through.
+/// On Unix, the terminal state saved before spawning is restored after
+/// the child exits, so a child killed mid-raw-mode cannot leave the
+/// terminal broken for the next prompt.
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     #[cfg(unix)]
-    {
+    let _guard = {
         use nix::libc::STDIN_FILENO;
+        TerminalStateGuard::save(STDIN_FILENO)
+    };
 
-        // Save terminal state and ignore sigint signal for current process before spawning child
-        let _guard = TerminalStateGuard::save(STDIN_FILENO);
+    let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
 
-        // Spawn and wait for child - guard will restore terminal state on drop
-        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
-    }
-
-    #[cfg(not(unix))]
+    #[cfg(unix)]
     {
-        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .map_err(|e| Error::Anyhow(e.into()))?;
+        let mut interrupts = 0u32;
+        loop {
+            tokio::select! {
+                status = child.wait() => return status.map_err(|e| Error::Anyhow(e.into())),
+                _ = sigint.recv() => {
+                    interrupts += 1;
+                    if interrupts >= 2 {
+                        let _ = child.start_kill();
+                    }
+                }
+            }
+        }
     }
+
+    #[cfg(windows)]
+    {
+        let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(|e| Error::Anyhow(e.into()))?;
+        let mut interrupts = 0u32;
+        loop {
+            tokio::select! {
+                status = child.wait() => return status.map_err(|e| Error::Anyhow(e.into())),
+                _ = ctrl_c.recv() => {
+                    interrupts += 1;
+                    if interrupts >= 2 {
+                        let _ = child.start_kill();
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    child.wait().await.map_err(|e| Error::Anyhow(e.into()))
 }
 
 /// Build a `tokio::process::Command` for shell execution.
@@ -308,7 +348,6 @@ pub fn fix_stdio_streams() {
 struct TerminalStateGuard {
     fd: RawFd,
     original: nix::sys::termios::Termios,
-    original_sigint: Option<nix::sys::signal::SigAction>,
 }
 
 #[cfg(unix)]
@@ -327,39 +366,22 @@ impl TerminalStateGuard {
         }
 
         match tcgetattr(borrowed_fd) {
-            Ok(original) => Some(Self { fd, original, original_sigint: Self::ignore_sigint() }),
+            Ok(original) => Some(Self { fd, original }),
             Err(_) => None,
         }
-    }
-
-    fn ignore_sigint() -> Option<nix::sys::signal::SigAction> {
-        use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
-
-        let ignore = SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
-        // SAFETY: installs a process signal disposition for SIGINT and returns
-        // the previous disposition, which this guard restores on drop.
-        unsafe { sigaction(Signal::SIGINT, &ignore).ok() }
     }
 }
 
 #[cfg(unix)]
 impl Drop for TerminalStateGuard {
     fn drop(&mut self) {
-        use nix::sys::{
-            signal::{Signal, sigaction},
-            termios::{SetArg, tcsetattr},
-        };
+        use nix::sys::termios::{SetArg, tcsetattr};
 
         // SAFETY: fd comes from stdin/stdout/stderr and the guard does not outlive the process
         let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.fd) };
 
         // Best effort: ignore errors during cleanup
         let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
-
-        // SAFETY: restores the signal disposition captured by save().
-        if let Some(original_sigint) = self.original_sigint.take() {
-            let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };
-        }
     }
 }
 
