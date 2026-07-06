@@ -6,8 +6,8 @@
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    BindingPattern, Expression, ImportDeclarationSpecifier, ModuleExportName, ObjectPropertyKind,
-    Program, Statement,
+    BindingPattern, Declaration, Expression, ImportDeclarationSpecifier, ModuleExportName,
+    ObjectPropertyKind, Program, Statement, VariableDeclaration,
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
@@ -262,59 +262,74 @@ fn has_untrusted_hoisted_define_config_binding(program: &Program<'_>) -> bool {
 }
 
 fn has_untrusted_define_config_variable_binding(stmt: &Statement<'_>) -> bool {
-    if let Statement::VariableDeclaration(decl) = stmt {
-        // Reject `var/let/const defineConfig = .....`, except `const defineConfig = require('vite-plus').defineConfig`
-        for declarator in &decl.declarations {
-            if let BindingPattern::BindingIdentifier(id) = &declarator.id
-                && id.name == "defineConfig"
-            {
-                let allowed = declarator.init.as_ref().is_some_and(|init| {
-                    init.without_parentheses().as_member_expression().is_some_and(|member| {
-                        member.static_property_name() == Some("defineConfig")
-                            && matches!(
-                                member.object().without_parentheses(),
-                                Expression::CallExpression(call)
-                                    if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
-                            )
-                    })
-                });
-                if !allowed {
-                    return true;
+    match stmt {
+        Statement::VariableDeclaration(decl) => {
+            has_untrusted_define_config_variable_declaration(decl)
+        }
+        Statement::ExportNamedDeclaration(export_decl) => {
+            export_decl.declaration.as_ref().is_some_and(|decl| match decl {
+                Declaration::VariableDeclaration(decl) => {
+                    has_untrusted_define_config_variable_declaration(decl)
                 }
+                _ => false,
+            })
+        }
+        _ => false,
+    }
+}
+
+fn has_untrusted_define_config_variable_declaration(decl: &VariableDeclaration<'_>) -> bool {
+    // Reject `var/let/const defineConfig = .....`, except `const defineConfig = require('vite-plus').defineConfig`
+    for declarator in &decl.declarations {
+        if let BindingPattern::BindingIdentifier(id) = &declarator.id
+            && id.name == "defineConfig"
+        {
+            let allowed = declarator.init.as_ref().is_some_and(|init| {
+                init.without_parentheses().as_member_expression().is_some_and(|member| {
+                    member.static_property_name() == Some("defineConfig")
+                        && matches!(
+                            member.object().without_parentheses(),
+                            Expression::CallExpression(call)
+                                if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
+                        )
+                })
+            });
+            if !allowed {
+                return true;
             }
         }
+    }
 
-        // Reject `var/let/const { defineConfig } = .....`, except `const { defineConfig } = require('vite-plus')`
-        for declarator in &decl.declarations {
-            let BindingPattern::ObjectPattern(pattern) = &declarator.id else {
-                continue;
+    // Reject `var/let/const { defineConfig } = .....`, except `const { defineConfig } = require('vite-plus')`
+    for declarator in &decl.declarations {
+        let BindingPattern::ObjectPattern(pattern) = &declarator.id else {
+            continue;
+        };
+
+        for prop in &pattern.properties {
+            let binds_define_config = match &prop.value {
+                BindingPattern::BindingIdentifier(id) => id.name == "defineConfig",
+                BindingPattern::AssignmentPattern(assignment) => {
+                    matches!(&assignment.left, BindingPattern::BindingIdentifier(id) if id.name == "defineConfig")
+                }
+                _ => false,
             };
+            if !binds_define_config {
+                continue;
+            }
 
-            for prop in &pattern.properties {
-                let binds_define_config = match &prop.value {
-                    BindingPattern::BindingIdentifier(id) => id.name == "defineConfig",
-                    BindingPattern::AssignmentPattern(assignment) => {
-                        matches!(&assignment.left, BindingPattern::BindingIdentifier(id) if id.name == "defineConfig")
-                    }
-                    _ => false,
-                };
-                if !binds_define_config {
-                    continue;
-                }
+            let is_direct_define_config =
+                !prop.computed && prop.key.static_name().is_some_and(|key| key == "defineConfig");
+            let is_allowed = is_direct_define_config && declarator.init.as_ref().is_some_and(|init| {
+                matches!(
+                    init.without_parentheses(),
+                    Expression::CallExpression(call)
+                        if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
+                )
+            });
 
-                let is_direct_define_config = !prop.computed
-                    && prop.key.static_name().is_some_and(|key| key == "defineConfig");
-                let is_allowed = is_direct_define_config && declarator.init.as_ref().is_some_and(|init| {
-                    matches!(
-                        init.without_parentheses(),
-                        Expression::CallExpression(call)
-                            if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
-                    )
-                });
-
-                if !is_allowed {
-                    return true;
-                }
+            if !is_allowed {
+                return true;
             }
         }
     }
@@ -345,6 +360,13 @@ fn has_untrusted_hoisted_define_config_binding_in_stmt(stmt: &Statement<'_>) -> 
         for specifier in specifiers {
             // Reject `import defineConfig from .....`
             if let ImportDeclarationSpecifier::ImportDefaultSpecifier(specifier) = specifier
+                && specifier.local.name == "defineConfig"
+            {
+                return true;
+            }
+
+            // Reject `import * as defineConfig from .....`
+            if let ImportDeclarationSpecifier::ImportNamespaceSpecifier(specifier) = specifier
                 && specifier.local.name == "defineConfig"
             {
                 return true;
@@ -690,6 +712,19 @@ mod tests {
     }
 
     #[test]
+    fn define_config_namespace_import_is_non_static() {
+        let result = parse(
+            r"
+            import * as defineConfig from './define-config';
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
     fn define_config_import_after_default_export_is_non_static() {
         let result = parse(
             r"
@@ -707,6 +742,19 @@ mod tests {
         let result = parse(
             r"
             const { defineConfig } = {};
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn define_config_defined_as_exported_variable_is_non_static() {
+        let result = parse(
+            r"
+            export const defineConfig = (config) => config;
             export default defineConfig({
                 run: { cacheScripts: true },
             });
