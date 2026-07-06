@@ -147,9 +147,12 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 3. `module.exports = defineConfig({ ... })`
 /// 4. `module.exports = { ... }`
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
+    if has_untrusted_hoisted_define_config_binding(program) {
+        return FieldMap::unanalyzable();
+    }
+
     for stmt in &program.body {
-        // Filter `defineConfig` import from other packages or defined by itself.
-        if find_custom_define_config(stmt) {
+        if has_untrusted_define_config_variable_binding(stmt) {
             return FieldMap::unanalyzable();
         }
 
@@ -254,7 +257,11 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
     FieldMap::unanalyzable()
 }
 
-fn find_custom_define_config(stmt: &Statement<'_>) -> bool {
+fn has_untrusted_hoisted_define_config_binding(program: &Program<'_>) -> bool {
+    program.body.iter().any(has_untrusted_hoisted_define_config_binding_in_stmt)
+}
+
+fn has_untrusted_define_config_variable_binding(stmt: &Statement<'_>) -> bool {
     if let Statement::VariableDeclaration(decl) = stmt {
         // Reject `var/let/const defineConfig = .....`, except `const defineConfig = require('vite-plus').defineConfig`
         for declarator in &decl.declarations {
@@ -310,6 +317,24 @@ fn find_custom_define_config(stmt: &Statement<'_>) -> bool {
                 }
             }
         }
+    }
+
+    false
+}
+
+fn has_untrusted_hoisted_define_config_binding_in_stmt(stmt: &Statement<'_>) -> bool {
+    // Reject `function defineConfig(...){...}`
+    if let Statement::FunctionDeclaration(func) = stmt
+        && func.id.as_ref().is_some_and(|id| id.name == "defineConfig")
+    {
+        return true;
+    }
+
+    // Reject `import defineConfig = require(...)`
+    if let Statement::TSImportEqualsDeclaration(import_decl) = stmt
+        && import_decl.id.name == "defineConfig"
+    {
+        return true;
     }
 
     if let Statement::ImportDeclaration(import_decl) = stmt {
@@ -665,6 +690,19 @@ mod tests {
     }
 
     #[test]
+    fn define_config_import_after_default_export_is_non_static() {
+        let result = parse(
+            r"
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            import { defineConfig } from './define-config';
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
     fn define_config_defined_as_variable() {
         let result = parse(
             r"
@@ -673,6 +711,48 @@ mod tests {
                 run: { cacheScripts: true },
             });
             ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn define_config_variable_after_default_export_does_not_block_static_extraction() {
+        let result = parse(
+            r"
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            const defineConfig = () => ({ run: { cacheScripts: false } });
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn define_config_defined_as_function_is_non_static() {
+        let result = parse(
+            r"
+            function defineConfig() {
+                return { run: { cacheScripts: false } };
+            }
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn define_config_import_equals_is_non_static() {
+        let result = parse_js_ts_config(
+            r#"
+            import defineConfig = require("./define-config");
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            "#,
+            "cts",
         );
         assert_non_static(&result, "run");
     }
