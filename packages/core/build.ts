@@ -372,6 +372,8 @@ async function bundleRolldown() {
     },
   });
 
+  const vitePlusNativePackages = new Set(getNativePlatformPackageNames(cliPkgJson.napi.targets));
+
   // Rewrite @rolldown/pluginutils imports in JS and type declaration files
   for (const file of rolldownFiles) {
     if (
@@ -388,8 +390,10 @@ async function bundleRolldown() {
             with: { type: 'json' },
           })
         ).default.version;
-        // @rolldown/binding-darwin-arm64 → @voidzero-dev/vite-plus-darwin-arm64/binding
-        source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
+        source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, (specifier, suffix) => {
+          const packageName = `@voidzero-dev/vite-plus-${suffix}`;
+          return vitePlusNativePackages.has(packageName) ? packageName : specifier;
+        });
         source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
       }
       const newSource = rewriteModuleSpecifiers(source, file, { rules });

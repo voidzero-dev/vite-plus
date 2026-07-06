@@ -46,8 +46,14 @@ describe('build artifacts', () => {
     ]);
   });
 
-  it('declares Vite+ native packages as core optional dependencies', () => {
-    for (const packageName of getNativePlatformPackageNames(cliPkgJson.napi.targets)) {
+  it('declares only generated Vite+ native packages as core optional dependencies', () => {
+    const packageNames = getNativePlatformPackageNames(cliPkgJson.napi.targets);
+    const nativeOptionalDependencyNames = Object.keys(corePkgJson.optionalDependencies).filter((name) =>
+      name.startsWith('@voidzero-dev/vite-plus-'),
+    );
+
+    expect(nativeOptionalDependencyNames.toSorted()).toEqual(packageNames.toSorted());
+    for (const packageName of packageNames) {
       expect(corePkgJson.optionalDependencies).toHaveProperty(packageName, corePkgJson.version);
     }
 
