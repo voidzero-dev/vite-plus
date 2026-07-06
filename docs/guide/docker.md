@@ -48,7 +48,7 @@ FROM ghcr.io/voidzero-dev/vite-plus:latest AS build
 WORKDIR /app
 
 # Install dependencies first so this layer is cached across source changes.
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version* ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version* ./
 RUN vp install --frozen-lockfile
 
 # Build. vp reads .node-version and provisions that exact Node.js automatically.
@@ -64,7 +64,7 @@ RUN cp "$(vp env which node | head -1)" /tmp/node
 # prune the already-installed devDependencies.
 FROM ghcr.io/voidzero-dev/vite-plus:latest AS deps
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version* ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version* ./
 RUN vp install --frozen-lockfile --prod
 
 # --- runtime stage: small, glibc, no vp ---
@@ -110,7 +110,7 @@ server:
 ```dockerfile [Dockerfile]
 FROM ghcr.io/voidzero-dev/vite-plus:latest AS build
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version* ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version* ./
 RUN vp install --frozen-lockfile
 COPY --chown=vp:vp . .
 RUN vp build
