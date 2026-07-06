@@ -357,7 +357,7 @@ impl Drop for TerminalStateGuard {
         let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
 
         // SAFETY: restores the signal disposition captured by save().
-        if let Some(original_sigint) = self.original_sigint {
+        if let Some(original_sigint) = self.original_sigint.take() {
             let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };
         }
     }
