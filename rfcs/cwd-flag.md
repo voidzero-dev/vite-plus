@@ -278,7 +278,7 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 
 - One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
 - Fuzzy search over name and path via `vite_select::fuzzy_match`, paging identical to the task picker.
-- A runnable workspace root appears as a `.` entry, keeping today's "run at root" behavior one keystroke away. The root needs a stronger signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
+- A runnable workspace root never elicits at all: the command runs in place, TTY or not, exactly as before this RFC. The invocation already has its configured target — a root app, or a single package whose `pnpm-workspace.yaml` only carries settings (catalogs, `minimumReleaseAge`) — and eliciting only when the root is not a plausible target is what keeps the feature purely additive. The root needs a stronger runnable signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
 - With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
 ### The likely-runnable heuristic

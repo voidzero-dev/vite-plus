@@ -1,0 +1,10 @@
+[[case]]
+name = "pack_in_place"
+vp = ["local", "global"]
+comment = """
+Regression guard for the vp-config e2e shape: a single package whose
+pnpm-workspace.yaml only carries settings (catalogs, minimumReleaseAge) is
+a workspace root whose only runnable candidate is itself. Bare vp pack must
+run in place, TTY or not, never print the target listing.
+"""
+steps = [{ argv = ["vp", "pack"], tty = false }]

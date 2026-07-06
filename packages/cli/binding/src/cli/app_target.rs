@@ -287,6 +287,14 @@ fn classify(
     {
         return None;
     }
+    // A runnable workspace root runs in place, TTY or not: the invocation
+    // already has its configured target, and repos whose root is the app or
+    // library (e.g. a single package with a settings-only pnpm-workspace.yaml)
+    // ran this way before elicitation existed. Eliciting only when the root
+    // is not a plausible target is what keeps this feature purely additive.
+    if looks_runnable(&workspace_root.path.to_absolute_path_buf(), command, true) {
+        return None;
+    }
     Some((command, Elicitation::WorkspaceRoot(workspace_root)))
 }
 
@@ -308,22 +316,19 @@ pub(super) fn resolve_app_target(
         vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
     let mut rows: Vec<PackageRow> = graph
         .node_weights()
-        .filter_map(|info| {
+        .filter(|info| {
+            // The root is never a row: when it looks runnable, classify
+            // already ran the command in place instead of eliciting.
+            !info.path.as_str().is_empty()
+        })
+        .map(|info| {
             let absolute = info.absolute_path.to_absolute_path_buf();
-            let is_root = info.path.as_str().is_empty();
-            let runnable = looks_runnable(&absolute, command, is_root);
-            // The root itself is a valid target only when it looks runnable;
-            // `.` keeps the -C hint and the selection working there.
-            if is_root && !runnable {
-                return None;
-            }
-            let path = if is_root { "." } else { info.path.as_str() };
-            Some(PackageRow {
+            PackageRow {
                 name: info.package_json.name.clone(),
-                path: vite_str::Str::from(path),
-                runnable,
+                path: vite_str::Str::from(info.path.as_str()),
+                runnable: looks_runnable(&absolute, command, false),
                 absolute,
-            })
+            }
         })
         .collect();
     if rows.is_empty() {
