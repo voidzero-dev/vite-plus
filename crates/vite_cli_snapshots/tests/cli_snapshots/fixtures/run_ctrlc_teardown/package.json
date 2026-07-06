@@ -1,0 +1,7 @@
+{
+  "name": "run-ctrlc-teardown",
+  "private": true,
+  "scripts": {
+    "dev": "vpt report-orphan-on-ctrlc verdict.txt"
+  }
+}

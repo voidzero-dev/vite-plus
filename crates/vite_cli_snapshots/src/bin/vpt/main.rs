@@ -29,9 +29,11 @@ mod print_native_path;
 mod probe;
 mod read_stdin;
 mod replace_file_content;
+mod report_orphan_on_ctrlc;
 mod rm;
 mod stat_file;
 mod touch_file;
+mod wait_file;
 mod write_file;
 
 fn main() {
@@ -39,7 +41,7 @@ fn main() {
     if args.len() < 2 {
         eprintln!("Usage: vpt <subcommand> [args...]");
         eprintln!(
-            "Subcommands: barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
+            "Subcommands: barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, report-orphan-on-ctrlc, rm, stat-file, touch-file, wait-file, write-file"
         );
         std::process::exit(1);
     }
@@ -74,9 +76,11 @@ fn main() {
         "probe" => probe::run(),
         "read-stdin" => read_stdin::run(),
         "replace-file-content" => replace_file_content::run(&args[2..]),
+        "report-orphan-on-ctrlc" => report_orphan_on_ctrlc::run(&args[2..]),
         "rm" => rm::run(&args[2..]),
         "stat-file" => stat_file::run(&args[2..]),
         "touch-file" => touch_file::run(&args[2..]),
+        "wait-file" => wait_file::run(&args[2..]),
         "write-file" => write_file::run(&args[2..]),
         other => {
             eprintln!("Unknown subcommand: {other}");

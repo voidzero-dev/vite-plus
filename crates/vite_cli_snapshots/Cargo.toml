@@ -32,6 +32,9 @@ tempfile = { workspace = true }
 toml = { workspace = true }
 which = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, features = ["fs", "poll", "process"] }
+
 [target.'cfg(windows)'.dev-dependencies]
 junction = { workspace = true }
 
