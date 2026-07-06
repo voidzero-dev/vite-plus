@@ -16,7 +16,7 @@ const REGISTRY_MARKER = '# vite-plus preview build registry bridge (auto-added b
 const BRIDGE_HOST = 'registry-bridge.viteplus.dev';
 
 /**
- * Registry bridge that serves pkg.pr.new builds as ordinary `0.0.0-commit.<sha>`
+ * Registry bridge that serves PR preview builds as ordinary `0.0.0-commit.<sha>`
  * versions (and proxies everything else to npmjs). Only ever used for preview
  * builds (see {@link isPreviewVitePlusVersion}); real releases never resolve
  * through it. Overridable via `VP_REGISTRY_BRIDGE` for testing or an alternate

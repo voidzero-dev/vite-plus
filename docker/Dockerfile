@@ -20,7 +20,7 @@ LABEL org.opencontainers.image.source="https://github.com/voidzero-dev/vite-plus
 #   docker build --build-arg VP_VERSION=1.4.2 .
 ARG VP_VERSION=latest
 
-# Optional: build a preview image from a pkg.pr.new build instead of npm.
+# Optional: build a preview image from a registry bridge build instead of npm.
 # Set to a PR number or commit SHA; when set it overrides VP_VERSION.
 #   docker build --build-arg VP_PR_VERSION=1569 .
 ARG VP_PR_VERSION=
@@ -50,7 +50,7 @@ ENV VP_HOME=/home/vp/.vite-plus \
     PATH=/home/vp/.vite-plus/bin:$PATH
 
 # Install the vp global CLI. The installer downloads the platform package from
-# npm (or from pkg.pr.new when VP_PR_VERSION is set). Node.js itself is
+# npm (or from the registry bridge when VP_PR_VERSION is set). Node.js itself is
 # provisioned per-project by vp at build time, honoring `.node-version` /
 # `engines.node` / `devEngines.runtime`.
 #
