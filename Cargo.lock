@@ -8529,6 +8529,7 @@ dependencies = [
  "dunce",
  "junction",
  "libtest-mimic",
+ "nix 0.30.1",
  "pty_terminal_test",
  "pty_terminal_test_client",
  "regex",

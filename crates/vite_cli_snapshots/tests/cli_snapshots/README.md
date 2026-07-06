@@ -122,7 +122,11 @@ is identical on every platform:
 `vpt print`, `vpt print-color`, `vpt print-env`, `vpt print-cwd`,
 `vpt print-native-path` (prints OS-native separators, for redaction
 self-tests), `vpt check-tty`, `vpt read-stdin`, `vpt exit <code>`,
-`vpt exit-on-ctrlc`, `vpt barrier`.
+`vpt exit-on-ctrlc`, `vpt report-orphan-on-ctrlc` (records via a watcher
+process that survives `vp run` whether the task got to finish its graceful
+shutdown), `vpt barrier`. `vpt wait-file <path> [timeout-ms]` polls until a
+file exists and prints it, for asserting on files written by a previous
+step's surviving process tree.
 
 ## Interactive cases
 
