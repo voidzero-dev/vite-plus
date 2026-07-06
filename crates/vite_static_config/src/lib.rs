@@ -6,8 +6,8 @@
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    BindingPattern, Declaration, Expression, ImportDeclarationSpecifier, ModuleExportName,
-    ObjectPropertyKind, Program, Statement, VariableDeclaration,
+    Expression, ImportDeclarationSpecifier, ImportOrExportKind, ModuleExportName,
+    ObjectPropertyKind, Program, Statement,
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
@@ -142,23 +142,18 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// Find the config object in a parsed program and extract its fields.
 ///
 /// Searches for the config value in the following patterns (in order):
-/// 1. `export default defineConfig({ ... })`
+/// 1. `export default defineConfig({ ... })` with `defineConfig` imported from `vite-plus`
 /// 2. `export default { ... }`
-/// 3. `module.exports = defineConfig({ ... })`
+/// 3. `module.exports = defineConfig({ ... })` with `defineConfig` imported from `vite-plus`
 /// 4. `module.exports = { ... }`
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
-    let mut has_untrusted_define_config_binding =
-        has_untrusted_hoisted_define_config_binding(program);
+    let has_trusted_define_config_import = has_trusted_define_config_import(program);
 
     for stmt in &program.body {
-        if has_untrusted_define_config_variable_binding(stmt) {
-            has_untrusted_define_config_binding = true;
-        }
-
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
-                return extract_config_from_expr(expr, has_untrusted_define_config_binding);
+                return extract_config_from_expr(expr, has_trusted_define_config_import);
             }
             // export default class/function — not analyzable
             return FieldMap::unanalyzable();
@@ -171,7 +166,7 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
                 m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
             })
         {
-            return extract_config_from_expr(&assign.right, has_untrusted_define_config_binding);
+            return extract_config_from_expr(&assign.right, has_trusted_define_config_import);
         }
     }
 
@@ -187,7 +182,7 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
 /// - anything else → not analyzable
 fn extract_config_from_expr(
     expr: &Expression<'_>,
-    has_untrusted_define_config_binding: bool,
+    has_trusted_define_config_import: bool,
 ) -> FieldMap {
     let expr = expr.without_parentheses();
     match expr {
@@ -195,7 +190,7 @@ fn extract_config_from_expr(
             if !call.callee.is_specific_id("defineConfig") {
                 return FieldMap::unanalyzable();
             }
-            if has_untrusted_define_config_binding {
+            if !has_trusted_define_config_import {
                 return FieldMap::unanalyzable();
             }
             let Some(first_arg) = call.arguments.first() else {
@@ -262,139 +257,35 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
     FieldMap::unanalyzable()
 }
 
-fn has_untrusted_hoisted_define_config_binding(program: &Program<'_>) -> bool {
-    program.body.iter().any(has_untrusted_hoisted_define_config_binding_in_stmt)
-}
-
-fn has_untrusted_define_config_variable_binding(stmt: &Statement<'_>) -> bool {
-    match stmt {
-        Statement::VariableDeclaration(decl) => {
-            has_untrusted_define_config_variable_declaration(decl)
-        }
-        Statement::ExportNamedDeclaration(export_decl) => {
-            export_decl.declaration.as_ref().is_some_and(|decl| match decl {
-                Declaration::VariableDeclaration(decl) => {
-                    has_untrusted_define_config_variable_declaration(decl)
-                }
-                _ => false,
-            })
-        }
-        _ => false,
-    }
-}
-
-fn has_untrusted_define_config_variable_declaration(decl: &VariableDeclaration<'_>) -> bool {
-    // Reject `var/let/const defineConfig = .....`, except `const defineConfig = require('vite-plus').defineConfig`
-    for declarator in &decl.declarations {
-        if let BindingPattern::BindingIdentifier(id) = &declarator.id
-            && id.name == "defineConfig"
-        {
-            let allowed = declarator.init.as_ref().is_some_and(|init| {
-                init.without_parentheses().as_member_expression().is_some_and(|member| {
-                    member.static_property_name() == Some("defineConfig")
-                        && matches!(
-                            member.object().without_parentheses(),
-                            Expression::CallExpression(call)
-                                if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
-                        )
-                })
-            });
-            if !allowed {
-                return true;
-            }
-        }
-    }
-
-    // Reject `var/let/const { defineConfig } = .....`, except `const { defineConfig } = require('vite-plus')`
-    for declarator in &decl.declarations {
-        let BindingPattern::ObjectPattern(pattern) = &declarator.id else {
-            continue;
-        };
-
-        for prop in &pattern.properties {
-            let binds_define_config = match &prop.value {
-                BindingPattern::BindingIdentifier(id) => id.name == "defineConfig",
-                BindingPattern::AssignmentPattern(assignment) => {
-                    matches!(&assignment.left, BindingPattern::BindingIdentifier(id) if id.name == "defineConfig")
-                }
-                _ => false,
-            };
-            if !binds_define_config {
-                continue;
-            }
-
-            let is_direct_define_config =
-                !prop.computed && prop.key.static_name().is_some_and(|key| key == "defineConfig");
-            let is_allowed = is_direct_define_config && declarator.init.as_ref().is_some_and(|init| {
-                matches!(
-                    init.without_parentheses(),
-                    Expression::CallExpression(call)
-                        if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
-                )
-            });
-
-            if !is_allowed {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-fn has_untrusted_hoisted_define_config_binding_in_stmt(stmt: &Statement<'_>) -> bool {
-    // Reject `function defineConfig(...){...}`
-    if let Statement::FunctionDeclaration(func) = stmt
-        && func.id.as_ref().is_some_and(|id| id.name == "defineConfig")
-    {
-        return true;
-    }
-
-    // Reject `import defineConfig = require(...)`
-    if let Statement::TSImportEqualsDeclaration(import_decl) = stmt
-        && import_decl.id.name == "defineConfig"
-    {
-        return true;
-    }
-
-    if let Statement::ImportDeclaration(import_decl) = stmt {
-        let Some(specifiers) = &import_decl.specifiers else {
+fn has_trusted_define_config_import(program: &Program<'_>) -> bool {
+    program.body.iter().any(|stmt| {
+        let Statement::ImportDeclaration(import_decl) = stmt else {
             return false;
         };
-
-        for specifier in specifiers {
-            // Reject `import defineConfig from .....`
-            if let ImportDeclarationSpecifier::ImportDefaultSpecifier(specifier) = specifier
-                && specifier.local.name == "defineConfig"
-            {
-                return true;
-            }
-
-            // Reject `import * as defineConfig from .....`
-            if let ImportDeclarationSpecifier::ImportNamespaceSpecifier(specifier) = specifier
-                && specifier.local.name == "defineConfig"
-            {
-                return true;
-            }
-
-            // Reject `import { defineConfig } from ....` except `import { defineConfig } from 'vite-plus'`
-            if let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier
-                && specifier.local.name == "defineConfig"
-            {
-                let imported_define_config = match &specifier.imported {
-                    ModuleExportName::IdentifierName(id) => id.name == "defineConfig",
-                    ModuleExportName::IdentifierReference(id) => id.name == "defineConfig",
-                    ModuleExportName::StringLiteral(lit) => lit.value == "defineConfig",
-                };
-
-                if import_decl.source.value != "vite-plus" || !imported_define_config {
-                    return true;
-                }
-            }
+        if import_decl.import_kind != ImportOrExportKind::Value
+            || import_decl.source.value != "vite-plus"
+        {
+            return false;
         }
-    }
+        import_decl.specifiers.as_ref().is_some_and(|specifiers| {
+            specifiers.iter().any(|specifier| {
+                let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
+                    return false;
+                };
+                specifier.import_kind == ImportOrExportKind::Value
+                    && specifier.local.name == "defineConfig"
+                    && module_export_name_is_define_config(&specifier.imported)
+            })
+        })
+    })
+}
 
-    false
+fn module_export_name_is_define_config(name: &ModuleExportName<'_>) -> bool {
+    match name {
+        ModuleExportName::IdentifierName(id) => id.name == "defineConfig",
+        ModuleExportName::IdentifierReference(id) => id.name == "defineConfig",
+        ModuleExportName::StringLiteral(lit) => lit.value == "defineConfig",
+    }
 }
 
 /// Count `return` statements recursively in a slice of statements.
@@ -681,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_export_default_object_ignores_unrelated_define_config_binding() {
+    fn plain_export_default_object_ignores_unrelated_define_config_import() {
         let result = parse(
             r"
             import { defineConfig } from 'vite';
@@ -730,95 +621,14 @@ mod tests {
     }
 
     #[test]
-    fn define_config_namespace_import_is_non_static() {
+    fn define_config_type_import_from_vite_plus_is_non_static() {
         let result = parse(
             r"
-            import * as defineConfig from './define-config';
+            import type { defineConfig } from 'vite-plus';
             export default defineConfig({
                 run: { cacheScripts: true },
             });
             ",
-        );
-        assert_non_static(&result, "run");
-    }
-
-    #[test]
-    fn define_config_import_after_default_export_is_non_static() {
-        let result = parse(
-            r"
-            export default defineConfig({
-                run: { cacheScripts: true },
-            });
-            import { defineConfig } from './define-config';
-            ",
-        );
-        assert_non_static(&result, "run");
-    }
-
-    #[test]
-    fn define_config_defined_as_variable() {
-        let result = parse(
-            r"
-            const { defineConfig } = {};
-            export default defineConfig({
-                run: { cacheScripts: true },
-            });
-            ",
-        );
-        assert_non_static(&result, "run");
-    }
-
-    #[test]
-    fn define_config_defined_as_exported_variable_is_non_static() {
-        let result = parse(
-            r"
-            export const defineConfig = (config) => config;
-            export default defineConfig({
-                run: { cacheScripts: true },
-            });
-            ",
-        );
-        assert_non_static(&result, "run");
-    }
-
-    #[test]
-    fn define_config_variable_after_default_export_does_not_block_static_extraction() {
-        let result = parse(
-            r"
-            export default defineConfig({
-                run: { cacheScripts: true },
-            });
-            const defineConfig = () => ({ run: { cacheScripts: false } });
-            ",
-        );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-    }
-
-    #[test]
-    fn define_config_defined_as_function_is_non_static() {
-        let result = parse(
-            r"
-            function defineConfig() {
-                return { run: { cacheScripts: false } };
-            }
-            export default defineConfig({
-                run: { cacheScripts: true },
-            });
-            ",
-        );
-        assert_non_static(&result, "run");
-    }
-
-    #[test]
-    fn define_config_import_equals_is_non_static() {
-        let result = parse_js_ts_config(
-            r#"
-            import defineConfig = require("./define-config");
-            export default defineConfig({
-                run: { cacheScripts: true },
-            });
-            "#,
-            "cts",
         );
         assert_non_static(&result, "run");
     }
@@ -832,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn module_exports_define_config() {
+    fn module_exports_define_config_without_import_is_non_static() {
         let result = parse_js_ts_config(
             r"
             const { defineConfig } = require('vite-plus');
@@ -842,7 +652,7 @@ mod tests {
             ",
             "cjs",
         );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_non_static(&result, "run");
     }
 
     #[test]
@@ -853,17 +663,6 @@ mod tests {
     #[test]
     fn module_exports_unknown_call() {
         assert_non_static(&parse_js_ts_config("module.exports = otherFn({ a: 1 });", "cjs"), "run");
-    }
-
-    #[test]
-    fn module_exports_untrusted_define_config_import() {
-        assert_non_static(
-            &parse_js_ts_config(
-                "const defineConfig = require('config-preset'); module.exports = defineConfig({ run: {} });",
-                "cjs",
-            ),
-            "run",
-        );
     }
 
     // ── Primitive values ────────────────────────────────────────────────
@@ -1226,6 +1025,8 @@ mod tests {
     fn define_config_arrow_block_body() {
         let result = parse(
             r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 const env = loadEnv(mode, process.cwd(), '');
                 return {
@@ -1243,6 +1044,8 @@ mod tests {
     fn define_config_arrow_expression_body() {
         let result = parse(
             r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(() => ({
                 run: { cacheScripts: true },
                 build: { outDir: 'dist' },
@@ -1257,6 +1060,8 @@ mod tests {
     fn define_config_function_expression() {
         let result = parse(
             r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(function() {
                 return {
                     run: { cacheScripts: true },
