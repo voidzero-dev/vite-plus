@@ -104,7 +104,9 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
 ///
 /// On Unix, the terminal state saved before spawning is restored after
 /// the child exits, so a child killed mid-raw-mode cannot leave the
-/// terminal broken for the next prompt.
+/// terminal broken for the next prompt. On Windows there is no
+/// equivalent console-mode guard; only the interrupt handling above
+/// applies, with Ctrl+C swallowed through a console ctrl handler.
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     #[cfg(unix)]
     let _guard = {
