@@ -7,6 +7,8 @@ when vp abandons the task mid-shutdown again.
 
 ## `vp run dev`
 
+**Exit code:** 1
+
 **→ expect-milestone:** `ready`
 
 ```
@@ -24,7 +26,7 @@ $ vpt report-orphan-on-ctrlc verdict.txt ⊘ cache disabled
 
 ```
 
-## `vpt wait-file verdict.txt`
+## `vpt wait-file verdict.txt 15000`
 
 The verdict recorded by the task's watcher process.
 

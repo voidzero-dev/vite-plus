@@ -2,7 +2,8 @@
 // rather than the project's custom types (vite_str, vite_path, etc.). Its
 // subcommand names and semantics follow vite-task's `vtt` multitool verbatim
 // wherever they overlap, so fixtures and habits transfer between the repos;
-// `chmod`, `json-edit`, and `probe` are vite-plus additions.
+// `chmod`, `json-edit`, `probe`, `report-orphan-on-ctrlc`, and `wait-file`
+// are vite-plus additions.
 #![expect(clippy::disallowed_types, reason = "standalone test utility uses std types")]
 #![expect(clippy::disallowed_macros, reason = "standalone test utility uses std macros")]
 #![expect(clippy::disallowed_methods, reason = "standalone test utility uses std methods")]
@@ -13,6 +14,7 @@ mod barrier;
 mod check_tty;
 mod chmod;
 mod cp;
+mod ctrlc_util;
 mod exit;
 mod exit_on_ctrlc;
 mod grep_file;

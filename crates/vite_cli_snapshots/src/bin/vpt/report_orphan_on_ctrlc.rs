@@ -26,7 +26,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         return watch(args.get(1).ok_or("--watch needs a verdict file")?);
     }
 
-    use std::{io::Write as _, os::fd::OwnedFd, sync::Arc, time::Duration};
+    use std::{io::Write as _, os::fd::OwnedFd, time::Duration};
 
     let mut verdict_path = None;
     let mut ignore_interrupt = false;
@@ -65,17 +65,11 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
     watcher.spawn()?;
 
-    let ctrlc_once_lock = Arc::new(std::sync::OnceLock::<()>::new());
-    ctrlc::set_handler({
-        let ctrlc_once_lock = Arc::clone(&ctrlc_once_lock);
-        move || {
-            let _ = ctrlc_once_lock.set(());
-        }
-    })?;
+    let ctrlc_flag = crate::ctrlc_util::install_ctrlc_flag()?;
 
     pty_terminal_test_client::mark_milestone("ready");
 
-    ctrlc_once_lock.wait();
+    ctrlc_flag.wait();
     if ignore_interrupt {
         // A task whose shutdown hangs: announce the interrupt so the test
         // can synchronize the second Ctrl+C on it, then never finish. The

@@ -212,19 +212,10 @@ fn exit_status_to_exit_code(exit_status: ExitStatus) -> ExitCode {
     if exit_status.success() {
         ExitCode::SUCCESS
     } else {
-        // A child killed by a signal has no exit code; report the shell
-        // convention 128 + signal (e.g. 130 for SIGINT) instead of a
-        // generic failure.
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::ExitStatusExt as _;
-            if let Some(signal) = exit_status.signal() {
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                return ExitCode::from(128u8.wrapping_add(signal as u8));
-            }
-        }
+        // shim::exec::exit_code_from_status maps signal deaths to the
+        // shell convention 128 + signal (e.g. 130 for SIGINT).
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        exit_status.code().map_or(ExitCode::FAILURE, |c| ExitCode::from(c as u8))
+        ExitCode::from(shim::exec::exit_code_from_status(exit_status) as u8)
     }
 }
 

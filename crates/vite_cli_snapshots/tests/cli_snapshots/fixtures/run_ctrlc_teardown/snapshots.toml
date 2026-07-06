@@ -29,7 +29,7 @@ steps = [
     { "expect-milestone" = "ready" },
     { "write-key" = "ctrl-c" },
   ] },
-  { argv = ["vpt", "wait-file", "verdict.txt"], comment = "The verdict recorded by the task's watcher process." },
+  { argv = ["vpt", "wait-file", "verdict.txt", "15000"], comment = "The verdict recorded by the task's watcher process." },
 ]
 
 [[case]]
@@ -38,10 +38,11 @@ vp = "global"
 skip-platforms = ["windows"]
 comment = """
 The escape hatch for the waiting behavior above: a task that ignores the
-interrupt must not make vp unstoppable. The second Ctrl+C force-kills the
-task, so vp exits with the kill signal's code and the watcher records an
-unfinished shutdown. The "interrupted" milestone between the two Ctrl+C
-presses keeps them from coalescing into a single signal.
+interrupt must not make vp unstoppable. On the second Ctrl+C vp warns,
+kills its own process group (taking the whole task tree with it), and dies
+with it, so only the watcher survives to record the unfinished shutdown.
+The "interrupted" milestone between the two Ctrl+C presses keeps them from
+coalescing into a single signal.
 """
 steps = [
   { argv = ["vp", "run", "stuck-dev"], continue-on-failure = true, interactions = [
@@ -50,5 +51,5 @@ steps = [
     { "expect-milestone" = "interrupted" },
     { "write-key" = "ctrl-c" },
   ] },
-  { argv = ["vpt", "wait-file", "verdict.txt"], comment = "The verdict recorded by the task's watcher process." },
+  { argv = ["vpt", "wait-file", "verdict.txt", "15000"], comment = "The verdict recorded by the task's watcher process." },
 ]

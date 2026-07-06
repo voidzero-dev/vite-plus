@@ -16,7 +16,8 @@ pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
 
     let cwd_buf = cwd.to_absolute_path_buf();
     match super::delegate::execute(cwd_buf, "run", args).await {
-        Ok(status) => status.code().unwrap_or(1),
+        // Maps signal deaths to 128 + signal, matching `vp run`.
+        Ok(status) => crate::shim::exec::exit_code_from_status(status),
         Err(e) => {
             output::error(&e.to_string());
             1

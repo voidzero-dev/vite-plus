@@ -8,7 +8,7 @@ use vite_shared::output;
 
 /// Convert a process ExitStatus to an exit code.
 /// On Unix, if the process was killed by a signal, returns 128 + signal_number.
-fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
+pub(crate) fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;

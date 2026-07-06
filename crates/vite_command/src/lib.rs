@@ -98,52 +98,120 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
 /// child's own exit decides when this returns. Swallowing uses a signal
 /// handler rather than `SIG_IGN`: an ignored disposition survives exec
 /// into the entire child tree, which would make tasks without their own
-/// SIGINT handler uninterruptible. A second interrupt force-kills the
-/// child so a task that ignores the first one cannot make the CLI
-/// unstoppable.
+/// SIGINT handler uninterruptible.
+///
+/// An interrupt that arrives when stdin is not a terminal was necessarily
+/// addressed to this process alone (a supervisor, `timeout`, CI
+/// cancellation), so it is forwarded to the child; with a terminal the
+/// foreground group already delivered it and forwarding would double it.
+/// A second interrupt force-quits: when this process leads its own
+/// process group (it is a shell job leader), the whole group is killed so
+/// the task's entire tree dies with it; otherwise only the direct child
+/// can be killed safely. After a swallowed interrupt this process
+/// re-raises SIGINT on itself once the child has exited, so calling
+/// shells see a died-of-SIGINT status and abort scripts and loops.
 ///
 /// On Unix, the terminal state saved before spawning is restored after
 /// the child exits, so a child killed mid-raw-mode cannot leave the
 /// terminal broken for the next prompt. On Windows there is no
-/// equivalent console-mode guard; only the interrupt handling above
-/// applies, with Ctrl+C swallowed through a console ctrl handler.
+/// equivalent console-mode guard, no interrupt forwarding, and no
+/// re-raise; Ctrl+C is swallowed through a console ctrl handler and the
+/// second press kills the direct child (its job object takes down the
+/// tree).
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     #[cfg(unix)]
-    let _guard = {
-        use nix::libc::STDIN_FILENO;
-        TerminalStateGuard::save(STDIN_FILENO)
-    };
-
-    let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-
-    #[cfg(unix)]
     {
-        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-            .map_err(|e| Error::Anyhow(e.into()))?;
+        use std::io::IsTerminal as _;
+
+        use nix::libc;
+
+        let mut guard = TerminalStateGuard::save(libc::STDIN_FILENO);
+
+        // Capture the pre-guard SIGINT disposition: tokio's handler
+        // registration below is process-global and permanent, so it is
+        // undone manually once the child is gone. (A second guarded
+        // execution in the same process would not receive interrupt
+        // events after this restore; both callers run once per process.)
+        // SAFETY: a null new-action pointer makes sigaction query-only.
+        let mut original_sigint: libc::sigaction = unsafe { std::mem::zeroed() };
+        // SAFETY: query-only call, writes the current disposition.
+        unsafe { libc::sigaction(libc::SIGINT, std::ptr::null(), &raw mut original_sigint) };
+
+        // Register before spawning so a registration failure cannot leak
+        // an unwaited child.
+        let mut interrupt =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                .map_err(|e| Error::Anyhow(e.into()))?;
+
+        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+
         let mut interrupts = 0u32;
-        loop {
+        let status = loop {
             tokio::select! {
-                status = child.wait() => return status.map_err(|e| Error::Anyhow(e.into())),
-                _ = sigint.recv() => {
+                status = child.wait() => break status.map_err(|e| Error::Anyhow(e.into()))?,
+                _ = interrupt.recv() => {
                     interrupts += 1;
-                    if interrupts >= 2 {
+                    if interrupts == 1 {
+                        if !std::io::stdin().is_terminal()
+                            && let Some(pid) = child.id()
+                        {
+                            let pid = i32::try_from(pid).unwrap_or_default();
+                            // SAFETY: forwards the targeted interrupt to
+                            // the still-running child.
+                            unsafe {
+                                libc::kill(pid, libc::SIGINT);
+                            }
+                        }
+                    } else {
+                        vite_shared::output::warn("Force quitting the task");
+                        // Restore the terminal before dying with the group.
+                        guard.take();
+                        // SAFETY: group/pid introspection and kill.
+                        unsafe {
+                            if libc::getpgrp() == libc::getpid() {
+                                libc::kill(0, libc::SIGKILL);
+                            }
+                        }
                         let _ = child.start_kill();
                     }
                 }
             }
+        };
+
+        // Undo tokio's process-global handler so the rest of the process
+        // keeps its normal Ctrl+C behavior.
+        // SAFETY: restores the disposition captured above.
+        unsafe { libc::sigaction(libc::SIGINT, &raw const original_sigint, std::ptr::null_mut()) };
+
+        drop(guard);
+
+        if interrupts > 0 {
+            // Die of SIGINT like an interrupted process should
+            // (wait-and-cooperative-exit): the calling shell then aborts
+            // scripts and loops. Under the restored default disposition
+            // this does not return; a custom disposition falls through to
+            // the child's status.
+            // SAFETY: re-raising under the restored disposition.
+            unsafe { libc::raise(libc::SIGINT) };
         }
+        Ok(status)
     }
 
     #[cfg(windows)]
     {
-        let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(|e| Error::Anyhow(e.into()))?;
+        let mut interrupt =
+            tokio::signal::windows::ctrl_c().map_err(|e| Error::Anyhow(e.into()))?;
+
+        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+
         let mut interrupts = 0u32;
         loop {
             tokio::select! {
                 status = child.wait() => return status.map_err(|e| Error::Anyhow(e.into())),
-                _ = ctrl_c.recv() => {
+                _ = interrupt.recv() => {
                     interrupts += 1;
                     if interrupts >= 2 {
+                        vite_shared::output::warn("Force quitting the task");
                         let _ = child.start_kill();
                     }
                 }
@@ -152,7 +220,10 @@ pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus,
     }
 
     #[cfg(not(any(unix, windows)))]
-    child.wait().await.map_err(|e| Error::Anyhow(e.into()))
+    {
+        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
+    }
 }
 
 /// Build a `tokio::process::Command` for shell execution.
