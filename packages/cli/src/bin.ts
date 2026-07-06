@@ -10,7 +10,6 @@
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { run } from '../binding/index.js';
@@ -51,15 +50,18 @@ if (args[0]?.startsWith('-C')) {
     process.exit(1);
   }
   const target = path.resolve(dir);
-  const stat = fs.statSync(target, { throwIfNoEntry: false });
-  if (!stat?.isDirectory()) {
-    errorMsg(`directory not found: ${dir}`);
-    process.exit(1);
-  }
+  // chdir is the single validation point: a pre-check stat can itself throw
+  // (EACCES on a parent, ELOOP), while chdir reports every failure mode
+  // through one catchable path.
   try {
     process.chdir(target);
   } catch (err) {
-    errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+    const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      errorMsg(`directory not found: ${dir}`);
+    } else {
+      errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+    }
     process.exit(1);
   }
   if (process.platform !== 'win32') {
