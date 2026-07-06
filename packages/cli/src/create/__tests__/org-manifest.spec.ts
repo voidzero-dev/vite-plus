@@ -201,7 +201,7 @@ function mockFetchPackumentAndTarball(
 ): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     if (requestUrl(input).endsWith('.tgz')) {
-      return new Response(tarBytes, { status: 200 });
+      return new Response(tarBytes.slice().buffer, { status: 200 });
     }
     return new Response(JSON.stringify(packumentBody), { status: 200 });
   });
