@@ -159,7 +159,7 @@ export function rewritePackageJson(
   if (isForceOverrideMode()) {
     for (const { dependencies } of dependencyGroups) {
       if (dependencies?.[VITE_PLUS_NAME]) {
-        // The referenced catalog entry is rewritten to the pkg.pr.new target
+        // The referenced catalog entry is rewritten to the preview target
         // separately. Preserve named/default catalog references so projects
         // such as Vize do not gain an unnecessary default catalog.
         if (

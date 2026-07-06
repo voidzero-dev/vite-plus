@@ -62,7 +62,7 @@ Then set the `vitest` override to that exact version, or rerun `vp migrate` to u
 
 Some Vite+ pull requests publish temporary packages for testing before an npm release. Treat these as nightly or bleeding-edge builds: they are useful when you want to verify a specific fix, test a fresh upstream dependency bump, or confirm a change before the next release. For day-to-day work, prefer the published `latest` release.
 
-Each commit on an eligible pull request is published to [pkg.pr.new](https://pkg.pr.new) and registered with the [registry bridge](https://registry-bridge.viteplus.dev/). The bridge serves these builds as ordinary npm versions of the form `0.0.0-commit.<sha>` and proxies every other package to the npm registry. That means you install a preview with normal version specs instead of mutable URLs, and the same versions resolve in CI.
+Each commit on an eligible pull request is published to the [registry bridge](https://registry-bridge.viteplus.dev/). The bridge serves these builds as ordinary npm versions of the form `0.0.0-commit.<sha>` and proxies every other package to the npm registry. That means you install a preview with normal version specs instead of mutable URLs, and the same versions resolve in CI.
 
 Both `vite-plus` and `@voidzero-dev/vite-plus-core` publish under the same `0.0.0-commit.<sha>` version. Each pull request carries a comment listing the exact version for its latest commit, along with ready-to-copy install steps.
 

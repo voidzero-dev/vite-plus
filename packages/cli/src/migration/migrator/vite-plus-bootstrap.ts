@@ -807,7 +807,7 @@ function ensureVitePlusDependencySpecs(
     }
     // Catalog writers update every existing managed entry in place. Keep a
     // package's deliberate named/default reference instead of collapsing all
-    // packages onto the workspace's preferred catalog, including pkg.pr.new
+    // packages onto the workspace's preferred catalog, including preview
     // force-override runs.
     if (version.startsWith('catalog:') && spec.startsWith('catalog:')) {
       continue;
@@ -823,7 +823,7 @@ function ensureVitePlusDependencySpecs(
     // Plain (non-protocol-pinned) range like `^0.1.24` → rewrite to the target
     // (`catalog:` for catalog-supporting projects, otherwise the concrete
     // version). Already-`catalog:` / other protocol pins are left untouched,
-    // except in force-override mode where ecosystem/pkg.pr.new validation must
+    // except in force-override mode where ecosystem/preview validation must
     // replace every prior target with the requested artifact.
     if (isForceOverrideMode() || !isProtocolPinnedSpec(spec)) {
       dependencies[VITE_PLUS_NAME] = version;
