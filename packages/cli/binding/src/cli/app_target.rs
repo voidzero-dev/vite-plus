@@ -102,8 +102,10 @@ fn is_bare(command: &str, args: &[String]) -> bool {
         if arg == "--" {
             return iter.next().is_none();
         }
+        // Workspace selectors and --root already specify pack's target;
+        // these previously-valid targeted invocations must keep forwarding.
         if is_pack
-            && ["-W", "--workspace", "-F", "--filter"]
+            && ["-W", "--workspace", "-F", "--filter", "--root"]
                 .iter()
                 .any(|f| arg == f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
         {
@@ -386,6 +388,8 @@ mod tests {
         assert!(!is_bare("pack", &to_args(&["-F", "ui"])));
         assert!(!is_bare("pack", &to_args(&["--filter=ui"])));
         assert!(!is_bare("pack", &to_args(&["--workspace=packages/a"])));
+        assert!(!is_bare("pack", &to_args(&["--root", "packages/lib"])));
+        assert!(!is_bare("pack", &to_args(&["--root=packages/lib"])));
         // `--` terminates options; a token after it is an explicit positional.
         assert!(!is_bare("build", &to_args(&["--", "apps/web"])));
         assert!(!is_bare("pack", &to_args(&["--minify", "--", "src/index.ts"])));
