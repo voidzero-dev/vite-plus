@@ -363,48 +363,6 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
-// ============ Update .github/workflows/test-vp-create.yml ============
-// The `vp create` smoke-test workflow pins every vitest-family package via the
-// `VP_OVERRIDE_PACKAGES` env var so that template installs use the bundled
-// version. Daily upstream bumps must rewrite those pins so the workflow does
-// not drift behind the rest of the repo.
-async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> {
-  const filePath = path.join(ROOT, '.github/workflows/test-vp-create.yml');
-  const content = fs.readFileSync(filePath, 'utf8');
-  const vitestKeys = [
-    'vitest',
-    '@vitest/expect',
-    '@vitest/runner',
-    '@vitest/snapshot',
-    '@vitest/spy',
-    '@vitest/utils',
-    '@vitest/mocker',
-    '@vitest/pretty-format',
-    '@vitest/coverage-v8',
-    '@vitest/coverage-istanbul',
-  ];
-  let updated = content;
-  let oldVersion: string | undefined;
-  for (const key of vitestKeys) {
-    const pattern = new RegExp(`"${key.replaceAll('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
-    let matched = false;
-    updated = updated.replace(pattern, (_match: string, captured: string) => {
-      matched = true;
-      oldVersion ??= captured;
-      return `"${key}":"${vitestVersion}"`;
-    });
-    if (!matched) {
-      throw new Error(
-        `Failed to match "${key}" in ${filePath} — the pattern ${pattern} is stale, ` +
-          `please update it in .github/scripts/upgrade-deps.ts`,
-      );
-    }
-  }
-  fs.writeFileSync(filePath, updated);
-  recordChange('test-vp-create workflow', oldVersion ?? null, vitestVersion);
-  console.log('Updated .github/workflows/test-vp-create.yml');
-}
-
 // ============ Update README.md manual-migration vitest pins ============
 // The manual-migration guide pins `vitest` to an exact version in three places —
 // the npm/Bun `overrides` block, the pnpm-workspace `overrides` block, and the
@@ -623,7 +581,6 @@ await updatePnpmWorkspace({
   oxcTransform: oxcTransformVersion,
 });
 await updateVitestVersionConstant(vitestVersion);
-await updateTestVpCreateWorkflow(vitestVersion);
 await updateReadmeVitestPins(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
