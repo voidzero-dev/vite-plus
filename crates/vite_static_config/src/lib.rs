@@ -147,19 +147,18 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 3. `module.exports = defineConfig({ ... })`
 /// 4. `module.exports = { ... }`
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
-    if has_untrusted_hoisted_define_config_binding(program) {
-        return FieldMap::unanalyzable();
-    }
+    let mut has_untrusted_define_config_binding =
+        has_untrusted_hoisted_define_config_binding(program);
 
     for stmt in &program.body {
         if has_untrusted_define_config_variable_binding(stmt) {
-            return FieldMap::unanalyzable();
+            has_untrusted_define_config_binding = true;
         }
 
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
-                return extract_config_from_expr(expr);
+                return extract_config_from_expr(expr, has_untrusted_define_config_binding);
             }
             // export default class/function — not analyzable
             return FieldMap::unanalyzable();
@@ -172,7 +171,7 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
                 m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
             })
         {
-            return extract_config_from_expr(&assign.right);
+            return extract_config_from_expr(&assign.right, has_untrusted_define_config_binding);
         }
     }
 
@@ -186,11 +185,17 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
 /// - `defineConfig(function() { return { ... }; })` → extract from return statement
 /// - `{ ... }` → extract directly
 /// - anything else → not analyzable
-fn extract_config_from_expr(expr: &Expression<'_>) -> FieldMap {
+fn extract_config_from_expr(
+    expr: &Expression<'_>,
+    has_untrusted_define_config_binding: bool,
+) -> FieldMap {
     let expr = expr.without_parentheses();
     match expr {
         Expression::CallExpression(call) => {
             if !call.callee.is_specific_id("defineConfig") {
+                return FieldMap::unanalyzable();
+            }
+            if has_untrusted_define_config_binding {
                 return FieldMap::unanalyzable();
             }
             let Some(first_arg) = call.arguments.first() else {
@@ -673,6 +678,19 @@ mod tests {
         let result = parse("export default { foo: 'bar', num: 42 }");
         assert_json(&result, "foo", serde_json::json!("bar"));
         assert_json(&result, "num", serde_json::json!(42));
+    }
+
+    #[test]
+    fn plain_export_default_object_ignores_unrelated_define_config_binding() {
+        let result = parse(
+            r"
+            import { defineConfig } from 'vite';
+            export default {
+                run: { cacheScripts: true },
+            };
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
     }
 
     #[test]
