@@ -651,6 +651,32 @@ mod tests {
         assert_json(&result, "lint", serde_json::json!({ "plugins": ["a"] }));
     }
 
+    #[test]
+    fn define_config_import_from_other_package_is_non_static() {
+        let result = parse(
+            r"
+            import { defineConfig } from 'vite';
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn define_config_defined_as_variable() {
+        let result = parse(
+            r"
+            const { defineConfig } = {};
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
     // ── module.exports = { ... } ───────────────────────────────────────
 
     #[test]
@@ -681,6 +707,17 @@ mod tests {
     #[test]
     fn module_exports_unknown_call() {
         assert_non_static(&parse_js_ts_config("module.exports = otherFn({ a: 1 });", "cjs"), "run");
+    }
+
+    #[test]
+    fn module_exports_untrusted_define_config_import() {
+        assert_non_static(
+            &parse_js_ts_config(
+                "const defineConfig = require('config-preset'); module.exports = defineConfig({ run: {} });",
+                "cjs",
+            ),
+            "run",
+        );
     }
 
     // ── Primitive values ────────────────────────────────────────────────
