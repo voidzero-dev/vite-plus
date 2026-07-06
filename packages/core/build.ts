@@ -20,7 +20,7 @@ import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
-import { getNativePlatformPackageNames } from './build-support/native-platform-packages.js';
+import { getNativePlatformPackageName } from './build-support/native-platform-packages.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
 import {
   createRolldownRewriteRules,
@@ -372,7 +372,7 @@ async function bundleRolldown() {
     },
   });
 
-  const vitePlusNativePackages = new Set(getNativePlatformPackageNames(cliPkgJson.napi.targets));
+  const vitePlusNativePackages = new Set(cliPkgJson.napi.targets.map(getNativePlatformPackageName));
 
   // Rewrite @rolldown/pluginutils imports in JS and type declaration files
   for (const file of rolldownFiles) {
@@ -790,12 +790,10 @@ async function mergePackageJson() {
     tsdown: tsdownPkg.version,
   };
 
-  destPkg.optionalDependencies = {
-    ...destPkg.optionalDependencies,
-    ...Object.fromEntries(
-      getNativePlatformPackageNames(cliPkgJson.napi.targets).map((name) => [name, destPkg.version]),
-    ),
-  };
+  destPkg.optionalDependencies = { ...destPkg.optionalDependencies };
+  for (const target of cliPkgJson.napi.targets) {
+    destPkg.optionalDependencies[getNativePlatformPackageName(target)] = destPkg.version;
+  }
 
   const { code, errors } = await format(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n', {
     sortPackageJson: true,
