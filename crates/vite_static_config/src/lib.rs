@@ -5,7 +5,10 @@
 //! config like `run` without needing a Node.js runtime.
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Expression, ObjectPropertyKind, Program, Statement};
+use oxc_ast::ast::{
+    BindingPattern, Expression, ImportDeclarationSpecifier, ModuleExportName, ObjectPropertyKind,
+    Program, Statement,
+};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
@@ -145,6 +148,11 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 4. `module.exports = { ... }`
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     for stmt in &program.body {
+        // Filter `defineConfig` import from other packages or defined by itself.
+        if find_custom_define_config(stmt) {
+            return FieldMap::unanalyzable();
+        }
+
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
@@ -244,6 +252,97 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
         }
     }
     FieldMap::unanalyzable()
+}
+
+fn find_custom_define_config(stmt: &Statement<'_>) -> bool {
+    if let Statement::VariableDeclaration(decl) = stmt {
+        // Reject `var/let/const defineConfig = .....`, except `const defineConfig = require('vite-plus').defineConfig`
+        for declarator in &decl.declarations {
+            if let BindingPattern::BindingIdentifier(id) = &declarator.id
+                && id.name == "defineConfig"
+            {
+                let allowed = declarator.init.as_ref().is_some_and(|init| {
+                    init.without_parentheses().as_member_expression().is_some_and(|member| {
+                        member.static_property_name() == Some("defineConfig")
+                            && matches!(
+                                member.object().without_parentheses(),
+                                Expression::CallExpression(call)
+                                    if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
+                            )
+                    })
+                });
+                if !allowed {
+                    return true;
+                }
+            }
+        }
+
+        // Reject `var/let/const { defineConfig } = .....`, except `const { defineConfig } = require('vite-plus')`
+        for declarator in &decl.declarations {
+            let BindingPattern::ObjectPattern(pattern) = &declarator.id else {
+                continue;
+            };
+
+            for prop in &pattern.properties {
+                let binds_define_config = match &prop.value {
+                    BindingPattern::BindingIdentifier(id) => id.name == "defineConfig",
+                    BindingPattern::AssignmentPattern(assignment) => {
+                        matches!(&assignment.left, BindingPattern::BindingIdentifier(id) if id.name == "defineConfig")
+                    }
+                    _ => false,
+                };
+                if !binds_define_config {
+                    continue;
+                }
+
+                let is_direct_define_config = !prop.computed
+                    && prop.key.static_name().is_some_and(|key| key == "defineConfig");
+                let is_allowed = is_direct_define_config && declarator.init.as_ref().is_some_and(|init| {
+                    matches!(
+                        init.without_parentheses(),
+                        Expression::CallExpression(call)
+                            if call.common_js_require().is_some_and(|source| source.value == "vite-plus")
+                    )
+                });
+
+                if !is_allowed {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if let Statement::ImportDeclaration(import_decl) = stmt {
+        let Some(specifiers) = &import_decl.specifiers else {
+            return false;
+        };
+
+        for specifier in specifiers {
+            // Reject `import defineConfig from .....`
+            if let ImportDeclarationSpecifier::ImportDefaultSpecifier(specifier) = specifier
+                && specifier.local.name == "defineConfig"
+            {
+                return true;
+            }
+
+            // Reject `import { defineConfig } from ....` except `import { defineConfig } from 'vite-plus'`
+            if let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier
+                && specifier.local.name == "defineConfig"
+            {
+                let imported_define_config = match &specifier.imported {
+                    ModuleExportName::IdentifierName(id) => id.name == "defineConfig",
+                    ModuleExportName::IdentifierReference(id) => id.name == "defineConfig",
+                    ModuleExportName::StringLiteral(lit) => lit.value == "defineConfig",
+                };
+
+                if import_decl.source.value != "vite-plus" || !imported_define_config {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Count `return` statements recursively in a slice of statements.
