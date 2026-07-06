@@ -148,10 +148,7 @@ During release builds (`RELEASE_BUILD=1`), an additional critical transformation
 ```typescript
 // In bundleRolldown()
 if (process.env.RELEASE_BUILD) {
-  source = source.replace(
-    /@rolldown\/binding-([a-z0-9-]+)/g,
-    '@voidzero-dev/vite-plus-$1',
-  );
+  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, '@voidzero-dev/vite-plus-$1');
   // Sync version strings
   source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
 }
@@ -159,11 +156,11 @@ if (process.env.RELEASE_BUILD) {
 
 **Platform-specific binding rewrites**:
 
-| Original Import                     | Rewritten Import                           |
-| ----------------------------------- | ------------------------------------------ |
-| `@rolldown/binding-darwin-arm64`    | `@voidzero-dev/vite-plus-darwin-arm64`     |
-| `@rolldown/binding-darwin-x64`      | `@voidzero-dev/vite-plus-darwin-x64`       |
-| `@rolldown/binding-linux-arm64-gnu` | `@voidzero-dev/vite-plus-linux-arm64-gnu`  |
+| Original Import                      | Rewritten Import                           |
+| ------------------------------------ | ------------------------------------------ |
+| `@rolldown/binding-darwin-arm64`     | `@voidzero-dev/vite-plus-darwin-arm64`     |
+| `@rolldown/binding-darwin-x64`       | `@voidzero-dev/vite-plus-darwin-x64`       |
+| `@rolldown/binding-linux-arm64-gnu`  | `@voidzero-dev/vite-plus-linux-arm64-gnu`  |
 | `@rolldown/binding-linux-arm64-musl` | `@voidzero-dev/vite-plus-linux-arm64-musl` |
 | `@rolldown/binding-linux-x64-gnu`    | `@voidzero-dev/vite-plus-linux-x64-gnu`    |
 | `@rolldown/binding-linux-x64-musl`   | `@voidzero-dev/vite-plus-linux-x64-musl`   |

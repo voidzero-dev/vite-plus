@@ -5,11 +5,11 @@ import url from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import cliPkgJson from '../../cli/package.json' with { type: 'json' };
-import corePkgJson from '../package.json' with { type: 'json' };
 import {
   getNativePlatformPackageName,
   getNativePlatformPackageNames,
 } from '../build-support/native-platform-packages.ts';
+import corePkgJson from '../package.json' with { type: 'json' };
 
 const coreDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(coreDir, 'dist');
@@ -48,8 +48,8 @@ describe('build artifacts', () => {
 
   it('declares only generated Vite+ native packages as core optional dependencies', () => {
     const packageNames = getNativePlatformPackageNames(cliPkgJson.napi.targets);
-    const nativeOptionalDependencyNames = Object.keys(corePkgJson.optionalDependencies).filter((name) =>
-      name.startsWith('@voidzero-dev/vite-plus-'),
+    const nativeOptionalDependencyNames = Object.keys(corePkgJson.optionalDependencies).filter(
+      (name) => name.startsWith('@voidzero-dev/vite-plus-'),
     );
 
     expect(nativeOptionalDependencyNames.toSorted()).toEqual(packageNames.toSorted());

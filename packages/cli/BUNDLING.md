@@ -154,16 +154,16 @@ packages/cli/
 
 The CLI builds native bindings for the following platform targets:
 
-| Target                      | Platform | Architecture | Output File                       |
-| --------------------------- | -------- | ------------ | --------------------------------- |
-| `aarch64-apple-darwin`      | macOS    | ARM64        | `vite-plus.darwin-arm64.node`     |
-| `x86_64-apple-darwin`       | macOS    | x64          | `vite-plus.darwin-x64.node`       |
-| `aarch64-unknown-linux-gnu` | Linux    | ARM64        | `vite-plus.linux-arm64-gnu.node`  |
+| Target                       | Platform | Architecture | Output File                       |
+| ---------------------------- | -------- | ------------ | --------------------------------- |
+| `aarch64-apple-darwin`       | macOS    | ARM64        | `vite-plus.darwin-arm64.node`     |
+| `x86_64-apple-darwin`        | macOS    | x64          | `vite-plus.darwin-x64.node`       |
+| `aarch64-unknown-linux-gnu`  | Linux    | ARM64        | `vite-plus.linux-arm64-gnu.node`  |
 | `aarch64-unknown-linux-musl` | Linux    | ARM64        | `vite-plus.linux-arm64-musl.node` |
-| `x86_64-unknown-linux-gnu`  | Linux    | x64          | `vite-plus.linux-x64-gnu.node`    |
+| `x86_64-unknown-linux-gnu`   | Linux    | x64          | `vite-plus.linux-x64-gnu.node`    |
 | `x86_64-unknown-linux-musl`  | Linux    | x64          | `vite-plus.linux-x64-musl.node`   |
-| `aarch64-pc-windows-msvc`   | Windows  | ARM64        | `vite-plus.win32-arm64-msvc.node` |
-| `x86_64-pc-windows-msvc`    | Windows  | x64          | `vite-plus.win32-x64-msvc.node`   |
+| `aarch64-pc-windows-msvc`    | Windows  | ARM64        | `vite-plus.win32-arm64-msvc.node` |
+| `x86_64-pc-windows-msvc`     | Windows  | x64          | `vite-plus.win32-x64-msvc.node`   |
 
 These targets are defined in `package.json` under the `napi.targets` field.
 
@@ -227,20 +227,17 @@ During release builds, the core package rewrites each `@rolldown/binding-*` impo
 ```typescript
 // In packages/core/build.ts
 if (process.env.RELEASE_BUILD) {
-  source = source.replace(
-    /@rolldown\/binding-([a-z0-9-]+)/g,
-    '@voidzero-dev/vite-plus-$1',
-  );
+  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, '@voidzero-dev/vite-plus-$1');
 }
 ```
 
 **Transformation examples**:
 
-| Original Import                    | After Rewrite                              |
-| ---------------------------------- | ------------------------------------------ |
-| `@rolldown/binding-darwin-arm64`   | `@voidzero-dev/vite-plus-darwin-arm64`     |
-| `@rolldown/binding-linux-x64-gnu`  | `@voidzero-dev/vite-plus-linux-x64-gnu`    |
-| `@rolldown/binding-win32-x64-msvc` | `@voidzero-dev/vite-plus-win32-x64-msvc`   |
+| Original Import                    | After Rewrite                            |
+| ---------------------------------- | ---------------------------------------- |
+| `@rolldown/binding-darwin-arm64`   | `@voidzero-dev/vite-plus-darwin-arm64`   |
+| `@rolldown/binding-linux-x64-gnu`  | `@voidzero-dev/vite-plus-linux-x64-gnu`  |
+| `@rolldown/binding-win32-x64-msvc` | `@voidzero-dev/vite-plus-win32-x64-msvc` |
 
 This means:
 

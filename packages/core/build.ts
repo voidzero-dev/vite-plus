@@ -18,6 +18,7 @@ import { glob } from 'tinyglobby';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
+import cliPkgJson from '../cli/package.json' with { type: 'json' };
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
 import { getNativePlatformPackageName } from './build-support/native-platform-packages.js';
@@ -28,7 +29,6 @@ import {
   rewriteModuleSpecifiers,
   type ReplacementRule,
 } from './build-support/rewrite-module-specifiers.js';
-import cliPkgJson from '../cli/package.json' with { type: 'json' };
 import pkgJson from './package.json' with { type: 'json' };
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
