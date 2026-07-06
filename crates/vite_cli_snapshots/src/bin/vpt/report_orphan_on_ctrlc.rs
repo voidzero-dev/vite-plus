@@ -1,9 +1,15 @@
-/// report-orphan-on-ctrlc `<verdict-file>`
+/// report-orphan-on-ctrlc `<verdict-file>` \[--ignore-interrupt\]
 ///
 /// Simulates a task with a graceful shutdown phase (a vite dev server
 /// closing on Ctrl+C) and records whether `vp run` let that shutdown finish
 /// (issue #2036): emits a "ready" milestone, waits for Ctrl+C, then spends
 /// 300 ms shutting down before exiting cleanly.
+///
+/// With `--ignore-interrupt` the task instead announces the interrupt (a
+/// printed line plus an "interrupted" milestone, so a test can synchronize
+/// a second Ctrl+C on it) and keeps running forever, like a task whose
+/// shutdown hangs. Its graceful shutdown then never completes; ending it
+/// takes vp's force-kill escalation.
 ///
 /// The verdict is written by a watcher process spawned into its own process
 /// group, insulated from whatever signals vp sends the task tree during
@@ -12,8 +18,8 @@
 /// its shutdown completes. Pipe EOF without "done" means the task was torn
 /// down mid-shutdown, and the watcher records that in `<verdict-file>`
 /// (atomically, via a temp-file rename) for a follow-up `vpt wait-file`
-/// step. Nothing is printed after the milestone, so the terminal snapshot
-/// stays deterministic no matter how quickly the task tree is killed.
+/// step. Nothing else is printed, so the terminal snapshot stays
+/// deterministic no matter how quickly the task tree is killed.
 #[cfg(unix)]
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.first().is_some_and(|arg| arg == "--watch") {
@@ -22,8 +28,17 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     use std::{io::Write as _, os::fd::OwnedFd, sync::Arc, time::Duration};
 
-    let Some(verdict_path) = args.first() else {
-        return Err("Usage: vpt report-orphan-on-ctrlc <verdict-file>".into());
+    let mut verdict_path = None;
+    let mut ignore_interrupt = false;
+    for arg in args {
+        if arg == "--ignore-interrupt" {
+            ignore_interrupt = true;
+        } else {
+            verdict_path = Some(arg);
+        }
+    }
+    let Some(verdict_path) = verdict_path else {
+        return Err("Usage: vpt report-orphan-on-ctrlc <verdict-file> [--ignore-interrupt]".into());
     };
 
     let (pipe_read, pipe_write): (OwnedFd, OwnedFd) = nix::unistd::pipe()?;
@@ -61,6 +76,17 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     pty_terminal_test_client::mark_milestone("ready");
 
     ctrlc_once_lock.wait();
+    if ignore_interrupt {
+        // A task whose shutdown hangs: announce the interrupt so the test
+        // can synchronize the second Ctrl+C on it, then never finish. The
+        // "done" marker below is unreachable, so the watcher records the
+        // eventual force-kill as an unfinished shutdown.
+        println!("ignoring interrupt; still running");
+        pty_terminal_test_client::mark_milestone("interrupted");
+        loop {
+            std::thread::park();
+        }
+    }
     // The graceful shutdown a real dev server performs after SIGINT. A
     // buggy vp tears the task down milliseconds into this window, so the
     // "done" marker below never gets written.

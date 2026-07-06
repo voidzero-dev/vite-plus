@@ -1,35 +1,54 @@
-# Reproduces https://github.com/voidzero-dev/vite-plus/issues/2036: killing a
-# `vp run` task with Ctrl+C leaves stray escape sequences on the next fish
-# prompt. fish probes the terminal (OSC 11, CSI 6n, DA1) every time it draws
-# a prompt; after `vp run` + Ctrl+C, the task's process tree (vite dev server,
-# managed node) is still shutting down when the shell takes the terminal back,
-# and its late terminal writes and mode restores race the shell's probes, so
-# the terminal's replies land as garbage input on the prompt
-# (`^[]11;rgb:...^[\^[[9;1R^[[?62;22;52c`). Plain `vite dev` is clean because
-# the shell waits for vite itself, which finishes its terminal cleanup before
-# exiting.
+# Guards the fix for https://github.com/voidzero-dev/vite-plus/issues/2036:
+# killing a `vp run` task with Ctrl+C used to leave stray escape sequences on
+# the next fish prompt. fish probes the terminal (OSC 11, CSI 6n, DA1) every
+# time it draws a prompt; vp used to die of SIGINT within milliseconds (it is
+# the PTY session leader, so the whole session got SIGHUP'd) while the task's
+# process tree (vite dev server, managed node) was still shutting down, and
+# the dying tree's late terminal writes and mode restores raced the shell's
+# probes, turning their replies into garbage input
+# (`^[]11;rgb:...^[\^[[9;1R^[[?62;22;52c`).
 #
-# The vp-side defect this case pins: on Ctrl+C, `vp run` tears the terminal
-# and the task down within milliseconds instead of letting the task shut
-# down gracefully. The payload simulates a dev-server-like task whose
-# shutdown takes 300 ms; a watcher process outside vp's reach records to
-# verdict.txt whether that shutdown was allowed to finish.
+# `vp run` must instead swallow the interrupt and wait for the task tree's
+# graceful shutdown before handing the terminal back. The payload simulates a
+# dev-server-like task whose shutdown takes 300 ms; a watcher process in its
+# own process group (it survives any teardown signals, like real dev-server
+# grandchildren do) records to verdict.txt whether that shutdown finished.
 
 [[case]]
-name = "run_ctrlc_exits_before_task_shutdown"
+name = "run_ctrlc_waits_for_task_shutdown"
 vp = "global"
 skip-platforms = ["windows"]
 comment = """
-Issue #2036: on Ctrl+C, `vp run` tears the task down immediately instead of
-waiting for its graceful shutdown, and whatever the dying task tree still
-does to the terminal races the next shell prompt. verdict.txt records the
-current buggy behavior; a fix should flip it to
-"task completed its graceful shutdown".
+Issue #2036: Ctrl+C on `vp run dev` must let the task finish its graceful
+shutdown before vp exits and the shell takes the terminal back. The verdict
+below flips to "task was torn down before its graceful shutdown finished"
+when vp abandons the task mid-shutdown again.
 """
 steps = [
   { argv = ["vp", "run", "dev"], continue-on-failure = true, interactions = [
     { "expect-milestone" = "ready" },
     { "write-key" = "ctrl-c" },
   ] },
-  { argv = ["vpt", "wait-file", "verdict.txt"], comment = "The verdict the task wrote after `vp run` already exited." },
+  { argv = ["vpt", "wait-file", "verdict.txt"], comment = "The verdict recorded by the task's watcher process." },
+]
+
+[[case]]
+name = "run_double_ctrlc_force_kills_stuck_task"
+vp = "global"
+skip-platforms = ["windows"]
+comment = """
+The escape hatch for the waiting behavior above: a task that ignores the
+interrupt must not make vp unstoppable. The second Ctrl+C force-kills the
+task, so vp exits with the kill signal's code and the watcher records an
+unfinished shutdown. The "interrupted" milestone between the two Ctrl+C
+presses keeps them from coalescing into a single signal.
+"""
+steps = [
+  { argv = ["vp", "run", "stuck-dev"], continue-on-failure = true, interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+    { "expect-milestone" = "interrupted" },
+    { "write-key" = "ctrl-c" },
+  ] },
+  { argv = ["vpt", "wait-file", "verdict.txt"], comment = "The verdict recorded by the task's watcher process." },
 ]

@@ -2,6 +2,7 @@
   "name": "run-ctrlc-teardown",
   "private": true,
   "scripts": {
-    "dev": "vpt report-orphan-on-ctrlc verdict.txt"
+    "dev": "vpt report-orphan-on-ctrlc verdict.txt",
+    "stuck-dev": "vpt report-orphan-on-ctrlc verdict.txt --ignore-interrupt"
   }
 }
