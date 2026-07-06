@@ -57,11 +57,6 @@ pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize
     None
 }
 
-/// Normalize CLI arguments:
-/// - `vp list ...` / `vp ls ...` → `vp pm list ...`
-/// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
-/// - `vp node [args...]` → `vp env exec node [args...]`
 /// Apply `-C <dir>`: resolve against `cwd`, validate, change the process
 /// cwd, and keep the POSIX `PWD` in sync like a real `cd`. Returns the new
 /// cwd, or the user-facing error message (not printed here: the completion
@@ -86,6 +81,11 @@ pub(crate) fn apply_chdir(
     Ok(target)
 }
 
+/// Normalize CLI arguments:
+/// - `vp list ...` / `vp ls ...` → `vp pm list ...`
+/// - `vp rebuild ...` → `vp pm rebuild ...`
+/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
+/// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
     loop {
