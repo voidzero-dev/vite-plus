@@ -859,14 +859,13 @@ pub async fn run_command_with_options(
     args: Args,
     render_options: RenderOptions,
 ) -> Result<ExitStatus, Error> {
-    // Apply the global `-C <dir>` flag before anything reads cwd, so local CLI
-    // resolution and command execution behave as if vp was started in <dir>.
-    // `clean()` normalizes `.`/`..` so upward workspace walks never see them.
+    // Apply the global `-C <dir>` flag before anything reads cwd. main
+    // normally consumes a leading `-C` pre-parse; this covers orderings that
+    // reach clap (e.g. a second `-C`), with identical semantics — including
+    // the process-cwd change and PWD sync the shared helper performs.
     if let Some(dir) = &args.chdir {
-        cwd = cwd.join(dir).clean();
-        if !cwd.as_path().is_dir() {
-            return Err(Error::UserMessage(format!("directory not found: {dir}").into()));
-        }
+        cwd =
+            crate::apply_chdir(&cwd, dir).map_err(|message| Error::UserMessage(message.into()))?;
     }
 
     // Handle --version flag (Category B: delegates to JS)

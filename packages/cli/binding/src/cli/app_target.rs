@@ -134,47 +134,49 @@ fn is_bare(command: &str, args: &[String]) -> bool {
 /// silent root build this feature exists to prevent.
 fn looks_runnable(dir: &AbsolutePathBuf, command: &str, is_root: bool) -> bool {
     match command {
-        // Bare `vp pack` succeeds when the config explicitly declares a
-        // `pack` block or tsdown's default entry exists. A spread that only
+        // Bare `vp pack` succeeds when tsdown's default entry exists or the
+        // config explicitly declares a `pack` block (a spread that only
         // might contain `pack` does not count: auto-select acts on this
-        // signal, so a false positive runs tsdown in a non-packable package.
+        // signal, so a false positive runs tsdown in a non-packable
+        // package). The one-stat entry check runs first: this executes per
+        // workspace package, and the config check reads and parses a file.
         "pack" => {
-            vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
-                || dir.as_path().join("src/index.ts").is_file()
+            dir.as_path().join("src/index.ts").is_file()
+                || vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
         }
         _ if is_root => dir.as_path().join("index.html").is_file(),
         _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
 
-/// `defaultPackage` from the `vite.config.*` in `cwd`, read via static
-/// extraction so it works at roots without a vite-plus install (non-workspace
-/// framework repos). The value must be a static string literal.
-///
-/// `get_declared` keeps this to explicitly written fields: a config that is
-/// unanalyzable or hides fields behind a spread simply falls through to the
-/// picker/current-dir resolution instead of failing every bare app command.
-fn resolve_default_package(command: &str, cwd: &AbsolutePathBuf) -> Option<AppTarget> {
+/// Resolve the `defaultPackage` value [`classify`] extracted from the
+/// invocation root's `vite.config.*` (static extraction, so it works at
+/// roots without a vite-plus install). The value must be a static string
+/// literal naming an existing directory.
+fn resolve_default_package(
+    command: &str,
+    cwd: &AbsolutePathBuf,
+    value: vite_static_config::FieldValue,
+) -> AppTarget {
     let fail = |msg: &str| {
         output::error(msg);
-        Some(AppTarget::Exit(ExitStatus(1)))
+        AppTarget::Exit(ExitStatus(1))
     };
-    match vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage") {
-        Some(vite_static_config::FieldValue::Json(serde_json::Value::String(dir))) => {
+    match value {
+        vite_static_config::FieldValue::Json(serde_json::Value::String(dir)) => {
             let target = cwd.join(&dir).clean();
             if !target.as_path().is_dir() {
                 return fail(&format!("defaultPackage points to a missing directory: {dir}"));
             }
             output::note(&format!("vp {command}: using {dir} (defaultPackage)"));
-            Some(AppTarget::Dir(target))
+            AppTarget::Dir(target)
         }
-        Some(vite_static_config::FieldValue::Json(other)) => {
+        vite_static_config::FieldValue::Json(other) => {
             fail(&format!("defaultPackage must be a string of a directory, got: {other}"))
         }
-        Some(vite_static_config::FieldValue::NonStatic) => fail(
+        vite_static_config::FieldValue::NonStatic => fail(
             "defaultPackage in vite.config.ts must be a static string literal so vp can read it without executing the config",
         ),
-        None => None,
     }
 }
 
@@ -239,67 +241,68 @@ pub(super) fn needs_elicitation(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
 ) -> bool {
-    let Some((command, args)) = app_command_parts(subcommand) else {
-        return false;
-    };
-    if !is_bare(command, args) {
-        return false;
-    }
-    let workspace = vite_workspace::find_workspace_root(cwd);
-    if at_invocation_root(workspace.as_ref().ok().map(|(_, rel)| rel.as_str()))
-        && vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage").is_some()
-    {
-        return true;
-    }
-    let Ok((workspace_root, rel_from_root)) = workspace else {
-        return false;
-    };
-    rel_from_root.as_str().is_empty()
-        && !matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_))
+    classify(subcommand, cwd).is_some()
 }
 
-/// `defaultPackage` is a root-pointer concept: it applies where the
-/// invocation directory is its own root (a workspace root, a standalone
-/// package, or a framework directory with no package.json ancestry — pass
-/// the workspace lookup's `rel_from_root`, or `None` when the lookup
-/// failed). Below a workspace root the current directory already identifies
-/// the target package, so a member's own config must not redirect.
-fn at_invocation_root(rel_from_root: Option<&str>) -> bool {
-    rel_from_root.is_none_or(str::is_empty)
+/// Why a bare app command needs target elicitation.
+enum Elicitation {
+    /// The invocation root's config explicitly declares `defaultPackage`
+    /// (with this value — possibly invalid, which the resolver reports).
+    DefaultPackage(vite_static_config::FieldValue),
+    /// Bare app command at a real workspace root: picker/listing territory.
+    WorkspaceRoot(vite_workspace::WorkspaceRoot),
+}
+
+/// The RFC's resolution order, written once for both entry points: bare app
+/// command, then `defaultPackage` at the invocation root, then the workspace
+/// root itself. `defaultPackage` is a root-pointer concept: it applies where
+/// the invocation directory is its own root (a workspace root, a standalone
+/// package, or a framework directory with no package.json ancestry); below a
+/// workspace root the current directory already identifies the target, so a
+/// member's own config must not redirect.
+fn classify(
+    subcommand: &SynthesizableSubcommand,
+    cwd: &AbsolutePathBuf,
+) -> Option<(&'static str, Elicitation)> {
+    let (command, args) = app_command_parts(subcommand)?;
+    if !is_bare(command, args) {
+        return None;
+    }
+    let workspace = vite_workspace::find_workspace_root(cwd);
+    let at_invocation_root =
+        workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
+    if at_invocation_root
+        && let Some(value) =
+            vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage")
+    {
+        return Some((command, Elicitation::DefaultPackage(value)));
+    }
+    // The picker/listing needs workspace metadata; anything unresolvable
+    // keeps today's behavior (the caller surfaces its own workspace errors).
+    let Ok((workspace_root, rel_from_root)) = workspace else {
+        return None;
+    };
+    if !rel_from_root.as_str().is_empty()
+        || matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_))
+    {
+        return None;
+    }
+    Some((command, Elicitation::WorkspaceRoot(workspace_root)))
 }
 
 pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
 ) -> Result<AppTarget, Error> {
-    let Some((command, args)) = app_command_parts(subcommand) else {
+    let Some((command, elicitation)) = classify(subcommand, cwd) else {
         return Ok(AppTarget::CurrentDir);
     };
-    if !is_bare(command, args) {
-        return Ok(AppTarget::CurrentDir);
-    }
-
-    // `defaultPackage` is consulted before the workspace-shape dispatch (the
-    // non-workspace framework shape has no workspace metadata at all), but
-    // only at the invocation root: a member package's config must not
-    // redirect a command already running in that member.
-    let workspace = vite_workspace::find_workspace_root(cwd);
-    if at_invocation_root(workspace.as_ref().ok().map(|(_, rel)| rel.as_str()))
-        && let Some(target) = resolve_default_package(command, cwd)
-    {
-        return Ok(target);
-    }
-
-    // The package listing needs workspace metadata; anything unresolvable
-    // keeps today's behavior (the caller surfaces its own workspace errors).
-    let Ok((workspace_root, rel_from_root)) = workspace else {
-        return Ok(AppTarget::CurrentDir);
+    let workspace_root = match elicitation {
+        Elicitation::DefaultPackage(value) => {
+            return Ok(resolve_default_package(command, cwd, value));
+        }
+        Elicitation::WorkspaceRoot(workspace_root) => workspace_root,
     };
-    if !rel_from_root.as_str().is_empty()
-        || matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_))
-    {
-        return Ok(AppTarget::CurrentDir);
-    }
 
     let graph =
         vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;

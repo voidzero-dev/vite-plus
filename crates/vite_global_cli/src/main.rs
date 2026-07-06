@@ -62,6 +62,30 @@ pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize
 /// - `vp rebuild ...` → `vp pm rebuild ...`
 /// - `vp help [command] [args...]` → `vp [command] [args...] --help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
+/// Apply `-C <dir>`: resolve against `cwd`, validate, change the process
+/// cwd, and keep the POSIX `PWD` in sync like a real `cd`. Returns the new
+/// cwd, or the user-facing error message (not printed here: the completion
+/// peek must stay silent, and clap-path callers wrap it in their error type).
+pub(crate) fn apply_chdir(
+    cwd: &vite_path::AbsolutePath,
+    dir: &str,
+) -> Result<vite_path::AbsolutePathBuf, String> {
+    let target = cwd.join(dir).clean();
+    if !target.as_path().is_dir() {
+        return Err(format!("directory not found: {dir}"));
+    }
+    if let Err(e) = std::env::set_current_dir(target.as_path()) {
+        return Err(format!("Failed to change directory to {dir}: {e}"));
+    }
+    // Node tools commonly read process.env.PWD.
+    #[cfg(unix)]
+    // SAFETY: single-threaded startup, before any command logic runs.
+    unsafe {
+        std::env::set_var("PWD", target.as_path());
+    }
+    Ok(target)
+}
+
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
     loop {
@@ -333,10 +357,8 @@ async fn main() -> ExitCode {
         && let Some((dir, _)) = parse_leading_chdir(&args[1..])
         && let Ok(current) = vite_path::current_dir()
     {
-        let target = current.join(&dir).clean();
-        if target.as_path().is_dir() {
-            let _ = std::env::set_current_dir(target.as_path());
-        }
+        // Best-effort and silent: mid-typing values are often not (yet) dirs.
+        let _ = apply_chdir(&current, &dir);
     }
     CompleteEnv::with_factory(command_with_help).var("VP_COMPLETE").complete();
 
@@ -367,22 +389,13 @@ async fn main() -> ExitCode {
     // cwd (before any command logic runs) keeps `vite_path::current_dir()`
     // callers deep inside command implementations equivalent to the cd form.
     if let Some((dir, consumed)) = parse_leading_chdir(&args[1..]) {
-        cwd = cwd.join(&dir).clean();
-        if !cwd.as_path().is_dir() {
-            output::raw_stderr(&format!("directory not found: {dir}"));
-            return ExitCode::FAILURE;
-        }
-        if let Err(e) = std::env::set_current_dir(cwd.as_path()) {
-            output::error(&format!("Failed to change directory to {dir}: {e}"));
-            return ExitCode::FAILURE;
-        }
-        // Keep the POSIX PWD in sync, like a real `cd`: Node tools commonly
-        // read process.env.PWD.
-        #[cfg(unix)]
-        // SAFETY: single-threaded startup, before any command logic runs.
-        unsafe {
-            std::env::set_var("PWD", cwd.as_path());
-        }
+        cwd = match apply_chdir(&cwd, &dir) {
+            Ok(target) => target,
+            Err(message) => {
+                output::raw_stderr(&message);
+                return ExitCode::FAILURE;
+            }
+        };
         args.drain(1..=consumed);
     }
 

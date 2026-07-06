@@ -87,10 +87,8 @@ impl FieldMap {
     /// unanalyzable config would break unrelated commands).
     #[must_use]
     pub fn get_declared(&self, key: &str) -> Option<FieldValue> {
-        match &self.0 {
-            FieldMapInner::Closed(map) => map.get(key).cloned(),
-            FieldMapInner::Open(map) => map.get(key).cloned(),
-        }
+        let (FieldMapInner::Closed(map) | FieldMapInner::Open(map)) = &self.0;
+        map.get(key).cloned()
     }
 }
 
@@ -439,21 +437,12 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
             continue;
         };
 
-        match &mut inner {
-            FieldMapInner::Closed(map) => {
-                let value =
-                    expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-                map.insert(Box::from(key.as_ref()), value);
-            }
-            FieldMapInner::Open(map) => {
-                // Record explicit declarations, including NonStatic ones:
-                // `get_declared` must distinguish a written `key: expr` from a
-                // key that merely might exist behind the spread.
-                let value =
-                    expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-                map.insert(Box::from(key.as_ref()), value);
-            }
-        }
+        // Both variants record explicit declarations, including NonStatic
+        // ones: `get_declared` must distinguish a written `key: expr` from a
+        // key that merely might exist behind a spread.
+        let (FieldMapInner::Closed(map) | FieldMapInner::Open(map)) = &mut inner;
+        let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
+        map.insert(Box::from(key.as_ref()), value);
     }
 
     FieldMap(inner)

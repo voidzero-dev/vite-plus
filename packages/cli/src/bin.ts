@@ -72,6 +72,15 @@ if (args[0]?.startsWith('-C')) {
   process.argv = process.argv.slice(0, 2).concat(args);
 }
 
+// `vpr` is shorthand for `vp run`: the bin/vpr shim imports this file
+// unchanged (argv0 tells them apart, like the Rust shim dispatch), and the
+// rewrite happens here, after -C consumption, so `vpr -C <dir> <task>`
+// orders itself correctly by construction.
+if (path.basename(process.argv[1] ?? '') === 'vpr') {
+  args = ['run', ...args];
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
+
 // Transform `vp help [command]` into `vp [command] --help`
 if (args[0] === 'help' && args[1]) {
   args = [args[1], '--help', ...args.slice(2)];

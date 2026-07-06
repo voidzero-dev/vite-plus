@@ -47,12 +47,7 @@ impl CommandHandler for VitePlusCommandHandler {
         // A leading global `-C` runs verbatim: CLIArgs has no global flags, and
         // the spawned vp/vpr binary applies the directory change (and target
         // elicitation) exactly like a direct invocation.
-        if command
-            .args
-            .first()
-            .map(Str::as_str)
-            .is_some_and(|arg| arg == "-C" || (arg.starts_with("-C") && arg.len() > 2))
-        {
+        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
             return Ok(HandledCommand::Verbatim);
         }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.

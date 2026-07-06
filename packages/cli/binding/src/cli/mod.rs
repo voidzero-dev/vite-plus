@@ -51,6 +51,7 @@ async fn execute_direct_subcommand(
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
     let target = app_target::resolve_app_target(&subcommand, cwd)?;
+    let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
     let cwd = match &target {
         app_target::AppTarget::Exit(status) => return Ok(*status),
         app_target::AppTarget::Dir(dir) => dir,
@@ -70,10 +71,11 @@ async fn execute_direct_subcommand(
         let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
             .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
             .collect();
-        // The tool runs with `cwd` as its working directory; keep the POSIX
-        // PWD consistent with it, like a real `cd` (matters when elicitation
-        // retargeted the command to another package).
-        if cfg!(unix) {
+        // When elicitation retargeted the command, the tool runs with the
+        // target as its working directory: keep the POSIX PWD consistent,
+        // like a real `cd`. Untargeted runs keep the caller's PWD verbatim
+        // (it may legitimately differ from cwd through shell symlinks).
+        if cfg!(unix) && retargeted {
             envs.insert(Arc::from(OsStr::new("PWD")), Arc::from(cwd.as_path().as_os_str()));
         }
         envs
