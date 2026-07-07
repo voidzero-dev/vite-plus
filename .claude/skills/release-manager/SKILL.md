@@ -121,6 +121,7 @@ Merging this PR will trigger the release workflow.
 ### Categorization rules
 
 - Every PR from `generate-notes` appears exactly once. No PR is listed both in Highlights and a section below.
+- **Describe the net change between the two released versions, not intra-cycle churn.** When several PRs touch the same area within one release (one narrows a behavior, a later one broadens it back), the reader only sees the delta from `v<prev>` to `v<curr>`; describe that once, listing every PR number, and do not narrate a regression that was introduced and then fixed inside the cycle. Apply this to the intro/theme sentence too.
 - `feat` -> Features, `fix` -> Fixes & Enhancements, `refactor` and `revert` -> Refactor (never Chore), `docs` -> Docs, `test` / `ci` / `chore` -> Chore.
 - `feat(docs)` goes in Docs when the user-facing surface is the docs site.
 - Highlights: 3-5 changes a vite-plus user will notice (new capabilities, security, major fixes). Skip developer-tooling-only conveniences. Each highlight ends with `, by @<author>`, same as every other entry.
@@ -167,7 +168,7 @@ echo "$BODY" | tail -1                                                          
 
 ## 4. Optional: preview build smoke test (before merging)
 
-This step is optional and runs **after the changelog (step 3) is complete and before merging (step 6)**. **Ask the release manager whether to run it**; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes).
+This step is optional and runs **after the changelog (step 3) is complete and before merging (step 6)**. **Ask the release manager whether to run it**; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes). If the release manager approves, **read and follow [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md) first**, then validate against the **full ecosystem-ci catalog** (every runnable fork), not a single project.
 
 If the release manager says yes:
 
@@ -178,9 +179,9 @@ If the release manager says yes:
    ```
 
 2. Wait for the `Publish preview build` workflow run on the release branch to succeed (it packs the built package directories and registers the commit with the registry bridge, then comments the build info on the PR).
-3. Verify the build against a real project with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the preview commit against a local project, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
+3. Verify the build against every runnable project in the catalog with the `test-pkg-pr-new-migrate` skill: it runs `vp migrate` from the preview commit against each local checkout, with dependencies resolved through the registry bridge. Report the outcome to the release manager before moving on.
 
-**Choosing a target project.** The smoke-test catalog and the local-setup rules live in the ecosystem-ci org: [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md), with the machine-readable list in [`ecosystem.json`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/ecosystem.json) (each fork's upstream, tracked branch, and package manager). Pick one whose stack matches the release's risk area (a pnpm monorepo for catalog/override changes, a bun project for install-path changes, an `other`/native project for binding changes); filter `ecosystem.json` with `jq`. Prefer a fork pinned to the immediately previous release, so migrate does a real upgrade rather than a no-op.
+**The catalog.** The smoke-test catalog and the local-setup rules live in the ecosystem-ci org: [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md), with the machine-readable list in [`ecosystem.json`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/ecosystem.json) (each fork's upstream, tracked branch, and package manager). Run every runnable fork; filter `ecosystem.json` with `jq` to skip non-JS `other` repos and any the release manager says to ignore. Forks pinned to the immediately previous release exercise a real upgrade rather than a no-op.
 
 > **Mandatory: open any test PR against the `vite-plus-ecosystem-ci` fork, never the upstream repo.** `gh pr create` inside a fork defaults its base repo to the parent (upstream), so pass `--repo vite-plus-ecosystem-ci/<repo>` (or run `gh repo set-default vite-plus-ecosystem-ci/<repo>` first). See TESTING.md.
 
@@ -194,7 +195,7 @@ git -C ~/git/github.com/vite-plus-ecosystem-ci/$repo checkout "$branch"
 # cleanup after the release: rm -rf ~/git/github.com/vite-plus-ecosystem-ci
 ```
 
-The `.github` repo also ships `scripts/setup-local.sh <repo>`, which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step. When in doubt, ask the release manager which project(s) to target.
+The `.github` repo also ships `scripts/setup-local.sh <repo>` (or `--all`), which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step.
 
 **Validate in the project's own CI (optional, deeper).** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
 
@@ -292,7 +293,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    vp upgrade && vp --version                       # bundled tool versions sane
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
-   `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
+   `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. Caveat: `vp upgrade` exists only on standalone-installer (`~/.vite-plus`) installs; if the release manager's `vp` is managed another way (e.g. mise), `vp upgrade` is missing and `vp update` is not a substitute (it runs `pnpm update` on the current project, so never run it inside the vite-plus checkout). In that case rely on the npm/GHCR checks plus the in-container `vp --version`. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
 
    ```bash
    TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:voidzero-dev/vite-plus:pull" \
@@ -304,7 +305,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
 
    ```markdown
-   **vite-plus vX.Y.Z is out** :tada:
+   :viteplus: **vite-plus vX.Y.Z is out** :tada:
 
    <One short theme line.>
 
@@ -321,10 +322,10 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    **Upgrade**: `vp upgrade`
 
    Full notes: <https://github.com/voidzero-dev/vite-plus/releases/tag/vX.Y.Z>
-   Thanks to new contributors @a, @b :wave:
+   Thanks to new contributors [@a](https://github.com/a), [@b](https://github.com/b) :wave:
    ```
 
-   The release-notes URL stays in `<angle brackets>` to suppress the embed; a blog post link (if any) goes bare so it unfurls.
+   The release-notes URL stays in `<angle brackets>` to suppress the embed; a blog post link (if any) goes bare so it unfurls. Lead the header with the server custom emoji `:viteplus:` (before the bold title, since it is a custom emoji). Link contributors as `[@user](https://github.com/user)` because Discord does not auto-link a bare GitHub handle. Keep the whole message user-facing: exclude vite-plus's own tooling/CI work.
 
    Never post to Discord yourself. Save the draft to a file and post it as a comment on the release PR wrapped in a fenced ` ```markdown ` block, so the `@mentions` do not ping anyone on GitHub, the emoji shortcodes stay literal, and any team member can copy-paste it into Discord.
 
@@ -334,7 +335,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
 - [ ] PR description written from the head branch data; every PR exactly once; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
-- [ ] Smoke test offered to the release manager; if accepted, preview build published and verified via `test-pkg-pr-new-migrate`
+- [ ] Smoke test offered to the release manager; if accepted, preview build published and verified across the full ecosystem-ci catalog via `test-pkg-pr-new-migrate` (following TESTING.md)
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
