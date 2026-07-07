@@ -2,6 +2,7 @@ pub mod add;
 pub mod approve_builds;
 pub mod audit;
 pub mod cache;
+pub mod ci;
 pub mod config;
 pub mod dedupe;
 pub mod deprecate;
