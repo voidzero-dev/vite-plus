@@ -1,55 +1,55 @@
-import { existsSync } from "node:fs";
-import { copyFile, cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import path from "node:path";
-import { dirname, join, parse, resolve, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync } from 'node:fs';
+import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { dirname, join, parse, resolve, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { format } from "oxfmt";
+import { format } from 'oxfmt';
 
 // Convert native path to POSIX format for glob patterns
 function toPosixPath(nativePath: string): string {
   return nativePath.split(path.sep).join(path.posix.sep);
 }
 
-import { build, type BuildOptions } from "rolldown";
-import { dts } from "rolldown-plugin-dts";
-import { glob } from "tinyglobby";
+import { build, type BuildOptions } from 'rolldown';
+import { dts } from 'rolldown-plugin-dts';
+import { glob } from 'tinyglobby';
 
-import { generateLicenseFile } from "../../scripts/generate-license.js";
-import viteRolldownConfig from "../../vite/packages/vite/rolldown.config.js";
-import cliPkgJson from "../cli/package.json" with { type: "json" };
-import { buildCjsDeps } from "./build-support/build-cjs-deps.js";
-import { replaceThirdPartyCjsRequires } from "./build-support/find-create-require.js";
-import { getNativePlatformPackageName } from "./build-support/native-platform-packages.js";
-import { RewriteImportsPlugin } from "./build-support/rewrite-imports.js";
+import { generateLicenseFile } from '../../scripts/generate-license.js';
+import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
+import cliPkgJson from '../cli/package.json' with { type: 'json' };
+import { buildCjsDeps } from './build-support/build-cjs-deps.js';
+import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
+import { getNativePlatformPackageName } from './build-support/native-platform-packages.js';
+import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
 import {
   createRolldownRewriteRules,
   createViteRewriteRules,
   rewriteModuleSpecifiers,
   type ReplacementRule,
-} from "./build-support/rewrite-module-specifiers.js";
-import pkgJson from "./package.json" with { type: "json" };
+} from './build-support/rewrite-module-specifiers.js';
+import pkgJson from './package.json' with { type: 'json' };
 
-const projectDir = join(fileURLToPath(import.meta.url), "..");
+const projectDir = join(fileURLToPath(import.meta.url), '..');
 
 const rolldownPluginUtilsDir = resolve(
   projectDir,
-  "..",
-  "..",
-  "rolldown",
-  "packages",
-  "rolldown",
-  "node_modules",
-  "@rolldown",
-  "pluginutils",
+  '..',
+  '..',
+  'rolldown',
+  'packages',
+  'rolldown',
+  'node_modules',
+  '@rolldown',
+  'pluginutils',
 );
 
-const rolldownSourceDir = resolve(projectDir, "..", "..", "rolldown", "packages", "rolldown");
+const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
 
-const rolldownViteSourceDir = resolve(projectDir, "..", "..", "vite", "packages", "vite");
+const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'vite', 'packages', 'vite');
 
-const tsdownSourceDir = resolve(projectDir, "node_modules/tsdown");
+const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
 // Main build orchestration
 await bundleRolldownPluginutils();
@@ -60,25 +60,25 @@ await brandTsdown();
 await wireBundledTsdownExtensions();
 await bundleVitepress();
 generateLicenseFile({
-  title: "Vite-Plus core license",
-  packageName: "Vite-Plus",
-  outputPath: join(projectDir, "LICENSE"),
-  coreLicensePath: join(projectDir, "..", "..", "LICENSE"),
-  bundledPaths: [join(projectDir, "dist")],
+  title: 'Vite-Plus core license',
+  packageName: 'Vite-Plus',
+  outputPath: join(projectDir, 'LICENSE'),
+  coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
+  bundledPaths: [join(projectDir, 'dist')],
   resolveFrom: [
     projectDir,
-    join(projectDir, "..", ".."),
-    join(projectDir, "..", "..", "rolldown"),
-    join(projectDir, "..", "..", "vite"),
+    join(projectDir, '..', '..'),
+    join(projectDir, '..', '..', 'rolldown'),
+    join(projectDir, '..', '..', 'vite'),
   ],
   extraPackages: [
     {
       packageDir: rolldownSourceDir,
-      licensePath: join(projectDir, "..", "..", "rolldown", "LICENSE"),
+      licensePath: join(projectDir, '..', '..', 'rolldown', 'LICENSE'),
     },
     {
       packageDir: rolldownPluginUtilsDir,
-      licensePath: join(rolldownPluginUtilsDir, "LICENSE"),
+      licensePath: join(rolldownPluginUtilsDir, 'LICENSE'),
     },
     {
       packageDir: rolldownViteSourceDir,
@@ -87,48 +87,48 @@ generateLicenseFile({
       packageDir: tsdownSourceDir,
     },
     {
-      packageDir: join(projectDir, "..", "..", "node_modules", "vitepress"),
+      packageDir: join(projectDir, '..', '..', 'node_modules', 'vitepress'),
     },
   ],
 });
-if (!existsSync(join(projectDir, "LICENSE"))) {
-  throw new Error("LICENSE was not generated during build");
+if (!existsSync(join(projectDir, 'LICENSE'))) {
+  throw new Error('LICENSE was not generated during build');
 }
 await mergePackageJson();
 
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
-    config.tsconfig = join(projectDir, "tsconfig.json");
+    config.tsconfig = join(projectDir, 'tsconfig.json');
     config.cwd = projectDir;
 
     if (Array.isArray(config.external)) {
       config.external = config.external.filter((external) => {
         return !(
-          (typeof external === "string" &&
-            (external === "picomatch" ||
-              external === "tinyglobby" ||
-              external === "fdir" ||
-              external === "rolldown")) ||
-          external === "yaml" ||
-          (external instanceof RegExp && (external.test("rolldown/") || external.test("vite/")))
+          (typeof external === 'string' &&
+            (external === 'picomatch' ||
+              external === 'tinyglobby' ||
+              external === 'fdir' ||
+              external === 'rolldown')) ||
+          external === 'yaml' ||
+          (external instanceof RegExp && (external.test('rolldown/') || external.test('vite/')))
         );
       });
     }
 
-    if (typeof config.output === "object" && !Array.isArray(config.output)) {
-      config.output.dir = "./dist/vite";
+    if (typeof config.output === 'object' && !Array.isArray(config.output)) {
+      config.output.dir = './dist/vite';
     }
 
-    if (config.platform === "node") {
+    if (config.platform === 'node') {
       if (config.resolve) {
         if (Array.isArray(config.resolve?.conditionNames)) {
-          config.resolve?.conditionNames?.unshift("dev");
+          config.resolve?.conditionNames?.unshift('dev');
         } else {
-          config.resolve.conditionNames = ["dev"];
+          config.resolve.conditionNames = ['dev'];
         }
       } else {
         config.resolve = {
-          conditionNames: ["dev"],
+          conditionNames: ['dev'],
         };
       }
     }
@@ -138,9 +138,9 @@ async function buildVite() {
         // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
         RewriteImportsPlugin,
         {
-          name: "fix-module-runner-dynamic-request-url",
+          name: 'fix-module-runner-dynamic-request-url',
           transform(_, id, meta) {
-            if (id.endsWith(join("vite", "src", "module-runner", "runner.ts"))) {
+            if (id.endsWith(join('vite', 'src', 'module-runner', 'runner.ts'))) {
               const { magicString } = meta;
               if (magicString) {
                 // Fix dynamicRequest to use the server-normalized module URL
@@ -164,9 +164,9 @@ async function buildVite() {
           },
         },
         {
-          name: "rewrite-static-paths",
+          name: 'rewrite-static-paths',
           transform(_, id, meta) {
-            if (id.endsWith(join("vite", "src", "node", "constants.ts"))) {
+            if (id.endsWith(join('vite', 'src', 'node', 'constants.ts'))) {
               const { magicString } = meta;
               if (magicString) {
                 magicString.replace(
@@ -206,22 +206,22 @@ async function buildVite() {
           },
         },
         {
-          name: "suppress-vite-version-only-reporter-line",
+          name: 'suppress-vite-version-only-reporter-line',
           transform(code, id) {
-            if (!id.endsWith(join("vite", "src", "node", "plugins", "reporter.ts"))) {
+            if (!id.endsWith(join('vite', 'src', 'node', 'plugins', 'reporter.ts'))) {
               return undefined;
             }
 
             // Upstream native reporter can emit a redundant standalone "vite vX.Y.Z" line.
             // Filter it at source so snapshots and CLI output remain stable.
-            if (code.includes("VITE_VERSION_ONLY_LINE_RE")) {
+            if (code.includes('VITE_VERSION_ONLY_LINE_RE')) {
               return undefined;
             }
 
             const constLine =
-              "const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/";
+              'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/';
             const logInfoLine =
-              "        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,";
+              '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,';
 
             if (!code.includes(constLine) || !code.includes(logInfoLine)) {
               return undefined;
@@ -250,10 +250,10 @@ async function buildVite() {
         },
         ...config.plugins.filter((plugin) => {
           return !(
-            typeof plugin === "object" &&
+            typeof plugin === 'object' &&
             plugin !== null &&
-            "name" in plugin &&
-            (plugin.name === "rollup-plugin-license" || plugin.name === "bundle-limit")
+            'name' in plugin &&
+            (plugin.name === 'rollup-plugin-license' || plugin.name === 'bundle-limit')
           );
         }),
       ];
@@ -274,25 +274,25 @@ async function buildVite() {
 
   // Copy additional vite files
 
-  await cp(join(rolldownViteSourceDir, "misc"), join(projectDir, "dist/vite/misc"), {
+  await cp(join(rolldownViteSourceDir, 'misc'), join(projectDir, 'dist/vite/misc'), {
     recursive: true,
   });
 
   // Copy and rewrite .d.ts files
   // Normalize glob pattern to use forward slashes on Windows
   const dtsFiles = await glob(
-    toPosixPath(join(rolldownViteSourceDir, "dist", "node", "**/*.d.ts")),
+    toPosixPath(join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts')),
     { absolute: true },
   );
 
   for (const dtsFile of dtsFiles) {
-    const file = await readFile(dtsFile, "utf-8");
+    const file = await readFile(dtsFile, 'utf-8');
     // Normalize paths to use forward slashes for consistent replacement on Windows
     const relativePath = toPosixPath(dtsFile).replace(
-      toPosixPath(join(rolldownViteSourceDir, "dist", "node")),
-      "",
+      toPosixPath(join(rolldownViteSourceDir, 'dist', 'node')),
+      '',
     );
-    const dstFilePath = join(projectDir, "dist", "vite", "node", relativePath);
+    const dstFilePath = join(projectDir, 'dist', 'vite', 'node', relativePath);
     const rewrittenFile = rewriteModuleSpecifiers(file, dtsFile, {
       rules: [...createViteRewriteRules(pkgJson.name), ...createRolldownRewriteRules(pkgJson.name)],
     });
@@ -301,20 +301,20 @@ async function buildVite() {
 
   // Copy type files
   // Normalize glob pattern to use forward slashes on Windows
-  const srcTypeFiles = await glob(toPosixPath(join(rolldownViteSourceDir, "types", "**/*.d.ts")), {
+  const srcTypeFiles = await glob(toPosixPath(join(rolldownViteSourceDir, 'types', '**/*.d.ts')), {
     absolute: true,
   });
 
-  await mkdir(join(projectDir, "dist/vite/types"), { recursive: true });
+  await mkdir(join(projectDir, 'dist/vite/types'), { recursive: true });
 
   for (const srcDtsFile of srcTypeFiles) {
-    const file = await readFile(srcDtsFile, "utf-8");
+    const file = await readFile(srcDtsFile, 'utf-8');
     // Normalize paths to use forward slashes for consistent replacement on Windows
     const relativePath = toPosixPath(srcDtsFile).replace(
-      toPosixPath(join(rolldownViteSourceDir, "types")),
-      "",
+      toPosixPath(join(rolldownViteSourceDir, 'types')),
+      '',
     );
-    const dstFilePath = join(projectDir, "dist", "vite", "types", relativePath);
+    const dstFilePath = join(projectDir, 'dist', 'vite', 'types', relativePath);
     const dir = dirname(dstFilePath);
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
@@ -327,42 +327,42 @@ async function buildVite() {
     // declared there without `export`. Bundling vite's types into a downstream
     // project then fails with `[MISSING_EXPORT]`. Add the missing `export` here
     // until it is fixed upstream (drop this once vite exports it).
-    if (relativePath === "/importGlob.d.ts") {
+    if (relativePath === '/importGlob.d.ts') {
       const knownQueryTypeMapPattern = /^type KnownQueryTypeMap\b/m;
       if (!knownQueryTypeMapPattern.test(rewrittenFile)) {
         throw new Error(
-          "Expected vite types/importGlob.d.ts to declare non-exported KnownQueryTypeMap. " +
-            "Upstream may have fixed vitejs/vite#21863; remove the KnownQueryTypeMap export workaround from packages/core/build.ts.",
+          'Expected vite types/importGlob.d.ts to declare non-exported KnownQueryTypeMap. ' +
+            'Upstream may have fixed vitejs/vite#21863; remove the KnownQueryTypeMap export workaround from packages/core/build.ts.',
         );
       }
       rewrittenFile = rewrittenFile.replace(
         knownQueryTypeMapPattern,
-        "export type KnownQueryTypeMap",
+        'export type KnownQueryTypeMap',
       );
     }
     await writeFile(dstFilePath, rewrittenFile);
   }
 
   await cp(
-    join(rolldownViteSourceDir, "client.d.ts"),
-    join(projectDir, "dist", "vite", "client.d.ts"),
+    join(rolldownViteSourceDir, 'client.d.ts'),
+    join(projectDir, 'dist', 'vite', 'client.d.ts'),
   );
 }
 
 async function bundleRolldownPluginutils() {
-  await mkdir(join(projectDir, "dist", "pluginutils"), { recursive: true });
+  await mkdir(join(projectDir, 'dist', 'pluginutils'), { recursive: true });
 
-  await cp(join(rolldownPluginUtilsDir, "dist"), join(projectDir, "dist", "pluginutils"), {
+  await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginutils'), {
     recursive: true,
   });
 }
 
 async function bundleRolldown() {
-  await mkdir(join(projectDir, "dist/rolldown"), { recursive: true });
+  await mkdir(join(projectDir, 'dist/rolldown'), { recursive: true });
 
   const rolldownFiles = new Set<string>();
 
-  await cp(join(rolldownSourceDir, "dist"), join(projectDir, "dist/rolldown"), {
+  await cp(join(rolldownSourceDir, 'dist'), join(projectDir, 'dist/rolldown'), {
     recursive: true,
     filter: async (from, to) => {
       if ((await stat(from)).isFile()) {
@@ -377,17 +377,17 @@ async function bundleRolldown() {
   // Rewrite @rolldown/pluginutils imports in JS and type declaration files
   for (const file of rolldownFiles) {
     if (
-      file.endsWith(".mjs") ||
-      file.endsWith(".js") ||
-      file.endsWith(".d.mts") ||
-      file.endsWith(".d.ts")
+      file.endsWith('.mjs') ||
+      file.endsWith('.js') ||
+      file.endsWith('.d.mts') ||
+      file.endsWith('.d.ts')
     ) {
-      let source = await readFile(file, "utf-8");
+      let source = await readFile(file, 'utf-8');
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
       if (process.env.RELEASE_BUILD) {
         const rolldownBindingVersion = (
-          await import(toPosixPath(relative(projectDir, join(rolldownSourceDir, "package.json"))), {
-            with: { type: "json" },
+          await import(toPosixPath(relative(projectDir, join(rolldownSourceDir, 'package.json'))), {
+            with: { type: 'json' },
           })
         ).default.version;
         source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, (specifier, suffix) => {
@@ -415,7 +415,7 @@ async function bundleRolldown() {
 }
 
 async function bundleTsdown() {
-  await mkdir(join(projectDir, "dist/tsdown/dist"), { recursive: true });
+  await mkdir(join(projectDir, 'dist/tsdown/dist'), { recursive: true });
 
   const require = createRequire(import.meta.url);
 
@@ -426,7 +426,7 @@ async function bundleTsdown() {
   // `tsdown/internal` against the bundled tsdown at build time, so `vp pack
   // --exe` and CSS bundling work without users installing anything extra.
   // See https://github.com/voidzero-dev/vite-plus/issues/1586
-  const bundledTsdownPackages = new Set(["@tsdown/exe", "@tsdown/css"]);
+  const bundledTsdownPackages = new Set(['@tsdown/exe', '@tsdown/css']);
 
   // Everything else in tsdown's peer dependencies stays external. `lightningcss`
   // (a native module) and `postcss` also stay external: `@tsdown/css` pulls them
@@ -434,8 +434,8 @@ async function bundleTsdown() {
   // at runtime and CSS bundling works without users installing anything.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
-    "lightningcss",
-    "postcss",
+    'lightningcss',
+    'postcss',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
@@ -445,25 +445,25 @@ async function bundleTsdown() {
   // extensions as stable named entries (`tsdown-exe.js`, `tsdown-css.js`).
   await build({
     input: {
-      run: join(tsdownSourceDir, "dist/run.mjs"),
-      index: join(tsdownSourceDir, "dist/index.mjs"),
-      "tsdown-exe": require.resolve("@tsdown/exe"),
-      "tsdown-css": require.resolve("@tsdown/css"),
+      run: join(tsdownSourceDir, 'dist/run.mjs'),
+      index: join(tsdownSourceDir, 'dist/index.mjs'),
+      'tsdown-exe': require.resolve('@tsdown/exe'),
+      'tsdown-css': require.resolve('@tsdown/css'),
     },
     output: {
-      format: "esm",
+      format: 'esm',
       cleanDir: true,
-      dir: join(projectDir, "dist/tsdown"),
-      entryFileNames: "[name].js",
+      dir: join(projectDir, 'dist/tsdown'),
+      entryFileNames: '[name].js',
     },
-    platform: "node",
+    platform: 'node',
     external: isExternal,
     plugins: [
       RewriteImportsPlugin,
       {
-        name: "find-third-party-cjs-requires",
+        name: 'find-third-party-cjs-requires',
         async transform(code, id) {
-          if (id.endsWith(".js") || id.endsWith(".mjs")) {
+          if (id.endsWith('.js') || id.endsWith('.mjs')) {
             const { code: updatedCode, modules: thirdPartyModules } =
               await replaceThirdPartyCjsRequires(code, id, new Set(tsdownExternal));
             for (const module of thirdPartyModules) {
@@ -477,15 +477,15 @@ async function bundleTsdown() {
     ],
   });
 
-  await buildCjsDeps(thirdPartyCjsModules, join(projectDir, "dist/tsdown"));
+  await buildCjsDeps(thirdPartyCjsModules, join(projectDir, 'dist/tsdown'));
 
   await build({
     input: {
-      "index-types": join(tsdownSourceDir, "dist/index.d.mts"),
+      'index-types': join(tsdownSourceDir, 'dist/index.d.mts'),
     },
     output: {
-      format: "esm",
-      dir: join(projectDir, "dist/tsdown"),
+      format: 'esm',
+      dir: join(projectDir, 'dist/tsdown'),
     },
     external: isExternal,
     plugins: [
@@ -500,23 +500,23 @@ async function bundleTsdown() {
   // Copy esm-shims.js to dist/ so tsdown's shims option can resolve it.
   // tsdown resolves this file via path.resolve(import.meta.dirname, '..', 'esm-shims.js'),
   // which means it expects the file at dist/esm-shims.js (one level up from dist/tsdown/).
-  await copyFile(join(tsdownSourceDir, "esm-shims.js"), join(projectDir, "dist/esm-shims.js"));
+  await copyFile(join(tsdownSourceDir, 'esm-shims.js'), join(projectDir, 'dist/esm-shims.js'));
 
   // Copy client.d.ts to dist/tsdown/ to expose it as the vite-plus/pack/client entry point,
   // equivalent to tsdown/client for registering bundler type features with TypeScript.
-  await copyFile(join(tsdownSourceDir, "client.d.ts"), join(projectDir, "dist/tsdown/client.d.ts"));
+  await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
 async function brandTsdown() {
-  const tsdownDistDir = join(projectDir, "dist/tsdown");
-  const buildFiles = await glob(toPosixPath(join(tsdownDistDir, "build-*.js")), { absolute: true });
+  const tsdownDistDir = join(projectDir, 'dist/tsdown');
+  const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
   // The logger code lives in a shared chunk whose name depends on rolldown's
   // chunking (e.g. `main-*.js` or `debug-*.js`), so scan every chunk for it.
-  const loggerCandidateFiles = await glob(toPosixPath(join(tsdownDistDir, "*.js")), {
+  const loggerCandidateFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), {
     absolute: true,
   });
   if (buildFiles.length === 0) {
-    throw new Error("brandTsdown: no build chunk found in dist/tsdown/");
+    throw new Error('brandTsdown: no build chunk found in dist/tsdown/');
   }
 
   const search = '"tsdown <your-file>"';
@@ -530,7 +530,7 @@ async function brandTsdown() {
     },
     {
       search:
-        "if (entries.length === 0) throw new Error(`${nameLabel} Cannot find entry: ${JSON.stringify(entry)}`);",
+        'if (entries.length === 0) throw new Error(`${nameLabel} Cannot find entry: ${JSON.stringify(entry)}`);',
       replacement:
         'if (entries.length === 0) throw new Error(`${nameLabel ? `${nameLabel} ` : ""}Cannot find entry: ${JSON.stringify(entry)}`);',
     },
@@ -539,7 +539,7 @@ async function brandTsdown() {
   let buildErrorsPatched = false;
 
   for (const buildFile of buildFiles) {
-    let content = await readFile(buildFile, "utf-8");
+    let content = await readFile(buildFile, 'utf-8');
     let changed = false;
     if (!content.includes(search)) {
       // Keep going to apply other safety patches below.
@@ -559,7 +559,7 @@ async function brandTsdown() {
     }
 
     if (changed) {
-      await writeFile(buildFile, content, "utf-8");
+      await writeFile(buildFile, content, 'utf-8');
     }
   }
 
@@ -567,7 +567,7 @@ async function brandTsdown() {
     throw new Error(`brandTsdown: pattern ${search} not found in any build chunk`);
   }
   if (!buildErrorsPatched) {
-    throw new Error("brandTsdown: build error message patterns not found in any build chunk");
+    throw new Error('brandTsdown: build error message patterns not found in any build chunk');
   }
 
   const loggerPatches = [
@@ -598,7 +598,7 @@ async function brandTsdown() {
   let loggerPatched = false;
 
   for (const candidateFile of loggerCandidateFiles) {
-    let content = await readFile(candidateFile, "utf-8");
+    let content = await readFile(candidateFile, 'utf-8');
     let changed = false;
     for (const { search, replacement } of loggerPatches) {
       if (content.includes(search)) {
@@ -609,13 +609,13 @@ async function brandTsdown() {
     if (!changed) {
       continue;
     }
-    await writeFile(candidateFile, content, "utf-8");
+    await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
   }
 
   if (!loggerPatched) {
-    throw new Error("brandTsdown: logger prefix patterns not found in any chunk");
+    throw new Error('brandTsdown: logger prefix patterns not found in any chunk');
   }
 }
 
@@ -623,12 +623,12 @@ async function brandTsdown() {
 // tsdown so they load from the local chunks instead of resolving external
 // top-level packages. See https://github.com/voidzero-dev/vite-plus/issues/1586
 async function wireBundledTsdownExtensions() {
-  const tsdownDistDir = join(projectDir, "dist/tsdown");
+  const tsdownDistDir = join(projectDir, 'dist/tsdown');
   // Scan every emitted chunk, not just `build-*.js`: which chunk rolldown hoists
   // these call sites into depends on its chunking heuristics, so don't pin to one.
-  const chunkFiles = await glob(toPosixPath(join(tsdownDistDir, "*.js")), { absolute: true });
+  const chunkFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), { absolute: true });
   if (chunkFiles.length === 0) {
-    throw new Error("wireBundledTsdownExtensions: no chunk found in dist/tsdown/");
+    throw new Error('wireBundledTsdownExtensions: no chunk found in dist/tsdown/');
   }
 
   // Route `@tsdown/exe` and `@tsdown/css` to the bundled entries.
@@ -645,7 +645,7 @@ async function wireBundledTsdownExtensions() {
   // way so a silent miss (no rewrite and no dedup) fails the build.
   let cssLoadWired = false;
   for (const chunkFile of chunkFiles) {
-    let content = await readFile(chunkFile, "utf-8");
+    let content = await readFile(chunkFile, 'utf-8');
     let changed = false;
     if (content.includes('importWithError("@tsdown/exe")')) {
       content = content.replaceAll('importWithError("@tsdown/exe")', 'import("./tsdown-exe.js")');
@@ -653,7 +653,7 @@ async function wireBundledTsdownExtensions() {
       changed = true;
     }
     if (content.includes('pkgExists("@tsdown/css")')) {
-      content = content.replaceAll('pkgExists("@tsdown/css")', "true");
+      content = content.replaceAll('pkgExists("@tsdown/css")', 'true');
       cssWired = true;
       changed = true;
     }
@@ -675,20 +675,20 @@ async function wireBundledTsdownExtensions() {
     throw new Error('wireBundledTsdownExtensions: `pkgExists("@tsdown/css")` not found');
   }
   if (!cssLoadWired) {
-    throw new Error("wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported");
+    throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
   }
 }
 
 // Actually do nothing now, we will polish it in the future when `vitepress` is ready
 async function bundleVitepress() {
-  const vitepressSourceDir = resolve(projectDir, "node_modules/vitepress");
-  const vitepressDestDir = join(projectDir, "dist/vitepress");
+  const vitepressSourceDir = resolve(projectDir, 'node_modules/vitepress');
+  const vitepressDestDir = join(projectDir, 'dist/vitepress');
 
   await mkdir(vitepressDestDir, { recursive: true });
 
   // Copy dist directory
   // Normalize glob pattern to use forward slashes on Windows
-  const vitepressDistFiles = await glob(toPosixPath(join(vitepressSourceDir, "dist", "**/*")), {
+  const vitepressDistFiles = await glob(toPosixPath(join(vitepressSourceDir, 'dist', '**/*')), {
     absolute: true,
   });
 
@@ -700,8 +700,8 @@ async function bundleVitepress() {
 
     // Normalize paths to use forward slashes for consistent replacement on Windows
     const relativePath = toPosixPath(file).replace(
-      toPosixPath(join(vitepressSourceDir, "dist")),
-      "",
+      toPosixPath(join(vitepressSourceDir, 'dist')),
+      '',
     );
     const destPath = join(vitepressDestDir, relativePath);
 
@@ -709,24 +709,24 @@ async function bundleVitepress() {
 
     // Rewrite vite imports in .js and .mjs files
     if (
-      file.endsWith(".js") ||
-      file.endsWith(".mjs") ||
-      file.endsWith(".d.mts") ||
-      file.endsWith(".d.ts")
+      file.endsWith('.js') ||
+      file.endsWith('.mjs') ||
+      file.endsWith('.d.mts') ||
+      file.endsWith('.d.ts')
     ) {
-      const content = await readFile(file, "utf-8");
+      const content = await readFile(file, 'utf-8');
       // Note: For vitepress, 'vite' -> 'pkgJson.name/vite' (vite subpath)
       const rewrittenContent = rewriteModuleSpecifiers(content, file, {
-        rules: [{ from: "vite", to: `${pkgJson.name}/vite` }],
+        rules: [{ from: 'vite', to: `${pkgJson.name}/vite` }],
       });
-      await writeFile(destPath, rewrittenContent, "utf-8");
+      await writeFile(destPath, rewrittenContent, 'utf-8');
     } else {
       await copyFile(file, destPath);
     }
   }
 
   // Copy top-level .d.ts files
-  const vitepressTypeFiles = ["client.d.ts", "theme.d.ts", "theme-without-fonts.d.ts"];
+  const vitepressTypeFiles = ['client.d.ts', 'theme.d.ts', 'theme-without-fonts.d.ts'];
   for (const typeFile of vitepressTypeFiles) {
     const sourcePath = join(vitepressSourceDir, typeFile);
     const destPath = join(vitepressDestDir, typeFile);
@@ -738,12 +738,12 @@ async function bundleVitepress() {
   }
 
   // Copy types directory
-  const vitepressTypesDir = join(vitepressSourceDir, "types");
-  const vitepressTypesDestDir = join(vitepressDestDir, "types");
+  const vitepressTypesDir = join(vitepressSourceDir, 'types');
+  const vitepressTypesDestDir = join(vitepressDestDir, 'types');
   await mkdir(vitepressTypesDestDir, { recursive: true });
 
   // Normalize glob pattern to use forward slashes on Windows
-  const vitepressTypesFiles = await glob(toPosixPath(join(vitepressTypesDir, "**/*")), {
+  const vitepressTypesFiles = await glob(toPosixPath(join(vitepressTypesDir, '**/*')), {
     absolute: true,
   });
 
@@ -754,7 +754,7 @@ async function bundleVitepress() {
     }
 
     // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = toPosixPath(file).replace(toPosixPath(vitepressTypesDir), "");
+    const relativePath = toPosixPath(file).replace(toPosixPath(vitepressTypesDir), '');
     const destPath = join(vitepressTypesDestDir, relativePath);
 
     await mkdir(parse(destPath).dir, { recursive: true });
@@ -763,15 +763,15 @@ async function bundleVitepress() {
 }
 
 async function mergePackageJson() {
-  const tsdownPkgPath = join(tsdownSourceDir, "package.json");
-  const rolldownPkgPath = join(rolldownSourceDir, "package.json");
-  const vitePkgPath = join(rolldownViteSourceDir, "package.json");
-  const destPkgPath = resolve(projectDir, "package.json");
+  const tsdownPkgPath = join(tsdownSourceDir, 'package.json');
+  const rolldownPkgPath = join(rolldownSourceDir, 'package.json');
+  const vitePkgPath = join(rolldownViteSourceDir, 'package.json');
+  const destPkgPath = resolve(projectDir, 'package.json');
 
-  const tsdownPkg = JSON.parse(await readFile(tsdownPkgPath, "utf-8"));
-  const rolldownPkg = JSON.parse(await readFile(rolldownPkgPath, "utf-8"));
-  const vitePkg = JSON.parse(await readFile(vitePkgPath, "utf-8"));
-  const destPkg = JSON.parse(await readFile(destPkgPath, "utf-8"));
+  const tsdownPkg = JSON.parse(await readFile(tsdownPkgPath, 'utf-8'));
+  const rolldownPkg = JSON.parse(await readFile(rolldownPkgPath, 'utf-8'));
+  const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
+  const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
 
   // Merge peerDependencies from tsdown and vite
   destPkg.peerDependencies = {
@@ -790,7 +790,7 @@ async function mergePackageJson() {
   // bundled `@tsdown/css` and Vite's lightningcss transformer use) stays a core
   // `dependency`, kept in lockstep with `@tsdown/css` by the upgrade-deps script,
   // so CSS bundling works without any extra install.
-  for (const bundled of ["@tsdown/exe", "@tsdown/css"]) {
+  for (const bundled of ['@tsdown/exe', '@tsdown/css']) {
     delete destPkg.peerDependencies[bundled];
     delete destPkg.peerDependenciesMeta[bundled];
   }
@@ -807,7 +807,7 @@ async function mergePackageJson() {
     destPkg.optionalDependencies[getNativePlatformPackageName(target)] = destPkg.version;
   }
 
-  const { code, errors } = await format(destPkgPath, JSON.stringify(destPkg, null, 2) + "\n", {
+  const { code, errors } = await format(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n', {
     sortPackageJson: true,
   });
   if (errors.length > 0) {
