@@ -5,7 +5,7 @@ import cliPkg from '../../package.json' with { type: 'json' };
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
 
-export const VITEST_VERSION = '4.1.9';
+export const VITEST_VERSION = '4.1.10';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
