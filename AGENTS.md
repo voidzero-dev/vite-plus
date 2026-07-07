@@ -32,6 +32,7 @@ vite-plus/
 ├── packages/test/             # @voidzero-dev/vite-plus-test Vitest-compatible exports
 ├── packages/prompts/          # Prompt UI/helpers package
 ├── packages/tools/            # Repo tooling
+├── crates/vite_cli_snapshots/ # PTY snapshot test runner + vpt helper (dev-only, new CLI tests)
 ├── crates/vite_global_cli/    # Standalone global vp binary and top-level command routing
 ├── crates/vite_pm_cli/        # Package-manager command surface
 ├── crates/vite_install/       # Package-manager detection/install behavior
@@ -53,7 +54,8 @@ vite-plus/
 - **Bundled toolchain surfaces**: start with `packages/core/BUNDLING.md`, `packages/cli/BUNDLING.md`, and `packages/test/BUNDLING.md`.
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
 - **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
-- **CLI output behavior**: inspect the relevant code plus `packages/cli/snap-tests/` or `packages/cli/snap-tests-global/`.
+- **CLI output behavior**: inspect the relevant code plus `crates/vite_cli_snapshots/tests/cli_snapshots/` (new PTY snapshot suite; write new cases here) or the legacy `packages/cli/snap-tests/` / `packages/cli/snap-tests-global/` trees.
+- **Interactive CLI testing (prompts, pickers, keystrokes)**: `crates/vite_cli_snapshots/tests/cli_snapshots/README.md` and `rfcs/interactive-snapshot-tests.md`.
 - **Install-testing against the local build**: `packages/tools/src/local-npm-registry.ts` serves the packed checkout behind a real registry interface; used by install snap fixtures (`localVitePlusPackages`), ecosystem e2e (`ecosystem-ci/patch-project.ts`), and local `vp migrate`/`vp create` iteration (see `CONTRIBUTING.md`).
 
 ## Command and Config Model
@@ -106,31 +108,41 @@ Use `pnpm bootstrap-cli` when you need to validate the installed global CLI at `
 
 Choose checks by change type:
 
-| Change type                   | Useful validation                                                       |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| Docs-only / agent-guide edits | Check referenced paths and commands; run `git diff --check -- <files>`  |
-| TypeScript or JS CLI behavior | `vp check`, `pnpm test:unit`, plus focused package tests when available |
-| Rust CLI/crate behavior       | `just check`, `just test`, `just lint`                                  |
-| CLI output or command UX      | Relevant snap tests, then inspect `git diff` for `snap.txt` changes     |
-| Global CLI behavior           | `pnpm bootstrap-cli`, `vp --version`, then relevant global snap tests   |
-| Release/build behavior        | `just build`                                                            |
-| Pre-merge/full validation     | `pnpm bootstrap-cli && pnpm test && git status`                         |
+| Change type                   | Useful validation                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Docs-only / agent-guide edits | Check referenced paths and commands; run `git diff --check -- <files>`                               |
+| TypeScript or JS CLI behavior | `vp check`, `pnpm test:unit`, plus focused package tests when available                              |
+| Rust CLI/crate behavior       | `just check`, `just test`, `just lint`                                                               |
+| CLI output or command UX      | `just snapshot-test <filter>` (new PTY runner); legacy snap tests + `git diff` while migration lasts |
+| Global CLI behavior           | `pnpm bootstrap-cli`, `vp --version`, then relevant global snap tests                                |
+| Release/build behavior        | `just build`                                                                                         |
+| Pre-merge/full validation     | `pnpm bootstrap-cli && pnpm test && git status`                                                      |
 
 Use `vp check --fix` only when you intentionally want formatting or lint fixes applied.
 
-### Snap tests
+### CLI snapshot tests (PTY runner)
 
-Snap tests live in `packages/cli/snap-tests/` and `packages/cli/snap-tests-global/`.
+**New CLI tests go here**, including all interactive-flow coverage. Fixtures live in `crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/`; each declares cases in `snapshots.toml` with a `vp = "local" | "global" | [both]` flavor. Read `crates/vite_cli_snapshots/tests/cli_snapshots/README.md` before writing a case (case/step/interaction schema, `vpt` helpers, milestone conventions); design rationale is in `rfcs/interactive-snapshot-tests.md`.
+
+```bash
+just snapshot-test                    # build vp, run everything
+just snapshot-test <name-filter>
+UPDATE_SNAPSHOTS=1 just snapshot-test <name-filter>   # record/accept snapshots
+```
+
+Snapshot mismatches fail the run with a unified diff and write `<case>.md.new`; recorded `.md` snapshots are reviewed like code and committed with the fixture. Steps are argv arrays (no shell); use `vpt` subcommands instead of coreutils so cases stay platform-identical.
+
+### Snap tests (legacy, being migrated)
+
+The old trees `packages/cli/snap-tests/` and `packages/cli/snap-tests-global/` still run in CI during the migration but must not receive new cases; convert them with `tool migrate-snap-tests` instead (see the runner README).
 
 ```bash
 pnpm -F vite-plus snap-test
-pnpm -F vite-plus snap-test-local
 pnpm -F vite-plus snap-test-local <name-filter>
-pnpm -F vite-plus snap-test-global
 pnpm -F vite-plus snap-test-global <name-filter>
 ```
 
-Snap tests regenerate `snap.txt` and can exit successfully even when output changed. Always inspect `git diff` afterward. Ensure fixture inputs are committed or created by the test setup, not accidentally supplied by ignored local files.
+Legacy snap tests regenerate `snap.txt` and can exit successfully even when output changed. Always inspect `git diff` afterward. Ensure fixture inputs are committed or created by the test setup, not accidentally supplied by ignored local files.
 
 ## Code Conventions
 

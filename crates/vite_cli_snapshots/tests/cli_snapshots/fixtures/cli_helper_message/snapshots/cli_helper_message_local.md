@@ -1,0 +1,47 @@
+# cli_helper_message_local
+
+## `vp -h`
+
+show help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp <COMMAND>
+
+Core Commands:
+  create         Create a new project from a template
+  migrate        Migrate an existing project to Vite+
+  dev            Run the development server
+  build          Build for production
+  test           Run tests
+  lint           Lint code
+  fmt, format    Format code
+  check          Run format, lint, and type checks
+  pack           Build library
+  run            Run tasks
+  exec           Execute a command from local node_modules/.bin
+  preview        Preview production build
+  cache          Manage the task cache
+  config         Configure hooks and agent integration
+  staged         Run linters on staged files
+
+Package Manager Commands:
+  install    Install all dependencies, or add packages if package names are provided
+
+Options:
+  -h, --help  Print help
+```
+
+## `vp -V`
+
+show version
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+vp <version>
+
+Local vite-plus:
+  vite-plus  Not found
+```

@@ -138,9 +138,26 @@ You can run this command to build, test and check if there are any snapshot chan
 pnpm bootstrap-cli && pnpm test && git status
 ```
 
-## Running Snap Tests
+## CLI Snapshot Tests (PTY runner)
 
-Snap tests verify CLI output. They are located in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI).
+CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vite_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
+
+```bash
+# Build vp and run the whole suite
+just snapshot-test
+
+# Filter by trial name substring
+just snapshot-test create
+
+# Record or accept snapshot changes, then review the .md diffs like code
+UPDATE_SNAPSHOTS=1 just snapshot-test create
+```
+
+The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
+
+## Running Snap Tests (legacy)
+
+The legacy snap trees in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI) still run in CI while they are migrated to the PTY runner (`tool migrate-snap-tests`). Do not add new cases to them.
 
 ```bash
 # Run all snap tests (local + global)
@@ -155,7 +172,7 @@ pnpm -F vite-plus snap-test-global
 pnpm -F vite-plus snap-test-global <name-filter>
 ```
 
-Snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
+Legacy snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
 ## Verified Commits
 

@@ -1,0 +1,5 @@
+[[case]]
+name = "help"
+vp = ["local", "global"]
+comment = "Top-level help output, one snapshot per flavor. The parity matrix keeps the two command surfaces honest."
+steps = [["vp", "help"]]
