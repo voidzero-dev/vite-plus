@@ -98,7 +98,7 @@ pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus,
     {
         use nix::libc::STDIN_FILENO;
 
-        // Save terminal state before spawning child
+        // Save terminal state and ignore sigint signal for current process before spawning child
         let _guard = TerminalStateGuard::save(STDIN_FILENO);
 
         // Spawn and wait for child - guard will restore terminal state on drop
@@ -308,6 +308,7 @@ pub fn fix_stdio_streams() {
 struct TerminalStateGuard {
     fd: RawFd,
     original: nix::sys::termios::Termios,
+    original_sigint: Option<nix::sys::signal::SigAction>,
 }
 
 #[cfg(unix)]
@@ -326,22 +327,39 @@ impl TerminalStateGuard {
         }
 
         match tcgetattr(borrowed_fd) {
-            Ok(original) => Some(Self { fd, original }),
+            Ok(original) => Some(Self { fd, original, original_sigint: Self::ignore_sigint() }),
             Err(_) => None,
         }
+    }
+
+    fn ignore_sigint() -> Option<nix::sys::signal::SigAction> {
+        use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
+
+        let ignore = SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
+        // SAFETY: installs a process signal disposition for SIGINT and returns
+        // the previous disposition, which this guard restores on drop.
+        unsafe { sigaction(Signal::SIGINT, &ignore).ok() }
     }
 }
 
 #[cfg(unix)]
 impl Drop for TerminalStateGuard {
     fn drop(&mut self) {
-        use nix::sys::termios::{SetArg, tcsetattr};
+        use nix::sys::{
+            signal::{Signal, sigaction},
+            termios::{SetArg, tcsetattr},
+        };
 
         // SAFETY: fd comes from stdin/stdout/stderr and the guard does not outlive the process
         let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.fd) };
 
         // Best effort: ignore errors during cleanup
         let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
+
+        // SAFETY: restores the signal disposition captured by save().
+        if let Some(original_sigint) = self.original_sigint.take() {
+            let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };
+        }
     }
 }
 

@@ -102,19 +102,19 @@ const VITEST_TYPE_SPECIFIER_REWRITES: ReadonlyArray<readonly [string, string]> =
 ];
 
 const {
-  values: { ['skip-native']: skipNative, ['skip-ts']: skipTs },
+  values: { ['skip-native']: skipNative, ['skip-ts']: skipTs, ['skip-format']: skipFormat },
 } = parseArgs({
   options: {
     ['skip-native']: { type: 'boolean', default: false },
     ['skip-ts']: { type: 'boolean', default: false },
+    ['skip-format']: { type: 'boolean', default: false },
   },
   strict: false,
 });
 
 // Filter out custom flags before passing to NAPI CLI
-const napiArgs = process.argv
-  .slice(2)
-  .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
+const customFlags = new Set(['--skip-native', '--skip-ts', '--skip-format']);
+const napiArgs = process.argv.slice(2).filter((arg) => !customFlags.has(arg));
 
 if (!skipTs) {
   buildWithTsdown();
@@ -166,6 +166,13 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
+  // --skip-format: importing the repo vite config pulls in the built
+  // vite-plus dist, which doesn't exist in CI jobs that cross-compile only
+  // the native binding (build-windows-cli); formatting the generated
+  // bindings is cosmetic there.
+  if (skipFormat) {
+    return;
+  }
   const viteConfig = await import('../../vite.config.js');
   for (const output of outputs) {
     if (output.kind !== 'node') {

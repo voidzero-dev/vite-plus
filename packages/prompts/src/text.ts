@@ -2,6 +2,7 @@ import { TextPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import { type CommonOptions, S_BAR, S_BAR_END, symbol } from './common.js';
+import { promptMilestone } from './milestone.js';
 
 export interface TextOptions extends CommonOptions {
   message: string;
@@ -35,22 +36,22 @@ export const text = (opts: TextOptions) => {
           const errorText = this.error ? ` ${color.yellow(this.error)}` : '';
           const errorPrefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
           const errorPrefixEnd = hasGuide ? color.yellow(S_BAR_END) : '';
-          return `${title.trim()}\n${errorPrefix}${userInput}\n${errorPrefixEnd}${errorText}\n`;
+          return `${title.trim()}\n${errorPrefix}${userInput}\n${errorPrefixEnd}${errorText}\n${promptMilestone('text', opts.testId, 'error')}`;
         }
         case 'submit': {
           const valueText = value ? color.dim(value) : '';
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${title}${submitPrefix}${valueText}\n`;
+          return `${title}${submitPrefix}${valueText}\n${promptMilestone('text', opts.testId, 'submit')}`;
         }
         case 'cancel': {
           const valueText = value ? color.strikethrough(color.dim(value)) : '';
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}\n`;
+          return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}\n${promptMilestone('text', opts.testId, 'cancel')}`;
         }
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
-          return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n`;
+          return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n${promptMilestone('text', opts.testId, this.value ?? '')}`;
         }
       }
     },

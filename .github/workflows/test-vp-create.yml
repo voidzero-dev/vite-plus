@@ -33,7 +33,7 @@ jobs:
       related-files-changed: ${{ steps.filter.outputs.related-files }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -95,34 +95,19 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
-          # Every tgz consumer below references fixed `*-0.0.0.tgz` filenames.
-          # A release commit can leave `packages/{core,cli}` at a published
-          # version (e.g. 0.1.22), which would make `pnpm pack` emit
-          # `*-0.1.22.tgz` instead. Pin both to 0.0.0 so the names stay stable.
+          # The test jobs serve these tgz through a local npm registry
+          # (packages/tools/src/local-npm-registry.ts), so `vp create` pins
+          # and installs them like a real release, with every package manager
+          # (including bun) resolving the standard
+          # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
+          # both packages to 0.0.0 so a correctly installed local build is
+          # always distinguishable from any published version, even on a
+          # release commit that leaves packages/{core,cli} at a published
+          # version.
           (cd packages/core && npm pkg set version=0.0.0)
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          # Bun is uniquely strict about peer-dep resolution:
-          #   1. It checks the *resolved target's* package name and version
-          #      against the peer range (vitest 4.1.9 declares peer
-          #      `vite ^6 || ^7 || ^8`).
-          #   2. A file: override pointing at the vite-plus-core tgz fails
-          #      both the name check (target is `@voidzero-dev/vite-plus-core`,
-          #      not `vite`) and the version check (0.0.0 is outside `^6|^7|^8`).
-          # pnpm/npm/yarn don't enforce either, and using the same core tgz as
-          # the file: target for both `vite` and `@voidzero-dev/vite-plus-core`
-          # is the only configuration they install cleanly. See
-          # https://github.com/oven-sh/bun/issues/8406.
-          #
-          # Generate a sibling vite-7.99.0.tgz: a copy of the core tgz with
-          # `package.json#name` rewritten to "vite" and `version` to 7.99.0.
-          # Only the bun matrix entry below points its vite override at this
-          # alias tgz; pnpm/npm/yarn keep pointing at the real core tgz so
-          # pnpm's workspace resolver doesn't trip on a "vite@<version>"
-          # registry lookup (the renamed tgz makes pnpm register the dep as
-          # vite@7.99.0 and then probe npmjs.org to validate the version).
-          pnpm exec tool repack-vite-tgz tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz tmp/tgz/vite-7.99.0.tgz vite 7.99.0
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
           ls -la tmp/tgz
@@ -179,15 +164,12 @@ jobs:
           - yarn
           - bun
     env:
-      # Bun's strict peer check requires the `vite` override target's tgz to be
-      # named "vite" with a version satisfying vitest's `peer vite ^6 || ^7 || ^8`.
-      # The bun matrix entry uses the masquerade tgz (vite-7.99.0.tgz). pnpm/npm/yarn
-      # point at the real core tgz — anything else trips a registry lookup for
-      # vite@<version> when sub-package and override targets are both file: tgz aliases.
-      VITE_OVERRIDE_TGZ: ${{ matrix.package-manager == 'bun' && 'vite-7.99.0.tgz' || 'voidzero-dev-vite-plus-core-0.0.0.tgz' }}
-      VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
+      # The local registry serves the packed 0.0.0 build, so create pins the
+      # exact version like a real release. The vp binary was built before the
+      # pack step pinned the package versions, so align the version explicitly.
+      VP_VERSION: '0.0.0'
       # Force full dependency rewriting so the library template's existing
-      # vite-plus dep gets overridden with the local tgz
+      # vite-plus dep gets overridden with the local build
       VP_FORCE_MIGRATE: '1'
       # yarn 4 quarantines packages published within `npmMinimalAgeGate`
       # (default 1440 min / 24h). When an oxlint bump landed <24h ago, the
@@ -221,10 +203,34 @@ jobs:
           which vp
           vp --version
 
+      - name: Start local npm registry
+        # Serve the packed local build behind a real registry interface for
+        # the create's install and every later step (the registry env is
+        # exported via GITHUB_ENV; the detached server lives for the job).
+        # Both output fds go to a file, not this step's pipes, so the step
+        # completes while the server keeps running.
+        run: |
+          node "$GITHUB_WORKSPACE/packages/tools/src/local-npm-registry.ts" --serve --packages-dir "$GITHUB_WORKSPACE/tmp/tgz" > "$RUNNER_TEMP/local-registry.out" 2>&1 &
+          server_pid=$!
+          until grep -q '"registry"' "$RUNNER_TEMP/local-registry.out" 2>/dev/null; do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "local registry failed to start:"
+              cat "$RUNNER_TEMP/local-registry.out"
+              exit 1
+            fi
+            sleep 0.2
+          done
+          handshake=$(head -1 "$RUNNER_TEMP/local-registry.out")
+          echo "$handshake"
+          echo "$handshake" | node -e 'const { env } = JSON.parse(require("node:fs").readFileSync(0, "utf8")); for (const [k, v] of Object.entries(env)) console.log(`${k}=${v}`)' >> "$GITHUB_ENV"
+
+      # No VP_OVERRIDE_PACKAGES: with VP_VERSION=0.0.0 the product default
+      # override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@0.0.0
+      # and `vitest` to the bundled version (see VITE_PLUS_OVERRIDE_PACKAGES in
+      # packages/cli/src/utils/constants.ts), and stays correct across vitest
+      # bumps without editing this workflow.
       - name: Run vp create ${{ matrix.template.name }} with ${{ matrix.package-manager }}
         working-directory: ${{ runner.temp }}
-        env:
-          VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/${{ env.VITE_OVERRIDE_TGZ }}","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"4.1.9","@vitest/expect":"4.1.9","@vitest/runner":"4.1.9","@vitest/snapshot":"4.1.9","@vitest/spy":"4.1.9","@vitest/utils":"4.1.9","@vitest/mocker":"4.1.9","@vitest/pretty-format":"4.1.9","@vitest/coverage-v8":"4.1.9","@vitest/coverage-istanbul":"4.1.9"}'
         run: |
           vp create ${{ matrix.template.create-args }} \
             --no-interactive \
@@ -334,7 +340,7 @@ jobs:
           fi
           echo "✓ vite-plus, vite, vitest are all single instances"
 
-      - name: Verify local tgz packages installed
+      - name: Verify local packages installed
         working-directory: ${{ runner.temp }}/test-project
         run: |
           node -e "
@@ -459,18 +465,23 @@ jobs:
         if: matrix.template.name == 'monorepo'
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          # Under npm, `vp run ready` reaches 100% cache hit only on the
-          # third invocation (#1638): vite-task's directory-listing
+          # Under npm and yarn, `vp run ready` reaches 100% cache hit only on
+          # the third invocation (#1638): vite-task's directory-listing
           # fingerprint and fspy read/write tracking surface false-positive
           # misses on run #2 because `packages/utils/node_modules/` is born
-          # during run #1. pnpm/yarn/bun pre-create per-package
-          # `node_modules/` at install time and reach 100% on run #2.
+          # during run #1. pnpm and bun pre-create per-package
+          # `node_modules/` at install time and reach 100% on run #2; Yarn
+          # Berry did too under the old file: overrides (per-package copies),
+          # but with registry-resolved semver specs it hoists the workspace
+          # deps like a real install, so it now behaves like npm here.
           # The preceding `Verify project builds` step already invoked
           # `vp run ready` once (verify-command for monorepo), so one
-          # extra warm-up here is enough under npm.
-          if [ "${{ matrix.package-manager }}" = "npm" ]; then
-            vp run ready >/dev/null 2>&1
-          fi
+          # extra warm-up here is enough.
+          case "${{ matrix.package-manager }}" in
+            npm|yarn)
+              vp run ready >/dev/null 2>&1
+              ;;
+          esac
           output=$(vp run ready 2>&1)
           echo "$output"
           if ! echo "$output" | grep -q 'cache hit (100%)'; then

@@ -16,6 +16,8 @@
     "verbatimModuleSyntax": true
   },
   "exclude": [
+    // PTY snapshot fixtures are workspaces under test, not repo code
+    "crates/vite_cli_snapshots/tests",
     "packages/cli/docs",
     "packages/cli/snap-tests",
     "packages/cli/snap-tests-global",

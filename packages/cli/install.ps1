@@ -18,6 +18,8 @@ $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
 $InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
+# Use ~ shorthand if install dir is under USERPROFILE, matching the final summary output
+$NodeManagerBinDisplay = (Join-Path $InstallDir.TrimEnd('\', '/') "bin") -replace [regex]::Escape($env:USERPROFILE), '~'
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
@@ -26,7 +28,7 @@ $LocalTgz = $env:VP_LOCAL_TGZ
 $LocalBinary = $env:VP_LOCAL_BINARY
 # PR number or commit SHA to install as a test build (registry bridge mode)
 $PrVersion = $env:VP_PR_VERSION
-# Registry bridge that serves pkg.pr.new builds as clearly-versioned packages.
+# Registry bridge that serves PR preview builds as clearly-versioned packages.
 # The pkg.pr.new-style download URL (BridgeDownloadBase) 302-redirects to a
 # canonical 0.0.0-commit.<sha> tarball; the registry (BridgeRegistry) resolves
 # those commit versions (and proxies everything else to npmjs) so a full install
@@ -196,6 +198,163 @@ function Write-ReleaseAgeOverride {
     $npmrc = Join-Path $VersionDir ".npmrc"
     if ((-not (Test-Path $npmrc)) -or (-not (Select-String -Path $npmrc -Pattern '^minimum-release-age=' -Quiet))) {
         Add-Content -Path $npmrc -Value "minimum-release-age=0"
+    }
+}
+
+function Normalize-InstallDir {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $Path
+    }
+
+    try {
+        if (Test-Path -LiteralPath $Path -PathType Container) {
+            return (Resolve-Path -LiteralPath $Path).ProviderPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        }
+
+        return [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    } catch {
+        return $Path.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    }
+}
+
+function Test-SafeInstallDirToRemove {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    $normalized = Normalize-InstallDir $Path
+    $root = [System.IO.Path]::GetPathRoot($normalized)
+    $home = Normalize-InstallDir $env:USERPROFILE
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $unsafeDirs = @(
+        $root
+        $home
+        (Normalize-InstallDir $env:SystemRoot)
+        (Normalize-InstallDir $env:ProgramFiles)
+        (Normalize-InstallDir $programFilesX86)
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    return $unsafeDirs -notcontains $normalized
+}
+
+function Test-VitePlusInstallDir {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $false
+    }
+
+    $binDir = Join-Path $Path "bin"
+    if (-not (Test-Path -LiteralPath $binDir -PathType Container)) {
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path "current"))) {
+        return $false
+    }
+
+    return (Test-Path -LiteralPath (Join-Path $binDir "vp.exe")) `
+        -or (Test-Path -LiteralPath (Join-Path $binDir "vp.cmd")) `
+        -or (Test-Path -LiteralPath (Join-Path $binDir "vp"))
+}
+
+function Get-PreviousInstallDir {
+    if (-not $env:VP_HOME) {
+        return $null
+    }
+
+    $vpCommand = Get-Command vp -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $vpCommand) {
+        return $null
+    }
+
+    $vpPath = $vpCommand.Path
+    if (-not $vpPath) {
+        return $null
+    }
+
+    $vpFileName = [System.IO.Path]::GetFileName($vpPath)
+    if ($vpFileName -notin @("vp", "vp.exe", "vp.cmd")) {
+        return $null
+    }
+
+    $oldDir = Normalize-InstallDir (Split-Path -Parent (Split-Path -Parent $vpPath))
+    $newDir = Normalize-InstallDir $InstallDir
+    if ($oldDir -eq $newDir) {
+        return $null
+    }
+    if (-not (Test-SafeInstallDirToRemove $oldDir)) {
+        return $null
+    }
+    if (-not (Test-VitePlusInstallDir $oldDir)) {
+        return $null
+    }
+
+    return $oldDir
+}
+
+function Test-NestedInstallDir {
+    param(
+        [string]$OldDir,
+        [string]$NewDir
+    )
+    if ([string]::IsNullOrWhiteSpace($OldDir) -or [string]::IsNullOrWhiteSpace($NewDir)) {
+        return $false
+    }
+
+    $oldDir = Normalize-InstallDir $OldDir
+    $newDir = Normalize-InstallDir $NewDir
+    if ([string]::IsNullOrWhiteSpace($oldDir) -or [string]::IsNullOrWhiteSpace($newDir) -or $oldDir -eq $newDir) {
+        return $false
+    }
+
+    # Normalize-InstallDir already trimmed trailing separators
+    $oldPrefix = $oldDir + [System.IO.Path]::DirectorySeparatorChar
+    $newPrefix = $newDir + [System.IO.Path]::DirectorySeparatorChar
+    return $oldPrefix.StartsWith($newPrefix, [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $newPrefix.StartsWith($oldPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Prompt-RemovePreviousInstallDir {
+    param([string]$PreviousInstallDir)
+    if (-not $PreviousInstallDir) {
+        return
+    }
+    if ($env:CI -eq "true") {
+        return
+    }
+    if (-not [Environment]::UserInteractive) {
+        return
+    }
+
+    Write-Host ""
+    Write-Warn "Found a previous Vite+ install at $PreviousInstallDir."
+    Write-Host "The new VP_HOME is $InstallDir."
+    $response = Read-Host "Remove the previous install directory? (y/N)"
+    if ($response -match "^(?i:y|yes)$") {
+        $vpBin = Join-Path $PreviousInstallDir "current\bin\vp.exe"
+        if (-not (Test-Path -LiteralPath $vpBin)) {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: vp binary not found."
+            return
+        }
+
+        $previousVpHome = $env:VP_HOME
+        try {
+            $env:VP_HOME = $PreviousInstallDir
+            $output = & $vpBin implode --yes 2>&1
+            $exitCode = $LASTEXITCODE
+        } catch {
+            $output = $_
+            $exitCode = 1
+        } finally {
+            $env:VP_HOME = $previousVpHome
+        }
+
+        if ($exitCode -eq 0) {
+            Write-Success "Removed previous Vite+ install at $PreviousInstallDir."
+        } else {
+            Write-Warn "Could not remove previous Vite+ install at ${PreviousInstallDir}: $output"
+        }
     }
 }
 
@@ -558,7 +717,7 @@ function Setup-NodeManager {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to $NodeManagerBinDisplay and automatically uses the right version."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
@@ -579,6 +738,11 @@ function Main {
 
     if ($PrVersion -and $LocalTgz) {
         Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
+    }
+
+    $previousInstallDir = Get-PreviousInstallDir
+    if ($previousInstallDir -and (Test-NestedInstallDir -OldDir $previousInstallDir -NewDir $InstallDir)) {
+        Write-Error-Exit "Previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Choose a separate VP_HOME or remove the previous install first."
     }
 
     # Suppress progress bars for cleaner output
@@ -798,14 +962,14 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 
-    # Configure Windows-native shell access via the User PATH
-    $pathResult = Configure-UserPath
-
-    # Configure Nushell autoload if Nushell is installed
-    $nushellResult = Configure-Nushell
-
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
+
+    Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
+
+    # Configure shell access after the install is otherwise complete.
+    $pathResult = Configure-UserPath
+    $nushellResult = Configure-Nushell
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'

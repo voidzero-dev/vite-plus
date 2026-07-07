@@ -1,0 +1,30 @@
+[[case]]
+name = "vite_plus_import_resolves"
+vp = "local"
+comment = """
+Locks in the fixture module contract: a config importing bare `vite-plus`
+resolves through the run-root node_modules the runner provides, without
+the fixture vendoring anything.
+"""
+steps = [["vp", "run", "hello"]]
+
+[[case]]
+name = "vite_alias_resolves"
+vp = "local"
+comment = """
+A config importing bare `vite` also resolves: the runner aliases it to the
+core package, matching the vite -> core override in migrated projects.
+"""
+cwd = "vite-import"
+steps = [["vp", "run", "hello"]]
+
+[[case]]
+name = "vite_define_config_without_run_stays_static"
+vp = "local"
+comment = """
+A Vite config with no `run` block must stay on the static extraction path.
+Runtime evaluation would resolve an intentionally unbuilt import and fail
+before the package script can run.
+"""
+cwd = "vite-import-static-no-run"
+steps = [["vp", "run", "build"]]

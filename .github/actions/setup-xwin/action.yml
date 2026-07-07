@@ -1,0 +1,48 @@
+name: 'Setup cargo-xwin'
+description: >-
+  Install the Rust toolchain and cargo-xwin for cross-compiling to
+  x86_64-pc-windows-msvc on Linux, with the MSVC CRT / Windows SDK cached.
+
+inputs:
+  cache-key:
+    description: 'setup-rust cache-key prefix; pass a distinct value per caller.'
+    required: true
+  save-cache:
+    description: 'Whether setup-rust should save its cache (usually only on main).'
+    required: false
+    default: 'false'
+  tools:
+    description: >-
+      Extra comma-separated taiki-e/install-action tools to install alongside
+      cargo-xwin (e.g. "cargo-nextest").
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    # llvm-tools provides llvm-ar in the toolchain's rustlib bin dir; cargo-xwin
+    # symlinks the MSVC-style llvm-lib/llvm-dlltool (used by cc-rs to archive
+    # C/C++ deps) and lld-link from there when the runner image has no matching
+    # system LLVM.
+    - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      with:
+        save-cache: ${{ inputs.save-cache }}
+        cache-key: ${{ inputs.cache-key }}
+        components: llvm-tools
+
+    - run: rustup target add x86_64-pc-windows-msvc
+      shell: bash
+
+    - uses: taiki-e/install-action@c93ccc03e00cd0e08e494f5fd058a6c55a6a1907 # v2.82.8
+      with:
+        tool: ${{ inputs.tools != '' && format('{0},cargo-xwin', inputs.tools) || 'cargo-xwin' }}
+
+    # Downloading and unpacking the MSVC CRT/Windows SDK dominates cold wall
+    # time (~10 minutes); the unpacked result is immutable for a given manifest
+    # version, so cache it (combined restore + post-job save). Bump the key when
+    # bumping cargo-xwin.
+    - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ~/.cache/cargo-xwin
+        key: cargo-xwin-msvc-17

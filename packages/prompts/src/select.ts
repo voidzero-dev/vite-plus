@@ -11,6 +11,7 @@ import {
   symbolBar,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
+import { promptMilestone } from './milestone.js';
 
 type Primitive = Readonly<string | boolean | number>;
 
@@ -169,7 +170,7 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
             opt(this.options[this.cursor], 'selected'),
             submitPrefix,
           );
-          return `${title}${wrappedLines}\n`;
+          return `${title}${wrappedLines}\n${promptMilestone('select', opts.testId, 'submit')}`;
         }
         case 'cancel': {
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
@@ -178,7 +179,7 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
             opt(this.options[this.cursor], 'cancelled'),
             cancelPrefix,
           );
-          return `${title}${wrappedLines}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n`;
+          return `${title}${wrappedLines}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n${promptMilestone('select', opts.testId, 'cancel')}`;
         }
         default: {
           const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
@@ -195,7 +196,9 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
             rowPadding: titleLineCount + footerLineCount,
             style: (item, active) =>
               opt(item, item.disabled ? 'disabled' : active ? 'active' : 'inactive'),
-          }).join(`\n${prefix}`)}\n${prefixEnd}\n`;
+          }).join(
+            `\n${prefix}`,
+          )}\n${prefixEnd}\n${promptMilestone('select', opts.testId, String(this.cursor))}`;
         }
       }
     },

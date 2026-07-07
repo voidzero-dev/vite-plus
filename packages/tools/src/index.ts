@@ -5,6 +5,10 @@ switch (subcommand) {
     const { snapTest } = await import('./snap-test.ts');
     await snapTest();
     break;
+  case 'migrate-snap-tests':
+    const { migrateSnapTests } = await import('./migrate-snap-tests.ts');
+    migrateSnapTests();
+    break;
   case 'replace-file-content':
     const { replaceFileContent } = await import('./replace-file-content.ts');
     replaceFileContent();
@@ -29,14 +33,22 @@ switch (subcommand) {
     const { brandVite } = await import('./brand-vite.ts');
     brandVite();
     break;
-  case 'repack-vite-tgz':
-    const { repackViteTgz } = await import('./repack-vite-tgz.ts');
-    await repackViteTgz();
+  case 'local-npm-registry':
+    // Spawn the script by path instead of importing it, so the child carries
+    // the canonical `node .../local-npm-registry.ts` command line that the
+    // script's own --ps/--kill maintenance matches.
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const registryScript = fileURLToPath(new URL('./local-npm-registry.ts', import.meta.url));
+    const result = spawnSync(process.execPath, [registryScript, ...process.argv.slice(3)], {
+      stdio: 'inherit',
+    });
+    process.exit(result.status ?? 1);
     break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, repack-vite-tgz',
+      'Available subcommands: snap-test, migrate-snap-tests, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, local-npm-registry',
     );
     process.exit(1);
 }

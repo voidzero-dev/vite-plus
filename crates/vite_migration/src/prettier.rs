@@ -225,6 +225,15 @@ mod tests {
             rewrite_prettier_script("prettier --check --list-different ."),
             "vp fmt --check ."
         );
+
+        // --list-different + --check (the other order) → still a single --check
+        assert_eq!(
+            rewrite_prettier_script("prettier --list-different --check ."),
+            "vp fmt --check ."
+        );
+
+        // two literal --check → still a single --check
+        assert_eq!(rewrite_prettier_script("prettier --check --check ."), "vp fmt --check .");
     }
 
     #[test]

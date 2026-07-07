@@ -98,6 +98,29 @@ Verify the link with `ls -l node_modules/vite-plus` (it should be a symlink into
 - `pnpm link` may also add a `packageManager` field to the test project's `package.json`; revert it if unwanted.
 - Undo with `pnpm unlink vite-plus`, or remove the override and run `pnpm install`.
 
+### Test `vp migrate` / `vp create` through a local npm registry
+
+`pnpm link` swaps the code inside an existing project, but `vp migrate` and `vp create` pin the exact CLI version and then _install_ it, so the checkout's `vite-plus` / `@voidzero-dev/vite-plus-core` must be resolvable from a registry. `packages/tools/src/local-npm-registry.ts` provides that: it packs the checkout, serves the tarballs behind a real registry HTTP interface, and proxies every other package upstream. This replaces the old pkg.pr.new publish + registry-bridge round-trip for local iteration; you can verify migrate/create logic immediately after a build.
+
+```bash
+pnpm build   # the served packages are built artifacts; rebuild after JS changes
+
+# One-shot: wrap any command (from the project you want to migrate)
+cd /path/to/test-project
+node /path/to/vite-plus/packages/tools/src/local-npm-registry.ts --pack -- vp migrate --no-interactive
+node /path/to/vite-plus/packages/tools/src/local-npm-registry.ts --pack -- vp create vite:application --no-interactive
+
+# Or keep a server running for repeated commands (from the vite-plus checkout)
+pnpm local-registry --pack --serve
+# copy the printed `export ...` lines into the shell where you run vp
+```
+
+Notes:
+
+- The served versions carry an old publish time, so `minimumReleaseAge` gates never quarantine them, and wrapped runs get throwaway Yarn Berry / bun caches (both cache registry state in ways that would otherwise leak stale local builds between runs).
+- The same server backs the install snap fixtures (`localVitePlusPackages` in `steps.json`) and ecosystem e2e (`ecosystem-ci/patch-project.ts`), so a flow that works here works there too.
+- `pnpm local-registry:ps` lists any registry processes still running (e.g. a `--serve` you forgot, or a wrapper that was killed mid-run); `pnpm local-registry:kill` stops them all and removes their leftover temp caches.
+
 ### Global CLI (Rust) changes
 
 `pnpm link` only swaps the JS side; the `vp` binary on `PATH` (and the Rust-backed commands it handles directly, such as package-manager commands) is still whatever is installed in `~/.vite-plus`. For changes to the Rust global CLI (`crates/`), install it from source, and combine with `pnpm link` when the change spans both layers:
@@ -115,9 +138,26 @@ You can run this command to build, test and check if there are any snapshot chan
 pnpm bootstrap-cli && pnpm test && git status
 ```
 
-## Running Snap Tests
+## CLI Snapshot Tests (PTY runner)
 
-Snap tests verify CLI output. They are located in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI).
+CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vite_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
+
+```bash
+# Build vp and run the whole suite
+just snapshot-test
+
+# Filter by trial name substring
+just snapshot-test create
+
+# Record or accept snapshot changes, then review the .md diffs like code
+UPDATE_SNAPSHOTS=1 just snapshot-test create
+```
+
+The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
+
+## Running Snap Tests (legacy)
+
+The legacy snap trees in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI) still run in CI while they are migrated to the PTY runner (`tool migrate-snap-tests`). Do not add new cases to them.
 
 ```bash
 # Run all snap tests (local + global)
@@ -132,7 +172,7 @@ pnpm -F vite-plus snap-test-global
 pnpm -F vite-plus snap-test-global <name-filter>
 ```
 
-Snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
+Legacy snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
 ## Verified Commits
 
