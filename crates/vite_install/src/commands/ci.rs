@@ -50,7 +50,11 @@ impl PackageManager {
             PackageManagerType::Yarn => {
                 bin_name = "yarn".into();
                 args.push("install".into());
-                args.push("--immutable".into());
+                if self.is_yarn_berry() {
+                    args.push("--immutable".into());
+                } else {
+                    args.push("--frozen-lockfile".into());
+                }
             }
         }
 
