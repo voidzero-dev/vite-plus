@@ -226,6 +226,25 @@ pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus,
     }
 }
 
+/// Convert a process `ExitStatus` to an exit code.
+///
+/// On Unix, a child killed by a signal has no exit code; the shell
+/// convention 128 + signal (e.g. 130 for SIGINT, 137 for SIGKILL) is
+/// reported instead of a generic failure, so callers observing children
+/// interrupted or force-killed through [`execute_with_terminal_guard`]
+/// see conventional signal exit codes.
+#[must_use]
+pub fn exit_code_from_status(status: ExitStatus) -> i32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt as _;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+    status.code().unwrap_or(1)
+}
+
 /// Build a `tokio::process::Command` for shell execution.
 /// Uses `/bin/sh -c` on Unix, `cmd.exe /C` on Windows.
 #[must_use]

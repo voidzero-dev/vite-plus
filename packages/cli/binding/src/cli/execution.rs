@@ -66,11 +66,11 @@ pub(super) async fn resolve_and_execute(
     // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
     if is_interactive {
         let status = vite_command::execute_with_terminal_guard(cmd).await?;
-        Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+        Ok(ExitStatus(vite_command::exit_code_from_status(status) as u8))
     } else {
         let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
         let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
-        Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+        Ok(ExitStatus(vite_command::exit_code_from_status(status) as u8))
     }
 }
 
@@ -112,7 +112,7 @@ pub(super) async fn resolve_and_execute_with_filter(
         }
     }
 
-    Ok(ExitStatus(output.status.code().unwrap_or(1) as u8))
+    Ok(ExitStatus(vite_command::exit_code_from_status(output.status) as u8))
 }
 
 pub(crate) async fn resolve_and_capture_output(
@@ -135,7 +135,7 @@ pub(crate) async fn resolve_and_capture_output(
     let output = child.wait_with_output().await.map_err(|e| Error::Anyhow(e.into()))?;
 
     Ok(CapturedCommandOutput {
-        status: ExitStatus(output.status.code().unwrap_or(1) as u8),
+        status: ExitStatus(vite_command::exit_code_from_status(output.status) as u8),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
     })
