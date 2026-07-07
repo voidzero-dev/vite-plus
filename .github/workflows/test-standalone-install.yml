@@ -329,7 +329,7 @@ jobs:
 
   test-install-ps1-v5:
     name: Test install.ps1 (Windows x64, PowerShell 5.1)
-    runs-on: namespace-profile-windows-x64-default
+    runs-on: nscloud-windows-2022-amd64-8x16
     permissions:
       contents: read
     steps:
@@ -478,7 +478,7 @@ jobs:
 
   test-install-ps1-v76:
     name: Test install.ps1 (Windows x64, PowerShell 7.6)
-    runs-on: namespace-profile-windows-x64-default
+    runs-on: nscloud-windows-2022-amd64-8x16
     permissions:
       contents: read
     steps:
@@ -558,7 +558,7 @@ jobs:
 
   test-install-ps1-release-age:
     name: Test install.ps1 (minimum-release-age)
-    runs-on: namespace-profile-windows-x64-default
+    runs-on: nscloud-windows-2022-amd64-8x16
     permissions:
       contents: read
     steps:
@@ -636,7 +636,7 @@ jobs:
 
   test-install-ps1:
     name: Test install.ps1 (Windows x64)
-    runs-on: namespace-profile-windows-x64-default
+    runs-on: nscloud-windows-2022-amd64-8x16
     permissions:
       contents: read
     steps:
@@ -789,7 +789,7 @@ jobs:
 
   test-vp-setup-exe:
     name: Test vp-setup.exe (pwsh)
-    runs-on: namespace-profile-windows-x64-default
+    runs-on: nscloud-windows-2022-amd64-8x16
     permissions:
       contents: read
     steps:

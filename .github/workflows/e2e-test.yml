@@ -101,7 +101,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             target: x86_64-pc-windows-msvc
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -189,7 +189,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - namespace-profile-windows-x64-default
+          - nscloud-windows-2022-amd64-8x16
         project:
           - name: vibe-dashboard
             node-version: 24
@@ -398,27 +398,27 @@ jobs:
               vp run test:coverage
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             project:
               name: frm-stack
           # dify only runs on Linux for now
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             project:
               name: dify
           # vinext uses workerd native deps that don't build on Windows
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             project:
               name: vinext
           # yaak is a Tauri app with Rust/wasm deps
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             project:
               name: yaak
           # npmx.dev is a Nuxt app, ubuntu-only for now
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             project:
               name: npmx.dev
           # varlet upstream CI is ubuntu-only
-          - os: namespace-profile-windows-x64-default
+          - os: nscloud-windows-2022-amd64-8x16
             project:
               name: varlet
 
