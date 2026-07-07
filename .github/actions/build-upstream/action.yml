@@ -49,7 +49,7 @@ runs:
     - name: Restore NAPI binding cache
       id: cache-restore
       if: inputs.skip-native != 'true'
-      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: |
           packages/cli/binding/*.node
@@ -189,7 +189,7 @@ runs:
 
     - name: Save NAPI binding cache
       if: steps.native.outputs.build == 'true'
-      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: |
           packages/cli/binding/*.node

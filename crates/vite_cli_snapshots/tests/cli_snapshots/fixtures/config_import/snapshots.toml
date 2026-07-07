@@ -17,3 +17,14 @@ core package, matching the vite -> core override in migrated projects.
 """
 cwd = "vite-import"
 steps = [["vp", "run", "hello"]]
+
+[[case]]
+name = "vite_define_config_without_run_stays_static"
+vp = "local"
+comment = """
+A Vite config with no `run` block must stay on the static extraction path.
+Runtime evaluation would resolve an intentionally unbuilt import and fail
+before the package script can run.
+"""
+cwd = "vite-import-static-no-run"
+steps = [["vp", "run", "build"]]
