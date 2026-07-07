@@ -15,6 +15,7 @@ steps = [
   { argv = ["vp", "why", "-h"], comment = "show why help message" },
   { argv = ["vp", "info", "-h"], comment = "show info help message" },
   { argv = ["vp", "pm", "-h"], comment = "show pm help message" },
+  { argv = ["vp", "pm", "ci", "-h"], comment = "show pm ci help message" },
   { argv = ["vp", "env"], comment = "show env help message" },
   { argv = ["vp", "upgrade", "-h"], comment = "show upgrade help message" },
 ]
