@@ -5866,7 +5866,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "append-only-vec",
@@ -6052,7 +6052,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_common"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6087,7 +6087,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6108,7 +6108,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev_common"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "derive_more",
  "rolldown_common",
@@ -6120,7 +6120,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "blake3",
  "rolldown_devtools_action",
@@ -6133,7 +6133,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools_action"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "serde",
  "ts-rs",
@@ -6141,7 +6141,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6153,7 +6153,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript_utils"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "memchr",
  "oxc",
@@ -6163,7 +6163,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_error"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6180,7 +6180,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "oxc_resolver",
  "vfs",
@@ -6188,7 +6188,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs_watcher"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "rolldown-notify",
  "rolldown-notify-debouncer-full",
@@ -6197,7 +6197,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6226,7 +6226,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_asset_module"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "memchr",
@@ -6241,7 +6241,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_bundle_analyzer"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6255,7 +6255,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_chunk_import_map"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6268,7 +6268,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_copy_module"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6284,7 +6284,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_data_url"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "arcstr",
  "base64-simd",
@@ -6297,7 +6297,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_esm_external_require"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "nodejs-built-in-modules",
  "rolldown_common",
@@ -6308,7 +6308,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_hmr"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "rolldown_common",
  "rolldown_plugin",
@@ -6316,7 +6316,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_isolated_declaration"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6330,7 +6330,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_lazy_compilation"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6343,7 +6343,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_oxc_runtime"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "arcstr",
  "phf 0.13.1",
@@ -6354,7 +6354,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_replace"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "oxc",
@@ -6370,12 +6370,24 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_utils"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
+ "anyhow",
+ "arcstr",
+ "cow-utils",
+ "dashmap",
+ "derive_more",
+ "itertools 0.14.0",
  "memchr",
+ "percent-encoding",
+ "regex",
+ "rolldown_common",
  "rolldown_plugin",
+ "rolldown_sourcemap",
  "rolldown_utils",
+ "rustc-hash",
  "serde_json",
+ "sugar_path",
 ]
 
 [[package]]
@@ -6514,7 +6526,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_vite_resolve"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6568,7 +6580,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_resolver"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6583,7 +6595,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_sourcemap"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "criterion2",
  "memchr",
@@ -6593,7 +6605,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_std_utils"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "regex",
 ]
@@ -6638,7 +6650,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_tracing"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "tracing",
  "tracing-chrome",
@@ -6647,7 +6659,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_utils"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6685,7 +6697,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_watcher"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6705,7 +6717,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_workspace"
-version = "1.1.5"
+version = "1.1.4"
 
 [[package]]
 name = "ropey"
@@ -7523,7 +7535,7 @@ dependencies = [
 
 [[package]]
 name = "string_wizard"
-version = "1.1.5"
+version = "1.1.4"
 dependencies = [
  "insta",
  "memchr",
@@ -8382,6 +8394,7 @@ dependencies = [
  "owo-colors",
  "petgraph 0.8.3",
  "pretty_assertions",
+ "pty_terminal_test_client",
  "rolldown_binding",
  "rustc-hash",
  "serde",
@@ -8394,6 +8407,7 @@ dependencies = [
  "vite_migration",
  "vite_path",
  "vite_pm_cli",
+ "vite_select",
  "vite_shared",
  "vite_static_config",
  "vite_str",
