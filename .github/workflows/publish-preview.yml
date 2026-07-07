@@ -150,7 +150,7 @@ jobs:
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: voidzero-dev/pkg-pr-registry-bridge@65c8157a6f44f075c50d3d3faf3a9bd43d2b230a # main
+        uses: voidzero-dev/pkg-pr-registry-bridge@84daf7a69402e34be8800d2cbb422ec9bad6bd1a # fix-republish-integrity-cas (bridge #58)
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
