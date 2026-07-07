@@ -102,13 +102,21 @@ Release vite-plus vX.Y.Z: <theme>.
 <One or two sentences on the release theme. When a blog post accompanies the release, read it first (via its preview URL if not yet deployed), align the theme with it, and link the final URL here even if that URL is not live yet.>
 
 ### Highlights
+
 ### Features
+
 ### Fixes & Enhancements
+
 ### Refactor
+
 ### Docs
+
 ### Chore
+
 ### Bundled Versions
+
 ### Upgrade
+
 ### New Contributors
 
 **Full Changelog**: https://github.com/voidzero-dev/vite-plus/compare/v<prev>...v<curr>
@@ -132,15 +140,15 @@ Merging this PR will trigger the release workflow.
 
 ### Bundled Versions table
 
-| Tool | Version | Source |
-| --- | --- | --- |
-| vite | `X.Y.Z` | [`<short-sha>`](https://github.com/vitejs/vite/commit/<full-sha>) |
-| rolldown | `X.Y.Z` | [`<short-sha>`](https://github.com/rolldown/rolldown/commit/<full-sha>) |
-| tsdown | `X.Y.Z` | [npm](https://npmx.dev/package/tsdown/v/X.Y.Z) |
-| vitest | `X.Y.Z` | [npm](https://npmx.dev/package/vitest/v/X.Y.Z) |
-| oxlint | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint/v/X.Y.Z) |
-| oxlint-tsgolint | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint-tsgolint/v/X.Y.Z) |
-| oxfmt | `X.Y.Z` | [npm](https://npmx.dev/package/oxfmt/v/X.Y.Z) |
+| Tool            | Version | Source                                                                  |
+| --------------- | ------- | ----------------------------------------------------------------------- |
+| vite            | `X.Y.Z` | [`<short-sha>`](https://github.com/vitejs/vite/commit/<full-sha>)       |
+| rolldown        | `X.Y.Z` | [`<short-sha>`](https://github.com/rolldown/rolldown/commit/<full-sha>) |
+| tsdown          | `X.Y.Z` | [npm](https://npmx.dev/package/tsdown/v/X.Y.Z)                          |
+| vitest          | `X.Y.Z` | [npm](https://npmx.dev/package/vitest/v/X.Y.Z)                          |
+| oxlint          | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint/v/X.Y.Z)                          |
+| oxlint-tsgolint | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint-tsgolint/v/X.Y.Z)                 |
+| oxfmt           | `X.Y.Z` | [npm](https://npmx.dev/package/oxfmt/v/X.Y.Z)                           |
 
 vite and rolldown are built from pinned commits, so link the commit. The npm-installed tools link to npmx.dev.
 
@@ -271,20 +279,25 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
      ````markdown
      **Docker:**
+
      ```bash
      docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp build
      ```
 
      Run any `vp` command without installing it; see the [Docker guide](https://viteplus.dev/guide/docker) for more.
      ````
+
    - **Present the draft to the release manager and apply only after approval.** Then retitle the release to match the PR theme and apply via a notes file:
 
      ```bash
      gh release edit vX.Y.Z --repo voidzero-dev/vite-plus \
        --title "vite-plus vX.Y.Z: <theme>" --notes-file /tmp/release-notes.md
      ```
+
    - Re-run the step 3 validation greps against the live release body, plus `grep -c 'Merging this PR'` (must be 0).
+
 2. **Verify**:
+
    ```bash
    npm view vite-plus version                       # X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
@@ -293,6 +306,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    vp upgrade && vp --version                       # bundled tool versions sane
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
+
    `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. Caveat: `vp upgrade` exists only on standalone-installer (`~/.vite-plus`) installs; if the release manager's `vp` is managed another way (e.g. mise), `vp upgrade` is missing and `vp update` is not a substitute (it runs `pnpm update` on the current project, so never run it inside the vite-plus checkout). In that case rely on the npm/GHCR checks plus the in-container `vp --version`. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
 
    ```bash
@@ -302,6 +316,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
      -H "Accept: application/vnd.oci.image.index.v1+json" \
      "https://ghcr.io/v2/voidzero-dev/vite-plus/manifests/X.Y.Z" | head -1   # HTTP/2 200
    ```
+
 3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
 
    ```markdown
@@ -314,6 +329,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    (3-5 lines)
 
    **Also in this release**
+
    - 4-6 short bullets, no PR links or credits
 
    **Bundled versions**
