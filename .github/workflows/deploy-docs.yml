@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: voidzero-dev/setup-vp@13e7afb99c66525824db54e107d667216e795d37 # main
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # main
         with:
           cache: true
           working-directory: docs
@@ -39,7 +39,7 @@ jobs:
 
       - name: Restore docs Vite Task cache
         id: vite-task-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: docs/node_modules/.vite/task-cache
           key: vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-${{ github.sha }}
@@ -52,7 +52,7 @@ jobs:
 
       - name: Save docs Vite Task cache
         if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: docs/node_modules/.vite/task-cache
           key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
