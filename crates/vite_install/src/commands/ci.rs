@@ -47,29 +47,36 @@ impl PackageManager {
     #[must_use]
     pub fn resolve_ci_commands(&self, options: &CiCommandOptions<'_>) -> Vec<ResolveCommandResult> {
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
-        let command = |bin_path: &str, mut args: Vec<String>| {
+        let command = |bin_path: &str, args: Vec<String>| ResolveCommandResult {
+            bin_path: bin_path.into(),
+            args,
+            envs: envs.clone(),
+        };
+        let command_with_pass_through = |bin_path: &str, mut args: Vec<String>| {
             if let Some(pass_through_args) = options.pass_through_args {
                 args.extend_from_slice(pass_through_args);
             }
 
-            ResolveCommandResult { bin_path: bin_path.into(), args, envs: envs.clone() }
+            command(bin_path, args)
         };
 
         match self.client {
-            PackageManagerType::Npm => vec![command("npm", vec!["ci".into()])],
+            PackageManagerType::Npm => vec![command_with_pass_through("npm", vec!["ci".into()])],
             PackageManagerType::Pnpm => {
                 // pnpm documents `ci` as `clean` followed by
                 // `install --frozen-lockfile`; keep the steps split for parity.
                 // See https://pnpm.io/cli/ci.
-                let clean = ResolveCommandResult {
-                    bin_path: "pnpm".into(),
-                    args: vec!["clean".into()],
-                    envs: envs.clone(),
-                };
+                let clean = command("pnpm", vec!["clean".into()]);
 
-                vec![clean, command("pnpm", vec!["install".into(), "--frozen-lockfile".into()])]
+                vec![
+                    clean,
+                    command_with_pass_through(
+                        "pnpm",
+                        vec!["install".into(), "--frozen-lockfile".into()],
+                    ),
+                ]
             }
-            PackageManagerType::Bun => vec![command("bun", vec!["ci".into()])],
+            PackageManagerType::Bun => vec![command_with_pass_through("bun", vec!["ci".into()])],
             PackageManagerType::Yarn => {
                 let mut args = vec!["install".into()];
                 if self.is_yarn_berry() {
@@ -77,7 +84,7 @@ impl PackageManager {
                 } else {
                     args.push("--frozen-lockfile".into());
                 }
-                vec![command("yarn", args)]
+                vec![command_with_pass_through("yarn", args)]
             }
         }
     }
@@ -112,10 +119,17 @@ mod tests {
         }
     }
 
+    fn assert_path_envs(commands: &[ResolveCommandResult]) {
+        for command in commands {
+            assert!(command.envs.contains_key("PATH"));
+        }
+    }
+
     #[test]
     fn test_npm_ci() {
         let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
         let result = pm.resolve_ci_commands(&CiCommandOptions::default());
+        assert_path_envs(&result);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bin_path, "npm");
         assert_eq!(result[0].args, vec!["ci"]);
@@ -125,6 +139,7 @@ mod tests {
     fn test_pnpm_ci() {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "11.0.0");
         let result = pm.resolve_ci_commands(&CiCommandOptions::default());
+        assert_path_envs(&result);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].bin_path, "pnpm");
         assert_eq!(result[0].args, vec!["clean"]);
@@ -136,6 +151,7 @@ mod tests {
     fn test_bun_ci() {
         let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
         let result = pm.resolve_ci_commands(&CiCommandOptions::default());
+        assert_path_envs(&result);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bin_path, "bun");
         assert_eq!(result[0].args, vec!["ci"]);
@@ -145,6 +161,7 @@ mod tests {
     fn test_yarn_ci_uses_immutable_install() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
         let result = pm.resolve_ci_commands(&CiCommandOptions::default());
+        assert_path_envs(&result);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bin_path, "yarn");
         assert_eq!(result[0].args, vec!["install", "--immutable"]);
@@ -154,6 +171,7 @@ mod tests {
     fn test_yarn_classic_ci_uses_frozen_lockfile_install() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.22");
         let result = pm.resolve_ci_commands(&CiCommandOptions::default());
+        assert_path_envs(&result);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bin_path, "yarn");
         assert_eq!(result[0].args, vec!["install", "--frozen-lockfile"]);
@@ -165,6 +183,7 @@ mod tests {
         let pass_through = vec!["--ignore-scripts".to_string()];
         let result =
             pm.resolve_ci_commands(&CiCommandOptions { pass_through_args: Some(&pass_through) });
+        assert_path_envs(&result);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].bin_path, "pnpm");
         assert_eq!(result[0].args, vec!["clean"]);
