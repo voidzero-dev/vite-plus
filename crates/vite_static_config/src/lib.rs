@@ -292,10 +292,10 @@ fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
                 && decl.declarations.iter().any(|declarator| {
                     declarator.init.as_ref().is_some_and(|init| match &declarator.id {
                         BindingPattern::BindingIdentifier(id) => {
-                            id.name == DEFINE_CONFIG && is_require_trusted_define_config(init)
+                            id.name == DEFINE_CONFIG && is_trusted_define_config_require(init)
                         }
                         BindingPattern::ObjectPattern(pattern) => {
-                            is_require_trusted_define_config_package(init)
+                            is_trusted_package_require(init)
                                 && pattern.properties.iter().any(|prop| {
                                     !prop.computed
                                         && prop
@@ -321,14 +321,14 @@ fn is_trusted_define_config_package(package: &str) -> bool {
     TRUSTED_DEFINE_CONFIG_PACKAGES.contains(&package)
 }
 
-fn is_require_trusted_define_config(expr: &Expression<'_>) -> bool {
+fn is_trusted_define_config_require(expr: &Expression<'_>) -> bool {
     expr.without_parentheses().as_member_expression().is_some_and(|member| {
         member.static_property_name() == Some(DEFINE_CONFIG)
-            && is_require_trusted_define_config_package(member.object())
+            && is_trusted_package_require(member.object())
     })
 }
 
-fn is_require_trusted_define_config_package(expr: &Expression<'_>) -> bool {
+fn is_trusted_package_require(expr: &Expression<'_>) -> bool {
     matches!(
         expr.without_parentheses(),
         Expression::CallExpression(call)
