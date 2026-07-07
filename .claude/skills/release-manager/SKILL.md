@@ -329,6 +329,14 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
    Never post to Discord yourself. Save the draft to a file and post it as a comment on the release PR wrapped in a fenced ` ```markdown ` block, so the `@mentions` do not ping anyone on GitHub, the emoji shortcodes stay literal, and any team member can copy-paste it into Discord.
 
+## 9. Update this skill (post-release)
+
+After the release ships, review the session for durable learnings and fold them into this file, then propose opening a PR.
+
+- Capture only what generalizes: a step whose instructions drifted from what actually worked, a gotcha or corrected mistake, or a command/flag that was wrong. Write it as **general guidance**, with no release-specific versions, project names, PR numbers, or one-off examples.
+- Be surgical: change only what was wrong or missing; do not reword content that was already correct. If nothing generalizes, make no change.
+- This skill lives on `main`, so do not push to `main` directly: make the edit on a branch, commit it, and **propose to the release manager that you open a `docs(skill): ...` PR** summarizing the learnings.
+
 ## Checklist
 
 - [ ] `prepare_release` run for the target version; release PR open
@@ -341,3 +349,4 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
 - [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
 - [ ] Discord announcement drafted (concise only) and shared as a fenced code block comment on the release PR
+- [ ] Skill reviewed for durable learnings; any that generalize folded in and a `docs(skill)` PR proposed
