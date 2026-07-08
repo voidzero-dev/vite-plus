@@ -1,6 +1,6 @@
 {
   "env": {
-    "VP_OVERRIDE_PACKAGES": "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\",\"vitest\":\"4.1.9\"}",
+    "VP_OVERRIDE_PACKAGES": "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\",\"vitest\":\"4.1.10\"}",
     "VP_VERSION": "0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617"
   },
   "commands": [
