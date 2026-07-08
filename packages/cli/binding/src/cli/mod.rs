@@ -50,7 +50,7 @@ async fn execute_direct_subcommand(
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
-    let target = app_target::resolve_app_target(&subcommand, cwd)?;
+    let (target, workspace_root_hint) = app_target::resolve_app_target(&subcommand, cwd)?;
     let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
     let cwd = match &target {
         app_target::AppTarget::Exit(status) => return Ok(*status),
@@ -58,7 +58,13 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::CurrentDir => cwd,
     };
 
-    let (workspace_root, _) = vite_workspace::find_workspace_root(cwd)?;
+    // The resolver hands back the workspace root it already found whenever the
+    // command runs in the unchanged cwd (never after a -C/elicitation
+    // retarget), so it matches a fresh lookup here and saves the second walk.
+    let workspace_root = match workspace_root_hint {
+        Some(root) => root,
+        None => vite_workspace::find_workspace_root(cwd)?.0,
+    };
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
     let resolver = if let Some(options) = options {

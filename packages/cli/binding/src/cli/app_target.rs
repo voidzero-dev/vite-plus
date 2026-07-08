@@ -241,7 +241,20 @@ pub(super) fn needs_elicitation(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
 ) -> bool {
-    classify(subcommand, cwd).is_some()
+    matches!(classify(subcommand, cwd), Classification::Elicit(..))
+}
+
+/// Outcome of classifying a bare app command.
+enum Classification {
+    /// Run in `cwd` unchanged. Carries the workspace root found for `cwd`
+    /// (when the lookup succeeded) so the caller can reuse it instead of
+    /// walking the tree a second time — the hot path for a bare command deep
+    /// inside a large monorepo, where the walk is the only per-invocation
+    /// cost this feature adds.
+    RunInPlace(Option<vite_workspace::WorkspaceRoot>),
+    /// Elicit a target: `defaultPackage`, or the picker/listing at a
+    /// workspace root.
+    Elicit(&'static str, Elicitation),
 }
 
 /// Why a bare app command needs target elicitation.
@@ -260,13 +273,16 @@ enum Elicitation {
 /// package, or a framework directory with no package.json ancestry); below a
 /// workspace root the current directory already identifies the target, so a
 /// member's own config must not redirect.
-fn classify(
-    subcommand: &SynthesizableSubcommand,
-    cwd: &AbsolutePathBuf,
-) -> Option<(&'static str, Elicitation)> {
-    let (command, args) = app_command_parts(subcommand)?;
+///
+/// The one `find_workspace_root` walk here rides back out on
+/// [`Classification::RunInPlace`] whenever the command ends up running in
+/// `cwd`, so a bare command in a sub-package walks the tree once, not twice.
+fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePathBuf) -> Classification {
+    let Some((command, args)) = app_command_parts(subcommand) else {
+        return Classification::RunInPlace(None);
+    };
     if !is_bare(command, args) {
-        return None;
+        return Classification::RunInPlace(None);
     }
     let workspace = vite_workspace::find_workspace_root(cwd);
     let at_invocation_root =
@@ -275,17 +291,17 @@ fn classify(
         && let Some(value) =
             vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage")
     {
-        return Some((command, Elicitation::DefaultPackage(value)));
+        return Classification::Elicit(command, Elicitation::DefaultPackage(value));
     }
     // The picker/listing needs workspace metadata; anything unresolvable
     // keeps today's behavior (the caller surfaces its own workspace errors).
     let Ok((workspace_root, rel_from_root)) = workspace else {
-        return None;
+        return Classification::RunInPlace(None);
     };
     if !rel_from_root.as_str().is_empty()
         || matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_))
     {
-        return None;
+        return Classification::RunInPlace(Some(workspace_root));
     }
     // A runnable workspace root runs in place, TTY or not: the invocation
     // already has its configured target, and repos whose root is the app or
@@ -293,21 +309,28 @@ fn classify(
     // ran this way before elicitation existed. Eliciting only when the root
     // is not a plausible target is what keeps this feature purely additive.
     if looks_runnable(&workspace_root.path.to_absolute_path_buf(), command, true) {
-        return None;
+        return Classification::RunInPlace(Some(workspace_root));
     }
-    Some((command, Elicitation::WorkspaceRoot(workspace_root)))
+    Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))
 }
 
+/// Resolve a bare app command's target. The second tuple element is the
+/// workspace root already found for `cwd`, present only when the command runs
+/// in the unchanged `cwd` (so it always matches a fresh lookup there); the
+/// caller reuses it to skip a second `find_workspace_root` walk.
 pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
-) -> Result<AppTarget, Error> {
-    let Some((command, elicitation)) = classify(subcommand, cwd) else {
-        return Ok(AppTarget::CurrentDir);
+) -> Result<(AppTarget, Option<vite_workspace::WorkspaceRoot>), Error> {
+    let (command, elicitation) = match classify(subcommand, cwd) {
+        Classification::RunInPlace(workspace_root) => {
+            return Ok((AppTarget::CurrentDir, workspace_root));
+        }
+        Classification::Elicit(command, elicitation) => (command, elicitation),
     };
     let workspace_root = match elicitation {
         Elicitation::DefaultPackage(value) => {
-            return Ok(resolve_default_package(command, cwd, value));
+            return Ok((resolve_default_package(command, cwd, value), None));
         }
         Elicitation::WorkspaceRoot(workspace_root) => workspace_root,
     };
@@ -332,7 +355,9 @@ pub(super) fn resolve_app_target(
         })
         .collect();
     if rows.is_empty() {
-        return Ok(AppTarget::CurrentDir);
+        // Root excluded and no members: runs in place, and the root we found
+        // is still valid for the unchanged cwd.
+        return Ok((AppTarget::CurrentDir, Some(workspace_root)));
     }
     rows.sort_by(|a, b| (!a.runnable, a.path.as_str()).cmp(&(!b.runnable, b.path.as_str())));
 
@@ -343,14 +368,14 @@ pub(super) fn resolve_app_target(
         let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
         let picked = if single_runnable { Some(0) } else { run_package_picker(command, &rows)? };
         let Some(index) = picked else {
-            return Ok(AppTarget::Exit(ExitStatus(130)));
+            return Ok((AppTarget::Exit(ExitStatus(130)), None));
         };
         let row = &rows[index];
         // Deliberately stdout via println!: these lines belong to the
         // command's own output stream, like the tool output that follows.
         println!("Selected package: {} ({})", row.name, row.path);
         println!("Tip: run this directly with `vp -C {} {command}`", row.path);
-        return Ok(AppTarget::Dir(row.absolute.clone()));
+        return Ok((AppTarget::Dir(row.absolute.clone()), None));
     }
 
     output::error(&format!("`vp {command}` at the workspace root needs a target package."));
@@ -364,7 +389,7 @@ pub(super) fn resolve_app_target(
     let example = &rows[0].path;
     output::raw_stderr(&format!("  Pass a directory:  vp -C {example} {command}"));
     output::raw_stderr(&format!("  Or run every package's {command} script:  vp run -r {command}"));
-    Ok(AppTarget::Exit(ExitStatus(1)))
+    Ok((AppTarget::Exit(ExitStatus(1)), None))
 }
 
 #[cfg(test)]
