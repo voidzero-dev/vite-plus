@@ -177,27 +177,42 @@ jobs:
           Write-Host "=== STDERR / trace ==="; Get-Content $err -ErrorAction SilentlyContinue | Write-Host
           exit 0
 
-      # ---- Probe 2: single case through the PTY snapshot runner ----
-      - name: 'Probe 2 — help::global via PTY runner, trace + sampler'
-        shell: bash
-        env:
-          RUST_BACKTRACE: full
-          __COMPAT_LAYER: RunAsInvoker
+      # ---- Probe 2: single case through the PTY runner, foreground sampler ----
+      - name: 'Probe 2 — help::global via PTY runner (spin-vs-blocked sampler)'
+        shell: pwsh
         run: |
-          set +e
-          export VP_SNAP_GLOBAL_VP="$USERPROFILE/.vite-plus/current/bin/vp.exe"
-          export VP_SNAP_JS_RUNTIME_DIR="$USERPROFILE/.vite-plus/js_runtime"
-          export VITE_LOG=trace
-          export RUST_LOG="vite_cli_snapshots=trace,debug"
+          $ErrorActionPreference = "Continue"
+          $env:VP_SNAP_GLOBAL_VP      = Join-Path $env:USERPROFILE ".vite-plus\current\bin\vp.exe"
+          $env:VP_SNAP_JS_RUNTIME_DIR = Join-Path $env:USERPROFILE ".vite-plus\js_runtime"
+          $env:VITE_LOG       = "trace"
+          $env:RUST_LOG       = "vite_cli_snapshots=trace,debug"
+          $env:RUST_BACKTRACE = "full"
+          $env:__COMPAT_LAYER = "RunAsInvoker"
 
-          # Background sampler: watch vp/node/vpt CPU while the case runs.
-          powershell -NoProfile -Command "1..25 | ForEach-Object { Get-Process vp,node,vpt -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU,@{n='WSMB';e={[int](\$_.WS/1MB)}} | Format-Table -AutoSize | Out-String | Write-Host; Start-Sleep 3 }" &
-          MON=$!
+          $log  = Join-Path $env:RUNNER_TEMP "nextest-out.txt"
+          $elog = Join-Path $env:RUNNER_TEMP "nextest-err.txt"
+          $nargs = @("nextest","run","--archive-file","windows-snapshot-tests.tar.zst",
+                     "--workspace-remap",".","-E","test(help::global)","--no-capture","--no-fail-fast")
+          Write-Host "=== launching nextest (help::global) in background ==="
+          $proc = Start-Process -FilePath "cargo-nextest" -ArgumentList $nargs -NoNewWindow -PassThru `
+                    -RedirectStandardOutput $log -RedirectStandardError $elog
 
-          echo "=== nextest: help::global (single case, --no-capture) ==="
-          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst \
-            --workspace-remap . -E 'test(help::global)' --no-capture --no-fail-fast
-          echo "nextest exit: $?"
-
-          kill "$MON" 2>/dev/null || true
+          # Foreground sampler: rising CPU / many vp procs = spin (self-exec);
+          # flat CPU with one blocked vp = waiting (ConPTY read / terminal probe).
+          for ($i = 0; $i -lt 24; $i++) {
+            $vps = @(Get-Process vp -ErrorAction SilentlyContinue)
+            Write-Host ("--- t=" + ($i*3) + "s   vp procs=" + $vps.Count + " ---")
+            Get-Process vp,node,vpt -ErrorAction SilentlyContinue |
+              Select-Object Id,ProcessName,CPU,@{n='WS_MB';e={[int]($_.WS/1MB)}} |
+              Format-Table -AutoSize | Out-String | Write-Host
+            if ($proc.HasExited) { Write-Host "nextest exited code $($proc.ExitCode)"; break }
+            Start-Sleep -Seconds 3
+          }
+          if (-not $proc.HasExited) {
+            Write-Host "::warning::nextest still running after the sampling window; killing"
+            Get-CimInstance Win32_Process -Filter "Name='vp.exe' OR Name='cargo-nextest.exe'" |
+              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          }
+          Write-Host "=== nextest STDOUT ==="; Get-Content $log  -ErrorAction SilentlyContinue | Write-Host
+          Write-Host "=== nextest STDERR ==="; Get-Content $elog -ErrorAction SilentlyContinue | Write-Host
           exit 0
