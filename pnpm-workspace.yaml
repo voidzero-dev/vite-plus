@@ -17,7 +17,7 @@ catalog:
   '@oxc-node/core': ^0.1.0
   '@oxc-project/runtime': =0.138.0
   '@oxc-project/types': =0.138.0
-  '@oxlint/plugins': =1.68.0
+  '@oxlint/plugins': =1.72.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
@@ -40,7 +40,7 @@ catalog:
   '@types/strip-comments': ^2.0.4
   '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
-  '@typescript/native-preview': 7.0.0-dev.20260605.1
+  '@typescript/native-preview': 7.0.0-dev.20260705.1
   '@vitejs/plugin-react': ^5.1.2
   '@vitest/browser': 4.1.10
   '@vitest/browser-playwright': 4.1.10
@@ -122,7 +122,7 @@ catalog:
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
-  valibot: 1.4.1
+  valibot: 1.4.2
   validate-npm-package-name: ^7.0.2
   vitepress: ^2.0.0-alpha.15
   vitepress-plugin-graphviz: ^0.1.0
