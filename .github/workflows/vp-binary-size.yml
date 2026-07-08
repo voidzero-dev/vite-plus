@@ -303,13 +303,22 @@ jobs:
               },
             ];
 
-            const formatSize = (bytes) =>
-              `${bytes.toLocaleString('en-US')} B (${(bytes / 1024 / 1024).toFixed(2)} MiB)`;
+            const formatSize = (bytes, includePlus = false) => {
+              const absolute = Math.abs(bytes);
+              const sign = bytes < 0 ? '-' : includePlus && bytes > 0 ? '+' : '';
+              if (absolute >= 1024 ** 2) {
+                return `${sign}${(absolute / 1024 ** 2).toFixed(2)} MiB`;
+              }
+              if (absolute >= 1024) {
+                return `${sign}${(absolute / 1024).toFixed(2)} KiB`;
+              }
+              return `${sign}${absolute.toLocaleString('en-US')} B`;
+            };
             const formatDelta = (base, head) => {
               const delta = head - base;
               const percent = base === 0 ? 0 : (delta / base) * 100;
               const sign = delta > 0 ? '+' : '';
-              return `${sign}${delta.toLocaleString('en-US')} B (${sign}${percent.toFixed(2)}%)`;
+              return `${formatSize(delta, true)} (${sign}${percent.toFixed(2)}%)`;
             };
 
             const shortSha = process.env.HEAD_SHA.slice(0, 7);
