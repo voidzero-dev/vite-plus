@@ -335,6 +335,14 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      - name: Pin VP_HOME to USERPROFILE
+        # Namespace's Windows runners run jobs under a service account whose real
+        # profile (C:\Windows\system32\config\systemprofile) differs from
+        # %USERPROFILE%; vp resolves its home from the OS profile. Pin VP_HOME so
+        # the install, generated shims, and these assertions share one location.
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+
       - name: Assert PowerShell 5.x
         shell: powershell
         run: |
@@ -484,10 +492,21 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      - name: Pin VP_HOME to USERPROFILE
+        # Namespace's Windows runners run jobs under a service account whose real
+        # profile (C:\Windows\system32\config\systemprofile) differs from
+        # %USERPROFILE%; vp resolves its home from the OS profile. Pin VP_HOME so
+        # the install, generated shims, and these assertions share one location.
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+
       - name: Install PowerShell 7.6
         shell: pwsh
         run: |
-          dotnet tool install --global PowerShell --version 7.6.0
+          # --tool-path (not --global): a global tool install resolves the target
+          # under the OS user profile, which is the service-account systemprofile
+          # on Namespace, not %USERPROFILE%. An explicit path is account-independent.
+          dotnet tool install --tool-path "$env:USERPROFILE\.dotnet\tools" PowerShell --version 7.6.0
           $pwsh76 = "$env:USERPROFILE\.dotnet\tools\pwsh.exe"
           echo "PWSH76=$pwsh76" >> $env:GITHUB_ENV
           $ver = & $pwsh76 -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
@@ -642,6 +661,14 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      - name: Pin VP_HOME to USERPROFILE
+        # Namespace's Windows runners run jobs under a service account whose real
+        # profile (C:\Windows\system32\config\systemprofile) differs from
+        # %USERPROFILE%; vp resolves its home from the OS profile. Pin VP_HOME so
+        # the install, generated shims, and these assertions share one location.
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+
       - name: Run install.ps1
         shell: pwsh
         run: |
@@ -795,6 +822,14 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
+
+      - name: Pin VP_HOME to USERPROFILE
+        # Namespace's Windows runners run jobs under a service account whose real
+        # profile (C:\Windows\system32\config\systemprofile) differs from
+        # %USERPROFILE%; vp-setup.exe installs into VP_HOME (falling back to the OS
+        # profile). Pin it so the install and these assertions share one location.
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
 
       - name: Setup Dev Drive
         uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
