@@ -94,38 +94,38 @@ catalogs:
       specifier: 7.0.0-dev.20260605.1
       version: 7.0.0-dev.20260605.1
     '@vitest/browser':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/browser-playwright':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/browser-preview':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/browser-webdriverio':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/expect':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/mocker':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/pretty-format':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/runner':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/snapshot':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/spy':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@vitest/utils':
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     '@yarnpkg/fslib':
       specifier: ^3.1.3
       version: 3.1.4
@@ -283,8 +283,8 @@ catalogs:
       specifier: ^7.0.2
       version: 7.0.2
     vitest:
-      specifier: 4.1.9
-      version: 4.1.9
+      specifier: 4.1.10
+      version: 4.1.10
     vue:
       specifier: ^3.5.35
       version: 3.5.39
@@ -364,7 +364,7 @@ importers:
         version: link:packages/cli
       vitest:
         specifier: 'catalog:'
-        version: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+        version: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
 
   packages/cli:
     dependencies:
@@ -376,31 +376,31 @@ importers:
         version: 1.68.0
       '@vitest/browser':
         specifier: 'catalog:'
-        version: 4.1.9(vite@packages+core)(vitest@4.1.9)
+        version: 4.1.10(vite@packages+core)(vitest@4.1.10)
       '@vitest/browser-preview':
         specifier: 'catalog:'
-        version: 4.1.9(vite@packages+core)(vitest@4.1.9)
+        version: 4.1.10(vite@packages+core)(vitest@4.1.10)
       '@vitest/expect':
         specifier: 'catalog:'
-        version: 4.1.9
+        version: 4.1.10
       '@vitest/mocker':
         specifier: 'catalog:'
-        version: 4.1.9(vite@packages+core)
+        version: 4.1.10(vite@packages+core)
       '@vitest/pretty-format':
         specifier: 'catalog:'
-        version: 4.1.9
+        version: 4.1.10
       '@vitest/runner':
         specifier: 'catalog:'
-        version: 4.1.9
+        version: 4.1.10
       '@vitest/snapshot':
         specifier: 'catalog:'
-        version: 4.1.9
+        version: 4.1.10
       '@vitest/spy':
         specifier: 'catalog:'
-        version: 4.1.9
+        version: 4.1.10
       '@vitest/utils':
         specifier: 'catalog:'
-        version: 4.1.9
+        version: 4.1.10
       '@voidzero-dev/vite-plus-core':
         specifier: workspace:*
         version: link:../core
@@ -415,7 +415,7 @@ importers:
         version: 0.24.0
       vitest:
         specifier: 'catalog:'
-        version: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+        version: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     devDependencies:
       '@napi-rs/cli':
         specifier: 'catalog:'
@@ -437,10 +437,10 @@ importers:
         version: 4.0.2
       '@vitest/browser-playwright':
         specifier: 'catalog:'
-        version: 4.1.9(playwright@1.57.0)(vite@packages+core)(vitest@4.1.9)
+        version: 4.1.10(playwright@1.57.0)(vite@packages+core)(vitest@4.1.10)
       '@vitest/browser-webdriverio':
         specifier: 'catalog:'
-        version: 4.1.9(vite@packages+core)(vitest@4.1.9)(webdriverio@9.20.1)
+        version: 4.1.10(vite@packages+core)(vitest@4.1.10)(webdriverio@9.20.1)
       '@voidzero-dev/vite-plus-prompts':
         specifier: workspace:*
         version: link:../prompts
@@ -726,7 +726,7 @@ importers:
         version: 7.8.4
       vitest:
         specifier: 'catalog:'
-        version: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+        version: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -1081,7 +1081,7 @@ importers:
         version: link:../packages/core
       vitest:
         specifier: ^4.1.9
-        version: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+        version: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
 
   vite/packages/create-vite:
     devDependencies:
@@ -4865,33 +4865,33 @@ packages:
   '@vitejs/release-scripts@1.7.1':
     resolution: {integrity: sha512-8YpovUu73Yb+ZnXIsR9VoF/yhbd2wTMhvJKDOjlB0bbOdm+ATl1l7Z7rskdX4CGzN7UfdvLcE6vGaHDCsirdpw==}
 
-  '@vitest/browser-playwright@4.1.9':
-    resolution: {integrity: sha512-Bq1rOGf9waevzG3EOkO/dene6bvKTUsZMVg8S1i+WH3JcMjuXEjiahP9rAqZRELUqjBySOJsvvSWqK/B3wjKQw==}
+  '@vitest/browser-playwright@4.1.10':
+    resolution: {integrity: sha512-nMoXGEiRpT7m3W7NsbvrM2aKNwiNHZf+zEpUCvMteGjZFvfT96Q9fh7QyB98dvDWXiKvrLxA7bJ1mCOOv+JQPw==}
     peerDependencies:
       playwright: '*'
-      vitest: 4.1.9
+      vitest: 4.1.10
 
-  '@vitest/browser-preview@4.1.9':
-    resolution: {integrity: sha512-a4/OrkMDb/WUnE4OOB/4FJbK3rYVO7YykqtUgcTKG4p2a0R3XcjPVu7SLRHFBs2+NIYhv5yxp1Lz3dbdGBjIow==}
+  '@vitest/browser-preview@4.1.10':
+    resolution: {integrity: sha512-14MJrL59ZFkqXLjwfSk6RzTDy5Czf9UG4+8q8L6Gxjs2aPjEce/cVNYV14bXAc2BvMjUNu904+ZEZA1Xc1wtvQ==}
     peerDependencies:
-      vitest: 4.1.9
+      vitest: 4.1.10
 
-  '@vitest/browser-webdriverio@4.1.9':
-    resolution: {integrity: sha512-bZFBg9PfjsiMJkD1cX3n7nUX+7kynZloLhnahBcbVPUP9NvxbyEhb52nSuiua2Fj+iSEhBqM/fWVDGMDZqloNg==}
+  '@vitest/browser-webdriverio@4.1.10':
+    resolution: {integrity: sha512-CnZZFYFV7kIda1QhnV8ZxTbO/EoGb1S48RSMf3/iB4JjXlDl2sRWJ0VtbSq6Aav3YpqDc/X5oq3p91nUIU1psA==}
     peerDependencies:
-      vitest: 4.1.9
+      vitest: 4.1.10
       webdriverio: '*'
 
-  '@vitest/browser@4.1.9':
-    resolution: {integrity: sha512-j1BKtWmPcqpMhmx/L9EPLgAJpCb0zKfwoWLmqBbxaogCXHjOwHFSEoHCBfnGtx93xKQwilZ26m+UOsHqHMkRNg==}
+  '@vitest/browser@4.1.10':
+    resolution: {integrity: sha512-UDwuWGwXj646CBx/bQHOaJSX7np0I8JL/UKQYa1e4QrVHH8VdWtx8eaOuf8sy0ShwDgR6NjJAsp5eF6vjF6qng==}
     peerDependencies:
-      vitest: 4.1.9
+      vitest: 4.1.10
 
-  '@vitest/expect@4.1.9':
-    resolution: {integrity: sha512-vl/rYsUKcBr3SnQn166+XR5ZQcgMx3DQhFWdfli/cWpLnLUmbxZvyrJZotLFUryib+LtArYMSTJ5RbQ57ZqrlA==}
+  '@vitest/expect@4.1.10':
+    resolution: {integrity: sha512-YsCn+qAk1GWjQOWFEsEcL2gNQ0zmVmQu3T03qP6UyjhtmdtwtbuI+DASn/7iQB3HGTXkdBwGddzxPlmiql5vlA==}
 
-  '@vitest/mocker@4.1.9':
-    resolution: {integrity: sha512-EVkXzBjrPGM+cK8/ANWgBrkUCfJfb38/EfTSO8h7pWvKkyPkpWxvR7BkD2MyItMF62C97zAEoqdpUixwR/e+Rw==}
+  '@vitest/mocker@4.1.10':
+    resolution: {integrity: sha512-v0xaezt+DKEmKfaxg133ldzADrwLGd7Ze1MfQQTYfvs8OqZIwbxyxaYURivwV7sWy5fqn3rH5uOrSp07bp44Ow==}
     peerDependencies:
       msw: ^2.4.9
       vite: workspace:@voidzero-dev/vite-plus-core@*
@@ -4901,17 +4901,23 @@ packages:
       vite:
         optional: true
 
+  '@vitest/pretty-format@4.1.10':
+    resolution: {integrity: sha512-W1HsjSH4MXQ9YfmmhLAoIYf1HRfekQCGngeIgcei6MP5QQGWUe0gkopdZQaVCFO+JDJMrAJGwa5pRpNpvy4P8Q==}
+
   '@vitest/pretty-format@4.1.9':
     resolution: {integrity: sha512-s0iufns3iIFitdgm+YR7g1whCAaGtXz459VS9/PqyKDEEFgYIhsHOQmXgIgDuYCt7DeQmiZT0Qe2OA2p4ZPu5A==}
 
-  '@vitest/runner@4.1.9':
-    resolution: {integrity: sha512-KXLMDtc7oe70+3mJfGrPUWPesswH+3sTxAMAMl8DG7I8IUQT4XW718dY5ID3vPUcmlu27CcKfY4P3h3I29SLJg==}
+  '@vitest/runner@4.1.10':
+    resolution: {integrity: sha512-IKI6kpIH+LmpROplyLwBBaCfMgOZOMsygVa6BARD6ahA04VRuJSa6OaVG7kRvSEMD870Vd91rSSw0eegtWyLGg==}
 
-  '@vitest/snapshot@4.1.9':
-    resolution: {integrity: sha512-Jc7RKGNBo8Z28WYIm0Niej4xdSPByRf6mU58VpHQkd6Zh05rlnA+twjbK5HyeIGHxrzsc3mJgS43uM0CZKzaIA==}
+  '@vitest/snapshot@4.1.10':
+    resolution: {integrity: sha512-xRkfOT1qpTAi/Ti4Y1LtfRc3kEuqxGw59eN2jN9pRWMtS/XDevekhcFSqvQqjUNGksfjMJu3Y+oJ+4Ypn2OaJw==}
 
-  '@vitest/spy@4.1.9':
-    resolution: {integrity: sha512-fHpsS6mIi+PiEW+vcRVOMkX1oSaPKne3VOclSFICPcGOmfKgXPU5iAah+wcNcj2xPrCCmfq99IDGf+EojhhvhA==}
+  '@vitest/spy@4.1.10':
+    resolution: {integrity: sha512-PLf/Ugvoq5wO/b4rwYCR1h2PSIdXz7wnkQFMiUpLdtM7l6pqVFcQIBEHyT1+l+cj7mNwAfZHzqXqDyjvOuwbDw==}
+
+  '@vitest/utils@4.1.10':
+    resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
   '@vitest/utils@4.1.9':
     resolution: {integrity: sha512-A51o8ymO5PpqlWNnBP9ZHPXDIpuMtTLlGSjN7la4US+LJzoUMyhwjA5QXlm39JexgwHKW4Xjs8Z2d3dLCXOeuA==}
@@ -8479,20 +8485,20 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  vitest@4.1.9:
-    resolution: {integrity: sha512-nE3/LEyc0z87uHYLZebqCUOaJr2hdtuPp7BQ4BosVFnfltxgAvMG08NyrSGlPpOUWvR27c5flSmYFTNr78L9GQ==}
+  vitest@4.1.10:
+    resolution: {integrity: sha512-R9jUTe5S4Qb0HCd4TNqpC7oGcrMssMRGXLW80ubjWsW9VH5GF8y1Y0SFLY9AbqSk6nt0PnOx4H4WNJYZ13GUPw==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
       '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
-      '@vitest/browser-playwright': 4.1.9
-      '@vitest/browser-preview': 4.1.9
-      '@vitest/browser-webdriverio': 4.1.9
-      '@vitest/coverage-istanbul': 4.1.9
-      '@vitest/coverage-v8': 4.1.9
-      '@vitest/ui': 4.1.9
+      '@vitest/browser-playwright': 4.1.10
+      '@vitest/browser-preview': 4.1.10
+      '@vitest/browser-webdriverio': 4.1.10
+      '@vitest/coverage-istanbul': 4.1.10
+      '@vitest/coverage-v8': 4.1.10
+      '@vitest/ui': 4.1.10
       happy-dom: '*'
       jsdom: '*'
       vite: workspace:@voidzero-dev/vite-plus-core@*
@@ -11924,35 +11930,35 @@ snapshots:
     transitivePeerDependencies:
       - conventional-commits-filter
 
-  '@vitest/browser-playwright@4.1.9(playwright@1.57.0)(vite@packages+core)(vitest@4.1.9)':
+  '@vitest/browser-playwright@4.1.10(playwright@1.57.0)(vite@packages+core)(vitest@4.1.10)':
     dependencies:
-      '@vitest/browser': 4.1.9(vite@packages+core)(vitest@4.1.9)
-      '@vitest/mocker': 4.1.9(vite@packages+core)
+      '@vitest/browser': 4.1.10(vite@packages+core)(vitest@4.1.10)
+      '@vitest/mocker': 4.1.10(vite@packages+core)
       playwright: 1.57.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     transitivePeerDependencies:
       - bufferutil
       - msw
       - utf-8-validate
       - vite
 
-  '@vitest/browser-preview@4.1.9(vite@packages+core)(vitest@4.1.9)':
+  '@vitest/browser-preview@4.1.10(vite@packages+core)(vitest@4.1.10)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
-      '@vitest/browser': 4.1.9(vite@packages+core)(vitest@4.1.9)
-      vitest: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      '@vitest/browser': 4.1.10(vite@packages+core)(vitest@4.1.10)
+      vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     transitivePeerDependencies:
       - bufferutil
       - msw
       - utf-8-validate
       - vite
 
-  '@vitest/browser-webdriverio@4.1.9(vite@packages+core)(vitest@4.1.9)(webdriverio@9.20.1)':
+  '@vitest/browser-webdriverio@4.1.10(vite@packages+core)(vitest@4.1.10)(webdriverio@9.20.1)':
     dependencies:
-      '@vitest/browser': 4.1.9(vite@packages+core)(vitest@4.1.9)
-      vitest: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      '@vitest/browser': 4.1.10(vite@packages+core)(vitest@4.1.10)
+      vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       webdriverio: 9.20.1
     transitivePeerDependencies:
       - bufferutil
@@ -11960,16 +11966,16 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@vitest/browser@4.1.9(vite@packages+core)(vitest@4.1.9)':
+  '@vitest/browser@4.1.10(vite@packages+core)(vitest@4.1.10)':
     dependencies:
       '@blazediff/core': 1.9.1
-      '@vitest/mocker': 4.1.9(vite@packages+core)
-      '@vitest/utils': 4.1.9
+      '@vitest/mocker': 4.1.10(vite@packages+core)
+      '@vitest/utils': 4.1.10
       magic-string: 0.30.21
       pngjs: 7.0.0
       sirv: 3.0.2(patch_hash=c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95)
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
@@ -11977,40 +11983,50 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@vitest/expect@4.1.9':
+  '@vitest/expect@4.1.10':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
-      '@vitest/spy': 4.1.9
-      '@vitest/utils': 4.1.9
+      '@vitest/spy': 4.1.10
+      '@vitest/utils': 4.1.10
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.9(vite@packages+core)':
+  '@vitest/mocker@4.1.10(vite@packages+core)':
     dependencies:
-      '@vitest/spy': 4.1.9
+      '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       vite: link:packages/core
 
+  '@vitest/pretty-format@4.1.10':
+    dependencies:
+      tinyrainbow: 3.1.0
+
   '@vitest/pretty-format@4.1.9':
     dependencies:
       tinyrainbow: 3.1.0
 
-  '@vitest/runner@4.1.9':
+  '@vitest/runner@4.1.10':
     dependencies:
-      '@vitest/utils': 4.1.9
+      '@vitest/utils': 4.1.10
       pathe: 2.0.3
 
-  '@vitest/snapshot@4.1.9':
+  '@vitest/snapshot@4.1.10':
     dependencies:
-      '@vitest/pretty-format': 4.1.9
-      '@vitest/utils': 4.1.9
+      '@vitest/pretty-format': 4.1.10
+      '@vitest/utils': 4.1.10
       magic-string: 0.30.21
       pathe: 2.0.3
 
-  '@vitest/spy@4.1.9': {}
+  '@vitest/spy@4.1.10': {}
+
+  '@vitest/utils@4.1.10':
+    dependencies:
+      '@vitest/pretty-format': 4.1.10
+      convert-source-map: 2.0.0
+      tinyrainbow: 3.1.0
 
   '@vitest/utils@4.1.9':
     dependencies:
@@ -15691,15 +15707,15 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vitest@4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core):
+  vitest@4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core):
     dependencies:
-      '@vitest/expect': 4.1.9
-      '@vitest/mocker': 4.1.9(vite@packages+core)
-      '@vitest/pretty-format': 4.1.9
-      '@vitest/runner': 4.1.9
-      '@vitest/snapshot': 4.1.9
-      '@vitest/spy': 4.1.9
-      '@vitest/utils': 4.1.9
+      '@vitest/expect': 4.1.10
+      '@vitest/mocker': 4.1.10(vite@packages+core)
+      '@vitest/pretty-format': 4.1.10
+      '@vitest/runner': 4.1.10
+      '@vitest/snapshot': 4.1.10
+      '@vitest/spy': 4.1.10
+      '@vitest/utils': 4.1.10
       es-module-lexer: 2.3.0
       expect-type: 1.3.0
       magic-string: 0.30.21
@@ -15717,23 +15733,23 @@ snapshots:
       '@edge-runtime/vm': 5.0.0
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.10.3
-      '@vitest/browser-playwright': 4.1.9(playwright@1.57.0)(vite@packages+core)(vitest@4.1.9)
-      '@vitest/browser-preview': 4.1.9(vite@packages+core)(vitest@4.1.9)
-      '@vitest/browser-webdriverio': 4.1.9(vite@packages+core)(vitest@4.1.9)(webdriverio@9.20.1)
+      '@vitest/browser-playwright': 4.1.10(playwright@1.57.0)(vite@packages+core)(vitest@4.1.10)
+      '@vitest/browser-preview': 4.1.10(vite@packages+core)(vitest@4.1.10)
+      '@vitest/browser-webdriverio': 4.1.10(vite@packages+core)(vitest@4.1.10)(webdriverio@9.20.1)
       happy-dom: 20.0.10
       jsdom: 27.2.0
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.9(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.9)(@vitest/browser-preview@4.1.9)(@vitest/browser-webdriverio@4.1.9)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core):
+  vitest@4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.2)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core):
     dependencies:
-      '@vitest/expect': 4.1.9
-      '@vitest/mocker': 4.1.9(vite@packages+core)
-      '@vitest/pretty-format': 4.1.9
-      '@vitest/runner': 4.1.9
-      '@vitest/snapshot': 4.1.9
-      '@vitest/spy': 4.1.9
-      '@vitest/utils': 4.1.9
+      '@vitest/expect': 4.1.10
+      '@vitest/mocker': 4.1.10(vite@packages+core)
+      '@vitest/pretty-format': 4.1.10
+      '@vitest/runner': 4.1.10
+      '@vitest/snapshot': 4.1.10
+      '@vitest/spy': 4.1.10
+      '@vitest/utils': 4.1.10
       es-module-lexer: 2.3.0
       expect-type: 1.3.0
       magic-string: 0.30.21
@@ -15751,9 +15767,9 @@ snapshots:
       '@edge-runtime/vm': 5.0.0
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.13.2
-      '@vitest/browser-playwright': 4.1.9(playwright@1.57.0)(vite@packages+core)(vitest@4.1.9)
-      '@vitest/browser-preview': 4.1.9(vite@packages+core)(vitest@4.1.9)
-      '@vitest/browser-webdriverio': 4.1.9(vite@packages+core)(vitest@4.1.9)(webdriverio@9.20.1)
+      '@vitest/browser-playwright': 4.1.10(playwright@1.57.0)(vite@packages+core)(vitest@4.1.10)
+      '@vitest/browser-preview': 4.1.10(vite@packages+core)(vitest@4.1.10)
+      '@vitest/browser-webdriverio': 4.1.10(vite@packages+core)(vitest@4.1.10)(webdriverio@9.20.1)
       happy-dom: 20.0.10
       jsdom: 27.2.0
     transitivePeerDependencies:

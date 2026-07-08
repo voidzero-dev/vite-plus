@@ -15,7 +15,7 @@
 {
   "name": "migration-upgrade-vitest-exact-peer-npm",
   "devDependencies": {
-    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-v8": "4.1.10",
     "@vitest/eslint-plugin": "^1.6.0",
     "@vitest/ui": "<semver>",
     "@vitest/utils": "<semver>",
