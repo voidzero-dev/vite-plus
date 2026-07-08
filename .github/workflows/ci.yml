@@ -949,6 +949,11 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      # Dev Drive works on the Namespace Windows runner: setup-dev-drive v4
+      # creates and mounts its ReFS VHD on namespace-profile-windows-4c-8g, and
+      # all three Windows shards pass with this step succeeding (nested
+      # virtualization is available there). Only cli-snapshot-test-windows moved
+      # off Namespace, and for an unrelated reason (Session-0 ConPTY, see there).
       - name: Setup Dev Drive
         if: runner.os == 'Windows'
         uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
