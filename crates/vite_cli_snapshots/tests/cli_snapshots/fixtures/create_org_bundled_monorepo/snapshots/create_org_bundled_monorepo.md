@@ -66,4 +66,9 @@ node_modules excluded even though tarball shipped no .gitignore
 
 ```
 node_modules
+
+# dotenv environment variable files
+.env
+.env.*
+!.env.example
 ```
