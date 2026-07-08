@@ -1,0 +1,203 @@
+# TEMPORARY debug workflow (remove before merge).
+#
+# Reproduces the `cli-snapshot-test-windows` hang on the Namespace Windows
+# runner (18/28 PTY snapshot cases wedge to a 60s timeout, including
+# `vp_help::help::global` = `vp --help`). It runs the exact same setup as the
+# real job but replaces the full suite with two instrumented probes:
+#
+#   1. DIRECT (no PTY): run the seeded global vp with an *isolated empty*
+#      VP_HOME + VITE_LOG=trace, with a hard 30s wait. The empty VP_HOME is the
+#      one variable the passing `cli-e2e-test` job does not exercise. If this
+#      hangs, the wedge is in vp itself (not the PTY runner) and the trace shows
+#      where; a background sampler tells spinning (self-exec race) from blocked.
+#   2. PTY: run just `help::global` through the snapshot runner with --no-capture
+#      and a process/CPU sampler, to confirm the faithful repro.
+#
+# Trigger: push a change to this file on the branch, or dispatch manually.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/namespace-windows-runners]
+    paths: ['.github/workflows/debug-snapshot-hang.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: debug-snapshot-hang-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rolldown:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/download-rolldown-binaries
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows-cli:
+    runs-on: namespace-profile-linux-x64-default
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/build-windows-cli
+        with:
+          save-cache: false
+
+  snapshot-archive:
+    runs-on: namespace-profile-linux-x64-default
+    env:
+      XWIN_ACCEPT_LICENSE: '1'
+      CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/setup-xwin
+        with:
+          save-cache: false
+          cache-key: windows-cross
+          tools: cargo-nextest
+      - name: Build snapshot test archive
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          cargo nextest archive -p vite_cli_snapshots \
+            --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-snapshot-test-archive
+          path: windows-snapshot-tests.tar.zst
+          retention-days: 3
+
+  debug:
+    needs: [rolldown, build-windows-cli, snapshot-archive]
+    name: Debug snapshot hang (Windows)
+    runs-on: namespace-profile-windows-4c-8g
+    timeout-minutes: 25
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - name: Pin VP_HOME to USERPROFILE
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+
+      - name: Setup Dev Drive
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            TEMP,{{ DEV_DRIVE }}/Temp
+            TMP,{{ DEV_DRIVE }}/Temp
+
+      - name: Create TEMP/TMP on Dev Drive
+        shell: bash
+        run: mkdir -p "$TEMP" "$TMP"
+
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Download prebuilt Windows binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-pc-windows-msvc
+          skip-native: true
+
+      - name: Install Global CLI vp
+        shell: bash
+        run: pnpm bootstrap-cli:ci
+
+      - name: Prewarm managed runtime
+        shell: bash
+        run: |
+          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
+            || echo "prewarm failed; the runtime will download on demand"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-snapshot-test-archive
+
+      - uses: taiki-e/install-action@c93ccc03e00cd0e08e494f5fd058a6c55a6a1907 # v2.82.8
+        with:
+          tool: cargo-nextest
+
+      # ---- Probe 1: bare vp with an ISOLATED EMPTY VP_HOME (no PTY) ----
+      - name: 'Probe 1 — direct vp --help, empty VP_HOME, trace'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $vp = Join-Path $env:USERPROFILE ".vite-plus\current\bin\vp.exe"
+          Write-Host "vp: $vp (exists: $(Test-Path $vp))"
+
+          $iso = Join-Path $env:RUNNER_TEMP "iso-vphome"
+          Remove-Item -Recurse -Force $iso -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $iso | Out-Null
+          $out = Join-Path $env:RUNNER_TEMP "p1-out.txt"
+          $err = Join-Path $env:RUNNER_TEMP "p1-err.txt"
+
+          # Run under the isolated, empty VP_HOME (the snapshot cases' condition).
+          $env:VP_HOME  = $iso
+          $env:VITE_LOG = "trace"
+          Write-Host "=== $vp --help  (VP_HOME=$iso) ==="
+          $p = Start-Process -FilePath $vp -ArgumentList "--help" -NoNewWindow -PassThru `
+                 -RedirectStandardOutput $out -RedirectStandardError $err
+          try {
+            Wait-Process -Id $p.Id -Timeout 30 -ErrorAction Stop
+            Write-Host "EXITED with code $($p.ExitCode)"
+          } catch {
+            Write-Host "::warning::Probe 1 HUNG: vp --help did not exit in 30s (repro WITHOUT a PTY)"
+            Write-Host "--- vp/node process tree ---"
+            Get-CimInstance Win32_Process -Filter "Name='vp.exe' OR Name='node.exe'" |
+              Select-Object ProcessId,ParentProcessId,CommandLine | Format-List | Out-String | Write-Host
+            Write-Host "--- CPU samples (rising CPU = busy/self-exec loop; flat = blocked) ---"
+            1..3 | ForEach-Object {
+              Get-Process vp,node -ErrorAction SilentlyContinue |
+                Select-Object Id,ProcessName,CPU,@{n='WS_MB';e={[int]($_.WS/1MB)}} |
+                Format-Table -AutoSize | Out-String | Write-Host
+              Start-Sleep -Seconds 2
+            }
+            Get-CimInstance Win32_Process -Filter "Name='vp.exe'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          }
+          Write-Host "=== STDOUT ==="; Get-Content $out -ErrorAction SilentlyContinue | Write-Host
+          Write-Host "=== STDERR / trace ==="; Get-Content $err -ErrorAction SilentlyContinue | Write-Host
+          exit 0
+
+      # ---- Probe 2: single case through the PTY snapshot runner ----
+      - name: 'Probe 2 — help::global via PTY runner, trace + sampler'
+        shell: bash
+        env:
+          RUST_BACKTRACE: full
+          __COMPAT_LAYER: RunAsInvoker
+        run: |
+          set +e
+          export VP_SNAP_GLOBAL_VP="$USERPROFILE/.vite-plus/current/bin/vp.exe"
+          export VP_SNAP_JS_RUNTIME_DIR="$USERPROFILE/.vite-plus/js_runtime"
+          export VITE_LOG=trace
+          export RUST_LOG="vite_cli_snapshots=trace,debug"
+
+          # Background sampler: watch vp/node/vpt CPU while the case runs.
+          powershell -NoProfile -Command "1..25 | ForEach-Object { Get-Process vp,node,vpt -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU,@{n='WSMB';e={[int](\$_.WS/1MB)}} | Format-Table -AutoSize | Out-String | Write-Host; Start-Sleep 3 }" &
+          MON=$!
+
+          echo "=== nextest: help::global (single case, --no-capture) ==="
+          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst \
+            --workspace-remap . -E 'test(help::global)' --no-capture --no-fail-fast
+          echo "nextest exit: $?"
+
+          kill "$MON" 2>/dev/null || true
+          exit 0
