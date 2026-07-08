@@ -33,6 +33,20 @@ static TOOL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// The workspace's own vite-plus / @voidzero-dev/vite-plus-core version is
+// written verbatim into scaffolded catalogs and manifests (`vite-plus: 0.2.3`,
+// `"vite-plus": "0.2.3"`, `npm:@voidzero-dev/vite-plus-core@0.2.3`). Unlike
+// third-party deps it bumps on every Vite+ release, so mask it by package
+// context while leaving other dep versions (core-js, typescript, ...)
+// assertable. The `vite-plus` key form requires a line-leading key so package
+// NAME values like `"vite-plus-application"` are untouched, and it needs a
+// digit after the separator so `vite-plus: catalog:` stays verbatim.
+static VP_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?m)(^\s*"?vite-plus"?\s*:\s*"?|@voidzero-dev/vite-plus-core@)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+    )
+    .unwrap()
+});
 // Output bytes differ across OSes (line endings, embedded paths), so byte
 // sizes and content-derived asset hashes can never be part of a shared
 // snapshot. The unit is kept ("<size> kB"): it only changes when content
@@ -158,6 +172,10 @@ pub fn redact_output(
 
     // Redact bare runtime-tool versions by name context (see TOOL_VERSION_RE)
     output = TOOL_VERSION_RE.replace_all(&output, "$1$2<version>").into_owned();
+
+    // Redact the workspace's own vite-plus/core version by package context
+    // (see VP_VERSION_RE), which bumps on every release.
+    output = VP_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
 
     // Redact thread counts like "16 threads" to "<n> threads"
     output = THREAD_RE.replace_all(&output, "<n> threads").into_owned();

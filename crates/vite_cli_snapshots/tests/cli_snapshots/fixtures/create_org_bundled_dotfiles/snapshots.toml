@@ -1,0 +1,10 @@
+[[case]]
+name = "create_org_bundled_dotfiles"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:demo", "--no-interactive", "--directory", "my-demo-app"], comment = "bundled template with _gitignore/_npmrc", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "my-demo-app", "--all"], comment = "verify _gitignore/_npmrc were renamed and no underscore variants remain", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-demo-app/.gitignore"], comment = "verify _gitignore content was preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-demo-app/.npmrc"], comment = "verify _npmrc content was preserved", continue-on-failure = true },
+]

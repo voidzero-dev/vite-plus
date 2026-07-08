@@ -1,0 +1,25 @@
+# create_org_no_interactive_error
+
+## `vp create @your-org --no-interactive`
+
+prints manifest table, exits 1
+
+**Exit code:** 1
+
+```
+
+A template name is required when running `vp create @your-org` in non-interactive mode.
+
+Available templates in @your-org/create:
+
+  NAME     DESCRIPTION                  TEMPLATE
+  web      Web app template             @your-org/template-web
+  library  TypeScript library template  @your-org/template-library
+
+Examples:
+  # Scaffold a specific template from the org
+  vp create @your-org:web --no-interactive
+
+  # Or use a Vite+ built-in template
+  vp create vite:application --no-interactive
+```

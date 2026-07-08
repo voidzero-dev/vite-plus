@@ -1,5 +1,0 @@
-{
-  "commands": [
-    "node $SNAP_LOCAL_REGISTRY -- vp create @your-org --no-interactive # invalid manifest -> schema error"
-  ]
-}

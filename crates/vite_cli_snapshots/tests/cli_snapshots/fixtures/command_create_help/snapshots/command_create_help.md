@@ -1,0 +1,211 @@
+# command_create_help
+
+## `vp create -h`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Use any builtin, local or remote template with Vite+.
+
+Arguments:
+  TEMPLATE  Template name. Run `vp create --list` to see available templates.
+            - Default: vite:monorepo, vite:application, vite:library, vite:generator
+            - Remote: vite, @tanstack/start, create-next-app,
+              create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
+            - Local: a `create.templates` entry name from vite.config.ts (monorepo)
+            - Org scope: @your-org → picker from @your-org/create's createConfig.templates manifest
+            - Org entry: @your-org:web → manifest entry "web" from @your-org/create
+            When omitted, uses `create.defaultTemplate` from vite.config.ts if set.
+
+Options:
+  --directory DIR         Target directory for the generated project.
+  --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
+  --no-agent              Skip writing coding agent instructions
+  --editor NAME           Write editor config files for the specified editor.
+  --no-editor             Skip writing editor config files
+  --git                   Initialize a git repository
+  --no-git                Skip git repository initialization
+  --hooks                 Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks              Skip pre-commit hooks setup
+  --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
+  --approve-builds        Approve and run gated dependency build scripts without prompting
+  --verbose               Show detailed scaffolding output
+  --no-interactive        Run in non-interactive mode
+  --list                  List all available templates
+  -h, --help              Show this help message
+
+Template Options:
+  Any arguments after -- are passed directly to the template.
+
+Examples:
+  # Interactive mode
+  vp create
+
+  # Use existing templates (shorthand expands to create-* packages)
+  vp create vite
+  vp create @tanstack/start
+  vp create svelte
+  vp create vite -- --template react-ts
+
+  # Full package names also work
+  vp create create-vite
+  vp create create-next-app
+
+  # Create Vite+ monorepo, application, library, or generator scaffolds
+  vp create vite:monorepo
+  vp create vite:application
+  vp create vite:library
+  vp create vite:generator
+
+  # Use templates from GitHub (via degit)
+  vp create github:user/repo
+  vp create https://github.com/user/template-repo
+
+  # Pick from an org that publishes @scope/create with createConfig.templates
+  vp create @your-org # interactive picker
+  vp create @your-org:web # direct manifest-entry selection
+
+Documentation: https://viteplus.dev/guide/create
+```
+
+## `vp create --help`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Use any builtin, local or remote template with Vite+.
+
+Arguments:
+  TEMPLATE  Template name. Run `vp create --list` to see available templates.
+            - Default: vite:monorepo, vite:application, vite:library, vite:generator
+            - Remote: vite, @tanstack/start, create-next-app,
+              create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
+            - Local: a `create.templates` entry name from vite.config.ts (monorepo)
+            - Org scope: @your-org → picker from @your-org/create's createConfig.templates manifest
+            - Org entry: @your-org:web → manifest entry "web" from @your-org/create
+            When omitted, uses `create.defaultTemplate` from vite.config.ts if set.
+
+Options:
+  --directory DIR         Target directory for the generated project.
+  --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
+  --no-agent              Skip writing coding agent instructions
+  --editor NAME           Write editor config files for the specified editor.
+  --no-editor             Skip writing editor config files
+  --git                   Initialize a git repository
+  --no-git                Skip git repository initialization
+  --hooks                 Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks              Skip pre-commit hooks setup
+  --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
+  --approve-builds        Approve and run gated dependency build scripts without prompting
+  --verbose               Show detailed scaffolding output
+  --no-interactive        Run in non-interactive mode
+  --list                  List all available templates
+  -h, --help              Show this help message
+
+Template Options:
+  Any arguments after -- are passed directly to the template.
+
+Examples:
+  # Interactive mode
+  vp create
+
+  # Use existing templates (shorthand expands to create-* packages)
+  vp create vite
+  vp create @tanstack/start
+  vp create svelte
+  vp create vite -- --template react-ts
+
+  # Full package names also work
+  vp create create-vite
+  vp create create-next-app
+
+  # Create Vite+ monorepo, application, library, or generator scaffolds
+  vp create vite:monorepo
+  vp create vite:application
+  vp create vite:library
+  vp create vite:generator
+
+  # Use templates from GitHub (via degit)
+  vp create github:user/repo
+  vp create https://github.com/user/template-repo
+
+  # Pick from an org that publishes @scope/create with createConfig.templates
+  vp create @your-org # interactive picker
+  vp create @your-org:web # direct manifest-entry selection
+
+Documentation: https://viteplus.dev/guide/create
+```
+
+## `vp help create`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Use any builtin, local or remote template with Vite+.
+
+Arguments:
+  TEMPLATE  Template name. Run `vp create --list` to see available templates.
+            - Default: vite:monorepo, vite:application, vite:library, vite:generator
+            - Remote: vite, @tanstack/start, create-next-app,
+              create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
+            - Local: a `create.templates` entry name from vite.config.ts (monorepo)
+            - Org scope: @your-org → picker from @your-org/create's createConfig.templates manifest
+            - Org entry: @your-org:web → manifest entry "web" from @your-org/create
+            When omitted, uses `create.defaultTemplate` from vite.config.ts if set.
+
+Options:
+  --directory DIR         Target directory for the generated project.
+  --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
+  --no-agent              Skip writing coding agent instructions
+  --editor NAME           Write editor config files for the specified editor.
+  --no-editor             Skip writing editor config files
+  --git                   Initialize a git repository
+  --no-git                Skip git repository initialization
+  --hooks                 Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks              Skip pre-commit hooks setup
+  --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
+  --approve-builds        Approve and run gated dependency build scripts without prompting
+  --verbose               Show detailed scaffolding output
+  --no-interactive        Run in non-interactive mode
+  --list                  List all available templates
+  -h, --help              Show this help message
+
+Template Options:
+  Any arguments after -- are passed directly to the template.
+
+Examples:
+  # Interactive mode
+  vp create
+
+  # Use existing templates (shorthand expands to create-* packages)
+  vp create vite
+  vp create @tanstack/start
+  vp create svelte
+  vp create vite -- --template react-ts
+
+  # Full package names also work
+  vp create create-vite
+  vp create create-next-app
+
+  # Create Vite+ monorepo, application, library, or generator scaffolds
+  vp create vite:monorepo
+  vp create vite:application
+  vp create vite:library
+  vp create vite:generator
+
+  # Use templates from GitHub (via degit)
+  vp create github:user/repo
+  vp create https://github.com/user/template-repo
+
+  # Pick from an org that publishes @scope/create with createConfig.templates
+  vp create @your-org # interactive picker
+  vp create @your-org:web # direct manifest-entry selection
+
+Documentation: https://viteplus.dev/guide/create
+```

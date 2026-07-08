@@ -1,0 +1,20 @@
+[[case]]
+name = "new_create_vite"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--git", "--editor", "vscode"], comment = "create vite app with default values", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "vite-plus-application/package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-application/.vscode/settings.json", "--assert", "file"], comment = "check VS Code settings created", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-application/.vscode/extensions.json", "--assert", "file"], comment = "check VS Code extensions created", continue-on-failure = true },
+  { argv = ["node", "check-trackable.cjs", "vite-plus-application", ".vscode/settings.json"], comment = "check VS Code settings are trackable", continue-on-failure = true },
+  { argv = ["node", "check-trackable.cjs", "vite-plus-application", ".vscode/extensions.json"], comment = "check VS Code extensions are trackable", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-application/.github/workflows/copilot-setup-steps.yml", "--assert-not", "file"], comment = "default create should not add Copilot setup workflow", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "claude-app", "--agent", "claude"], comment = "create vite app with non-Copilot agent", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "claude-app/.github/workflows/copilot-setup-steps.yml", "--assert-not", "file"], comment = "non-Copilot agent should not add Copilot setup workflow", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "no-agent-app", "--no-agent"], comment = "create vite app without agent setup", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "no-agent-app/.github/workflows/copilot-setup-steps.yml", "--assert-not", "file"], comment = "--no-agent should not add Copilot setup workflow", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "copilot-app", "--agent", "copilot"], comment = "create vite app with Copilot agent setup", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "copilot-app/.github/workflows/copilot-setup-steps.yml"], comment = "check Copilot setup workflow", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "my-react-ts", "--", "--template", "react-ts"], comment = "create vite app with react-ts template", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "my-react-ts/package.json"], comment = "check package.json", continue-on-failure = true },
+]

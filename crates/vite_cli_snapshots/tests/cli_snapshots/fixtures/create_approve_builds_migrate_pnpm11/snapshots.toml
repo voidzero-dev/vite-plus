@@ -1,0 +1,14 @@
+[[case]]
+name = "create_approve_builds_migrate_pnpm11"
+vp = "local"
+env = { ADBLOCK = "1" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:with-build-dep", "--no-interactive", "--approve-builds", "--directory", "approved-app"], comment = "template ships Prettier, so create installs+migrates before the main install; the gated build (core-js) must still be surfaced and approved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "approved-app/pnpm-workspace.yaml"], comment = "approval recorded under allowBuilds despite the migration pre-install", continue-on-failure = true },
+  { argv = ["vp", "create", "@your-org:with-build-dep", "--no-interactive", "--directory", "default-app"], comment = "default run surfaces the gated build with guidance, leaving it unapproved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "default-app/pnpm-workspace.yaml"], comment = "no allowBuilds, the build was not run", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "core-js"], cwd = "default-app", comment = "the guidance's `vp pm approve-builds` command approves the gated build", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "default-app/pnpm-workspace.yaml"], comment = "core-js is now allowed under allowBuilds", continue-on-failure = true },
+]

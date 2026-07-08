@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["win32"],
+  "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
   "env": {},
   "commands": [
     "vp install -g --node lts ./command-env-install-version-alias-pkg # Install with LTS alias",

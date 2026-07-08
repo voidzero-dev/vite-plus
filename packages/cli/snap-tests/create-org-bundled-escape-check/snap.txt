@@ -1,3 +1,0 @@
-[1]> node $SNAP_LOCAL_REGISTRY -- vp create @your-org --no-interactive # `../outside` path rejected at schema-validation, before any tarball fetch
-@your-org/create: createConfig.templates[0].template escapes the package root: ../outside
-
