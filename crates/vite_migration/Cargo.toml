@@ -16,7 +16,7 @@ ignore = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
-vite_error = { workspace = true }
+vite_error = { workspace = true, features = ["migration"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

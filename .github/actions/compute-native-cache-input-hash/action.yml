@@ -42,8 +42,10 @@ runs:
               'packages/cli/build.ts',
               'packages/cli/tsdown.config.ts',
               '.github/actions/build-upstream/action.yml',
+              '.github/actions/clone/action.yml',
               '.github/actions/build-windows-cli/action.yml',
               '.github/actions/compute-native-cache-input-hash/action.yml',
+              '.github/actions/download-rolldown-binaries/action.yml',
               '.github/actions/setup-xwin/action.yml'
             )
           }}
