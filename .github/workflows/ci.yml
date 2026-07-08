@@ -1099,18 +1099,16 @@ jobs:
       - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
-    runs-on: namespace-profile-windows-4c-8g
+    # Stays on GitHub-hosted windows-latest, NOT the Namespace Windows runner:
+    # this is a PTY snapshot suite. The runner opens a pseudo-console (ConPTY)
+    # and spawns vp into it, but Namespace's Windows runners execute jobs under a
+    # Session-0 service account with no interactive console, where that ConPTY
+    # spawn blocks — vp is never launched and every case times out at 60s.
+    # windows-latest runs in a session where ConPTY works.
+    runs-on: windows-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-
-      - name: Pin VP_HOME to USERPROFILE
-        # Namespace's Windows runners run jobs under a service account whose real
-        # profile (C:\Windows\system32\config\systemprofile) differs from
-        # %USERPROFILE%; vp resolves its home from the OS profile. Pin VP_HOME so
-        # the seeded global vp/runtime land where VP_SNAP_* below point.
-        shell: bash
-        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
 
       # Same Dev Drive TEMP routing as cli-snap-test: staged fixture
       # workspaces live under os.tmpdir() and must resolve pnpm junction
