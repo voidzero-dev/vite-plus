@@ -20,9 +20,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  VP_VERSION: alpha
-
 jobs:
   test-install-sh:
     name: Test install.sh (${{ matrix.name }})
@@ -168,7 +165,6 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VP_VERSION=alpha \
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
@@ -227,7 +223,6 @@ jobs:
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
-            -e VP_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
@@ -285,7 +280,6 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VP_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
@@ -851,8 +845,6 @@ jobs:
       - name: Install via vp-setup.exe (silent)
         shell: pwsh
         run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
-        env:
-          VP_VERSION: alpha
 
       - name: Set PATH
         shell: bash
