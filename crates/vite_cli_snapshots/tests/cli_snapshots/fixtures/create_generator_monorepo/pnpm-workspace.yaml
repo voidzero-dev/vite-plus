@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - tools/*
+
+catalog:
+  "@types/node": ^24
+  typescript: ^5

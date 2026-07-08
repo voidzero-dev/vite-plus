@@ -78,4 +78,4 @@ jobs:
             Release vite-plus v${{ inputs.version }}.
 
             Merging this PR will trigger the release workflow.
-          assignees: fengmk2
+          assignees: ${{ github.actor }}

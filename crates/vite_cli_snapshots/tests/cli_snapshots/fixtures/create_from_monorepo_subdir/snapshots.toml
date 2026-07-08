@@ -1,0 +1,27 @@
+[[case]]
+name = "create_from_monorepo_subdir"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "create", "--no-interactive", "vite:generator"], cwd = "apps/website", comment = "from workspace subdir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "tools/vite-plus-generator/package.json", "--assert", "file"], comment = "created at tools/vite-plus-generator, not apps/website/", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "--git", "vite:generator"], cwd = "apps/website", comment = "--git is unavailable for monorepo package create", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "--no-git", "vite:generator"], cwd = "apps/website", comment = "--no-git is unavailable for monorepo package create", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "--git", "vite:application"], cwd = "apps/website", comment = "--git is unavailable for monorepo package create", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "--no-git", "vite:library"], cwd = "apps/website", comment = "--no-git is unavailable for monorepo package create", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "apps/website/tools/vite-plus-generator/package.json", "--assert-not", "file"], comment = "not created inside apps/website/", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:application"], cwd = "apps", comment = "from workspace parent dir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "apps/vite-plus-application/package.json", "--assert", "file"], comment = "created at apps/vite-plus-application", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:library"], cwd = "scripts/helper", comment = "from non-workspace dir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/vite-plus-library/package.json", "--assert", "file"], comment = "created at packages/vite-plus-library", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "scripts/helper/packages/vite-plus-library/package.json", "--assert-not", "file"], comment = "not created inside scripts/helper/", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:application", "--directory", "apps/custom-app"], cwd = "scripts/helper", comment = "--directory from non-workspace dir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "apps/custom-app/package.json", "--assert", "file"], comment = "created at apps/custom-app with --directory", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "apps/dot-test"], comment = "--directory . from monorepo subdir", snapshot = false },
+  { argv = ["vp", "create", "--no-interactive", "vite:application", "--directory", "."], cwd = "apps/dot-test", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "apps/dot-test/package.json", "--assert", "file"], comment = "created at apps/dot-test with --directory .", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:application", "--directory", "."], comment = "--directory . from monorepo root should fail", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "apps/website/src"], comment = "--directory . inside existing package should fail", snapshot = false },
+  { argv = ["vp", "create", "--no-interactive", "vite:application", "--directory", "."], cwd = "apps/website/src", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:application", "--directory", "."], cwd = "apps/website", comment = "--directory . at existing package root should fail", continue-on-failure = true },
+]

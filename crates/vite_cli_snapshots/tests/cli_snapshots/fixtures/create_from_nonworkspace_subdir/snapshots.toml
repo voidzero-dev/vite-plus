@@ -1,0 +1,9 @@
+[[case]]
+name = "create_from_nonworkspace_subdir"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "create", "--no-interactive", "vite:application"], cwd = "scripts", comment = "from non-monorepo subdir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "scripts/vite-plus-application/package.json", "--assert", "file"], comment = "created at scripts/vite-plus-application", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-application/package.json", "--assert-not", "file"], comment = "not created at parent root", continue-on-failure = true },
+]

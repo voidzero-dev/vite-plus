@@ -172,8 +172,8 @@ impl Step {
         }
     }
 
-    fn timeout(&self) -> Duration {
-        self.timeout.map_or(STEP_TIMEOUT, Duration::from_millis)
+    fn timeout(&self, default: Duration) -> Duration {
+        self.timeout.map_or(default, Duration::from_millis)
     }
 }
 
@@ -331,6 +331,13 @@ struct Case {
     /// Marks the trial `#[ignore]` (runnable with `cargo test -- --ignored`).
     #[serde(default)]
     ignore: bool,
+    /// Run this case in isolation: nothing else runs while it does (the suite
+    /// otherwise runs cases in parallel). Set for signal-sensitive flows (e.g.
+    /// watch modes) that concurrent PTY activity would perturb; ctrl-c cases
+    /// are detected automatically (see `case_needs_isolation`) and need not
+    /// set this.
+    #[serde(default)]
+    serial: bool,
     /// Serve the packed checkout packages through the local npm registry.
     #[serde(default, rename = "local-registry")]
     local_registry: bool,
@@ -635,6 +642,165 @@ fn kill_step_tree(child: &mut std::process::Child) {
     let _ = child.kill();
 }
 
+/// A per-case local npm registry (`local-npm-registry.ts --serve`). Held for
+/// the case's lifetime; dropping it tears the server down and removes the
+/// throwaway yarn/bun caches it created.
+struct RegistryHandle {
+    child: std::process::Child,
+    /// The per-run `YARN_GLOBAL_FOLDER` / `BUN_INSTALL_CACHE_DIR` the server
+    /// created. Its own SIGTERM handler removes them on Unix, but the Windows
+    /// teardown force-kills the process so that handler never runs; removing
+    /// them here keeps yarn/bun install cases from leaking caches on every
+    /// platform.
+    cache_dirs: Vec<PathBuf>,
+}
+
+impl Drop for RegistryHandle {
+    fn drop(&mut self) {
+        // Graceful first: SIGTERM the server so its handler removes the
+        // throwaway yarn/bun caches. Signal both the process itself and its
+        // group (whether the child ended up a group leader can vary), so the
+        // handler reliably runs regardless.
+        #[cfg(unix)]
+        {
+            let pid = self.child.id();
+            let _ = std::process::Command::new("kill")
+                .args(["-TERM", &pid.to_string(), &format!("-{pid}")])
+                .output();
+        }
+        #[cfg(windows)]
+        {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &self.child.id().to_string(), "/T", "/F"])
+                .output();
+        }
+        // Drop must never block indefinitely: if the graceful signal did not
+        // land (group-kill semantics vary across platforms), force-kill the
+        // child directly (guaranteed via the child handle) after a short grace
+        // period, then reap. Without this fallback a server that ignored the
+        // group SIGTERM would wedge the whole suite on `wait()`.
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) | Err(_) => break,
+                Ok(None) if std::time::Instant::now() >= deadline => {
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    break;
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            }
+        }
+        // Reclaim the caches the server made (a no-op on Unix, where its own
+        // handler already removed them; the only cleanup on Windows).
+        for dir in &self.cache_dirs {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
+/// Starts `local-npm-registry.ts --serve` for a local-registry case. The server
+/// reads the fixture's `mock-manifest.json` / `tarballs/` from `stage` and the
+/// packed checkout packages from `pack_dir`, then prints a one-line JSON
+/// handshake (`{registry, env}`). The returned `env` (per-package-manager
+/// registry settings) is injected into every step so plain `vp`/`npm`/`pnpm`/
+/// `yarn`/`bun` commands resolve through it instead of the public registry.
+fn start_local_registry(
+    node: &Path,
+    stage: &Path,
+    pack_dir: &Path,
+    case_env: &BTreeMap<String, OsString>,
+) -> Result<(BTreeMap<String, OsString>, RegistryHandle), String> {
+    use std::io::{BufRead as _, Read as _};
+
+    let script = flavor::repo_root().join("packages/tools/src/local-npm-registry.ts");
+    let mut cmd = std::process::Command::new(node);
+    cmd.arg(&script)
+        .arg("--serve")
+        .current_dir(stage)
+        .env_clear()
+        .envs(case_env)
+        .env("SNAP_LOCAL_VP_PACKAGES_DIR", pack_dir)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    // The server proxies to the developer's configured upstream (an internal
+    // npm mirror in `~/.npmrc`); it must read the REAL user home to find it,
+    // not the isolated case HOME from `baseline_env`, or mirror-only
+    // environments fall back to registry.npmjs.org and real-dependency installs
+    // fail. The case's own steps keep their isolated HOME — only this
+    // upstream-resolving helper sees the real one.
+    if let Some(home) = std::env::var_os("HOME") {
+        cmd.env("HOME", home);
+    }
+    if let Some(profile) = std::env::var_os("USERPROFILE") {
+        cmd.env("USERPROFILE", profile);
+    }
+    group_leader(&mut cmd);
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to spawn local registry (`{}`): {e}", node.display()))?;
+
+    let stdout = child.stdout.take().unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+
+    // Read the handshake on a thread (so a server that never prints it can't
+    // wedge the trial), then keep draining stdout for the case's lifetime so a
+    // full pipe never blocks the long-lived server.
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(stdout);
+        let mut line = String::new();
+        let _ = tx.send(reader.read_line(&mut line).map(|_| line));
+        let mut sink = String::new();
+        let _ = reader.read_to_string(&mut sink);
+    });
+
+    let line = match rx.recv_timeout(Duration::from_secs(60)) {
+        Ok(Ok(line)) if !line.trim().is_empty() => line,
+        other => {
+            drop(RegistryHandle { child, cache_dirs: Vec::new() });
+            let mut err = String::new();
+            let _ = stderr.read_to_string(&mut err);
+            return Err(format!(
+                "local registry did not start (handshake: {other:?}); stderr:\n{err}"
+            ));
+        }
+    };
+
+    // Wrap the child now so a handshake that parses/validates wrong tears the
+    // server down too (an early `?` below would otherwise leak the process and
+    // its caches into later trials).
+    let mut handle = RegistryHandle { child, cache_dirs: Vec::new() };
+
+    // Drain stderr for the case's lifetime.
+    std::thread::spawn(move || {
+        let mut sink = String::new();
+        let _ = stderr.read_to_string(&mut sink);
+    });
+
+    let parsed: serde_json::Value = serde_json::from_str(line.trim())
+        .map_err(|e| format!("could not parse local registry handshake `{}`: {e}", line.trim()))?;
+    let env_obj = parsed
+        .get("env")
+        .and_then(serde_json::Value::as_object)
+        .ok_or("local registry handshake is missing an `env` object")?;
+    let mut registry_env = BTreeMap::new();
+    for (key, value) in env_obj {
+        if let Some(value) = value.as_str() {
+            registry_env.insert(key.clone(), OsString::from(value));
+        }
+    }
+
+    // Remove these per-run caches on teardown (see RegistryHandle).
+    handle.cache_dirs = ["YARN_GLOBAL_FOLDER", "BUN_INSTALL_CACHE_DIR"]
+        .into_iter()
+        .filter_map(|key| registry_env.get(key).map(PathBuf::from))
+        .collect();
+
+    Ok((registry_env, handle))
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "test runner with process management necessarily has many lines"
@@ -648,11 +814,8 @@ fn run_case(
     flavor: Flavor,
     runtime: &FlavorRuntime,
     snapshot_name: &str,
+    local_registry_pack: Option<&Path>,
 ) -> Result<(), String> {
-    if case.local_registry {
-        return Err("`local-registry = true` is not implemented yet (Phase 1 follow-up)".to_owned());
-    }
-
     let snapshots = snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
 
     // Copy the fixture to a per-case staging directory so the test runs in
@@ -681,6 +844,30 @@ fn run_case(
     // case's own env table).
     let case_path: OsString =
         case_env.get("PATH").cloned().unwrap_or_else(|| runtime.path_env.clone());
+
+    // local-registry cases: stand up a per-case npm registry (serving the
+    // packed checkout packages plus this fixture's mock-manifest/tarballs) and
+    // fold its registry env into every step. Held to the end of the case so
+    // its teardown removes the throwaway package-manager caches. Registry env
+    // never sets PATH, so folding it in after `case_path` is derived is safe.
+    let _registry = if case.local_registry {
+        let pack_dir = local_registry_pack
+            .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
+        let node = runtime.resolve_program("node", &case_path, &stage)?;
+        let (registry_env, handle) = start_local_registry(&node, &stage, pack_dir, &case_env)?;
+        for (key, value) in registry_env {
+            case_env.insert(key, value);
+        }
+        Some(handle)
+    } else {
+        None
+    };
+
+    // Installs through the local registry are slower than pure vp commands, so
+    // local-registry steps get the legacy 120s default (still overridable
+    // per step); everything else keeps the standard per-step default.
+    let step_default_timeout =
+        if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
 
     let stage_str = stage.to_str().unwrap().to_owned();
     let home_str = case_home.home.to_str().unwrap().to_owned();
@@ -717,7 +904,7 @@ fn run_case(
         let (step_env, step_cwd, program) =
             step_context(step, &case_env, &case_path, &stage, &case.cwd, runtime)?;
         let step_env: &BTreeMap<String, OsString> = &step_env;
-        let timeout = step.timeout();
+        let timeout = step.timeout(step_default_timeout);
 
         let (termination_state, raw_output) = if step.tty {
             let mut cmd = CommandBuilder::new(&program);
@@ -907,7 +1094,7 @@ fn run_case(
         // Cleanup honors the step timeout (output is discarded either way),
         // so a hung teardown can never wedge the whole suite.
         if let Ok(mut child) = cmd.spawn() {
-            let _ = wait_with_deadline(&mut child, step.timeout());
+            let _ = wait_with_deadline(&mut child, step.timeout(step_default_timeout));
         }
     }
 
@@ -917,6 +1104,59 @@ fn run_case(
     }
 
     snapshots.check_snapshot(snapshot_name, &doc)
+}
+
+/// Global execution gate. Ordinary cases hold a shared (read) lease and run
+/// concurrently; isolated cases hold the exclusive (write) lease, so nothing
+/// else runs while they do. This replaces the old blanket `--test-threads=1`
+/// on Linux: only the few signal-sensitive cases pay for serialization, while
+/// the rest parallelize as they already do on macOS and Windows.
+///
+/// This coordinates threads within a single `cargo test` process, which is the
+/// Linux and macOS snapshot jobs and the only place the parallel-PTY
+/// signal-routing flakiness occurs. The Windows job runs the suite under
+/// `cargo nextest`, which executes each trial in its own process; there the
+/// gate is a no-op, but isolation is stronger for free — a signal-sensitive
+/// case already has its own process, PTY, and process group, which is exactly
+/// what this gate reconstructs for the shared-process case.
+static EXECUTION_GATE: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+/// Held for a case's whole run: either a shared read lease (parallel) or the
+/// exclusive write lease (isolated). Poisoning is ignored — a case that
+/// panicked already failed, and its neighbours should still run.
+enum GateLease {
+    Shared(
+        #[expect(dead_code, reason = "held for its Drop")] std::sync::RwLockReadGuard<'static, ()>,
+    ),
+    Exclusive(
+        #[expect(dead_code, reason = "held for its Drop")] std::sync::RwLockWriteGuard<'static, ()>,
+    ),
+}
+
+fn acquire_gate(isolated: bool) -> GateLease {
+    use std::sync::PoisonError;
+    if isolated {
+        GateLease::Exclusive(EXECUTION_GATE.write().unwrap_or_else(PoisonError::into_inner))
+    } else {
+        GateLease::Shared(EXECUTION_GATE.read().unwrap_or_else(PoisonError::into_inner))
+    }
+}
+
+/// A case needs isolation if it opts in with `serial` or scripts a ctrl-c
+/// keystroke. Parallel PTYs on Linux misroute signals, which is the one
+/// documented flakiness source the old blanket serialization guarded against;
+/// isolating exactly those cases keeps the guarantee while letting the rest
+/// run in parallel.
+fn case_needs_isolation(case: &Case) -> bool {
+    case.serial
+        || case.steps.iter().chain(&case.after).any(|step| {
+            step.interactions.iter().any(|interaction| {
+                matches!(
+                    interaction,
+                    Interaction::WriteKey(WriteKeyInteraction { write_key: WriteKey::CtrlC })
+                )
+            })
+        })
 }
 
 fn main() {
@@ -955,13 +1195,12 @@ fn main() {
         .collect::<Vec<_>>();
     fixture_paths.sort();
 
-    let mut args = libtest_mimic::Arguments::from_args();
-    // On Linux, parallel PTY + signal-routing contention makes ctrl-c cases
-    // flaky (inherited from vite-task's snapshot suite; scoping this serialization
-    // is an open question in the RFC).
-    if cfg!(target_os = "linux") && args.test_threads.is_none() {
-        args.test_threads = Some(1);
-    }
+    // Cases run in parallel on every platform. Signal-sensitive cases (ctrl-c,
+    // or `serial = true`) instead take the exclusive execution lease so they
+    // run in isolation; see `EXECUTION_GATE`. This replaces the old
+    // Linux-wide `--test-threads=1`, which serialized the entire suite to
+    // protect a handful of ctrl-c cases.
+    let args = libtest_mimic::Arguments::from_args();
 
     // `VP_SNAP_SKIP_FLAVORS=local` (comma-separated) skips registering trials
     // for a flavor entirely; CI legs that don't build the JS CLI use it.
@@ -977,6 +1216,10 @@ fn main() {
         run_root: Arc<Path>,
         global: std::sync::OnceLock<Result<FlavorRuntime, String>>,
         local: std::sync::OnceLock<Result<FlavorRuntime, String>>,
+        /// Packed checkout packages (vite-plus, @voidzero-dev/vite-plus-core),
+        /// produced once on the first local-registry case and shared by every
+        /// per-case registry via `SNAP_LOCAL_VP_PACKAGES_DIR`.
+        local_registry_pack: std::sync::OnceLock<Result<Arc<Path>, String>>,
     }
     impl LazyRuntimes {
         fn get(&self, flavor: Flavor) -> &Result<FlavorRuntime, String> {
@@ -986,12 +1229,58 @@ fn main() {
             };
             cell.get_or_init(|| flavor::provision(flavor, &self.run_root))
         }
+
+        /// Packs the checkout packages once and returns the shared dir. Reuses
+        /// `local-npm-registry.ts --pack-to` so the pack logic lives in one
+        /// place (the same helper the tool and ecosystem-ci use).
+        fn local_registry_pack(&self) -> Result<Arc<Path>, String> {
+            self.local_registry_pack
+                .get_or_init(|| {
+                    let node = which::which("node")
+                        .map_err(|e| format!("`node` not found on PATH (needed to pack): {e}"))?;
+                    let repo_root = flavor::repo_root();
+                    let script = repo_root.join("packages/tools/src/local-npm-registry.ts");
+                    let dest = self.run_root.join("local-registry-packages");
+                    std::fs::create_dir_all(&dest)
+                        .map_err(|e| format!("failed to create pack dir: {e}"))?;
+                    // Inherit the runner's environment so the packer finds
+                    // `pnpm` and `node` the same way a developer would.
+                    let output = std::process::Command::new(&node)
+                        .arg(&script)
+                        .arg("--pack-to")
+                        .arg(&dest)
+                        .current_dir(&repo_root)
+                        .output()
+                        .map_err(|e| format!("failed to run local-registry pack: {e}"))?;
+                    if !output.status.success() {
+                        return Err(format!(
+                            "packing checkout packages failed:\n{}",
+                            String::from_utf8_lossy(&output.stderr)
+                        ));
+                    }
+                    Ok(Arc::from(dest.as_path()))
+                })
+                .clone()
+        }
     }
     let runtimes = Arc::new(LazyRuntimes {
         run_root: Arc::clone(&tmp_dir_path),
         global: std::sync::OnceLock::new(),
         local: std::sync::OnceLock::new(),
+        local_registry_pack: std::sync::OnceLock::new(),
     });
+
+    // Per-case wall times, printed slowest-first after the run. libtest-mimic
+    // (0.8) has no `--report-time`, so the runner records timings itself; the
+    // summary shows every case's cost and makes a slow or stuck case obvious.
+    let timings: Arc<Mutex<Vec<(String, Duration)>>> = Arc::new(Mutex::new(Vec::new()));
+
+    // local-registry cases pack the checkout, which needs the built JS packages
+    // (`packages/cli/dist`). On a Rust-only checkout, such as
+    // `snapshot-test-global` without a prior `pnpm build`, that build is absent,
+    // so ignore those cases instead of failing the run; the full-build legs
+    // cover them.
+    let local_build_present = flavor::repo_root().join("packages/cli/dist/bin.js").is_file();
 
     let mut tests: Vec<libtest_mimic::Trial> = Vec::new();
     for fixture_path in fixture_paths {
@@ -1025,24 +1314,48 @@ fn main() {
                 let fixture_name = Arc::clone(&fixture_name);
                 let tmp_dir_path = Arc::clone(&tmp_dir_path);
                 let case = Arc::clone(&case);
-                let ignored = case.ignore;
+                let ignored = case.ignore || (case.local_registry && !local_build_present);
+                let isolated = case_needs_isolation(&case);
+                let timings = Arc::clone(&timings);
+                let timing_name = trial_name.clone();
                 tests.push(
                     libtest_mimic::Trial::test(trial_name, move || {
-                        let runtime = match runtimes.get(flavor) {
-                            Ok(runtime) => runtime,
-                            Err(message) => return Err(message.clone().into()),
-                        };
-                        run_case(
-                            &tmp_dir_path,
-                            &fixture_path,
-                            &fixture_name,
-                            case_index,
-                            &case,
-                            flavor,
-                            runtime,
-                            &snapshot_name,
-                        )
-                        .map_err(Into::into)
+                        // Hold the execution lease for the whole case: shared
+                        // (parallel) unless the case needs isolation. Acquired
+                        // before timing so the reported duration is the case's
+                        // own work, not time spent waiting for the lease.
+                        let _gate = acquire_gate(isolated);
+                        let started = std::time::Instant::now();
+                        let result = (|| -> Result<(), libtest_mimic::Failed> {
+                            let runtime = match runtimes.get(flavor) {
+                                Ok(runtime) => runtime,
+                                Err(message) => return Err(message.clone().into()),
+                            };
+                            // Pack the checkout once, lazily, only when a
+                            // local-registry case actually runs.
+                            let local_registry_pack = if case.local_registry {
+                                match runtimes.local_registry_pack() {
+                                    Ok(dir) => Some(dir),
+                                    Err(message) => return Err(message.into()),
+                                }
+                            } else {
+                                None
+                            };
+                            run_case(
+                                &tmp_dir_path,
+                                &fixture_path,
+                                &fixture_name,
+                                case_index,
+                                &case,
+                                flavor,
+                                runtime,
+                                &snapshot_name,
+                                local_registry_pack.as_deref(),
+                            )
+                            .map_err(Into::into)
+                        })();
+                        timings.lock().unwrap().push((timing_name, started.elapsed()));
+                        result
                     })
                     .with_ignored_flag(ignored),
                 );
@@ -1051,6 +1364,20 @@ fn main() {
     }
 
     let conclusion = libtest_mimic::run(&args, tests);
+
+    // Report each case's wall time (slowest first). Skipped for `--list`,
+    // which runs nothing.
+    if !args.list {
+        let mut recorded = std::mem::take(&mut *timings.lock().unwrap());
+        if !recorded.is_empty() {
+            recorded.sort_by_key(|(_, dur)| std::cmp::Reverse(*dur));
+            eprintln!("\nsnapshot case timings (slowest first):");
+            for (name, dur) in &recorded {
+                eprintln!("  {:>7.2}s  {name}", dur.as_secs_f64());
+            }
+        }
+    }
+
     // exit() never returns, so the staged run tree must be dropped first or
     // every run would leave its full tempdir behind.
     drop(tmp_dir);

@@ -1,0 +1,14 @@
+[[case]]
+name = "create_approve_builds_pnpm11"
+vp = "local"
+env = { ADBLOCK = "1" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:with-build-dep", "--no-interactive", "--approve-builds", "--directory", "approved-app"], comment = "--approve-builds auto-approves and runs the gated build script (core-js)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "approved-app/pnpm-workspace.yaml"], comment = "approval recorded under allowBuilds", continue-on-failure = true },
+  { argv = ["vp", "create", "@your-org:with-build-dep", "--no-interactive", "--directory", "default-app"], comment = "default run surfaces the gated build with guidance, leaving it unapproved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "default-app/pnpm-workspace.yaml"], comment = "no allowBuilds, the build was not run", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "core-js"], cwd = "default-app", comment = "the guidance's `vp pm approve-builds` command approves the gated build", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "default-app/pnpm-workspace.yaml"], comment = "core-js is now allowed under allowBuilds", continue-on-failure = true },
+]

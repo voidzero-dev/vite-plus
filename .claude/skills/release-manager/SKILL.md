@@ -307,7 +307,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
 
-   `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. Caveat: `vp upgrade` exists only on standalone-installer (`~/.vite-plus`) installs; if the release manager's `vp` is managed another way (e.g. mise), `vp upgrade` is missing and `vp update` is not a substitute (it runs `pnpm update` on the current project, so never run it inside the vite-plus checkout). In that case rely on the npm/GHCR checks plus the in-container `vp --version`. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z` and bundled tool versions matching the changelog's Bundled Versions table. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
+   `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. Caveat: `vp upgrade` exists only on standalone-installer (`~/.vite-plus`) installs; if the release manager's `vp` is managed another way (e.g. mise), `vp upgrade` is missing and `vp update` is not a substitute (it runs `pnpm update` on the current project, so never run it inside the vite-plus checkout). In that case rely on the npm/GHCR checks plus the in-container `vp --version`. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z`. If that output does not list bundled tool versions, inspect the installed image package tree under `~/.vite-plus/X.Y.Z/node_modules/.pnpm` and confirm the bundled tool packages and versions match the changelog's Bundled Versions table. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
 
    ```bash
    TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:voidzero-dev/vite-plus:pull" \
@@ -317,7 +317,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
      "https://ghcr.io/v2/voidzero-dev/vite-plus/manifests/X.Y.Z" | head -1   # HTTP/2 200
    ```
 
-3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. One emoji per highlight by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). The secondary list is titled **Also in this release** and must not repeat any highlight:
+3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. One emoji per line by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). Use **Upstream Upgrades** for dependency/tool version bumps, not Highlights; a security fix caused by a dependency bump can still have a Highlight focused on the vulnerability, and that line must link the CVE/GHSA/advisory when one exists. Include **Also in this release** only when there are meaningful secondary user-facing items, and omit the whole section for a narrow hotfix.
 
    ```markdown
    :viteplus: **vite-plus vX.Y.Z is out** :tada:
@@ -325,12 +325,17 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
    <One short theme line.>
 
    **Highlights**
-   :emoji: one short line per highlight
-   (3-5 lines)
+   :emoji: one short user-impact line per highlight
+   (1-5 lines; link CVE/GHSA/advisory text for security items)
+
+   **Upstream Upgrades**
+   :package: tool `old` -> `new`
+   (omit if no upstream version changes worth naming)
 
    **Also in this release**
 
-   - 4-6 short bullets, no PR links or credits
+   - 2-6 short bullets, no PR links or credits
+     (omit this whole section when there are no meaningful secondary user-facing items)
 
    **Bundled versions**
    vite `X`, rolldown `X`, tsdown `X`, vitest `X`, oxlint `X`, oxlint-tsgolint `X`, oxfmt `X`
@@ -343,15 +348,15 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
    The release-notes URL stays in `<angle brackets>` to suppress the embed; a blog post link (if any) goes bare so it unfurls. Lead the header with the server custom emoji `:viteplus:` (before the bold title, since it is a custom emoji). Link contributors as `[@user](https://github.com/user)` because Discord does not auto-link a bare GitHub handle. Keep the whole message user-facing: exclude vite-plus's own tooling/CI work.
 
-   Never post to Discord yourself. Save the draft to a file and post it as a comment on the release PR wrapped in a fenced ` ```markdown ` block, so the `@mentions` do not ping anyone on GitHub, the emoji shortcodes stay literal, and any team member can copy-paste it into Discord.
+   Never post to Discord yourself. Save the draft to a file and post it as a comment on the release PR wrapped in a fenced ` ```markdown ` block, so the `@mentions` do not ping anyone on GitHub, the emoji shortcodes stay literal, and any team member can copy-paste it into Discord. After the release manager approves the Discord draft, proceed directly to step 9; do not wait for another prompt or treat the skill update as optional.
 
 ## 9. Update this skill (post-release)
 
-After the release ships, review the session for durable learnings and fold them into this file, then propose opening a PR.
+After the release ships and the Discord announcement draft is approved, review the session for durable learnings and fold them into this file. Then ask for approval before pushing or opening a PR.
 
 - Capture only what generalizes: a step whose instructions drifted from what actually worked, a gotcha or corrected mistake, or a command/flag that was wrong. Write it as **general guidance**, with no release-specific versions, project names, PR numbers, or one-off examples.
 - Be surgical: change only what was wrong or missing; do not reword content that was already correct. If nothing generalizes, make no change.
-- This skill lives on `main`, so do not push to `main` directly: make the edit on a branch, commit it, and **propose to the release manager that you open a `docs(skill): ...` PR** summarizing the learnings.
+- This skill lives on `main`, so do not push to `main` directly: make the edit on a branch, commit it, present the local diff and summary to the release manager, and **only push or open a `docs(skill): ...` PR after explicit approval**.
 
 ## Checklist
 

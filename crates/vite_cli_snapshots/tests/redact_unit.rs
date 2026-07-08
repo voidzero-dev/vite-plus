@@ -56,6 +56,33 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
 }
 
 #[test]
+fn masks_vite_plus_version_by_context_only() {
+    // The workspace vite-plus/core version bumps every release and is masked by
+    // package context; third-party dep versions, `catalog:` refs, and package
+    // NAME values stay verbatim.
+    let input = concat!(
+        "  vite: npm:@voidzero-dev/vite-plus-core@0.2.3\n",
+        "  vite-plus: 0.2.3\n",
+        "    \"vite-plus\": \"0.2.3\",\n",
+        "    \"vite-plus\": \"catalog:\",\n",
+        "    \"core-js\": \"3.39.0\",\n",
+        "    \"name\": \"vite-plus-application\"\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "  vite: npm:@voidzero-dev/vite-plus-core@<version>\n",
+            "  vite-plus: <version>\n",
+            "    \"vite-plus\": \"<version>\",\n",
+            "    \"vite-plus\": \"catalog:\",\n",
+            "    \"core-js\": \"3.39.0\",\n",
+            "    \"name\": \"vite-plus-application\"\n",
+        )
+    );
+}
+
+#[test]
 fn replaces_paths_with_labels() {
     let input = "built /tmp/stage-1/dist in 3ms\n".to_owned();
     assert_eq!(

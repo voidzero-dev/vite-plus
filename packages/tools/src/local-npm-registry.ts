@@ -25,12 +25,15 @@
 //
 // Usage:
 //   node local-npm-registry.ts [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]]
+//   node local-npm-registry.ts --pack-to <dir>
 //   node local-npm-registry.ts --ps | --kill
 //
 //   --packages-dir <dir>  serve every *.tgz in <dir> (defaults to
 //                         $SNAP_LOCAL_VP_PACKAGES_DIR when set)
 //   --pack                pack the checkout's vite-plus and
 //                         @voidzero-dev/vite-plus-core into a temp dir first
+//   --pack-to <dir>       pack the checkout packages into <dir> and exit
+//                         (no server); the snapshot runner packs once per run
 //   --serve               keep the server running and print the registry URL
 //                         and env exports instead of wrapping a command
 //   --ps                  list running local registry processes
@@ -67,6 +70,7 @@ const command = separatorIndex === -1 ? [] : args.slice(separatorIndex + 1);
 
 let packagesDir = process.env.SNAP_LOCAL_VP_PACKAGES_DIR;
 let pack = false;
+let packTo: string | undefined;
 let serve = false;
 let listProcesses = false;
 let killProcesses = false;
@@ -75,6 +79,8 @@ for (let i = 0; i < flags.length; i++) {
     packagesDir = flags[++i];
   } else if (flags[i] === '--pack') {
     pack = true;
+  } else if (flags[i] === '--pack-to' && flags[i + 1]) {
+    packTo = flags[++i];
   } else if (flags[i] === '--serve') {
     serve = true;
   } else if (flags[i] === '--ps') {
@@ -151,15 +157,24 @@ if (listProcesses || killProcesses) {
   process.exit(0);
 }
 
+// The script lives at `packages/tools/src/`, so the repo root is three up.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+// `--pack-to <dir>`: pack the checkout packages into <dir> and exit, without
+// serving. The PTY snapshot runner calls this once per run, then points each
+// case's `--serve` registry at the shared dir via SNAP_LOCAL_VP_PACKAGES_DIR
+// (the packed-once-per-run optimization the legacy harness did in-process).
+if (packTo) {
+  await packLocalVitePlusPackages(repoRoot, packTo);
+  process.exit(0);
+}
+
 if (!serve && command.length === 0) {
   console.error(
-    'usage: node local-npm-registry.ts [--packages-dir <dir>] [--pack] [--serve] [-- <command> [args...]] | --ps | --kill',
+    'usage: node local-npm-registry.ts [--packages-dir <dir>] [--pack | --pack-to <dir>] [--serve] [-- <command> [args...]] | --ps | --kill',
   );
   process.exit(2);
 }
-
-// The script lives at `packages/tools/src/`, so the repo root is three up.
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 // Tracked so the normal cleanup paths remove the packed tarballs; a hard
 // kill leaves it behind, which `--kill` sweeps up with the other

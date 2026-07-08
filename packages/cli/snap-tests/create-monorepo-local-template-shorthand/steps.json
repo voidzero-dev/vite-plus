@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp create starter --no-interactive --no-agent -- --directory my-app # run the local create.templates entry; generated pkg declares fmt/lint via shorthand",
-    "cat packages/my-app/vite.config.ts # fmt/lint stay shorthand only, no injected duplicate inline fmt:/lint: blocks (#1836)",
-    "test ! -f packages/my-app/.oxlintrc.json # standalone lint config merge-skipped and removed",
-    "test ! -f packages/my-app/.oxfmtrc.json # standalone fmt config merge-skipped and removed"
-  ]
-}
