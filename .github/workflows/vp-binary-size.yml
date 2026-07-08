@@ -72,12 +72,12 @@ jobs:
         settings:
           - label: Linux x64
             builder: upstream
-            os: ubuntu-latest
+            os: namespace-profile-linux-x64-default
             platform: linux
             target: x86_64-unknown-linux-gnu
           - label: macOS ARM64
             builder: upstream
-            os: macos-latest
+            os: namespace-profile-mac-default
             platform: macos
             target: aarch64-apple-darwin
           - label: Windows x64
