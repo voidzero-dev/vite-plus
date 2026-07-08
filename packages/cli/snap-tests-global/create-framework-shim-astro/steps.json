@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["win32"],
+  "ignoredPlatforms": ["win32", "linux", "darwin"],
   "localVitePlusPackages": true,
   "commands": [
     {
