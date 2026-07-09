@@ -927,7 +927,16 @@ fn run_case(
                 // the suite proceeds.
                 let (spawn_tx, spawn_rx) = mpsc::channel();
                 std::thread::spawn(move || {
-                    let _ = spawn_tx.send(TestTerminal::spawn(SCREEN_SIZE, cmd));
+                    // If the main thread already timed out and dropped the
+                    // receiver, the spawn may still complete afterwards: kill
+                    // the child so a slow-but-live command can't keep running
+                    // (holding a port, mutating the staged workspace) after the
+                    // case has already failed.
+                    if let Err(mpsc::SendError(Ok(terminal))) =
+                        spawn_tx.send(TestTerminal::spawn(SCREEN_SIZE, cmd))
+                    {
+                        let _ = terminal.child_handle.clone().kill();
+                    }
                 });
                 let terminal = match spawn_rx.recv_timeout(timeout) {
                     Ok(Ok(terminal)) => terminal,
