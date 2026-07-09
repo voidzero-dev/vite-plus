@@ -70,6 +70,34 @@ VITE+ - The Unified Toolchain for the Web
 cwd base: hello
 ```
 
+## `vpr -C packages/hello where`
+
+vpr -C <dir> <task> consumes the flag and runs the task in <dir> (global vpr shim and local bin/vpr)
+
+```
+~/packages/hello$ node -e "console.log('cwd base: ' + require('node:path').basename(process.cwd()))" ⊘ cache disabled
+cwd base: hello
+```
+
+## `cd packages/hello && vpr where`
+
+equivalent cd form for vpr
+
+```
+~/packages/hello$ node -e "console.log('cwd base: ' + require('node:path').basename(process.cwd()))" ⊘ cache disabled
+cwd base: hello
+```
+
+## `vpr -C`
+
+bare vpr -C reports the missing directory argument instead of running a task named -C
+
+**Exit code:** 1
+
+```
+-C requires a directory argument
+```
+
 ## `vp -C packages/missing build`
 
 missing directory errors
