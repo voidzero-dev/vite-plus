@@ -1046,7 +1046,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          # GitHub-hosted, not namespace-profile-linux-x64-default: the
+          # Namespace Linux runner wedges the PTY suite (vp processes there do
+          # not exit / grandchildren keep the PTY slave open), while the exact
+          # same code runs clean on macOS Namespace and GitHub-hosted Windows.
+          # This is the Linux analog of the ConPTY move that keeps
+          # cli-snapshot-test-windows on a GitHub-hosted runner.
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
