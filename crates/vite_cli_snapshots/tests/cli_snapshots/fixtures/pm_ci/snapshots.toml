@@ -10,10 +10,10 @@ steps = [
   { argv = ["node", "scripts/setup-fake-pms.cjs"], snapshot = false },
 
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.0.0"], snapshot = false },
-  { argv = ["vp", "pm", "ci"], comment = "pnpm uses the documented clean + frozen install flow" },
+  { argv = ["vp", "pm", "ci"], comment = "pnpm uses frozen-lockfile install" },
 
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.5.0"], snapshot = false },
-  { argv = ["vp", "pm", "ci"], comment = "npm keeps native ci delegation" },
+  { argv = ["vp", "pm", "ci"], comment = "npm keeps native ci delegation because npm has no frozen-lockfile install flag" },
 
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
   { argv = ["vp", "pm", "ci"], comment = "Yarn Classic uses frozen-lockfile install" },
@@ -22,5 +22,5 @@ steps = [
   { argv = ["vp", "pm", "ci"], comment = "Yarn Berry uses immutable install" },
 
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.2.0"], snapshot = false },
-  { argv = ["vp", "pm", "ci"], comment = "Bun keeps native ci delegation" },
+  { argv = ["vp", "pm", "ci"], comment = "Bun uses frozen-lockfile install" },
 ]

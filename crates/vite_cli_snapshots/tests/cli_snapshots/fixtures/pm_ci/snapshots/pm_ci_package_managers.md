@@ -12,10 +12,9 @@ the exact argv Vite+ delegates without hitting the network or real installers.
 
 ## `vp pm ci`
 
-pnpm uses the documented clean + frozen install flow
+pnpm uses frozen-lockfile install
 
 ```
-pnpm clean
 pnpm install --frozen-lockfile
 ```
 
@@ -24,7 +23,7 @@ pnpm install --frozen-lockfile
 
 ## `vp pm ci`
 
-npm keeps native ci delegation
+npm keeps native ci delegation because npm has no frozen-lockfile install flag
 
 ```
 npm ci
@@ -57,8 +56,8 @@ yarn install --immutable
 
 ## `vp pm ci`
 
-Bun keeps native ci delegation
+Bun uses frozen-lockfile install
 
 ```
-bun ci
+bun install --frozen-lockfile
 ```
