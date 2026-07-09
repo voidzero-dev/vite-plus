@@ -498,7 +498,10 @@ impl CaseHome {
             }
         };
 
-        Ok(CaseInstall { path_env: compose_case_path_env(&allowed_tool_dirs), allowed_tool_dirs })
+        Ok(CaseInstall {
+            path_env: compose_case_path_env(&allowed_tool_dirs, Some(&runtime.bin_dir)),
+            allowed_tool_dirs,
+        })
     }
 
     fn install_case_package(&self, package_dir: &Path) -> Result<(), String> {
@@ -545,7 +548,7 @@ impl CaseHome {
 
     fn run_env_setup(&self, vp: &Path) -> Result<(), String> {
         let mut env = BTreeMap::new();
-        env.insert("PATH".to_string(), compose_case_path_env(&[]));
+        env.insert("PATH".to_string(), compose_case_path_env(&[], None));
         env.insert("TERM".to_string(), "xterm-256color".into());
         env.insert("VP_CLI_TEST".to_string(), "1".into());
         env.insert("NODE_NO_WARNINGS".to_string(), "1".into());
@@ -604,8 +607,12 @@ impl CaseHome {
     }
 }
 
-fn compose_case_path_env(tool_dirs: &[PathBuf]) -> OsString {
-    let mut entries = tool_dirs.to_vec();
+fn compose_case_path_env(tool_dirs: &[PathBuf], runner_bin_dir: Option<&Path>) -> OsString {
+    let mut entries = Vec::new();
+    if let Some(runner_bin_dir) = runner_bin_dir {
+        entries.push(runner_bin_dir.to_path_buf());
+    }
+    entries.extend(tool_dirs.iter().cloned());
     if cfg!(windows) {
         if let Some(path) = std::env::var_os("PATH") {
             entries.extend(std::env::split_paths(&path));
