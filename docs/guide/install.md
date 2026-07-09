@@ -2,6 +2,10 @@
 
 `vp install` installs dependencies using the current workspace's package manager.
 
+::: info
+For environment variables recognized by the installer scripts (`install.ps1`, `install.sh`) and `vp-setup.exe`, see the [Installer Environment Variables](/guide/installer-env-vars) page.
+:::
+
 ## Overview
 
 Use Vite+ to manage dependencies across pnpm, npm, Yarn, and Bun. Instead of switching between `pnpm install`, `npm install`, `yarn install`, and `bun install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
