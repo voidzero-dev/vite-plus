@@ -87,9 +87,11 @@ after = [ ... ]               # cleanup steps, never snapshotted
 into the case's `VP_HOME/current/bin`, install the checkout package under that
 case home, and run `vp env setup` before steps. `"global"` exposes only
 `VP_HOME/bin`; `"local"` also exposes the case-local
-`VP_HOME/current/current/node_modules/vite-plus/bin` package bin. The list form
-registers one trial and one snapshot per flavor; use it for parity cases (help
-output, routing, error messages) where both surfaces must agree.
+`VP_HOME/current/node_modules/vite-plus/bin` package bin. On Windows, local
+flavor exposes sibling `.cmd` shims under
+`VP_HOME/current/node_modules/.vite-plus-bin` instead. The list form registers
+one trial and one snapshot per flavor; use it for parity cases (help output,
+routing, error messages) where both surfaces must agree.
 
 A step is a bare argv array or a table:
 

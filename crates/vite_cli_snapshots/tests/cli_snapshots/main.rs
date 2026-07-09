@@ -471,19 +471,12 @@ impl CaseHome {
             flavor::install_file(&current_bin.join("vp-shim.exe"), &shim, "global vp-shim.exe")?;
         }
 
-        let package_dir = match flavor {
-            Flavor::Global => self.vp_home().join("current").join("node_modules").join("vite-plus"),
-            Flavor::Local => self
-                .vp_home()
-                .join("current")
-                .join("current")
-                .join("node_modules")
-                .join("vite-plus"),
-        };
+        let package_dir = self.vp_home().join("current").join("node_modules").join("vite-plus");
         self.install_case_package(&package_dir)?;
+        let local_bin_dir = local_package_bin_dir(&package_dir);
         #[cfg(windows)]
         if flavor == Flavor::Local {
-            self.write_local_package_cmd_shims(&package_dir)?;
+            self.write_local_package_cmd_shims(&package_dir, &local_bin_dir)?;
         }
         self.run_env_setup(&vp)?;
 
@@ -494,7 +487,7 @@ impl CaseHome {
                 runtime.local_cli_bin_dir.as_deref().ok_or(
                     "internal error: local case reached run_case without a local CLI bin dir",
                 )?;
-                vec![package_dir.join("bin"), vp_bin_dir]
+                vec![local_bin_dir, vp_bin_dir]
             }
         };
 
@@ -512,9 +505,8 @@ impl CaseHome {
 
         #[cfg(windows)]
         {
-            CopyOptions::new()
-                .copy_tree(&source, package_dir)
-                .map_err(|e| format!("failed to copy case vite-plus package: {e}"))?;
+            junction::create(&source, package_dir)
+                .map_err(|e| format!("failed to junction case vite-plus package: {e}"))?;
         }
 
         #[cfg(not(windows))]
@@ -531,16 +523,24 @@ impl CaseHome {
     }
 
     #[cfg(windows)]
-    fn write_local_package_cmd_shims(&self, package_dir: &Path) -> Result<(), String> {
+    fn write_local_package_cmd_shims(
+        &self,
+        package_dir: &Path,
+        shim_dir: &Path,
+    ) -> Result<(), String> {
         let bin_dir = package_dir.join("bin");
+        std::fs::create_dir_all(shim_dir)
+            .map_err(|e| format!("failed to create local package shim dir: {e}"))?;
         for name in ["vp", "vpr", "oxfmt", "oxlint"] {
             let script = bin_dir.join(name);
             if !script.is_file() {
                 continue;
             }
-            let content =
-                format!("@echo off\r\nnode \"%~dp0{name}\" %*\r\nexit /b %ERRORLEVEL%\r\n");
-            std::fs::write(bin_dir.join(format!("{name}.cmd")), content)
+            let content = format!(
+                "@echo off\r\nnode \"{}\" %*\r\nexit /b %ERRORLEVEL%\r\n",
+                script.display()
+            );
+            std::fs::write(shim_dir.join(format!("{name}.cmd")), content)
                 .map_err(|e| format!("failed to write local package {name}.cmd: {e}"))?;
         }
         Ok(())
@@ -605,6 +605,13 @@ impl CaseHome {
     fn npm_prefix(&self) -> PathBuf {
         self.home.parent().unwrap().join("npm-global")
     }
+}
+
+fn local_package_bin_dir(package_dir: &Path) -> PathBuf {
+    if cfg!(windows) {
+        return package_dir.parent().unwrap().join(".vite-plus-bin");
+    }
+    package_dir.join("bin")
 }
 
 fn compose_case_path_env(tool_dirs: &[PathBuf], runner_bin_dir: Option<&Path>) -> OsString {
