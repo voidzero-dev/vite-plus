@@ -39,6 +39,37 @@ const STEP_TIMEOUT: Duration =
 /// Screen size for the PTY terminal. Large enough to avoid line wrapping.
 const SCREEN_SIZE: ScreenSize = ScreenSize { rows: 500, cols: 500 };
 
+/// Diagnostic step tracing. A step that logs `START` without a matching
+/// `END` is the one that wedged; the phase markers localize within it.
+///
+/// `VP_SNAP_TRACE_FILE` appends to that file (each line flushed) — use this in
+/// CI: a step killed by its timeout has its own log discarded by GitHub, but a
+/// file on disk survives and a later `if: always()` step can print it.
+/// `VP_SNAP_TRACE=1` writes to stderr instead, for local runs.
+fn snap_trace(args: std::fmt::Arguments<'_>) {
+    use std::io::Write as _;
+    static SINK: std::sync::LazyLock<Option<std::sync::Mutex<std::fs::File>>> =
+        std::sync::LazyLock::new(|| {
+            let path = std::env::var_os("VP_SNAP_TRACE_FILE")?;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .ok()
+                .map(std::sync::Mutex::new)
+        });
+    if let Some(file) = SINK.as_ref() {
+        if let Ok(mut file) = file.lock() {
+            let _ = writeln!(file, "[pty-trace] {args}");
+            let _ = file.flush();
+        }
+    } else if std::env::var_os("VP_SNAP_TRACE").is_some_and(|v| v == "1") {
+        let mut err = std::io::stderr().lock();
+        let _ = writeln!(err, "[pty-trace] {args}");
+        let _ = err.flush();
+    }
+}
+
 /// Raw serde shape for a step: bare argv array or full table.
 #[derive(serde::Deserialize, Debug)]
 #[serde(untagged)]
@@ -386,6 +417,7 @@ fn load_snapshots_file(fixture_path: &Path) -> SnapshotsFile {
     }
 }
 
+#[derive(Debug)]
 enum TerminationState {
     Exited(i64),
     TimedOut,
@@ -896,6 +928,8 @@ fn run_case(
         }
     }
 
+    let trace_tag = format!("{fixture_name}::{}::{}", case.name, flavor.as_str());
+
     let mut timeout_error: Option<String> = None;
     let mut step_index = 0;
     while step_index < case.steps.len() {
@@ -905,6 +939,11 @@ fn run_case(
             step_context(step, &case_env, &case_path, &stage, &case.cwd, runtime)?;
         let step_env: &BTreeMap<String, OsString> = &step_env;
         let timeout = step.timeout(step_default_timeout);
+
+        snap_trace(format_args!(
+            "{trace_tag} step {step_index} START tty={} timeout={timeout:?} {:?}",
+            step.tty, argv
+        ));
 
         let (termination_state, raw_output) = if step.tty {
             'tty: {
@@ -938,10 +977,14 @@ fn run_case(
                         let _ = terminal.child_handle.clone().kill();
                     }
                 });
+                snap_trace(format_args!("{trace_tag} step {step_index} PTY spawn dispatched"));
                 let terminal = match spawn_rx.recv_timeout(timeout) {
                     Ok(Ok(terminal)) => terminal,
                     Ok(Err(err)) => panic!("failed to spawn PTY terminal: {err}"),
                     Err(mpsc::RecvTimeoutError::Timeout) => {
+                        snap_trace(format_args!(
+                            "{trace_tag} step {step_index} PTY spawn TIMED OUT"
+                        ));
                         break 'tty (
                             TerminationState::TimedOut,
                             "(PTY spawn did not complete)".to_string(),
@@ -951,6 +994,7 @@ fn run_case(
                         panic!("PTY spawn thread panicked");
                     }
                 };
+                snap_trace(format_args!("{trace_tag} step {step_index} PTY spawned, driving"));
                 let mut killer = terminal.child_handle.clone();
                 let interactions = step.interactions.clone();
                 let formatted_snapshot = step.formatted_snapshot;
@@ -1018,6 +1062,9 @@ fn run_case(
                     let _ = tx.send(i64::from(status.exit_code()));
                 });
 
+                snap_trace(format_args!(
+                    "{trace_tag} step {step_index} interactions dispatched, waiting for exit"
+                ));
                 match rx.recv_timeout(timeout) {
                     Ok(exit_code) => {
                         let output = output.lock().unwrap().clone();
@@ -1043,6 +1090,8 @@ fn run_case(
             push_fenced_block(&mut block, &raw);
             (state, block)
         };
+
+        snap_trace(format_args!("{trace_tag} step {step_index} END {termination_state:?}"));
 
         // Blank line separator before every `##`.
         doc.push('\n');

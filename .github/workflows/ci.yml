@@ -1086,12 +1086,36 @@ jobs:
             || echo "prewarm failed; cases will download the runtime on demand"
 
       - name: Run PTY snapshot tests
+        # Bound the step: the suite runs in well under 2 min, but an
+        # interactive PTY case can wedge unbounded on the Namespace runner
+        # (PTY spawn/teardown flakiness, the Linux analog of the ConPTY
+        # blocking that keeps cli-snapshot-test-windows on GitHub-hosted
+        # runners). Without this, a wedged case burns the 6h job default and
+        # never flushes the step log; the timeout fails fast and preserves it.
+        timeout-minutes: 10
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
           cargo test -p vite_cli_snapshots
         env:
           RUST_BACKTRACE: '1'
+          # Diagnostic step tracing to a file (see snap_trace): a step that
+          # logs START without END is the one that wedged. Written to a file
+          # (not the step log) because GitHub discards a timed-out step's log;
+          # the next step prints it. Investigating the recurring Namespace-
+          # Linux PTY wedge that survives the spawn bound.
+          VP_SNAP_TRACE_FILE: ${{ runner.temp }}/pty-trace.log
+
+      - name: Print PTY trace
+        # Runs even when the step above is killed by its timeout, so the trace
+        # survives the wedge (that step's own log does not).
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/pty-trace.log" ]; then
+            cat "${{ runner.temp }}/pty-trace.log"
+          else
+            echo "no pty-trace file (VP_SNAP_TRACE_FILE unwritten)"
+          fi
 
   # Runs the PTY snapshot suite (crates/vite_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
