@@ -8,8 +8,7 @@ runnable root, a member present), but -c lib.config.ts builds the lib.
 
 ```
 vite <version> building client environment for production...
-[2Ktransforming...✓ 2 modules transformed.
-rendering chunks...
+✓ 2 modules transformed.
 computing gzip size...
 dist/lib.js  <size> kB │ gzip: <size> kB
 

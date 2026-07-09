@@ -7,9 +7,10 @@ runnable root, a member present), but -c lib.config.ts builds the lib.
 ## `vp build -c lib.config.ts`
 
 ```
+VITE+ - The Unified Toolchain for the Web
+
 vite <version> building client environment for production...
-[2Ktransforming...✓ 2 modules transformed.
-rendering chunks...
+✓ 2 modules transformed.
 computing gzip size...
 dist/lib.js  <size> kB │ gzip: <size> kB
 
