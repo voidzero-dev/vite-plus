@@ -7,3 +7,13 @@ index.html) is a valid target. Bare vp build must run the root build in
 place, not elicit the members, even with a member present.
 """
 steps = [{ argv = ["vp", "build"], tty = false }]
+
+[[case]]
+name = "dev_at_lib_root_elicits"
+vp = ["local", "global"]
+comment = """
+The build-config signal is build-only: a lib/SSR root has no app to serve,
+so bare vp dev at that root must still elicit (no index.html), even though
+vp build runs it in place.
+"""
+steps = [{ argv = ["vp", "dev"], tty = false }]

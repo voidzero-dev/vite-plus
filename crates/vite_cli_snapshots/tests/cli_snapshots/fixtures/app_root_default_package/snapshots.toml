@@ -39,3 +39,12 @@ Regression: defaultPackage declared through a TypeScript wrapper
 must be honored. vp builds ./frontend, not the wrapper root.
 """
 steps = [{ argv = ["vp", "build"], cwd = "ts_wrapper" }]
+
+[[case]]
+name = "default_package_define_config_wrapper"
+vp = ["local", "global"]
+comment = """
+defaultPackage inside `defineConfig({ ... } satisfies UserConfig)` is also
+honored: the wrapper on the defineConfig argument is unwrapped too.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "dc_wrapper" }]

@@ -102,6 +102,14 @@ fn is_bare(command: &str, args: &[String]) -> bool {
         if arg == "--" {
             return iter.next().is_none();
         }
+        // An explicit config file (`-c`/`--config`) is explicit build intent:
+        // forward it to the tool instead of eliciting a package to override it.
+        if ["-c", "--config"]
+            .iter()
+            .any(|f| arg == f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
+        {
+            return false;
+        }
         // Workspace selectors and --root already specify pack's target;
         // these previously-valid targeted invocations must keep forwarding.
         if is_pack
@@ -144,15 +152,16 @@ fn looks_runnable(dir: &AbsolutePathBuf, command: &str, is_root: bool) -> bool {
             dir.as_path().join("src/index.ts").is_file()
                 || vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
         }
-        // The root needs a stronger signal than a member: a root `index.html`
-        // (an app), or a config that declares a `build` block (a library/SSR
-        // build that produces output without an entry HTML). A shared root
-        // config for lint/fmt/tasks declares neither, so it does not make the
-        // root a build target.
-        _ if is_root => {
+        // The root needs a stronger signal than a member. A declared `build`
+        // block (a library/SSR build with no entry HTML) makes the root a
+        // target for `vp build` only: dev/preview serve an app, for which the
+        // signal is a root `index.html`. A shared root config for lint/fmt/
+        // tasks declares neither, so it never makes the root a target.
+        "build" if is_root => {
             dir.as_path().join("index.html").is_file()
                 || vite_static_config::resolve_static_config(dir).get_declared("build").is_some()
         }
+        _ if is_root => dir.as_path().join("index.html").is_file(),
         _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
@@ -437,6 +446,12 @@ mod tests {
         assert!(!is_bare("pack", &to_args(&["--workspace=packages/a"])));
         assert!(!is_bare("pack", &to_args(&["--root", "packages/lib"])));
         assert!(!is_bare("pack", &to_args(&["--root=packages/lib"])));
+        // An explicit config file is an explicit target (build and pack).
+        assert!(!is_bare("build", &to_args(&["-c", "apps/web/vite.config.ts"])));
+        assert!(!is_bare("build", &to_args(&["--config", "apps/web/vite.config.ts"])));
+        assert!(!is_bare("build", &to_args(&["--config=apps/web/vite.config.ts"])));
+        assert!(!is_bare("preview", &to_args(&["-c", "x.ts"])));
+        assert!(!is_bare("pack", &to_args(&["-c", "tsdown.config.ts"])));
         // `--` terminates options; a token after it is an explicit positional.
         assert!(!is_bare("build", &to_args(&["--", "apps/web"])));
         assert!(!is_bare("pack", &to_args(&["--minify", "--", "src/index.ts"])));

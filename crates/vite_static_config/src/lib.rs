@@ -228,7 +228,9 @@ fn extract_config_from_expr(
             let Some(first_arg_expr) = first_arg.as_expression() else {
                 return FieldMap::unanalyzable();
             };
-            match first_arg_expr {
+            // Unwrap a TS wrapper on the argument too, e.g.
+            // `defineConfig({ ... } satisfies UserConfig)`.
+            match first_arg_expr.get_inner_expression() {
                 Expression::ObjectExpression(obj) => extract_object_fields(obj),
                 Expression::ArrowFunctionExpression(arrow) => {
                     extract_config_from_function_body(&arrow.body)
@@ -267,7 +269,7 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
                 let Some(arg) = ret.argument.as_ref() else {
                     return FieldMap::unanalyzable();
                 };
-                if let Expression::ObjectExpression(obj) = arg.without_parentheses() {
+                if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
                     return extract_object_fields(obj);
                 }
                 return FieldMap::unanalyzable();
@@ -275,7 +277,7 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
             Statement::ExpressionStatement(expr_stmt) => {
                 // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
                 if let Expression::ObjectExpression(obj) =
-                    expr_stmt.expression.without_parentheses()
+                    expr_stmt.expression.get_inner_expression()
                 {
                     return extract_object_fields(obj);
                 }
@@ -669,6 +671,14 @@ mod tests {
             "export default { foo: 'bar' } as UserConfig",
             "export default ({ foo: 'bar' } satisfies UserConfig)",
             "module.exports = { foo: 'bar' } satisfies UserConfig",
+        ] {
+            assert_json(&parse(source), "foo", serde_json::json!("bar"));
+        }
+        // Wrappers inside defineConfig(...) and inside a config factory's
+        // return must be unwrapped too.
+        for source in [
+            "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ foo: 'bar' } satisfies UserConfig)",
+            "import { defineConfig } from 'vite-plus';\nexport default defineConfig(() => ({ foo: 'bar' } satisfies UserConfig))",
         ] {
             assert_json(&parse(source), "foo", serde_json::json!("bar"));
         }
