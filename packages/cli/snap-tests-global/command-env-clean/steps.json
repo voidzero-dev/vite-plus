@@ -1,8 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "node setup-env-clean.mjs # Create isolated runtime/package-manager caches and fake corepack",
-    "node run-env-clean.mjs # Clean isolated Vite+ caches",
-    "node assert-env-clean.mjs # Assert current/default runtimes are preserved and caches are removed"
-  ]
-}

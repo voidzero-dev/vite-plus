@@ -1,0 +1,8 @@
+[[case]]
+name = "command_env_clean"
+vp = "global"
+steps = [
+  { argv = ["node", "setup-env-clean.mjs"], comment = "Create isolated runtime/package-manager caches and fake corepack" },
+  { argv = ["node", "run-env-clean.mjs"], comment = "Clean isolated Vite+ caches" },
+  { argv = ["node", "assert-env-clean.mjs"], comment = "Assert current/default runtimes are preserved and caches are removed" },
+]

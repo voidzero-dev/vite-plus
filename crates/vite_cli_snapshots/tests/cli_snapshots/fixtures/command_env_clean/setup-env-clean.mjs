@@ -29,4 +29,5 @@ if (process.platform === 'win32') {
     { mode: 0o755 },
   );
 }
+
 fs.writeFileSync(path.join('home', 'config.json'), '{"defaultNodeVersion":"24.11.0"}\n');
