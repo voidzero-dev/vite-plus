@@ -1,0 +1,26 @@
+[[case]]
+name = "pm_ci_package_managers"
+vp = "global"
+comment = """
+Covers `vp pm ci` command delegation for each supported package manager.
+Fake managed package-manager installs live under VP_HOME, so the case records
+the exact argv Vite+ delegates without hitting the network or real installers.
+"""
+steps = [
+  { argv = ["node", "scripts/setup-fake-pms.cjs"], snapshot = false },
+
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.0.0"], snapshot = false },
+  { argv = ["vp", "pm", "ci"], comment = "pnpm uses the documented clean + frozen install flow" },
+
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.5.0"], snapshot = false },
+  { argv = ["vp", "pm", "ci"], comment = "npm keeps native ci delegation" },
+
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
+  { argv = ["vp", "pm", "ci"], comment = "Yarn Classic uses frozen-lockfile install" },
+
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.0.0"], snapshot = false },
+  { argv = ["vp", "pm", "ci"], comment = "Yarn Berry uses immutable install" },
+
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.2.0"], snapshot = false },
+  { argv = ["vp", "pm", "ci"], comment = "Bun keeps native ci delegation" },
+]
