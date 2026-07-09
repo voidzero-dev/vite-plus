@@ -1,19 +1,13 @@
 //! Provisioning for the two `vp` flavors a case can run under.
 //!
-//! - `global`: the Rust binary built from `crates/vite_global_cli`, resolved
-//!   from the target directory next to this test executable.
-//! - `local`: the JS CLI dispatch scripts in `packages/cli/bin`, which require
-//!   `node` on `PATH` and a built `packages/cli/dist`.
+//! Both flavors install the built global `vp` binary into each case's isolated
+//! `VP_HOME` and run `vp env setup`. The local flavor additionally exposes the
+//! checkout package's JS bin directory from inside that same case home.
 //!
-//! Each flavor gets one bin directory per run (created under the run temp
-//! root) that fronts exactly the executables a fixture may invoke; per-case
-//! state isolation happens through `VP_HOME`/`HOME`, not through the bin dir.
+//! Each flavor gets one runner bin directory per run (created under the run
+//! temp root) for runner-owned helpers. Only `vpt` lives there.
 
-use std::{
-    env::{join_paths, split_paths},
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -34,11 +28,10 @@ impl Flavor {
 /// Everything the runner needs to spawn commands under one flavor.
 pub struct FlavorRuntime {
     pub bin_dir: PathBuf,
-    /// `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` value for the global flavor.
-    pub js_scripts_dir: Option<PathBuf>,
-    /// Baseline `PATH` (bin dir, node, system tail); node and the other real
-    /// tools resolve through the per-case PATH derived from this.
-    pub path_env: OsString,
+    /// Source global `vp` binary to install into each case's `VP_HOME/current`.
+    pub global_vp: PathBuf,
+    /// Source JS CLI bin dir for the local flavor.
+    pub local_cli_bin_dir: Option<PathBuf>,
 }
 
 /// The runner crate's manifest dir. The runtime env var wins: cargo sets it
@@ -143,6 +136,10 @@ fn local_cli_bin_dir() -> Result<PathBuf, String> {
     Ok(bin_dir)
 }
 
+pub fn cli_package_dir() -> PathBuf {
+    repo_root().join("packages/cli")
+}
+
 fn newest_mtime(dir: &Path) -> Option<std::time::SystemTime> {
     let mut newest = None;
     let entries = std::fs::read_dir(dir).ok()?;
@@ -231,6 +228,16 @@ fn install_tool(bin_dir: &Path, name: &str, target: &Path) -> Result<(), String>
     }
 }
 
+/// Installs a real executable file. Used for the standalone global layout under
+/// `VP_HOME/current/bin`, where symlinking to the build output would test the
+/// wrong installation shape.
+pub fn install_file(dest: &Path, source: &Path, label: &str) -> Result<(), String> {
+    let source = std::fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+    std::fs::hard_link(&source, dest)
+        .or_else(|_| std::fs::copy(&source, dest).map(|_| ()))
+        .map_err(|e| format!("failed to install {label}: {e}"))
+}
+
 /// Best-effort directory link. On Windows, directory symlinks may require
 /// privileges, so a junction (which never does) is the fallback; only if
 /// both fail does resolution fall back to whatever the fixture vendors.
@@ -243,70 +250,16 @@ pub fn link_dir(target: &Path, link: &Path) {
     }
 }
 
-fn compose_path_env(bin_dir: &Path, node_dir: &Path) -> OsString {
-    let mut entries: Vec<PathBuf> = vec![bin_dir.to_path_buf(), node_dir.to_path_buf()];
-    if cfg!(windows) {
-        // Windows needs System32 and friends for anything to run; inherit the
-        // ambient PATH after the controlled entries.
-        if let Some(path) = std::env::var_os("PATH") {
-            entries.extend(split_paths(&path));
-        }
-    } else {
-        // A fixed system tail keeps child processes deterministic: `git` and
-        // the usual coreutils resolve from the OS, nothing else leaks in.
-        for dir in ["/usr/bin", "/bin", "/usr/sbin", "/sbin"] {
-            entries.push(PathBuf::from(dir));
-        }
-    }
-    join_paths(entries).unwrap()
-}
-
 /// Creates the per-run bin directory for `flavor` under `run_root`.
 pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, String> {
-    let node = which::which("node")
-        .map_err(|e| format!("`node` not found on PATH (needed by the CLI under test): {e}"))?;
-    let node_dir = node.parent().ok_or("node has no parent dir")?.to_path_buf();
-
     let bin_dir = run_root.join(format!("bin-{}", flavor.as_str()));
     std::fs::create_dir_all(&bin_dir).map_err(|e| format!("failed to create bin dir: {e}"))?;
 
-    let js_scripts_dir = match flavor {
-        Flavor::Global => {
-            let vp = global_vp_path()?;
-            // The global binary dispatches on argv0, so the aliases are links
-            // to the same executable.
-            for name in ["vp", "vpr", "vpx"] {
-                install_tool(&bin_dir, name, &vp)?;
-            }
-            // Windows `vp env setup` looks for the trampoline template
-            // (vp-shim.exe) beside vp.exe; carry it over when the source
-            // build has one, so shim-creating cases work.
-            #[cfg(windows)]
-            if let Some(shim) = vp.parent().map(|dir| dir.join("vp-shim.exe"))
-                && shim.is_file()
-            {
-                let dest = bin_dir.join("vp-shim.exe");
-                if std::fs::hard_link(&shim, &dest).is_err() {
-                    let _ = std::fs::copy(&shim, &dest);
-                }
-            }
-            Some(repo_root().join("packages/cli/dist"))
-        }
-        Flavor::Local => {
-            let local_bin = local_cli_bin_dir()?;
-            for name in ["vp", "vpr", "oxfmt", "oxlint"] {
-                let target = local_bin.join(name);
-                if target.exists() {
-                    install_tool(&bin_dir, name, &target)?;
-                }
-            }
-            None
-        }
-    };
     install_tool(&bin_dir, "vpt", &vpt_path()?)?;
 
-    let path_env = compose_path_env(&bin_dir, &node_dir);
-    Ok(FlavorRuntime { bin_dir, js_scripts_dir, path_env })
+    let global_vp = global_vp_path()?;
+    let local_cli_bin_dir = if flavor == Flavor::Local { Some(local_cli_bin_dir()?) } else { None };
+    Ok(FlavorRuntime { bin_dir, global_vp, local_cli_bin_dir })
 }
 
 impl FlavorRuntime {
@@ -314,38 +267,45 @@ impl FlavorRuntime {
     /// `vpt`, and an allow-list of real tools may run as steps; everything
     /// else belongs behind a `vpt` subcommand so fixtures stay
     /// platform-identical. Keep the allow-list in sync with
-    /// `PASSTHROUGH_PROGRAMS` in packages/tools/src/migrate-snap-tests.ts. Real tools resolve through the CASE's `PATH`
-    /// (which leads with `$VP_HOME/bin`), so shims a case creates via
-    /// `vp env setup` or global installs take precedence over host tools.
+    /// `PASSTHROUGH_PROGRAMS` in packages/tools/src/migrate-snap-tests.ts.
+    /// Real tools resolve through the CASE's `PATH`, then the resolved path is
+    /// checked against the flavor-owned tool dirs.
     pub fn resolve_program(
         &self,
         program: &str,
         case_path: &std::ffi::OsStr,
         cwd: &Path,
+        allowed_tool_dirs: &[PathBuf],
     ) -> Result<PathBuf, String> {
         match program {
             "vp" | "vpr" | "vpx" | "oxfmt" | "oxlint" => {
-                // Case PATH first: shims a case creates in $VP_HOME/bin must
-                // shadow the runner-installed aliases. The flavor bin dir is
-                // on that PATH too, so this is a pure precedence rule; the
-                // direct bin-dir lookup below only remains as the fallback
-                // for cases that override PATH entirely.
-                if let Ok(found) = which::which_in(program, Some(case_path), cwd) {
-                    return Ok(found);
-                }
-                self.bin_dir_tool(program)
+                self.resolve_case_tool(program, case_path, cwd, allowed_tool_dirs)
             }
             // vpt is the runner's own assertion tool: a case-created shim must
             // never shadow it, so it resolves only from the flavor bin dir.
             "vpt" => self.bin_dir_tool(program),
             "node" | "git" | "npm" | "pnpm" | "yarn" | "bun" => {
-                which::which_in(program, Some(case_path), cwd)
-                    .map_err(|e| format!("`{program}` not found on the case PATH: {e}"))
+                self.resolve_case_tool(program, case_path, cwd, allowed_tool_dirs)
             }
             other => Err(format!(
                 "step program `{other}` is not allowed; use a `vpt` subcommand instead"
             )),
         }
+    }
+
+    fn resolve_case_tool(
+        &self,
+        program: &str,
+        case_path: &std::ffi::OsStr,
+        cwd: &Path,
+        allowed_tool_dirs: &[PathBuf],
+    ) -> Result<PathBuf, String> {
+        let found = which::which_in(program, Some(case_path), cwd)
+            .map_err(|e| format!("`{program}` not found on the case PATH: {e}"))?;
+        if allowed_tool_dirs.iter().any(|dir| found.starts_with(dir)) {
+            return Ok(found);
+        }
+        Err(format!("`{program}` resolved outside the flavor-owned tool dirs: {}", found.display()))
     }
 
     /// Looks a tool up directly in the flavor bin dir.
