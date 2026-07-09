@@ -694,15 +694,13 @@ struct RegistryHandle {
 impl Drop for RegistryHandle {
     fn drop(&mut self) {
         // Graceful first: SIGTERM the server so its handler removes the
-        // throwaway yarn/bun caches. Signal both the process itself and its
-        // group (whether the child ended up a group leader can vary), so the
-        // handler reliably runs regardless.
+        // throwaway yarn/bun caches. Keep this scoped to the direct child:
+        // process-group SIGTERM can leak past the case boundary on
+        // ubuntu-latest PTY runs and interrupt the Actions runner itself.
         #[cfg(unix)]
         {
             let pid = self.child.id();
-            let _ = std::process::Command::new("kill")
-                .args(["-TERM", &pid.to_string(), &format!("-{pid}")])
-                .output();
+            let _ = std::process::Command::new("kill").args(["-TERM", &pid.to_string()]).output();
         }
         #[cfg(windows)]
         {
