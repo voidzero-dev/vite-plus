@@ -228,7 +228,7 @@ const upstreamAgent = new HttpsAgent({ keepAlive: true, maxSockets: 64 });
 // in a pnpm-packed tarball, so long-name (pax header) handling is unnecessary.
 function readPackageJsonFromTarball(tgzBytes: Buffer, sourcePath: string): PackageManifest {
   const tar = gunzipSync(tgzBytes);
-  for (let offset = 0; offset + 512 <= tar.length; ) {
+  for (let offset = 0; offset + 512 <= tar.length;) {
     const rawName = tar.subarray(offset, offset + 100).toString();
     const nulIndex = rawName.indexOf('\0');
     const name = nulIndex === -1 ? rawName : rawName.slice(0, nulIndex);
