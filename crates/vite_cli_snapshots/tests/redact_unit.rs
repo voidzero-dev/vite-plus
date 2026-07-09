@@ -83,6 +83,51 @@ fn masks_vite_plus_version_by_context_only() {
 }
 
 #[test]
+fn masks_scaffolded_dev_engines_pins_by_name_context() {
+    // vp create/migrate pin the resolved runtime and package-manager version
+    // into devEngines; both churn on upstream releases and must be masked,
+    // while user-controlled semver in the same manifest stays verbatim.
+    let input = concat!(
+        "  \"devEngines\": {\n",
+        "    \"packageManager\": {\n",
+        "      \"name\": \"yarn\",\n",
+        "      \"version\": \"4.17.0\",\n",
+        "      \"onFail\": \"download\"\n",
+        "    },\n",
+        "    \"runtime\": {\n",
+        "      \"name\": \"node\",\n",
+        "      \"version\": \"24.18.0\"\n",
+        "    }\n",
+        "  },\n",
+        "  \"name\": \"approved-app\",\n",
+        "  \"version\": \"0.0.0\",\n",
+        "  \"packageManager\": \"bun@1.3.11\",\n",
+        "  \"core-js\": \"3.39.0\"\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "  \"devEngines\": {\n",
+            "    \"packageManager\": {\n",
+            "      \"name\": \"yarn\",\n",
+            "      \"version\": \"<version>\",\n",
+            "      \"onFail\": \"download\"\n",
+            "    },\n",
+            "    \"runtime\": {\n",
+            "      \"name\": \"node\",\n",
+            "      \"version\": \"<version>\"\n",
+            "    }\n",
+            "  },\n",
+            "  \"name\": \"approved-app\",\n",
+            "  \"version\": \"0.0.0\",\n",
+            "  \"packageManager\": \"bun@1.3.11\",\n",
+            "  \"core-js\": \"3.39.0\"\n",
+        )
+    );
+}
+
+#[test]
 fn replaces_paths_with_labels() {
     let input = "built /tmp/stage-1/dist in 3ms\n".to_owned();
     assert_eq!(

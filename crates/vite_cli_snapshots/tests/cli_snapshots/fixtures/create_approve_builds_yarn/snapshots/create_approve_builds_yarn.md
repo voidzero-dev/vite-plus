@@ -40,7 +40,7 @@ core-js recorded under dependenciesMeta.built
   "devEngines": {
     "packageManager": {
       "name": "yarn",
-      "version": "4.17.0",
+      "version": "<version>",
       "onFail": "download"
     }
   }
@@ -86,7 +86,7 @@ no dependenciesMeta, the build was not run
   "devEngines": {
     "packageManager": {
       "name": "yarn",
-      "version": "4.17.0",
+      "version": "<version>",
       "onFail": "download"
     }
   }
