@@ -29,3 +29,13 @@ not fail the command. Bare vp build falls through and runs in place.
 # raw Windows byte stream of a vite build differs invisibly from macOS; the
 # grid rendering normalizes that and is what the assertion needs anyway.
 steps = [{ argv = ["vp", "build"], cwd = "spread" }]
+
+[[case]]
+name = "default_package_ts_wrapper"
+vp = ["local", "global"]
+comment = """
+Regression: defaultPackage declared through a TypeScript wrapper
+(`satisfies UserConfig`, `as const`) is still a static string literal and
+must be honored. vp builds ./frontend, not the wrapper root.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "ts_wrapper" }]

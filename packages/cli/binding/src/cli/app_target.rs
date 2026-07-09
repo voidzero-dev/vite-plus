@@ -144,7 +144,15 @@ fn looks_runnable(dir: &AbsolutePathBuf, command: &str, is_root: bool) -> bool {
             dir.as_path().join("src/index.ts").is_file()
                 || vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
         }
-        _ if is_root => dir.as_path().join("index.html").is_file(),
+        // The root needs a stronger signal than a member: a root `index.html`
+        // (an app), or a config that declares a `build` block (a library/SSR
+        // build that produces output without an entry HTML). A shared root
+        // config for lint/fmt/tasks declares neither, so it does not make the
+        // root a build target.
+        _ if is_root => {
+            dir.as_path().join("index.html").is_file()
+                || vite_static_config::resolve_static_config(dir).get_declared("build").is_some()
+        }
         _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }

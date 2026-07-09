@@ -209,7 +209,11 @@ fn extract_config_from_expr(
     expr: &Expression<'_>,
     has_trusted_define_config_binding: bool,
 ) -> FieldMap {
-    let expr = expr.without_parentheses();
+    // Unwrap parentheses and TypeScript-only wrappers (`satisfies`, `as`,
+    // `as const`, `!`) so a config authored as
+    // `export default { ... } satisfies UserConfig` is analyzed like the raw
+    // object it wraps, rather than being treated as unanalyzable.
+    let expr = expr.get_inner_expression();
     match expr {
         Expression::CallExpression(call) => {
             if !call.callee.is_specific_id("defineConfig") {
@@ -653,6 +657,21 @@ mod tests {
         let result = parse("export default { foo: 'bar', num: 42 }");
         assert_json(&result, "foo", serde_json::json!("bar"));
         assert_json(&result, "num", serde_json::json!(42));
+    }
+
+    #[test]
+    fn unwraps_typescript_wrappers_around_the_config_object() {
+        // `satisfies`, `as`, `as const`, and non-null wrappers are TS-only and
+        // leave the underlying object statically analyzable.
+        for source in [
+            "export default { foo: 'bar' } satisfies UserConfig",
+            "export default { foo: 'bar' } as const",
+            "export default { foo: 'bar' } as UserConfig",
+            "export default ({ foo: 'bar' } satisfies UserConfig)",
+            "module.exports = { foo: 'bar' } satisfies UserConfig",
+        ] {
+            assert_json(&parse(source), "foo", serde_json::json!("bar"));
+        }
     }
 
     #[test]
