@@ -1,8 +1,9 @@
 [[case]]
 name = "command_env_clean"
 vp = "global"
+seed-runtime = false
 steps = [
-  { argv = ["node", "setup-env-clean.mjs"], comment = "Create isolated runtime/package-manager caches and fake corepack" },
-  { argv = ["node", "run-env-clean.mjs"], comment = "Clean isolated Vite+ caches" },
+  { argv = ["node", "setup-env-clean.mjs"], comment = "Create runtime/package-manager caches in the isolated VP_HOME" },
+  { argv = ["node", "run-env-clean.mjs"], comment = "Clean isolated Vite+ caches with fake corepack on PATH" },
   { argv = ["node", "assert-env-clean.mjs"], comment = "Assert current/default runtimes are preserved and caches are removed" },
 ]

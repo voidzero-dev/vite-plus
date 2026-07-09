@@ -2,14 +2,14 @@
 
 ## `node setup-env-clean.mjs`
 
-Create isolated runtime/package-manager caches and fake corepack
+Create runtime/package-manager caches in the isolated VP_HOME
 
 ```
 ```
 
 ## `node run-env-clean.mjs`
 
-Clean isolated Vite+ caches
+Clean isolated Vite+ caches with fake corepack on PATH
 
 ```
 VITE+ - The Unified Toolchain for the Web

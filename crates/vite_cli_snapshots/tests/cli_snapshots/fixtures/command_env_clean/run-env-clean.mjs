@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-const env = { ...process.env, VP_HOME: path.resolve('home') };
+const env = { ...process.env };
 const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
 env[pathKey] = [path.resolve('fake-bin'), env[pathKey]].filter(Boolean).join(path.delimiter);
 
