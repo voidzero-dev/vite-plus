@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_husky_latest_dist_tag_v9_installed"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should resolve husky v9 from node_modules, no warning", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky and lint-staged should be removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

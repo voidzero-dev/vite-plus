@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_vitest_unmanaged_override"
+vp = "global"
+env = { VP_OVERRIDE_PACKAGES = "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}" }
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "vitest omitted from managed overrides must remain user-owned", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "user's Vitest and @vitest/ui stay direct devDependencies (not converted to catalog:), so they remain user-owned", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "no vitest catalog or override should be introduced", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "unmanaged Vitest ecosystem versions remain stable on rerun", continue-on-failure = true },
+]

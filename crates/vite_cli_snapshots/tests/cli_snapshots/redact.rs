@@ -63,6 +63,41 @@ static DEV_ENGINES_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// `vp migrate` prints the CLI's own version bare in its completion banner
+// (`◇ Migrated . to Vite+ 0.2.4`). Like the workspace's own vite-plus version
+// above it bumps on every Vite+ release, so mask it by the `Vite+ ` context.
+// The mixed-case, `+ `-then-digit anchor leaves the all-caps `VITE+ - The
+// Unified Toolchain` header untouched.
+static VP_BANNER_VERSION_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(Vite\+ )\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?").unwrap());
+// `vp migrate`'s dependency version-change table prints `<name> <from> →
+// <to>` rows (`vite-plus  0.1.21 → 0.2.4`, `vite  8.0.0 → 8.1.3`, `vitest
+// 3.2.4 → 4.1.10`). The target of every managed-toolchain row (vite-plus,
+// vite, vitest, `@vitest/*`) is the CLI's own or a bundled version that bumps
+// on release, so mask it (VP_VERSION_RE's `key:` form does not reach the
+// space-aligned table). The source (what the project has installed) is
+// fixture-controlled and stays verbatim, so the "raw upstream vite" row keeps
+// its `8.0.0`. Any middle column (source / `latest` / empty when adding) is
+// consumed non-greedily up to the arrow.
+static VP_UPGRADE_TARGET_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^(\s*(?:vite-plus|vite|vitest|@vitest/[a-z0-9-]+)\s+[^\n→]*?(?:→|->)\s*)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?",
+    )
+    .unwrap()
+});
+// The vitest ecosystem (`vitest`, `@vitest/*`) is a Vite+-managed toolchain
+// version too: `vp migrate` pins the bundled version into catalogs / overrides
+// (`vitest: 4.1.10` in a pnpm catalog, `"@vitest/coverage-v8": "4.1.10"` in a
+// resolutions block), which bumps whenever the bundle refreshes. Mask it by
+// key context like the vite-plus version, matching the YAML (`key: ver`) and
+// JSON (`"key": "ver"`) spellings; the `\d` anchor keeps `vitest: catalog:`
+// verbatim.
+static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+    )
+    .unwrap()
+});
 // Output bytes differ across OSes (line endings, embedded paths), so byte
 // sizes and content-derived asset hashes can never be part of a shared
 // snapshot. The unit is kept ("<size> kB"): it only changes when content
@@ -196,6 +231,19 @@ pub fn redact_output(
     // Redact scaffolded devEngines runtime/package-manager pins by name
     // context (see DEV_ENGINES_VERSION_RE), which track upstream releases.
     output = DEV_ENGINES_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Redact the CLI's own version in the `vp migrate` completion banner
+    // (see VP_BANNER_VERSION_RE), which bumps on every release.
+    output = VP_BANNER_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Redact the managed-toolchain row targets of `vp migrate`'s version-change
+    // table (see VP_UPGRADE_TARGET_RE); the CLI/bundled target bumps on release.
+    output = VP_UPGRADE_TARGET_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Redact the bundled vitest-ecosystem versions `vp migrate` pins into
+    // catalogs/overrides (see MANAGED_TEST_VERSION_RE), which bump on bundle
+    // refresh like the vite-plus version.
+    output = MANAGED_TEST_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
 
     // Redact thread counts like "16 threads" to "<n> threads"
     output = THREAD_RE.replace_all(&output, "<n> threads").into_owned();

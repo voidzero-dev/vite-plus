@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # peer catalog must resolve before managed Vitest catalogs are pruned",
-    "cat package.json # peer uses its resolved public range without gaining direct Vitest",
-    "cat pnpm-workspace.yaml # unreferenced managed Vitest catalog is removed",
-    "vp migrate --no-interactive # repaired project should no longer be pending"
-  ]
-}

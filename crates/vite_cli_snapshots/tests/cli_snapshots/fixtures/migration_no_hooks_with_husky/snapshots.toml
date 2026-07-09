@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_no_hooks_with_husky"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-interactive"], comment = "--no-hooks should keep husky/lint-staged and preserve config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "prepare script, lint-staged config, check-staged script, and deps should all be preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".husky", "--assert-not", "dir"], comment = "no .husky directory", continue-on-failure = true },
+]

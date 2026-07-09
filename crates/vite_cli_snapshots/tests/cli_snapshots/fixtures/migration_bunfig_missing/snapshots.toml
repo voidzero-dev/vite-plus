@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_bunfig_missing"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration does not create bunfig.toml", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "bunfig.toml", "--assert-not", "file"], comment = "check Bun configuration remains absent", continue-on-failure = true },
+]
