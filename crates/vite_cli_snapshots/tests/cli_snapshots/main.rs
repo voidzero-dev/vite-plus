@@ -42,10 +42,13 @@ const SCREEN_SIZE: ScreenSize = ScreenSize { rows: 500, cols: 500 };
 /// Diagnostic step tracing. A step that logs `START` without a matching
 /// `END` is the one that wedged; the phase markers localize within it.
 ///
-/// `VP_SNAP_TRACE_FILE` appends to that file (each line flushed) — use this in
-/// CI: a step killed by its timeout has its own log discarded by GitHub, but a
-/// file on disk survives and a later `if: always()` step can print it.
-/// `VP_SNAP_TRACE=1` writes to stderr instead, for local runs.
+/// `VP_SNAP_TRACE_FILE` appends to that file (each line flushed) — a step
+/// killed by its own timeout has its log discarded by GitHub, but a file on
+/// disk survives and a later `if: always()` step can print it. `VP_SNAP_TRACE=1`
+/// ALSO streams each line to stderr (independent of the file): a hard PTY wedge
+/// can cancel the whole job before that print step runs, discarding the file
+/// too, so CI enables both and runs `cargo test -- --nocapture` to keep the
+/// trace visible in the live step log right up to the wedge.
 fn snap_trace(args: std::fmt::Arguments<'_>) {
     use std::io::Write as _;
     static SINK: std::sync::LazyLock<Option<std::sync::Mutex<std::fs::File>>> =
@@ -58,12 +61,13 @@ fn snap_trace(args: std::fmt::Arguments<'_>) {
                 .ok()
                 .map(std::sync::Mutex::new)
         });
-    if let Some(file) = SINK.as_ref() {
-        if let Ok(mut file) = file.lock() {
-            let _ = writeln!(file, "[pty-trace] {args}");
-            let _ = file.flush();
-        }
-    } else if std::env::var_os("VP_SNAP_TRACE").is_some_and(|v| v == "1") {
+    if let Some(file) = SINK.as_ref()
+        && let Ok(mut file) = file.lock()
+    {
+        let _ = writeln!(file, "[pty-trace] {args}");
+        let _ = file.flush();
+    }
+    if std::env::var_os("VP_SNAP_TRACE").is_some_and(|v| v == "1") {
         let mut err = std::io::stderr().lock();
         let _ = writeln!(err, "[pty-trace] {args}");
         let _ = err.flush();

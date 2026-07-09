@@ -1093,18 +1093,24 @@ jobs:
         # runners). Without this, a wedged case burns the 6h job default and
         # never flushes the step log; the timeout fails fast and preserves it.
         timeout-minutes: 10
+        # `--nocapture` streams snap_trace's stderr lines into this step's live
+        # log: a hard wedge cancels the whole job before `Print PTY trace` runs
+        # (and discards the file), so the file alone is not enough — the live
+        # log keeps the trace up to the wedged step.
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
-          cargo test -p vite_cli_snapshots
+          cargo test -p vite_cli_snapshots -- --nocapture
         env:
           RUST_BACKTRACE: '1'
-          # Diagnostic step tracing to a file (see snap_trace): a step that
-          # logs START without END is the one that wedged. Written to a file
-          # (not the step log) because GitHub discards a timed-out step's log;
-          # the next step prints it. Investigating the recurring Namespace-
-          # Linux PTY wedge that survives the spawn bound.
+          # Diagnostic step tracing (see snap_trace): a step that logs START
+          # without END is the one that wedged. Written to a file (which the
+          # next step prints, since GitHub discards a timed-out step's own log)
+          # AND streamed to stderr via VP_SNAP_TRACE so the live log survives a
+          # job-cancelling wedge. Investigating the recurring Namespace-Linux
+          # PTY wedge that survives the spawn bound.
           VP_SNAP_TRACE_FILE: ${{ runner.temp }}/pty-trace.log
+          VP_SNAP_TRACE: '1'
 
       - name: Print PTY trace
         # Runs even when the step above is killed by its timeout, so the trace
