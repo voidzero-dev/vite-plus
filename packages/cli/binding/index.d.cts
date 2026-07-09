@@ -144,6 +144,17 @@ export interface MangleOptions {
    * @default false
    */
   keepNames?: boolean | MangleOptionsKeepNames;
+  /**
+   * Names that bindings must not be renamed to, and that bindings already
+   * carrying them keep. Equivalent to terser's `mangle.reserved`.
+   *
+   * Pass `['exports', 'module']` when minifying prebuilt CommonJS / UMD files
+   * that Node consumers `import` directly, so Node's cjs-module-lexer can still
+   * detect the mangled module's named exports.
+   *
+   * @default []
+   */
+  reserved?: Array<string>;
   /** Debug mangled names. */
   debug?: boolean;
 }
@@ -1762,6 +1773,7 @@ export declare class BindingNormalizedOptions {
   get name(): string | null;
   get entryFilenames(): string | undefined;
   get chunkFilenames(): string | undefined;
+  get sourcemapFilenames(): string | undefined;
   get assetFilenames(): string | undefined;
   get dir(): string | null;
   get file(): string | null;
@@ -2591,15 +2603,6 @@ export interface BindingMatchGroup {
   includeDependenciesRecursively?: boolean;
 }
 
-export interface BindingModulePreloadOptions {
-  polyfill: boolean;
-  resolveDependencies?: (
-    filename: string,
-    deps: string[],
-    context: { hostId: string; hostType: 'html' | 'js' },
-  ) => string[];
-}
-
 export interface BindingModules {
   values: Array<BindingRenderedModule>;
   keys: Array<string>;
@@ -2643,6 +2646,7 @@ export interface BindingOutputOptions {
   paths?: Record<string, string> | ((id: string) => string);
   plugins: (BindingBuiltinPlugin | BindingPluginOptions | undefined)[];
   sourcemap?: 'file' | 'inline' | 'hidden';
+  sourcemapFileNames?: string | ((chunk: PreRenderedChunk) => string);
   sourcemapBaseUrl?: string;
   sourcemapIgnoreList?:
     | boolean
@@ -2843,29 +2847,12 @@ export declare const enum BindingRebuildStrategy {
   Never = 2,
 }
 
-export interface BindingRenderBuiltUrlConfig {
-  ssr: boolean;
-  type: 'asset' | 'public';
-  hostId: string;
-  hostType: 'js' | 'css' | 'html';
-}
-
-export interface BindingRenderBuiltUrlRet {
-  relative?: boolean;
-  runtime?: string;
-}
-
 export interface BindingReplacePluginConfig {
   values: Record<string, string>;
   delimiters?: [string, string];
   preventAssignment?: boolean;
   objectGuards?: boolean;
   sourcemap?: boolean;
-}
-
-export interface BindingResolveDependenciesContext {
-  hostId: string;
-  hostType: string;
 }
 
 export type BindingResolvedExternal = boolean | string;
@@ -3202,6 +3189,7 @@ export interface JsOutputChunk {
   map?: BindingSourcemap;
   sourcemapFilename?: string;
   preliminaryFilename: string;
+  preliminarySourcemapFilename?: string;
 }
 
 /** Error emitted from native side, it only contains kind and message, no stack trace. */
