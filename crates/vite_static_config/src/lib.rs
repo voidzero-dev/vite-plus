@@ -474,7 +474,9 @@ fn f64_to_json_number(value: f64) -> serde_json::Value {
 /// Returns `None` if the expression contains non-JSON-literal nodes
 /// (function calls, identifiers, template literals, etc.)
 fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
-    let expr = expr.without_parentheses();
+    // Unwrap parentheses and TS-only wrappers (`as const`, `satisfies`, `as`,
+    // `!`) so a typed literal value like `'./web' as const` still extracts.
+    let expr = expr.get_inner_expression();
     match expr {
         Expression::NullLiteral(_) => Some(serde_json::Value::Null),
 
@@ -682,6 +684,9 @@ mod tests {
         ] {
             assert_json(&parse(source), "foo", serde_json::json!("bar"));
         }
+        // TS wrappers on a property VALUE must be unwrapped too.
+        assert_json(&parse("export default { foo: 'bar' as const }"), "foo", serde_json::json!("bar"));
+        assert_json(&parse("export default { foo: ('bar' satisfies string) }"), "foo", serde_json::json!("bar"));
     }
 
     #[test]

@@ -57,10 +57,15 @@ pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize
     None
 }
 
-/// Apply `-C <dir>`: resolve against `cwd`, validate, change the process
-/// cwd, and keep the POSIX `PWD` in sync like a real `cd`. Returns the new
-/// cwd, or the user-facing error message (not printed here: the completion
-/// peek must stay silent, and clap-path callers wrap it in their error type).
+/// Apply `-C <dir>`: resolve against `cwd`, validate, and change the process
+/// cwd. Returns the resolved cwd, or the user-facing error message (not
+/// printed here: the completion peek must stay silent, and clap-path callers
+/// wrap it in their error type).
+///
+/// This changes only the process cwd, never `PWD`. Mutating the environment is
+/// unsound once the Tokio runtime has spawned threads, and it is unnecessary:
+/// delegated children that read `process.env.PWD` get it set explicitly from
+/// the resolved cwd at spawn time (see `js_executor` and the NAPI dispatch).
 pub(crate) fn apply_chdir(
     cwd: &vite_path::AbsolutePath,
     dir: &str,
@@ -71,12 +76,6 @@ pub(crate) fn apply_chdir(
     }
     if let Err(e) = std::env::set_current_dir(target.as_path()) {
         return Err(format!("Failed to change directory to {dir}: {e}"));
-    }
-    // Node tools commonly read process.env.PWD.
-    #[cfg(unix)]
-    // SAFETY: single-threaded startup, before any command logic runs.
-    unsafe {
-        std::env::set_var("PWD", target.as_path());
     }
     Ok(target)
 }

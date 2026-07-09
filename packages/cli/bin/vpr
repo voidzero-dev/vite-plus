@@ -4,4 +4,7 @@ import module from 'node:module';
 if (module.enableCompileCache) {
   module.enableCompileCache();
 }
-import '../dist/bin.js';
+// Dynamic import so it runs AFTER enableCompileCache above (a static
+// import is hoisted and would load the CLI bundle uncached). The argv
+// rewrite to `run` lives in bin.ts (keyed on argv0).
+await import('../dist/bin.js');

@@ -41,6 +41,17 @@ must be honored. vp builds ./frontend, not the wrapper root.
 steps = [{ argv = ["vp", "build"], cwd = "ts_wrapper" }]
 
 [[case]]
+name = "default_package_value_wrapper"
+vp = ["local", "global"]
+comment = """
+Regression: the TypeScript wrapper is on the defaultPackage VALUE
+(`'./frontend' as const`), not the config object. Static extraction must
+unwrap it too, so vp builds ./frontend rather than erroring that
+defaultPackage is not a static string literal.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "value_wrapper" }]
+
+[[case]]
 name = "default_package_define_config_wrapper"
 vp = ["local", "global"]
 comment = """

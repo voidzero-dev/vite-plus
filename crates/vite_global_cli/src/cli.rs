@@ -861,8 +861,9 @@ pub async fn run_command_with_options(
 ) -> Result<ExitStatus, Error> {
     // Apply the global `-C <dir>` flag before anything reads cwd. main
     // normally consumes a leading `-C` pre-parse; this covers orderings that
-    // reach clap (e.g. a second `-C`), with identical semantics — including
-    // the process-cwd change and PWD sync the shared helper performs.
+    // reach clap (e.g. a second `-C`), with identical semantics: the shared
+    // helper changes the process cwd, and delegated children receive PWD from
+    // the resolved cwd at spawn time.
     if let Some(dir) = &args.chdir {
         cwd =
             crate::apply_chdir(&cwd, dir).map_err(|message| Error::UserMessage(message.into()))?;
