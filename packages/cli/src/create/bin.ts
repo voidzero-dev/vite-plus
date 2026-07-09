@@ -84,7 +84,7 @@ import {
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
-  ensureGitignoreNodeModules,
+  ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
   normalizeEditorOption,
@@ -1073,7 +1073,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         if (!compactOutput) {
           prompts.log.success('Git repository initialized');
         }
-        ensureGitignoreNodeModules(fullPath);
+        ensureDefaultGitignoreEntries(fullPath);
       } else {
         prompts.log.warn('Failed to initialize git repository');
         if (gitResult.stderr) {
@@ -1111,7 +1111,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteMonorepo(workspaceInfo, undefined, compactOutput);
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
-      await initGitRepository(fullPath);
+      if (await initGitRepository(fullPath)) {
+        ensureDefaultGitignoreEntries(fullPath);
+      }
     }
     if (bundled?.monorepo) {
       // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
@@ -1434,7 +1436,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
-      await initGitRepository(fullPath);
+      if (await initGitRepository(fullPath)) {
+        ensureDefaultGitignoreEntries(fullPath);
+      }
     }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);

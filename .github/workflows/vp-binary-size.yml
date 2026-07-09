@@ -153,6 +153,7 @@ jobs:
                   vp: `target/${target}/release/vp.exe`,
                   napi: 'packages/cli/binding/vite-plus.win32-x64-msvc.node',
                   trampoline: `target/${target}/release/vp-shim.exe`,
+                  installer: `target/${target}/release/vp-setup.exe`,
                 };
 
           const artifacts = {};
@@ -300,6 +301,13 @@ jobs:
                 baseGzip: baseWindows.artifacts.trampoline.gzip,
                 headRaw: headWindows.artifacts.trampoline.raw,
                 headGzip: headWindows.artifacts.trampoline.gzip,
+              },
+              {
+                name: 'Installer (Windows x64)',
+                baseRaw: baseWindows.artifacts.installer.raw,
+                baseGzip: baseWindows.artifacts.installer.gzip,
+                headRaw: headWindows.artifacts.installer.raw,
+                headGzip: headWindows.artifacts.installer.gzip,
               },
             ];
 
