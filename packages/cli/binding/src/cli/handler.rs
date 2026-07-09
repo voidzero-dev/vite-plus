@@ -64,6 +64,7 @@ impl CommandHandler for VitePlusCommandHandler {
                 // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
                 Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(
                     UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
                         input: Some(check_cache_inputs()),

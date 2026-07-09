@@ -169,6 +169,24 @@ tasks: {
 }
 ```
 
+### `replayLogs`
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to replay the task's cached stdout/stderr on cache hits. Set this to `false` when you want cache hits to restore output files and report saved time without printing the task's previous logs:
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    command: 'vp build',
+    replayLogs: false,
+  },
+}
+```
+
+This does not disable caching and does not affect [`output`](#output) restoration. On a cache hit, Vite Task still skips the command and restores cached output files.
+
 ### `env`
 
 - **Type:** `string[]`

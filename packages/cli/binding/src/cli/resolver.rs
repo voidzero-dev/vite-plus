@@ -107,6 +107,7 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
                         input: None,
@@ -143,6 +144,7 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: None,
                         untracked_env: None,
                         input: None,
@@ -172,6 +174,7 @@ impl SubcommandResolver {
                     // vite's `ignoreInput`/`ignoreOutput`/`getEnv`/`getEnvs` refine
                     // the fingerprint at runtime.
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: None,
                         untracked_env: None,
                         input: None,
@@ -198,6 +201,7 @@ impl SubcommandResolver {
                     program: Arc::from(OsStr::new("node")),
                     args: iter::once(Str::from(js_path_str)).chain(vitest_args).collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: None,
                         untracked_env: None,
                         input: Some(vec![
@@ -226,6 +230,7 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: None,
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
@@ -284,6 +289,7 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        replay_logs: None,
                         env: None,
                         untracked_env: None,
                         input: None,
