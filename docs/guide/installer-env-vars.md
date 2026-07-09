@@ -19,7 +19,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 
   ```bash
   # Unix
-  VP_VERSION=1.2.3 curl -fsSL https://vite.plus | bash
+  curl -fsSL https://vite.plus | VP_VERSION=1.2.3 bash
   ```
 
   ```powershell
@@ -36,7 +36,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 
   ```bash
   # Unix
-  VP_HOME=/opt/vite-plus curl -fsSL https://vite.plus | bash
+  curl -fsSL https://vite.plus | VP_HOME=/opt/vite-plus bash
   ```
 
   ```powershell
@@ -51,7 +51,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 - **CLI equivalent**: `--registry`
 - **Example**:
   ```bash
-  NPM_CONFIG_REGISTRY=https://registry.npmmirror.com curl -fsSL https://vite.plus | bash
+  curl -fsSL https://vite.plus | NPM_CONFIG_REGISTRY=https://registry.npmmirror.com bash
   ```
 
 ### `VP_NODE_MANAGER`
@@ -63,7 +63,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 - **Example**:
   ```bash
   # Skip Node.js manager setup in CI
-  VP_NODE_MANAGER=no curl -fsSL https://vite.plus | bash
+  curl -fsSL https://vite.plus | VP_NODE_MANAGER=no bash
   ```
 
 ### `VP_PR_VERSION`
@@ -74,7 +74,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 - **Example**:
   ```bash
   # Install preview build for PR #1569
-  VP_PR_VERSION=1569 curl -fsSL https://vite.plus | bash
+  curl -fsSL https://vite.plus | VP_PR_VERSION=1569 bash
   ```
 
 ### `VP_LOCAL_TGZ`
@@ -83,7 +83,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 - **Default**: None
 - **Example**:
   ```bash
-  VP_LOCAL_TGZ=./vite-plus-0.0.0.tgz curl -fsSL https://vite.plus | bash
+  curl -fsSL https://vite.plus | VP_LOCAL_TGZ=./vite-plus-0.0.0.tgz bash
   ```
 
 ### `VP_LOCAL_BINARY`

@@ -216,4 +216,4 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
   Node.js builds.
 - **Custom base image**: to add `vp` to your own base image instead, run the
   installer: `curl -fsSL https://vite.plus | bash` (set `VP_VERSION` to pin a
-  version). See the [Installer Environment Variables](/guide/installer-env-vars) page for all available options.
+  version). 

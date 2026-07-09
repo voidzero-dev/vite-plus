@@ -88,10 +88,6 @@ Remove-Item Env:\VP_PR_VERSION
 
 The installer resolves the ref to its `0.0.0-commit.<sha>` build through the registry bridge and installs it like any other version. Run `vp --version` afterward to confirm which build and bundled tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
 
-::: tip
-See the [Installer Environment Variables](/guide/installer-env-vars) page for all available environment variables.
-:::
-
 ### Local `vite-plus` Preview
 
 After installing the preview global CLI above, run migrate in the project to move its local `vite-plus` onto the same build:

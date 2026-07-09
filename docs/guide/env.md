@@ -2,10 +2,6 @@
 
 `vp env` manages Node.js versions globally and per project.
 
-::: info
-For environment variables recognized by the installer scripts (`install.ps1`, `install.sh`) and `vp-setup.exe`, see the [Installer Environment Variables](/guide/installer-env-vars) page.
-:::
-
 ## Overview
 
 Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
