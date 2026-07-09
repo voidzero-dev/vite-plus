@@ -685,8 +685,16 @@ mod tests {
             assert_json(&parse(source), "foo", serde_json::json!("bar"));
         }
         // TS wrappers on a property VALUE must be unwrapped too.
-        assert_json(&parse("export default { foo: 'bar' as const }"), "foo", serde_json::json!("bar"));
-        assert_json(&parse("export default { foo: ('bar' satisfies string) }"), "foo", serde_json::json!("bar"));
+        assert_json(
+            &parse("export default { foo: 'bar' as const }"),
+            "foo",
+            serde_json::json!("bar"),
+        );
+        assert_json(
+            &parse("export default { foo: ('bar' satisfies string) }"),
+            "foo",
+            serde_json::json!("bar"),
+        );
     }
 
     #[test]
