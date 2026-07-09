@@ -907,93 +907,130 @@ fn run_case(
         let timeout = step.timeout(step_default_timeout);
 
         let (termination_state, raw_output) = if step.tty {
-            let mut cmd = CommandBuilder::new(&program);
-            for arg in &argv[1..] {
-                cmd.arg(arg);
-            }
-            cmd.env_clear();
-            for (k, v) in step_env {
-                cmd.env(k, v);
-            }
-            cmd.cwd(&step_cwd);
+            'tty: {
+                let mut cmd = CommandBuilder::new(&program);
+                for arg in &argv[1..] {
+                    cmd.arg(arg);
+                }
+                cmd.env_clear();
+                for (k, v) in step_env {
+                    cmd.env(k, v);
+                }
+                cmd.cwd(&step_cwd);
 
-            let terminal = TestTerminal::spawn(SCREEN_SIZE, cmd).unwrap();
-            let mut killer = terminal.child_handle.clone();
-            let interactions = step.interactions.clone();
-            let formatted_snapshot = step.formatted_snapshot;
-            let output = Arc::new(Mutex::new(String::new()));
-            let output_for_thread = Arc::clone(&output);
-            let (tx, rx) = mpsc::channel();
-            std::thread::spawn(move || {
-                let mut terminal = terminal;
+                // Bound the PTY spawn itself. `TestTerminal::spawn` (openpty plus
+                // fork/exec of the child into the PTY) can block indefinitely on
+                // some CI runners, and it runs before the interaction-phase
+                // `recv_timeout` below could catch it. Run it on a helper thread so
+                // a wedged spawn becomes a per-step timeout, not a suite-wide hang:
+                // the helper thread is abandoned, this case fails, and the rest of
+                // the suite proceeds.
+                let (spawn_tx, spawn_rx) = mpsc::channel();
+                std::thread::spawn(move || {
+                    // If the main thread already timed out and dropped the
+                    // receiver, the spawn may still complete afterwards: kill
+                    // the child so a slow-but-live command can't keep running
+                    // (holding a port, mutating the staged workspace) after the
+                    // case has already failed.
+                    if let Err(mpsc::SendError(Ok(terminal))) =
+                        spawn_tx.send(TestTerminal::spawn(SCREEN_SIZE, cmd))
+                    {
+                        let _ = terminal.child_handle.clone().kill();
+                    }
+                });
+                let terminal = match spawn_rx.recv_timeout(timeout) {
+                    Ok(Ok(terminal)) => terminal,
+                    Ok(Err(err)) => panic!("failed to spawn PTY terminal: {err}"),
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        break 'tty (
+                            TerminationState::TimedOut,
+                            "(PTY spawn did not complete)".to_string(),
+                        );
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        panic!("PTY spawn thread panicked");
+                    }
+                };
+                let mut killer = terminal.child_handle.clone();
+                let interactions = step.interactions.clone();
+                let formatted_snapshot = step.formatted_snapshot;
+                let output = Arc::new(Mutex::new(String::new()));
+                let output_for_thread = Arc::clone(&output);
+                let (tx, rx) = mpsc::channel();
+                std::thread::spawn(move || {
+                    let mut terminal = terminal;
 
-                for interaction in interactions {
-                    match interaction {
-                        Interaction::ExpectMilestone(expect) => {
-                            output_for_thread.lock().unwrap().push_str(&format!(
-                                "**→ expect-milestone:** `{}`\n\n",
-                                expect.expect_milestone
-                            ));
-                            let milestone_screen =
-                                terminal.reader.expect_milestone(&expect.expect_milestone);
-                            let mut output = output_for_thread.lock().unwrap();
-                            push_fenced_block(&mut output, &milestone_screen);
-                            output.push('\n');
-                        }
-                        Interaction::Write(write) => {
-                            output_for_thread
-                                .lock()
-                                .unwrap()
-                                .push_str(&format!("**← write:** `{}`\n\n", write.write));
-                            terminal.writer.write_all(write.write.as_bytes()).unwrap();
-                            terminal.writer.flush().unwrap();
-                        }
-                        Interaction::WriteLine(write_line) => {
-                            output_for_thread.lock().unwrap().push_str(&format!(
-                                "**← write-line:** `{}`\n\n",
-                                write_line.write_line
-                            ));
-                            terminal.writer.write_line(write_line.write_line.as_bytes()).unwrap();
-                        }
-                        Interaction::WriteKey(write_key) => {
-                            let key_name = write_key.write_key.as_str();
-                            output_for_thread
-                                .lock()
-                                .unwrap()
-                                .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
-                            terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
-                            terminal.writer.flush().unwrap();
+                    for interaction in interactions {
+                        match interaction {
+                            Interaction::ExpectMilestone(expect) => {
+                                output_for_thread.lock().unwrap().push_str(&format!(
+                                    "**→ expect-milestone:** `{}`\n\n",
+                                    expect.expect_milestone
+                                ));
+                                let milestone_screen =
+                                    terminal.reader.expect_milestone(&expect.expect_milestone);
+                                let mut output = output_for_thread.lock().unwrap();
+                                push_fenced_block(&mut output, &milestone_screen);
+                                output.push('\n');
+                            }
+                            Interaction::Write(write) => {
+                                output_for_thread
+                                    .lock()
+                                    .unwrap()
+                                    .push_str(&format!("**← write:** `{}`\n\n", write.write));
+                                terminal.writer.write_all(write.write.as_bytes()).unwrap();
+                                terminal.writer.flush().unwrap();
+                            }
+                            Interaction::WriteLine(write_line) => {
+                                output_for_thread.lock().unwrap().push_str(&format!(
+                                    "**← write-line:** `{}`\n\n",
+                                    write_line.write_line
+                                ));
+                                terminal
+                                    .writer
+                                    .write_line(write_line.write_line.as_bytes())
+                                    .unwrap();
+                            }
+                            Interaction::WriteKey(write_key) => {
+                                let key_name = write_key.write_key.as_str();
+                                output_for_thread
+                                    .lock()
+                                    .unwrap()
+                                    .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
+                                terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
+                                terminal.writer.flush().unwrap();
+                            }
                         }
                     }
-                }
 
-                let status = terminal.reader.wait_for_exit().unwrap();
-                let screen = if formatted_snapshot {
-                    render_formatted_screen(&terminal.reader.screen_contents_formatted())
-                } else {
-                    terminal.reader.screen_contents()
-                };
+                    let status = terminal.reader.wait_for_exit().unwrap();
+                    let screen = if formatted_snapshot {
+                        render_formatted_screen(&terminal.reader.screen_contents_formatted())
+                    } else {
+                        terminal.reader.screen_contents()
+                    };
 
-                {
-                    let mut output = output_for_thread.lock().unwrap();
-                    push_fenced_block(&mut output, &screen);
-                }
+                    {
+                        let mut output = output_for_thread.lock().unwrap();
+                        push_fenced_block(&mut output, &screen);
+                    }
 
-                let _ = tx.send(i64::from(status.exit_code()));
-            });
+                    let _ = tx.send(i64::from(status.exit_code()));
+                });
 
-            match rx.recv_timeout(timeout) {
-                Ok(exit_code) => {
-                    let output = output.lock().unwrap().clone();
-                    (TerminationState::Exited(exit_code), output)
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    let _ = killer.kill();
-                    let output = output.lock().unwrap().clone();
-                    (TerminationState::TimedOut, output)
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    panic!("terminal thread panicked");
+                match rx.recv_timeout(timeout) {
+                    Ok(exit_code) => {
+                        let output = output.lock().unwrap().clone();
+                        (TerminationState::Exited(exit_code), output)
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        let _ = killer.kill();
+                        let output = output.lock().unwrap().clone();
+                        (TerminationState::TimedOut, output)
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        panic!("terminal thread panicked");
+                    }
                 }
             }
         } else {

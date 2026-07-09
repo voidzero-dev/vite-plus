@@ -30,7 +30,9 @@ Tags track the `vp` version:
 
 The examples use `:latest` to track the newest release; pin an exact tag or a
 digest if you need reproducible builds. The image is published for `linux/amd64`
-and `linux/arm64` and runs as a non-root user by default.
+and `linux/arm64` and runs as the non-root `vp` user by default. That user has
+passwordless `sudo`, so build/CI steps that need root (extra apt packages,
+`playwright install --with-deps`) work without changing the image user.
 
 Browse all published versions and digests on the [GitHub package page](https://github.com/voidzero-dev/vite-plus/pkgs/container/vite-plus).
 
@@ -136,6 +138,44 @@ build:
 
 On GitHub Actions, prefer [`setup-vp`](./ci) instead of the image.
 
+## Browser mode tests (Vitest / Playwright)
+
+Running as the non-root `vp` user is what you want for browsers: Chromium keeps
+its sandbox (running a browser as root disables it). Install the browser and its
+system libraries in the job. `playwright install --with-deps` needs root to
+`apt-get install` those libraries. The `vp` user has passwordless `sudo`, so
+Playwright uses it to install them without changing the image user:
+
+```yaml [.gitlab-ci.yml]
+test:
+  image: ghcr.io/voidzero-dev/vite-plus:latest
+  script:
+    - vp install --frozen-lockfile
+    - vp exec playwright install --with-deps chromium
+    - vp test
+```
+
+`vp exec` runs the project's own Playwright (from your lockfile), so it installs
+the browser revision your tests expect. Prefer it over `vpx playwright install`,
+which would download whatever Playwright is latest and can fetch a different
+browser revision.
+
+To bake the browser and its libraries into a derived image instead of installing
+them on every run, install the project dependencies first so the baked browser
+matches your lockfile, then install with the project's Playwright (root is
+available through `sudo`):
+
+```dockerfile [Dockerfile]
+FROM ghcr.io/voidzero-dev/vite-plus:latest
+WORKDIR /app
+COPY --chown=vp:vp package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version* ./
+RUN vp install --frozen-lockfile
+RUN vp exec playwright install --with-deps chromium
+```
+
+If Chromium crashes under load in CI, give the container more shared memory with
+`--ipc=host`; see the [Playwright Docker docs](https://playwright.dev/docs/docker).
+
 ## Devcontainers
 
 Use the image as a ready-to-go development container with the toolchain
@@ -164,7 +204,11 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
   those that use one have it available in every stage.
 - **Non-root user**: the image runs as the non-root `vp` user, so copy sources
   with `COPY --chown=vp:vp ...` as shown. Without it, `COPY` writes root-owned
-  files that `vp install` cannot update (permission denied).
+  files that `vp install` cannot update (permission denied). The `vp` user has
+  passwordless `sudo` for the occasional root step (installing extra apt packages
+  or `playwright install --with-deps`), so you rarely need to switch the image
+  user. The production runtime stage is a separate, vp-free base image, so this
+  convenience does not reach your deployed image.
 - **Native addons**: the image includes a C/C++ build toolchain (`build-essential`,
   `python3`), so native dependencies such as `better-sqlite3` compile during
   `vp install`.
