@@ -110,11 +110,11 @@ A step is a bare argv array or a table:
   interactions = [ ... ] }
 ```
 
-`argv[0]` may be `vp`, `vpr`, `vpx`, `vpt`, `oxfmt`, `oxlint`, `node`,
-`git`, `npm`, `pnpm`, `yarn`, or `bun`, but everything except `vpt` must
-resolve from the flavor-owned tool directories described above. There is no
-shell: no `&&`, no redirects, no globs. File setup and assertions go through
-`vpt` so behavior is identical on every platform:
+`argv[0]` may be `vpt` or any executable exposed by the case's Vite+
+installation, including default shims such as `vp`, `node`, and `corepack`
+and globally installed package binaries. There is no shell: no `&&`, no
+redirects, no globs. File setup and assertions go through `vpt` so behavior
+is identical on every platform:
 
 `vpt print-file` (cat), `vpt stat-file` (prints `file`/`dir`/`missing`;
 `--assert <state>` / `--assert-not <state>` also fail on mismatch, so

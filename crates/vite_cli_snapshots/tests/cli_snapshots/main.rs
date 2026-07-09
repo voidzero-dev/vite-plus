@@ -427,7 +427,30 @@ struct CaseHome {
 
 struct CaseInstall {
     path_env: OsString,
-    allowed_tool_dirs: Vec<PathBuf>,
+    tool_dirs: Vec<PathBuf>,
+    vpt: PathBuf,
+}
+
+impl CaseInstall {
+    /// Resolve a step program from the case-owned Vite+ installation. `vpt`
+    /// stays runner-owned so a fixture cannot shadow the assertion helper.
+    fn resolve_program(
+        &self,
+        program: &str,
+        case_path: &std::ffi::OsStr,
+        cwd: &Path,
+    ) -> Result<PathBuf, String> {
+        if program == "vpt" {
+            return Ok(self.vpt.clone());
+        }
+
+        let found = which::which_in(program, Some(case_path), cwd)
+            .map_err(|e| format!("`{program}` not found on the case PATH: {e}"))?;
+        if self.tool_dirs.iter().any(|dir| found.starts_with(dir)) {
+            return Ok(found);
+        }
+        Err(format!("`{program}` resolved outside the case-owned tool dirs: {}", found.display()))
+    }
 }
 
 impl CaseHome {
@@ -472,7 +495,7 @@ impl CaseHome {
         }
 
         let package_dir = self.vp_home().join("current").join("node_modules").join("vite-plus");
-        self.install_case_package(&package_dir)?;
+        Self::install_case_package(&runtime.cli_package_dir, &package_dir)?;
         let local_bin_dir = local_package_bin_dir(&package_dir);
         #[cfg(windows)]
         if flavor == Flavor::Local {
@@ -481,42 +504,39 @@ impl CaseHome {
         self.run_env_setup(&vp)?;
 
         let vp_bin_dir = self.vp_home().join("bin");
-        let allowed_tool_dirs = match flavor {
+        let tool_dirs = match flavor {
             Flavor::Global => vec![vp_bin_dir],
-            Flavor::Local => {
-                runtime.local_cli_bin_dir.as_deref().ok_or(
-                    "internal error: local case reached run_case without a local CLI bin dir",
-                )?;
-                vec![local_bin_dir, vp_bin_dir]
-            }
+            Flavor::Local => vec![local_bin_dir, vp_bin_dir],
         };
+        let mut path_dirs = vec![runtime.runner_bin_dir.clone()];
+        path_dirs.extend(tool_dirs.iter().cloned());
 
         Ok(CaseInstall {
-            path_env: compose_case_path_env(&allowed_tool_dirs, Some(&runtime.bin_dir)),
-            allowed_tool_dirs,
+            path_env: compose_path_env(&path_dirs),
+            tool_dirs,
+            vpt: runtime.vpt.clone(),
         })
     }
 
-    fn install_case_package(&self, package_dir: &Path) -> Result<(), String> {
-        let source = flavor::cli_package_dir();
+    fn install_case_package(source: &Path, package_dir: &Path) -> Result<(), String> {
         let parent = package_dir.parent().ok_or("case package dir has no parent")?;
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create case package parent: {e}"))?;
 
         #[cfg(windows)]
         {
-            junction::create(&source, package_dir)
+            junction::create(source, package_dir)
                 .map_err(|e| format!("failed to junction case vite-plus package: {e}"))?;
         }
 
         #[cfg(not(windows))]
         {
-            flavor::link_dir(&source, package_dir);
+            flavor::link_dir(source, package_dir);
             if package_dir.join("package.json").is_file() {
                 return Ok(());
             }
             CopyOptions::new()
-                .copy_tree(&source, package_dir)
+                .copy_tree(source, package_dir)
                 .map_err(|e| format!("failed to copy case vite-plus package: {e}"))?;
         }
         Ok(())
@@ -547,39 +567,7 @@ impl CaseHome {
     }
 
     fn run_env_setup(&self, vp: &Path) -> Result<(), String> {
-        let mut env = BTreeMap::new();
-        env.insert("PATH".to_string(), compose_case_path_env(&[], None));
-        env.insert("TERM".to_string(), "xterm-256color".into());
-        env.insert("VP_CLI_TEST".to_string(), "1".into());
-        env.insert("NODE_NO_WARNINGS".to_string(), "1".into());
-        env.insert("VP_HOME".to_string(), self.vp_home().into_os_string());
-        if cfg!(windows) {
-            env.insert("USERPROFILE".to_string(), self.home.clone().into_os_string());
-            env.insert(
-                "PATHEXT".to_string(),
-                ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC".into(),
-            );
-            for name in [
-                "TMP",
-                "TEMP",
-                "APPDATA",
-                "LOCALAPPDATA",
-                "PROGRAMDATA",
-                "HOMEDRIVE",
-                "HOMEPATH",
-                "WINDIR",
-                "SYSTEMROOT",
-                "SYSTEMDRIVE",
-                "ProgramFiles",
-                "ProgramFiles(x86)",
-            ] {
-                if let Some(value) = std::env::var_os(name) {
-                    env.insert(name.to_string(), value);
-                }
-            }
-        } else {
-            env.insert("HOME".to_string(), self.home.clone().into_os_string());
-        }
+        let env = self.base_env(compose_path_env(&[]));
         let output = std::process::Command::new(vp)
             .args(["env", "setup", "--refresh"])
             .env_clear()
@@ -598,6 +586,45 @@ impl CaseHome {
         ))
     }
 
+    fn base_env(&self, path_env: OsString) -> BTreeMap<String, OsString> {
+        let mut env = BTreeMap::new();
+        env.insert("PATH".into(), path_env);
+        // xterm-256color keeps anstream from stripping the OSC 8 milestone
+        // sequences used by test steps. It is harmless during env setup.
+        env.insert("TERM".into(), "xterm-256color".into());
+        env.insert("VP_CLI_TEST".into(), "1".into());
+        env.insert("NODE_NO_WARNINGS".into(), "1".into());
+        env.insert("VP_HOME".into(), self.vp_home().into_os_string());
+        if cfg!(windows) {
+            env.insert("USERPROFILE".into(), self.home.clone().into_os_string());
+            env.insert(
+                "PATHEXT".into(),
+                ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC".into(),
+            );
+            for name in [
+                "TMP",
+                "TEMP",
+                "APPDATA",
+                "LOCALAPPDATA",
+                "PROGRAMDATA",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                "WINDIR",
+                "SYSTEMROOT",
+                "SYSTEMDRIVE",
+                "ProgramFiles",
+                "ProgramFiles(x86)",
+            ] {
+                if let Some(value) = std::env::var_os(name) {
+                    env.insert(name.into(), value);
+                }
+            }
+        } else {
+            env.insert("HOME".into(), self.home.clone().into_os_string());
+        }
+        env
+    }
+
     fn vp_home(&self) -> PathBuf {
         self.home.join(flavor::VP_HOME_DIR)
     }
@@ -614,12 +641,8 @@ fn local_package_bin_dir(package_dir: &Path) -> PathBuf {
     package_dir.join("bin")
 }
 
-fn compose_case_path_env(tool_dirs: &[PathBuf], runner_bin_dir: Option<&Path>) -> OsString {
-    let mut entries = Vec::new();
-    if let Some(runner_bin_dir) = runner_bin_dir {
-        entries.push(runner_bin_dir.to_path_buf());
-    }
-    entries.extend(tool_dirs.iter().cloned());
+fn compose_path_env(tool_dirs: &[PathBuf]) -> OsString {
+    let mut entries = tool_dirs.to_vec();
     if cfg!(windows) {
         if let Some(path) = std::env::var_os("PATH") {
             entries.extend(std::env::split_paths(&path));
@@ -637,25 +660,13 @@ fn compose_case_path_env(tool_dirs: &[PathBuf], runner_bin_dir: Option<&Path>) -
 /// Notably absent: `CI` and `NO_COLOR`; the PTY makes real interactive
 /// behaviour the default, and grid rendering strips styling from snapshots.
 fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String, OsString> {
-    let mut env: BTreeMap<String, OsString> = BTreeMap::new();
-    env.insert("PATH".into(), install.path_env.clone());
-    // xterm-256color keeps anstream from stripping the OSC 8 milestone
-    // sequences the runner synchronizes on.
-    env.insert("TERM".into(), "xterm-256color".into());
-    env.insert("VP_CLI_TEST".into(), "1".into());
+    let mut env = case_home.base_env(install.path_env.clone());
     env.insert("VP_EMIT_MILESTONES".into(), "1".into());
-    env.insert("NODE_NO_WARNINGS".into(), "1".into());
     // Legacy-runner parity: `vp migrate` fixtures skip real dependency
     // installs (slow, network-bound). Cases that want real installs unset
     // this via `unset-env`.
     env.insert("VP_SKIP_INSTALL".into(), "1".into());
-    env.insert("VP_HOME".into(), case_home.vp_home().into_os_string());
     env.insert("NPM_CONFIG_PREFIX".into(), case_home.npm_prefix().into_os_string());
-    if cfg!(windows) {
-        env.insert("USERPROFILE".into(), case_home.home.clone().into_os_string());
-    } else {
-        env.insert("HOME".into(), case_home.home.clone().into_os_string());
-    }
     for (key, value) in [
         ("GIT_AUTHOR_NAME", "vite-plus-test"),
         ("GIT_AUTHOR_EMAIL", "test@vite-plus.invalid"),
@@ -663,32 +674,6 @@ fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String,
         ("GIT_COMMITTER_EMAIL", "test@vite-plus.invalid"),
     ] {
         env.insert(key.into(), value.into());
-    }
-    if cfg!(windows) {
-        env.insert(
-            "PATHEXT".into(),
-            ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC".into(),
-        );
-        // Forward the Windows env vars Node and Git need for temp dirs and
-        // profile discovery.
-        for name in [
-            "TMP",
-            "TEMP",
-            "APPDATA",
-            "LOCALAPPDATA",
-            "PROGRAMDATA",
-            "HOMEDRIVE",
-            "HOMEPATH",
-            "WINDIR",
-            "SYSTEMROOT",
-            "SYSTEMDRIVE",
-            "ProgramFiles",
-            "ProgramFiles(x86)",
-        ] {
-            if let Some(value) = std::env::var_os(name) {
-                env.insert(name.into(), value);
-            }
-        }
     }
     env
 }
@@ -782,8 +767,7 @@ fn step_context<'a>(
     case_path: &OsString,
     stage: &Path,
     case_cwd: &str,
-    runtime: &FlavorRuntime,
-    allowed_tool_dirs: &[PathBuf],
+    install: &CaseInstall,
 ) -> Result<(std::borrow::Cow<'a, BTreeMap<String, OsString>>, PathBuf, PathBuf), String> {
     use std::borrow::Cow;
     assert!(!step.argv.is_empty(), "step argv must not be empty");
@@ -802,7 +786,7 @@ fn step_context<'a>(
     // and custom-prefix steps run exactly the child's tool.
     let path = env.get("PATH").cloned().unwrap_or_else(|| case_path.clone());
     let cwd = stage.join(step.cwd.as_deref().unwrap_or(case_cwd));
-    let program = runtime.resolve_program(&step.argv[0], &path, &cwd, allowed_tool_dirs)?;
+    let program = install.resolve_program(&step.argv[0], &path, &cwd)?;
     Ok((env, cwd, program))
 }
 
@@ -1032,8 +1016,7 @@ fn run_case(
     let _registry = if case.local_registry {
         let pack_dir = local_registry_pack
             .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
-        let registry_node =
-            runtime.resolve_program("node", &case_path, &stage, &case_install.allowed_tool_dirs)?;
+        let registry_node = case_install.resolve_program("node", &case_path, &stage)?;
         let (registry_env, handle) =
             start_local_registry(&registry_node, &stage, pack_dir, &case_env)?;
         for (key, value) in registry_env {
@@ -1082,15 +1065,8 @@ fn run_case(
     while step_index < case.steps.len() {
         let step = &case.steps[step_index];
         let argv = &step.argv;
-        let (step_env, step_cwd, program) = step_context(
-            step,
-            &case_env,
-            &case_path,
-            &stage,
-            &case.cwd,
-            runtime,
-            &case_install.allowed_tool_dirs,
-        )?;
+        let (step_env, step_cwd, program) =
+            step_context(step, &case_env, &case_path, &stage, &case.cwd, &case_install)?;
         let step_env: &BTreeMap<String, OsString> = &step_env;
         let timeout = step.timeout(step_default_timeout);
 
@@ -1302,15 +1278,9 @@ fn run_case(
     // here too: cleanup often depends on the same PATH/prefix overrides as
     // the step it tears down.
     for step in &case.after {
-        let Ok((after_env, after_cwd, program)) = step_context(
-            step,
-            &case_env,
-            &case_path,
-            &stage,
-            &case.cwd,
-            runtime,
-            &case_install.allowed_tool_dirs,
-        ) else {
+        let Ok((after_env, after_cwd, program)) =
+            step_context(step, &case_env, &case_path, &stage, &case.cwd, &case_install)
+        else {
             continue;
         };
         let mut cmd = std::process::Command::new(program);
