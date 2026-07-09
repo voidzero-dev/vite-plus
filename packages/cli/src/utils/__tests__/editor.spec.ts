@@ -50,6 +50,11 @@ describe('selectEditors', () => {
             value: 'zed',
             hint: '.zed',
           }),
+          expect.objectContaining({
+            label: 'JetBrains',
+            value: 'jetbrains',
+            hint: '.idea',
+          }),
         ]),
       }),
     );
@@ -75,6 +80,16 @@ describe('selectEditors', () => {
       }),
     ).resolves.toEqual(['zed']);
   });
+
+  it('accepts intellij as an alias for JetBrains editor config', async () => {
+    await expect(
+      selectEditors({
+        interactive: false,
+        editor: 'intellij',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['jetbrains']);
+  });
 });
 
 describe('detectExistingEditors', () => {
@@ -82,10 +97,12 @@ describe('detectExistingEditors', () => {
     const projectRoot = createTempDir();
     fs.mkdirSync(path.join(projectRoot, '.vscode'), { recursive: true });
     fs.mkdirSync(path.join(projectRoot, '.zed'), { recursive: true });
+    fs.mkdirSync(path.join(projectRoot, '.idea'), { recursive: true });
     fs.writeFileSync(path.join(projectRoot, '.vscode', 'settings.json'), '{}');
     fs.writeFileSync(path.join(projectRoot, '.zed', 'settings.json'), '{}');
+    fs.writeFileSync(path.join(projectRoot, '.idea', 'externalDependencies.xml'), '<project />');
 
-    expect(detectExistingEditors(projectRoot)).toEqual(['vscode', 'zed']);
+    expect(detectExistingEditors(projectRoot)).toEqual(['vscode', 'zed', 'jetbrains']);
   });
 
   it('returns undefined when no editor config files exist', () => {
@@ -513,12 +530,73 @@ describe('writeEditorConfigs', () => {
     );
   });
 
+  it('writes JetBrains required plugin config for Oxc', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+
+    const externalDependencies = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'externalDependencies.xml'),
+      'utf8',
+    );
+
+    expect(externalDependencies).toContain('<component name="ExternalDependencies">');
+    expect(externalDependencies).toContain(
+      '<plugin id="com.github.oxc.project.oxcintellijplugin" />',
+    );
+  });
+
+  it('merges JetBrains required plugin config without duplicating the Oxc plugin', async () => {
+    const projectRoot = createTempDir();
+    const ideaDir = path.join(projectRoot, '.idea');
+    fs.mkdirSync(ideaDir, { recursive: true });
+    const externalDependenciesPath = path.join(ideaDir, 'externalDependencies.xml');
+    fs.writeFileSync(
+      externalDependenciesPath,
+      `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalDependencies">
+    <plugin id="org.jetbrains.plugins.github" />
+  </component>
+</project>
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+    const afterFirst = fs.readFileSync(externalDependenciesPath, 'utf8');
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+    const afterSecond = fs.readFileSync(externalDependenciesPath, 'utf8');
+
+    expect(afterSecond).toBe(afterFirst);
+    expect(afterSecond).toContain('<plugin id="org.jetbrains.plugins.github" />');
+    expect(
+      afterSecond.match(/<plugin id="com\.github\.oxc\.project\.oxcintellijplugin" \/>/g),
+    ).toHaveLength(1);
+  });
+
   it('writes multiple editor configs in one call', async () => {
     const projectRoot = createTempDir();
 
     await writeEditorConfigs({
       projectRoot,
-      editorId: ['vscode', 'zed'],
+      editorId: ['vscode', 'zed', 'jetbrains'],
       interactive: false,
       silent: true,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
@@ -533,10 +611,17 @@ describe('writeEditorConfigs', () => {
     const zedSettings = JSON.parse(
       fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
     ) as Record<string, unknown>;
+    const jetbrainsExternalDependencies = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'externalDependencies.xml'),
+      'utf8',
+    );
 
     expect(vscodeSettings['npm.scriptRunner']).toBe('vp');
     expect(vscodeExtensions.recommendations).toContain('VoidZero.vite-plus-extension-pack');
     expect(zedSettings['npm.scriptRunner']).toBeUndefined();
     expect(zedSettings.lsp).toBeDefined();
+    expect(jetbrainsExternalDependencies).toContain(
+      '<plugin id="com.github.oxc.project.oxcintellijplugin" />',
+    );
   });
 });

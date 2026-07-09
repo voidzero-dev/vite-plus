@@ -15,6 +15,30 @@ import {
 
 import { detectFormattingOptions, writeJsonFile } from './json.ts';
 
+type JsonEditorFile = {
+  type: 'json';
+  value: Record<string, unknown>;
+};
+
+type TextEditorFile = {
+  type: 'text';
+  value: string;
+  merge: (originalText: string, incomingText: string) => string;
+};
+
+type EditorFile = JsonEditorFile | TextEditorFile;
+
+function jsonEditorFile(value: Record<string, unknown>): JsonEditorFile {
+  return { type: 'json', value };
+}
+
+function textEditorFile(
+  value: string,
+  merge: TextEditorFile['merge'] = (_originalText, incomingText) => incomingText,
+): TextEditorFile {
+  return { type: 'text', value, merge };
+}
+
 // Language-specific overrides because user-level [lang] settings beat the workspace default
 const VSCODE_LANGUAGE_OVERRIDES = {
   '[javascript]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
@@ -150,14 +174,23 @@ const ZED_SETTINGS = {
   },
 } as const;
 
+const JETBRAINS_OXC_PLUGIN_ID = 'com.github.oxc.project.oxcintellijplugin';
+const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalDependencies">
+    <plugin id="${JETBRAINS_OXC_PLUGIN_ID}" />
+  </component>
+</project>
+`;
+
 export const EDITORS = [
   {
     id: 'vscode',
     label: 'VSCode',
     targetDir: '.vscode',
     files: {
-      'settings.json': VSCODE_SETTINGS as Record<string, unknown>,
-      'extensions.json': VSCODE_EXTENSIONS as Record<string, unknown>,
+      'settings.json': jsonEditorFile(VSCODE_SETTINGS),
+      'extensions.json': jsonEditorFile(VSCODE_EXTENSIONS),
     },
   },
   {
@@ -165,7 +198,19 @@ export const EDITORS = [
     label: 'Zed',
     targetDir: '.zed',
     files: {
-      'settings.json': ZED_SETTINGS as Record<string, unknown>,
+      'settings.json': jsonEditorFile(ZED_SETTINGS),
+    },
+  },
+  {
+    id: 'jetbrains',
+    label: 'JetBrains',
+    aliases: ['intellij'],
+    targetDir: '.idea',
+    files: {
+      'externalDependencies.xml': textEditorFile(
+        JETBRAINS_EXTERNAL_DEPENDENCIES,
+        mergeJetBrainsExternalDependencies,
+      ),
     },
   },
 ] as const;
@@ -383,8 +428,11 @@ async function writeEditorConfig({
 
   for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
     const incoming =
-      editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
-        ? { ...extraVsCodeSettings, ...baseIncoming }
+      editorId === 'vscode' &&
+      fileName === 'settings.json' &&
+      extraVsCodeSettings &&
+      baseIncoming.type === 'json'
+        ? { ...baseIncoming, value: { ...extraVsCodeSettings, ...baseIncoming.value } }
         : baseIncoming;
     const filePath = path.join(targetDir, fileName);
 
@@ -434,7 +482,7 @@ async function writeEditorConfig({
       continue;
     }
 
-    writeJsonFile(filePath, incoming);
+    writeEditorConfigFile(filePath, incoming);
     if (!silent) {
       prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
     }
@@ -448,6 +496,15 @@ function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
   return [...new Set(Array.isArray(editorId) ? editorId : [editorId])];
 }
 
+function writeEditorConfigFile(filePath: string, file: EditorFile) {
+  if (file.type === 'json') {
+    writeJsonFile(filePath, file.value);
+    return;
+  }
+
+  fs.writeFileSync(filePath, file.value, 'utf-8');
+}
+
 /**
  * Merge incoming settings into an existing editor JSON/JSONC file by patching the
  * original text with `jsonc-parser` instead of re-serializing a merged object.
@@ -456,12 +513,28 @@ function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
  */
 function mergeAndWriteEditorConfig(
   filePath: string,
-  incoming: Record<string, unknown>,
+  incoming: EditorFile,
   fileName: string,
   displayPath: string,
   silent = false,
 ) {
   const originalText = fs.readFileSync(filePath, 'utf-8');
+  if (incoming.type === 'text') {
+    const newText = incoming.merge(originalText, incoming.value);
+    if (newText === originalText) {
+      if (!silent) {
+        prompts.log.info(`No changes needed for ${displayPath}`);
+      }
+      return;
+    }
+
+    fs.writeFileSync(filePath, newText, 'utf-8');
+    if (!silent) {
+      prompts.log.success(`Merged editor config into ${displayPath}`);
+    }
+    return;
+  }
+
   const existing = parseJsonc(originalText) as unknown;
   if (!isPlainObject(existing)) {
     throw new Error(`Cannot merge editor config: ${displayPath} is not a JSON object`);
@@ -470,8 +543,8 @@ function mergeAndWriteEditorConfig(
   const formattingOptions = detectFormattingOptions(originalText);
   const newText =
     fileName === 'extensions.json'
-      ? mergeExtensionsText(originalText, existing, incoming, formattingOptions)
-      : mergeSettingsText(originalText, existing, incoming, formattingOptions);
+      ? mergeExtensionsText(originalText, existing, incoming.value, formattingOptions)
+      : mergeSettingsText(originalText, existing, incoming.value, formattingOptions);
 
   // Do not rewrite when the merge produced no changes (keeps the operation idempotent).
   if (newText === originalText) {
@@ -485,6 +558,55 @@ function mergeAndWriteEditorConfig(
   if (!silent) {
     prompts.log.success(`Merged editor config into ${displayPath}`);
   }
+}
+
+function mergeJetBrainsExternalDependencies(originalText: string, incomingText: string): string {
+  if (hasJetBrainsPluginDependency(originalText, JETBRAINS_OXC_PLUGIN_ID)) {
+    return originalText;
+  }
+
+  const componentStart = originalText.search(
+    /<component\s+name=["']ExternalDependencies["'][^>]*>/,
+  );
+  if (componentStart !== -1) {
+    const componentEnd = originalText.indexOf('</component>', componentStart);
+    if (componentEnd !== -1) {
+      const indentation = getLineIndentation(originalText, componentEnd);
+      return insertAt(
+        originalText,
+        componentEnd,
+        `${indentation}  <plugin id="${JETBRAINS_OXC_PLUGIN_ID}" />\n`,
+      );
+    }
+  }
+
+  const projectEnd = originalText.indexOf('</project>');
+  if (projectEnd !== -1) {
+    return insertAt(
+      originalText,
+      projectEnd,
+      `  <component name="ExternalDependencies">\n    <plugin id="${JETBRAINS_OXC_PLUGIN_ID}" />\n  </component>\n`,
+    );
+  }
+
+  return incomingText;
+}
+
+function hasJetBrainsPluginDependency(text: string, pluginId: string): boolean {
+  return new RegExp(`<plugin\\s+[^>]*id=["']${escapeRegExp(pluginId)}["'][^>]*>`).test(text);
+}
+
+function getLineIndentation(text: string, index: number): string {
+  const lineStart = text.lastIndexOf('\n', index - 1) + 1;
+  return text.slice(lineStart, index).match(/^\s*/)?.[0] ?? '';
+}
+
+function insertAt(text: string, index: number, value: string): string {
+  return `${text.slice(0, index)}${value}${text.slice(index)}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -576,7 +698,10 @@ function mergeExtensionsText(
 function resolveEditorId(editor: string): EditorId | undefined {
   const normalized = editor.trim().toLowerCase();
   const match = EDITORS.find(
-    (option) => option.id === normalized || option.label.toLowerCase() === normalized,
+    (option) =>
+      option.id === normalized ||
+      option.label.toLowerCase() === normalized ||
+      ('aliases' in option && (option.aliases as readonly string[]).includes(normalized)),
   );
   return match?.id;
 }
