@@ -29,7 +29,7 @@ verify package.json name was rewritten
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "11.10.0",
+      "version": "<version>",
       "onFail": "download"
     }
   }

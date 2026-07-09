@@ -49,7 +49,7 @@ check package.json with catalog
   "devEngines": {
     "packageManager": {
       "name": "bun",
-      "version": "1.3.14",
+      "version": "<version>",
       "onFail": "download"
     }
   },
