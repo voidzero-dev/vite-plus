@@ -1000,6 +1000,21 @@ fn run_case(
                 };
                 snap_trace(format_args!("{trace_tag} step {step_index} PTY spawned, driving"));
                 let mut killer = terminal.child_handle.clone();
+                // Diagnostic: trace when the command's OWN process exits,
+                // independent of the PTY reaching EOF (which `wait_for_exit`'s
+                // `read_to_end` waits for). If this fires but the step still
+                // hangs at "waiting for exit", a grandchild is holding the PTY
+                // slave open (a runner/harness bug); if it never fires, the
+                // command process itself hung (a vp bug). Read-only clone, so
+                // it never perturbs the real exit path.
+                {
+                    let exit_probe = terminal.child_handle.clone();
+                    let tag = trace_tag.clone();
+                    std::thread::spawn(move || {
+                        let _ = exit_probe.wait();
+                        snap_trace(format_args!("{tag} step {step_index} child process exited"));
+                    });
+                }
                 let interactions = step.interactions.clone();
                 let formatted_snapshot = step.formatted_snapshot;
                 let output = Arc::new(Mutex::new(String::new()));
