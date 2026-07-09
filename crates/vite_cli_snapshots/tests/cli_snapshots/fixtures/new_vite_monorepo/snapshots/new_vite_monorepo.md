@@ -42,7 +42,7 @@ check package.json
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "11.10.0",
+      "version": "<version>",
       "onFail": "download"
     }
   },
@@ -422,7 +422,7 @@ check package.json
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "11.10.0",
+      "version": "<version>",
       "onFail": "download"
     }
   },

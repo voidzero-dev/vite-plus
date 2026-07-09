@@ -7,14 +7,15 @@ license.workspace = true
 publish = false
 rust-version.workspace = true
 
+[features]
+migration = ["dep:ast-grep-config", "dep:ignore"]
+
 [dependencies]
 anyhow = { workspace = true }
-ast-grep-config = { workspace = true }
-bincode = { workspace = true }
+ast-grep-config = { workspace = true, optional = true }
 bstr = { workspace = true }
-ignore = { workspace = true }
+ignore = { workspace = true, optional = true }
 nix = { workspace = true }
-rusqlite = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -23,7 +24,6 @@ vite_path = { workspace = true }
 vite_shared = { workspace = true }
 vite_str = { workspace = true }
 vite_workspace = { workspace = true }
-wax = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }

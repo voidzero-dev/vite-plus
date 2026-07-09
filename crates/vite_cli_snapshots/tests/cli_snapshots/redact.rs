@@ -47,6 +47,22 @@ static VP_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// `vp create`/`vp migrate` pin the exact resolved runtime and package-manager
+// version into a scaffolded manifest's `devEngines` block (`{ "name": "yarn",
+// "version": "4.17.0", ... }`, likewise pnpm/bun/node). Those track whatever
+// the package manager or Node published most recently, so they churn on every
+// upstream release exactly like the banner's `yarn <version>` line (already
+// masked). Mask by the adjacent `"name"` context so a scaffolded pin is
+// redacted while user-controlled semver in the same manifest (`"core-js":
+// "3.39.0"`, a pre-existing `"packageManager": "bun@1.3.11"` input) stays
+// assertable. The tool-name allowlist keeps ordinary top-level `"name":
+// "my-app"` / `"version": "0.0.0"` pairs verbatim.
+static DEV_ENGINES_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"("name":\s*"(?:node|npm|pnpm|yarn|bun|deno)",\s*"version":\s*")\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+    )
+    .unwrap()
+});
 // Output bytes differ across OSes (line endings, embedded paths), so byte
 // sizes and content-derived asset hashes can never be part of a shared
 // snapshot. The unit is kept ("<size> kB"): it only changes when content
@@ -176,6 +192,10 @@ pub fn redact_output(
     // Redact the workspace's own vite-plus/core version by package context
     // (see VP_VERSION_RE), which bumps on every release.
     output = VP_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Redact scaffolded devEngines runtime/package-manager pins by name
+    // context (see DEV_ENGINES_VERSION_RE), which track upstream releases.
+    output = DEV_ENGINES_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
 
     // Redact thread counts like "16 threads" to "<n> threads"
     output = THREAD_RE.replace_all(&output, "<n> threads").into_owned();

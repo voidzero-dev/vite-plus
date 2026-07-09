@@ -230,7 +230,7 @@ jobs:
   test-windows:
     needs: build-windows-tests
     name: Test (Windows)
-    runs-on: windows-latest
+    runs-on: namespace-profile-windows-4c-8g
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -374,7 +374,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
@@ -498,7 +498,7 @@ jobs:
           node --version
 
       - name: Test global package install (cmd)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: cmd
         run: |
           echo "PATH: %PATH%"
@@ -682,7 +682,7 @@ jobs:
           }
 
       - name: Test upgrade (cmd)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: cmd
         run: |
           REM See bash block above for why we assert on the install dir basename.
@@ -719,7 +719,7 @@ jobs:
           )
 
       - name: Test same-version forced upgrade (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: |
           # Force-reinstall the published `latest` version rather than the local
@@ -771,7 +771,7 @@ jobs:
           }
 
       - name: Test same-version forced upgrade (Unix)
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ runner.os != 'Windows' }}
         shell: bash
         run: |
           # Unix mirror of the Windows same-version forced-upgrade test above.
@@ -877,7 +877,7 @@ jobs:
           vp --version
 
       - name: Test implode (cmd)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: cmd
         run: |
           REM Retry — Windows file locks can cause transient "Access is denied" errors
@@ -932,15 +932,15 @@ jobs:
             target: aarch64-apple-darwin
             shard: 3
             shardTotal: 3
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
             shard: 1
             shardTotal: 3
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
             shard: 2
             shardTotal: 3
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
             shard: 3
             shardTotal: 3
@@ -949,6 +949,11 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      # Dev Drive works on the Namespace Windows runner: setup-dev-drive v4
+      # creates and mounts its ReFS VHD on namespace-profile-windows-4c-8g, and
+      # all three Windows shards pass with this step succeeding (nested
+      # virtualization is available there). Only cli-snapshot-test-windows moved
+      # off Namespace, and for an unrelated reason (Session-0 ConPTY, see there).
       - name: Setup Dev Drive
         if: runner.os == 'Windows'
         uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
@@ -1099,6 +1104,12 @@ jobs:
       - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
+    # Stays on GitHub-hosted windows-latest, NOT the Namespace Windows runner:
+    # this is a PTY snapshot suite. The runner opens a pseudo-console (ConPTY)
+    # and spawns vp into it, but Namespace's Windows runners execute jobs under a
+    # Session-0 service account with no interactive console, where that ConPTY
+    # spawn blocks — vp is never launched and every case times out at 60s.
+    # windows-latest runs in a session where ConPTY works.
     runs-on: windows-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1358,7 +1369,7 @@ jobs:
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
             vp_insecure_tls: ''
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
             sfw_asset: sfw-free-windows-x86_64.exe
             # On Windows vp ships as `vp.exe`; sfw spawns its child process
