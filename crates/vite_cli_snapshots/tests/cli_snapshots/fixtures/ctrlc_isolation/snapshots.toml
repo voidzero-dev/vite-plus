@@ -1,6 +1,14 @@
+# Temporarily skipped on Linux: on the GitHub-hosted ubuntu-latest runner the
+# scripted ctrl-c (writing \x03 into the PTY, which the line discipline turns
+# into a SIGINT) escapes the case's PTY session and reaches the Actions runner
+# service, which reports "runner received a shutdown signal" and cancels the job
+# ~2 min in. It is not OOM or CPU (memory/load stay healthy). The case still runs
+# on macOS and Windows, where the signal stays contained. Re-enable once the PTY
+# session isolation is hardened so the interrupt cannot leak to the runner.
 [[case]]
 name = "ctrlc_interrupt"
 vp = "global"
+skip-platforms = ["linux"]
 comment = """
 Scripts a ctrl-c: `vpt exit-on-ctrlc` emits a `ready` milestone, waits for the
 interrupt, then prints and exits. This is the one scenario the runner isolates:
