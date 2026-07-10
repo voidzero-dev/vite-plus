@@ -1,20 +1,23 @@
 /**
  * Render-milestone markers for the PTY snapshot suite
- * (crates/vite_cli_snapshots): invisible OSC 8 hyperlinks the runner
+ * (crates/vite_cli_snapshots): invisible window-title updates the runner
  * synchronizes on via `expect-milestone` interactions. Emission is gated on
  * `VP_EMIT_MILESTONES=1`, which only the runner sets; real terminals and
- * piped output never see these bytes.
+ * piped output never see these markers as content (they only update the
+ * window title, which the runner's PTY captures).
  *
  * Protocol (shared with vite-task's `pty_terminal_test_client` crate):
- * `OSC 8 ; ; https://milestone.invalid/<hex(name)> ST <ZWSP> OSC 8 ; ; ST`.
- * The zero-width anchor keeps the hyperlink observable through Windows
- * ConPTY, which can drop zero-length hyperlinks.
+ * `OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The runner
+ * decodes the title with `decode_milestone_title`, ignoring ordinary title
+ * updates. A fresh random id per emission keeps repeated milestones with the
+ * same name observable as distinct title changes through Windows ConPTY.
  */
 
-const MILESTONE_URI_PREFIX = 'https://milestone.invalid/';
-const OSC8_OPEN = '\x1b]8;;';
+import { randomBytes } from 'node:crypto';
+
+const MILESTONE_TITLE_MARKER = 'pty-terminal-test:';
+const OSC2_OPEN = '\x1b]2;';
 const ST = '\x1b\\';
-const ZERO_WIDTH_ANCHOR = '​';
 
 // Cached at module load: the runner sets the env before spawning the CLI,
 // and milestone() runs on every prompt render (every keystroke), so the
@@ -30,8 +33,11 @@ export function milestone(name: string): string {
   if (!MILESTONES_ENABLED) {
     return '';
   }
-  const hex = Buffer.from(name, 'utf8').toString('hex');
-  return `${OSC8_OPEN}${MILESTONE_URI_PREFIX}${hex}${ST}${ZERO_WIDTH_ANCHOR}${OSC8_OPEN}${ST}`;
+  // 16 random bytes → 32 lowercase hex chars, matching the Rust
+  // `{id:032x}` u128 formatting that `decode_milestone_title` validates.
+  const id = randomBytes(16).toString('hex');
+  const encodedName = Buffer.from(name, 'utf8').toString('base64url');
+  return `${OSC2_OPEN}${MILESTONE_TITLE_MARKER}${id}:${encodedName}${ST}`;
 }
 
 /**

@@ -30,16 +30,28 @@ describe('milestone', () => {
     expect(disabled.milestone('vp')).toBe('');
   });
 
-  it('encodes the name as a hex OSC 8 hyperlink with a zero-width anchor', async () => {
+  it('encodes the name as a window-title milestone marker', async () => {
     const { milestone } = await loadMilestone('1');
-    // "vp" is 0x76 0x70; the sequence must match vite-task's
-    // pty_terminal_test_client protocol byte for byte.
-    expect(milestone('vp')).toBe('\x1b]8;;https://milestone.invalid/7670\x1b\\​\x1b]8;;\x1b\\');
+    // The marker must match vite-task's pty_terminal_test_client title
+    // protocol: OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)> ST.
+    const marker = milestone('vp');
+    const match = /^\x1b\]2;pty-terminal-test:([0-9a-f]{32}):([A-Za-z0-9_-]+)\x1b\\$/.exec(marker);
+    expect(match).not.toBeNull();
+    expect(Buffer.from(match![2], 'base64url').toString('utf8')).toBe('vp');
+  });
+
+  it('uses a fresh id per emission so repeated names stay observable', async () => {
+    const { milestone } = await loadMilestone('1');
+    expect(milestone('ready')).not.toBe(milestone('ready'));
   });
 
   it('formats prompt milestones as <kind>:<id>:<state>', async () => {
-    const { milestone, promptMilestone } = await loadMilestone('1');
-    expect(promptMilestone('select', 'template', '1')).toBe(milestone('select:template:1'));
-    expect(promptMilestone('confirm', undefined, 'yes')).toBe(milestone('confirm:confirm:yes'));
+    const { promptMilestone } = await loadMilestone('1');
+    const decodeName = (marker: string) => {
+      const match = /:([A-Za-z0-9_-]+)\x1b\\$/.exec(marker);
+      return Buffer.from(match![1], 'base64url').toString('utf8');
+    };
+    expect(decodeName(promptMilestone('select', 'template', '1'))).toBe('select:template:1');
+    expect(decodeName(promptMilestone('confirm', undefined, 'yes'))).toBe('confirm:confirm:yes');
   });
 });
