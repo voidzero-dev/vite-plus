@@ -170,7 +170,19 @@ pub async fn run_pm_subcommand(
     cwd: &AbsolutePath,
     command: PmCommands,
 ) -> Result<ExitStatus, Error> {
-    let needs_project = pm_subcommand_needs_project(&command);
+    let needs_project = matches!(
+        command,
+        PmCommands::ApproveBuilds { .. }
+            | PmCommands::Prune { .. }
+            | PmCommands::Pack { .. }
+            | PmCommands::List { .. }
+            | PmCommands::Version { .. }
+            | PmCommands::Publish { .. }
+            | PmCommands::Stage(StageCommands::Publish { .. })
+            | PmCommands::Rebuild { .. }
+            | PmCommands::Fund { .. }
+            | PmCommands::Audit { .. }
+    );
 
     let pm = if needs_project {
         build_package_manager(cwd).await?
@@ -271,11 +283,12 @@ pub async fn run_pm_subcommand(
             Ok(pm.run_view_command(&options, cwd).await?)
         }
 
-        PmCommands::Version { new_version, filter, args } => {
+        PmCommands::Version { new_version, filter, json, pass_through_args } => {
             let options = VersionCommandOptions {
                 new_version: new_version.as_deref(),
                 filters: (!filter.is_empty()).then_some(filter.as_slice()),
-                pass_through_args: (!args.is_empty()).then_some(args.as_slice()),
+                json,
+                pass_through_args: pass_through_args.as_deref(),
             };
             Ok(pm.run_version_command(&options, cwd).await?)
         }
@@ -546,53 +559,6 @@ pub async fn run_pm_subcommand(
     }
 }
 
-fn pm_subcommand_needs_project(command: &PmCommands) -> bool {
-    match command {
-        PmCommands::Version { new_version, filter, args } => {
-            let native_help = (matches!(new_version.as_deref(), Some("--help" | "-h"))
-                && args.is_empty())
-                || (new_version.is_none()
-                    && matches!(args.as_slice(), [arg] if arg == "--help" || arg == "-h"));
-            !filter.is_empty() || !native_help
-        }
-        PmCommands::ApproveBuilds { .. }
-        | PmCommands::Prune { .. }
-        | PmCommands::Pack { .. }
-        | PmCommands::List { .. }
-        | PmCommands::Publish { .. }
-        | PmCommands::Stage(StageCommands::Publish { .. })
-        | PmCommands::Rebuild { .. }
-        | PmCommands::Fund { .. }
-        | PmCommands::Audit { .. } => true,
-        _ => false,
-    }
-}
-
 fn config_location(global: bool, location: Option<&str>) -> Option<&str> {
     if global { Some("global") } else { location }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_help_does_not_require_a_project() {
-        for arg in ["--help", "-h"] {
-            assert!(!pm_subcommand_needs_project(&PmCommands::Version {
-                new_version: Some(arg.to_string()),
-                filter: vec![],
-                args: vec![],
-            }));
-        }
-    }
-
-    #[test]
-    fn version_execution_requires_a_project() {
-        assert!(pm_subcommand_needs_project(&PmCommands::Version {
-            new_version: Some("patch".to_string()),
-            filter: vec![],
-            args: vec![],
-        }));
-    }
 }

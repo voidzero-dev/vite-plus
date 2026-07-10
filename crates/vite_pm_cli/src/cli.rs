@@ -708,19 +708,21 @@ pub enum PmCommands {
     },
 
     /// Forward the native package version command
-    #[command(disable_help_flag = true)]
     Version {
-        /// Version number, increment strategy, or leading native flag
-        #[arg(allow_hyphen_values = true)]
+        /// Version number or increment strategy
         new_version: Option<String>,
 
         /// Filter packages in a pnpm/npm workspace (can be used multiple times)
         #[arg(long, value_name = "PATTERN")]
         filter: Vec<String>,
 
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
         /// Arguments to pass to the package manager
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
     },
 
     /// Publish package to registry
@@ -960,9 +962,7 @@ impl PmCommands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::List { json, parseable, .. } => *json || *parseable,
-            Self::Version { new_version, args, .. } => {
-                new_version.as_deref() == Some("--json") || args.iter().any(|arg| arg == "--json")
-            }
+            Self::Version { json, .. } => *json,
             Self::Pack { json, .. }
             | Self::View { json, .. }
             | Self::Publish { json, .. }
@@ -1436,48 +1436,62 @@ mod tests {
     }
 
     #[test]
-    fn version_forwards_opaque_args_and_detects_json() {
-        let command =
-            parse_pm_command(&["vp", "pm", "version", "prerelease", "--preid", "beta", "--json"])
-                .expect("version arguments should parse");
+    fn version_forwards_native_args_and_detects_json() {
+        let command = parse_pm_command(&[
+            "vp",
+            "pm",
+            "version",
+            "prerelease",
+            "--json",
+            "--",
+            "--preid",
+            "beta",
+        ])
+        .expect("version arguments should parse");
 
         assert!(command.is_quiet_or_machine_readable());
-        let PackageManagerCommand::Pm(PmCommands::Version { new_version, filter, args }) = command
+        let PackageManagerCommand::Pm(PmCommands::Version {
+            new_version,
+            filter,
+            json,
+            pass_through_args,
+        }) = command
         else {
             panic!("expected Version variant");
         };
         assert_eq!(new_version.as_deref(), Some("prerelease"));
         assert!(filter.is_empty());
-        assert_eq!(args, ["--preid", "beta", "--json"]);
+        assert!(json);
+        assert_eq!(pass_through_args, Some(vec!["--preid".to_string(), "beta".to_string()]));
     }
 
     #[test]
-    fn version_parses_workspace_filters() {
+    fn version_parses_workspace_filters_after_strategy() {
         let command =
-            parse_pm_command(&["vp", "pm", "version", "--filter", "web", "patch", "--json"])
+            parse_pm_command(&["vp", "pm", "version", "patch", "--filter", "web", "--json"])
                 .expect("version filters should parse");
 
-        let PackageManagerCommand::Pm(PmCommands::Version { new_version, filter, args }) = command
+        let PackageManagerCommand::Pm(PmCommands::Version {
+            new_version,
+            filter,
+            json,
+            pass_through_args,
+        }) = command
         else {
             panic!("expected Version variant");
         };
         assert_eq!(new_version.as_deref(), Some("patch"));
         assert_eq!(filter, ["web"]);
-        assert_eq!(args, ["--json"]);
+        assert!(json);
+        assert!(pass_through_args.is_none());
     }
 
     #[test]
-    fn version_forwards_native_help() {
-        let command = parse_pm_command(&["vp", "pm", "version", "--help"])
-            .expect("native help should be forwarded");
+    fn version_uses_vite_plus_help() {
+        let error = parse_pm_command(&["vp", "pm", "version", "--help"])
+            .expect_err("version help should be rendered by Vite+");
 
-        let PackageManagerCommand::Pm(PmCommands::Version { new_version, filter, args }) = command
-        else {
-            panic!("expected Version variant");
-        };
-        assert_eq!(new_version.as_deref(), Some("--help"));
-        assert!(filter.is_empty());
-        assert!(args.is_empty());
+        assert_eq!(error.kind(), clap::error::ErrorKind::DisplayHelp);
     }
 
     #[test]

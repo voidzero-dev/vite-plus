@@ -15,6 +15,7 @@ use crate::package_manager::{
 pub struct VersionCommandOptions<'a> {
     pub new_version: Option<&'a str>,
     pub filters: Option<&'a [String]>,
+    pub json: bool,
     pub pass_through_args: Option<&'a [String]>,
 }
 
@@ -54,7 +55,18 @@ impl PackageManager {
             resolved_args.push("version".into());
         }
         if let Some(new_version) = options.new_version {
-            resolved_args.push(new_version.to_string());
+            if self.client == PackageManagerType::Yarn && !self.is_yarn_berry() {
+                match new_version {
+                    "major" | "minor" | "patch" | "premajor" | "preminor" | "prepatch"
+                    | "prerelease" => resolved_args.push(format!("--{new_version}")),
+                    _ => {
+                        resolved_args.push("--new-version".into());
+                        resolved_args.push(new_version.to_string());
+                    }
+                }
+            } else {
+                resolved_args.push(new_version.to_string());
+            }
         }
         if self.client != PackageManagerType::Pnpm
             && let Some(filters) = options.filters
@@ -67,6 +79,9 @@ impl PackageManager {
                 }
                 resolved_args.push(filter.clone());
             }
+        }
+        if options.json {
+            resolved_args.push("--json".into());
         }
         if let Some(pass_through_args) = options.pass_through_args {
             resolved_args.extend_from_slice(pass_through_args);
@@ -117,6 +132,35 @@ mod tests {
     }
 
     #[test]
+    fn translates_yarn_classic_versions() {
+        let yarn = create_mock_package_manager(PackageManagerType::Yarn);
+
+        let patch = yarn.resolve_version_command(&VersionCommandOptions {
+            new_version: Some("patch"),
+            ..Default::default()
+        });
+        assert_eq!(patch.args, ["version", "--patch"]);
+
+        let explicit = yarn.resolve_version_command(&VersionCommandOptions {
+            new_version: Some("2.0.0"),
+            ..Default::default()
+        });
+        assert_eq!(explicit.args, ["version", "--new-version", "2.0.0"]);
+    }
+
+    #[test]
+    fn keeps_yarn_berry_version_positional() {
+        let mut yarn = create_mock_package_manager(PackageManagerType::Yarn);
+        yarn.version = "4.0.0".into();
+
+        let result = yarn.resolve_version_command(&VersionCommandOptions {
+            new_version: Some("patch"),
+            ..Default::default()
+        });
+        assert_eq!(result.args, ["version", "patch"]);
+    }
+
+    #[test]
     fn resolves_workspace_filters() {
         let filters = vec!["web".to_string()];
         let options = VersionCommandOptions {
@@ -139,6 +183,17 @@ mod tests {
     }
 
     #[test]
+    fn resolves_json_output() {
+        let npm = create_mock_package_manager(PackageManagerType::Npm);
+        let result = npm.resolve_version_command(&VersionCommandOptions {
+            new_version: Some("patch"),
+            json: true,
+            ..Default::default()
+        });
+        assert_eq!(result.args, ["version", "patch", "--json"]);
+    }
+
+    #[test]
     fn resolves_native_version_commands() {
         let pass_through_args = vec!["--preid".to_string(), "beta".to_string()];
         let options = VersionCommandOptions {
@@ -147,21 +202,19 @@ mod tests {
             ..Default::default()
         };
         let cases = [
-            (PackageManagerType::Npm, "npm", vec!["version"]),
-            (PackageManagerType::Pnpm, "pnpm", vec!["version"]),
-            (PackageManagerType::Yarn, "yarn", vec!["version"]),
-            (PackageManagerType::Bun, "bun", vec!["pm", "version"]),
+            (PackageManagerType::Npm, "npm", vec!["version", "prerelease", "--preid", "beta"]),
+            (PackageManagerType::Pnpm, "pnpm", vec!["version", "prerelease", "--preid", "beta"]),
+            (PackageManagerType::Yarn, "yarn", vec!["version", "--prerelease", "--preid", "beta"]),
+            (
+                PackageManagerType::Bun,
+                "bun",
+                vec!["pm", "version", "prerelease", "--preid", "beta"],
+            ),
         ];
 
-        for (pm_type, expected_bin, prefix) in cases {
+        for (pm_type, expected_bin, expected_args) in cases {
             let pm = create_mock_package_manager(pm_type);
             let result = pm.resolve_version_command(&options);
-            let expected_args = prefix
-                .into_iter()
-                .map(String::from)
-                .chain(["prerelease".to_string()])
-                .chain(pass_through_args.iter().cloned())
-                .collect::<Vec<_>>();
 
             assert_eq!(result.bin_path, expected_bin);
             assert_eq!(result.args, expected_args);
