@@ -14,6 +14,7 @@ use crate::package_manager::{
 #[derive(Debug, Default)]
 pub struct VersionCommandOptions<'a> {
     pub new_version: Option<&'a str>,
+    pub filters: Option<&'a [String]>,
     pub pass_through_args: Option<&'a [String]>,
 }
 
@@ -30,19 +31,42 @@ impl PackageManager {
 
     #[must_use]
     pub fn resolve_version_command(&self, options: &VersionCommandOptions) -> ResolveCommandResult {
-        let mut resolved_args = if self.client == PackageManagerType::Bun {
+        let mut resolved_args = Vec::new();
+        if self.client == PackageManagerType::Pnpm
+            && let Some(filters) = options.filters
+        {
+            for filter in filters {
+                resolved_args.push("--filter".into());
+                resolved_args.push(filter.clone());
+            }
+        }
+
+        if self.client == PackageManagerType::Bun {
             if !bun_supports_version_command(&self.version) {
                 output::warn(&format!(
                     "bun {} does not support `bun pm version` (requires bun >= 1.2.18); forwarding anyway",
                     self.version
                 ));
             }
-            vec!["pm".into(), "version".into()]
+            resolved_args.push("pm".into());
+            resolved_args.push("version".into());
         } else {
-            vec!["version".into()]
-        };
+            resolved_args.push("version".into());
+        }
         if let Some(new_version) = options.new_version {
             resolved_args.push(new_version.to_string());
+        }
+        if self.client != PackageManagerType::Pnpm
+            && let Some(filters) = options.filters
+        {
+            for filter in filters {
+                if self.client == PackageManagerType::Npm {
+                    resolved_args.push("--workspace".into());
+                } else {
+                    resolved_args.push("--filter".into());
+                }
+                resolved_args.push(filter.clone());
+            }
         }
         if let Some(pass_through_args) = options.pass_through_args {
             resolved_args.extend_from_slice(pass_through_args);
@@ -93,11 +117,34 @@ mod tests {
     }
 
     #[test]
+    fn resolves_workspace_filters() {
+        let filters = vec!["web".to_string()];
+        let options = VersionCommandOptions {
+            new_version: Some("patch"),
+            filters: Some(&filters),
+            ..Default::default()
+        };
+
+        let pnpm = create_mock_package_manager(PackageManagerType::Pnpm);
+        assert_eq!(
+            pnpm.resolve_version_command(&options).args,
+            ["--filter", "web", "version", "patch"]
+        );
+
+        let npm = create_mock_package_manager(PackageManagerType::Npm);
+        assert_eq!(
+            npm.resolve_version_command(&options).args,
+            ["version", "patch", "--workspace", "web"]
+        );
+    }
+
+    #[test]
     fn resolves_native_version_commands() {
         let pass_through_args = vec!["--preid".to_string(), "beta".to_string()];
         let options = VersionCommandOptions {
             new_version: Some("prerelease"),
             pass_through_args: Some(&pass_through_args),
+            ..Default::default()
         };
         let cases = [
             (PackageManagerType::Npm, "npm", vec!["version"]),

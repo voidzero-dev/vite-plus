@@ -271,8 +271,12 @@ pub async fn run_pm_subcommand(
             Ok(pm.run_view_command(&options, cwd).await?)
         }
 
-        PmCommands::Version { args } => {
-            let options = version_command_options(&args);
+        PmCommands::Version { new_version, filter, args } => {
+            let options = VersionCommandOptions {
+                new_version: new_version.as_deref(),
+                filters: (!filter.is_empty()).then_some(filter.as_slice()),
+                pass_through_args: (!args.is_empty()).then_some(args.as_slice()),
+            };
             Ok(pm.run_version_command(&options, cwd).await?)
         }
 
@@ -542,20 +546,14 @@ pub async fn run_pm_subcommand(
     }
 }
 
-fn version_command_options(args: &[String]) -> VersionCommandOptions<'_> {
-    let (new_version, pass_through_args) = match args.split_first() {
-        Some((new_version, rest)) if !new_version.starts_with('-') => {
-            (Some(new_version.as_str()), (!rest.is_empty()).then_some(rest))
-        }
-        _ => (None, (!args.is_empty()).then_some(args)),
-    };
-    VersionCommandOptions { new_version, pass_through_args }
-}
-
 fn pm_subcommand_needs_project(command: &PmCommands) -> bool {
     match command {
-        PmCommands::Version { args } => {
-            !matches!(args.as_slice(), [arg] if arg == "--help" || arg == "-h")
+        PmCommands::Version { new_version, filter, args } => {
+            let native_help = (matches!(new_version.as_deref(), Some("--help" | "-h"))
+                && args.is_empty())
+                || (new_version.is_none()
+                    && matches!(args.as_slice(), [arg] if arg == "--help" || arg == "-h"));
+            !filter.is_empty() || !native_help
         }
         PmCommands::ApproveBuilds { .. }
         | PmCommands::Prune { .. }
@@ -579,28 +577,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn version_options_separate_strategy_from_native_args() {
-        let args = vec!["prerelease".to_string(), "--preid".to_string(), "beta".to_string()];
-        let options = version_command_options(&args);
-
-        assert_eq!(options.new_version, Some("prerelease"));
-        assert_eq!(options.pass_through_args, Some(&args[1..]));
-    }
-
-    #[test]
-    fn version_options_keep_flag_first_invocations_opaque() {
-        let args = vec!["--json".to_string(), "patch".to_string()];
-        let options = version_command_options(&args);
-
-        assert_eq!(options.new_version, None);
-        assert_eq!(options.pass_through_args, Some(args.as_slice()));
-    }
-
-    #[test]
     fn version_help_does_not_require_a_project() {
         for arg in ["--help", "-h"] {
             assert!(!pm_subcommand_needs_project(&PmCommands::Version {
-                args: vec![arg.to_string()],
+                new_version: Some(arg.to_string()),
+                filter: vec![],
+                args: vec![],
             }));
         }
     }
@@ -608,7 +590,9 @@ mod tests {
     #[test]
     fn version_execution_requires_a_project() {
         assert!(pm_subcommand_needs_project(&PmCommands::Version {
-            args: vec!["patch".to_string()],
+            new_version: Some("patch".to_string()),
+            filter: vec![],
+            args: vec![],
         }));
     }
 }
