@@ -1,0 +1,7 @@
+[[case]]
+name = "synthetic_build_cache_disabled"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "run", "build"], comment = "synthetic build (vp build) should have cache disabled without cacheScripts", continue-on-failure = true },
+]

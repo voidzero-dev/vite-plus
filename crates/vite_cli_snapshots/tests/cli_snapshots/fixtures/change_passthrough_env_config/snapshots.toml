@@ -1,0 +1,8 @@
+[[case]]
+name = "change_passthrough_env_config"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "hello"], envs = [["MY_ENV", "1"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "MY_ENV is pass-through. should hit the cache created in step 1", envs = [["MY_ENV", "2"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "cache should be invalidated because untrackedEnv config changed", envs = [["VITE_TASK_PASS_THROUGH_ENVS", "MY_ENV,MY_ENV2"], ["MY_ENV", "2"]], continue-on-failure = true },
+]

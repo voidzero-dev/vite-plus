@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "env": {},
-  "commands": [
-    "vp env exec node --version # Ensure Node.js is installed first",
-    "test \"$(npm --version)\" = \"10.9.4\" && echo \"npm shim used packageManager version\"",
-    "test \"$(npx --version)\" = \"10.9.4\" && echo \"npx shim used packageManager version\""
-  ]
-}

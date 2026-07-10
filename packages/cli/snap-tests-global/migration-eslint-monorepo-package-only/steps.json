@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # migration should warn about package-only eslint",
-    "cat package.json # check root package.json",
-    "cat packages/app/package.json # check app eslint preserved (not migrated)",
-    "cat packages/app/eslint.config.mjs # check package eslint config preserved"
-  ]
-}

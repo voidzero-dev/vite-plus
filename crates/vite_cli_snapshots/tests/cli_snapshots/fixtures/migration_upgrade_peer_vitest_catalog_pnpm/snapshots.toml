@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_peer_vitest_catalog_pnpm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "peer catalog must resolve before managed Vitest catalogs are pruned", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "peer uses its resolved public range without gaining direct Vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "unreferenced managed Vitest catalog is removed", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "repaired project should no longer be pending", continue-on-failure = true },
+]

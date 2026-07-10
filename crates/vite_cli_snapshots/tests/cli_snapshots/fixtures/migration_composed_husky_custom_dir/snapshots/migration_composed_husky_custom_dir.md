@@ -1,0 +1,106 @@
+# migration_composed_husky_custom_dir
+
+## `git init`
+
+
+## `vp migrate --no-interactive`
+
+migration should preserve custom husky dir in composed prepare
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+◇ Migrated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• 2 config updates applied
+• Git hooks configured
+```
+
+## `vpt print-file package.json`
+
+prepare should be 'vp config --hooks-dir .config/husky && npm run build'
+
+```
+{
+  "name": "migration-composed-husky-custom-dir",
+  "scripts": {
+    "prepare": "npm run build && vp config --hooks-dir .config/husky"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<version>",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+## `vpt print-file pnpm-workspace.yaml`
+
+check pnpm-workspace.yaml has overrides and catalog
+
+```
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@<version>
+  vite-plus: <version>
+overrides:
+  vite: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
+```
+
+## `vpt print-file .config/husky/pre-commit`
+
+pre-commit hook should be in custom dir
+
+```
+vp staged
+```
+
+## `vpt print-file .config/husky/_/h`
+
+hook dispatcher should resolve repo root correctly for nested dirs
+
+```
+#!/usr/bin/env sh
+{ [ "$HUSKY" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
+n=$(basename "$0")
+s=$(dirname "$(dirname "$0")")/$n
+
+[ ! -f "$s" ] && exit 0
+
+i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
+[ ! -f "$i" ] && i="${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
+[ -f "$i" ] && . "$i"
+
+{ [ "${HUSKY-}" = "0" ] || [ "${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
+
+d="$(dirname "$(dirname "$(dirname "$(dirname "$0")")")")"
+__vp_shell=/bin/sh
+[ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
+
+if [ -n "${VP_HOME-}" ]; then
+  __vp_bin="$VP_HOME/bin"
+elif [ -n "${HOME-}" ]; then
+  __vp_bin="$HOME/.vite-plus/bin"
+else
+  __vp_bin=""
+fi
+[ -n "$__vp_bin" ] && [ -d "$__vp_bin" ] && export PATH="$PATH:$__vp_bin"
+
+export PATH="$d/node_modules/.bin:$PATH"
+"$__vp_shell" -e "$s" "$@"
+c=$?
+
+[ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
+[ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
+exit $c
+```

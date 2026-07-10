@@ -1311,9 +1311,13 @@ jobs:
           export PATH=$PWD/node_modules/.bin:$PATH
           vp -h
           # Test vp install on various repositories with different package managers
+          # Entry format: "owner/repo:dir" or "owner/repo:dir:ref" (tag or branch to clone)
           repos=(
             # pnpm workspace
-            "pnpm/pnpm:pnpm"
+            # Pinned to the latest stable tag: pnpm main pins pnpm v12 alphas,
+            # whose @pnpm/exe ships a placeholder bin that breaks pnpm's
+            # version self-switch (pnpm/pnpm#12811)
+            "pnpm/pnpm:pnpm:v11.11.0"
             "vitejs/vite:vite"
             # yarn workspace
             "napi-rs/napi-rs:napi-rs"
@@ -1324,13 +1328,17 @@ jobs:
           )
 
           for repo_info in "${repos[@]}"; do
-            IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vp install on $repo…"
+            IFS=':' read -r repo dir_name ref <<< "$repo_info"
+            echo "Testing vp install on $repo${ref:+ ($ref)}…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"
             fi
-            git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
+            clone_args=(--depth 1)
+            if [ -n "$ref" ]; then
+              clone_args+=(--branch "$ref")
+            fi
+            git clone "${clone_args[@]}" "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
             vp install --no-frozen-lockfile
             # run again to show install cache increase by time

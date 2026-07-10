@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # migration preserves inline arrays in an existing bunfig.toml",
-    "cat bunfig.toml # check Bun configuration is unchanged"
-  ]
-}

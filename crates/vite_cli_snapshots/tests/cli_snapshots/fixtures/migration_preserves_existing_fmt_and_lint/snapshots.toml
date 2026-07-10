@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_preserves_existing_fmt_and_lint"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should NOT duplicate fmt/lint blocks already in vite.config.ts (regression for vp create fate)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "exactly one fmt: and one lint: block, preserving template values", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.jsonc", "--assert-not", "file"], comment = "redundant standalone file removed", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "redundant standalone file removed", continue-on-failure = true },
+]

@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_framework_shim_vue"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "migration should add Vue shim when vue dependency is detected", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/env.d.ts"], comment = "check Vue shim was written", continue-on-failure = true },
+]

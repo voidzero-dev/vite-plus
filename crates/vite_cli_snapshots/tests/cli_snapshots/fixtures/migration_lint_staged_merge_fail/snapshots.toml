@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_lint_staged_merge_fail"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should handle merge failure gracefully", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "lint-staged config should be preserved when merge fails", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "vite config should be unchanged (merge failed)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert-not", "file"], comment = "no pre-commit hook when merge fails", continue-on-failure = true },
+]

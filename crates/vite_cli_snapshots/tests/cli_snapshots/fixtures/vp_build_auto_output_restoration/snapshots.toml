@@ -1,0 +1,10 @@
+[[case]]
+name = "vp_build_auto_output_restoration"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build"], comment = "first build populates the cache", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "dist"], comment = "build output exists", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-rf", "dist"], comment = "remove the build output", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], comment = "rebuild hits cache", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "dist"], comment = "dist auto-restored on cache hit (no synthetic output config)", continue-on-failure = true },
+]

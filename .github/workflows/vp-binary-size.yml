@@ -23,39 +23,59 @@ jobs:
       contents: read
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
+      merge_base_sha: ${{ steps.merge_base.outputs.sha }}
     steps:
-      - name: Check out base
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Compute base native input hash
-        id: base
-        uses: ./.github/actions/compute-native-cache-input-hash
-
       - name: Check out PR
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          # Full commit graph for merge-base resolution, but no historical
+          # blobs: the job only materializes the head and merge-base trees.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
+
+      # Compare against the PR's fork point (merge base) rather than the live
+      # tip of the base branch: a branch that forked before a native-input
+      # change landed on the base branch would otherwise rebuild and report
+      # deltas from commits already on the base branch (e.g. a docs-only PR
+      # forked before a deps upgrade).
+      - name: Resolve merge base
+        id: merge_base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          echo "sha=$MERGE_BASE" >> "$GITHUB_OUTPUT"
+          if git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- .github/workflows/vp-binary-size.yml; then
+            echo "workflow_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflow_changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Compute PR native input hash
         id: head
+        uses: ./.github/actions/compute-native-cache-input-hash
+
+      - name: Check out merge base
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.merge_base.outputs.sha }}
+          persist-credentials: false
+
+      - name: Compute merge-base native input hash
+        id: base
         uses: ./.github/actions/compute-native-cache-input-hash
 
       - name: Compare native inputs
         id: compare
         env:
           BASE_HASH: ${{ steps.base.outputs.hash }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_HASH: ${{ steps.head.outputs.hash }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKFLOW_CHANGED: ${{ steps.merge_base.outputs.workflow_changed }}
         run: |
-          if [[ "$BASE_HASH" != "$HEAD_HASH" ]] ||
-            ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- .github/workflows/vp-binary-size.yml; then
+          if [[ "$BASE_HASH" != "$HEAD_HASH" || "$WORKFLOW_CHANGED" == "true" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -95,7 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ matrix.source == 'base' && github.event.pull_request.base.sha || github.event.pull_request.head.sha }}
+          ref: ${{ matrix.source == 'base' && needs.inputs.outputs.merge_base_sha || github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/clone
