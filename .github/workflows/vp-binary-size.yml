@@ -23,26 +23,29 @@ jobs:
       contents: read
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
-      base_sha: ${{ steps.merge_base.outputs.sha }}
+      merge_base_sha: ${{ steps.merge_base.outputs.sha }}
     steps:
       - name: Check out PR
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          # Full commit graph for merge-base resolution, but no historical
+          # blobs: the job only materializes the head and merge-base trees.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
-      # Compare against the PR's fork point (merge base), not the live tip of the
-      # base branch. Otherwise a branch that is merely behind on native-input
-      # changes already merged into the base branch would rebuild and report a
-      # delta it does not own (e.g. a docs-only PR forked before a deps upgrade).
+      # Compare against the PR's fork point (merge base) rather than the live
+      # tip of the base branch: a branch that forked before a native-input
+      # change landed on the base branch would otherwise rebuild and report
+      # deltas from commits already on the base branch (e.g. a docs-only PR
+      # forked before a deps upgrade).
       - name: Resolve merge base
         id: merge_base
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git fetch --no-tags --no-recurse-submodules origin "$BASE_SHA"
           MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           echo "sha=$MERGE_BASE" >> "$GITHUB_OUTPUT"
           if git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- .github/workflows/vp-binary-size.yml; then
@@ -112,7 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ matrix.source == 'base' && needs.inputs.outputs.base_sha || github.event.pull_request.head.sha }}
+          ref: ${{ matrix.source == 'base' && needs.inputs.outputs.merge_base_sha || github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/clone
