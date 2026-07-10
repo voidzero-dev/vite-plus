@@ -199,10 +199,11 @@ fn resolve_default_package(
 
 /// Fuzzy package picker on `vite_select`, the same component behind the
 /// `vp run` task selector. Returns the selected row index, or `None` on
-/// Ctrl+C. When the PTY snapshot harness sets `VP_EMIT_MILESTONES=1`, every
-/// render emits a `package-select:<query>:<index>` milestone (invisible
-/// OSC 8 hyperlinks) for the tests to synchronize on — same gate as
-/// packages/prompts/src/milestone.ts; real terminals never see the bytes.
+/// Ctrl+C. When the PTY snapshot runner sets `VP_EMIT_MILESTONES=1`, every
+/// render emits a `package-select:<query>:<index>` milestone (an invisible
+/// window-title update) for the tests to synchronize on, same gate and
+/// protocol as packages/prompts/src/milestone.ts; real terminals never see
+/// the marker as content.
 fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>, Error> {
     let emit_milestones = std::env::var_os("VP_EMIT_MILESTONES").is_some_and(|value| value == "1");
     let items: Vec<vite_select::SelectItem> = rows
@@ -230,16 +231,12 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         &params,
         vite_select::Mode::Interactive { selected_index: &mut selected_index },
         |state| {
-            use std::io::Write as _;
             if !emit_milestones {
                 return;
             }
             let milestone =
                 vite_str::format!("package-select:{}:{}", state.query, state.selected_index);
-            let bytes = pty_terminal_test_client::encoded_milestone(&milestone);
-            let mut out = std::io::stdout();
-            let _ = out.write_all(&bytes);
-            let _ = out.flush();
+            emit_milestone_title(&milestone);
         },
     )
     .map_err(Error::Anyhow)?;
@@ -247,6 +244,24 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         vite_select::SelectResult::Selected => Some(selected_index),
         vite_select::SelectResult::Cancelled => None,
     })
+}
+
+/// Emits a render-milestone as a window-title update for the PTY snapshot
+/// runner, mirroring packages/prompts/src/milestone.ts:
+/// `OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The protocol
+/// is shared with vite-task's `pty_terminal_test_client`, whose emitting API
+/// compiles to a no-op outside its `testing` feature (enabling that feature
+/// here would also un-gate vite_task's own task-picker milestones in
+/// production), so the sequence is written by hand. A fresh random id per
+/// emission keeps repeated milestones with the same name observable as
+/// distinct title changes through Windows ConPTY.
+fn emit_milestone_title(name: &str) {
+    use std::io::Write as _;
+    let id = uuid::Uuid::new_v4();
+    let encoded_name = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
+    let mut out = std::io::stdout().lock();
+    let _ = write!(out, "\x1b]2;pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
+    let _ = out.flush();
 }
 
 /// Pure predicate for the vp-script interception: would `resolve_app_target`

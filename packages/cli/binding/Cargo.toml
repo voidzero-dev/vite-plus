@@ -13,6 +13,7 @@ rolldown = ["dep:rolldown_binding"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
 fspy = { workspace = true }
@@ -21,11 +22,11 @@ napi = { workspace = true }
 napi-derive = { workspace = true }
 petgraph = { workspace = true }
 owo-colors = { workspace = true }
-pty_terminal_test_client = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 vite_command = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
