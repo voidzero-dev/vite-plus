@@ -25,12 +25,11 @@ fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
 /// without touching our own environment, so the inherited `PWD` would
 /// otherwise point at the original directory.
 fn sync_child_pwd(cmd: &mut std::process::Command) {
-    #[cfg(unix)]
-    if let Ok(cwd) = std::env::current_dir() {
+    if cfg!(unix)
+        && let Ok(cwd) = std::env::current_dir()
+    {
         cmd.env("PWD", cwd);
     }
-    #[cfg(not(unix))]
-    let _ = cmd;
 }
 
 /// Spawn a tool as a child process and wait for completion.

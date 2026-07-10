@@ -78,10 +78,9 @@ fn resolve_program(
 /// equivalent to the `cd <dir> && vp` form. Callers' later `envs()` overlays
 /// still win for an explicit `PWD`.
 pub fn sync_child_pwd(cmd: &mut Command, cwd: &AbsolutePath) {
-    #[cfg(unix)]
-    cmd.env("PWD", cwd.as_path());
-    #[cfg(not(unix))]
-    let _ = (cmd, cwd);
+    if cfg!(unix) {
+        cmd.env("PWD", cwd.as_path());
+    }
 }
 
 /// Build a `tokio::process::Command` for a pre-resolved binary path.
@@ -240,8 +239,9 @@ where
     // Same PWD/cwd alignment as `sync_child_pwd` (fspy has its own Command
     // type); writing before the `envs` overlay keeps last-write-wins for a
     // caller's explicit `PWD`.
-    #[cfg(unix)]
-    cmd.env("PWD", cwd.as_path());
+    if cfg!(unix) {
+        cmd.env("PWD", cwd.as_path());
+    }
     cmd
         // then set custom environment variables
         .envs(envs)
