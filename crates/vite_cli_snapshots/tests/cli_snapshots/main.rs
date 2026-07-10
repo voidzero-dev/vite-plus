@@ -89,7 +89,7 @@ struct StepTable {
 ///   visible (`\x1b[…m`) so colour/style attributes are asserted.
 /// - `timeout`: per-step override in ms (default `STEP_TIMEOUT`).
 /// - `snapshot = false`: omit the screen while the step succeeds; failures
-///   always keep their output (legacy `ignoreOutput` semantics).
+///   always keep their output.
 /// - `tty = false`: piped stdio instead of a PTY, for non-TTY assertions;
 ///   interactions require a PTY.
 /// - `continue_on_failure`: on failure, execution skips past the next step
@@ -349,8 +349,7 @@ struct Case {
     #[serde(default = "default_true", rename = "seed-runtime")]
     seed_runtime: bool,
     /// Expose the run-root node_modules as the workspace's parent-dir
-    /// node_modules (the legacy runner's layout), for fixtures that address
-    /// the linked checkout packages by path (`node
+    /// node_modules for fixtures that address the linked checkout packages by path (`node
     /// ../node_modules/vite-plus/bin/oxlint`) rather than by specifier
     /// through Node's upward walk.
     #[serde(default, rename = "link-node-modules")]
@@ -1119,8 +1118,8 @@ fn run_case(
     };
 
     // Installs through the local registry are slower than pure vp commands, so
-    // local-registry steps get the legacy 120s default (still overridable
-    // per step); everything else keeps the standard per-step default.
+    // local-registry steps get a 120s default (still overridable per step);
+    // everything else keeps the standard per-step default.
     let step_default_timeout =
         if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
 
@@ -1328,8 +1327,7 @@ fn run_case(
         }
 
         // `snapshot = false` suppresses the screen only on success; failures
-        // always keep their output for diagnosis (legacy ignoreOutput
-        // semantics).
+        // always keep their output for diagnosis.
         let succeeded = matches!(termination_state, TerminationState::Exited(0));
         if step.snapshot || !succeeded {
             let mut redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
@@ -1348,9 +1346,8 @@ fn run_case(
 
         // Shell-like `&&` semantics with line boundaries: a failing step
         // skips the rest of its line, up to and including the next
-        // continue-on-failure step (the line terminator in migrated
-        // fixtures), and the following line resumes, exactly the legacy
-        // model. Hand-written cases without markers stop here entirely.
+        // continue-on-failure step, then the following line resumes.
+        // Cases without markers stop here entirely.
         if !succeeded && !step.continue_on_failure {
             match case.steps[step_index + 1..].iter().position(|s| s.continue_on_failure) {
                 Some(offset) => {

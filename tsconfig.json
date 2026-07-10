@@ -19,8 +19,6 @@
     // PTY snapshot fixtures are workspaces under test, not repo code
     "crates/vite_cli_snapshots/tests",
     "packages/cli/docs",
-    "packages/cli/snap-tests",
-    "packages/cli/snap-tests-global",
     // build.ts imports vite/packages/vite/rolldown.config.ts which doesn't use .js extensions
     "packages/core/build.ts",
     "vite",

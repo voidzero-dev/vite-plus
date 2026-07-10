@@ -109,15 +109,11 @@ import from the barrel.
 From the repo root:
 
 ```bash
-vp check                                                      # format + lint + type-check
-pnpm -F vite-plus exec vitest run src/migration               # migration unit tests
-pnpm -F vite-plus snap-test-local migration                   # local migration snap tests
-pnpm -F vite-plus snap-test-global migration                  # global migration snap tests
+vp check                                             # format + lint + type-check
+pnpm -F vite-plus exec vitest run src/migration      # migration unit tests
+just snapshot-test migration                         # migration CLI snapshot tests
 ```
 
-Always inspect the `git diff` of `snap-tests*/**/snap.txt` afterwards — the
-runner regenerates snapshots and can exit 0 even when output changed.
-
-A pure reorganization must not change `tsc` results, the unit-test count, or any
-`snap.txt`. A behavior change should be accompanied by the matching test/snap
-updates.
+Review any changed `.md` snapshots like code. A pure reorganization must not
+change type-check results, the unit-test count, or snapshots. A behavior change
+should be accompanied by the matching unit or snapshot test updates.

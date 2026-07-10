@@ -51,20 +51,12 @@ vite-task changes often affect CLI output, which means snapshot tests need updat
 - **Cache behavior messages**: e.g., new summary lines about cache status
 - **Task output formatting**: e.g., step numbering, separator lines
 
-**PTY snapshot suite (`crates/vite_cli_snapshots`)**, the primary suite:
+**PTY snapshot suite (`crates/vite_cli_snapshots`):**
 
 - A bump can break it two ways: runner compilation (it consumes vite-task's `pty_terminal_test`, `pty_terminal_test_client`, and `snapshot_test` crates directly, so their API changes surface here; fix in the runner) and recorded CLI output.
-- Unlike the legacy trees, output changes are handled locally with real assertions: `UPDATE_SNAPSHOTS=1 just snapshot-test`, then review the `.md` diffs like code. Without a built `packages/cli/dist`, run the global flavor only: `VP_SNAP_SKIP_FLAVORS=local UPDATE_SNAPSHOTS=1 just snapshot-test`.
+- Update output locally with real assertions: `UPDATE_SNAPSHOTS=1 just snapshot-test`, then review the `.md` diffs like code. Without a built `packages/cli/dist`, run the global flavor only: `VP_SNAP_SKIP_FLAVORS=local UPDATE_SNAPSHOTS=1 just snapshot-test`.
 - Windows runs in the `CLI snapshot test (Windows)` CI job via a cross-compiled nextest archive; snapshots are OS-shared, so a Windows-only diff there means a redaction gap, not a re-record.
 - Reference: `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`.
-
-**Legacy snap trees** (`packages/cli/snap-tests/*/snap.txt`, `packages/cli/snap-tests-global/*/snap.txt`, being migrated; do not add cases):
-
-1. Push your changes and let CI run the snap tests.
-2. CI will show the diff in the E2E test logs if snap tests fail.
-3. Extract the diff from CI logs and apply it locally.
-4. Check all three platforms (Linux, Mac, Windows) since they may have slightly different snap test coverage.
-5. Watch for trailing newline issues - ensure snap files end consistently.
 
 ### 7. Review changelog and update docs
 
@@ -98,7 +90,6 @@ After creating the PR, automatically watch CI without asking the user first. Ens
 - **Lint**: Clippy and format checks
 - **Test** (Linux, Mac, Windows): Rust unit tests
 - **CLI snapshot test** (Linux, Mac, Windows): the PTY snapshot suite - most likely to fail on a vite-task bump (runner compiles against vite-task crates AND asserts CLI output)
-- **CLI E2E test** (Linux, Mac, Windows): legacy snap tests during the migration
 - **Run task**: Task runner integration tests
 - **Cargo Deny**: License/advisory checks (may have pre-existing failures unrelated to bump)
 
@@ -106,5 +97,5 @@ The only **required** status check for merging is `done`, which aggregates the o
 
 ## Notes
 
-- Building the full CLI locally (`pnpm bootstrap-cli`) requires the rolldown Node.js package to be built first, which is complex. Prefer relying on CI for snap test generation.
+- Building the full CLI locally (`pnpm bootstrap-cli`) requires the rolldown Node.js package to be built first, which is complex. Prefer the global-only snapshot command above or CI when no local CLI build is available.
 - `Cargo.lock` is automatically updated by cargo when you change the revision in `Cargo.toml`.

@@ -1,7 +1,7 @@
 /// chmod `<octal-mode>|+x` `<path>`
 ///
 /// Sets POSIX permission bits; `+x` adds the execute bits to the current
-/// mode (the common legacy-fixture form, `chmod +x hook.mjs`). Windows
+/// mode (for example, `chmod +x hook.mjs`). Windows
 /// treats it as a validated no-op: the mode and target are still checked,
 /// so a typo or a failed earlier setup step fails on every platform.
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {

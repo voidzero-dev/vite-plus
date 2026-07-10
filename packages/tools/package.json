@@ -7,18 +7,10 @@
     "tool": "./src/bin.js"
   },
   "type": "module",
-  "scripts": {
-    "snap-test": "tool snap-test"
-  },
-  "dependencies": {
-    "@yarnpkg/fslib": "catalog:",
-    "@yarnpkg/shell": "catalog:"
-  },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/semver": "catalog:",
-    "minimatch": "catalog:",
     "semver": "catalog:",
     "vitest": "catalog:",
     "yaml": "catalog:"

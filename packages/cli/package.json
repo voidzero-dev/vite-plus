@@ -355,9 +355,6 @@
     "build": "oxnode -C dev ./build.ts",
     "build-ts": "oxnode -C dev ./build.ts --skip-native",
     "build-native": "oxnode -C dev ./build.ts --skip-ts",
-    "snap-test": "pnpm snap-test-local && pnpm snap-test-global",
-    "snap-test-local": "tool snap-test",
-    "snap-test-global": "tool snap-test --dir snap-tests-global --bin-dir ~/.vite-plus/bin",
     "publish-native": "node ./publish-native-addons.ts",
     "test": "vitest run"
   },

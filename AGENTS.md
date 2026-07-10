@@ -22,17 +22,15 @@ High-signal repo map:
 
 ```
 vite-plus/
-├── packages/cli/              # Published vite-plus package, JS CLI, docs, templates, legacy snap tests, NAPI binding
+├── packages/cli/              # Published vite-plus package, JS CLI, docs, templates, NAPI binding
 │   ├── src/bin.ts             # JS entrypoint and local CLI dispatch
 │   ├── src/resolve-test.ts    # Resolves upstream Vitest for `vp test`
 │   ├── src/utils/agent.ts     # Generated agent-file marker/update logic
-│   ├── binding/               # Rust NAPI binding used by the local CLI
-│   ├── snap-tests/            # Legacy local CLI output snapshots
-│   └── snap-tests-global/     # Legacy global CLI output snapshots
+│   └── binding/               # Rust NAPI binding used by the local CLI
 ├── packages/core/             # @voidzero-dev/vite-plus-core bundled Vite/Rolldown/tsdown/VitePress surfaces
 ├── packages/prompts/          # Prompt UI/helpers package, including snapshot milestones
-├── packages/tools/            # Repo tooling, local npm registry, legacy snap migrator
-├── crates/vite_cli_snapshots/ # PTY snapshot test runner + vpt helper (new CLI tests)
+├── packages/tools/            # Repo tooling and local npm registry
+├── crates/vite_cli_snapshots/ # PTY snapshot test runner + vpt helper (CLI tests)
 ├── crates/vite_command/       # Shared command execution helpers
 ├── crates/vite_error/         # Shared error types
 ├── crates/vite_global_cli/    # Standalone global vp binary and top-level command routing
@@ -62,9 +60,9 @@ vite-plus/
 - **Bundled toolchain surfaces**: start with `packages/core/BUNDLING.md` and `packages/cli/BUNDLING.md`.
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
 - **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
-- **CLI output behavior**: inspect the relevant code plus `crates/vite_cli_snapshots/tests/cli_snapshots/` (PTY snapshot suite; write new cases here). Legacy `packages/cli/snap-tests/` and `packages/cli/snap-tests-global/` are migration-only.
+- **CLI output behavior**: inspect the relevant code plus `crates/vite_cli_snapshots/tests/cli_snapshots/` (PTY snapshot suite; write new cases here).
 - **Interactive CLI testing (prompts, pickers, keystrokes)**: `crates/vite_cli_snapshots/tests/cli_snapshots/README.md` and `rfcs/interactive-snapshot-tests.md`.
-- **Install-testing against the local build**: `packages/tools/src/local-npm-registry.ts` serves the packed checkout behind a real registry interface; used by install snap fixtures (`localVitePlusPackages`), ecosystem e2e (`ecosystem-ci/patch-project.ts`), and local `vp migrate`/`vp create` iteration (see `CONTRIBUTING.md`).
+- **Install-testing against the local build**: `packages/tools/src/local-npm-registry.ts` serves the packed checkout behind a real registry interface; used by PTY snapshot fixtures, ecosystem e2e (`ecosystem-ci/patch-project.ts`), and local `vp migrate`/`vp create` iteration (see `CONTRIBUTING.md`).
 
 ## Command and Config Model
 
@@ -142,18 +140,6 @@ UPDATE_SNAPSHOTS=1 just snapshot-test <name-filter>   # record/accept snapshots
 
 Snapshot mismatches fail the run with a unified diff and write `<case>.md.new`; recorded `.md` snapshots are reviewed like code and committed with the fixture. Steps are argv arrays (no shell); use `vpt` subcommands instead of coreutils so cases stay platform-identical. Cases declare `vp = "local" | "global" | ["local", "global"]`; local-flavor cases require a fresh `packages/cli/dist`.
 
-### Snap tests (legacy, being migrated)
-
-The old trees `packages/cli/snap-tests/` and `packages/cli/snap-tests-global/` still run in CI during the migration but must not receive new cases; convert them with `node packages/tools/src/bin.js migrate-snap-tests ...` instead (see the runner README).
-
-```bash
-pnpm -F vite-plus snap-test
-pnpm -F vite-plus snap-test-local <name-filter>
-pnpm -F vite-plus snap-test-global <name-filter>
-```
-
-Legacy snap tests regenerate `snap.txt` and can exit successfully even when output changed. Always inspect `git diff` afterward. Ensure fixture inputs are committed or created by the test setup, not accidentally supplied by ignored local files.
-
 ## Code Conventions
 
 ### Rust
@@ -178,14 +164,13 @@ Reference these files instead of duplicating rules here:
 
 ## Testing Strategy
 
-Use the validation matrix above as the source of truth. For behavior-bearing changes, find the nearest existing tests before editing and add or update coverage in the same area. For CLI output changes, pair focused tests with snap-test diff review. For documentation-only changes, verify referenced paths, commands, and links instead of running unrelated suites.
+Use the validation matrix above as the source of truth. For behavior-bearing changes, find the nearest existing tests before editing and add or update coverage in the same area. For CLI output changes, pair focused tests with PTY snapshot diff review. For documentation-only changes, verify referenced paths, commands, and links instead of running unrelated suites.
 
 ## Common Pitfalls
 
 - **Treating Vite+ as only Vite Task**: Vite Task is integrated, but this repo spans CLI, runtime, package management, bundled packages, create/migrate, docs, and upstream integration.
 - **Looking for local `packages/test` or `crates/vite_task`**: neither is tracked here. Check `packages/cli/BUNDLING.md` for test shims and `Cargo.toml` for Vite Task git dependency wiring.
 - **Confusing built-ins with scripts**: `vp test` and `vp run test` can do different things.
-- **Trusting snap-test exit status alone**: always inspect snapshot diffs.
 
 ## Debugging
 
@@ -193,7 +178,7 @@ Use the validation matrix above as the source of truth. For behavior-bearing cha
 - Use `vp help` and `vp <command> --help` to inspect command surfaces.
 - For command routing bugs, compare the global path (`crates/vite_global_cli/`) with the local/NAPI path (`packages/cli/src/bin.ts`, `packages/cli/binding/`).
 - For config-loading bugs, compare the static extractor (`crates/vite_static_config/`) with the JS resolver fallback (`packages/cli/src/resolve-vite-config.ts`).
-- For package-manager behavior, inspect `crates/vite_pm_cli/`, `crates/vite_install/`, and related snap tests.
+- For package-manager behavior, inspect `crates/vite_pm_cli/`, `crates/vite_install/`, and related PTY snapshot cases.
 - For `vp check`, lint, format, or type-check behavior, validate end-to-end because bundled-tool routing can hide silent config drift.
 
 ## AI Assistant Tips

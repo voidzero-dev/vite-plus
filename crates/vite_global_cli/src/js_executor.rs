@@ -635,8 +635,7 @@ mod tests {
             EnvConfig::test_guard(EnvConfig::for_test_with_home(vp_home.path().to_path_buf()));
 
         // Pin Node 20.0.0 via `.node-version`: well below the declared floor and
-        // exactly the case the removed gate rejected (see the deleted
-        // `runtime-with-incompatible-project-node` snap test).
+        // exactly the case the removed gate rejected.
         let project = TempDir::new().unwrap();
         tokio::fs::write(project.path().join(".node-version"), "20.0.0\n").await.unwrap();
         let project_path = AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();

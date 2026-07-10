@@ -13,7 +13,7 @@
     "local-registry:kill": "node packages/tools/src/local-npm-registry.ts --kill",
     "tsgo": "tsgo -b tsconfig.json",
     "lint": "vp lint --type-aware --type-check --threads 4",
-    "test": "vp test run && pnpm -r snap-test",
+    "test": "vp test run",
     "snapshot-test": "just snapshot-test",
     "fmt": "vp fmt",
     "test:unit": "vp test run",
