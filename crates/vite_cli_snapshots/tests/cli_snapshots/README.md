@@ -170,12 +170,11 @@ runner itself (see `fixtures/interactive_probe/`).
 ## What a step sees
 
 Each case gets a cleared environment: controlled `PATH` (runner `vpt`, then
-case-owned tool dirs, then a system tail for child processes),
+case-owned tool dirs, then a system tail for child processes and direct `git` steps),
 `TERM=xterm-256color`, `VP_CLI_TEST=1`, `VP_EMIT_MILESTONES=1`, a fresh
 `HOME`, `VP_HOME`, and npm prefix. The runner still rejects direct step tools
-that resolve outside the case-owned dirs; `vpt` is the only runner helper on
-PATH, and the system tail is only for child processes such as `git` inside real
-`vp create` flows. `CI` and `NO_COLOR` are deliberately NOT set: with a PTY
+that resolve outside the case-owned dirs, except for `git`; `vpt` is the only
+runner helper on PATH. `CI` and `NO_COLOR` are deliberately NOT set: with a PTY
 attached, the CLI behaves interactively by default, which is the point.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.

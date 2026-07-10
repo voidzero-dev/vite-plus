@@ -446,7 +446,9 @@ impl CaseInstall {
 
         let found = which::which_in(program, Some(case_path), cwd)
             .map_err(|e| format!("`{program}` not found on the case PATH: {e}"))?;
-        if self.tool_dirs.iter().any(|dir| found.starts_with(dir)) {
+        // Git is a fixture dependency in real create/migrate flows, so steps may
+        // invoke the system installation directly as the sole PATH exception.
+        if program == "git" || self.tool_dirs.iter().any(|dir| found.starts_with(dir)) {
             return Ok(found);
         }
         Err(format!("`{program}` resolved outside the case-owned tool dirs: {}", found.display()))
