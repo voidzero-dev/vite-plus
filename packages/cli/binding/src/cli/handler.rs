@@ -82,8 +82,7 @@ impl CommandHandler for VitePlusCommandHandler {
                 // target elicitation as direct invocations: spawn the real
                 // binary, which elicits (defaultPackage note, listing +
                 // exit 1) identically instead of silently running the root.
-                let cwd = command.cwd.to_absolute_path_buf();
-                if super::app_target::needs_elicitation(&subcmd, &cwd) {
+                if super::app_target::needs_elicitation(&subcmd, &command.cwd) {
                     return Ok(HandledCommand::Verbatim);
                 }
                 let resolved = self.resolver.resolve(subcmd, None, &command.envs).await?;

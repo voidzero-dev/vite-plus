@@ -8,8 +8,8 @@
 //! listing plus exit 1 when the terminal is not interactive).
 
 use vite_error::Error;
-use vite_path::AbsolutePathBuf;
-use vite_shared::output;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_shared::{env_vars, output};
 use vite_task::ExitStatus;
 use vite_workspace::WorkspaceFile;
 
@@ -91,6 +91,11 @@ const PACK_BOOLEAN_FLAGS: &[&str] = &[
 /// disable elicitation outright. Help/version requests are answered by the
 /// underlying tool and must never be redirected.
 fn is_bare(command: &str, args: &[String]) -> bool {
+    /// `arg` is one of `flags`, exactly or in inline `flag=value` form.
+    fn matches_flag(arg: &str, flags: &[&str]) -> bool {
+        flags.iter().any(|f| arg == *f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
+    }
+
     let is_pack = command == "pack";
     let booleans = if is_pack { PACK_BOOLEAN_FLAGS } else { VITE_BOOLEAN_FLAGS };
     let mut iter = args.iter().peekable();
@@ -104,19 +109,12 @@ fn is_bare(command: &str, args: &[String]) -> bool {
         }
         // An explicit config file (`-c`/`--config`) is explicit build intent:
         // forward it to the tool instead of eliciting a package to override it.
-        if ["-c", "--config"]
-            .iter()
-            .any(|f| arg == f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
-        {
+        if matches_flag(arg, &["-c", "--config"]) {
             return false;
         }
         // Workspace selectors and --root already specify pack's target;
         // these previously-valid targeted invocations must keep forwarding.
-        if is_pack
-            && ["-W", "--workspace", "-F", "--filter", "--root"]
-                .iter()
-                .any(|f| arg == f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
-        {
+        if is_pack && matches_flag(arg, &["-W", "--workspace", "-F", "--filter", "--root"]) {
             return false;
         }
         let is_boolean = booleans.contains(&arg.as_str()) || arg.starts_with("--no-");
@@ -131,37 +129,51 @@ fn is_bare(command: &str, args: &[String]) -> bool {
     true
 }
 
-/// Heuristic ranking signal: does `dir` look runnable for `command`?
+/// Heuristic ranking signal: does a directory look runnable for `command`?
 /// Used for ordering and single-candidate auto-selection, never for hiding.
 /// The rules are documented in rfcs/cwd-flag.md ("The likely-runnable
-/// heuristic"); keep both in sync.
+/// heuristic"); keep both in sync. Two variants because the workspace root
+/// needs a stronger signal than member packages: a shared root
+/// `vite.config.ts` (lint/fmt/tasks) is the normal monorepo setup and must
+/// not make the root look like an app, or auto-select would run the silent
+/// root build this feature exists to prevent.
 ///
-/// The workspace root needs a stronger signal than member packages: a shared
-/// root `vite.config.ts` (lint/fmt/tasks) is the normal monorepo setup and
-/// must not make the root look like an app, or auto-select would run the
-/// silent root build this feature exists to prevent.
-fn looks_runnable(dir: &AbsolutePathBuf, command: &str, is_root: bool) -> bool {
+/// Root variant. Takes the root config [`classify`] already resolved for the
+/// `defaultPackage` lookup, so the file is read and parsed once per
+/// invocation. A declared `build` block (a library/SSR build with no entry
+/// HTML) makes the root a target for `vp build` only: dev/preview serve an
+/// app, for which the signal is a root `index.html`. A shared root config
+/// for lint/fmt/tasks declares neither, so it never makes the root a target.
+fn root_looks_runnable(
+    config: &vite_static_config::FieldMap,
+    dir: &AbsolutePath,
+    command: &str,
+) -> bool {
     match command {
         // Bare `vp pack` succeeds when tsdown's default entry exists or the
         // config explicitly declares a `pack` block (a spread that only
         // might contain `pack` does not count: auto-select acts on this
-        // signal, so a false positive runs tsdown in a non-packable
-        // package). The one-stat entry check runs first: this executes per
-        // workspace package, and the config check reads and parses a file.
+        // signal, so a false positive runs tsdown in a non-packable package).
+        "pack" => {
+            dir.as_path().join("src/index.ts").is_file() || config.get_declared("pack").is_some()
+        }
+        "build" => {
+            dir.as_path().join("index.html").is_file() || config.get_declared("build").is_some()
+        }
+        _ => dir.as_path().join("index.html").is_file(),
+    }
+}
+
+/// Member variant of the likely-runnable heuristic; see
+/// [`root_looks_runnable`]. Resolves the member's own config lazily: this
+/// executes per workspace package, and for `pack` the one-stat entry check
+/// runs first because the config check reads and parses a file.
+fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
+    match command {
         "pack" => {
             dir.as_path().join("src/index.ts").is_file()
                 || vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
         }
-        // The root needs a stronger signal than a member. A declared `build`
-        // block (a library/SSR build with no entry HTML) makes the root a
-        // target for `vp build` only: dev/preview serve an app, for which the
-        // signal is a root `index.html`. A shared root config for lint/fmt/
-        // tasks declares neither, so it never makes the root a target.
-        "build" if is_root => {
-            dir.as_path().join("index.html").is_file()
-                || vite_static_config::resolve_static_config(dir).get_declared("build").is_some()
-        }
-        _ if is_root => dir.as_path().join("index.html").is_file(),
         _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
@@ -172,7 +184,7 @@ fn looks_runnable(dir: &AbsolutePathBuf, command: &str, is_root: bool) -> bool {
 /// literal naming an existing directory.
 fn resolve_default_package(
     command: &str,
-    cwd: &AbsolutePathBuf,
+    cwd: &AbsolutePath,
     value: vite_static_config::FieldValue,
 ) -> AppTarget {
     let fail = |msg: &str| {
@@ -205,7 +217,8 @@ fn resolve_default_package(
 /// protocol as packages/prompts/src/milestone.ts; real terminals never see
 /// the marker as content.
 fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>, Error> {
-    let emit_milestones = std::env::var_os("VP_EMIT_MILESTONES").is_some_and(|value| value == "1");
+    let emit_milestones =
+        std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_some_and(|value| value == "1");
     let items: Vec<vite_select::SelectItem> = rows
         .iter()
         .map(|row| vite_select::SelectItem {
@@ -269,10 +282,7 @@ fn emit_milestone_title(name: &str) {
 /// picker. Slightly over-approximates (an empty workspace reports true), in
 /// which case the script merely spawns the real binary, which then behaves
 /// identically to a direct invocation.
-pub(super) fn needs_elicitation(
-    subcommand: &SynthesizableSubcommand,
-    cwd: &AbsolutePathBuf,
-) -> bool {
+pub(super) fn needs_elicitation(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> bool {
     matches!(classify(subcommand, cwd), Classification::Elicit(..))
 }
 
@@ -309,7 +319,7 @@ enum Elicitation {
 /// The one `find_workspace_root` walk here rides back out on
 /// [`Classification::RunInPlace`] whenever the command ends up running in
 /// `cwd`, so a bare command in a sub-package walks the tree once, not twice.
-fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePathBuf) -> Classification {
+fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classification {
     let Some((command, args)) = app_command_parts(subcommand) else {
         return Classification::RunInPlace(None);
     };
@@ -319,9 +329,11 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePathBuf) -> Clas
     let workspace = vite_workspace::find_workspace_root(cwd);
     let at_invocation_root =
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
-    if at_invocation_root
-        && let Some(value) =
-            vite_static_config::resolve_static_config(cwd).get_declared("defaultPackage")
+    // Resolved once and reused by `root_looks_runnable` below, so a bare
+    // command at a root reads and parses the config a single time.
+    let root_config = at_invocation_root.then(|| vite_static_config::resolve_static_config(cwd));
+    if let Some(value) =
+        root_config.as_ref().and_then(|config| config.get_declared("defaultPackage"))
     {
         return Classification::Elicit(command, Elicitation::DefaultPackage(value));
     }
@@ -340,7 +352,13 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePathBuf) -> Clas
     // library (e.g. a single package with a settings-only pnpm-workspace.yaml)
     // ran this way before elicitation existed. Eliciting only when the root
     // is not a plausible target is what keeps this feature purely additive.
-    if looks_runnable(&workspace_root.path.to_absolute_path_buf(), command, true) {
+    // An empty `rel_from_root` means the invocation is at the root, so the
+    // config resolved above is present; degrade to running in place rather
+    // than panic if that invariant ever breaks.
+    let Some(root_config) = root_config else {
+        return Classification::RunInPlace(Some(workspace_root));
+    };
+    if root_looks_runnable(&root_config, &workspace_root.path, command) {
         return Classification::RunInPlace(Some(workspace_root));
     }
     Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))
@@ -352,7 +370,7 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePathBuf) -> Clas
 /// caller reuses it to skip a second `find_workspace_root` walk.
 pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
-    cwd: &AbsolutePathBuf,
+    cwd: &AbsolutePath,
 ) -> Result<(AppTarget, Option<vite_workspace::WorkspaceRoot>), Error> {
     let (command, elicitation) = match classify(subcommand, cwd) {
         Classification::RunInPlace(workspace_root) => {
@@ -381,7 +399,7 @@ pub(super) fn resolve_app_target(
             PackageRow {
                 name: info.package_json.name.clone(),
                 path: vite_str::Str::from(info.path.as_str()),
-                runnable: looks_runnable(&absolute, command, false),
+                runnable: member_looks_runnable(&absolute, command),
                 absolute,
             }
         })

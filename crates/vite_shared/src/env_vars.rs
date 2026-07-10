@@ -68,6 +68,14 @@ pub const VP_RESOLVE_SOURCE: &str = "VP_RESOLVE_SOURCE";
 /// Set by shell wrapper scripts to indicate which tool is being shimmed.
 pub const VP_SHIM_TOOL: &str = "VP_SHIM_TOOL";
 
+/// Set (to `1`) only by the PTY snapshot runner to enable render-milestone
+/// emission (invisible window-title updates the tests synchronize on).
+///
+/// The value is a cross-process contract: the runner and the JS prompts
+/// package (`packages/prompts/src/milestone.ts`) spell the literal
+/// independently.
+pub const VP_EMIT_MILESTONES: &str = "VP_EMIT_MILESTONES";
+
 /// Set by Windows shim wrappers that route through `vp env exec`.
 ///
 /// When present, `env exec` can normalize wrapper-inserted argument separators

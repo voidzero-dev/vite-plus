@@ -77,7 +77,7 @@ fn resolve_program(
 /// working directory; setting it at spawn time keeps `vp -C <dir>` children
 /// equivalent to the `cd <dir> && vp` form. Callers' later `envs()` overlays
 /// still win for an explicit `PWD`.
-fn sync_child_pwd(cmd: &mut Command, cwd: &AbsolutePath) {
+pub fn sync_child_pwd(cmd: &mut Command, cwd: &AbsolutePath) {
     #[cfg(unix)]
     cmd.env("PWD", cwd.as_path());
     #[cfg(not(unix))]
@@ -236,20 +236,19 @@ where
     let mut cmd = fspy::Command::new(bin_name);
     cmd.args(&args)
         // set system environment variables first
-        .envs(std::env::vars_os())
+        .envs(std::env::vars_os());
+    // Same PWD/cwd alignment as `sync_child_pwd` (fspy has its own Command
+    // type); writing before the `envs` overlay keeps last-write-wins for a
+    // caller's explicit `PWD`.
+    #[cfg(unix)]
+    cmd.env("PWD", cwd.as_path());
+    cmd
         // then set custom environment variables
         .envs(envs)
         .current_dir(cwd)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
-    // Same PWD/cwd alignment as `sync_child_pwd` (fspy has its own Command
-    // type). This runs after the `envs` overlay, so guard against clobbering
-    // an explicitly provided `PWD`; only the inherited stale value is fixed.
-    #[cfg(unix)]
-    if !envs.contains_key("PWD") {
-        cmd.env("PWD", cwd.as_path());
-    }
 
     // fix stdio streams on unix
     #[cfg(unix)]

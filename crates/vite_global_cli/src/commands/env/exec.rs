@@ -147,12 +147,10 @@ async fn execute_with_version(
 
     let mut child = tokio::process::Command::new(cmd);
     child.args(args).env("PATH", new_path);
-    // Align the child's inherited `PWD` with the process cwd, which a leading
-    // `-C <dir>` changes without touching our own environment (see
-    // `shim::exec::sync_child_pwd`).
-    #[cfg(unix)]
-    if let Ok(cwd) = std::env::current_dir() {
-        child.env("PWD", cwd);
+    // The child runs in the inherited cwd, which a leading `-C <dir>` changes
+    // without touching our own environment; align its `PWD` accordingly.
+    if let Ok(cwd) = vite_path::current_dir() {
+        vite_command::sync_child_pwd(&mut child, &cwd);
     }
     let status = child.status().await?;
 

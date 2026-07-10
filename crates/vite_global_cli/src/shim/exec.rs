@@ -19,10 +19,11 @@ fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-/// Keep the child's `PWD` consistent with the process cwd. Shim children run
-/// in the inherited cwd, which a leading `-C <dir>` changes without touching
-/// our own environment (mutating it is unsound once the runtime has threads),
-/// so the inherited `PWD` would otherwise point at the original directory.
+/// Keep the child's `PWD` consistent with the process cwd; the std-Command
+/// sibling of [`vite_command::sync_child_pwd`] (rationale there). Shim
+/// children run in the inherited cwd, which a leading `-C <dir>` changes
+/// without touching our own environment, so the inherited `PWD` would
+/// otherwise point at the original directory.
 fn sync_child_pwd(cmd: &mut std::process::Command) {
     #[cfg(unix)]
     if let Ok(cwd) = std::env::current_dir() {
