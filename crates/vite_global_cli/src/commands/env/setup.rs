@@ -732,6 +732,7 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
+#[cfg(windows)]
 const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset VP_HOME=%~dp0..\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
 fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
@@ -807,10 +808,13 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
         tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
     }
 
-    // Only write the cmd wrapper if bin directory exists (it may not during --env-only)
-    let bin_path = vite_plus_home.join("bin");
-    if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
-        tokio::fs::write(bin_path.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
+    #[cfg(windows)]
+    {
+        // Only write the cmd wrapper if bin directory exists (it may not during --env-only)
+        let bin_path = vite_plus_home.join("bin");
+        if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
+            tokio::fs::write(bin_path.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
+        }
     }
 
     Ok(())
@@ -1193,6 +1197,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(windows)]
     async fn test_create_env_files_cmd_wrapper_sets_vp_home_before_env_use() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1210,6 +1215,23 @@ mod tests {
         assert!(
             cmd_content.contains("%~dp0..\\current\\bin\\vp.exe env use %*"),
             "vp-use.cmd should invoke the install-local vp.exe"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_create_env_files_does_not_create_cmd_wrapper_on_unix() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+        let bin_dir = home.join("bin");
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+
+        create_env_files(&home).await.unwrap();
+
+        assert!(
+            !bin_dir.join("vp-use.cmd").as_path().exists(),
+            "vp-use.cmd should only be created on Windows"
         );
     }
 
