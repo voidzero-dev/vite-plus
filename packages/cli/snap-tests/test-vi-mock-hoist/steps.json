@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp test run src/vi-mock-hoist.test.ts # vi.mock() from 'vite-plus/test' must hoist via upstream mocker (no vite-plus patch/shim)"
-  ]
-}

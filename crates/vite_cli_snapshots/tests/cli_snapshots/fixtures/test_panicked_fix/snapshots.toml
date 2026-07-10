@@ -1,0 +1,6 @@
+[[case]]
+name = "test_panicked_fix"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "--help"], comment = "print help message and no panicked", continue-on-failure = true },
+]

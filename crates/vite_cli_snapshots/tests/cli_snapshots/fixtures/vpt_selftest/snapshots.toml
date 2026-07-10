@@ -10,7 +10,7 @@ steps = [
   ["vpt", "json-edit", "package.json", "scripts.build", "vp build"],
   ["vpt", "print-file", "package.json"],
   { argv = ["vpt", "touch-file", "created-by-touch.txt"], comment = "touch-file creates missing files" },
-  { argv = ["vpt", "stat-file", "created-by-touch.txt", "notes"], comment = "stat-file reports the entry type: file, dir, or missing" },
+  { argv = ["vpt", "stat-file", "created-by-touch.txt", "notes"], comment = "stat-file reports the entry type: file, dir, symlink, or missing" },
   { argv = ["vpt", "rm", "-f", "never-existed.txt"], comment = "rm -f ignores missing targets" },
   { argv = ["vpt", "cp", "created-by-touch.txt", "notes"], comment = "cp into an existing directory, like real cp" },
   ["vpt", "list-dir", "notes"],

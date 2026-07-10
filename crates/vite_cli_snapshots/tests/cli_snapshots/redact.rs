@@ -30,6 +30,11 @@ static THREAD_RE: LazyLock<regex::Regex> =
 // thread counts.
 static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
+// Oxlint's summary line prints its active rule count ("with 95 rules"), which
+// grows with every bundled oxlint upgrade; mask it like thread counts so lint
+// baselines survive routine dep bumps.
+static RULE_COUNT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"with \d+ rules").unwrap());
 // Some tool banners print runtime versions bare ("Node 24.18.0  pnpm 10.34.4"
 // in vp create); mask those by tool-name context so user semver elsewhere
 // stays assertable.
@@ -103,6 +108,14 @@ static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
         r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
+});
+// `vp env which` prints the resolving runtime as a labelled `Node:` field, and
+// the npm shim records the node it ran under into a BinConfig's
+// `"nodeVersion"` value. Both track the environment's managed default (not a
+// fixture pin), so they churn with runtime upgrades; mask by label/key context
+// so fixture-pinned versions elsewhere stay assertable.
+static WHICH_NODE_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(Node:\s+|"nodeVersion":\s*")\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#).unwrap()
 });
 // Output bytes differ across OSes (line endings, embedded paths), so byte
 // sizes and content-derived asset hashes can never be part of a shared
@@ -272,11 +285,18 @@ pub fn redact_output(
     // refresh like the vite-plus version.
     output = MANAGED_TEST_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
 
+    // Redact the environment's managed default runtime version by label/key
+    // context (see WHICH_NODE_VERSION_RE).
+    output = WHICH_NODE_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
     // Redact thread counts like "16 threads" to "<n> threads"
     output = THREAD_RE.replace_all(&output, "<n> threads").into_owned();
 
     // Redact platform-dependent pack clean counts like "Cleaning 2 files"
     output = CLEANING_COUNT_RE.replace_all(&output, "Cleaning <n> files").into_owned();
+
+    // Redact oxlint rule counts like "with 95 rules" to "with <n> rules"
+    output = RULE_COUNT_RE.replace_all(&output, "with <n> rules").into_owned();
 
     // Redact byte-size numbers like "0.12 kB" to "<size> kB" (unit kept)
     output = SIZE_RE.replace_all(&output, "<size>${1}${2}").into_owned();

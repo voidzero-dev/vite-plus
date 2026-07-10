@@ -116,7 +116,7 @@ and globally installed package binaries. There is no shell: no `&&`, no
 redirects, no globs. File setup and assertions go through `vpt` so behavior
 is identical on every platform:
 
-`vpt print-file` (cat), `vpt stat-file` (prints `file`/`dir`/`missing`;
+`vpt print-file` (cat), `vpt stat-file` (prints `file`/`dir`/`symlink`/`missing`;
 `--assert <state>` / `--assert-not <state>` also fail on mismatch, so
 `test -f x && cmd` guards keep their short-circuit), `vpt write-file`,
 `vpt touch-file`, `vpt replace-file-content`, `vpt list-dir`, `vpt mkdir`,

@@ -634,6 +634,19 @@ impl CaseHome {
     fn npm_prefix(&self) -> PathBuf {
         self.home.parent().unwrap().join("npm-global")
     }
+
+    /// The machine-specific directories this case owns, paired with their
+    /// snapshot labels. Owned by the type that creates the directories so a
+    /// new case-owned dir cannot be added without deciding its redaction:
+    /// the npm prefix is a sibling of `home`, which the `<home>` pair never
+    /// matches, and it leaked raw temp paths into snapshots until it was
+    /// paired here.
+    fn redaction_paths(&self) -> [(String, &'static str); 2] {
+        [
+            (self.home.to_str().unwrap().to_owned(), "<home>"),
+            (self.npm_prefix().to_str().unwrap().to_owned(), "<npm-prefix>"),
+        ]
+    }
 }
 
 fn local_package_bin_dir(package_dir: &Path) -> PathBuf {
@@ -1034,14 +1047,12 @@ fn run_case(
         if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
 
     let stage_str = stage.to_str().unwrap().to_owned();
-    let home_str = case_home.home.to_str().unwrap().to_owned();
+    let case_dirs = case_home.redaction_paths();
     let repo_root = flavor::repo_root();
     let repo_str = repo_root.to_str().unwrap().to_owned();
-    let redactions = [
-        (stage_str.as_str(), "<workspace>"),
-        (home_str.as_str(), "<home>"),
-        (repo_str.as_str(), "<repo>"),
-    ];
+    let mut redactions = vec![(stage_str.as_str(), "<workspace>")];
+    redactions.extend(case_dirs.iter().map(|(path, label)| (path.as_str(), *label)));
+    redactions.push((repo_str.as_str(), "<repo>"));
 
     let mut doc = String::new();
     doc.push_str(&format!("# {}\n", case.name));

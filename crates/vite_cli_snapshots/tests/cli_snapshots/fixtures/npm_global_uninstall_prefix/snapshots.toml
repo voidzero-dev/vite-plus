@@ -1,0 +1,13 @@
+[[case]]
+name = "npm_global_uninstall_prefix"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "custom-prefix"], continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "--prefix", "./custom-prefix", "./npm-global-prefix-pkg"], comment = "Install to custom prefix, should create link", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"], comment = "Link should exist", continue-on-failure = true },
+  { argv = ["npm-global-prefix-cli"], comment = "Verify callable via link", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg"], comment = "Uninstall should also remove link", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli"], comment = "Should be gone", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-rf", "custom-prefix"], comment = "Cleanup", continue-on-failure = true },
+]
