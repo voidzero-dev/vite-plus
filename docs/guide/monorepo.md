@@ -164,7 +164,7 @@ Tip: run this directly with `vp -C apps/web dev`
   ➜  Network: use --host to expose
 ```
 
-When several packages could be the target, vp opens a fuzzy package picker (the same selector as `vp run`). Typing filters, Enter runs the selection, and vp prints the direct command for next time:
+When several packages could be the target, vp opens a fuzzy package picker (the same selector as `vp run`); typing filters, Enter runs the selection:
 
 ```
 $ vp build
@@ -197,11 +197,11 @@ error: `vp build` at the workspace root needs a target package.
   Or run every package's build script:  vp run -r build
 ```
 
-Packages that look runnable for the command are ranked first in both the picker and the listing: a `vite.config.*` or root `index.html` for `dev` / `build` / `preview`, and a `pack` config block or tsdown's default `src/index.ts` entry for `pack`.
+vp ranks packages that look runnable for the command first in both the picker and the listing: a `vite.config.*` or root `index.html` for `dev` / `build` / `preview`, and a `pack` config block or tsdown's default `src/index.ts` entry for `pack`.
 
 ### Targeting a package with `-C`
 
-The global `-C` flag runs any command as if you had `cd`'d into a package. It works with every vp command and is identical to `cd <dir> && vp <command>`:
+The global `-C` flag runs any vp command as if you had `cd`'d into the package first, identical to `cd <dir> && vp <command>`:
 
 ```bash
 vp -C apps/web dev

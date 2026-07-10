@@ -4,7 +4,7 @@
 
 Add a global `-C <dir>` flag to vp, then use it to fix the app-command experience in monorepos. Everything is additive and backward compatible:
 
-1. **`-C <dir>` global flag** (the feature): for every vp command, `vp -C <dir> <cmd>` behaves exactly like `cd <dir> && vp <cmd>`, following the `git -C` / `make -C` convention: the first-class "run there" form vp currently lacks. Positional semantics stay untouched: `vp dev <path>` keeps upstream Vite semantics (`root` only), and `vp pack` positionals stay tsdown entries.
+1. **`-C <dir>` global flag** (the feature): for every vp command, `vp -C <dir> <cmd>` behaves exactly like `cd <dir> && vp <cmd>`, following the `git -C` / `make -C` convention: the first-class "run there" form vp lacks. Positional semantics stay untouched: `vp dev <path>` keeps upstream Vite semantics (`root` only), and `vp pack` positionals stay tsdown entries.
 2. **App-command UX built on `-C`**: running `vp dev` / `vp build` / `vp preview` / `vp pack` bare at a workspace root elicits the missing target instead of silently running against the root: an interactive fuzzy package picker in a TTY, a `defaultPackage` config for repos with one blessed target, and a clear listing plus exit 1 when non-interactive. All three are defined as an implicit `-C <dir>`.
 
 In the common flows users never type `-C`: bare `vp dev` at the root goes through the picker or `defaultPackage`, and inside a package it runs there as today. `-C` is the explicit, teachable form underneath. The commands stay singular: `vp dev` still starts exactly one Vite dev server in one directory. Running a task across many packages at once remains the job of `vp run` (`-r`, `--filter`).
@@ -46,11 +46,11 @@ error: Build failed with 1 error:
 [UNRESOLVED_ENTRY] Cannot resolve entry module packages/ui.
 ```
 
-So the only form that works reliably, uniformly, for every command, is `cd <path> && vp <cmd>`, and vp offers no flag equivalent of it.
+So the only form that works for every command is `cd <path> && vp <cmd>`, and vp offers no flag equivalent of it.
 
 **2. At a monorepo root, the app commands are silently wrong.**
 
-The workspace root usually has no app, but `vp dev` happily starts a server pointed at it:
+The workspace root usually has no app, but `vp dev` starts a server pointed at it anyway:
 
 ```
 $ vp dev
@@ -60,9 +60,9 @@ $ vp dev
   ➜  Local:   http://localhost:5173/        # opens to a 404, no index.html here
 ```
 
-Nothing errors, nothing guides the user toward the right invocation, and the server exposes the whole repository tree. Fixing this requires eliciting a target, and eliciting a target requires a well-defined primitive to expand to. `-C` is that primitive.
+vp prints no error and no guidance, and the server exposes the whole repository tree. A fix has to elicit the missing target, and the elicited target needs a well-defined primitive to expand to: `-C`.
 
-All of the failures above are reproducible with `vite-plus@0.2.2`: https://github.com/why-reproductions-are-required/vite-plus-monorepo-app-commands-repro
+All of the failures above reproduce with `vite-plus@0.2.2`: https://github.com/why-reproductions-are-required/vite-plus-monorepo-app-commands-repro
 
 ## Proposed UX
 
@@ -87,7 +87,7 @@ vp -C apps/admin dev
 cd apps/admin && vp dev
 ```
 
-It is not limited to the app commands:
+Every vp command accepts it, not just the app commands:
 
 ```bash
 vp -C apps/web test
@@ -197,7 +197,7 @@ export default {
 };
 ```
 
-Bare app commands at the root now behave as `vp -C ./frontend <cmd>`, with one line of output so it never feels magical:
+Bare app commands at the root now behave as `vp -C ./frontend <cmd>`, with one line of output that keeps the redirect visible:
 
 ```
 $ vp dev
@@ -246,7 +246,7 @@ Rejected alternatives: repurposing the app-command positional to mean "run there
 
 ### Target directory resolution
 
-An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). The classification mirrors the tools' own cac parsing: a non-flag token following any non-boolean flag is that flag's value — required and optional values alike (`--port 3000`, `--host 0.0.0.0`) — because the tool itself would never treat it as a positional; only a token no flag consumes is a positional target, and any positional disables elicitation. The boolean-flag tables come from the shipped `--help` of each tool and are command-specific (`--minify` is optional-value for Vite build but boolean for pack). pack's target selectors (`-W`/`--workspace`, `-F`/`--filter`, `--root`) already define their own target and always disable elicitation. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
+An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). The classification mirrors the tools' own cac parsing: a non-flag token following any non-boolean flag is that flag's value, required and optional values alike (`--port 3000`, `--host 0.0.0.0`), because the tool itself would never treat it as a positional; only a token no flag consumes is a positional target, and any positional disables elicitation. The boolean-flag tables come from the shipped `--help` of each tool and are command-specific (`--minify` is optional-value for Vite build but boolean for pack). pack's target selectors (`-W`/`--workspace`, `-F`/`--filter`, `--root`) already define their own target and always disable elicitation. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
 
 1. **`-C <dir>`**: run there. Never triggers the picker.
 2. **Positional target present**: forward as today, upstream semantics, vp does not interfere.
@@ -278,7 +278,7 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 
 - One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
 - Fuzzy search over name and path via `vite_select::fuzzy_match`, paging identical to the task picker.
-- A runnable workspace root never elicits at all: the command runs in place, TTY or not, exactly as before this RFC. The invocation already has its configured target — a root app, or a single package whose `pnpm-workspace.yaml` only carries settings (catalogs, `minimumReleaseAge`) — and eliciting only when the root is not a plausible target is what keeps the feature purely additive. The root needs a stronger runnable signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
+- A runnable workspace root never elicits at all: the command runs in place, TTY or not, exactly as before this RFC. The invocation already has its configured target: a root app, or a single package whose `pnpm-workspace.yaml` only carries settings (catalogs, `minimumReleaseAge`). Eliciting only when the root is not a plausible target is what keeps the feature purely additive. The root needs a stronger runnable signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
 - With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
 ### The likely-runnable heuristic
@@ -294,7 +294,7 @@ Both file-based signals are upstream defaults, not vp inventions: `index.html` a
 
 "Exactly one likely-runnable package" means: after sorting rows runnable-first, the first row is runnable and the second is not. Auto-select additionally requires an interactive terminal.
 
-Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is immediately visible (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
+Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is visible at once (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
 
 - A library whose `vite.config.*` exists only for Vitest or lint settings ranks as runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
 - An app whose `index.html` lives outside the package root (custom Vite `root`) or whose config is inherited from a parent directory is not ranked first, and never auto-selects.
@@ -320,7 +320,7 @@ export default defineConfig({
 
 ### Vite CLI parity preserved; `-C` carries the `cd` semantics
 
-The core tension: parity with `vite <path>` (positional sets `root` only, cwd untouched) and parity with `cd <path> && vp dev` cannot both hold on the same positional. An earlier draft repurposed the positional and accepted a permanent divergence from the upstream CLI. This RFC keeps the positional fully Vite-compatible and puts the `cd` semantics on a new, explicitly named channel instead. Nothing existing changes meaning, pack needs no directory-vs-entry heuristic, and the primitive generalizes to every vp command instead of four.
+The core tension: parity with `vite <path>` (positional sets `root` only, cwd untouched) and parity with `cd <path> && vp dev` cannot both hold on the same positional. An earlier draft repurposed the positional and accepted a permanent divergence from the upstream CLI. This RFC keeps the positional Vite-compatible and puts the `cd` semantics on a new, explicitly named channel instead. Nothing existing changes meaning, pack needs no directory-vs-entry heuristic, and the primitive generalizes to every vp command instead of four.
 
 The accepted cost: two ways to pass a directory with different semantics. Mitigation: users rarely type either (bare `vp dev` plus picker or `defaultPackage` covers the common flows), and every hint, error, and doc teaches only `-C`.
 

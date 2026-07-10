@@ -37,7 +37,7 @@ Vite+ extends the basic Vite configuration with these additions:
 
 ## defaultPackage
 
-Default target directory for `vp dev` / `vp build` / `vp preview` / `vp pack` when they are invoked bare in the directory containing the config, an implicit [`vp -C <dir>`](/guide/monorepo#app-commands):
+Default target directory for `vp dev` / `vp build` / `vp preview` / `vp pack` when you invoke them bare in the directory containing the config, an implicit [`vp -C <dir>`](/guide/monorepo#app-commands):
 
 ```ts [vite.config.ts]
 export default {
