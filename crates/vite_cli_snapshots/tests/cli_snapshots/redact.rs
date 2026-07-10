@@ -24,6 +24,12 @@ static VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 static THREAD_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\d+ threads").unwrap());
+// `vp pack`'s clean step reports how many stale files it removed from dist,
+// which varies by platform (Windows leaves an extra artifact behind); the
+// count carries no signal for cache-behavior baselines, so mask it like
+// thread counts.
+static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
 // Some tool banners print runtime versions bare ("Node 24.18.0  pnpm 10.34.4"
 // in vp create); mask those by tool-name context so user semver elsewhere
 // stays assertable.
@@ -268,6 +274,9 @@ pub fn redact_output(
 
     // Redact thread counts like "16 threads" to "<n> threads"
     output = THREAD_RE.replace_all(&output, "<n> threads").into_owned();
+
+    // Redact platform-dependent pack clean counts like "Cleaning 2 files"
+    output = CLEANING_COUNT_RE.replace_all(&output, "Cleaning <n> files").into_owned();
 
     // Redact byte-size numbers like "0.12 kB" to "<size> kB" (unit kept)
     output = SIZE_RE.replace_all(&output, "<size>${1}${2}").into_owned();
