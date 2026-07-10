@@ -95,8 +95,8 @@ pub fn prepend_to_path_env(dir: &AbsolutePath, options: PrependOptions) -> bool 
 
 /// Format PATH with the given directory prepended (simple version).
 ///
-/// This is a simpler version that always prepends without deduplication.
-/// Use this for backward compatibility with `format_path_env`.
+/// This always prepends without deduplication. Use it when a child process
+/// needs an explicit PATH value without mutating the parent process.
 ///
 /// # Arguments
 /// * `bin_prefix` - The directory to prepend to PATH
