@@ -89,7 +89,7 @@ catalogMode: prefer
 
 catalog:
   "@types/node": ^24
-  typescript: ^5
+  typescript: ^5 || ^6 || ^7
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
