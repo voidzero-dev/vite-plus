@@ -22,3 +22,21 @@ steps = [
   { argv = ["vpt", "list-dir", "dist"], comment = "upstream semantics: output lands at the invocation directory" },
   { argv = ["vp", "run", "where:hello"], comment = "a script whose command starts with vp -C runs verbatim and honors the directory" },
 ]
+
+# Repro for the -C direct-exec PWD gap: a command run through `env exec`
+# (the node/npm/npx shim dispatch, not the JS-delegation path) must observe
+# `process.env.PWD` synced to the -C target, exactly like the cd form, so
+# `-C dir` is equivalent to `cd dir`. Bug: -C only changes the process cwd,
+# so the child inherits the original PWD and prints `matches cwd: false`.
+[[case]]
+name = "cwd_flag_pwd_env_exec"
+vp = ["global"]
+comment = """
+`vp -C <dir> env exec <tool>` must give the spawned tool the same PWD as
+`cd <dir> && vp env exec <tool>`. The boolean keeps the assertion path- and
+redaction-independent.
+"""
+steps = [
+  { argv = ["vp", "-C", "packages/hello", "env", "exec", "node", "-e", "console.log('PWD matches cwd: ' + (process.env.PWD === process.cwd()))"], comment = "-C form: the direct-exec child should see PWD synced to the target" },
+  { argv = ["vp", "env", "exec", "node", "-e", "console.log('PWD matches cwd: ' + (process.env.PWD === process.cwd()))"], cwd = "packages/hello", comment = "equivalent cd form (baseline: true)" },
+]

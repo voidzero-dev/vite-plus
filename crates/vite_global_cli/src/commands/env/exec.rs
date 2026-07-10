@@ -145,8 +145,16 @@ async fn execute_with_version(
     // 5. Execute command
     let (cmd, args) = command.split_first().unwrap();
 
-    let status =
-        tokio::process::Command::new(cmd).args(args).env("PATH", new_path).status().await?;
+    let mut child = tokio::process::Command::new(cmd);
+    child.args(args).env("PATH", new_path);
+    // Align the child's inherited `PWD` with the process cwd, which a leading
+    // `-C <dir>` changes without touching our own environment (see
+    // `shim::exec::sync_child_pwd`).
+    #[cfg(unix)]
+    if let Ok(cwd) = std::env::current_dir() {
+        child.env("PWD", cwd);
+    }
+    let status = child.status().await?;
 
     Ok(status)
 }

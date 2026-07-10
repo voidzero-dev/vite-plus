@@ -67,6 +67,23 @@ fn resolve_program(
     })
 }
 
+/// Keep the child's `PWD` environment variable consistent with its spawn cwd.
+///
+/// `current_dir` changes where the child runs but leaves the inherited `PWD`
+/// pointing wherever this process started, and the global `-C <dir>` flag
+/// only changes the process cwd (mutating our own environment is unsound
+/// once the runtime has threads). Shells export `PWD` on `cd`, so tools that
+/// read it (e.g. Node scripts via `process.env.PWD`) expect it to match the
+/// working directory; setting it at spawn time keeps `vp -C <dir>` children
+/// equivalent to the `cd <dir> && vp` form. Callers' later `envs()` overlays
+/// still win for an explicit `PWD`.
+fn sync_child_pwd(cmd: &mut Command, cwd: &AbsolutePath) {
+    #[cfg(unix)]
+    cmd.env("PWD", cwd.as_path());
+    #[cfg(not(unix))]
+    let _ = (cmd, cwd);
+}
+
 /// Build a `tokio::process::Command` for a pre-resolved binary path.
 /// Sets inherited stdio and `fix_stdio_streams` (Unix `pre_exec`).
 /// Callers can further customize (add args, envs, override stdio, etc.).
@@ -74,6 +91,7 @@ fn resolve_program(
 pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
     let mut cmd = Command::new(bin_path.as_path());
     cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    sync_child_pwd(&mut cmd, cwd);
 
     #[cfg(unix)]
     unsafe {
@@ -132,6 +150,7 @@ pub fn build_shell_command(shell_cmd: &str, cwd: &AbsolutePath) -> Command {
     };
 
     cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    sync_child_pwd(&mut cmd, cwd);
 
     #[cfg(unix)]
     unsafe {
@@ -224,6 +243,13 @@ where
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    // Same PWD/cwd alignment as `sync_child_pwd` (fspy has its own Command
+    // type). This runs after the `envs` overlay, so guard against clobbering
+    // an explicitly provided `PWD`; only the inherited stale value is fixed.
+    #[cfg(unix)]
+    if !envs.contains_key("PWD") {
+        cmd.env("PWD", cwd.as_path());
+    }
 
     // fix stdio streams on unix
     #[cfg(unix)]
