@@ -3,7 +3,7 @@
 //! Fixtures live in `tests/cli_snapshots/fixtures/<name>/`; each declares
 //! cases in `snapshots.toml` (see `rfcs/interactive-snapshot-tests.md`).
 //! Every step runs in a real pseudo-terminal backed by a vt100 emulator;
-//! interactive steps synchronize on OSC 8 milestones emitted by the child.
+//! interactive steps synchronize on window-title milestones emitted by the child.
 //! Snapshots are Markdown files compared with real pass/fail semantics
 //! (`UPDATE_SNAPSHOTS=1` accepts changes).
 //!
@@ -456,8 +456,8 @@ fn baseline_env(rt: &FlavorRuntime, case_home: &CaseHome) -> BTreeMap<String, Os
     let mut path_entries = vec![case_home.vp_home().join("bin")];
     path_entries.extend(std::env::split_paths(&rt.path_env));
     env.insert("PATH".into(), std::env::join_paths(path_entries).unwrap());
-    // xterm-256color keeps anstream from stripping the OSC 8 milestone
-    // sequences the runner synchronizes on.
+    // xterm-256color keeps anstream from stripping the window-title
+    // milestone sequences the runner synchronizes on.
     env.insert("TERM".into(), "xterm-256color".into());
     env.insert("VP_CLI_TEST".into(), "1".into());
     env.insert("VP_EMIT_MILESTONES".into(), "1".into());
@@ -658,15 +658,13 @@ struct RegistryHandle {
 impl Drop for RegistryHandle {
     fn drop(&mut self) {
         // Graceful first: SIGTERM the server so its handler removes the
-        // throwaway yarn/bun caches. Signal both the process itself and its
-        // group (whether the child ended up a group leader can vary), so the
-        // handler reliably runs regardless.
+        // throwaway yarn/bun caches. Keep this scoped to the direct child:
+        // process-group SIGTERM can leak past the case boundary on
+        // ubuntu-latest PTY runs and interrupt the Actions runner itself.
         #[cfg(unix)]
         {
             let pid = self.child.id();
-            let _ = std::process::Command::new("kill")
-                .args(["-TERM", &pid.to_string(), &format!("-{pid}")])
-                .output();
+            let _ = std::process::Command::new("kill").args(["-TERM", &pid.to_string()]).output();
         }
         #[cfg(windows)]
         {
