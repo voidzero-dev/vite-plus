@@ -16,6 +16,8 @@ pub mod logout;
 pub mod outdated;
 pub mod owner;
 pub mod pack;
+pub mod patch;
+pub mod patch_commit;
 pub mod ping;
 pub mod prune;
 pub mod publish;

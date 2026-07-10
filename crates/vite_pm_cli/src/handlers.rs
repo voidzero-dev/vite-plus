@@ -25,6 +25,8 @@ use vite_install::{
         outdated::OutdatedCommandOptions,
         owner::OwnerSubcommand,
         pack::PackCommandOptions,
+        patch::PatchCommandOptions,
+        patch_commit::PatchCommitCommandOptions,
         ping::PingCommandOptions,
         prune::PruneCommandOptions,
         publish::PublishCommandOptions,
@@ -174,6 +176,8 @@ pub async fn run_pm_subcommand(
         command,
         PmCommands::ApproveBuilds { .. }
             | PmCommands::Prune { .. }
+            | PmCommands::Patch { .. }
+            | PmCommands::PatchCommit { .. }
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
             | PmCommands::Version { .. }
@@ -213,6 +217,22 @@ pub async fn run_pm_subcommand(
                 pass_through_args: pass_through_args.as_deref(),
             };
             Ok(pm.run_prune_command(&options, cwd).await?)
+        }
+
+        PmCommands::Patch { package, pass_through_args } => {
+            let options = PatchCommandOptions {
+                package: &package,
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(pm.run_patch_command(&options, cwd).await?)
+        }
+
+        PmCommands::PatchCommit { patch_dir, pass_through_args } => {
+            let options = PatchCommitCommandOptions {
+                patch_dir: &patch_dir,
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(pm.run_patch_commit_command(&options, cwd).await?)
         }
 
         PmCommands::Pack {
