@@ -274,11 +274,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     // Move extracted directory to cache location
     move_to_cache(&extracted_path, &install_dir, version).await?;
 
-    tracing::info!(
-        "{} {version} installed at {}",
-        provider.name(),
-        install_dir.as_path().display()
-    );
+    tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
 
     Ok(JsRuntime {
         runtime_type,
