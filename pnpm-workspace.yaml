@@ -214,6 +214,7 @@ patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
+  postcss-modules@9.0.0: vite/patches/postcss-modules@9.0.0.patch
 peerDependencyRules:
   allowAny:
     - vite
