@@ -7,7 +7,6 @@ Clean isolated Vite+ caches
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Cleaned Corepack cache
 ✓ Removed 0 Node.js runtimes
 ✓ Removed 0 package manager installs
 ```
