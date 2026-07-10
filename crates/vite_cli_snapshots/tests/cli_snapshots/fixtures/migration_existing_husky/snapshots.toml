@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_existing_husky"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should rewrite husky to vp config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prepare script rewritten and husky removed from devDeps", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check pre-commit hook rewritten to vp staged", continue-on-failure = true },
+]

@@ -1,0 +1,7 @@
+[[case]]
+name = "synthetic_dev_cache_disabled"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "run", "dev"], comment = "synthetic dev (vp dev) should have cache disabled even with cacheScripts", continue-on-failure = true },
+]

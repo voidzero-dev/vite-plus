@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_already_vite_plus_with_husky_hookspath"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a version-update defers legacy husky hooks to --full", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "still husky's .husky/_ (not overridden)", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "--hooks overrides husky's core.hooksPath and migrates hooks", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky/lint-staged should be removed, prepare should be vp config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "pre-commit hook should be rewritten", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+]

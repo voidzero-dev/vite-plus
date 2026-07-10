@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_prettier_ignore_unknown"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should strip --ignore-unknown and -u flags", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prettier removed and --ignore-unknown stripped from scripts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".prettierrc.json", "--assert-not", "file"], comment = "check prettier config is removed", continue-on-failure = true },
+]

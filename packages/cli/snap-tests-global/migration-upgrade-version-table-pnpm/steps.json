@@ -1,9 +1,0 @@
-{
-  "env": {
-    "VP_VERSION": "0.2.1"
-  },
-  "commands": [
-    "node -e \"const fs = require('node:fs'); fs.mkdirSync('node_modules/vite', { recursive: true }); fs.writeFileSync('node_modules/vite/package.json', JSON.stringify({ name: '@voidzero-dev/vite-plus-core', version: '0.1.21', bundledVersions: { vite: '8.0.0' } })); \" # stub the installed vite-plus-core alias so the raw upstream vite version is read",
-    "vp migrate --no-interactive # existing-Vite+ upgrade shows the toolchain version-change table with the raw vite row"
-  ]
-}

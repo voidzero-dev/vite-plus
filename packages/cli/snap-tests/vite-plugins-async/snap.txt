@@ -1,3 +1,0 @@
-> vp build
-> cat dist/index.html | grep 'lazy-plugin-injected' # async vitePlugins() should apply plugins during build
-  <!-- lazy-plugin-injected --></body>

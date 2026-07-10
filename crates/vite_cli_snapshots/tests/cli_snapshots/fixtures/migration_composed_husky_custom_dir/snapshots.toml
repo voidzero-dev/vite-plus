@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_composed_husky_custom_dir"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve custom husky dir in composed prepare", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "prepare should be 'vp config --hooks-dir .config/husky && npm run build'", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".config/husky/pre-commit"], comment = "pre-commit hook should be in custom dir", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".config/husky/_/h"], comment = "hook dispatcher should resolve repo root correctly for nested dirs", continue-on-failure = true },
+]

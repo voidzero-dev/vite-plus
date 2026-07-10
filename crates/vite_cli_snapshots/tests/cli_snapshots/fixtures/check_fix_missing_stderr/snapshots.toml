@@ -1,0 +1,8 @@
+[[case]]
+name = "check_fix_missing_stderr"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "check", "--fix"], continue-on-failure = true },
+  { argv = ["vp", "check"], continue-on-failure = true },
+]

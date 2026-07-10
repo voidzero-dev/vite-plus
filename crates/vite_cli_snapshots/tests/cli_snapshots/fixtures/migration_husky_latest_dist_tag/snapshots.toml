@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_husky_latest_dist_tag"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should warn about uncoercible husky version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky should still be in devDeps", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

@@ -1,0 +1,8 @@
+[[case]]
+name = "ignore_dist"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "lint"], continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "dist"], continue-on-failure = true },
+  { argv = ["vp", "run", "lint"], comment = "new dist folder should not invalidate cache", continue-on-failure = true },
+]

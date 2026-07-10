@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_upgrade_setup_full_pnpm"
+vp = "global"
+env = { VP_CLI_BIN = "./fix-baseurl.mjs" }
+steps = [
+  { argv = ["vpt", "chmod", "+x", "fix-baseurl.mjs"], comment = "stub the baseUrl fixer so the dlx stays offline", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--full", "--no-interactive"], comment = "existing Vite+ project: upgrade plus the full setup", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "vite-plus version upgrade is applied", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = ".nvmrc is migrated to .node-version by the full setup", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".nvmrc", "--assert-not", "file"], comment = "the original .nvmrc is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsconfig.json"], comment = "tsconfig baseUrl is removed by the full setup", continue-on-failure = true },
+]
