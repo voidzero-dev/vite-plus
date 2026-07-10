@@ -80,6 +80,9 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Ensure bin directory exists
     tokio::fs::create_dir_all(&bin_dir).await?;
 
+    #[cfg(windows)]
+    tokio::fs::write(bin_dir.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
+
     // Get the current executable path (for shims)
     let current_exe = std::env::current_exe()?;
 
@@ -801,20 +804,10 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath)
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
 /// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
-/// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
         let content = render_env_content(shell, vite_plus_home);
         tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
-    }
-
-    #[cfg(windows)]
-    {
-        // Only write the cmd wrapper if bin directory exists (it may not during --env-only)
-        let bin_path = vite_plus_home.join("bin");
-        if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
-            tokio::fs::write(bin_path.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
-        }
     }
 
     Ok(())
@@ -902,6 +895,37 @@ mod tests {
             user_home: Some(home.into()),
             ..vite_shared::EnvConfig::for_test()
         })
+    }
+
+    #[cfg(windows)]
+    struct FakeTrampolineGuard(Option<std::ffi::OsString>);
+
+    #[cfg(windows)]
+    impl FakeTrampolineGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let trampoline = dir.join("vp-shim.exe");
+            std::fs::write(&trampoline, b"fake-trampoline").unwrap();
+            let previous = std::env::var_os(vite_shared::env_vars::VP_TRAMPOLINE_PATH);
+            // SAFETY: This Windows-only test is serialized and the guard restores the variable.
+            unsafe {
+                std::env::set_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH, &trampoline);
+            }
+            Self(previous)
+        }
+    }
+
+    #[cfg(windows)]
+    impl Drop for FakeTrampolineGuard {
+        fn drop(&mut self) {
+            // SAFETY: This Windows-only test is serialized and restores the previous value.
+            unsafe {
+                if let Some(previous) = self.0.take() {
+                    std::env::set_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH, previous);
+                } else {
+                    std::env::remove_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH);
+                }
+            }
+        }
     }
 
     #[tokio::test]
@@ -1198,15 +1222,22 @@ mod tests {
 
     #[tokio::test]
     #[cfg(windows)]
-    async fn test_create_env_files_cmd_wrapper_sets_vp_home_before_env_use() {
+    #[serial_test::serial]
+    async fn test_execute_creates_cmd_wrapper_in_fresh_home() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
-        let bin_dir = home.join("bin");
-        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        let fresh_home = temp_dir.path().join("new-vite-plus");
+        let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
+        let _env_guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vite_plus_home: Some(fresh_home.clone()),
+            user_home: Some(temp_dir.path().to_path_buf()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
-        create_env_files(&home).await.unwrap();
+        assert!(!fresh_home.exists(), "VP_HOME should not exist before initial setup");
+        let status = execute(false, false).await.unwrap();
 
+        assert!(status.success(), "initial vp env setup should succeed");
+        let bin_dir = AbsolutePathBuf::new(fresh_home.join("bin")).unwrap();
         let cmd_content = tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
         assert!(
             cmd_content.contains("set VP_HOME=%~dp0..\r\nfor /f"),
