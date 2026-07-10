@@ -118,7 +118,7 @@ should support prod output
 **Exit code:** 1
 
 ```
-warn: --prod/--dev not supported by npm
+warn: npm does not support --prod.
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
 test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace
@@ -132,7 +132,7 @@ should support dev output
 **Exit code:** 1
 
 ```
-warn: --prod/--dev not supported by npm
+warn: npm does not support --dev.
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
 test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace
@@ -146,7 +146,7 @@ should support no-optional output
 **Exit code:** 1
 
 ```
-warn: --no-optional not supported by npm
+warn: npm does not support --no-optional.
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
 test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace
@@ -160,7 +160,7 @@ should compatible output nothing
 **Exit code:** 1
 
 ```
-warn: --compatible not supported by npm
+warn: npm does not support --compatible.
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
 test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace
@@ -177,7 +177,7 @@ should support compatible output with optional dependencies
 **Exit code:** 1
 
 ```
-warn: --compatible not supported by npm
+warn: npm does not support --compatible.
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.1.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
 test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace
@@ -191,7 +191,7 @@ should support sort-by output
 **Exit code:** 1
 
 ```
-warn: --sort-by not supported by npm
+warn: npm does not support --sort-by.
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.1.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
 test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace

@@ -37,8 +37,8 @@ Update the vite-task git dependency in `Cargo.toml` to the latest commit on the 
 
 ### 5. Run tests
 
-- Run `cargo test -p vite_command -p vite_error -p vite_install -p vite_js_runtime -p vite_migration -p vite_shared -p vite_static_config -p vite-plus-cli -p vite_global_cli` to run the vite-plus crate tests.
-- Note: Some tests require network access (e.g., `vite_install::package_manager` tests, `vite_global_cli::commands::env` tests). These may fail in sandboxed environments. Verify they also fail on the main branch before dismissing them.
+- Run `cargo test -p vite_command -p vite_error -p vite_pm_cli -p vite_js_runtime -p vite_migration -p vite_shared -p vite_static_config -p vite-plus-cli -p vite_global_cli` to run the vite-plus crate tests.
+- Note: Some tests require network access (e.g., `vite_pm_cli::package_manager` tests, `vite_global_cli::commands::env` tests). These may fail in sandboxed environments. Verify they also fail on the main branch before dismissing them.
 - Note: `cargo test -p vite_task` will NOT work because vite_task is a git dependency, not a workspace member.
 - The PTY snapshot suite (`crates/vite_cli_snapshots`) is excluded from `just test`; it is covered in step 6.
 

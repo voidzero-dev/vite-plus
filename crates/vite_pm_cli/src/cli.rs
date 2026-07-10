@@ -1,1339 +1,365 @@
-//! Clap definitions for every package-manager subcommand.
+//! Typed clap surface for every package-manager command.
 //!
-//! The top-level [`PackageManagerCommand`] enum is consumed by both the
-//! global CLI and the local CLI binding via `#[command(flatten)]`, so any
-//! flag added here appears identically in both surfaces.
+//! [`PackageManagerCommand`] is flattened into both the global CLI and the
+//! local NAPI CLI. Each variant owns the same typed argument value that is
+//! later diagnosed and resolved for the detected package manager. There is no
+//! parser-to-options compatibility layer between clap and dispatch.
 
 use clap::Subcommand;
-use vite_install::commands::{add::SaveDependencyType, outdated::Format};
 
-fn parse_positive_usize(value: &str) -> Result<usize, String> {
-    match value.parse::<usize>() {
-        Ok(value) if value > 0 => Ok(value),
-        Ok(_) => Err("value must be at least 1".to_string()),
-        Err(error) => Err(error.to_string()),
-    }
-}
+use crate::{
+    Error, PackageManager,
+    resolution::{
+        AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, ConfigCommand, DedupeArgs, DeprecateArgs,
+        DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs, LoginArgs, LogoutArgs,
+        OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs, PublishArgs,
+        RebuildArgs, RemoveArgs, Resolution, SearchArgs, StageCommand, TokenCommand, UnlinkArgs,
+        UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+        resolve_for_manager as resolve_args_for_manager,
+    },
+};
 
-/// All package-manager subcommands.
+/// A parsed package-manager command.
 ///
-/// Variants intentionally mirror the original definitions in
-/// `vite_global_cli/src/cli.rs`. Aliases (`i`, `up`, `rm`, `un`, `uninstall`,
-/// `explain`, `view`, `show`, `ln`) are preserved so both CLIs accept the
-/// same shorthands.
-#[derive(Subcommand, Debug, Clone)]
+/// The variants intentionally hold the production resolver argument types
+/// directly. Aliases match the existing public `vp` command surface.
+#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
 pub enum PackageManagerCommand {
     /// Install all dependencies, or add packages if package names are provided
     #[command(visible_alias = "i")]
-    Install {
-        /// Do not install devDependencies
-        #[arg(short = 'P', long)]
-        prod: bool,
-
-        /// Only install devDependencies (install) / Save to devDependencies (add)
-        #[arg(short = 'D', long)]
-        dev: bool,
-
-        /// Do not install optionalDependencies
-        #[arg(long)]
-        no_optional: bool,
-
-        /// Fail if lockfile needs to be updated (CI mode)
-        #[arg(long, overrides_with = "no_frozen_lockfile")]
-        frozen_lockfile: bool,
-
-        /// Allow lockfile updates (opposite of --frozen-lockfile)
-        #[arg(long, overrides_with = "frozen_lockfile")]
-        no_frozen_lockfile: bool,
-
-        /// Only update lockfile, don't install
-        #[arg(long)]
-        lockfile_only: bool,
-
-        /// Use cached packages when available
-        #[arg(long)]
-        prefer_offline: bool,
-
-        /// Only use packages already in cache
-        #[arg(long)]
-        offline: bool,
-
-        /// Force reinstall all dependencies
-        #[arg(short = 'f', long)]
-        force: bool,
-
-        /// Do not run lifecycle scripts
-        #[arg(long)]
-        ignore_scripts: bool,
-
-        /// Don't read or generate lockfile
-        #[arg(long)]
-        no_lockfile: bool,
-
-        /// Fix broken lockfile entries (pnpm and yarn@2+ only)
-        #[arg(long)]
-        fix_lockfile: bool,
-
-        /// Create flat `node_modules` (pnpm only)
-        #[arg(long)]
-        shamefully_hoist: bool,
-
-        /// Re-run resolution for peer dependency analysis (pnpm only)
-        #[arg(long)]
-        resolution_only: bool,
-
-        /// Suppress output (silent mode)
-        #[arg(long)]
-        silent: bool,
-
-        /// Filter packages in monorepo (can be used multiple times)
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Install in workspace root only
-        #[arg(short = 'w', long)]
-        workspace_root: bool,
-
-        /// Save exact version (only when adding packages)
-        #[arg(short = 'E', long)]
-        save_exact: bool,
-
-        /// Save to peerDependencies (only when adding packages)
-        #[arg(long)]
-        save_peer: bool,
-
-        /// Save to optionalDependencies (only when adding packages)
-        #[arg(short = 'O', long)]
-        save_optional: bool,
-
-        /// Save the new dependency to the default catalog (only when adding packages)
-        #[arg(long)]
-        save_catalog: bool,
-
-        /// Install globally (requires package names)
-        #[arg(short = 'g', long, requires = "packages")]
-        global: bool,
-
-        /// Node.js version to use for global installation (only with -g)
-        #[arg(long, requires = "global")]
-        node: Option<String>,
-
-        /// Number of global package installs to run in parallel (only with -g)
-        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-        concurrency: Option<usize>,
-
-        /// Packages to add (if provided, acts as `vp add`)
-        #[arg(required = false)]
-        packages: Option<Vec<String>>,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Install(InstallArgs),
 
     /// Add packages to dependencies
-    Add {
-        /// Save to `dependencies` (default)
-        #[arg(short = 'P', long)]
-        save_prod: bool,
-
-        /// Save to `devDependencies`
-        #[arg(short = 'D', long)]
-        save_dev: bool,
-
-        /// Save to `peerDependencies` and `devDependencies`
-        #[arg(long)]
-        save_peer: bool,
-
-        /// Save to `optionalDependencies`
-        #[arg(short = 'O', long)]
-        save_optional: bool,
-
-        /// Save exact version rather than semver range
-        #[arg(short = 'E', long)]
-        save_exact: bool,
-
-        /// Save the new dependency to the specified catalog name
-        #[arg(long, value_name = "CATALOG_NAME")]
-        save_catalog_name: Option<String>,
-
-        /// Save the new dependency to the default catalog
-        #[arg(long)]
-        save_catalog: bool,
-
-        /// A list of package names allowed to run postinstall
-        #[arg(long, value_name = "NAMES")]
-        allow_build: Option<String>,
-
-        /// Filter packages in monorepo (can be used multiple times)
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Add to workspace root
-        #[arg(short = 'w', long)]
-        workspace_root: bool,
-
-        /// Only add if package exists in workspace (pnpm-specific)
-        #[arg(long)]
-        workspace: bool,
-
-        /// Install globally
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Node.js version to use for global installation (only with -g)
-        #[arg(long, requires = "global")]
-        node: Option<String>,
-
-        /// Number of global package installs to run in parallel (only with -g)
-        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-        concurrency: Option<usize>,
-
-        /// Packages to add
-        #[arg(required = true)]
-        packages: Vec<String>,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Add(AddArgs),
 
     /// Remove packages from dependencies
     #[command(visible_alias = "rm", visible_alias = "un", visible_alias = "uninstall")]
-    Remove {
-        /// Only remove from `devDependencies` (pnpm-specific)
-        #[arg(short = 'D', long)]
-        save_dev: bool,
-
-        /// Only remove from `optionalDependencies` (pnpm-specific)
-        #[arg(short = 'O', long)]
-        save_optional: bool,
-
-        /// Only remove from `dependencies` (pnpm-specific)
-        #[arg(short = 'P', long)]
-        save_prod: bool,
-
-        /// Filter packages in monorepo (can be used multiple times)
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Remove from workspace root
-        #[arg(short = 'w', long)]
-        workspace_root: bool,
-
-        /// Remove recursively from all workspace packages
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Remove global packages
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Preview what would be removed without actually removing (only with -g)
-        #[arg(long, requires = "global")]
-        dry_run: bool,
-
-        /// Packages to remove
-        #[arg(required = true)]
-        packages: Vec<String>,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Remove(RemoveArgs),
 
     /// Update packages to their latest versions
     #[command(visible_alias = "up")]
-    Update {
-        /// Update to latest version (ignore semver range)
-        #[arg(short = 'L', long)]
-        latest: bool,
-
-        /// Update global packages
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Number of global package updates to run in parallel (only with -g)
-        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-        concurrency: Option<usize>,
-
-        /// Reinstall up-to-date global packages installed with a different Node.js version
-        #[arg(long, requires = "global")]
-        reinstall_node_mismatch: bool,
-
-        /// Skip up-to-date global packages installed with a different Node.js version
-        #[arg(long, requires = "global")]
-        ignore_node_mismatch: bool,
-
-        /// Update recursively in all workspace packages
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages in monorepo (can be used multiple times)
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Include workspace root
-        #[arg(short = 'w', long)]
-        workspace_root: bool,
-
-        /// Update only devDependencies
-        #[arg(short = 'D', long)]
-        dev: bool,
-
-        /// Update only dependencies (production)
-        #[arg(short = 'P', long)]
-        prod: bool,
-
-        /// Interactive mode
-        #[arg(short = 'i', long)]
-        interactive: bool,
-
-        /// Don't update optionalDependencies
-        #[arg(long)]
-        no_optional: bool,
-
-        /// Update lockfile only, don't modify package.json
-        #[arg(long)]
-        no_save: bool,
-
-        /// Only update if package exists in workspace (pnpm-specific)
-        #[arg(long)]
-        workspace: bool,
-
-        /// Packages to update (optional - updates all if omitted)
-        packages: Vec<String>,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Update(UpdateArgs),
 
     /// Deduplicate dependencies
-    Dedupe {
-        /// Check if deduplication would make changes
-        #[arg(long)]
-        check: bool,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Dedupe(DedupeArgs),
 
     /// Check for outdated packages
-    Outdated {
-        /// Package name(s) to check
-        packages: Vec<String>,
-
-        /// Show extended information
-        #[arg(long)]
-        long: bool,
-
-        /// Output format: table (default), list, or json
-        #[arg(long, value_name = "FORMAT", value_parser = clap::value_parser!(Format))]
-        format: Option<Format>,
-
-        /// Check recursively across all workspaces
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages in monorepo
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Include workspace root
-        #[arg(short = 'w', long)]
-        workspace_root: bool,
-
-        /// Only production and optional dependencies
-        #[arg(short = 'P', long)]
-        prod: bool,
-
-        /// Only dev dependencies
-        #[arg(short = 'D', long)]
-        dev: bool,
-
-        /// Exclude optional dependencies
-        #[arg(long)]
-        no_optional: bool,
-
-        /// Only show compatible versions
-        #[arg(long)]
-        compatible: bool,
-
-        /// Sort results by field
-        #[arg(long, value_name = "FIELD")]
-        sort_by: Option<String>,
-
-        /// Check globally installed packages
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Number of global package checks to run in parallel (only with -g)
-        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-        concurrency: Option<usize>,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Outdated(OutdatedArgs),
 
     /// Show why a package is installed
     #[command(visible_alias = "explain")]
-    Why {
-        /// Package(s) to check
-        #[arg(required = true)]
-        packages: Vec<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Show extended information
-        #[arg(long)]
-        long: bool,
-
-        /// Show parseable output
-        #[arg(long)]
-        parseable: bool,
-
-        /// Check recursively across all workspaces
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages in monorepo
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Check in workspace root
-        #[arg(short = 'w', long)]
-        workspace_root: bool,
-
-        /// Only production dependencies
-        #[arg(short = 'P', long)]
-        prod: bool,
-
-        /// Only dev dependencies
-        #[arg(short = 'D', long)]
-        dev: bool,
-
-        /// Limit tree depth
-        #[arg(long)]
-        depth: Option<u32>,
-
-        /// Exclude optional dependencies
-        #[arg(long)]
-        no_optional: bool,
-
-        /// Exclude peer dependencies
-        #[arg(long)]
-        exclude_peers: bool,
-
-        /// Use a finder function defined in .pnpmfile.cjs
-        #[arg(long, value_name = "FINDER_NAME")]
-        find_by: Option<String>,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Why(WhyArgs),
 
     /// View package information from the registry
     #[command(visible_alias = "view", visible_alias = "show")]
-    Info {
-        /// Package name with optional version
-        #[arg(required = true)]
-        package: String,
-
-        /// Specific field to view
-        field: Option<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Info(ViewArgs),
 
     /// Link packages for local development
     #[command(visible_alias = "ln")]
-    Link {
-        /// Package name or directory to link
-        #[arg(value_name = "PACKAGE|DIR")]
-        package: Option<String>,
-
-        /// Arguments to pass to package manager
-        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Link(LinkArgs),
 
     /// Unlink packages
-    Unlink {
-        /// Package name to unlink
-        #[arg(value_name = "PACKAGE|DIR")]
-        package: Option<String>,
+    Unlink(UnlinkArgs),
 
-        /// Unlink in every workspace package
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Arguments to pass to package manager
-        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
-
-    /// Execute a package binary without installing it
-    Dlx {
-        /// Package(s) to install before running
-        #[arg(long, short = 'p', value_name = "NAME")]
-        package: Vec<String>,
-
-        /// Execute within a shell environment
-        #[arg(long = "shell-mode", short = 'c')]
-        shell_mode: bool,
-
-        /// Suppress all output except the executed command's output
-        #[arg(long, short = 's')]
-        silent: bool,
-
-        /// Package to execute and arguments
-        #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
-    },
+    /// Download and execute a package without installing it globally
+    Dlx(DlxArgs),
 
     /// Forward a command to the package manager
     #[command(subcommand)]
-    Pm(PmCommands),
+    Pm(PmCommand),
 }
 
-impl PackageManagerCommand {
-    /// Whether the command was invoked with flags that request quiet or
-    /// machine-readable output.
-    pub fn is_quiet_or_machine_readable(&self) -> bool {
-        match self {
-            Self::Install { silent, .. } | Self::Dlx { silent, .. } => *silent,
-            Self::Outdated { format, .. } => matches!(format, Some(Format::Json | Format::List)),
-            Self::Why { json, parseable, .. } => *json || *parseable,
-            Self::Info { json, .. } => *json,
-            Self::Pm(sub) => sub.is_quiet_or_machine_readable(),
-            _ => false,
-        }
-    }
-
-    /// Whether this invocation hits the vite-plus-managed-global flow on the
-    /// global CLI. The local CLI binding refuses these cases (it has no
-    /// managed package store of its own); pass-through `-g` cases like
-    /// `pm config get -g` return `false` and keep working on both CLIs.
-    pub fn is_managed_global(&self) -> bool {
-        match self {
-            Self::Install { global, .. }
-            | Self::Add { global, .. }
-            | Self::Remove { global, .. }
-            | Self::Outdated { global, .. }
-            | Self::Update { global, .. } => *global,
-            Self::Pm(PmCommands::List { global, .. }) => *global,
-            _ => false,
-        }
-    }
-
-    /// Determine the save dependency type from CLI flags shared by `Install` and `Add`.
-    pub fn determine_save_dependency_type(
-        save_dev: bool,
-        save_peer: bool,
-        save_optional: bool,
-        save_prod: bool,
-    ) -> Option<SaveDependencyType> {
-        if save_dev {
-            Some(SaveDependencyType::Dev)
-        } else if save_peer {
-            Some(SaveDependencyType::Peer)
-        } else if save_optional {
-            Some(SaveDependencyType::Optional)
-        } else if save_prod {
-            Some(SaveDependencyType::Production)
-        } else {
-            None
-        }
-    }
-}
-
-/// Package manager subcommands (`vp pm <subcommand>`).
-#[derive(Subcommand, Debug, Clone)]
-pub enum PmCommands {
+/// Commands nested below `vp pm`.
+#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
+pub enum PmCommand {
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     #[command(name = "approve-builds")]
-    ApproveBuilds {
-        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0, npm >= 11.16.0).
-        /// Omit to launch interactive mode (pnpm) or list pending packages (npm >= 11.16.0).
-        packages: Vec<String>,
-
-        /// Approve every package currently pending approval (pnpm >= 10.32.0, npm >= 11.16.0).
-        /// Mutually exclusive with positional packages.
-        #[arg(long, conflicts_with = "packages")]
-        all: bool,
-
-        /// Additional arguments to pass through to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    ApproveBuilds(ApproveBuildsArgs),
 
     /// Remove unnecessary packages
-    Prune {
-        /// Remove devDependencies
-        #[arg(long)]
-        prod: bool,
-
-        /// Remove optional dependencies
-        #[arg(long)]
-        no_optional: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Prune(PruneArgs),
 
     /// Create a tarball of the package
-    Pack {
-        /// Pack all workspace packages
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages to pack
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Output path for the tarball
-        #[arg(long)]
-        out: Option<String>,
-
-        /// Directory where the tarball will be saved
-        #[arg(long)]
-        pack_destination: Option<String>,
-
-        /// Gzip compression level (0-9)
-        #[arg(long)]
-        pack_gzip_level: Option<u8>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Pack(PackArgs),
 
     /// List installed packages
     #[command(visible_alias = "ls")]
-    List {
-        /// Package pattern to filter
-        pattern: Option<String>,
-
-        /// Maximum depth of dependency tree
-        #[arg(long)]
-        depth: Option<u32>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Show extended information
-        #[arg(long)]
-        long: bool,
-
-        /// Parseable output format
-        #[arg(long)]
-        parseable: bool,
-
-        /// Only production dependencies
-        #[arg(short = 'P', long)]
-        prod: bool,
-
-        /// Only dev dependencies
-        #[arg(short = 'D', long)]
-        dev: bool,
-
-        /// Exclude optional dependencies
-        #[arg(long)]
-        no_optional: bool,
-
-        /// Exclude peer dependencies
-        #[arg(long)]
-        exclude_peers: bool,
-
-        /// Show only project packages
-        #[arg(long)]
-        only_projects: bool,
-
-        /// Use a finder function
-        #[arg(long, value_name = "FINDER_NAME")]
-        find_by: Option<String>,
-
-        /// List across all workspaces
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages in monorepo
-        #[arg(long, value_name = "PATTERN")]
-        filter: Vec<String>,
-
-        /// List global packages
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    List(ListArgs),
 
     /// View package information from the registry
     #[command(visible_alias = "info", visible_alias = "show")]
-    View {
-        /// Package name with optional version
-        #[arg(required = true)]
-        package: String,
-
-        /// Specific field to view
-        field: Option<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    View(ViewArgs),
 
     /// Forward the native package version command
-    Version {
-        /// Version number or increment strategy
-        new_version: Option<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Arguments to pass to the package manager
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Version(VersionArgs),
 
     /// Publish package to registry
-    Publish {
-        /// Tarball or folder to publish
-        #[arg(value_name = "TARBALL|FOLDER")]
-        target: Option<String>,
-
-        /// Preview without publishing
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Publish tag
-        #[arg(long)]
-        tag: Option<String>,
-
-        /// Access level (public/restricted)
-        #[arg(long)]
-        access: Option<String>,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-
-        /// Skip git checks
-        #[arg(long)]
-        no_git_checks: bool,
-
-        /// Set the branch name to publish from
-        #[arg(long, value_name = "BRANCH")]
-        publish_branch: Option<String>,
-
-        /// Save publish summary
-        #[arg(long)]
-        report_summary: bool,
-
-        /// Publish with provenance
-        #[arg(long)]
-        provenance: bool,
-
-        /// Force publish
-        #[arg(long)]
-        force: bool,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Publish all workspace packages
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages in monorepo
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Publish(PublishArgs),
 
     /// Stage a package for publishing (npm staged publishing workflow)
     #[command(subcommand)]
-    Stage(StageCommands),
+    Stage(StageCommand),
 
     /// Manage package owners
     #[command(subcommand, visible_alias = "author")]
-    Owner(OwnerCommands),
+    Owner(OwnerCommand),
 
     /// Manage package cache
-    Cache {
-        /// Subcommand: dir, path, clean
-        #[arg(required = true)]
-        subcommand: String,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Cache(CacheArgs),
 
     /// Manage package manager configuration
     #[command(subcommand, visible_alias = "c")]
-    Config(ConfigCommands),
+    Config(ConfigCommand),
 
     /// Log in to a registry
     #[command(visible_alias = "adduser")]
-    Login {
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Scope for the login
-        #[arg(long, value_name = "SCOPE")]
-        scope: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Login(LoginArgs),
 
     /// Log out from a registry
-    Logout {
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Scope for the logout
-        #[arg(long, value_name = "SCOPE")]
-        scope: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Logout(LogoutArgs),
 
     /// Show the current logged-in user
-    Whoami {
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Whoami(WhoamiArgs),
 
     /// Manage authentication tokens
     #[command(subcommand)]
-    Token(TokenCommands),
+    Token(TokenCommand),
 
     /// Run a security audit
-    Audit {
-        /// Automatically fix vulnerabilities
-        #[arg(long)]
-        fix: bool,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Minimum vulnerability level to report
-        #[arg(long, value_name = "LEVEL")]
-        level: Option<String>,
-
-        /// Only audit production dependencies
-        #[arg(long)]
-        production: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Audit(AuditArgs),
 
     /// Manage distribution tags
     #[command(name = "dist-tag", subcommand)]
-    DistTag(DistTagCommands),
+    DistTag(DistTagCommand),
 
     /// Deprecate a package version
-    Deprecate {
-        /// Package name with version (e.g., "my-pkg@1.0.0")
-        package: String,
-
-        /// Deprecation message
-        message: String,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Deprecate(DeprecateArgs),
 
     /// Search for packages in the registry
-    Search {
-        /// Search terms
-        #[arg(required = true, num_args = 1..)]
-        terms: Vec<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Show extended information
-        #[arg(long)]
-        long: bool,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Search(SearchArgs),
 
     /// Rebuild native modules
     #[command(visible_alias = "rb")]
-    Rebuild {
-        /// Packages to rebuild (rebuilds all if omitted)
-        packages: Vec<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Rebuild(RebuildArgs),
 
     /// Show funding information for installed packages
-    Fund {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Fund(FundArgs),
 
     /// Ping the registry
-    Ping {
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    Ping(PingArgs),
 }
 
-impl PmCommands {
-    pub fn is_quiet_or_machine_readable(&self) -> bool {
-        match self {
-            Self::List { json, parseable, .. } => *json || *parseable,
-            Self::Version { json, .. } => *json,
-            Self::Pack { json, .. }
-            | Self::View { json, .. }
-            | Self::Publish { json, .. }
-            | Self::Audit { json, .. }
-            | Self::Search { json, .. }
-            | Self::Fund { json, .. } => *json,
-            Self::Config(sub) => sub.is_quiet_or_machine_readable(),
-            Self::Token(sub) => sub.is_quiet_or_machine_readable(),
-            Self::Stage(sub) => sub.is_quiet_or_machine_readable(),
-            _ => false,
-        }
-    }
-}
-
-/// Configuration subcommands.
-#[derive(Subcommand, Debug, Clone)]
-pub enum ConfigCommands {
-    /// List all configuration
-    List {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Use global config
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Config location: project (default) or global
-        #[arg(long, value_name = "LOCATION")]
-        location: Option<String>,
-    },
-
-    /// Get configuration value
-    Get {
-        /// Config key
-        key: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Use global config
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Config location
-        #[arg(long, value_name = "LOCATION")]
-        location: Option<String>,
-    },
-
-    /// Set configuration value
-    Set {
-        /// Config key
-        key: String,
-
-        /// Config value
-        value: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Use global config
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Config location
-        #[arg(long, value_name = "LOCATION")]
-        location: Option<String>,
-    },
-
-    /// Delete configuration key
-    Delete {
-        /// Config key
-        key: String,
-
-        /// Use global config
-        #[arg(short = 'g', long)]
-        global: bool,
-
-        /// Config location
-        #[arg(long, value_name = "LOCATION")]
-        location: Option<String>,
-    },
-}
-
-impl ConfigCommands {
-    pub fn is_quiet_or_machine_readable(&self) -> bool {
-        match self {
-            Self::List { json, .. } | Self::Get { json, .. } | Self::Set { json, .. } => *json,
-            _ => false,
-        }
-    }
-}
-
-/// Owner subcommands.
-#[derive(Subcommand, Debug, Clone)]
-pub enum OwnerCommands {
-    /// List package owners
-    #[command(visible_alias = "ls")]
-    List {
-        /// Package name
-        package: String,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-    },
-
-    /// Add package owner
-    Add {
-        /// Username
-        user: String,
-        /// Package name
-        package: String,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-    },
-
-    /// Remove package owner
-    Rm {
-        /// Username
-        user: String,
-        /// Package name
-        package: String,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-    },
-}
-
-/// Token subcommands.
-#[derive(Subcommand, Debug, Clone)]
-pub enum TokenCommands {
-    /// List all known tokens
-    #[command(visible_alias = "ls")]
-    List {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Create a new authentication token
-    Create {
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// CIDR ranges to restrict the token to
-        #[arg(long, value_name = "CIDR")]
-        cidr: Option<Vec<String>>,
-
-        /// Create a read-only token
-        #[arg(long)]
-        readonly: bool,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Revoke an authentication token
-    Revoke {
-        /// Token or token ID to revoke
-        token: String,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-}
-
-impl TokenCommands {
-    pub fn is_quiet_or_machine_readable(&self) -> bool {
-        match self {
-            Self::List { json, .. } | Self::Create { json, .. } => *json,
-            _ => false,
-        }
-    }
-}
-
-/// Distribution tag subcommands.
-#[derive(Subcommand, Debug, Clone)]
-pub enum DistTagCommands {
-    /// List distribution tags for a package
-    #[command(visible_alias = "ls")]
-    List {
-        /// Package name
-        package: Option<String>,
-    },
-
-    /// Add a distribution tag
-    Add {
-        /// Package name with version (e.g., "my-pkg@1.0.0")
-        package_at_version: String,
-
-        /// Tag name
-        tag: String,
-    },
-
-    /// Remove a distribution tag
-    Rm {
-        /// Package name
-        package: String,
-
-        /// Tag name
-        tag: String,
-    },
-}
-
-/// Staged-publishing subcommands (`vp pm stage <subcommand>`).
+/// A package-manager command handled by Vite+'s managed global-package store.
 ///
-/// Maps to `npm stage`/`pnpm stage` and yarn berry's npm plugin
-/// (`yarn npm publish --staged`, `yarn npm stage …`). Note: this is unrelated
-/// to yarn's own `yarn stage` command, which stages files for a VCS commit.
-#[derive(Subcommand, Debug, Clone)]
-pub enum StageCommands {
-    /// Stage a package for publishing (no 2FA required)
-    Publish {
-        /// Tarball or folder to stage
-        #[arg(value_name = "TARBALL|FOLDER")]
-        target: Option<String>,
-
-        /// Publish tag
-        #[arg(long)]
-        tag: Option<String>,
-
-        /// Access level (public/restricted)
-        #[arg(long)]
-        access: Option<String>,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-
-        /// Preview without staging
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Stage all publishable workspace packages
-        #[arg(short = 'r', long)]
-        recursive: bool,
-
-        /// Filter packages in monorepo
-        #[arg(long, value_name = "PATTERN")]
-        filter: Option<Vec<String>>,
-
-        /// Stage with provenance
-        #[arg(long)]
-        provenance: bool,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
+/// This borrowed projection keeps the clap argument layout private while
+/// exposing the small set of values required by the global CLI dispatcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ManagedGlobalCommand<'a> {
+    /// Install packages into the managed global store.
+    Install {
+        packages: &'a [String],
+        node: Option<&'a str>,
+        force: bool,
+        concurrency: Option<usize>,
     },
-
-    /// List staged versions
-    #[command(visible_alias = "ls")]
-    List {
-        /// Package spec to filter by
-        package: Option<String>,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
+    /// Remove packages from the managed global store.
+    Remove { packages: &'a [String], dry_run: bool },
+    /// Update packages in the managed global store.
+    Update {
+        packages: &'a [String],
+        concurrency: Option<usize>,
+        reinstall_node_mismatch: bool,
+        ignore_node_mismatch: bool,
     },
-
-    /// Show details about a staged version
-    View {
-        /// Stage ID
-        stage_id: String,
-
-        /// Output in JSON format
-        #[arg(long)]
-        json: bool,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
+    /// Check managed global packages for updates.
+    Outdated {
+        packages: &'a [String],
+        long: bool,
+        format: Option<OutdatedFormat>,
+        concurrency: Option<usize>,
     },
-
-    /// Download the staged tarball for inspection
-    Download {
-        /// Stage ID
-        stage_id: String,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Promote a staged version to the live registry (2FA required)
-    Approve {
-        /// Stage ID
-        stage_id: String,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Discard a staged version (2FA required)
-    Reject {
-        /// Stage ID
-        stage_id: String,
-
-        /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
-        otp: Option<String>,
-
-        /// Registry URL
-        #[arg(long, value_name = "URL")]
-        registry: Option<String>,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
+    /// List packages in the managed global store.
+    List { json: bool, pattern: Option<&'a str> },
 }
 
-impl StageCommands {
+impl PackageManagerCommand {
+    /// Build a `dlx` command for callers that do not use the clap parser.
+    #[must_use]
+    pub fn dlx(package: Vec<String>, shell_mode: bool, silent: bool, args: Vec<String>) -> Self {
+        Self::Dlx(DlxArgs { package, shell_mode, silent, args })
+    }
+
+    /// Resolve this parsed command for a detected package manager.
+    ///
+    /// `install <packages>` normalizes directly into [`AddArgs`]. This is the
+    /// only command whose typed clap shape selects between two resolvers.
+    pub(crate) fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
+        match self {
+            Self::Install(args) if !args.packages.is_empty() => {
+                resolve_args_for_manager(manager, args.into_add_args())
+            }
+            Self::Install(args) => resolve_args_for_manager(manager, args),
+            Self::Add(args) => resolve_args_for_manager(manager, args),
+            Self::Remove(args) => resolve_args_for_manager(manager, args),
+            Self::Update(args) => resolve_args_for_manager(manager, args),
+            Self::Dedupe(args) => resolve_args_for_manager(manager, args),
+            Self::Outdated(args) => resolve_args_for_manager(manager, args),
+            Self::Why(args) => resolve_args_for_manager(manager, args),
+            Self::Info(args) => resolve_args_for_manager(manager, args),
+            Self::Link(args) => resolve_args_for_manager(manager, args),
+            Self::Unlink(args) => resolve_args_for_manager(manager, args),
+            Self::Dlx(args) => resolve_args_for_manager(manager, args),
+            Self::Pm(command) => command.resolve_for_manager(manager),
+        }
+    }
+
+    /// Whether this command must bypass normal dispatch and use Vite+'s
+    /// managed global-package store.
+    #[must_use]
+    pub fn is_managed_global(&self) -> bool {
+        self.managed_global_command().is_some()
+    }
+
+    /// Borrow the values needed by Vite+'s managed global-package dispatcher.
+    ///
+    /// Returns `None` when normal package-manager dispatch should be used.
+    #[must_use]
+    pub fn managed_global_command(&self) -> Option<ManagedGlobalCommand<'_>> {
+        match self {
+            Self::Install(args) if args.global => Some(ManagedGlobalCommand::Install {
+                packages: &args.packages,
+                node: args.node.as_deref(),
+                force: args.force,
+                concurrency: args.concurrency,
+            }),
+            Self::Add(args) if args.global => Some(ManagedGlobalCommand::Install {
+                packages: &args.packages,
+                node: args.node.as_deref(),
+                force: false,
+                concurrency: args.concurrency,
+            }),
+            Self::Remove(args) if args.global => Some(ManagedGlobalCommand::Remove {
+                packages: &args.packages,
+                dry_run: args.dry_run,
+            }),
+            Self::Update(args) if args.global => Some(ManagedGlobalCommand::Update {
+                packages: &args.packages,
+                concurrency: args.concurrency,
+                reinstall_node_mismatch: args.reinstall_node_mismatch,
+                ignore_node_mismatch: args.ignore_node_mismatch,
+            }),
+            Self::Outdated(args) if args.global => Some(ManagedGlobalCommand::Outdated {
+                packages: &args.packages,
+                long: args.long,
+                format: args.format,
+                concurrency: args.concurrency,
+            }),
+            Self::Pm(PmCommand::List(args)) if args.global => Some(ManagedGlobalCommand::List {
+                json: args.json,
+                pattern: args.pattern.as_deref(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// Whether normal informational output would corrupt or pollute the
+    /// command's requested output format.
+    #[must_use]
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
-            Self::Publish { json, .. } | Self::List { json, .. } | Self::View { json, .. } => *json,
+            Self::Install(args) => args.silent,
+            Self::Dlx(args) => args.silent,
+            Self::Outdated(args) => {
+                matches!(args.format, Some(OutdatedFormat::Json | OutdatedFormat::List))
+            }
+            Self::Why(args) => args.json || args.parseable,
+            Self::Info(args) => args.json,
+            Self::Pm(command) => command.is_quiet_or_machine_readable(),
+            _ => false,
+        }
+    }
+
+    /// Whether compatibility diagnostics should be rendered for this command.
+    ///
+    /// Machine-readable output uses stdout while diagnostics use stderr, so
+    /// only explicit silent modes suppress them.
+    pub(crate) fn should_render_diagnostics(&self) -> bool {
+        match self {
+            Self::Install(args) => !args.silent,
+            Self::Dlx(args) => !args.silent,
+            _ => true,
+        }
+    }
+
+    /// Return the install command's `--silent` value when this is `install`.
+    ///
+    /// The global CLI uses this before dispatch to decide whether to print its
+    /// managed-runtime header.
+    #[must_use]
+    pub fn install_silent(&self) -> Option<bool> {
+        match self {
+            Self::Install(args) => Some(args.silent),
+            _ => None,
+        }
+    }
+}
+
+impl PmCommand {
+    fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
+        match self {
+            Self::ApproveBuilds(args) => resolve_args_for_manager(manager, args),
+            Self::Prune(args) => resolve_args_for_manager(manager, args),
+            Self::Pack(args) => resolve_args_for_manager(manager, args),
+            Self::List(args) => resolve_args_for_manager(manager, args),
+            Self::View(args) => resolve_args_for_manager(manager, args),
+            Self::Version(args) => resolve_args_for_manager(manager, args),
+            Self::Publish(args) => resolve_args_for_manager(manager, args),
+            Self::Stage(args) => resolve_args_for_manager(manager, args),
+            Self::Owner(args) => resolve_args_for_manager(manager, args),
+            Self::Cache(args) => resolve_args_for_manager(manager, args),
+            Self::Config(args) => resolve_args_for_manager(manager, args),
+            Self::Login(args) => resolve_args_for_manager(manager, args),
+            Self::Logout(args) => resolve_args_for_manager(manager, args),
+            Self::Whoami(args) => resolve_args_for_manager(manager, args),
+            Self::Token(args) => resolve_args_for_manager(manager, args),
+            Self::Audit(args) => resolve_args_for_manager(manager, args),
+            Self::DistTag(args) => resolve_args_for_manager(manager, args),
+            Self::Deprecate(args) => resolve_args_for_manager(manager, args),
+            Self::Search(args) => resolve_args_for_manager(manager, args),
+            Self::Rebuild(args) => resolve_args_for_manager(manager, args),
+            Self::Fund(args) => resolve_args_for_manager(manager, args),
+            Self::Ping(args) => resolve_args_for_manager(manager, args),
+        }
+    }
+
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List(args) => args.json || args.parseable,
+            Self::Pack(args) => args.json,
+            Self::View(args) => args.json,
+            Self::Version(args) => args.json,
+            Self::Publish(args) => args.json,
+            Self::Audit(args) => args.json,
+            Self::Search(args) => args.json,
+            Self::Fund(args) => args.json,
+            Self::Config(args) => match args {
+                ConfigCommand::List { json, .. }
+                | ConfigCommand::Get { json, .. }
+                | ConfigCommand::Set { json, .. } => *json,
+                ConfigCommand::Delete { .. } => false,
+            },
+            Self::Token(args) => match args {
+                TokenCommand::List { json, .. } | TokenCommand::Create { json, .. } => *json,
+                TokenCommand::Revoke { .. } => false,
+            },
+            Self::Stage(args) => match args {
+                StageCommand::Publish { json, .. }
+                | StageCommand::List { json, .. }
+                | StageCommand::View { json, .. } => *json,
+                StageCommand::Download { .. }
+                | StageCommand::Approve { .. }
+                | StageCommand::Reject { .. } => false,
+            },
             _ => false,
         }
     }
@@ -1341,160 +367,243 @@ impl StageCommands {
 
 #[cfg(test)]
 mod tests {
-    use clap::FromArgMatches;
+    use clap::{FromArgMatches, Subcommand};
 
     use super::*;
+    use crate::{PackageManagerType, resolution::CommandResolution};
 
-    fn parse_pm_command(args: &[&str]) -> Result<PackageManagerCommand, clap::Error> {
-        let mut command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
-        let matches = command.try_get_matches_from_mut(args)?;
+    fn parse(args: &[&str]) -> Result<PackageManagerCommand, clap::Error> {
+        let command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
+        let matches =
+            command.try_get_matches_from(std::iter::once("vp").chain(args.iter().copied()))?;
         PackageManagerCommand::from_arg_matches(&matches)
     }
 
-    #[test]
-    fn global_install_accepts_concurrency() {
-        let command =
-            parse_pm_command(&["vp", "install", "-g", "--concurrency", "2", "typescript"])
-                .expect("expected command to parse");
+    fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
+        let workspace_root = vite_path::current_dir().unwrap();
+        PackageManager {
+            client,
+            version: version.into(),
+            install_dir: workspace_root.join(".test-package-manager"),
+        }
+    }
 
+    #[test]
+    fn parses_top_level_aliases() {
+        assert!(matches!(parse(&["i"]).unwrap(), PackageManagerCommand::Install(_)));
+        assert!(matches!(parse(&["up"]).unwrap(), PackageManagerCommand::Update(_)));
+        for alias in ["rm", "un", "uninstall"] {
+            assert!(matches!(parse(&[alias, "react"]).unwrap(), PackageManagerCommand::Remove(_)));
+        }
+        assert!(matches!(parse(&["explain", "react"]).unwrap(), PackageManagerCommand::Why(_)));
+        for alias in ["view", "show"] {
+            assert!(matches!(parse(&[alias, "react"]).unwrap(), PackageManagerCommand::Info(_)));
+        }
+        assert!(matches!(parse(&["ln", "react"]).unwrap(), PackageManagerCommand::Link(_)));
+    }
+
+    #[test]
+    fn parses_pm_aliases_and_nested_commands() {
         assert!(matches!(
-            command,
-            PackageManagerCommand::Install { global: true, concurrency: Some(2), .. }
+            parse(&["pm", "ls"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::List(_))
+        ));
+        for alias in ["info", "show"] {
+            assert!(matches!(
+                parse(&["pm", alias, "react"]).unwrap(),
+                PackageManagerCommand::Pm(PmCommand::View(_))
+            ));
+        }
+        assert!(matches!(
+            parse(&["pm", "author", "ls", "react"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Owner(OwnerCommand::List { .. }))
+        ));
+        assert!(matches!(
+            parse(&["pm", "c", "list"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Config(ConfigCommand::List { .. }))
+        ));
+        assert!(matches!(
+            parse(&["pm", "adduser"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Login(_))
+        ));
+        assert!(matches!(
+            parse(&["pm", "rb"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Rebuild(_))
+        ));
+        assert!(matches!(
+            parse(&["pm", "token", "ls"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Token(TokenCommand::List { .. }))
+        ));
+        assert!(matches!(
+            parse(&["pm", "dist-tag", "ls"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::DistTag(DistTagCommand::List { .. }))
+        ));
+        assert!(matches!(
+            parse(&["pm", "stage", "ls"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Stage(StageCommand::List { .. }))
         ));
     }
 
     #[test]
-    fn concurrency_requires_global() {
-        let error = parse_pm_command(&["vp", "install", "--concurrency", "2", "typescript"])
-            .expect_err("expected --concurrency without --global to fail");
+    fn install_uses_install_or_add_resolver_from_packages() {
+        let manager = package_manager(PackageManagerType::Pnpm, "10.0.0");
+        let install = parse(&["install", "--frozen-lockfile"]).unwrap();
+        let add = parse(&["install", "-D", "react"]).unwrap();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn concurrency_rejects_zero() {
-        let error = parse_pm_command(&["vp", "update", "-g", "--concurrency", "0"])
-            .expect_err("expected zero concurrency to fail");
-
-        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
-    }
-
-    #[test]
-    fn approve_builds_all_conflicts_with_packages() {
-        let error = parse_pm_command(&["vp", "pm", "approve-builds", "--all", "esbuild"])
-            .expect_err("expected --all + positional to fail");
-
-        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
-    }
-
-    #[test]
-    fn approve_builds_all_conflicts_with_deny_packages() {
-        let error = parse_pm_command(&["vp", "pm", "approve-builds", "--all", "!core-js"])
-            .expect_err("expected --all + !pkg to fail");
-
-        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
-    }
-
-    #[test]
-    fn approve_builds_all_alone_parses() {
-        let command = parse_pm_command(&["vp", "pm", "approve-builds", "--all"])
-            .expect("--all alone should parse");
-
-        assert!(matches!(
-            command,
-            PackageManagerCommand::Pm(PmCommands::ApproveBuilds { all: true, .. })
-        ));
-    }
-
-    #[test]
-    fn approve_builds_packages_alone_parses() {
-        let command = parse_pm_command(&["vp", "pm", "approve-builds", "esbuild", "fsevents"])
-            .expect("positional packages should parse");
-
-        assert!(matches!(
-            command,
-            PackageManagerCommand::Pm(PmCommands::ApproveBuilds { all: false, .. })
-        ));
-    }
-
-    #[test]
-    fn approve_builds_pass_through_args_capture() {
-        let command =
-            parse_pm_command(&["vp", "pm", "approve-builds", "esbuild", "--", "--workspace-root"])
-                .expect("pass-through args should parse");
-
-        let PackageManagerCommand::Pm(PmCommands::ApproveBuilds { pass_through_args, .. }) =
-            command
+        let CommandResolution::Run(install) =
+            install.resolve_for_manager(&manager).unwrap().outcome
         else {
-            panic!("expected ApproveBuilds variant");
+            panic!("expected install command");
         };
-        assert_eq!(pass_through_args, Some(vec!["--workspace-root".to_string()]));
+        let CommandResolution::Run(add) = add.resolve_for_manager(&manager).unwrap().outcome else {
+            panic!("expected add command");
+        };
+
+        assert_eq!(install.args, vec!["install", "--frozen-lockfile"]);
+        assert_eq!(add.args, vec!["add", "--save-dev", "react"]);
+    }
+
+    #[test]
+    fn frozen_lockfile_flags_use_last_value() {
+        let PackageManagerCommand::Install(first) =
+            parse(&["install", "--frozen-lockfile", "--no-frozen-lockfile"]).unwrap()
+        else {
+            panic!("expected install command");
+        };
+        let PackageManagerCommand::Install(second) =
+            parse(&["install", "--no-frozen-lockfile", "--frozen-lockfile"]).unwrap()
+        else {
+            panic!("expected install command");
+        };
+
+        assert!(!first.frozen_lockfile);
+        assert!(first.no_frozen_lockfile);
+        assert!(second.frozen_lockfile);
+        assert!(!second.no_frozen_lockfile);
+    }
+
+    #[test]
+    fn validates_managed_global_options() {
+        assert!(parse(&["install", "-g"]).is_err());
+        assert!(parse(&["add", "--node", "22", "react"]).is_err());
+
+        let install =
+            parse(&["install", "-g", "--node", "22", "--concurrency", "2", "tsx"]).unwrap();
+        let add = parse(&["add", "-g", "--node", "22", "--concurrency", "2", "tsx"]).unwrap();
+
+        assert!(install.is_managed_global());
+        assert!(add.is_managed_global());
+    }
+
+    #[test]
+    fn projects_managed_global_commands() {
+        let install =
+            parse(&["install", "-g", "--node", "22", "--force", "--concurrency", "2", "tsx"])
+                .unwrap();
+        let Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) =
+            install.managed_global_command()
+        else {
+            panic!("expected managed install command");
+        };
+        assert_eq!(packages, &["tsx"]);
+        assert_eq!(node, Some("22"));
+        assert!(force);
+        assert_eq!(concurrency, Some(2));
+
+        let add = parse(&["add", "-g", "tsx"]).unwrap();
+        assert!(matches!(
+            add.managed_global_command(),
+            Some(ManagedGlobalCommand::Install { force: false, .. })
+        ));
+
+        let remove = parse(&["remove", "-g", "--dry-run", "tsx"]).unwrap();
+        assert!(matches!(
+            remove.managed_global_command(),
+            Some(ManagedGlobalCommand::Remove { packages, dry_run: true })
+                if packages == ["tsx"]
+        ));
+
+        let update = parse(&["update", "-g", "--reinstall-node-mismatch", "tsx"]).unwrap();
+        assert!(matches!(
+            update.managed_global_command(),
+            Some(ManagedGlobalCommand::Update {
+                packages,
+                reinstall_node_mismatch: true,
+                ignore_node_mismatch: false,
+                ..
+            }) if packages == ["tsx"]
+        ));
+
+        let outdated = parse(&["outdated", "-g", "--format", "json", "tsx"]).unwrap();
+        assert!(matches!(
+            outdated.managed_global_command(),
+            Some(ManagedGlobalCommand::Outdated {
+                packages,
+                format: Some(OutdatedFormat::Json),
+                ..
+            }) if packages == ["tsx"]
+        ));
+
+        let list = parse(&["pm", "list", "-g", "--json", "tsx"]).unwrap();
+        assert!(matches!(
+            list.managed_global_command(),
+            Some(ManagedGlobalCommand::List { json: true, pattern: Some("tsx") })
+        ));
+
+        assert!(parse(&["install"]).unwrap().managed_global_command().is_none());
+    }
+
+    #[test]
+    fn save_dependency_targets_are_exclusive() {
+        assert!(parse(&["add", "-D", "-O", "react"]).is_err());
+    }
+
+    #[test]
+    fn classifies_quiet_and_machine_readable_commands() {
+        for args in [
+            &["install", "--silent"][..],
+            &["dlx", "--silent", "tsx"][..],
+            &["outdated", "--format", "json"][..],
+            &["why", "react", "--parseable"][..],
+            &["info", "react", "--json"][..],
+            &["pm", "list", "--json"][..],
+            &["pm", "version", "patch", "--json"][..],
+            &["pm", "config", "list", "--json"][..],
+            &["pm", "token", "create", "--json"][..],
+            &["pm", "stage", "list", "--json"][..],
+        ] {
+            assert!(parse(args).unwrap().is_quiet_or_machine_readable(), "{args:?}");
+        }
+        assert!(!parse(&["install"]).unwrap().is_quiet_or_machine_readable());
+    }
+
+    #[test]
+    fn suppresses_diagnostics_only_for_explicit_silent_modes() {
+        for args in [
+            &["outdated", "--format", "json"][..],
+            &["why", "react", "--parseable"][..],
+            &["info", "react", "--json"][..],
+            &["pm", "list", "--json"][..],
+        ] {
+            assert!(parse(args).unwrap().should_render_diagnostics(), "{args:?}");
+        }
+
+        for args in [&["install", "--silent"][..], &["dlx", "--silent", "tsx"][..]] {
+            assert!(!parse(args).unwrap().should_render_diagnostics(), "{args:?}");
+        }
     }
 
     #[test]
     fn version_forwards_native_args_and_detects_json() {
-        let command = parse_pm_command(&[
-            "vp",
-            "pm",
-            "version",
-            "prerelease",
-            "--json",
-            "--",
-            "--preid",
-            "beta",
-        ])
-        .expect("version arguments should parse");
+        let command =
+            parse(&["pm", "version", "prerelease", "--json", "--", "--preid", "beta"]).unwrap();
 
         assert!(command.is_quiet_or_machine_readable());
-        let PackageManagerCommand::Pm(PmCommands::Version { new_version, json, pass_through_args }) =
-            command
-        else {
-            panic!("expected Version variant");
+        let PackageManagerCommand::Pm(PmCommand::Version(args)) = command else {
+            panic!("expected version command");
         };
-        assert_eq!(new_version.as_deref(), Some("prerelease"));
-        assert!(json);
-        assert_eq!(pass_through_args, Some(vec!["--preid".to_string(), "beta".to_string()]));
-    }
-
-    #[test]
-    fn version_uses_vite_plus_help() {
-        let error = parse_pm_command(&["vp", "pm", "version", "--help"])
-            .expect_err("version help should be rendered by Vite+");
-
-        assert_eq!(error.kind(), clap::error::ErrorKind::DisplayHelp);
-    }
-
-    #[test]
-    fn stage_publish_parses() {
-        let command = parse_pm_command(&["vp", "pm", "stage", "publish", "--tag", "next"])
-            .expect("stage publish should parse");
-
-        assert!(matches!(
-            command,
-            PackageManagerCommand::Pm(PmCommands::Stage(StageCommands::Publish { .. }))
-        ));
-    }
-
-    #[test]
-    fn stage_approve_requires_stage_id() {
-        let error = parse_pm_command(&["vp", "pm", "stage", "approve"])
-            .expect_err("stage approve without an id should fail");
-
-        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn stage_list_pass_through_args_capture() {
-        let command = parse_pm_command(&["vp", "pm", "stage", "list", "--", "--registry", "x"])
-            .expect("pass-through args should parse");
-
-        let PackageManagerCommand::Pm(PmCommands::Stage(StageCommands::List {
-            pass_through_args,
-            ..
-        })) = command
-        else {
-            panic!("expected Stage(List) variant");
-        };
-        assert_eq!(pass_through_args, Some(vec!["--registry".to_string(), "x".to_string()]));
+        assert_eq!(args.new_version.as_deref(), Some("prerelease"));
+        assert!(args.json);
+        assert_eq!(args.pass_through_args, ["--preid", "beta"]);
     }
 }

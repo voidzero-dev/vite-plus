@@ -10,11 +10,11 @@ use std::process::ExitStatus;
 
 use chrono::Local;
 use owo_colors::OwoColorize;
-use vite_install::package_manager::{
+use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{

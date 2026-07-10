@@ -855,7 +855,7 @@ async fn collect_dev_engines_findings(
     // too, the unsupported one is skipped by design (an info note); otherwise it
     // is the only declaration and warrants a warning.
     if let Some(field) = package_manager_field {
-        let is_supported = |name: &str| vite_install::PackageManagerType::from_name(name).is_some();
+        let is_supported = |name: &str| vite_pm_cli::PackageManagerType::from_name(name).is_some();
         let has_supported = field.entries().iter().any(|e| is_supported(&e.name));
         for entry in field.entries().iter().filter(|e| !is_supported(&e.name)) {
             let skipped = if has_supported { " and will be skipped" } else { "" };

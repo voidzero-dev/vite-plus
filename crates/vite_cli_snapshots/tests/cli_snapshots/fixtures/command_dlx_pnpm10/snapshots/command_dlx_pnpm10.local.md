@@ -5,7 +5,7 @@
 should show help message
 
 ```
-Execute a package binary without installing it
+Download and execute a package without installing it globally
 
 Usage: vp dlx [OPTIONS] <ARGS>...
 

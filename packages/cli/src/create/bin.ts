@@ -1291,7 +1291,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // `@oxlint/migrate` can resolve eslint.config.js's plugin imports, then
   // migrate before the vite-plus rewrite so the generated .oxlintrc/.oxfmtrc
   // get merged into vite.config.ts — matching `vp migrate`. Pin the
-  // packageManager field (vite_install hardcodes pnpm in CI/non-TTY when no
+  // packageManager field (vite_pm_cli defaults to pnpm in CI/non-TTY when no
   // signal is present) and force yarn's classic node_modules layout
   // (Plug'n'Play zip entries break @oxlint/migrate's fileURLToPath resolution).
   const installAndMigrate = async (installCwd: string) => {

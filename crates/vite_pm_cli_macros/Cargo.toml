@@ -1,0 +1,28 @@
+[package]
+name = "vite_pm_cli_macros"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+doctest = false
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+semver = { workspace = true }
+syn = { workspace = true, features = [
+  "clone-impls",
+  "extra-traits",
+  "full",
+  "parsing",
+  "printing",
+  "proc-macro",
+] }
+
+[lints]
+workspace = true

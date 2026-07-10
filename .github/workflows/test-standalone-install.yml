@@ -9,6 +9,7 @@ on:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - 'crates/vite_installer/**'
+      - 'crates/vite_pm_cli/**'
       - 'crates/vite_setup/**'
       - '.github/workflows/test-standalone-install.yml'
 

@@ -1,8 +1,8 @@
 use napi::{Error, anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 use vite_error::Error::{UnrecognizedPackageManager, UnsupportedPackageManager};
-use vite_install::{PackageManagerType, get_package_manager_type_and_version};
 use vite_path::AbsolutePathBuf;
+use vite_pm_cli::{PackageManagerType, get_package_manager_type_and_version};
 use vite_workspace::{Error::PackageJsonNotFound, WorkspaceFile, find_workspace_root};
 
 #[napi(object)]
@@ -71,7 +71,7 @@ pub async fn download_package_manager(
         }
     };
 
-    let (install_dir, package_name, version) = vite_install::download_package_manager(
+    let (install_dir, package_name, version) = vite_pm_cli::download_package_manager(
         package_manager_type,
         &options.version,
         options.expected_hash.as_deref(),

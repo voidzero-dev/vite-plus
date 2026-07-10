@@ -25,8 +25,7 @@ Yarn Berry rejects unsupported JSON output
 **Exit code:** 1
 
 ```
-error: Invalid argument: `--json` is not supported by Yarn 2+ `version`.
-* Invalid argument: `--json` is not supported by Yarn 2+ `version`.
+Invalid argument: `--json` is not supported by Yarn 2+ `version`.
 ```
 
 ## `vpt print-file package.json`

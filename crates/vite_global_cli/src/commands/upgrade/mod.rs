@@ -6,8 +6,8 @@
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
-use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
+use vite_pm_cli::HttpClient;
 use vite_setup::{install, integrity, platform, registry};
 use vite_shared::output;
 
