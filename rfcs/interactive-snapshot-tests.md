@@ -44,7 +44,7 @@ The vite-task repository has a working implementation of exactly this design, us
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pty_terminal`             | Spawns a child in a PTY (`portable-pty`), feeds output through a `vt100` emulator, answers cursor-position queries, handles resize and ctrl-c. Encodes platform workarounds: ConPTY on Windows, a global lock for musl PTY crashes, macOS slave-fd lifetime for EIO truncation. |
 | `pty_terminal_test`        | `TestTerminal` wrapper plus `Reader::expect_milestone(name)`: block until the child emits a named milestone, then return the rendered screen.                                                                                                                                   |
-| `pty_terminal_test_client` | Child-side helper that encodes milestones as OSC 8 hyperlinks (`https://milestone.invalid/<hex(name)>` with a zero-width-space anchor), which survive both Unix PTYs and Windows ConPTY and arrive inline with the output they mark.                                            |
+| `pty_terminal_test_client` | Child-side helper that encodes milestones as window-title updates (`OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)>`, a fresh id per emission), which survive both Unix PTYs and Windows ConPTY and arrive in-order with the output they mark.                          |
 | `snapshot_test`            | Minimal snapshot store: compare or update via `UPDATE_SNAPSHOTS=1`, write `<name>.new` on mismatch, return a unified diff as the failure message.                                                                                                                               |
 
 On top of these, `vite_task_bin/tests/e2e_snapshots` implements a `libtest-mimic` custom test target: fixtures declare cases in `snapshots.toml`, steps are argv arrays (no shell), interactive steps carry an ordered `interactions` list, and each case produces one Markdown snapshot containing the command lines, the interaction log, and fenced terminal screenshots captured at each milestone and at exit.
@@ -237,7 +237,7 @@ The per-case bin dir fronts `packages/cli/bin` (the JS dispatch), which requires
 
 ## Milestone protocol and CLI instrumentation
 
-A milestone is an invisible marker the CLI writes into its output stream at a deterministic render point. The encoding is the vite-task protocol unchanged: an OSC 8 hyperlink whose URI is `https://milestone.invalid/<hex(name)>`, anchored on a zero-width space. It survives Unix PTYs and Windows ConPTY, arrives in-order with the output it marks, and renders as nothing in a real terminal.
+A milestone is an invisible marker the CLI writes into its output stream at a deterministic render point. The encoding is the vite-task protocol: a window-title update (`OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)>`) with a fresh random id per emission so repeated names stay observable as distinct title changes. It survives Unix PTYs and Windows ConPTY, arrives in-order with the output it marks, and renders as nothing in a real terminal's screen content.
 
 Emission is gated on `VP_EMIT_MILESTONES=1`, which only the runner sets. vp is a widely distributed CLI whose output gets piped into logs and other tools, so unconditional emission (vite-task's choice) is not appropriate here.
 
