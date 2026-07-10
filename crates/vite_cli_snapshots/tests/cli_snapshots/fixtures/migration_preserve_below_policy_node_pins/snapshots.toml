@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_preserve_below_policy_node_pins"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "existing Vite+ project: a Node pin below the supported range is preserved, not raised (native binding supports Node >=20)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = "stays 24.3.0", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "engines.node stays 24.x and devEngines.runtime node stays ^24 (preserved, not raised)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "vite-stack catalog updated to the migration target", continue-on-failure = true },
+]

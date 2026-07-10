@@ -1,0 +1,13 @@
+[[case]]
+name = "migration_baseurl_tsconfig"
+vp = "global"
+env = { VP_CLI_BIN = "./fix-baseurl.mjs" }
+steps = [
+  { argv = ["vpt", "chmod", "+x", "fix-baseurl.mjs"], comment = "setup baseUrl fixer", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should auto-fix tsconfig baseUrl", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts has typeAware and typeCheck", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsconfig.json"], comment = "check baseUrl was removed", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "check .oxlintrc.json is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

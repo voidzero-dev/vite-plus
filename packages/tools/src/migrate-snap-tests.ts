@@ -154,6 +154,7 @@ const PASSTHROUGH_PROGRAMS = new Set([
   'node',
   'git',
   'npm',
+  'npx',
   'pnpm',
   'yarn',
   'bun',

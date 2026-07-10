@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_preserve_editor_jsonc_comments"
+vp = "local"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--editor", "vscode"], comment = "merge must preserve existing .vscode JSONC comments", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vscode/settings.json"], comment = "top-level and nested comments survive; oxc settings are added without overwriting existing values", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vscode/extensions.json"], comment = "existing recommendation and comment stay; vite-plus extension is appended once", continue-on-failure = true },
+]

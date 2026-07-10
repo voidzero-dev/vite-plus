@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_eslint_jsplugins_preserve"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "plugin referenced via lint.jsPlugins must be preserved through cleanup AND sanitization", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "eslint-plugin-survives stays in devDependencies (eslint itself is removed)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "lint.jsPlugins keeps `eslint-plugin-survives`; lint.rules keeps `survives/no-fiction`", continue-on-failure = true },
+]

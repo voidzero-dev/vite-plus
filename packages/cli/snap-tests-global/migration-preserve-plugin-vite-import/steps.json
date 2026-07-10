@@ -1,9 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive --no-hooks # `vite` is rewritten to vite-plus only in config entry files; every other file keeps its `vite` imports (issue #2004)",
-    "cat vite.config.ts # REWRITTEN: the config entry's `defineConfig` import becomes vite-plus",
-    "cat packages/app/src/main.ts # PRESERVED: a normal app's non-config `vite` import (createServer, typeof import) stays on vite",
-    "cat packages/vite-plugin-demo/index.ts # PRESERVED: a vite-plugin-* package keeps `from 'vite'` so it stays usable by plain-vite projects",
-    "cat packages/unplugin-demo/src/index.ts # PRESERVED: an unplugin-* package keeps `from 'vite'` too"
-  ]
-}

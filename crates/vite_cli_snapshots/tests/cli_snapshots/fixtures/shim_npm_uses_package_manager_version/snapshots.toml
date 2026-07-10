@@ -1,0 +1,9 @@
+[[case]]
+name = "shim_npm_uses_package_manager_version"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "exec", "node", "--version"], comment = "Ensure Node.js is installed first", continue-on-failure = true },
+  { argv = ["npm", "--version"], comment = "npm shim resolves the pinned packageManager version (10.9.4)", continue-on-failure = true },
+  { argv = ["npx", "--version"], comment = "npx shim resolves the pinned packageManager version (10.9.4)", continue-on-failure = true },
+]

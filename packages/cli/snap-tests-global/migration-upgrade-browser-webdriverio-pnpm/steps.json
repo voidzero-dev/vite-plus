@@ -1,8 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # source-only WebdriverIO provider should be restored",
-    "cat package.json # provider, webdriverio, and local vitest should be present",
-    "cat pnpm-workspace.yaml # driver builds and shared vitest should be enabled"
-  ]
-}

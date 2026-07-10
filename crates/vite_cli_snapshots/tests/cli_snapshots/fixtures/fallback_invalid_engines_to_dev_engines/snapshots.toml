@@ -1,0 +1,8 @@
+[[case]]
+name = "fallback_invalid_engines_to_dev_engines"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "exec", "node", "-e", "console.log(process.version)"], comment = "Should use devEngines.runtime 22.18.0, not LTS", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "node"], comment = "Should show devEngines.runtime source", continue-on-failure = true },
+]
