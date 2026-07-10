@@ -34,9 +34,13 @@ impl PackageManager {
         &self,
         options: &VersionCommandOptions,
     ) -> Result<ResolveCommandResult, Error> {
-        if self.client == PackageManagerType::Yarn && self.is_yarn_berry() && options.json {
+        if options.json
+            && (self.client == PackageManagerType::Bun
+                || self.client == PackageManagerType::Yarn && self.is_yarn_berry())
+        {
+            let client = if self.client == PackageManagerType::Bun { "Bun" } else { "Yarn 2+" };
             return Err(Error::InvalidArgument(
-                "`--json` is not supported by Yarn 2+ `version`.".into(),
+                format!("`--json` is not supported by {client} `version`.").into(),
             ));
         }
 
@@ -155,16 +159,19 @@ mod tests {
     }
 
     #[test]
-    fn rejects_yarn_berry_json() {
+    fn rejects_unsupported_json_output() {
         let mut yarn = create_mock_package_manager(PackageManagerType::Yarn);
         yarn.version = "4.0.0".into();
+        let bun = create_mock_package_manager(PackageManagerType::Bun);
 
-        let result = yarn.resolve_version_command(&VersionCommandOptions {
-            new_version: Some("patch"),
-            json: true,
-            ..Default::default()
-        });
-        assert!(matches!(result, Err(Error::InvalidArgument(_))));
+        for package_manager in [&yarn, &bun] {
+            let result = package_manager.resolve_version_command(&VersionCommandOptions {
+                new_version: Some("patch"),
+                json: true,
+                ..Default::default()
+            });
+            assert!(matches!(result, Err(Error::InvalidArgument(_))));
+        }
     }
 
     #[test]
