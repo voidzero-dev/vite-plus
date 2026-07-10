@@ -64,6 +64,16 @@ Open the profile file for editing:
 Invoke-Item $PROFILE
 ```
 
+Windows Command Prompt (`cmd.exe`) cannot define the wrapper function needed for `vp env use` to update the current shell session. Use the generated `vp-use.cmd` command instead:
+
+```batch
+vp-use 20
+node --version
+vp-use --unset
+```
+
+Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 
 ### Manage
