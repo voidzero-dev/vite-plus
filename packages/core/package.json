@@ -149,7 +149,7 @@
     "sugarss": "^5.0.0",
     "terser": "^5.16.0",
     "tsx": "^4.8.1",
-    "typescript": "^5.0.0 || ^6.0.0",
+    "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "unplugin-unused": "^0.5.0",
     "unrun": "*",
     "yaml": "^2.4.2"
