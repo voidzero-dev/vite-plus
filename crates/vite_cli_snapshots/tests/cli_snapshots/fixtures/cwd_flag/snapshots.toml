@@ -23,14 +23,18 @@ steps = [
   { argv = ["vp", "run", "where:hello"], comment = "a script whose command starts with vp -C runs verbatim and honors the directory" },
 ]
 
-# Repro for the -C direct-exec PWD gap: a command run through `env exec`
-# (the node/npm/npx shim dispatch, not the JS-delegation path) must observe
-# `process.env.PWD` synced to the -C target, exactly like the cd form, so
-# `-C dir` is equivalent to `cd dir`. Bug: -C only changes the process cwd,
-# so the child inherits the original PWD and prints `matches cwd: false`.
+# Regression guard for the -C direct-exec PWD gap: a command run through
+# `env exec` (the node/npm/npx shim dispatch, not the JS-delegation path)
+# must observe `process.env.PWD` synced to the -C target, exactly like the
+# cd form, so `-C dir` is equivalent to `cd dir`. Before the fix, -C only
+# changed the process cwd and the child inherited the original PWD.
 [[case]]
 name = "cwd_flag_pwd_env_exec"
 vp = ["global"]
+# PWD is a POSIX convention: no Windows shell exports it, and vp's PWD sync
+# is unix-only, so both forms report false there. Skip rather than encode a
+# Windows-specific snapshot for semantics that do not exist on the platform.
+skip-platforms = ["windows"]
 comment = """
 `vp -C <dir> env exec <tool>` must give the spawned tool the same PWD as
 `cd <dir> && vp env exec <tool>`. The boolean keeps the assertion path- and
