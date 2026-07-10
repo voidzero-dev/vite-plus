@@ -422,6 +422,13 @@ export async function snapTest() {
 
   const casesDir = path.resolve(values.dir || 'snap-tests');
 
+  // Every case has been migrated to the PTY snapshot suite; git does not
+  // track the resulting empty tree, so a fresh checkout has no dir at all.
+  if (!fs.existsSync(casesDir)) {
+    console.log(`No snap tests: ${casesDir} does not exist`);
+    return;
+  }
+
   // Collect valid test case names (sorted for deterministic sharding)
   const validCaseNames: string[] = [];
   const missingStepsJson: string[] = [];

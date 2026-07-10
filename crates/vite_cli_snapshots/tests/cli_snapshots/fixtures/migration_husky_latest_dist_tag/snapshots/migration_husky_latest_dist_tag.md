@@ -10,7 +10,6 @@ should warn about uncoercible husky version
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ⚠ Could not determine husky version from "latest" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>

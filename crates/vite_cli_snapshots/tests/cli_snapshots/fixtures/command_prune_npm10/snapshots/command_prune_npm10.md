@@ -1,0 +1,90 @@
+# command_prune_npm10
+
+## `vp install`
+
+should install packages first
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+added 3 packages, and audited 4 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp pm prune --help`
+
+should show help
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Remove unnecessary packages
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --prod         Remove devDependencies
+  --no-optional  Remove optional dependencies
+  -h, --help     Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp pm prune`
+
+should prune extraneous dependencies
+
+```
+
+up to date, audited 4 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp pm prune --prod`
+
+should prune dev dependencies (uses --omit=dev)
+
+```
+
+up to date, audited 3 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp pm prune --no-optional`
+
+should prune optional dependencies (uses --omit=optional)
+
+```
+
+added 1 package, and audited 3 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp pm prune --prod --no-optional`
+
+should prune both dev and optional dependencies
+
+```
+
+up to date, audited 2 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp pm prune -- --loglevel=warn`
+
+should support pass through arguments
+
+```
+
+added 2 packages, and audited 4 packages in <duration>
+
+found 0 vulnerabilities
+```

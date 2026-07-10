@@ -1,8 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp pm apprev-build --help # typo should not print pm parent help",
-    "vp help pm apprev-build # help alias should not print pm parent help for a typo",
-    "vp pm --help apprev-build # help flag before typo should not print pm parent help"
-  ]
-}

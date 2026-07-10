@@ -1,0 +1,11 @@
+[[case]]
+name = "command_list_npm10_with_workspace"
+vp = "global"
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--json"], comment = "should list current workspace root dependencies", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--json"], comment = "should list all packages in workspace (uses --workspaces)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--filter", "app", "--json"], comment = "should list specific workspace package (uses --workspace app)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--filter", "app", "--filter", "@vite-plus-test/utils", "--json"], comment = "should list multiple workspace packages", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--depth", "0", "--json"], comment = "should list workspace packages with depth limit", continue-on-failure = true },
+]

@@ -1,0 +1,12 @@
+[[case]]
+name = "command_env_install_node_version"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "--node", "22", "./command-env-install-node-version-pkg"], comment = "Install with Node.js 22", continue-on-failure = true },
+  { argv = ["node", "-e", "const d=JSON.parse(require('fs').readFileSync(process.env.VP_HOME+'/bins/command-env-install-node-version-pkg-cli.json','utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])"], comment = "Verify Node 22", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "command-env-install-node-version-pkg"], comment = "Cleanup", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "--node", "20", "./command-env-install-node-version-pkg"], comment = "Install with Node.js 20", continue-on-failure = true },
+  { argv = ["node", "-e", "const d=JSON.parse(require('fs').readFileSync(process.env.VP_HOME+'/bins/command-env-install-node-version-pkg-cli.json','utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])"], comment = "Verify Node 20", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "command-env-install-node-version-pkg"], comment = "Cleanup", continue-on-failure = true },
+]

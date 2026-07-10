@@ -7,7 +7,6 @@ standalone (non-workspace) bun upgrade must keep concrete specs so `bun install`
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Formatting code...
 
 Code formatted

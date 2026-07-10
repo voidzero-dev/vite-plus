@@ -343,7 +343,7 @@ jobs:
   # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
   # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
   # cargo-xwin, then publishes them as the windows-cli-binaries artifact. The
-  # Windows entries of cli-e2e-test, cli-snap-test, and install-e2e-test-sfw
+  # Windows entries of cli-e2e-test and install-e2e-test-sfw
   # download that artifact instead of each spending ~24 minutes rebuilding the
   # same binaries on slow windows-latest runners whenever build-upstream's
   # NAPI binding cache misses. Release builds are unaffected: they keep
@@ -899,139 +899,6 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
-  cli-snap-test:
-    name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
-    needs:
-      - download-previous-rolldown-binaries
-      - build-windows-cli
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 3
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 3
-            shardTotal: 3
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            shard: 3
-            shardTotal: 3
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: ./.github/actions/clone
-
-      # Dev Drive works on the Namespace Windows runner: setup-dev-drive v4
-      # creates and mounts its ReFS VHD on namespace-profile-windows-4c-8g, and
-      # all three Windows shards pass with this step succeeding (nested
-      # virtualization is available there). Only cli-snapshot-test-windows moved
-      # off Namespace, and for an unrelated reason (Session-0 ConPTY, see there).
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          # Route TEMP/TMP onto the Dev Drive (ReFS) so `tmpdir()` from
-          # `packages/tools/src/snap-test.ts` lives on a filesystem that
-          # cleanly resolves pnpm's junction reparse points. NTFS-on-C:
-          # preserves the junction-target backslashes during resolution,
-          # which produces mixed `\` / `/` paths that break Node's ESM
-          # subpath-import walk-up (`#module-sync-enabled` inside
-          # `@voidzero-dev/vite-plus-core` → `ERR_PACKAGE_IMPORT_NOT_DEFINED`
-          # during `vp fmt --write` in the
-          # `new-create-vite-migrates-eslint-prettier` snap test).
-          env-mapping: |
-            TEMP,{{ DEV_DRIVE }}/Temp
-            TMP,{{ DEV_DRIVE }}/Temp
-
-      - name: Create TEMP/TMP on Dev Drive
-        if: runner.os == 'Windows'
-        # `setup-dev-drive` only mounts the drive; it doesn't create the
-        # dir we point TEMP/TMP at. Anything that calls `os.tmpdir()` /
-        # `lstat($TEMP)` before this dir exists fails (e.g. the bootstrap
-        # CLI installer's `lstat 'E:\Temp'` ENOENT).
-        shell: bash
-        run: mkdir -p "$TEMP" "$TMP"
-
-      # Windows runs against the prebuilt binaries from build-windows-cli,
-      # so it needs no Rust toolchain here (the Dev Drive above stays for
-      # the TEMP/TMP routing).
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-        if: runner.os != 'Windows'
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-snap-test-${{ matrix.target }}
-
-      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
-
-      - name: Install docs dependencies
-        run: pnpm -C docs install --frozen-lockfile
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
-      # See the cli-e2e-test job for details on the prebuilt binaries.
-      - name: Download prebuilt Windows binaries
-        if: runner.os == 'Windows'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: windows-cli-binaries
-
-      - name: Build with upstream
-        uses: ./.github/actions/build-upstream
-        with:
-          target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' }}
-
-      - name: Install Global CLI vp
-        run: |
-          pnpm bootstrap-cli:ci
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
-          else
-            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
-          fi
-
-      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
-        run: |
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          bash .github/scripts/retry-failed-snap-tests.sh
-        env:
-          RUST_MIN_STACK: 8388608
-
   # Runs the PTY snapshot suite (crates/vite_cli_snapshots) with BOTH vp
   # flavors on Linux and macOS: the local flavor uses the packages/cli build
   # from this job, the global flavor reuses the installed release binary via
@@ -1115,9 +982,12 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      # Same Dev Drive TEMP routing as cli-snap-test: staged fixture
-      # workspaces live under os.tmpdir() and must resolve pnpm junction
-      # reparse points cleanly (see that job for the full story).
+      # Route TEMP/TMP onto a Dev Drive (ReFS): staged fixture workspaces
+      # live under os.tmpdir() and must resolve pnpm junction reparse points
+      # cleanly. NTFS-on-C: preserves the junction-target backslashes during
+      # resolution, which produces mixed `\` / `/` paths that break Node's
+      # ESM subpath-import walk-up (`#module-sync-enabled` inside
+      # `@voidzero-dev/vite-plus-core` -> `ERR_PACKAGE_IMPORT_NOT_DEFINED`).
       - name: Setup Dev Drive
         uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
         with:
@@ -1267,7 +1137,6 @@ jobs:
 
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test
-              bash .github/scripts/retry-failed-snap-tests.sh
             "
 
   install-e2e-test:
@@ -1485,7 +1354,6 @@ jobs:
       - lint
       - cli-e2e-test
       - cli-e2e-test-musl
-      - cli-snap-test
       - cli-snapshot-test
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.

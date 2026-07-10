@@ -9,7 +9,6 @@ migration should fail because npm version is not supported
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✘ npm@8.2.0 is not supported by auto migration, please upgrade npm to >=8.3.0 first
 Vite+ cannot automatically migrate this project yet.
 ```

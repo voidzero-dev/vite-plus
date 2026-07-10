@@ -1,0 +1,21 @@
+[[case]]
+name = "command_why_pnpm10"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "why", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2"], comment = "should show why package is installed", continue-on-failure = true },
+  { argv = ["vp", "explain", "testnpm2"], comment = "should work with explain alias", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-package"], comment = "should show why dev package is installed", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "test-vite-plus-package"], comment = "should support multiple packages", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--json"], comment = "should support json output", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--long"], comment = "should support long output", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--parseable"], comment = "should support parseable output", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "-P"], comment = "should support prod dependencies only", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-package", "-D"], comment = "should support dev dependencies only", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--depth", "1"], comment = "should support depth limiting", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-package-optional", "--no-optional"], comment = "should exclude optional dependencies", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--find-by", "customFinder"], comment = "should support find-by option (pnpm-specific)", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--", "--reporter=silent"], comment = "should support pass through arguments", continue-on-failure = true },
+]

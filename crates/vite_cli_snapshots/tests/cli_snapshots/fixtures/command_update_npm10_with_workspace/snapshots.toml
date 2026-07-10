@@ -1,0 +1,18 @@
+[[case]]
+name = "command_update_npm10_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "update", "testnpm2", "-w", "--", "--no-audit"], comment = "should update in workspace root" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "testnpm2", "--latest", "--filter", "app", "--", "--no-audit"], comment = "should update in specific package" },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
+  { argv = ["vp", "up", "-D", "--filter", "app", "--", "--no-audit"], comment = "should update dev dependencies in app" },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "--filter", "*", "--", "--no-audit"], comment = "should update in all packages" },
+  { argv = ["vpt", "print-file", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-r", "--no-save", "--", "--no-audit"], comment = "should update recursively without saving" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "--workspace", "--filter", "app", "@vite-plus-test/utils", "--", "--no-audit"], comment = "should update workspace dependency" },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
+]

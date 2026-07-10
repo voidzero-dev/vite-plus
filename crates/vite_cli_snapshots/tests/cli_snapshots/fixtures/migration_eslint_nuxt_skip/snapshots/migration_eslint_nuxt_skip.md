@@ -7,7 +7,6 @@
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 @nuxt/eslint detected — automatic ESLint migration is skipped. @nuxt/eslint wires ESLint into a framework-specific flow that Vite+ cannot migrate cleanly yet. Your ESLint setup is preserved. To migrate manually, remove @nuxt/eslint from package.json and re-run `vp migrate`.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>

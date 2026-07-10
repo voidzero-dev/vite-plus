@@ -1,0 +1,13 @@
+[[case]]
+name = "command_update_node_mismatch"
+vp = "global"
+local-registry = true
+steps = [
+  { tty = false, argv = ["vp", "install", "-g", "--node", "20", "testnpm2"], continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2"], comment = "should warn and skip node mismatch reinstall in CI", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2", "--ignore-node-mismatch"], comment = "should explicitly skip node mismatch reinstall", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2", "--reinstall-node-mismatch"], continue-on-failure = true },
+]
+after = [
+  { tty = false, argv = ["vp", "remove", "-g", "testnpm2"], continue-on-failure = true },
+]

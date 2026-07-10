@@ -1,0 +1,6 @@
+[[case]]
+name = "command_list_yarn4"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "list"], comment = "should show warning that yarn@2+ does not support list command", continue-on-failure = true },
+]

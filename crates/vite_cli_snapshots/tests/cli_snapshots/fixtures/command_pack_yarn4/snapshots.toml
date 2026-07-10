@@ -1,0 +1,10 @@
+[[case]]
+name = "command_pack_yarn4"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "pack"], comment = "should pack current package", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--out", "./dist/package.tgz"], comment = "should pack with output file", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--json"], comment = "should pack with json output", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--", "--dry-run"], comment = "should support pass through arguments", continue-on-failure = true },
+]

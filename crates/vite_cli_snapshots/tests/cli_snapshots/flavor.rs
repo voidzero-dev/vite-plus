@@ -200,6 +200,31 @@ pub fn js_runtime_seed_dir() -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
+/// The newest real `node` binary in the seed runtime, bypassing the case's
+/// node shim (which resolves a project-pinned version from its cwd). Used for
+/// runner infrastructure like the local-registry server, which needs a
+/// TypeScript-capable Node regardless of what the fixture under test pins.
+pub fn seed_runtime_node() -> Option<PathBuf> {
+    let node_root = js_runtime_seed_dir()?.join("node");
+    let mut versions: Vec<(Vec<u64>, PathBuf)> = std::fs::read_dir(&node_root)
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            let parts: Vec<u64> = name.split('.').map(str::parse).collect::<Result<_, _>>().ok()?;
+            // Windows node dists put node.exe at the version root; Unix under bin/.
+            let bin = if cfg!(windows) {
+                e.path().join("node.exe")
+            } else {
+                e.path().join("bin").join("node")
+            };
+            bin.is_file().then_some((parts, bin))
+        })
+        .collect();
+    versions.sort();
+    versions.pop().map(|(_, bin)| bin)
+}
+
 /// Installs a runner-owned native tool. A symlink is enough on Unix; Windows
 /// uses a hard link or copy so the executable keeps its `.exe` suffix.
 fn install_runner_tool(bin_dir: &Path, name: &str, target: &Path) -> Result<PathBuf, String> {

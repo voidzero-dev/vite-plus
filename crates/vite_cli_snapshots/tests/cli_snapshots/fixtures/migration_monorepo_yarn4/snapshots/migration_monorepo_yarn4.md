@@ -7,7 +7,6 @@ migration should merge vite.config.ts and remove oxlintrc
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
 
 ✔ Switched Yarn to node-modules mode

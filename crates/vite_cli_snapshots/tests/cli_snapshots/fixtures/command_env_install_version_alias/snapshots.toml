@@ -1,0 +1,12 @@
+[[case]]
+name = "command_env_install_version_alias"
+vp = "global"
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "install", "-g", "--node", "lts", "./command-env-install-version-alias-pkg"], comment = "Install with LTS alias", continue-on-failure = true },
+  { argv = ["node", "-e", "const d=JSON.parse(require('fs').readFileSync(process.env.VP_HOME+'/bins/command-env-install-version-alias-pkg-cli.json','utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)"], comment = "Verify LTS version", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "command-env-install-version-alias-pkg"], comment = "Cleanup", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "--node", "latest", "./command-env-install-version-alias-pkg"], comment = "Install with latest alias", continue-on-failure = true },
+  { argv = ["node", "-e", "const d=JSON.parse(require('fs').readFileSync(process.env.VP_HOME+'/bins/command-env-install-version-alias-pkg-cli.json','utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)"], comment = "Verify latest version", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "command-env-install-version-alias-pkg"], comment = "Cleanup", continue-on-failure = true },
+]

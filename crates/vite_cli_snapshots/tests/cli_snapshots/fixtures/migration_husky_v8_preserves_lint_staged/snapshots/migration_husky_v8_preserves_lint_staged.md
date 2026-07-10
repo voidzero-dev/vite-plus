@@ -10,7 +10,6 @@ should warn about husky v8, preserve lint-staged config
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>

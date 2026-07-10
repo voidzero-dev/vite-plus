@@ -77,6 +77,9 @@ cwd = "packages/app"          # optional, relative to the fixture root
 skip-platforms = ["windows"]  # or { os = "linux", libc = "musl" }
 ignore = false                # true: only runs with `-- --ignored`
 seed-runtime = true           # false: start from an empty VP_HOME
+link-node-modules = false     # true: expose the run-root node_modules as
+                              #   the workspace's parent-dir node_modules,
+                              #   for `../node_modules/vite-plus/...` paths
 env = { MY_VAR = "1" }        # case-wide env additions
 unset-env = ["SOME_VAR"]      # remove baseline env entries
 steps = [ ... ]
@@ -99,7 +102,11 @@ A step is a bare argv array or a table:
 { argv = ["vp", "create"],
   cwd = "sub",                # per-step working dir
   comment = "...",            # rendered under the step heading
-  envs = [["K", "V"]],        # per-step env
+  envs = [["K", "V"]],        # per-step env; values expand `${NAME}`:
+                              #   `${workspace}` is the step's working dir,
+                              #   any other name resolves from the case env
+                              #   (`PATH = "${workspace}/bin:${PATH}"` is
+                              #   the shell's `PATH="$(pwd)/bin:$PATH"`)
   timeout = 120000,           # ms, default 50s
   snapshot = false,           # omit the screen while the step succeeds
                               #   (failures always keep their output)

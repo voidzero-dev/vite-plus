@@ -1,0 +1,9 @@
+[[case]]
+name = "command_dlx_pnpm11"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vp", "dlx", "--help"], comment = "should show help message", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], comment = "should run cowsay with pnpm dlx", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "cowsay@1.6.0", "hello"], comment = "should run specific version", continue-on-failure = true },
+]

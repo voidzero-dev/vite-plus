@@ -1,0 +1,22 @@
+[[case]]
+name = "command_update_pnpm10"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "update", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "update", "testnpm2"], comment = "should update package within semver range" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "up", "testnpm2", "--latest"], comment = "should to absolute latest version" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-D"], comment = "should update only dev dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-P", "--no-save"], comment = "should update only dependencies and optionalDependencies without saving" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "rm", "testnpm2"], comment = "should remove package from dependencies for the next test", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2@1.0.0", "-O"], comment = "should skip optional dependencies" },
+  ["vp", "update", "--no-optional", "--latest"],
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update"], comment = "should update all packages and change the package.json" },
+  ["vp", "update", "--recursive"],
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

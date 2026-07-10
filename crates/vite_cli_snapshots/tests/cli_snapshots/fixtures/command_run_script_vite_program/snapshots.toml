@@ -1,0 +1,11 @@
+[[case]]
+name = "command_run_script_vite_program"
+vp = "global"
+steps = [
+  { argv = ["node", "setup-bin.js"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "run", "dev"], comment = "should run vite binary, not parse as vp subcommand", continue-on-failure = true },
+  { argv = ["vp", "run", "dev-help"], comment = "should run vite -h, not parse as vp subcommand", continue-on-failure = true },
+  { argv = ["vp", "run", "dev-version"], comment = "should run vite --version, not parse as vp subcommand", continue-on-failure = true },
+  { argv = ["vp", "run", "hello-vpr"], comment = "vpr in script should be synthesized in-session", continue-on-failure = true },
+  { argv = ["vp", "run", "ready"], comment = "chained vpr commands should both be synthesized", continue-on-failure = true },
+]

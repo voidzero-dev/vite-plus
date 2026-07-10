@@ -1,0 +1,16 @@
+[[case]]
+name = "command_config_custom_dir_hook_path"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".config/husky"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\necho hook-path-ok > hook-output.txt"], comment = "the hook command records a marker file (a stdout echo would be interleaved with git commit's hash-bearing output)", snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/test-hook-cmd"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".config/husky"], snapshot = false },
+  { argv = ["vpt", "write-file", ".config/husky/pre-commit", "test-hook-cmd\n"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", "file.txt", "test\n"], snapshot = false },
+  { argv = ["git", "add", "file.txt"], snapshot = false, continue-on-failure = true },
+  { argv = ["git", "commit", "-m", "test"], comment = "commit output carries a nondeterministic hash; the hook marker below is the assertion", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "hook-output.txt"], comment = "hook found test-hook-cmd via PATH", continue-on-failure = true },
+]

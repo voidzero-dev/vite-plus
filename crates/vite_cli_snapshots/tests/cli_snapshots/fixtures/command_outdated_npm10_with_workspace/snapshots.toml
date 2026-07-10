@@ -1,0 +1,11 @@
+[[case]]
+name = "command_outdated_npm10_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "-w"], comment = "should outdated in workspace root", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "--filter", "app"], comment = "should outdated in specific package", continue-on-failure = true },
+  { argv = ["vp", "outdated", "--filter", "*", "--format", "json"], comment = "should outdated in all packages", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-r"], comment = "should outdated recursively", continue-on-failure = true },
+]

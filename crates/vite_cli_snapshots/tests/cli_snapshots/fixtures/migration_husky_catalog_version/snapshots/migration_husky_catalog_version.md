@@ -10,7 +10,6 @@ should resolve husky version from catalog and configure hooks without warning
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✔ Created vite.config.ts in vite.config.ts
 
 ✔ Merged staged config into vite.config.ts

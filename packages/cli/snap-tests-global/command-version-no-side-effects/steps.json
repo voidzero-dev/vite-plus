@@ -1,7 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp --version # should print version",
-    "test -f .node-version && echo 'FAIL: .node-version was created' || echo 'OK: no .node-version created'"
-  ]
-}

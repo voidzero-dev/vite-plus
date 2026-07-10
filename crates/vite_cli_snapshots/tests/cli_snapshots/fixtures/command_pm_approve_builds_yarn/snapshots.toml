@@ -1,0 +1,10 @@
+[[case]]
+name = "command_pm_approve_builds_yarn"
+vp = "local"
+skip-platforms = ["linux", "windows"]
+steps = [
+  { argv = ["vp", "pm", "approve-builds", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds"], comment = "warn and exit 0 (no-op on yarn)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild"], comment = "warn and exit 0 (no-op on yarn)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "--all"], comment = "warn and exit 0 (no-op on yarn)", continue-on-failure = true },
+]

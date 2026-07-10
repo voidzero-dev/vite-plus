@@ -1,0 +1,17 @@
+[[case]]
+name = "command_list_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--json"], comment = "should list installed packages", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "testnpm2", "--json"], comment = "should list specific package", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--depth", "0", "--json"], comment = "should list packages with depth limit", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--long", "--json"], comment = "should list packages with extended info", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--parseable", "--json"], comment = "should list packages in parseable format", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--prod", "--json"], comment = "should list production dependencies only (uses --include prod --include peer)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--dev", "--json"], comment = "should list development dependencies only (uses --include dev)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--no-optional", "--json"], comment = "should exclude optional dependencies (uses --omit optional)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--exclude-peers", "--json"], comment = "should exclude peer dependencies (uses --omit peer)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--", "--loglevel=warn", "--json"], comment = "should support pass through arguments", continue-on-failure = true },
+]

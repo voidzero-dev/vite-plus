@@ -1,8 +1,0 @@
-[1]> vp pm approve-builds --all # pnpm 10.31.0 < 10.32.0 → rejected with friendly UserMessage (no `error:` prefix)
-`--all` requires pnpm >= <semver>. Upgrade pnpm or pass package names explicitly.
-
-[1]> vp pm approve-builds esbuild '!core-js' # pnpm 10.31.0 < 11.0.0 → !pkg deny syntax rejected
-`!<pkg>` deny syntax requires pnpm >= <semver>. Upgrade pnpm or omit the `!` entries.
-
-> vp pm approve-builds esbuild # plain positional still works on old pnpm
-There are no packages awaiting approval

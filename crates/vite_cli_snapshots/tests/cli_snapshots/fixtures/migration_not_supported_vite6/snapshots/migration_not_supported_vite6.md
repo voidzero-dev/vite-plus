@@ -14,7 +14,6 @@ migration should fail because vite version is not supported
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✘ vite@6.4.3 in package.json is not supported by auto migration
 
 Please upgrade vite to version >=7.0.0 first

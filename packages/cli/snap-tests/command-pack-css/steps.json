@@ -1,7 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp pack src/index.ts --minify # bundles CSS via the bundled @tsdown/css + lightningcss (issue #1586)",
-    "cat dist/style.css # lightningcss-optimized output proves @tsdown/css ran"
-  ]
-}

@@ -1,0 +1,9 @@
+[[case]]
+name = "command_list_bun"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "list"], comment = "should list installed packages", continue-on-failure = true },
+]

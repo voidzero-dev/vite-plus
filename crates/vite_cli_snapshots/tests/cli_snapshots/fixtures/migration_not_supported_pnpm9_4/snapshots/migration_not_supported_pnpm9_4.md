@@ -9,7 +9,6 @@ migration should fail because pnpm version is not supported
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✘ pnpm@9.4.0 is not supported by auto migration, please upgrade pnpm to >=9.5.0 first
 Vite+ cannot automatically migrate this project yet.
 ```

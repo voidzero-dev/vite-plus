@@ -10,7 +10,6 @@ migration work with subpath
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
 ◇ Migrated foo to Vite+ <version>
 • Node <version>  pnpm <version>
