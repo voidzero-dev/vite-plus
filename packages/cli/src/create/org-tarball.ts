@@ -116,6 +116,38 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
   return bytes;
 }
 
+/**
+ * Download a package tarball and parse its `package/package.json`.
+ *
+ * Some registries (GitHub Packages among them) strip fields they don't
+ * recognize — including `createConfig` — from packument *version metadata*
+ * while preserving the published tarball byte-for-byte. This gives
+ * `readOrgManifest` a fallback source of truth for those registries.
+ *
+ * Returns `null` when the archive contains no `package/package.json`.
+ * Throws on download/integrity failures or unparsable JSON.
+ */
+export async function readPackageJsonFromTarball(
+  tarballUrl: string,
+  integrity?: string,
+): Promise<unknown> {
+  const bytes = await downloadTarball(tarballUrl);
+  verifyIntegrity(bytes, integrity);
+  const entries = await parseTarGzip(bytes);
+  for (const entry of entries) {
+    if (normalizeEntryName(entry.name) !== 'package.json' || !entry.data) {
+      continue;
+    }
+    const text = new TextDecoder().decode(entry.data);
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new Error(`invalid package.json in tarball: ${tarballUrl}`);
+    }
+  }
+  return null;
+}
+
 const STAGING_SUFFIX_PREFIX = '.tmp-';
 
 /**

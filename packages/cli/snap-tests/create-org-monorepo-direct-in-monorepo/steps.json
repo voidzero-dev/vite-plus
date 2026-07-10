@@ -1,5 +1,0 @@
-{
-  "commands": [
-    "node $SNAP_LOCAL_REGISTRY -- vp create @your-org:monorepo --no-interactive # direct-selecting a monorepo entry inside a monorepo -> refuse"
-  ]
-}

@@ -33,7 +33,7 @@ jobs:
       related-files-changed: ${{ steps.filter.outputs.related-files }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -101,7 +101,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -189,7 +189,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - windows-latest
+          - namespace-profile-windows-4c-8g
         project:
           - name: vibe-dashboard
             node-version: 24
@@ -398,27 +398,27 @@ jobs:
               vp run test:coverage
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             project:
               name: frm-stack
           # dify only runs on Linux for now
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             project:
               name: dify
           # vinext uses workerd native deps that don't build on Windows
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             project:
               name: vinext
           # yaak is a Tauri app with Rust/wasm deps
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             project:
               name: yaak
           # npmx.dev is a Nuxt app, ubuntu-only for now
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             project:
               name: npmx.dev
           # varlet upstream CI is ubuntu-only
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             project:
               name: varlet
 

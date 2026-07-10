@@ -1,0 +1,8 @@
+[[case]]
+name = "new_create_vite_directory_dot"
+vp = "global"
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "my-app"], comment = "create vite app in current directory", snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "."], cwd = "my-app", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-app/package.json", "--assert", "file"], comment = "created at my-app with --directory .", continue-on-failure = true },
+]

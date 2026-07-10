@@ -1,0 +1,9 @@
+[[case]]
+name = "local_registry_smoke"
+vp = "global"
+local-registry = true
+comment = "Smoke test for `local-registry = true`: a package that exists ONLY in this fixture's mock-manifest/tarballs resolves through the injected registry env, proving the runner packs the checkout, starts the per-case registry, and folds its env into every step."
+steps = [
+  { argv = ["npm", "install", "@vp-smoke/hello", "--no-save", "--no-audit", "--no-fund"], comment = "install a package served only by the local registry", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "node_modules/@vp-smoke/hello/package.json"], comment = "the local registry served the packument and its tarball (integrity verified by npm)", continue-on-failure = true },
+]

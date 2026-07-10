@@ -1,0 +1,10 @@
+[[case]]
+name = "create_org_bundled"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:demo", "--no-interactive", "--directory", "my-demo-app"], comment = "bundled template: extract tarball, copy subdir", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-demo-app/package.json"], comment = "verify package.json name was rewritten", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-demo-app/src/index.ts"], comment = "verify bundled source copied", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "my-demo-app/README.md"], comment = "verify README copied", continue-on-failure = true },
+]

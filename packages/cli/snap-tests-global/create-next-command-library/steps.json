@@ -1,9 +1,0 @@
-{
-  "commands": [
-    {
-      "command": "vp create vite:library --no-interactive # verify next command suggests vp run",
-      "ignoreOutput": false,
-      "timeout": 120000
-    }
-  ]
-}

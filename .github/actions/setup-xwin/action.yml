@@ -34,7 +34,7 @@ runs:
     - run: rustup target add x86_64-pc-windows-msvc
       shell: bash
 
-    - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+    - uses: taiki-e/install-action@c93ccc03e00cd0e08e494f5fd058a6c55a6a1907 # v2.82.8
       with:
         tool: ${{ inputs.tools != '' && format('{0},cargo-xwin', inputs.tools) || 'cargo-xwin' }}
 
@@ -42,7 +42,7 @@ runs:
     # time (~10 minutes); the unpacked result is immutable for a given manifest
     # version, so cache it (combined restore + post-job save). Bump the key when
     # bumping cargo-xwin.
-    - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/cargo-xwin
         key: cargo-xwin-msvc-17

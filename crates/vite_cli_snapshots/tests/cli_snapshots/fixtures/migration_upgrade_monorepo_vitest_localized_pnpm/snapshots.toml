@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_monorepo_vitest_localized_pnpm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "existing Vite+ workspace packages should be reconciled", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "root should not gain a direct vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "only the peer consumer should gain local vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "shared vitest config should exist for the consuming package", continue-on-failure = true },
+]

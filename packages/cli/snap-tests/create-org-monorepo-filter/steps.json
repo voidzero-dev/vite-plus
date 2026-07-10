@@ -1,5 +1,0 @@
-{
-  "commands": [
-    "node $SNAP_LOCAL_REGISTRY -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer"
-  ]
-}

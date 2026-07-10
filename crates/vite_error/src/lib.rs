@@ -9,18 +9,6 @@ use vite_str::Str;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    Sqlite(#[from] rusqlite::Error),
-
-    #[error(transparent)]
-    BincodeEncode(#[from] bincode::error::EncodeError),
-
-    #[error(transparent)]
-    BincodeDecode(#[from] bincode::error::DecodeError),
-
-    #[error("Unrecognized db version: {0}")]
-    UnrecognizedDbVersion(u32),
-
-    #[error(transparent)]
     Io(#[from] std::io::Error),
 
     #[error("IO error: {err} at {path:?}")]
@@ -50,12 +38,7 @@ pub enum Error {
     #[error(transparent)]
     Utf8Error(#[from] bstr::Utf8Error),
 
-    #[error(transparent)]
-    WaxBuild(#[from] wax::BuildError),
-
-    #[error(transparent)]
-    WaxWalk(#[from] wax::WalkError),
-
+    #[cfg(feature = "migration")]
     #[error(transparent)]
     IgnoreError(#[from] ignore::Error),
 
@@ -135,6 +118,7 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
 
+    #[cfg(feature = "migration")]
     #[error(transparent)]
     AstGrepConfigError(#[from] ast_grep_config::RuleConfigError),
 

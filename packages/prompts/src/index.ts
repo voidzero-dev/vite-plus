@@ -9,6 +9,7 @@ export * from './group-multi-select.js';
 export * from './limit-options.js';
 export * from './log.js';
 export * from './messages.js';
+export * from './milestone.js';
 export * from './multi-select.js';
 export * from './note.js';
 export * from './password.js';

@@ -1,9 +1,0 @@
-{
-  "commands": [
-    {
-      "command": "vp create vite:library --no-interactive # monorepo: next command should suggest vp run",
-      "ignoreOutput": false,
-      "timeout": 120000
-    }
-  ]
-}

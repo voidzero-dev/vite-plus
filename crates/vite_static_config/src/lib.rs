@@ -5,11 +5,19 @@
 //! config like `run` without needing a Node.js runtime.
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Expression, ObjectPropertyKind, Program, Statement};
+use oxc_ast::ast::{
+    BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind, ObjectPropertyKind,
+    Program, Statement, VariableDeclarationKind,
+};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
+
+/// Packages whose `defineConfig` helpers preserve top-level config fields.
+const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] = &["vite-plus", "vite"];
+/// The name of the config helper static extraction trusts.
+const DEFINE_CONFIG: &str = "defineConfig";
 
 /// The result of statically analyzing a single config field's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,16 +147,20 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// Find the config object in a parsed program and extract its fields.
 ///
 /// Searches for the config value in the following patterns (in order):
-/// 1. `export default defineConfig({ ... })`
+/// 1. `export default defineConfig({ ... })` with `defineConfig` from a trusted package
 /// 2. `export default { ... }`
-/// 3. `module.exports = defineConfig({ ... })`
+/// 3. `module.exports = defineConfig({ ... })` with `defineConfig` from a trusted package
 /// 4. `module.exports = { ... }`
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
+    let has_trusted_define_config_binding = program.body.iter().any(|stmt| {
+        is_trusted_define_config_import(stmt) || has_trusted_define_config_cjs_binding(stmt)
+    });
+
     for stmt in &program.body {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
-                return extract_config_from_expr(expr);
+                return extract_config_from_expr(expr, has_trusted_define_config_binding);
             }
             // export default class/function — not analyzable
             return FieldMap::unanalyzable();
@@ -161,7 +173,7 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
                 m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
             })
         {
-            return extract_config_from_expr(&assign.right);
+            return extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
         }
     }
 
@@ -175,11 +187,17 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
 /// - `defineConfig(function() { return { ... }; })` → extract from return statement
 /// - `{ ... }` → extract directly
 /// - anything else → not analyzable
-fn extract_config_from_expr(expr: &Expression<'_>) -> FieldMap {
+fn extract_config_from_expr(
+    expr: &Expression<'_>,
+    has_trusted_define_config_binding: bool,
+) -> FieldMap {
     let expr = expr.without_parentheses();
     match expr {
         Expression::CallExpression(call) => {
             if !call.callee.is_specific_id("defineConfig") {
+                return FieldMap::unanalyzable();
+            }
+            if !has_trusted_define_config_binding {
                 return FieldMap::unanalyzable();
             }
             let Some(first_arg) = call.arguments.first() else {
@@ -244,6 +262,80 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
         }
     }
     FieldMap::unanalyzable()
+}
+
+fn is_trusted_define_config_import(stmt: &Statement<'_>) -> bool {
+    let Statement::ImportDeclaration(import_decl) = stmt else {
+        return false;
+    };
+    if import_decl.import_kind != ImportOrExportKind::Value
+        || !is_trusted_define_config_package(import_decl.source.value.as_str())
+    {
+        return false;
+    }
+    import_decl.specifiers.as_ref().is_some_and(|specifiers| {
+        specifiers.iter().any(|specifier| {
+            let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
+                return false;
+            };
+            specifier.import_kind == ImportOrExportKind::Value
+                && specifier.local.name == DEFINE_CONFIG
+                && specifier.imported.name() == DEFINE_CONFIG
+        })
+    })
+}
+
+fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
+    match stmt {
+        Statement::VariableDeclaration(decl) => {
+            decl.kind == VariableDeclarationKind::Const
+                && decl.declarations.iter().any(|declarator| {
+                    declarator.init.as_ref().is_some_and(|init| match &declarator.id {
+                        BindingPattern::BindingIdentifier(id) => {
+                            id.name == DEFINE_CONFIG && is_trusted_define_config_require(init)
+                        }
+                        BindingPattern::ObjectPattern(pattern) => {
+                            is_trusted_package_require(init)
+                                && pattern.properties.iter().any(|prop| {
+                                    !prop.computed
+                                        && prop
+                                            .key
+                                            .static_name()
+                                            .is_some_and(|key| key == DEFINE_CONFIG)
+                                        && matches!(
+                                            &prop.value,
+                                            BindingPattern::BindingIdentifier(id)
+                                                if id.name == DEFINE_CONFIG
+                                        )
+                                })
+                        }
+                        _ => false,
+                    })
+                })
+        }
+        _ => false,
+    }
+}
+
+fn is_trusted_define_config_package(package: &str) -> bool {
+    TRUSTED_DEFINE_CONFIG_PACKAGES.contains(&package)
+}
+
+fn is_trusted_define_config_require(expr: &Expression<'_>) -> bool {
+    expr.without_parentheses().as_member_expression().is_some_and(|member| {
+        member.static_property_name() == Some(DEFINE_CONFIG)
+            && is_trusted_package_require(member.object())
+    })
+}
+
+fn is_trusted_package_require(expr: &Expression<'_>) -> bool {
+    matches!(
+        expr.without_parentheses(),
+        Expression::CallExpression(call)
+            if call.common_js_require().is_some_and(|source| {
+                is_trusted_define_config_package(source.value.as_str())
+            })
+    )
 }
 
 /// Count `return` statements recursively in a slice of statements.
@@ -530,6 +622,19 @@ mod tests {
     }
 
     #[test]
+    fn plain_export_default_object_ignores_unrelated_define_config_import() {
+        let result = parse(
+            r"
+            import { defineConfig } from 'vite';
+            export default {
+                run: { cacheScripts: true },
+            };
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
     fn export_default_empty_object() {
         let result = parse("export default {}");
         assert!(result.get("run").is_none());
@@ -552,6 +657,46 @@ mod tests {
         assert_json(&result, "lint", serde_json::json!({ "plugins": ["a"] }));
     }
 
+    #[test]
+    fn define_config_import_from_vite_is_static() {
+        let result = parse(
+            r"
+            import { defineConfig } from 'vite';
+            export default defineConfig({
+                build: { outDir: 'dist' },
+            });
+            ",
+        );
+        assert_json(&result, "build", serde_json::json!({ "outDir": "dist" }));
+        assert!(result.get("run").is_none());
+    }
+
+    #[test]
+    fn define_config_import_from_other_package_is_non_static() {
+        let result = parse(
+            r"
+            import { defineConfig } from 'custom-config';
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn define_config_type_import_from_vite_plus_is_non_static() {
+        let result = parse(
+            r"
+            import type { defineConfig } from 'vite-plus';
+            export default defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
     // ── module.exports = { ... } ───────────────────────────────────────
 
     #[test]
@@ -561,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn module_exports_define_config() {
+    fn module_exports_define_config_destructured_require() {
         let result = parse_js_ts_config(
             r"
             const { defineConfig } = require('vite-plus');
@@ -572,6 +717,48 @@ mod tests {
             "cjs",
         );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn module_exports_define_config_member_require() {
+        let result = parse_js_ts_config(
+            r"
+            const defineConfig = require('vite-plus').defineConfig;
+            module.exports = defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+            "cjs",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn module_exports_define_config_require_from_vite() {
+        let result = parse_js_ts_config(
+            r"
+            const { defineConfig } = require('vite');
+            module.exports = defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+            "cjs",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn module_exports_define_config_require_from_other_package_is_non_static() {
+        let result = parse_js_ts_config(
+            r"
+            const { defineConfig } = require('custom-config');
+            module.exports = defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+            "cjs",
+        );
+        assert_non_static(&result, "run");
     }
 
     #[test]
@@ -944,6 +1131,8 @@ mod tests {
     fn define_config_arrow_block_body() {
         let result = parse(
             r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 const env = loadEnv(mode, process.cwd(), '');
                 return {
@@ -961,6 +1150,8 @@ mod tests {
     fn define_config_arrow_expression_body() {
         let result = parse(
             r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(() => ({
                 run: { cacheScripts: true },
                 build: { outDir: 'dist' },
@@ -975,6 +1166,8 @@ mod tests {
     fn define_config_function_expression() {
         let result = parse(
             r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(function() {
                 return {
                     run: { cacheScripts: true },

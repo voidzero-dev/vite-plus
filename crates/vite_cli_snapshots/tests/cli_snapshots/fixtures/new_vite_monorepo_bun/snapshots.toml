@@ -1,0 +1,15 @@
+[[case]]
+name = "new_vite_monorepo_bun"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "create", "vite:monorepo", "--no-interactive", "--package-manager", "bun", "--git"], comment = "create monorepo with bun", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "vite-plus-monorepo"], comment = "check files created", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-monorepo/package.json"], comment = "check package.json with catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-monorepo/pnpm-workspace.yaml", "--assert-not", "file"], comment = "verify no pnpm config", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-monorepo/.yarnrc.yml", "--assert-not", "file"], comment = "verify no yarn config", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-monorepo/.git", "--assert", "dir"], comment = "check git init", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "vite-plus-monorepo/apps"], comment = "check apps directory", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-monorepo/apps/website/package.json"], comment = "check website uses catalog:", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-monorepo/packages/utils/package.json"], comment = "check utils normalizes vite-plus to catalog:", continue-on-failure = true },
+]

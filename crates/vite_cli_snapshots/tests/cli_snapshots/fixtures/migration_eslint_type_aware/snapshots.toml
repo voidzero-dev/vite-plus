@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_eslint_type_aware"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve type-aware coverage", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check typescript-eslint and @typescript-eslint/* are removed; typescript is preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check options.typeAware/typeCheck = true is set in the lint block", continue-on-failure = true },
+]

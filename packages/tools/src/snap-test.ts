@@ -490,7 +490,9 @@ export async function snapTest() {
   process.exit(0); // Ensure exit even if there are pending timed-out steps
 }
 
-interface Command {
+// Command, PlatformFilter, and Steps are exported for migrate-snap-tests.ts,
+// which translates this legacy steps.json schema to the PTY harness format.
+export interface Command {
   command: string;
   /**
    * If true, the stdout and stderr output of the command will be ignored.
@@ -504,12 +506,12 @@ interface Command {
   timeout?: number;
 }
 
-interface PlatformFilter {
+export interface PlatformFilter {
   os: string;
   libc?: string;
 }
 
-interface Steps {
+export interface Steps {
   ignoredPlatforms?: (string | PlatformFilter)[];
   env?: Record<string, string>;
   commands: (string | Command)[];

@@ -1,0 +1,7 @@
+[[case]]
+name = "new_create_vite_with_scope_name"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "@my-scope/my-vite-app", "--", "--template", "vanilla-ts"], comment = "create vite app with vanilla-ts template with scope name", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "my-vite-app/package.json"], comment = "check package.json", continue-on-failure = true },
+]

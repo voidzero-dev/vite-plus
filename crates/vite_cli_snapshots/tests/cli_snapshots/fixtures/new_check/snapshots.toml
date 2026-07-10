@@ -1,0 +1,8 @@
+[[case]]
+name = "new_check"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "--help"], comment = "show help", continue-on-failure = true },
+  { argv = ["vp", "create", "--list"], comment = "list templates", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive"], comment = "run in non-interactive mode without template name will show error", continue-on-failure = true },
+]

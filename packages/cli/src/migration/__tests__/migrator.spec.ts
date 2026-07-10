@@ -507,7 +507,7 @@ describe('rewritePackageJson', () => {
     // vitest is now a managed override key — yarn optional deps receive the
     // literal override version so the resolution doesn't depend on catalog
     // lookup at the optionalDependency site.
-    expect(pkg.optionalDependencies.vitest).toBe('4.1.9');
+    expect(pkg.optionalDependencies.vitest).toBe(VITEST_VERSION);
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
@@ -5877,7 +5877,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // npm hard-fails with EOVERRIDE when an override pins the provider to a
     // version different from the migrated direct dep. Because webdriverio is now
     // KEPT/injected as a direct dep (not stripped), the migration must prune the
-    // stale `overrides` entry before injecting `@vitest/browser-webdriverio@4.1.9`.
+    // stale `overrides` entry before injecting the bundled provider version.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -5903,7 +5903,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   it('drops a stale npm @vitest/browser-playwright override that would conflict with the kept provider', () => {
     // Same hazard as webdriverio: playwright is now opt-in and KEPT as a direct
     // dep (not stripped), so a stale `overrides` pin to a different version would
-    // EOVERRIDE-conflict with the migrated `@vitest/browser-playwright@4.1.9`. The
+    // EOVERRIDE-conflict with the migrated bundled provider version. The
     // migration must prune it before normalizing the provider dep.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -5929,7 +5929,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // `@<5`). The `>` MUST NOT be mistaken for a pnpm `parent>child` selector
     // (pnpm's own delimiter rule excludes a `>` preceded by `@`), or the key's
     // target is parsed incorrectly and the stale pin survives, forcing the
-    // provider off the migrated 4.1.9 dep. A comparator-range key for an
+    // provider off the migrated bundled-version dep. A comparator-range key for an
     // unrelated package must still be preserved.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -5956,7 +5956,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
   it('drops a stale yarn @vitest/browser-webdriverio resolution that would force the wrong provider version', () => {
     // Same hazard as npm, via yarn `resolutions`: a leftover pin would force the
-    // stale provider over the migrated, bundled-vitest-aligned 4.1.9 dep.
+    // stale provider over the migrated, bundled-vitest-aligned dep.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -6078,7 +6078,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // npm-alias key targets `fork` (the aliased descriptor), not the provider — preserved.
     expect(resolutions['@vitest/browser-webdriverio@npm:@other/fork@1.2.3']).toBe('2.0.0');
     // The bare key DOES target the provider — pruned so it can't force the
-    // stale provider over the migrated 4.1.9 dep.
+    // stale provider over the migrated bundled-version dep.
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
     const devDeps = pkg.devDependencies as Record<string, string>;
     expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');

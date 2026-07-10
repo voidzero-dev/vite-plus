@@ -1,0 +1,15 @@
+[[case]]
+name = "milestone_roundtrip"
+vp = "global"
+comment = """
+Proves the interactive machinery end-to-end without product instrumentation:
+wait for a milestone, capture the rendered screen, type a line, wait for the
+next milestone, capture again.
+"""
+steps = [
+  { argv = ["vpt", "probe"], interactions = [
+    { "expect-milestone" = "probe:ask" },
+    { "write-line" = "vite-plus" },
+    { "expect-milestone" = "probe:done" },
+  ] },
+]

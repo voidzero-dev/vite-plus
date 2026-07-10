@@ -48,7 +48,7 @@ runs:
 
     - name: Restore binaries cache
       id: binaries-cache
-      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.binary-paths.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
@@ -97,7 +97,7 @@ runs:
         if-no-files-found: error
         retention-days: 7
 
-    - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       with:
         path: ${{ steps.binary-paths.outputs.paths }}

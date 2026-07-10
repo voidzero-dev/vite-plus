@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_monorepo_yarn4"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should merge vite.config.ts and remove oxlintrc", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "check .oxlintrc.json is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".yarnrc.yml"], comment = "check .yarnrc.yml", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "check app package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/utils/package.json"], comment = "check utils package.json", continue-on-failure = true },
+]

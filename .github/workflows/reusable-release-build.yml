@@ -42,9 +42,9 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: namespace-profile-windows-4c-8g
           - target: aarch64-pc-windows-msvc
-            os: windows-latest
+            os: namespace-profile-windows-4c-8g
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           # Stamp ${VERSION} as the [package] version so CARGO_PKG_VERSION matches
           # the version that gets published/installed (the release version, or
-          # 0.0.0-commit.<sha> for pkg.pr.new). Anchored to the line-start
+          # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
           # `version = "..."` so crate dependency versions are never touched.
           for f in crates/vite_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"

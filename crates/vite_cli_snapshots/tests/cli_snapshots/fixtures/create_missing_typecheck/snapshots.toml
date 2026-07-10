@@ -1,0 +1,11 @@
+[[case]]
+name = "create_missing_typecheck"
+vp = "global"
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive"], comment = "create standalone app", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-application/vite.config.ts"], comment = "check standalone vite.config.ts has typeAware and typeCheck", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:monorepo", "--no-interactive"], comment = "create monorepo", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-monorepo/vite.config.ts"], comment = "check monorepo root vite.config.ts has typeAware and typeCheck", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-monorepo/apps/website/vite.config.ts", "--assert-not", "file"], comment = "sub-app should NOT have typeAware/typeCheck", continue-on-failure = true },
+]

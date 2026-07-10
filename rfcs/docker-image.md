@@ -262,11 +262,12 @@ release. (Exact wiring is an implementation detail for the PR.)
 
 ### Pre-release validation (preview image)
 
-To verify the image before a real release, the `pkg.pr.new` workflow
-(`publish-to-pkg.pr.new.yml`) also builds the multi-arch image, but from the PR's
-pkg.pr.new build (`VP_PR_VERSION`), and pushes it as `ghcr.io/voidzero-dev/vite-plus:pr-<number>`
+To verify the image before a real release, the preview publish workflow
+(`publish-preview.yml`, triggered by the `preview-build` label) also builds the
+multi-arch image, but from the PR's registry bridge build (`VP_PR_VERSION`),
+and pushes it as `ghcr.io/voidzero-dev/vite-plus:pr-<number>`
 (never `latest`). This reuses the exact same `docker/Dockerfile` as the release,
-so labeling a PR with `pkg.pr.new` produces a pullable preview image that
+so labeling a PR with `preview-build` produces a pullable preview image that
 exercises the real build path.
 
 ### Docs example verification

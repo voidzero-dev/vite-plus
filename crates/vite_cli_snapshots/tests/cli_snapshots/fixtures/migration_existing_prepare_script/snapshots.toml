@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_existing_prepare_script"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should compose vp config with existing prepare script", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prepare script is composed: vp config && npm run build", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check pre-commit hook", continue-on-failure = true },
+]

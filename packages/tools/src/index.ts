@@ -5,6 +5,10 @@ switch (subcommand) {
     const { snapTest } = await import('./snap-test.ts');
     await snapTest();
     break;
+  case 'migrate-snap-tests':
+    const { migrateSnapTests } = await import('./migrate-snap-tests.ts');
+    migrateSnapTests();
+    break;
   case 'replace-file-content':
     const { replaceFileContent } = await import('./replace-file-content.ts');
     replaceFileContent();
@@ -44,7 +48,7 @@ switch (subcommand) {
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, local-npm-registry',
+      'Available subcommands: snap-test, migrate-snap-tests, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, local-npm-registry',
     );
     process.exit(1);
 }

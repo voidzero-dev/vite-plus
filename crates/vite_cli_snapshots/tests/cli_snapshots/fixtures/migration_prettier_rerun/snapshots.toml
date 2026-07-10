@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_prettier_rerun"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should detect vite-plus + prettier and auto-migrate prettier", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prettier removed from devDependencies and scripts rewritten", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".prettierrc.json", "--assert-not", "file"], comment = "check prettier config is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check oxfmt config merged into vite.config.ts", continue-on-failure = true },
+]

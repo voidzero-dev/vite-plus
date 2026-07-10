@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_monorepo_pnpm_overrides_dependency_selector"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should merge pnpm overrides with dependency selector", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "check app package.json", continue-on-failure = true },
+]

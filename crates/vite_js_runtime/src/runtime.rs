@@ -1452,6 +1452,16 @@ mod tests {
     }
 
     #[tokio::test]
+    // The unofficial-builds musl channel lists a release in index.json as soon
+    // as its directory is created, before every architecture's binary has been
+    // built. So "latest" can resolve to a version whose linux-*-musl tarball is
+    // not published yet, and the download then fails with HashNotFound. Skip on
+    // musl to avoid this race; other targets download from the atomic official
+    // nodejs.org index and stay reliable.
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_with_latest_alias_in_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

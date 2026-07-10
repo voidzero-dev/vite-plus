@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_standalone_npm"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "migration should work with npm, add overrides, and update lockfile", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json has overrides field (not pnpm.overrides)", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "package-lock.json", "@voidzero-dev/vite-plus-core"], comment = "lockfile updated with the vite override (aliased to @voidzero-dev/vite-plus-core)", continue-on-failure = true },
+]
