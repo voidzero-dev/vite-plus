@@ -7,7 +7,6 @@ Yarn PnP converts to node-modules before exact-peer migration
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
 
 ✔ Switched Yarn to node-modules mode

@@ -1,0 +1,12 @@
+[[case]]
+name = "command_env_global_install_multiple_fail"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", ".", "voidzero-nonexistent-pkg-xyz-23456"], continue-on-failure = true },
+  { argv = ["install-fail-local-package"], continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "install-fail-local-package"], continue-on-failure = true },
+]

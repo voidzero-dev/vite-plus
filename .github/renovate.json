@@ -4,14 +4,7 @@
   "description": "Skip lockfile artifact updates (npm and cargo): they fail in Renovate's clone because vite/ and rolldown/ are gitignored. The renovate-lockfiles workflow regenerates lockfiles on renovate/** pushes; gitIgnoredAuthors keeps Renovate managing branches with its commits.",
   "gitIgnoredAuthors": ["278573678+voidzero-guard[bot]@users.noreply.github.com"],
   "skipArtifactsUpdate": true,
-  "ignorePaths": [
-    "packages/cli/snap-tests/**",
-    "packages/cli/snap-tests-global/**",
-    "packages/cli/snap-tests-todo/**",
-    "bench/fixtures/**",
-    "rolldown/**",
-    "vite/**"
-  ],
+  "ignorePaths": ["bench/fixtures/**", "rolldown/**", "vite/**"],
   "packageRules": [
     {
       "description": "Ignore upstream toolchain npm packages (vendored via sync-remote or bumped by the proactive catalog workflow); everything else stays enabled so security alerts get fixed.",

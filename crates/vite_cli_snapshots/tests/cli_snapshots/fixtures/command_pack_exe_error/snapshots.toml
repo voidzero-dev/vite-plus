@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pack_exe_error"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "pack", "src/index.ts", "--exe"], continue-on-failure = true },
+]

@@ -7,7 +7,6 @@ migration should strip --ignore-unknown and -u flags
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>

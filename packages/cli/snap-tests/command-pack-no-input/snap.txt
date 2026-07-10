@@ -1,2 +1,0 @@
-[1]> vp pack # should not mention tsdown in error
-error: No input files, try "vp pack <your-file>" or create src/index.ts

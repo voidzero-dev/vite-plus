@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pm_stage_pnpm11"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "stage", "--help"], comment = "should list the staged-publishing subcommands", continue-on-failure = true },
+  { argv = ["vp", "pm", "stage", "publish", "--help"], comment = "should show stage publish options", continue-on-failure = true },
+  { argv = ["vp", "pm", "stage", "approve", "--help"], comment = "should show stage approve options", continue-on-failure = true },
+]

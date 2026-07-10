@@ -1,0 +1,10 @@
+[[case]]
+name = "command_run_argument_order"
+vp = "local"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "run", "-r", "hello"], comment = "new syntax: -r before task, runs recursively", continue-on-failure = true },
+  { argv = ["vp", "run", "hello", "-r"], tty = false, comment = "old syntax: -r after task, passed through as arg", continue-on-failure = true },
+]

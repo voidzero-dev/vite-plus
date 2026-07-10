@@ -1,3 +1,0 @@
-{
-  "commands": ["vp check -h", "vp check --help", "vp help check"]
-}

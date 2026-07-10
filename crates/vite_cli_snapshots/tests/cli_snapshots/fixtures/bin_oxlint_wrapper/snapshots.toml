@@ -1,0 +1,11 @@
+[[case]]
+name = "bin_oxlint_wrapper"
+vp = "local"
+# The wrapper is addressed by path through the workspace parent, the legacy
+# runner's layout.
+link-node-modules = true
+steps = [
+  { argv = ["node", "../node_modules/vite-plus/bin/oxlint"], comment = "should reject non-LSP usage", continue-on-failure = true },
+  { argv = ["node", "../node_modules/vite-plus/bin/oxlint", "--help"], comment = "should reject non-LSP usage", continue-on-failure = true },
+  { argv = ["node", "../node_modules/vite-plus/bin/oxlint", "--lsp", "--help"], comment = "should exercise import path" },
+]

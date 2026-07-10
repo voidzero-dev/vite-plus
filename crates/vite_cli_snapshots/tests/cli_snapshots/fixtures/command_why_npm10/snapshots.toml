@@ -1,0 +1,17 @@
+[[case]]
+name = "command_why_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2"], comment = "should show why package is installed (uses npm explain)", continue-on-failure = true },
+  { argv = ["vp", "explain", "testnpm2"], comment = "should work with explain alias", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-package"], comment = "should show why dev package is installed", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--json"], comment = "should support json output", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "test-vite-plus-package"], comment = "should support multiple packages", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--long"], comment = "should warn that --long not supported by npm", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--parseable"], comment = "should warn that --parseable not supported by npm", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "-P"], comment = "should warn that --prod not supported by npm", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--find-by", "customFinder"], comment = "should warn that --find-by not supported by npm", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--", "--omit=dev"], comment = "should support pass through arguments", continue-on-failure = true },
+]

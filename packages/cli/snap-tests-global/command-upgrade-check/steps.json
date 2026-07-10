@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
-  "commands": [
-    "vp upgrade --check --tag alpha # alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)"
-  ]
-}

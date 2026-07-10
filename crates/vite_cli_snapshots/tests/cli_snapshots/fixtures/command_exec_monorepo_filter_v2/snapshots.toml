@@ -1,0 +1,21 @@
+[[case]]
+name = "command_exec_monorepo_filter_v2"
+vp = "local"
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "exec", "-F", "app-a", "--", "echo", "hello"], comment = "-F short flag for --filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "-F", "app-a", "-F", "lib-c", "--", "echo", "hello"], comment = "-F short flag multiple", continue-on-failure = true },
+  { argv = ["vp", "exec", "-F", "app-*", "--", "echo", "hello"], comment = "-F short flag with glob", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-a lib-c", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "whitespace splitting: 'a b' => two filters", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-a  app-b", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "whitespace splitting with extra spaces", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "nonexistent-pkg", "--", "echo", "hello"], comment = "unmatched filter warning", continue-on-failure = true },
+  { argv = ["vp", "exec", "--fail-if-no-match", "--filter", "nonexistent-pkg", "--", "echo", "hello"], comment = "unmatched filter strict error", continue-on-failure = true },
+  { argv = ["vp", "exec", "--fail-if-no-match", "--filter", "nonexistent-pkg", "--filter", "app-a", "--", "echo", "hello"], comment = "unmatched + matched strict error", continue-on-failure = true },
+  { argv = ["vp", "exec", "--fail-if-no-match", "--filter", "nope1", "--filter", "nope2", "--", "echo", "hello"], comment = "multiple unmatched strict error", continue-on-failure = true },
+  { argv = ["vp", "exec", "--fail-if-no-match", "--filter", "app-a", "--", "echo", "hello"], comment = "strict succeeds when filter matches", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "nonexistent-pkg", "--filter", "app-a", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "unmatched + matched filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "-w", "--filter", "app-a", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "-w + --filter is additive (root + filtered)", continue-on-failure = true },
+  { argv = ["vp", "exec", "-w", "--filter", "app-*", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "-w + glob filter additive", continue-on-failure = true },
+  { argv = ["vp", "exec", "-r", "--filter", "app-a", "--", "echo", "hello"], comment = "-r + --filter conflict error", continue-on-failure = true },
+]

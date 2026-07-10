@@ -1,0 +1,14 @@
+[[case]]
+name = "command_link_yarn4"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "../test-lib-yarn"], comment = "create test library" },
+  { argv = ["vpt", "write-file", "../test-lib-yarn/package.json", "{\"name\": \"test-lib-yarn\", \"version\": \"1.0.0\"}\n"], continue-on-failure = true },
+  { argv = ["vp", "link", "../test-lib-yarn"], comment = "should link local directory" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "ln", "../test-lib-yarn"], comment = "should work with ln alias" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "unlink", "test-lib-yarn"], comment = "cleanup temp states" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

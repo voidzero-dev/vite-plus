@@ -1,0 +1,292 @@
+# command_add_npm10_with_workspace
+
+## `vp add testnpm2 -D -w -- --no-audit`
+
+should add package to workspace root
+
+```
+
+added 3 packages in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+```
+
+## `vp add @vite-plus-test/utils --workspace -- --no-audit`
+
+should add @vite-plus-test/utils to workspace root
+
+```
+
+up to date in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+```
+
+## `vp add testnpm2 test-vite-plus-install@1.0.0 --filter app -- --no-audit`
+
+should add packages to packages/app
+
+```
+
+added 1 package in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+```
+
+## `vp add @vite-plus-test/utils --workspace --filter app -- --no-audit`
+
+should add @vite-plus-test/utils to packages/app
+
+```
+
+up to date in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+```
+
+## `vp add testnpm2 test-vite-plus-install@1.0.0 --filter * -- --no-audit`
+
+should add testnpm2 test-vite-plus-install to all packages except workspace root
+
+```
+
+up to date in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+```
+
+## `vp add -E testnpm2 test-vite-plus-install@1.0.0 --filter * --workspace-root -- --no-audit`
+
+should add testnpm2 test-vite-plus-install to all packages include workspace root
+
+```
+
+up to date in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+```
+
+## `vp install test-vite-plus-package@1.0.0 --filter * --workspace-root -- --no-audit`
+
+should install packages alias for add command
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+added 1 package in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
+
+```
+{
+  "name": "command-add-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "^1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "^1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+```

@@ -1,0 +1,21 @@
+[[case]]
+name = "command_outdated_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2"], comment = "should outdated package", continue-on-failure = true },
+  { argv = ["vp", "outdated", "test-vite*"], comment = "should outdated with glob pattern not working on npm", continue-on-failure = true },
+  { argv = ["vp", "outdated", "--format", "json"], comment = "should support json output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "--format", "list"], comment = "should support list output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "--format", "table"], comment = "should support table output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "--long"], comment = "should support --long", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-r"], comment = "should support recursive output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-P"], comment = "should support prod output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-D"], comment = "should support dev output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "--no-optional"], comment = "should support no-optional output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "--compatible"], comment = "should compatible output nothing", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.test-vite-plus-other-optional", "\"^1.0.0\""], comment = "should support compatible output with optional dependencies", snapshot = false },
+  { argv = ["vp", "outdated", "--compatible"], continue-on-failure = true },
+  { argv = ["vp", "outdated", "--sort-by", "name"], comment = "should support sort-by output", continue-on-failure = true },
+]

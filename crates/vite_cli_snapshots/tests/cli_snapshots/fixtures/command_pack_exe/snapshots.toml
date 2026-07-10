@@ -1,0 +1,15 @@
+[[case]]
+name = "command_pack_exe"
+vp = "global"
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "pack", "src/index.ts", "--exe"], continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "dist"], continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "build"], continue-on-failure = true },
+  { argv = ["./build/index"], comment = "the packed executable runs", continue-on-failure = true },
+]
+after = [
+  { argv = ["vpt", "rm", "-rf", "dist"], continue-on-failure = true },
+  { argv = ["vpt", "rm", "-rf", "build"], continue-on-failure = true },
+]

@@ -1,0 +1,24 @@
+[[case]]
+name = "command_pack_pnpm10_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "pack"], comment = "should pack current workspace root" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const out=JSON.parse(execFileSync('vp',['pm','pack','--recursive','--json'],{encoding:'utf8'}));out.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);console.log(JSON.stringify(out,null,2));"], comment = "should pack all packages in workspace (sorted by name for determinism)" },
+  ["vpt", "print-file", "out.json"],
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--filter", "app"], comment = "should pack specific package (uses --filter app pack)" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const out=JSON.parse(execFileSync('vp',['pm','pack','--filter','app','--filter','@vite-plus-test/utils','--json'],{encoding:'utf8'}));out.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);console.log(JSON.stringify(out,null,2));"], comment = "should pack multiple packages (sorted by name for determinism)" },
+  ["vpt", "print-file", "out.json"],
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--out", "./dist/package.tgz"], comment = "should pack with output file" },
+  { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--pack-destination", "./dist"], comment = "should pack with destination" },
+  { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--pack-gzip-level", "9"], comment = "should pack with gzip compression level" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--json", "--out", "foo-%s-%v.tgz"], comment = "should pack with json output" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+]

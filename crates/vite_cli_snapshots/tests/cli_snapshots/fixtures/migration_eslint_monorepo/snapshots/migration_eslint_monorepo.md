@@ -7,7 +7,6 @@ migration should detect eslint in monorepo and migrate all packages
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✔ Created vite.config.ts in vite.config.ts
 
 ✔ Merged .oxlintrc.json into vite.config.ts

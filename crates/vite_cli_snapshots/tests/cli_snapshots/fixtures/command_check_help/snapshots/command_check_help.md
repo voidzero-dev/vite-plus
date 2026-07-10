@@ -1,0 +1,73 @@
+# command_check_help
+
+## `vp check -h`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp check [OPTIONS] [PATHS]...
+
+Run format, lint, and type checks.
+
+Options:
+  --fix                            Auto-fix format and lint issues
+  --no-fmt                         Skip format check
+  --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
+  --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  -h, --help                       Print help
+
+Examples:
+  vp check
+  vp check --fix
+  vp check --no-lint src/index.ts
+
+Documentation: https://viteplus.dev/guide/check
+```
+
+## `vp check --help`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp check [OPTIONS] [PATHS]...
+
+Run format, lint, and type checks.
+
+Options:
+  --fix                            Auto-fix format and lint issues
+  --no-fmt                         Skip format check
+  --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
+  --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  -h, --help                       Print help
+
+Examples:
+  vp check
+  vp check --fix
+  vp check --no-lint src/index.ts
+
+Documentation: https://viteplus.dev/guide/check
+```
+
+## `vp help check`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp check [OPTIONS] [PATHS]...
+
+Run format, lint, and type checks.
+
+Options:
+  --fix                            Auto-fix format and lint issues
+  --no-fmt                         Skip format check
+  --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
+  --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  -h, --help                       Print help
+
+Examples:
+  vp check
+  vp check --fix
+  vp check --no-lint src/index.ts
+
+Documentation: https://viteplus.dev/guide/check
+```

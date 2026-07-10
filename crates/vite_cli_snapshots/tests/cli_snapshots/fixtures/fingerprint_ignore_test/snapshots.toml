@@ -1,0 +1,17 @@
+# Disabled on every platform since the legacy suite (fingerprintIgnores is not
+# yet supported in vite-task user config); no snapshot is recorded until the
+# case is re-enabled.
+[[case]]
+name = "fingerprint_ignore_test"
+vp = "local"
+skip-platforms = ["linux", "windows", "macos"]
+steps = [
+  { argv = ["vp", "run", "create-files"], comment = "first run" },
+  { argv = ["vp", "run", "create-files"], comment = "cache hit - no changes" },
+  { argv = ["vpt", "write-file", "node_modules/pkg-a/index.js", "module.exports = {modified: true}\n"], snapshot = false },
+  { argv = ["vp", "run", "create-files"], comment = "cache hit - index.js ignored" },
+  { argv = ["vpt", "write-file", "dist/bundle.js", "modified output\n"], snapshot = false },
+  { argv = ["vp", "run", "create-files"], comment = "cache hit - dist ignored" },
+  { argv = ["vpt", "write-file", "node_modules/pkg-a/package.json", "{\"name\":\"pkg-a\",\"version\":\"2.0.0\"}\n"], snapshot = false },
+  { argv = ["vp", "run", "create-files"], comment = "cache miss - package.json NOT ignored" },
+]

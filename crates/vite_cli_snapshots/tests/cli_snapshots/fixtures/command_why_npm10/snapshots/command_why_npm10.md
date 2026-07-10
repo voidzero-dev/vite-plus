@@ -1,0 +1,142 @@
+# command_why_npm10
+
+## `vp install`
+
+should install packages first
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+added 3 packages, and audited 4 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp why testnpm2`
+
+should show why package is installed (uses npm explain)
+
+```
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```
+
+## `vp explain testnpm2`
+
+should work with explain alias
+
+```
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```
+
+## `vp why test-vite-plus-package`
+
+should show why dev package is installed
+
+```
+test-vite-plus-package@1.0.0 dev
+node_modules/test-vite-plus-package
+  dev test-vite-plus-package@"1.0.0" from the root project
+```
+
+## `vp why testnpm2 --json`
+
+should support json output
+
+```
+[
+  {
+    "name": "testnpm2",
+    "version": "1.0.1",
+    "location": "node_modules/testnpm2",
+    "isWorkspace": false,
+    "dependents": [
+      {
+        "type": "prod",
+        "name": "testnpm2",
+        "spec": "1.0.1",
+        "from": {
+          "location": "<workspace>"
+        }
+      }
+    ],
+    "dev": false,
+    "optional": false,
+    "devOptional": false,
+    "peer": false,
+    "bundled": false,
+    "overridden": false
+  }
+]
+```
+
+## `vp why testnpm2 test-vite-plus-package`
+
+should support multiple packages
+
+```
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+test-vite-plus-package@1.0.0 dev
+node_modules/test-vite-plus-package
+  dev test-vite-plus-package@"1.0.0" from the root project
+```
+
+## `vp why testnpm2 --long`
+
+should warn that --long not supported by npm
+
+```
+warn: --long not supported by npm
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```
+
+## `vp why testnpm2 --parseable`
+
+should warn that --parseable not supported by npm
+
+```
+warn: --parseable not supported by npm
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```
+
+## `vp why testnpm2 -P`
+
+should warn that --prod not supported by npm
+
+```
+warn: --prod/--dev not supported by npm
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```
+
+## `vp why testnpm2 --find-by customFinder`
+
+should warn that --find-by not supported by npm
+
+```
+warn: --find-by not supported by npm
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```
+
+## `vp why testnpm2 -- --omit=dev`
+
+should support pass through arguments
+
+```
+testnpm2@1.0.1
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+```

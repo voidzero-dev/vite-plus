@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_install_conflict"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "./conflict-pkg"], comment = "Install package with conflicting binary name (uses cwd version)", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "conflict-pkg"], comment = "Cleanup", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "--node", "20", "./conflict-pkg"], comment = "Install with specific Node.js version", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "conflict-pkg"], comment = "Cleanup", continue-on-failure = true },
+]

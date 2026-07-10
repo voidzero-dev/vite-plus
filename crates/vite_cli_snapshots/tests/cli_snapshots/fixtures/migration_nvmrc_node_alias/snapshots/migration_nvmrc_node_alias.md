@@ -7,7 +7,6 @@
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 "node" in .nvmrc is not a specific version; automatically mapping to "lts/*"
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>

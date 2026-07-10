@@ -14,7 +14,6 @@ migration should fail because vitest version is not supported
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✘ vitest@3.2.4 in package.json is not supported by auto migration
 
 Please upgrade vitest to version >=4.0.0 first

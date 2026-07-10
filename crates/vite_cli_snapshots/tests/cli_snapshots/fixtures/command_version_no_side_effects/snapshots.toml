@@ -1,0 +1,8 @@
+[[case]]
+name = "command_version_no_side_effects"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "--version"], comment = "should print version", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".node-version", "--assert", "missing"], comment = "no .node-version side effect" },
+]

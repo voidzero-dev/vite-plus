@@ -1,0 +1,9 @@
+[[case]]
+name = "command_why_bun"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "why", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2"], comment = "should show why package is installed", continue-on-failure = true },
+]

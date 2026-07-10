@@ -7,7 +7,6 @@ migration should work with bun object-form workspaces
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ✔ Merged .oxlintrc.json into vite.config.ts
 ◇ Migrated . to Vite+ <version>
 • Node <version>  bun <version>

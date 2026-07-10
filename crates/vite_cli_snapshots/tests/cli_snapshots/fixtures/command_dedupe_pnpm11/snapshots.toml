@@ -1,0 +1,18 @@
+[[case]]
+name = "command_dedupe_pnpm11"
+vp = "global"
+steps = [
+  { argv = ["vp", "dedupe", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "dedupe"], comment = "should dedupe dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "dedupe", "--check"], comment = "should check if deduplication would make changes" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "dedupe", "--", "--loglevel=warn"], comment = "support pass through arguments" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies", "{}"], comment = "should check fails because no dependencies", snapshot = false },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "dedupe", "--check"], continue-on-failure = true },
+  { argv = ["vp", "dedupe"], comment = "should dedupe fix the change by removing the dependencies" },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "dedupe", "--check"], continue-on-failure = true },
+]

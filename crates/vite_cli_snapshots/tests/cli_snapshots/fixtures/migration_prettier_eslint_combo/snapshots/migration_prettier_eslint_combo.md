@@ -7,7 +7,6 @@ migration should detect both eslint and prettier and auto-migrate
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
