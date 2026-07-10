@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_husky_catalog_version"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should resolve husky version from catalog and configure hooks without warning", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky and lint-staged should be removed, prepare rewritten to vp config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check staged config migrated to vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check pre-commit hook rewritten", continue-on-failure = true },
+]

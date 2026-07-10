@@ -1,8 +1,0 @@
-> vp env exec node -v # Root: uses devEngines.runtime directly
-v20.18.0
-
-> cd packages/app && vp env exec node -v # Sub-package: inherits parent devEngines.runtime
-v20.18.0
-
-> test ! -f packages/app/.node-version && echo 'No .node-version written in sub-package' # Verify no .node-version created in sub-package
-No .node-version written in sub-package

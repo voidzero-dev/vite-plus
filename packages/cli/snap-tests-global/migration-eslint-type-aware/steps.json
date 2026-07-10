@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # migration should preserve type-aware coverage",
-    "cat package.json # check typescript-eslint and @typescript-eslint/* are removed; typescript is preserved",
-    "cat vite.config.ts # check options.typeAware/typeCheck = true is set in the lint block"
-  ]
-}

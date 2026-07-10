@@ -1,0 +1,9 @@
+[[case]]
+name = "shim_inherits_parent_engines_node"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "exec", "node", "-v"], comment = "Root: uses engines.node directly", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "node", "-v"], cwd = "packages/app", comment = "Sub-package: inherits parent engines.node", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/app/.node-version", "--assert-not", "file"], comment = "Verify no .node-version created in sub-package", continue-on-failure = true },
+]

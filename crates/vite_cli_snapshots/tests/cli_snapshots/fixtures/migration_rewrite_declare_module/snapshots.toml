@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_rewrite_declare_module"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "retained vitest augmentations should keep a package-local vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/index.ts"], comment = "declare module 'vite'/'vitest' outside config files are preserved: through the core alias a 'vite' augmentation reaches the UserConfig that types vite-plus defineConfig, while vite-plus exports no UserConfig symbol to merge a rewritten augmentation with", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

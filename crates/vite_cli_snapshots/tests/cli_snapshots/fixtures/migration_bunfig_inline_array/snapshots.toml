@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_bunfig_inline_array"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration preserves inline arrays in an existing bunfig.toml", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "bunfig.toml"], comment = "check Bun configuration is unchanged", continue-on-failure = true },
+]

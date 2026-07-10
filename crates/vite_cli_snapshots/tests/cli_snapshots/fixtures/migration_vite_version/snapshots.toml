@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_vite_version"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should rewrite vite --version to vp --version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

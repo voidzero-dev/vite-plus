@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_eslint_monorepo"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect eslint in monorepo and migrate all packages", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check root eslint removed and scripts rewritten", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "check app eslint removed and scripts rewritten", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/utils/package.json"], comment = "check utils eslint removed and scripts rewritten", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "eslint.config.mjs", "--assert-not", "file"], comment = "check root eslint config is removed", continue-on-failure = true },
+]

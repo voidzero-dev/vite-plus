@@ -1,0 +1,7 @@
+[[case]]
+name = "check_fix_reformat"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--fix"], continue-on-failure = true },
+  { argv = ["vp", "check"], comment = "should pass after fix", continue-on-failure = true },
+]

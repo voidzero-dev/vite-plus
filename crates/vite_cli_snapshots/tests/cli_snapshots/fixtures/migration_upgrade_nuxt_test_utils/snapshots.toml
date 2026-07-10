@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_upgrade_nuxt_test_utils"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "preserve upstream Vitest throughout packages that declare @nuxt/test-utils", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "direct Vitest and its shared pin remain for the package-level exception", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "nuxt.spec.ts"], comment = "unscoped Vitest stays while the scoped browser package migrates", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "unit.spec.ts"], comment = "an unrelated test file in the same package also keeps upstream Vitest", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "the package-level compatibility result is idempotent", continue-on-failure = true },
+]

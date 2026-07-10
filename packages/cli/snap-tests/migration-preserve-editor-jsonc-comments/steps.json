@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive --no-hooks --editor vscode 2>&1 # merge must preserve existing .vscode JSONC comments",
-    "cat .vscode/settings.json # top-level and nested comments survive; oxc settings are added without overwriting existing values",
-    "cat .vscode/extensions.json # existing recommendation and comment stay; vite-plus extension is appended once"
-  ]
-}
