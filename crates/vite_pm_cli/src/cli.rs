@@ -712,10 +712,6 @@ pub enum PmCommands {
         /// Version number or increment strategy
         new_version: Option<String>,
 
-        /// Filter packages in a pnpm/npm workspace (can be used multiple times)
-        #[arg(long, value_name = "PATTERN")]
-        filter: Vec<String>,
-
         /// Output in JSON format
         #[arg(long)]
         json: bool,
@@ -1450,40 +1446,14 @@ mod tests {
         .expect("version arguments should parse");
 
         assert!(command.is_quiet_or_machine_readable());
-        let PackageManagerCommand::Pm(PmCommands::Version {
-            new_version,
-            filter,
-            json,
-            pass_through_args,
-        }) = command
+        let PackageManagerCommand::Pm(PmCommands::Version { new_version, json, pass_through_args }) =
+            command
         else {
             panic!("expected Version variant");
         };
         assert_eq!(new_version.as_deref(), Some("prerelease"));
-        assert!(filter.is_empty());
         assert!(json);
         assert_eq!(pass_through_args, Some(vec!["--preid".to_string(), "beta".to_string()]));
-    }
-
-    #[test]
-    fn version_parses_workspace_filters_after_strategy() {
-        let command =
-            parse_pm_command(&["vp", "pm", "version", "patch", "--filter", "web", "--json"])
-                .expect("version filters should parse");
-
-        let PackageManagerCommand::Pm(PmCommands::Version {
-            new_version,
-            filter,
-            json,
-            pass_through_args,
-        }) = command
-        else {
-            panic!("expected Version variant");
-        };
-        assert_eq!(new_version.as_deref(), Some("patch"));
-        assert_eq!(filter, ["web"]);
-        assert!(json);
-        assert!(pass_through_args.is_none());
     }
 
     #[test]

@@ -14,7 +14,6 @@ use crate::package_manager::{
 #[derive(Debug, Default)]
 pub struct VersionCommandOptions<'a> {
     pub new_version: Option<&'a str>,
-    pub filters: Option<&'a [String]>,
     pub json: bool,
     pub pass_through_args: Option<&'a [String]>,
 }
@@ -26,22 +25,22 @@ impl PackageManager {
         options: &VersionCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
-        let command = self.resolve_version_command(options);
+        let command = self.resolve_version_command(options)?;
         run_command(&command.bin_path, &command.args, &command.envs, cwd).await
     }
 
     #[must_use]
-    pub fn resolve_version_command(&self, options: &VersionCommandOptions) -> ResolveCommandResult {
-        let mut resolved_args = Vec::new();
-        if self.client == PackageManagerType::Pnpm
-            && let Some(filters) = options.filters
-        {
-            for filter in filters {
-                resolved_args.push("--filter".into());
-                resolved_args.push(filter.clone());
-            }
+    pub fn resolve_version_command(
+        &self,
+        options: &VersionCommandOptions,
+    ) -> Result<ResolveCommandResult, Error> {
+        if self.client == PackageManagerType::Yarn && self.is_yarn_berry() && options.json {
+            return Err(Error::InvalidArgument(
+                "`--json` is not supported by Yarn 2+ `version`.".into(),
+            ));
         }
 
+        let mut resolved_args = Vec::new();
         if self.client == PackageManagerType::Bun {
             if !bun_supports_version_command(&self.version) {
                 output::warn(&format!(
@@ -68,18 +67,6 @@ impl PackageManager {
                 resolved_args.push(new_version.to_string());
             }
         }
-        if self.client != PackageManagerType::Pnpm
-            && let Some(filters) = options.filters
-        {
-            for filter in filters {
-                if self.client == PackageManagerType::Npm {
-                    resolved_args.push("--workspace".into());
-                } else {
-                    resolved_args.push("--filter".into());
-                }
-                resolved_args.push(filter.clone());
-            }
-        }
         if options.json {
             resolved_args.push("--json".into());
         }
@@ -87,11 +74,11 @@ impl PackageManager {
             resolved_args.extend_from_slice(pass_through_args);
         }
 
-        ResolveCommandResult {
+        Ok(ResolveCommandResult {
             bin_path: self.bin_name.to_string(),
             args: resolved_args,
             envs: HashMap::from([("PATH".into(), format_path_env(self.get_bin_prefix()))]),
-        }
+        })
     }
 }
 
@@ -124,6 +111,13 @@ mod tests {
         }
     }
 
+    fn resolve(
+        package_manager: &PackageManager,
+        options: &VersionCommandOptions,
+    ) -> ResolveCommandResult {
+        package_manager.resolve_version_command(options).expect("version command should resolve")
+    }
+
     #[test]
     fn detects_bun_version_command_support() {
         assert!(!bun_supports_version_command("1.2.17"));
@@ -135,16 +129,16 @@ mod tests {
     fn translates_yarn_classic_versions() {
         let yarn = create_mock_package_manager(PackageManagerType::Yarn);
 
-        let patch = yarn.resolve_version_command(&VersionCommandOptions {
-            new_version: Some("patch"),
-            ..Default::default()
-        });
+        let patch = resolve(
+            &yarn,
+            &VersionCommandOptions { new_version: Some("patch"), ..Default::default() },
+        );
         assert_eq!(patch.args, ["version", "--patch"]);
 
-        let explicit = yarn.resolve_version_command(&VersionCommandOptions {
-            new_version: Some("2.0.0"),
-            ..Default::default()
-        });
+        let explicit = resolve(
+            &yarn,
+            &VersionCommandOptions { new_version: Some("2.0.0"), ..Default::default() },
+        );
         assert_eq!(explicit.args, ["version", "--new-version", "2.0.0"]);
     }
 
@@ -153,43 +147,33 @@ mod tests {
         let mut yarn = create_mock_package_manager(PackageManagerType::Yarn);
         yarn.version = "4.0.0".into();
 
-        let result = yarn.resolve_version_command(&VersionCommandOptions {
-            new_version: Some("patch"),
-            ..Default::default()
-        });
+        let result = resolve(
+            &yarn,
+            &VersionCommandOptions { new_version: Some("patch"), ..Default::default() },
+        );
         assert_eq!(result.args, ["version", "patch"]);
     }
 
     #[test]
-    fn resolves_workspace_filters() {
-        let filters = vec!["web".to_string()];
-        let options = VersionCommandOptions {
+    fn rejects_yarn_berry_json() {
+        let mut yarn = create_mock_package_manager(PackageManagerType::Yarn);
+        yarn.version = "4.0.0".into();
+
+        let result = yarn.resolve_version_command(&VersionCommandOptions {
             new_version: Some("patch"),
-            filters: Some(&filters),
+            json: true,
             ..Default::default()
-        };
-
-        let pnpm = create_mock_package_manager(PackageManagerType::Pnpm);
-        assert_eq!(
-            pnpm.resolve_version_command(&options).args,
-            ["--filter", "web", "version", "patch"]
-        );
-
-        let npm = create_mock_package_manager(PackageManagerType::Npm);
-        assert_eq!(
-            npm.resolve_version_command(&options).args,
-            ["version", "patch", "--workspace", "web"]
-        );
+        });
+        assert!(matches!(result, Err(Error::InvalidArgument(_))));
     }
 
     #[test]
     fn resolves_json_output() {
         let npm = create_mock_package_manager(PackageManagerType::Npm);
-        let result = npm.resolve_version_command(&VersionCommandOptions {
-            new_version: Some("patch"),
-            json: true,
-            ..Default::default()
-        });
+        let result = resolve(
+            &npm,
+            &VersionCommandOptions { new_version: Some("patch"), json: true, ..Default::default() },
+        );
         assert_eq!(result.args, ["version", "patch", "--json"]);
     }
 
@@ -214,7 +198,7 @@ mod tests {
 
         for (pm_type, expected_bin, expected_args) in cases {
             let pm = create_mock_package_manager(pm_type);
-            let result = pm.resolve_version_command(&options);
+            let result = resolve(&pm, &options);
 
             assert_eq!(result.bin_path, expected_bin);
             assert_eq!(result.args, expected_args);

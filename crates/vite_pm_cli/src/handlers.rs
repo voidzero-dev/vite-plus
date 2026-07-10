@@ -283,10 +283,9 @@ pub async fn run_pm_subcommand(
             Ok(pm.run_view_command(&options, cwd).await?)
         }
 
-        PmCommands::Version { new_version, filter, json, pass_through_args } => {
+        PmCommands::Version { new_version, json, pass_through_args } => {
             let options = VersionCommandOptions {
                 new_version: new_version.as_deref(),
-                filters: (!filter.is_empty()).then_some(filter.as_slice()),
                 json,
                 pass_through_args: pass_through_args.as_deref(),
             };
