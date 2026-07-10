@@ -35,6 +35,7 @@ steps = [
 name = "pm_version_yarn_berry"
 vp = "local"
 cwd = "yarn_berry"
+env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
   { argv = ["vp", "pm", "version", "patch"], comment = "Yarn Berry bumps the package version", continue-on-failure = true },
   { argv = ["vp", "pm", "version", "2.0.0", "--json"], comment = "Yarn Berry rejects unsupported JSON output", continue-on-failure = true },
