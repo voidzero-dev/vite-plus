@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_existing_pnpm_exec_lint_staged"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should strip pnpm exec lint-staged and add vp staged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prepare rewritten and husky/lint-staged removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check staged config migrated to vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check pnpm exec lint-staged replaced with vp staged", continue-on-failure = true },
+]

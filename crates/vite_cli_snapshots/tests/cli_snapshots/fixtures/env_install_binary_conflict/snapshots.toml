@@ -1,0 +1,14 @@
+[[case]]
+name = "env_install_binary_conflict"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "./env-binary-conflict-pkg-a"], comment = "Install pkg-a which provides env-binary-conflict-cli binary", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "$VP_HOME/bins/env-binary-conflict-cli.json"], comment = "Bin config should point to pkg-a", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "./env-binary-conflict-pkg-b"], comment = "Try to install pkg-b without force - should fail", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "$VP_HOME/bins/env-binary-conflict-cli.json"], comment = "Bin config should still point to pkg-a", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "--force", "./env-binary-conflict-pkg-b"], comment = "Force install pkg-b - should auto-uninstall pkg-a", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "$VP_HOME/bins/env-binary-conflict-cli.json"], comment = "Bin config should now point to pkg-b", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "env-binary-conflict-pkg-b"], comment = "Cleanup", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bins/env-binary-conflict-cli.json", "--assert", "missing"], comment = "Bin config should be deleted", continue-on-failure = true },
+]

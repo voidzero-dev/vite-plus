@@ -49,11 +49,18 @@ impl PackageManager {
             }
             PackageManagerType::Yarn => {
                 bin_name = "yarn".into();
-                args.push("dedupe".into());
+                if self.is_yarn_berry() {
+                    args.push("dedupe".into());
 
-                // yarn@2+ supports --check
-                if options.check {
-                    args.push("--check".into());
+                    // yarn@2+ supports --check
+                    if options.check {
+                        args.push("--check".into());
+                    }
+                } else {
+                    output::warn(
+                        "Yarn Classic dedupes during install, falling back to yarn install",
+                    );
+                    args.push("install".into());
                 }
             }
             PackageManagerType::Npm => {
@@ -148,6 +155,14 @@ mod tests {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
         let result = pm.resolve_dedupe_command(&DedupeCommandOptions { ..Default::default() });
         assert_eq!(result.args, vec!["dedupe"]);
+        assert_eq!(result.bin_path, "yarn");
+    }
+
+    #[test]
+    fn test_yarn_classic_dedupe_falls_back_to_install() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.22");
+        let result = pm.resolve_dedupe_command(&DedupeCommandOptions { ..Default::default() });
+        assert_eq!(result.args, vec!["install"]);
         assert_eq!(result.bin_path, "yarn");
     }
 

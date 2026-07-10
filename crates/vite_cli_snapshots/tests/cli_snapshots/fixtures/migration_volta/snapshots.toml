@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_volta"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect volta.node in package.json and migrate to .node-version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = "check .node-version is created from volta.node", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "volta field is preserved in package.json (not removed)", continue-on-failure = true },
+]

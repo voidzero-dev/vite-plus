@@ -1,0 +1,7 @@
+[[case]]
+name = "test_vi_mock_hoist"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "test", "run", "src/vi-mock-hoist.test.ts"], comment = "vi.mock() from 'vite-plus/test' must hoist via upstream mocker (no vite-plus patch/shim)", continue-on-failure = true },
+]

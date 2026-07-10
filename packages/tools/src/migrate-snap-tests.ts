@@ -143,8 +143,7 @@ function extractComment(line: string): { command: string; comment?: string } {
   return { command: line.trim() };
 }
 
-// Keep in sync with resolve_program's allow-list in
-// crates/vite_cli_snapshots/tests/cli_snapshots/flavor.rs.
+// Legacy commands that can be represented directly without shell semantics.
 const PASSTHROUGH_PROGRAMS = new Set([
   'vp',
   'vpr',
@@ -155,9 +154,11 @@ const PASSTHROUGH_PROGRAMS = new Set([
   'node',
   'git',
   'npm',
+  'npx',
   'pnpm',
   'yarn',
   'bun',
+  'corepack',
 ]);
 
 const COREUTILS_MAP: Record<string, string> = {

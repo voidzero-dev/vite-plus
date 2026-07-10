@@ -26,6 +26,7 @@ pub mod stage;
 pub mod token;
 pub mod unlink;
 pub mod update;
+pub mod version;
 pub mod view;
 pub mod whoami;
 pub mod why;

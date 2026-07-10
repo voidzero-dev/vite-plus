@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_eslint_lint_staged_mjs"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve non-JSON lint-staged config when hooks are not requested", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "lint-staged.config.mjs"], comment = "verify non-JSON lint-staged config is preserved unchanged", continue-on-failure = true },
+]

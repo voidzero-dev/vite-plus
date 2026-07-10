@@ -34,14 +34,39 @@ mod stat_file;
 mod touch_file;
 mod write_file;
 
+/// Expands a leading `$NAME` environment reference in an argument
+/// (`$VP_HOME/bin/x` becomes `<case home>/.vite-plus/bin/x`). The runner has
+/// no shell, so fixtures reference per-case directories this way; only the
+/// leading position expands, and an unset variable leaves the argument
+/// unchanged so ordinary `$`-strings (a printed price) survive verbatim.
+fn expand_env_arg(arg: &str) -> String {
+    let Some(rest) = arg.strip_prefix('$') else {
+        return arg.to_owned();
+    };
+    let end = rest
+        .find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'))
+        .unwrap_or(rest.len());
+    let (name, tail) = rest.split_at(end);
+    if name.is_empty() {
+        return arg.to_owned();
+    }
+    match std::env::var(name) {
+        Ok(value) => format!("{value}{tail}"),
+        Err(_) => arg.to_owned(),
+    }
+}
+
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         eprintln!("Usage: vpt <subcommand> [args...]");
         eprintln!(
             "Subcommands: barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
         );
         std::process::exit(1);
+    }
+    for arg in &mut args[2..] {
+        *arg = expand_env_arg(arg);
     }
 
     let result: Result<(), Box<dyn std::error::Error>> = match args[1].as_str() {

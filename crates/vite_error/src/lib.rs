@@ -11,7 +11,7 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    #[error("IO error: {err} at {path:?}")]
+    #[error("IO error: {err} at {}", .path.as_path().display())]
     IoWithPath { err: std::io::Error, path: Arc<AbsolutePath> },
 
     #[error(transparent)]
@@ -66,7 +66,7 @@ pub enum Error {
     #[error("Resolve universal vite config failed")]
     ResolveUniversalViteConfigFailed { status: Str, reason: Str },
 
-    #[error("The path ({path:?}) is not a valid relative path because: {reason}")]
+    #[error("The path ({}) is not a valid relative path because: {reason}", .path.display())]
     InvalidRelativePath { path: Box<Path>, reason: FromPathError },
 
     #[error("Unsupported package manager: {0}")]
@@ -79,7 +79,8 @@ pub enum Error {
     UnrecognizedPackageManager,
 
     #[error(
-        "Package manager {name}@{version} in {package_json_path:?} is invalid, expected format: 'package-manager-name@major.minor.patch'"
+        "Package manager {name}@{version} in {} is invalid, expected format: 'package-manager-name@major.minor.patch'",
+        .package_json_path.as_path().display()
     )]
     PackageManagerVersionInvalid { name: Str, version: Str, package_json_path: AbsolutePathBuf },
 

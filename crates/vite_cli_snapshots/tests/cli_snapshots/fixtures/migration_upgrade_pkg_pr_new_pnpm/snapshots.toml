@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_upgrade_pkg_pr_new_pnpm"
+vp = "global"
+env = { VP_OVERRIDE_PACKAGES = "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\",\"vitest\":\"4.1.10\"}", VP_VERSION = "0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617" }
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "bridge commit builds upgrade like an ordinary npm version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "direct dependencies use catalogs aligned to the bridge build", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the catalog holds the immutable commit version", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "bridge commit migration is idempotent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "rerun leaves package.json unchanged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "rerun leaves the catalog unchanged", continue-on-failure = true },
+]

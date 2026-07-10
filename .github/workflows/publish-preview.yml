@@ -150,7 +150,7 @@ jobs:
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: voidzero-dev/pkg-pr-registry-bridge@4fbc4133d80536c36e4ce25aab3527da3645afc4 # main
+        uses: voidzero-dev/pkg-pr-registry-bridge@f57eaa9063ca6af90ea6471ef881c8b46c64a060 # main
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}

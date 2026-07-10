@@ -51,11 +51,11 @@ cargo test -p vite_cli_snapshots -- <filter>      # if vp is already built
 ```
 
 Trial names are `<fixture>::<case>` (plus `::<flavor>` for multi-flavor
-cases). Prerequisites: the global flavor needs `cargo build -p
-vite_global_cli` (the `just` recipe does it); the local flavor needs `node`
-and a built `packages/cli/dist` (`pnpm build`); the runner fails fast when
-`dist` is older than `src`, so a forgotten rebuild never silently tests
-stale local-CLI code.
+cases). Prerequisites: both flavors need `cargo build -p vite_global_cli`
+(the `just` recipe does it); the local flavor also needs a built
+`packages/cli/dist` (`pnpm build`). The runner fails fast when `dist` is
+older than `src`, so a forgotten rebuild never silently tests stale
+local-CLI code.
 
 Environment overrides, mainly for CI:
 
@@ -83,8 +83,13 @@ steps = [ ... ]
 after = [ ... ]               # cleanup steps, never snapshotted
 ```
 
-`vp` picks which CLI runs the case: `"global"` is the Rust binary,
-`"local"` is the JS dispatch in `packages/cli/bin`. The list form registers
+`vp` picks which CLI runs the case. Both flavors install the built Rust binary
+into the case's `VP_HOME/current/bin`, install the checkout package under that
+case home, and run `vp env setup` before steps. `"global"` exposes only
+`VP_HOME/bin`; `"local"` also exposes the case-local
+`VP_HOME/current/node_modules/vite-plus/bin` package bin. On Windows, local
+flavor exposes sibling `.cmd` shims under
+`VP_HOME/current/node_modules/.vite-plus-bin` instead. The list form registers
 one trial and one snapshot per flavor; use it for parity cases (help output,
 routing, error messages) where both surfaces must agree.
 
@@ -105,15 +110,13 @@ A step is a bare argv array or a table:
   interactions = [ ... ] }
 ```
 
-`argv[0]` may be `vp`, `vpr`, `vpx`, `vpt`, `oxfmt`, `oxlint`, `node`,
-`git`, `npm`, `pnpm`, `yarn`, or `bun`. `oxfmt`/`oxlint` are JS shims from
-the local CLI build, so they exist under the local flavor only; a global
-case uses `vp fmt` / `vp lint` (what global-binary users run) or a shim
-the case itself creates. There is no shell: no `&&`, no redirects, no
-globs. File setup and assertions go through `vpt` so behavior
+`argv[0]` may be `vpt` or any executable exposed by the case's Vite+
+installation, including default shims such as `vp`, `node`, and `corepack`
+and globally installed package binaries. There is no shell: no `&&`, no
+redirects, no globs. File setup and assertions go through `vpt` so behavior
 is identical on every platform:
 
-`vpt print-file` (cat), `vpt stat-file` (prints `file`/`dir`/`missing`;
+`vpt print-file` (cat), `vpt stat-file` (prints `file`/`dir`/`symlink`/`missing`;
 `--assert <state>` / `--assert-not <state>` also fail on mismatch, so
 `test -f x && cmd` guards keep their short-circuit), `vpt write-file`,
 `vpt touch-file`, `vpt replace-file-content`, `vpt list-dir`, `vpt mkdir`,
@@ -166,13 +169,15 @@ runner itself (see `fixtures/interactive_probe/`).
 
 ## What a step sees
 
-Each case gets a cleared environment: controlled `PATH` (flavor bin dir,
-node, system dirs), `TERM=xterm-256color`, `VP_CLI_TEST=1`,
-`VP_EMIT_MILESTONES=1`, a fresh `HOME`, `VP_HOME`, and npm prefix. `CI` and
-`NO_COLOR` are deliberately NOT set: with a PTY attached, the CLI behaves
-interactively by default, which is the point. `seed-runtime = true`
-(default) symlinks a provisioned managed Node runtime into the case
-`VP_HOME` so commands do not download ~50MB per case.
+Each case gets a cleared environment: controlled `PATH` (runner `vpt`, then
+case-owned tool dirs, then a system tail for child processes and direct `git` steps),
+`TERM=xterm-256color`, `VP_CLI_TEST=1`, `VP_EMIT_MILESTONES=1`, a fresh
+`HOME`, `VP_HOME`, and npm prefix. The runner still rejects direct step tools
+that resolve outside the case-owned dirs, except for `git`; `vpt` is the only
+runner helper on PATH. `CI` and `NO_COLOR` are deliberately NOT set: with a PTY
+attached, the CLI behaves interactively by default, which is the point.
+`seed-runtime = true` (default) symlinks a provisioned managed Node runtime
+into the case `VP_HOME` so commands do not download ~50MB per case.
 
 Fixture configs may import bare `vite-plus` and
 `@voidzero-dev/vite-plus-core`: the runner links the checkout packages

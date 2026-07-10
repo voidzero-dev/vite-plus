@@ -1,0 +1,9 @@
+[[case]]
+name = "check_fmt_fail"
+vp = "local"
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "check"], continue-on-failure = true },
+  { argv = ["vp", "check", "--fix"], continue-on-failure = true },
+  { argv = ["vp", "check"], comment = "should pass after fix", continue-on-failure = true },
+]

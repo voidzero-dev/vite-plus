@@ -1,0 +1,10 @@
+[[case]]
+name = "npm_global_uninstall_link_cleanup"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-uninstall-pkg"], comment = "Install package first", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-uninstall-cli", "--assert", "symlink"], comment = "Link should exist after install", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-uninstall-pkg"], comment = "Uninstall should remove the link", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-uninstall-cli", "--assert-not", "symlink"], comment = "Link should be gone" },
+]

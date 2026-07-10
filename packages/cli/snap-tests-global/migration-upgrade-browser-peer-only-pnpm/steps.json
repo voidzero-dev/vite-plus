@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # peer-only browser provider is promoted with its required peers",
-    "cat package.json # provider, Playwright, and package-local Vitest are installed",
-    "cat pnpm-workspace.yaml # promoted provider keeps shared Vitest management",
-    "vp migrate --no-interactive # repaired project should no longer be pending"
-  ]
-}

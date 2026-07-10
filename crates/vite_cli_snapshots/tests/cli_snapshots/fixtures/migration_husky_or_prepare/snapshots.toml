@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_husky_or_prepare"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve || fallback semantics", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prepare script preserves || true fallback", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]
