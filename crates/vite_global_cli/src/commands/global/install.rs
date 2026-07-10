@@ -557,9 +557,7 @@ async fn install_one(
         }
         let _ = std::io::stderr().write_all(&output.stderr);
         cleanup_failed_install(&install_dir).await?;
-        return Err(Error::Other(
-            format!("npm install failed with exit code: {:?}", output.status.code()).into(),
-        ));
+        return Err(Error::Other(format!("npm install failed with {}", output.status).into()));
     }
 
     let node_modules_dir = get_node_modules_dir(&install_dir, package_name);
