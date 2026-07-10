@@ -157,6 +157,7 @@ const PASSTHROUGH_PROGRAMS = new Set([
   'pnpm',
   'yarn',
   'bun',
+  'corepack',
 ]);
 
 const COREUTILS_MAP: Record<string, string> = {
