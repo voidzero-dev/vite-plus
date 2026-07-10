@@ -251,8 +251,7 @@ Do not assume the merge brought in only the fix PR: `main` may have accumulated 
 
 Known release-branch-only failure modes:
 
-- **Binding version drift**: `CLI E2E test` fails its no-unexpected-changes guard with a diff flipping version strings in `binding/index.cjs`. Fix: step 2.
-- **Unpublished-version installs**: the release branch carries version `X.Y.Z` before it exists on npm. Snap fixtures that run a real package-manager install (`vp create` / `vp migrate` followed by install) fail with `ERR_PNPM_NO_MATCHING_VERSION` or bun/yarn `failed to resolve` for `vite-plus@X.Y.Z` / `@voidzero-dev/vite-plus-core@X.Y.Z`. Fix: pin `"VP_VERSION": "<published version>"` in the fixture's `steps.json` env (see #2017); the snapshot normalizer rewrites versions to `<semver>`, so output does not change. Any new install-performing fixture must ship with this pin or it will break the next release.
+- **Binding version drift**: CI's no-unexpected-changes guard reports a diff flipping version strings in `binding/index.cjs`. Fix: step 2.
 - **Registry flakes**: registry-bound fixtures can time out (about 50s) and look like regressions. Rerun before diagnosing, and never commit a `[timeout]` snapshot.
 
 ## 6. Merge

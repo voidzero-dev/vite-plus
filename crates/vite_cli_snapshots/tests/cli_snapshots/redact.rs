@@ -1,7 +1,7 @@
 //! Normalization of captured terminal screens before they enter a snapshot.
 //!
-//! Deliberately minimal compared to the old snap-test `replaceUnstableOutput`:
-//! grid rendering already removes ANSI noise, spinner frames, and
+//! Redaction stays deliberately minimal: grid rendering already removes ANSI
+//! noise, spinner frames, and
 //! stdout/stderr interleaving, so every rule here should correspond to a real
 //! source of nondeterminism (paths, durations, versions, machine parallelism).
 
