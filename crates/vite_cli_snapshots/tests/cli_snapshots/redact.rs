@@ -30,6 +30,11 @@ static THREAD_RE: LazyLock<regex::Regex> =
 // thread counts.
 static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
+// Oxlint's summary line prints its active rule count ("with 95 rules"), which
+// grows with every bundled oxlint upgrade; mask it like thread counts so lint
+// baselines survive routine dep bumps.
+static RULE_COUNT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"with \d+ rules").unwrap());
 // Some tool banners print runtime versions bare ("Node 24.18.0  pnpm 10.34.4"
 // in vp create); mask those by tool-name context so user semver elsewhere
 // stays assertable.
@@ -277,6 +282,9 @@ pub fn redact_output(
 
     // Redact platform-dependent pack clean counts like "Cleaning 2 files"
     output = CLEANING_COUNT_RE.replace_all(&output, "Cleaning <n> files").into_owned();
+
+    // Redact oxlint rule counts like "with 95 rules" to "with <n> rules"
+    output = RULE_COUNT_RE.replace_all(&output, "with <n> rules").into_owned();
 
     // Redact byte-size numbers like "0.12 kB" to "<size> kB" (unit kept)
     output = SIZE_RE.replace_all(&output, "<size>${1}${2}").into_owned();

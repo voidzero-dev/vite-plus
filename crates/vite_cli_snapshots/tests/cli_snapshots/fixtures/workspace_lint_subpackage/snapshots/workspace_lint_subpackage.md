@@ -16,5 +16,5 @@ sub-workspace has no-console:off but root has no-console:warn
   help: Delete this console statement.
 
 Found 1 warning and 0 errors.
-Finished in <duration> on 2 files with 96 rules using <n> threads.
+Finished in <duration> on 2 files with <n> rules using <n> threads.
 ```

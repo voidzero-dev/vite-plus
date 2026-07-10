@@ -1,8 +1,8 @@
-# vite_plugins_skip_on_lint
+# lint_ignore_patterns
 
 ## `vp lint src/`
 
-vp lint should not load plugins (heavy-plugin.ts throws if imported)
+Test that lint ignorePatterns works - ignored files should not be linted
 
 ```
 Found 0 warnings and 0 errors.
