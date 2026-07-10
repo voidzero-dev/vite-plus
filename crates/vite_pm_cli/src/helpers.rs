@@ -62,7 +62,7 @@ pub async fn ensure_package_json(project_path: &AbsolutePath) -> Result<(), Erro
         Ok(mut file) => {
             file.write_all(content.as_bytes()).await?;
             file.write_all(b"\n").await?;
-            tracing::info!("Created package.json in {:?}", project_path);
+            tracing::info!("Created package.json in {}", project_path.as_path().display());
             Ok(())
         }
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),

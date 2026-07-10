@@ -497,7 +497,10 @@ async fn find_system_node_runtime() -> Option<JsRuntime> {
         return None;
     }
     let system_node = shim::find_system_tool("node")?;
-    tracing::info!("System-first mode: using system Node.js at {:?}", system_node);
+    tracing::info!(
+        "System-first mode: using system Node.js at {}",
+        system_node.as_path().display()
+    );
     Some(JsRuntime::from_system(JsRuntimeType::Node, system_node))
 }
 
