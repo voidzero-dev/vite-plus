@@ -28,9 +28,7 @@ Alternatively, download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 The `vp-setup.exe` is not yet code-signed. Your browser may show a warning when downloading. Click **"..."** → **"Keep"** → **"Keep anyway"** to proceed. If Windows Defender SmartScreen blocks the file when you run it, click **"More info"** → **"Run anyway"**.
 :::
 
-::: info Installer Environment Variables
-The installer scripts and `vp-setup.exe` support environment variables for customization. See the [Installer Environment Variables](/guide/installer-env-vars) page for details.
-:::
+The installer scripts and `vp-setup.exe` read [environment variables](/guide/installer-env-vars) such as `VP_VERSION` and `VP_HOME`.
 
 After installation, open a new shell and run:
 

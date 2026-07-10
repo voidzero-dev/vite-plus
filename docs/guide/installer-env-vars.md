@@ -1,14 +1,10 @@
 # Installer Environment Variables
 
-This page documents all environment variables recognized by the Vite+ installers (`vp-setup.exe`, `install.ps1`, and `install.sh`).
-
-::: tip
-The set of supported variables may change between releases. Always check the [release notes](https://github.com/voidzero-dev/vite-plus/releases) for the version you are using.
-:::
+The Vite+ installers (`vp-setup.exe`, `install.ps1`, and `install.sh`) and the installed `vp` CLI read the environment variables on this page.
 
 ## Installation Variables
 
-These variables control the behavior of the Vite+ installer scripts and the standalone Windows installer (`vp-setup.exe`).
+These variables control the installer scripts and the standalone Windows installer (`vp-setup.exe`).
 
 ### `VP_VERSION`
 
@@ -29,7 +25,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 
 ### `VP_HOME`
 
-- **Purpose**: Installation directory
+- **Purpose**: Installation directory; the installed CLI reads the same variable as the Vite+ home directory (see [Environment](/guide/env))
 - **Default**: `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows)
 - **CLI equivalent**: `--install-dir`
 - **Example**:
@@ -58,7 +54,7 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 
 - **Purpose**: Control Node.js version manager setup during installation
 - **Values**: `yes` or `no`
-- **Default**: Auto-detected based on environment
+- **Default**: Auto-detected
 - **CLI equivalent**: `--no-node-manager` (inverted)
 - **Example**:
   ```bash
@@ -71,69 +67,30 @@ These variables control the behavior of the Vite+ installer scripts and the stan
 - **Purpose**: Install a preview build from a pull request or commit SHA
 - **Values**: PR number or commit SHA
 - **Default**: None
-- **Example**:
-  ```bash
-  # Install preview build for PR #1569
-  curl -fsSL https://vite.plus | VP_PR_VERSION=1569 bash
-  ```
+- **Details**: [Global `vp` Preview](/guide/upgrade#global-vp-preview)
 
-### `VP_LOCAL_TGZ`
+### Development variables
 
-- **Purpose**: Path to local `vite-plus.tgz` for development/testing
-- **Default**: None
-- **Example**:
-  ```bash
-  curl -fsSL https://vite.plus | VP_LOCAL_TGZ=./vite-plus-0.0.0.tgz bash
-  ```
-
-### `VP_LOCAL_BINARY`
-
-- **Purpose**: Path to local `vp` binary for development
-- **Default**: None
-- **Note**: Set by `install-global-cli.ts` for local development
-
-### Internal (do not set manually)
-
-These variables are used internally by the installers and should not be set manually:
-
-- `VP_INSTALL_STOP` — Signal to stop installation (used internally by `install.ps1`)
+When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) and `VP_LOCAL_BINARY` (path to a local `vp` binary) feed the installer a local build. The installers also set `VP_INSTALL_STOP` themselves; do not set it manually.
 
 ## Runtime Variables
 
-These variables affect the behavior of the installed Vite+ CLI.
-
-### `VP_HOME`
-
-- **Purpose**: Override the Vite+ home directory
-- **Default**: `~/.vite-plus`
-- **Example**:
-  ```bash
-  export VP_HOME=/opt/vite-plus
-  ```
+These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applies at runtime.
 
 ### `VP_NODE_DIST_MIRROR`
 
 - **Purpose**: Node.js distribution mirror URL
 - **Default**: `https://nodejs.org/dist`
-- **Example**:
-  ```bash
-  export VP_NODE_DIST_MIRROR=https://npmmirror.com/mirrors/node
-  ```
+- **Details**: [Custom Node.js Mirror](/guide/env#custom-nodejs-mirror)
 
 ### `VP_NODE_VERSION`
 
 - **Purpose**: Override Node.js version
 - **Default**: None (auto-detected)
 - **Example**:
-
   ```bash
   # Run a command with a specific Node.js version
   VP_NODE_VERSION=22 vp env exec node -v
-  ```
-
-  ```cmd
-  :: CMD
-  set VP_NODE_VERSION=22 && vp env exec node -v
   ```
 
 ### `VP_NODE_SKIP_SIGNATURE_VERIFY`
@@ -141,34 +98,11 @@ These variables affect the behavior of the installed Vite+ CLI.
 - **Purpose**: Skip PGP signature verification of Node.js downloads
 - **Values**: Any non-empty value
 - **Default**: None (verification enabled)
-- **Example**:
-  ```bash
-  VP_NODE_SKIP_SIGNATURE_VERIFY=1 vp env install 22
-  ```
-
-### `VP_DEBUG_SHIM`
-
-- **Purpose**: Enable debug output for shim dispatch
-- **Values**: Any non-empty value
-- **Default**: None
-- **Example**:
-  ```bash
-  VP_DEBUG_SHIM=1 node -v
-  ```
-
-### `VP_ENV_USE_EVAL_ENABLE`
-
-- **Purpose**: Enable eval mode for `vp env use`
-- **Values**: Any non-empty value
-- **Default**: None
-- **Example**:
-  ```bash
-  VP_ENV_USE_EVAL_ENABLE=1 eval "$(vp env use 20)"
-  ```
+- **Details**: [Node.js Signature Verification](/guide/env#nodejs-signature-verification)
 
 ### `VP_SHELL`
 
-- **Purpose**: Explicitly specify the current shell
+- **Purpose**: Specify the current shell
 - **Default**: Auto-detected
 - **Example**:
   ```bash
@@ -177,7 +111,7 @@ These variables affect the behavior of the installed Vite+ CLI.
 
 ### `VP_BYPASS`
 
-- **Purpose**: Bypass Vite+ shim and use system tool directly
+- **Purpose**: Bypass the Vite+ shim and use the system tool
 - **Values**: `PATH`-style list of directories to bypass
 - **Default**: None
 - **Example**:
@@ -185,36 +119,19 @@ These variables affect the behavior of the installed Vite+ CLI.
   VP_BYPASS=/usr/local/bin node -v
   ```
 
-### Internal (do not set manually)
+### Internal variables
 
-These variables are set automatically by Vite+ during runtime and should not be configured manually:
-
-- `VP_TOOL_RECURSION` — Recursion guard for `vp env exec` (prevents infinite shim loops)
-- `VP_ACTIVE_NODE` — Records the active Node.js version (set by shim dispatch)
-- `VP_RESOLVE_SOURCE` — Records how the Node.js version was resolved (set by shim dispatch)
-- `VP_SHIM_TOOL` — Indicates which tool is being shimmed (set by shell wrapper scripts)
-- `VP_SHIM_WRAPPER` — Windows shim wrapper flag (set by Windows shim wrappers)
-- `VP_CLI_BIN` — Path to the `vp` binary (passed to JS scripts for CLI commands)
-- `VP_GLOBAL_VERSION` — Global CLI version (passed from Rust binary to JS for `--version` display)
+Vite+ sets additional `VP_*` variables during shim dispatch and shell integration (recursion guards, active-version records, wrapper flags); do not set them manually.
 
 ## TLS/CA Configuration
 
-### `SSL_CERT_FILE`
+### `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS`
 
-- **Purpose**: Path to PEM bundle of extra CA certificates
+- **Purpose**: Path to PEM bundle of extra CA certificates (`NODE_EXTRA_CA_CERTS` is the Node.js convention)
 - **Default**: System trust store
 - **Example**:
   ```bash
   export SSL_CERT_FILE=/path/to/custom-ca.pem
-  ```
-
-### `NODE_EXTRA_CA_CERTS`
-
-- **Purpose**: Path to PEM bundle of extra CA certificates (Node.js convention)
-- **Default**: System trust store
-- **Example**:
-  ```bash
-  export NODE_EXTRA_CA_CERTS=/path/to/custom-ca.pem
   ```
 
 ### `VP_INSECURE_TLS`
@@ -222,16 +139,10 @@ These variables are set automatically by Vite+ during runtime and should not be 
 - **Purpose**: Disable HTTPS certificate verification
 - **Values**: Any non-empty value (`1`, `true`, `yes`)
 - **Default**: None (verification enabled)
-- **Warning**: Diagnostic escape hatch only. Do not use in production. The effect is limited to the current process/command only; remove the variable immediately after troubleshooting.
+- **Warning**: Diagnostic escape hatch only; do not use in production
 - **Example**:
-
   ```bash
   VP_INSECURE_TLS=1 vp env install 22
-  ```
-
-  ```cmd
-  :: CMD
-  set VP_INSECURE_TLS=1 && vp env install 22
   ```
 
 ## Logging and Debugging
@@ -246,33 +157,14 @@ These variables are set automatically by Vite+ during runtime and should not be 
   VITE_LOG=vite_task=trace vp build
   ```
 
-### `VITE_UPDATE_TASK_TYPES`
+### `VP_DEBUG_SHIM`
 
-- **Purpose**: Filter for update task types
+- **Purpose**: Enable debug output for shim dispatch
+- **Values**: Any non-empty value
 - **Default**: None
 - **Example**:
   ```bash
-  VITE_UPDATE_TASK_TYPES=dependencies vp update
-  ```
-
-### `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR`
-
-- **Purpose**: Override directory for global CLI JS scripts
-- **Default**: Auto-detected
-- **Example**:
-  ```bash
-  VITE_GLOBAL_CLI_JS_SCRIPTS_DIR=/path/to/scripts vp help
-  ```
-
-## Testing/Development
-
-### `VP_TRAMPOLINE_PATH`
-
-- **Purpose**: Override trampoline binary path for tests
-- **Default**: Auto-detected from `current_exe()`
-- **Example**:
-  ```bash
-  VP_TRAMPOLINE_PATH=/path/to/trampoline vp setup
+  VP_DEBUG_SHIM=1 node -v
   ```
 
 ## Standard Environment Variables
@@ -292,7 +184,7 @@ Vite+ also respects these standard environment variables:
 ### `HOME` / `USERPROFILE`
 
 - **Purpose**: User home directory
-- **Effect**: Used to resolve `~/.vite-plus` default path
+- **Effect**: Base for the default `~/.vite-plus` path
 
 ## Precedence
 
@@ -300,4 +192,4 @@ Vite+ also respects these standard environment variables:
 2. Environment variables
 3. Default values (lowest priority)
 
-For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` will install version 2.0.0.
+For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.0.0.
