@@ -25,9 +25,9 @@ name = "pm_version_yarn"
 vp = "local"
 cwd = "yarn"
 steps = [
-  { argv = ["vp", "pm", "version", "patch", "--", "--no-git-tag-version"], comment = "Yarn Classic bumps the package version", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "patch", "--json", "--", "--no-git-tag-version"], comment = "Yarn Classic bumps the package version with JSON output", continue-on-failure = true },
   { argv = ["vp", "pm", "version", "2.0.0", "--json", "--", "--no-git-tag-version"], comment = "Yarn Classic accepts an explicit version with JSON output", continue-on-failure = true },
-  { argv = ["vp", "pm", "version", "prerelease", "--", "--preid", "beta", "--no-git-tag-version"], comment = "Yarn Classic creates a prerelease with a custom identifier", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "prerelease", "--json", "--", "--preid", "beta", "--no-git-tag-version"], comment = "Yarn Classic creates a prerelease with a custom identifier", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "verify the version was updated" },
 ]
 
