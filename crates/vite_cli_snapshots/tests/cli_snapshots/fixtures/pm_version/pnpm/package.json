@@ -1,0 +1,7 @@
+{
+  "name": "pm-version-pnpm",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@11.0.6"
+}
