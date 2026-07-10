@@ -1,0 +1,7 @@
+[[case]]
+name = "command_env_clean"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "clean"], comment = "Clean isolated Vite+ caches" },
+]
