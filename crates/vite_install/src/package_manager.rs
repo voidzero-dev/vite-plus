@@ -486,7 +486,7 @@ fn get_package_manager_from_dev_engines(
                 || node_semver::Range::parse(version.as_str()).is_ok();
             if !valid {
                 vite_shared::output::warn(&format!(
-                    "invalid devEngines.packageManager version \"{version}\" for \
+                    "invalid devEngines.packageManager version {version:?} for \
                      {package_manager_type}, treating as any version"
                 ));
             }
@@ -501,7 +501,7 @@ fn get_package_manager_from_dev_engines(
         OnFail::Ignore => Ok(None),
         OnFail::Warn => {
             vite_shared::output::warn(&format!(
-                "devEngines.packageManager \"{names}\" is not supported \
+                "devEngines.packageManager {names:?} is not supported \
                  (supported: pnpm, yarn, npm, bun)"
             ));
             Ok(None)
@@ -549,7 +549,7 @@ fn dev_engines_package_manager_conflict_message(
         return Some(
             format!(
                 "packageManager is {name}@{version} but devEngines.packageManager \
-                 requires \"{names}\". This will become an error in a future release.",
+                 requires {names:?}. This will become an error in a future release.",
                 version = resolution.version
             )
             .into(),
@@ -563,7 +563,7 @@ fn dev_engines_package_manager_conflict_message(
         return Some(
             format!(
                 "packageManager {name}@{version} does not satisfy \
-                 devEngines.packageManager \"{required}\". This will become an error in a \
+                 devEngines.packageManager {required:?}. This will become an error in a \
                  future release.",
                 version = resolution.version
             )
@@ -786,7 +786,7 @@ async fn resolve_package_manager_range(
     let range = node_semver::Range::parse(version_req).map_err(|_| {
         Error::InvalidArgument(
             format!(
-                "invalid {package_manager_type} version \"{version_req}\": expected semver \
+                "invalid {package_manager_type} version {version_req:?}: expected semver \
                  'major.minor.patch' or a semver range"
             )
             .into(),
@@ -831,7 +831,7 @@ pub async fn download_package_manager(
     let parsed_version = Version::parse(&version).map_err(|_| {
         Error::InvalidArgument(
             format!(
-                "invalid {package_manager_type} version \"{version}\": expected semver 'major.minor.patch'"
+                "invalid {package_manager_type} version {version:?}: expected semver 'major.minor.patch'"
             )
             .into(),
         )
