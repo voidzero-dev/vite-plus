@@ -707,6 +707,14 @@ pub enum PmCommands {
         pass_through_args: Option<Vec<String>>,
     },
 
+    /// Forward the native package version command
+    #[command(disable_help_flag = true)]
+    Version {
+        /// Arguments to pass to the package manager
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Publish package to registry
     Publish {
         /// Tarball or folder to publish
@@ -944,6 +952,7 @@ impl PmCommands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::List { json, parseable, .. } => *json || *parseable,
+            Self::Version { args } => args.iter().any(|arg| arg == "--json"),
             Self::Pack { json, .. }
             | Self::View { json, .. }
             | Self::Publish { json, .. }
@@ -1414,6 +1423,30 @@ mod tests {
             panic!("expected ApproveBuilds variant");
         };
         assert_eq!(pass_through_args, Some(vec!["--workspace-root".to_string()]));
+    }
+
+    #[test]
+    fn version_forwards_opaque_args_and_detects_json() {
+        let command =
+            parse_pm_command(&["vp", "pm", "version", "prerelease", "--preid", "beta", "--json"])
+                .expect("version arguments should parse");
+
+        assert!(command.is_quiet_or_machine_readable());
+        let PackageManagerCommand::Pm(PmCommands::Version { args }) = command else {
+            panic!("expected Version variant");
+        };
+        assert_eq!(args, ["prerelease", "--preid", "beta", "--json"]);
+    }
+
+    #[test]
+    fn version_forwards_native_help() {
+        let command = parse_pm_command(&["vp", "pm", "version", "--help"])
+            .expect("native help should be forwarded");
+
+        let PackageManagerCommand::Pm(PmCommands::Version { args }) = command else {
+            panic!("expected Version variant");
+        };
+        assert_eq!(args, ["--help"]);
     }
 
     #[test]

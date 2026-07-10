@@ -401,6 +401,7 @@ Commands:
   pack              Create a tarball of the package
   list, ls          List installed packages
   view, info, show  View package information from the registry
+  version           Forward the native package version command
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
   owner, author     Manage package owners

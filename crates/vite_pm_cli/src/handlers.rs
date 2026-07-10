@@ -175,6 +175,7 @@ pub async fn run_pm_subcommand(
             | PmCommands::Prune { .. }
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
+            | PmCommands::Version { .. }
             | PmCommands::Publish { .. }
             | PmCommands::Stage(StageCommands::Publish { .. })
             | PmCommands::Rebuild { .. }
@@ -280,6 +281,8 @@ pub async fn run_pm_subcommand(
             };
             Ok(pm.run_view_command(&options, cwd).await?)
         }
+
+        PmCommands::Version { args } => Ok(pm.run_version_command(&args, cwd).await?),
 
         PmCommands::Publish {
             target,
