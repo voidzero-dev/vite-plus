@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_upgrade_vite_plus_protocol_pin_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "deliberate vite-plus protocol pin must survive bootstrap", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "file pin should remain while stale vitest config is removed", continue-on-failure = true },
+]

@@ -1,6 +1,0 @@
-> vp migrate --no-interactive # migration does not create bunfig.toml
-◇ Migrated . to Vite+ <semver>
-• Node <semver>  bun <semver>
-• 2 config updates applied
-
-> test ! -f bunfig.toml # check Bun configuration remains absent

@@ -1,8 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # Yarn PnP converts to node-modules before exact-peer migration",
-    "cat package.json # direct deps and resolutions should use the managed catalog/version",
-    "cat .yarnrc.yml # linker conversion and aligned Vitest catalog are persisted"
-  ]
-}

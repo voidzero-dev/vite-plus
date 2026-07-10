@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # clean checkout conservatively preserves existing Vitest",
-    "cat package.json # package-local Vitest and its shared override remain aligned",
-    "node -e \"const fs = require('node:fs'); fs.mkdirSync('node_modules', { recursive: true }); fs.cpSync('.fixture/vite-plugin-gherkin', 'node_modules/vite-plugin-gherkin', { recursive: true })\" # simulate installed dependency metadata",
-    "vp migrate --no-interactive # metadata confirms the unnamed required Vitest peer"
-  ]
-}

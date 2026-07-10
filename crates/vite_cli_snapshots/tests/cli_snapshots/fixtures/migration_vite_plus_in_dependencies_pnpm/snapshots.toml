@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_vite_plus_in_dependencies_pnpm"
+vp = "local"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "vite-plus declared in dependencies must NOT be duplicated into devDependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "vite-plus stays in dependencies (normalized to catalog:); no duplicate devDependencies entry", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the catalog carries the managed vite-plus version that the dependencies catalog: ref resolves to", continue-on-failure = true },
+]

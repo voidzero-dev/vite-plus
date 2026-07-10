@@ -128,6 +128,81 @@ fn masks_scaffolded_dev_engines_pins_by_name_context() {
 }
 
 #[test]
+fn masks_vp_migrate_banner_version_but_not_the_header() {
+    // The `vp migrate` banner prints the CLI's own version bare; it bumps on
+    // every release and must be masked, while the all-caps toolchain header
+    // (no version) and user semver on the same screen stay verbatim.
+    let input = concat!(
+        "VITE+ - The Unified Toolchain for the Web\n",
+        "◇ Migrated . to Vite+ 0.2.4\n",
+        "◇ Migrated foo to Vite+ 0.0.0-commit.0c515e3\n",
+        "  \"core-js\": \"3.39.0\"\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "VITE+ - The Unified Toolchain for the Web\n",
+            "◇ Migrated . to Vite+ <version>\n",
+            "◇ Migrated foo to Vite+ <version>\n",
+            "  \"core-js\": \"3.39.0\"\n",
+        )
+    );
+}
+
+#[test]
+fn masks_migrate_upgrade_table_managed_targets_keeping_sources() {
+    // Every managed-toolchain row (vite-plus/vite/vitest/@vitest/*) upgrades to
+    // a CLI/bundled version that bumps on release, so all targets are masked;
+    // the installed sources are fixture-controlled and stay assertable, and a
+    // row with no source column (a newly added dep) is still handled.
+    let input = concat!(
+        "    vite-plus            latest → 0.2.4\n",
+        "    vite                 8.0.0  → 8.1.3\n",
+        "    vitest               3.2.4  → 4.1.10\n",
+        "    @vitest/coverage-v8         → 4.1.10\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "    vite-plus            latest → <version>\n",
+            "    vite                 8.0.0  → <version>\n",
+            "    vitest               3.2.4  → <version>\n",
+            "    @vitest/coverage-v8         → <version>\n",
+        )
+    );
+}
+
+#[test]
+fn masks_vitest_ecosystem_versions_but_not_unrelated_deps() {
+    // The vitest ecosystem (`vitest`, `@vitest/*`) is a managed toolchain
+    // version and is masked by key context wherever it carries a bare semver
+    // (YAML catalogs and JSON overrides/deps alike), matching the vite-plus
+    // treatment. `catalog:` refs and unrelated deps (`typescript`) stay verbatim.
+    let input = concat!(
+        "  vitest: 4.1.10\n",
+        "  '@vitest/browser-playwright': 4.1.10\n",
+        "  vitest: 'catalog:'\n",
+        "    \"@vitest/coverage-v8\": \"4.1.10\",\n",
+        "    \"vitest\": \"4.0.13\",\n",
+        "    \"typescript\": \"5.4.0\"\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "  vitest: <version>\n",
+            "  '@vitest/browser-playwright': <version>\n",
+            "  vitest: 'catalog:'\n",
+            "    \"@vitest/coverage-v8\": \"<version>\",\n",
+            "    \"vitest\": \"<version>\",\n",
+            "    \"typescript\": \"5.4.0\"\n",
+        )
+    );
+}
+
+#[test]
 fn replaces_paths_with_labels() {
     let input = "built /tmp/stage-1/dist in 3ms\n".to_owned();
     assert_eq!(

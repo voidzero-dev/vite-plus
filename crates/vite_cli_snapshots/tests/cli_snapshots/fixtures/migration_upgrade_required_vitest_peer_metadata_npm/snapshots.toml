@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_upgrade_required_vitest_peer_metadata_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "clean checkout conservatively preserves existing Vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "package-local Vitest and its shared override remain aligned", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "node_modules"], comment = "simulate installed dependency metadata", snapshot = false },
+  { argv = ["vpt", "cp", "-r", ".fixture/vite-plugin-gherkin", "node_modules"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "metadata confirms the unnamed required Vitest peer", continue-on-failure = true },
+]

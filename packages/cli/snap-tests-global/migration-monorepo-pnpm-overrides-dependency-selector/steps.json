@@ -1,9 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # migration should merge pnpm overrides with dependency selector",
-    "cat vite.config.ts # check vite.config.ts",
-    "cat package.json # check package.json",
-    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml",
-    "cat packages/app/package.json # check app package.json"
-  ]
-}
