@@ -35,6 +35,7 @@ use vite_install::{
         token::TokenSubcommand,
         unlink::UnlinkCommandOptions,
         update::UpdateCommandOptions,
+        version::VersionCommandOptions,
         view::ViewCommandOptions,
         whoami::WhoamiCommandOptions,
         why::WhyCommandOptions,
@@ -270,7 +271,10 @@ pub async fn run_pm_subcommand(
             Ok(pm.run_view_command(&options, cwd).await?)
         }
 
-        PmCommands::Version { args } => Ok(pm.run_version_command(&args, cwd).await?),
+        PmCommands::Version { args } => {
+            let options = version_command_options(&args);
+            Ok(pm.run_version_command(&options, cwd).await?)
+        }
 
         PmCommands::Publish {
             target,
@@ -538,6 +542,16 @@ pub async fn run_pm_subcommand(
     }
 }
 
+fn version_command_options(args: &[String]) -> VersionCommandOptions<'_> {
+    let (new_version, pass_through_args) = match args.split_first() {
+        Some((new_version, rest)) if !new_version.starts_with('-') => {
+            (Some(new_version.as_str()), (!rest.is_empty()).then_some(rest))
+        }
+        _ => (None, (!args.is_empty()).then_some(args)),
+    };
+    VersionCommandOptions { new_version, pass_through_args }
+}
+
 fn pm_subcommand_needs_project(command: &PmCommands) -> bool {
     match command {
         PmCommands::Version { args } => {
@@ -563,6 +577,24 @@ fn config_location(global: bool, location: Option<&str>) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_options_separate_strategy_from_native_args() {
+        let args = vec!["prerelease".to_string(), "--preid".to_string(), "beta".to_string()];
+        let options = version_command_options(&args);
+
+        assert_eq!(options.new_version, Some("prerelease"));
+        assert_eq!(options.pass_through_args, Some(&args[1..]));
+    }
+
+    #[test]
+    fn version_options_keep_flag_first_invocations_opaque() {
+        let args = vec!["--json".to_string(), "patch".to_string()];
+        let options = version_command_options(&args);
+
+        assert_eq!(options.new_version, None);
+        assert_eq!(options.pass_through_args, Some(args.as_slice()));
+    }
 
     #[test]
     fn version_help_does_not_require_a_project() {

@@ -10,19 +10,26 @@ use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
 };
 
+/// Options for the version command.
+#[derive(Debug, Default)]
+pub struct VersionCommandOptions<'a> {
+    pub new_version: Option<&'a str>,
+    pub pass_through_args: Option<&'a [String]>,
+}
+
 impl PackageManager {
     #[must_use]
     pub async fn run_version_command(
         &self,
-        args: &[String],
+        options: &VersionCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
-        let command = self.resolve_version_command(args);
+        let command = self.resolve_version_command(options);
         run_command(&command.bin_path, &command.args, &command.envs, cwd).await
     }
 
     #[must_use]
-    pub fn resolve_version_command(&self, args: &[String]) -> ResolveCommandResult {
+    pub fn resolve_version_command(&self, options: &VersionCommandOptions) -> ResolveCommandResult {
         let mut resolved_args = if self.client == PackageManagerType::Bun {
             if !bun_supports_version_command(&self.version) {
                 output::warn(&format!(
@@ -34,7 +41,12 @@ impl PackageManager {
         } else {
             vec!["version".into()]
         };
-        resolved_args.extend_from_slice(args);
+        if let Some(new_version) = options.new_version {
+            resolved_args.push(new_version.to_string());
+        }
+        if let Some(pass_through_args) = options.pass_through_args {
+            resolved_args.extend_from_slice(pass_through_args);
+        }
 
         ResolveCommandResult {
             bin_path: self.bin_name.to_string(),
@@ -82,7 +94,11 @@ mod tests {
 
     #[test]
     fn resolves_native_version_commands() {
-        let args = vec!["prerelease".to_string(), "--preid".to_string(), "beta".to_string()];
+        let pass_through_args = vec!["--preid".to_string(), "beta".to_string()];
+        let options = VersionCommandOptions {
+            new_version: Some("prerelease"),
+            pass_through_args: Some(&pass_through_args),
+        };
         let cases = [
             (PackageManagerType::Npm, "npm", vec!["version"]),
             (PackageManagerType::Pnpm, "pnpm", vec!["version"]),
@@ -92,11 +108,12 @@ mod tests {
 
         for (pm_type, expected_bin, prefix) in cases {
             let pm = create_mock_package_manager(pm_type);
-            let result = pm.resolve_version_command(&args);
+            let result = pm.resolve_version_command(&options);
             let expected_args = prefix
                 .into_iter()
                 .map(String::from)
-                .chain(args.iter().cloned())
+                .chain(["prerelease".to_string()])
+                .chain(pass_through_args.iter().cloned())
                 .collect::<Vec<_>>();
 
             assert_eq!(result.bin_path, expected_bin);
