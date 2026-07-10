@@ -565,7 +565,7 @@ mod tests {
             .expect("resolves");
         // Still classified as a deny (starts with !), but the displayed name
         // in the warning retains the second `!`. We can only assert no-op here;
-        // visual inspection of the warn is captured in snap-tests.
+        // visual inspection of the warning is captured in PTY snapshots.
         assert!(result.is_none());
     }
 
@@ -855,6 +855,6 @@ mod tests {
             })
             .expect("resolves");
         assert!(result.is_none()); // still a no-op
-        // Visual inspection of the warn text is captured in snap-tests.
+        // Visual inspection of the warning is captured in PTY snapshots.
     }
 }

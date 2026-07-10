@@ -103,8 +103,7 @@ fn local_cli_package_dir() -> Result<PathBuf, String> {
             dist_entry.display(),
         ));
     }
-    // A stale dist silently tests old code; fail fast when sources are newer
-    // (the legacy runner did the same for the global binary via mtimes).
+    // A stale dist silently tests old code; fail fast when sources are newer.
     // Skipped in CI, where dist is always freshly built, and under the
     // override, which points at another checkout on purpose.
     if overridden.is_none() && std::env::var_os("GITHUB_ACTIONS").is_none() {

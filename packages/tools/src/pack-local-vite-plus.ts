@@ -1,7 +1,7 @@
 // Pack the checkout's publishable Vite+ packages (vite-plus and
 // @voidzero-dev/vite-plus-core) so a local npm registry can serve them at the
-// checkout version. Shared by the snap-test harness (once-per-run pack) and
-// local-npm-registry.ts --pack (standalone dev / e2e invocations).
+// checkout version. Used by local-npm-registry.ts for snapshot tests, e2e,
+// and standalone development.
 //
 // Uses node builtins only and erasable TypeScript syntax, so
 // local-npm-registry.ts stays runnable with bare `node` from any directory.

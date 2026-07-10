@@ -190,7 +190,7 @@ mod tests {
     }
 
     /// `pnpm`/`npm`/`yarn` `.ps1` wrappers introspect stdin and hang
-    /// when stdin is piped or null (CI, snap tests, scripted invocations).
+    /// when stdin is piped or null (CI, snapshot tests, scripted invocations).
     /// In that environment the rewrite is unwanted; the spawn falls back
     /// to `.cmd` directly.
     #[test]

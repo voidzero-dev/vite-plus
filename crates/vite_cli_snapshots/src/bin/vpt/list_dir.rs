@@ -35,8 +35,8 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
     let dir = dir.ok_or("Usage: vpt list-dir <dir> [--ext <suffix>] [--recursive] [--all]")?;
 
-    // Like `ls <file>`, a file target prints its own name; legacy fixtures
-    // use that form as an existence assertion.
+    // Like `ls <file>`, a file target prints its own name so it can serve as
+    // an existence assertion.
     let path = std::path::Path::new(dir);
     if path.is_file() {
         println!("{dir}");
