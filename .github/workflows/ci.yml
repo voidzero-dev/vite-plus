@@ -1104,13 +1104,13 @@ jobs:
       - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
-    # Stays on GitHub-hosted windows-latest, NOT the Namespace Windows runner:
-    # this is a PTY snapshot suite. The runner opens a pseudo-console (ConPTY)
-    # and spawns vp into it, but Namespace's Windows runners execute jobs under a
-    # Session-0 service account with no interactive console, where that ConPTY
-    # spawn blocks — vp is never launched and every case times out at 60s.
-    # windows-latest runs in a session where ConPTY works.
-    runs-on: windows-latest
+    # Runs on the Namespace Windows runner. This is a PTY snapshot suite that
+    # opens a pseudo-console (ConPTY) and spawns vp into it. It previously stayed
+    # on GitHub-hosted windows-latest because Namespace's Windows runners ran
+    # under a Session-0 service account with no interactive console, where the
+    # ConPTY spawn blocked and every case timed out at 60s. #2126 (vite-task
+    # bump) resolved that; revert to windows-latest if it recurs.
+    runs-on: namespace-profile-windows-4c-8g
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
