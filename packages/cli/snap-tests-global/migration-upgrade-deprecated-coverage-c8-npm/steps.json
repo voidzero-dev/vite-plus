@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # deprecated coverage-c8 has an independent version line",
-    "cat package.json # coverage-c8 must not be rewritten to a nonexistent Vitest 4 version"
-  ]
-}

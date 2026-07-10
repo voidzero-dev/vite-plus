@@ -1,0 +1,45 @@
+[[case]]
+name = "pm_dedupe_npm"
+vp = "global"
+cwd = "npm"
+steps = [
+  { argv = ["vp", "dedupe", "--", "--json"], comment = "npm deduplicates dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify npm completed" },
+]
+
+[[case]]
+name = "pm_dedupe_pnpm"
+vp = "global"
+cwd = "pnpm"
+steps = [
+  { argv = ["vp", "dedupe"], comment = "pnpm deduplicates dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify pnpm completed" },
+]
+
+[[case]]
+name = "pm_dedupe_yarn"
+vp = "global"
+cwd = "yarn"
+steps = [
+  { argv = ["vp", "dedupe", "--", "--silent"], comment = "Yarn Classic falls back to install because install already deduplicates dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify Yarn Classic completed" },
+]
+
+[[case]]
+name = "pm_dedupe_yarn_berry"
+vp = "global"
+cwd = "yarn_berry"
+env = { YARN_ENABLE_TELEMETRY = "0" }
+steps = [
+  { argv = ["vp", "dedupe", "--", "--json"], comment = "Yarn Berry deduplicates dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify Yarn Berry completed" },
+]
+
+[[case]]
+name = "pm_dedupe_bun"
+vp = "global"
+cwd = "bun"
+steps = [
+  { argv = ["vp", "dedupe", "--", "--silent"], comment = "Bun falls back to install because it does not support dedupe" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify Bun completed" },
+]

@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_skip_vite_dependency"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should skip rewriting vite imports when vite is in dependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/index.ts"], comment = "vite imports should NOT be rewritten, vitest imports SHOULD be rewritten", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

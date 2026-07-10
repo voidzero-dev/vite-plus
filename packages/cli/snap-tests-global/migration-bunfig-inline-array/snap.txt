@@ -1,9 +1,0 @@
-> vp migrate --no-interactive # migration preserves inline arrays in an existing bunfig.toml
-◇ Migrated . to Vite+ <semver>
-• Node <semver>  bun <semver>
-• 2 config updates applied
-
-> cat bunfig.toml # check Bun configuration is unchanged
-[install]
-minimumReleaseAge = 259200
-minimumReleaseAgeExcludes = ["@zerobyte/*"]

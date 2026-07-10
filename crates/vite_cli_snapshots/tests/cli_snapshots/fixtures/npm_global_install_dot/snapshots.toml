@@ -1,0 +1,11 @@
+[[case]]
+name = "npm_global_install_dot"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "."], cwd = "npm-global-dot-pkg", comment = "Should install and create link", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-dot-cli", "--assert", "symlink"], comment = "Link should exist", continue-on-failure = true },
+  { argv = ["npm-global-dot-cli"], comment = "Should be callable via the link", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/bin/npm-global-dot-cli"], comment = "Cleanup link", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-dot-pkg"], comment = "Cleanup npm install", continue-on-failure = true },
+]

@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_pre_commit_env_setup"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-commit", "#!/usr/bin/env sh\nexport NODE_OPTIONS=\"--max-old-space-size=4096\"\nnpx lint-staged\nnpm test\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "755", ".husky/pre-commit"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "check pre-commit hook before migration", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should replace lint-staged in-place", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check vp staged replaced npx lint-staged in-place", continue-on-failure = true },
+]

@@ -1,9 +1,0 @@
-{
-  "commands": [
-    {
-      "command": "vp exec node build.mjs",
-      "ignoreOutput": true
-    },
-    "cat dist/index.html | grep 'exec-build-plugin-injected' # vp exec should still load vite plugins from factory"
-  ]
-}

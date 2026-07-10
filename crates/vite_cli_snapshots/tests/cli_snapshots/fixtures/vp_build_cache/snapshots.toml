@@ -1,0 +1,9 @@
+[[case]]
+name = "vp_build_cache"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build"], comment = "first build", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "run", "build"], comment = "should hit cache", continue-on-failure = true },
+  { argv = ["vp", "build"], comment = "direct vp build should not be cached", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "build"], comment = "direct vp build has no cache", continue-on-failure = true },
+]

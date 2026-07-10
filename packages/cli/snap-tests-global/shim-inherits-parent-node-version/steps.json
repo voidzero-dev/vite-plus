@@ -1,9 +1,0 @@
-{
-  "env": {},
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp env exec node -v # Root: uses .node-version directly",
-    "cd packages/app && vp env exec node -v # Sub-package: inherits parent .node-version",
-    "test ! -f packages/app/.node-version && echo 'No .node-version written in sub-package' # Verify no .node-version created in sub-package"
-  ]
-}

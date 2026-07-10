@@ -1,3 +1,0 @@
-> vp run build
-> cat dist/index.html | grep 'run-verbatim-plugin-injected' # a verbatim build task under vp run should still load vite plugins
-  <!-- run-verbatim-plugin-injected --></body>

@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_browser_peer_only_pnpm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "peer-only browser provider is promoted with its required peers", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "provider, Playwright, and package-local Vitest are installed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "promoted provider keeps shared Vitest management", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "repaired project should no longer be pending", continue-on-failure = true },
+]

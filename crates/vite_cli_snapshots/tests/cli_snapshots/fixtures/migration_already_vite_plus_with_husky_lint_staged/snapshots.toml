@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_already_vite_plus_with_husky_lint_staged"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a version-update defers legacy husky/lint-staged setup to --full", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky/lint-staged and prepare are left untouched", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".husky", "--assert", "dir"], comment = ".husky is kept", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "--hooks opts into migrating legacy husky/lint-staged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky/lint-staged should be removed, prepare should be vp config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "pre-commit hook should be rewritten", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".husky", "--assert-not", "dir"], comment = ".husky should be removed", continue-on-failure = true },
+]

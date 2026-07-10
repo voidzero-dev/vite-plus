@@ -1,0 +1,17 @@
+[[case]]
+name = "vp_build_cache_monorepo"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "app#build"], comment = "should build the app from root", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/app/dist"], comment = "should have the build output", continue-on-failure = true },
+  { argv = ["vp", "run", "app#build"], comment = "should hit cache from root", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/app", comment = "should hit cache from sub dir", continue-on-failure = true },
+  { argv = ["vp", "build"], cwd = "packages/app", comment = "direct vp build should not be cached", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "build"], cwd = "packages/app", comment = "direct vp build has no cache", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "packages/app/index.html", "<html><body><script type=\"module\">console.log(\"changed\");</script></body></html>\n"], continue-on-failure = true },
+  { argv = ["vp", "run", "app#build"], comment = "should miss cache after source change", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/web", comment = "should build from sub dir first", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/web/dist"], comment = "should have the build output", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/web", comment = "should hit cache from sub dir", continue-on-failure = true },
+  { argv = ["vp", "run", "web#build"], comment = "should hit cache from root after sub dir build", continue-on-failure = true },
+]

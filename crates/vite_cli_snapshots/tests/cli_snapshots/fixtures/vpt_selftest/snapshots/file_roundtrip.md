@@ -52,7 +52,7 @@ touch-file creates missing files
 
 ## `vpt stat-file created-by-touch.txt notes`
 
-stat-file reports the entry type: file, dir, or missing
+stat-file reports the entry type: file, dir, symlink, or missing
 
 ```
 created-by-touch.txt: file

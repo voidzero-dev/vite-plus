@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_lazy_plugins_await"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "migration should wrap awaited inline plugins with async lazyPlugins", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check awaited plugins use async lazyPlugins", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]
