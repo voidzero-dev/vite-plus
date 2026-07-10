@@ -1,8 +1,10 @@
 use std::{collections::HashMap, process::ExitStatus};
 
+use node_semver::{Range, Version};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -22,6 +24,12 @@ impl PackageManager {
     #[must_use]
     pub fn resolve_version_command(&self, args: &[String]) -> ResolveCommandResult {
         let mut resolved_args = if self.client == PackageManagerType::Bun {
+            if !bun_supports_version_command(&self.version) {
+                output::warn(&format!(
+                    "bun {} does not support `bun pm version` (requires bun >= 1.2.18); forwarding anyway",
+                    self.version
+                ));
+            }
             vec!["pm".into(), "version".into()]
         } else {
             vec!["version".into()]
@@ -36,13 +44,18 @@ impl PackageManager {
     }
 }
 
+fn bun_supports_version_command(version: &str) -> bool {
+    let range = ">=1.2.18".parse::<Range>().expect("static range");
+    version.parse::<Version>().is_ok_and(|version| version.satisfies(&range))
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
     use vite_path::AbsolutePathBuf;
     use vite_str::Str;
 
-    use crate::package_manager::{PackageManager, PackageManagerType};
+    use super::*;
 
     fn create_mock_package_manager(pm_type: PackageManagerType) -> PackageManager {
         let temp_dir = tempdir().expect("Failed to create temp directory");
@@ -58,6 +71,13 @@ mod tests {
             is_monorepo: false,
             install_dir,
         }
+    }
+
+    #[test]
+    fn detects_bun_version_command_support() {
+        assert!(!bun_supports_version_command("1.2.17"));
+        assert!(bun_supports_version_command("1.2.18"));
+        assert!(bun_supports_version_command("1.3.11"));
     }
 
     #[test]

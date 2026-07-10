@@ -169,19 +169,7 @@ pub async fn run_pm_subcommand(
     cwd: &AbsolutePath,
     command: PmCommands,
 ) -> Result<ExitStatus, Error> {
-    let needs_project = matches!(
-        command,
-        PmCommands::ApproveBuilds { .. }
-            | PmCommands::Prune { .. }
-            | PmCommands::Pack { .. }
-            | PmCommands::List { .. }
-            | PmCommands::Version { .. }
-            | PmCommands::Publish { .. }
-            | PmCommands::Stage(StageCommands::Publish { .. })
-            | PmCommands::Rebuild { .. }
-            | PmCommands::Fund { .. }
-            | PmCommands::Audit { .. }
-    );
+    let needs_project = pm_subcommand_needs_project(&command);
 
     let pm = if needs_project {
         build_package_manager(cwd).await?
@@ -550,6 +538,45 @@ pub async fn run_pm_subcommand(
     }
 }
 
+fn pm_subcommand_needs_project(command: &PmCommands) -> bool {
+    match command {
+        PmCommands::Version { args } => {
+            !matches!(args.as_slice(), [arg] if arg == "--help" || arg == "-h")
+        }
+        PmCommands::ApproveBuilds { .. }
+        | PmCommands::Prune { .. }
+        | PmCommands::Pack { .. }
+        | PmCommands::List { .. }
+        | PmCommands::Publish { .. }
+        | PmCommands::Stage(StageCommands::Publish { .. })
+        | PmCommands::Rebuild { .. }
+        | PmCommands::Fund { .. }
+        | PmCommands::Audit { .. } => true,
+        _ => false,
+    }
+}
+
 fn config_location(global: bool, location: Option<&str>) -> Option<&str> {
     if global { Some("global") } else { location }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_help_does_not_require_a_project() {
+        for arg in ["--help", "-h"] {
+            assert!(!pm_subcommand_needs_project(&PmCommands::Version {
+                args: vec![arg.to_string()],
+            }));
+        }
+    }
+
+    #[test]
+    fn version_execution_requires_a_project() {
+        assert!(pm_subcommand_needs_project(&PmCommands::Version {
+            args: vec!["patch".to_string()],
+        }));
+    }
 }
