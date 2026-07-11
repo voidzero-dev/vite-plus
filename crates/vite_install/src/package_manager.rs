@@ -978,9 +978,10 @@ async fn download_bun_package_manager(
     let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
     let install_dir = target_dir.join("bun");
 
-    // If shims already exist, return early (same completeness check as the cache
-    // and the tgz download path)
+    // If shims already exist, refresh them before returning so wrapper fixes are
+    // applied to managed Bun versions installed by an older Vite+ release.
     if is_package_manager_install_complete(&install_dir, "bun")? {
+        refresh_bunx_shim_if_needed(&install_dir.join("bin")).await?;
         return Ok((install_dir, package_name, version.clone()));
     }
 
@@ -1049,6 +1050,7 @@ async fn download_bun_package_manager(
 
     if is_package_manager_install_complete(&install_dir, "bun")? {
         tracing::debug!("bun install already complete after lock acquisition, skip rename");
+        refresh_bunx_shim_if_needed(&install_dir.join("bin")).await?;
         return Ok((install_dir, package_name, version.clone()));
     }
 
@@ -1165,6 +1167,18 @@ async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
     let bunx_shim = bin_prefix.join("bunx");
     shim::write_native_shims(&native_bin, &bunx_shim, Some("x")).await?;
 
+    Ok(())
+}
+
+/// Refresh an older managed Bun installation without touching its native binary
+/// or the separate `bun` wrappers.
+async fn refresh_bunx_shim_if_needed(bin_prefix: &AbsolutePath) -> Result<(), Error> {
+    let native_name = if cfg!(windows) { "bun.native.exe" } else { "bun.native" };
+    let bunx_shim = bin_prefix.join("bunx");
+    let expected = shim::native_sh_shim(native_name, Some("x"));
+    if tokio::fs::read_to_string(&bunx_shim).await? != expected {
+        shim::write_native_shims(bin_prefix.join(native_name), bunx_shim, Some("x")).await?;
+    }
     Ok(())
 }
 
