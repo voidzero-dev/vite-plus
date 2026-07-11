@@ -26,5 +26,5 @@
     "tailwindcss": "^4.1.18",
     "vitepress": "2.0.0-alpha.17"
   },
-  "packageManager": "pnpm@10.34.4"
+  "packageManager": "pnpm@11.9.0"
 }
