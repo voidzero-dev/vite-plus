@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env, fmt,
     fs::{self, File},
-    io::{self, BufReader, IsTerminal, Write},
+    io::{self, BufReader, Write},
     path::Path,
 };
 
@@ -1229,26 +1229,7 @@ async fn set_dev_engines_package_manager_field(
 }
 
 pub(crate) use vite_shared::format_path_prepended as format_path_env;
-
-/// Common CI environment variables
-const CI_ENV_VARS: &[&str] = &[
-    "CI",
-    "CONTINUOUS_INTEGRATION",
-    "GITHUB_ACTIONS",
-    "GITLAB_CI",
-    "CIRCLECI",
-    "TRAVIS",
-    "JENKINS_URL",
-    "BUILDKITE",
-    "DRONE",
-    "CODEBUILD_BUILD_ID", // AWS CodeBuild
-    "TF_BUILD",           // Azure Pipelines
-];
-
-/// Check if running in a CI environment
-fn is_ci_environment() -> bool {
-    CI_ENV_VARS.iter().any(|key| env::var(key).is_ok())
-}
+use vite_shared::is_ci_environment;
 
 /// Interactive menu for selecting a package manager with keyboard navigation
 fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
@@ -1404,7 +1385,7 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     }
 
     // Check if stdin is a TTY (terminal) - if not, use default
-    if !io::stdin().is_terminal() {
+    if !vite_shared::is_stdin_terminal() {
         tracing::info!("Non-interactive environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }

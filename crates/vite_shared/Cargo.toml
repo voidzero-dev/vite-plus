@@ -18,6 +18,7 @@ supports-color = "3"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
+vite_powershell = { workspace = true }
 vite_str = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

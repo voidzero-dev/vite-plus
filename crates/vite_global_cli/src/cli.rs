@@ -3,7 +3,7 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{collections::HashSet, ffi::OsStr, io::IsTerminal, process::ExitStatus};
+use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
@@ -52,6 +52,10 @@ pub struct Args {
     /// Print version
     #[arg(short = 'V', long = "version")]
     pub version: bool,
+
+    /// Run as if vp was started in <DIR> instead of the current working directory
+    #[arg(short = 'C', value_name = "DIR")]
+    pub chdir: Option<String>,
 
     #[clap(subcommand)]
     pub command: Option<Commands>,
@@ -808,7 +812,7 @@ fn should_reinstall_node_mismatches(
         return true;
     }
 
-    if !std::io::stdin().is_terminal() || std::env::var_os("CI").is_some() {
+    if !vite_shared::is_stdin_terminal() || std::env::var_os("CI").is_some() {
         let package_names =
             packages.iter().map(|package| package.name.as_str()).collect::<Vec<_>>().join(", ");
         output::warn(&format!(
@@ -851,10 +855,20 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
 /// Run the CLI command with rendering options.
 pub async fn run_command_with_options(
-    cwd: AbsolutePathBuf,
+    mut cwd: AbsolutePathBuf,
     args: Args,
     render_options: RenderOptions,
 ) -> Result<ExitStatus, Error> {
+    // Apply the global `-C <dir>` flag before anything reads cwd. main
+    // normally consumes a leading `-C` pre-parse; this covers orderings that
+    // reach clap (e.g. a second `-C`), with identical semantics: the shared
+    // helper changes the process cwd, and delegated children receive PWD from
+    // the resolved cwd at spawn time.
+    if let Some(dir) = &args.chdir {
+        cwd =
+            crate::apply_chdir(&cwd, dir).map_err(|message| Error::UserMessage(message.into()))?;
+    }
+
     // Handle --version flag (Category B: delegates to JS)
     if args.version {
         return commands::version::execute(cwd).await;

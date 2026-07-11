@@ -145,16 +145,96 @@ This keeps the behavior centralized while letting each team or package own the p
 
 ## App Commands
 
-The root `vite.config.ts` is most valuable for shared linting, formatting, staged checks, and task definitions. For project-specific development, build, and test behavior, use the setup that best matches each app:
+The root `vite.config.ts` is most valuable for shared linting, formatting, staged checks, and task definitions. Development, build, preview, and packaging still act on a single app, so Vite+ makes the built-in commands monorepo-aware instead of forcing you to `cd` between packages.
 
-- Pass a folder to built-in Vite commands when you want to target one app:
+### Running at the workspace root
 
-```bash
-vp dev apps/web
-vp build apps/web
+`vp dev`, `vp build`, `vp preview`, and `vp pack` never silently act on the workspace root, which usually has no app of its own. Run them at the top of the monorepo and Vite+ works out which app you mean.
+
+When exactly one package looks like an app, vp runs it and shows you the direct command for next time:
+
+```
+$ vp dev
+Selected package: web (apps/web)
+Tip: run this directly with `vp -C apps/web dev`
+
+  VITE+ v0.2.2
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
 ```
 
-- Keep package-specific scripts in each package when the command differs per app:
+When several packages could be the target, vp opens a fuzzy package picker (the same selector as `vp run`); typing filters, Enter runs the selection:
+
+```
+$ vp build
+Select a package to build (↑/↓, Enter to run, type to search):
+
+  › admin apps/admin
+    web   apps/web
+    ui    packages/ui
+```
+
+```
+Selected package: web (apps/web)
+Tip: run this directly with `vp -C apps/web build`
+
+  ✓ built in 187ms
+```
+
+In non-interactive shells (CI, pipes, redirection), vp prints the same packages as a plain listing with ready-to-copy commands and exits 1:
+
+```
+$ vp build | cat
+error: `vp build` at the workspace root needs a target package.
+
+  Packages in this workspace:
+    admin     apps/admin
+    web       apps/web
+    @shop/ui  packages/ui
+
+  Pass a directory:  vp -C apps/admin build
+  Or run every package's build script:  vp run -r build
+```
+
+vp ranks packages that look runnable for the command first in both the picker and the listing: a `vite.config.*` or root `index.html` for `dev` / `build` / `preview`, and a `pack` config block or tsdown's default `src/index.ts` entry for `pack`.
+
+### Targeting a package with `-C`
+
+The global `-C` flag runs any vp command as if you had `cd`'d into the package first, identical to `cd <dir> && vp <command>`:
+
+```bash
+vp -C apps/web dev
+vp -C apps/web build
+vp -C packages/ui pack
+```
+
+Passing a folder as a positional (`vp dev apps/web`) still works, but keeps upstream Vite semantics: it sets Vite's `root` option without changing the working directory, so `process.cwd()` reads in configs and plugins resolve from where you ran vp. Prefer `-C` when the package should behave as if you had `cd`'d into it.
+
+### A fixed default with `defaultPackage`
+
+To always target one directory and skip the resolution above, set [`defaultPackage`](/config/#defaultpackage) in the root config:
+
+```ts [vite.config.ts]
+export default {
+  defaultPackage: './apps/web',
+};
+```
+
+```
+$ vp dev
+note: vp dev: using ./apps/web (defaultPackage)
+
+  VITE+ v0.2.2
+
+  ➜  Local:   http://localhost:5173/
+```
+
+This is the right choice for framework monorepos that are not JavaScript workspaces, such as a Laravel or Rails app with a `frontend/` directory: there is no package list to resolve, so `defaultPackage` points vp straight at the app. Because vp reads it without executing the config, it works even when `vite-plus` is installed only inside that subdirectory.
+
+### Package scripts and workspace-wide tasks
+
+Keep package-specific scripts in each package when the command differs per app:
 
 ```json [apps/api/package.json]
 {
@@ -165,7 +245,7 @@ vp build apps/web
 }
 ```
 
-- Run scripts across the workspace with `vp run`:
+Run scripts across the whole workspace with `vp run`:
 
 ```bash
 vp run -r build

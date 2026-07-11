@@ -58,5 +58,6 @@ Documentation: https://viteplus.dev/guide/
 
 Options:
   -V, --version  Print version
+  -C <DIR>       Run as if vp was started in <DIR> instead of the current working directory
   -h, --help     Print help
 ```

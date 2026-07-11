@@ -8373,6 +8373,7 @@ version = "0.2.4"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64-simd",
  "clap",
  "cow-utils",
  "fspy",
@@ -8388,12 +8389,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "uuid",
  "vite_command",
  "vite_error",
  "vite_install",
  "vite_migration",
  "vite_path",
  "vite_pm_cli",
+ "vite_select",
  "vite_shared",
  "vite_static_config",
  "vite_str",
@@ -8699,6 +8702,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vite_path",
+ "vite_powershell",
  "vite_str",
 ]
 

@@ -19,12 +19,28 @@ fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
+/// Keep the child's `PWD` consistent with the process cwd; the std-Command
+/// sibling of [`vite_command::sync_child_pwd`] (rationale there). Shim
+/// children run in the inherited cwd, which a leading `-C <dir>` changes
+/// without touching our own environment, so the inherited `PWD` would
+/// otherwise point at the original directory.
+fn sync_child_pwd(cmd: &mut std::process::Command) {
+    if cfg!(unix)
+        && let Ok(cwd) = std::env::current_dir()
+    {
+        cmd.env("PWD", cwd);
+    }
+}
+
 /// Spawn a tool as a child process and wait for completion.
 ///
 /// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
 /// allowing the caller to run code after the tool exits.
 pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
-    match std::process::Command::new(path.as_path()).args(args).status() {
+    let mut cmd = std::process::Command::new(path.as_path());
+    cmd.args(args);
+    sync_child_pwd(&mut cmd);
+    match cmd.status() {
         Ok(status) => exit_code_from_status(status),
         Err(e) => {
             output::error(&format!("Failed to execute {}: {}", path.as_path().display(), e));
@@ -55,6 +71,7 @@ fn exec_unix(path: &AbsolutePath, args: &[String]) -> i32 {
 
     let mut cmd = std::process::Command::new(path.as_path());
     cmd.args(args);
+    sync_child_pwd(&mut cmd);
 
     // exec replaces the current process - this only returns on error
     let err = cmd.exec();

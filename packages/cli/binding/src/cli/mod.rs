@@ -3,6 +3,7 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
+mod app_target;
 mod execution;
 mod handler;
 mod help;
@@ -46,7 +47,24 @@ async fn execute_direct_subcommand(
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
 ) -> Result<ExitStatus, Error> {
-    let (workspace_root, _) = vite_workspace::find_workspace_root(cwd)?;
+    // A bare app command at a workspace root resolves its target first
+    // (defaultPackage, package listing); the command then runs as if invoked
+    // in the resolved directory (rfcs/cwd-flag.md).
+    let (target, workspace_root_hint) = app_target::resolve_app_target(&subcommand, cwd)?;
+    let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
+    let cwd = match &target {
+        app_target::AppTarget::Exit(status) => return Ok(*status),
+        app_target::AppTarget::Dir(dir) => dir,
+        app_target::AppTarget::CurrentDir => cwd,
+    };
+
+    // The resolver hands back the workspace root it already found whenever the
+    // command runs in the unchanged cwd (never after a -C/elicitation
+    // retarget), so it matches a fresh lookup here and saves the second walk.
+    let workspace_root = match workspace_root_hint {
+        Some(root) => root,
+        None => vite_workspace::find_workspace_root(cwd)?.0,
+    };
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
     let resolver = if let Some(options) = options {
@@ -55,11 +73,19 @@ async fn execute_direct_subcommand(
         SubcommandResolver::new(Arc::clone(&workspace_path))
     };
 
-    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new(
-        std::env::vars_os()
+    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new({
+        let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
             .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
-            .collect(),
-    );
+            .collect();
+        // When elicitation retargeted the command, the tool runs with the
+        // target as its working directory: keep the POSIX PWD consistent,
+        // like a real `cd`. Untargeted runs keep the caller's PWD verbatim
+        // (it may legitimately differ from cwd through shell symlinks).
+        if cfg!(unix) && retargeted {
+            envs.insert(Arc::from(OsStr::new("PWD")), Arc::from(cwd.as_path().as_os_str()));
+        }
+        envs
+    });
     let envs = envs_with_explicit_package_manager_path(cwd, envs).await?;
 
     let status = match subcommand {

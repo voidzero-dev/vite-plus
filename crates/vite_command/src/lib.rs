@@ -67,6 +67,22 @@ fn resolve_program(
     })
 }
 
+/// Keep the child's `PWD` environment variable consistent with its spawn cwd.
+///
+/// `current_dir` changes where the child runs but leaves the inherited `PWD`
+/// pointing wherever this process started, and the global `-C <dir>` flag
+/// only changes the process cwd (mutating our own environment is unsound
+/// once the runtime has threads). Shells export `PWD` on `cd`, so tools that
+/// read it (e.g. Node scripts via `process.env.PWD`) expect it to match the
+/// working directory; setting it at spawn time keeps `vp -C <dir>` children
+/// equivalent to the `cd <dir> && vp` form. Callers' later `envs()` overlays
+/// still win for an explicit `PWD`.
+pub fn sync_child_pwd(cmd: &mut Command, cwd: &AbsolutePath) {
+    if cfg!(unix) {
+        cmd.env("PWD", cwd.as_path());
+    }
+}
+
 /// Build a `tokio::process::Command` for a pre-resolved binary path.
 /// Sets inherited stdio and `fix_stdio_streams` (Unix `pre_exec`).
 /// Callers can further customize (add args, envs, override stdio, etc.).
@@ -74,6 +90,7 @@ fn resolve_program(
 pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
     let mut cmd = Command::new(bin_path.as_path());
     cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    sync_child_pwd(&mut cmd, cwd);
 
     #[cfg(unix)]
     unsafe {
@@ -132,6 +149,7 @@ pub fn build_shell_command(shell_cmd: &str, cwd: &AbsolutePath) -> Command {
     };
 
     cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    sync_child_pwd(&mut cmd, cwd);
 
     #[cfg(unix)]
     unsafe {
@@ -217,7 +235,14 @@ where
     let mut cmd = fspy::Command::new(bin_name);
     cmd.args(&args)
         // set system environment variables first
-        .envs(std::env::vars_os())
+        .envs(std::env::vars_os());
+    // Same PWD/cwd alignment as `sync_child_pwd` (fspy has its own Command
+    // type); writing before the `envs` overlay keeps last-write-wins for a
+    // caller's explicit `PWD`.
+    if cfg!(unix) {
+        cmd.env("PWD", cwd.as_path());
+    }
+    cmd
         // then set custom environment variables
         .envs(envs)
         .current_dir(cwd)

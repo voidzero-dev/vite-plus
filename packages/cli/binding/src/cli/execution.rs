@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ffi::OsStr, io::IsTerminal, process::Stdio, sync::Arc};
+use std::{borrow::Cow, ffi::OsStr, process::Stdio, sync::Arc};
 
 use rustc_hash::FxHashMap;
 use vite_error::Error;
@@ -127,7 +127,7 @@ pub(crate) async fn resolve_and_capture_output(
         resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    if force_color_if_terminal && std::io::stdout().is_terminal() {
+    if force_color_if_terminal && vite_shared::is_stdout_terminal() {
         cmd.env("FORCE_COLOR", "1");
     }
 

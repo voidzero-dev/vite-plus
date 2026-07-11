@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs::{File, OpenOptions, TryLockError},
-    io::{IsTerminal, Read, Write},
+    io::{Read, Write},
     process::Stdio,
     time::Duration,
 };
@@ -178,7 +178,7 @@ pub async fn install(
     ));
 
     let progress = ProgressBar::new(packages_count as u64);
-    if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
+    if vite_shared::is_stderr_terminal() && std::env::var_os("CI").is_none() {
         let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
             .unwrap_or_else(|_| ProgressStyle::default_spinner())
             .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);

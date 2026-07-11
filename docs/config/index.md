@@ -33,3 +33,16 @@ Vite+ extends the basic Vite configuration with these additions:
 - [`test`](/config/test) for Vitest
 - [`pack`](/config/pack) for tsdown
 - [`staged`](/config/staged) for staged-file checks
+- [`defaultPackage`](#defaultpackage) for the default target of bare app commands at a workspace root
+
+## defaultPackage
+
+Default target directory for `vp dev` / `vp build` / `vp preview` / `vp pack` when you invoke them bare in the directory containing the config, an implicit [`vp -C <dir>`](/guide/monorepo#app-commands):
+
+```ts [vite.config.ts]
+export default {
+  defaultPackage: './frontend',
+};
+```
+
+The value must be a static string literal: vp reads it without executing the config, so it also works at repository roots without a vite-plus install (for example a Laravel or Rails repo whose Vite app lives in `frontend/`). An explicit `-C` or positional target always wins over the config.

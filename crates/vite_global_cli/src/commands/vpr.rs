@@ -10,11 +10,28 @@ use vite_shared::output;
 ///
 /// Called from shim dispatch when `argv[0]` is `vpr`.
 pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
+    // `vpr -C <dir> <task>` mirrors `vp -C <dir> run <task>`: consume the
+    // global flag before treating the rest as run arguments. There is no
+    // clap parse on this path, so a missing value is reported here.
+    let (cwd_buf, args) = match crate::parse_leading_chdir(args) {
+        Some((dir, consumed)) => match crate::apply_chdir(cwd, &dir) {
+            Ok(target) => (target, &args[consumed..]),
+            Err(message) => {
+                output::raw_stderr(&message);
+                return 1;
+            }
+        },
+        None if args.first().is_some_and(|arg| arg.starts_with("-C")) => {
+            output::raw_stderr("-C requires a directory argument");
+            return 1;
+        }
+        None => (cwd.to_absolute_path_buf(), args),
+    };
+
     if crate::help::maybe_print_unified_delegate_help("run", args, true) {
         return 0;
     }
 
-    let cwd_buf = cwd.to_absolute_path_buf();
     match super::delegate::execute(cwd_buf, "run", args).await {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {

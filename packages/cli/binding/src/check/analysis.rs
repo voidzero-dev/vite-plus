@@ -1,5 +1,3 @@
-use std::io::IsTerminal;
-
 use owo_colors::OwoColorize;
 use vite_shared::output;
 
@@ -141,7 +139,7 @@ pub(super) fn print_stdout_block(block: &str) {
 
 pub(super) fn print_summary_line(message: &str) {
     output::raw("");
-    if std::io::stdout().is_terminal() && message.contains('`') {
+    if vite_shared::is_stdout_terminal() && message.contains('`') {
         let mut formatted = String::with_capacity(message.len());
         let mut segments = message.split('`');
         if let Some(first) = segments.next() {

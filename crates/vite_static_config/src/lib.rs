@@ -29,53 +29,59 @@ pub enum FieldValue {
     NonStatic,
 }
 
-/// Internal representation of extracted object fields.
-///
-/// Two variants model the closed-world vs open-world assumption:
-///
-/// - [`FieldMapInner::Closed`] — the object had no spreads or computed-key properties.
-///   The map is exhaustive: every field is accounted for, absent keys do not exist.
-///
-/// - [`FieldMapInner::Open`] — the object had at least one spread or computed-key
-///   property. The map contains only [`serde_json::Value`] entries for keys
-///   explicitly declared **after** the last such entry. Absent keys may exist via
-///   the spread and are treated as [`FieldValue::NonStatic`] by [`FieldMap::get`].
-enum FieldMapInner {
-    Closed(FxHashMap<Box<str>, FieldValue>),
-    Open(FxHashMap<Box<str>, serde_json::Value>),
-}
-
 /// Extracted fields from a vite config object.
-pub struct FieldMap(FieldMapInner);
+///
+/// `open` models the closed-world vs open-world assumption:
+///
+/// - closed (`open == false`) — the object had no spreads or computed-key
+///   properties. The map is exhaustive: every field is accounted for, absent
+///   keys do not exist.
+///
+/// - open (`open == true`) — the object had at least one spread or
+///   computed-key property. The map contains entries only for keys explicitly
+///   declared **after** the last such entry (both static and `NonStatic`
+///   values). Absent keys may exist via the spread and are treated as
+///   [`FieldValue::NonStatic`] by [`FieldMap::get`], but not by
+///   [`FieldMap::get_declared`].
+pub struct FieldMap {
+    map: FxHashMap<Box<str>, FieldValue>,
+    open: bool,
+}
 
 impl FieldMap {
     /// Returns an open empty map — used when the config is not analyzable.
     /// `get()` returns `Some(NonStatic)` for any key, triggering NAPI fallback.
     fn unanalyzable() -> Self {
-        Self(FieldMapInner::Open(FxHashMap::default()))
+        Self { map: FxHashMap::default(), open: true }
     }
 
     /// Returns a closed empty map — used when no config file exists.
     /// `get()` returns `None` for any key (field definitively absent).
     fn no_config() -> Self {
-        Self(FieldMapInner::Closed(FxHashMap::default()))
+        Self { map: FxHashMap::default(), open: false }
     }
 
     /// Look up a field by name.
     ///
-    /// - [`Closed`](FieldMapInner::Closed): returns the stored value, or `None`
-    ///   if the field is definitively absent.
-    /// - [`Open`](FieldMapInner::Open): returns the stored `Json` value if
-    ///   explicitly declared after the last spread/computed key, or
-    ///   `Some(NonStatic)` for any other key (it may exist in the spread).
+    /// - closed map: returns the stored value, or `None` if the field is
+    ///   definitively absent.
+    /// - open map: returns the stored value if explicitly declared after the
+    ///   last spread/computed key, or `Some(NonStatic)` for any other key (it
+    ///   may exist in the spread).
     #[must_use]
     pub fn get(&self, key: &str) -> Option<FieldValue> {
-        match &self.0 {
-            FieldMapInner::Closed(map) => map.get(key).cloned(),
-            FieldMapInner::Open(map) => {
-                Some(map.get(key).map_or(FieldValue::NonStatic, |v| FieldValue::Json(v.clone())))
-            }
-        }
+        self.map.get(key).cloned().or_else(|| self.open.then_some(FieldValue::NonStatic))
+    }
+
+    /// Like [`get`](Self::get), but only for fields the config explicitly
+    /// declares. Unlike `get`, an open map (spread, computed keys, or an
+    /// unanalyzable config) does NOT report undeclared keys as `NonStatic`:
+    /// they return `None`. Use this when a merely-possible field must not
+    /// change behavior (e.g. `defaultPackage`, where erroring on every
+    /// unanalyzable config would break unrelated commands).
+    #[must_use]
+    pub fn get_declared(&self, key: &str) -> Option<FieldValue> {
+        self.map.get(key).cloned()
     }
 }
 
@@ -94,6 +100,11 @@ const CONFIG_FILE_NAMES: &[&str] = &[
     "vite.config.mts",
     "vite.config.cts",
 ];
+
+/// Returns true when `dir` directly contains a Vite config file.
+pub fn has_config_file(dir: &AbsolutePath) -> bool {
+    resolve_config_path(dir).is_some()
+}
 
 /// Resolve the vite config file path in the given directory.
 ///
@@ -191,7 +202,11 @@ fn extract_config_from_expr(
     expr: &Expression<'_>,
     has_trusted_define_config_binding: bool,
 ) -> FieldMap {
-    let expr = expr.without_parentheses();
+    // Unwrap parentheses and TypeScript-only wrappers (`satisfies`, `as`,
+    // `as const`, `!`) so a config authored as
+    // `export default { ... } satisfies UserConfig` is analyzed like the raw
+    // object it wraps, rather than being treated as unanalyzable.
+    let expr = expr.get_inner_expression();
     match expr {
         Expression::CallExpression(call) => {
             if !call.callee.is_specific_id("defineConfig") {
@@ -206,7 +221,9 @@ fn extract_config_from_expr(
             let Some(first_arg_expr) = first_arg.as_expression() else {
                 return FieldMap::unanalyzable();
             };
-            match first_arg_expr {
+            // Unwrap a TS wrapper on the argument too, e.g.
+            // `defineConfig({ ... } satisfies UserConfig)`.
+            match first_arg_expr.get_inner_expression() {
                 Expression::ObjectExpression(obj) => extract_object_fields(obj),
                 Expression::ArrowFunctionExpression(arrow) => {
                     extract_config_from_function_body(&arrow.body)
@@ -245,7 +262,7 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
                 let Some(arg) = ret.argument.as_ref() else {
                     return FieldMap::unanalyzable();
                 };
-                if let Expression::ObjectExpression(obj) = arg.without_parentheses() {
+                if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
                     return extract_object_fields(obj);
                 }
                 return FieldMap::unanalyzable();
@@ -253,7 +270,7 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
             Statement::ExpressionStatement(expr_stmt) => {
                 // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
                 if let Expression::ObjectExpression(obj) =
-                    expr_stmt.expression.without_parentheses()
+                    expr_stmt.expression.get_inner_expression()
                 {
                     return extract_object_fields(obj);
                 }
@@ -389,53 +406,48 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
 
 /// Extract fields from an object expression into a [`FieldMap`].
 ///
-/// Objects with no spreads or computed-key properties produce a [`FieldMapInner::Closed`]
-/// map — absent keys are definitively absent. Objects with at least one such property
-/// produce a [`FieldMapInner::Open`] map — absent keys may exist via the spread and
+/// Objects with no spreads or computed-key properties produce a closed map —
+/// absent keys are definitively absent. Objects with at least one such
+/// property produce an open map — absent keys may exist via the spread and
 /// [`FieldMap::get`] returns [`FieldValue::NonStatic`] for them.
 ///
-/// When a spread or computed key is encountered the map transitions to
-/// [`FieldMapInner::Open`] (discarding pre-spread entries): they would all be
-/// [`FieldValue::NonStatic`] anyway, and `Open` already returns `NonStatic` for every absent key.
+/// When a spread or computed key is encountered the map transitions to open
+/// (discarding pre-spread entries): they would all be
+/// [`FieldValue::NonStatic`] anyway, and an open map already returns
+/// `NonStatic` for every absent key.
 ///
 /// Fields declared after the last spread/computed key are still extractable:
 ///
 /// ```js
-/// { a: 1, ...x, b: 2 }  // Open{ b: Json(2) };  get("a") = NonStatic, get("b") = Json(2)
-/// { a: 1, [k]: 2, b: 3 } // Open{ b: Json(3) };  get("a") = NonStatic, get("b") = Json(3)
-/// { a: 1, b: 2 }         // Closed{ a: Json(1), b: Json(2) }; get("c") = None
+/// { a: 1, ...x, b: 2 }  // open{ b: Json(2) };  get("a") = NonStatic, get("b") = Json(2)
+/// { a: 1, [k]: 2, b: 3 } // open{ b: Json(3) };  get("a") = NonStatic, get("b") = Json(3)
+/// { a: 1, b: 2 }         // closed{ a: Json(1), b: Json(2) }; get("c") = None
 /// ```
 fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
-    let mut inner = FieldMapInner::Closed(FxHashMap::default());
+    let mut map = FxHashMap::default();
+    let mut open = false;
 
     for prop in &obj.properties {
         if prop.is_spread() {
-            inner = FieldMapInner::Open(FxHashMap::default());
+            map.clear();
+            open = true;
             continue;
         }
         let ObjectPropertyKind::ObjectProperty(prop) = prop else { continue };
         let Some(key) = prop.key.static_name() else {
-            inner = FieldMapInner::Open(FxHashMap::default());
+            map.clear();
+            open = true;
             continue;
         };
 
-        match &mut inner {
-            FieldMapInner::Closed(map) => {
-                let value =
-                    expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-                map.insert(Box::from(key.as_ref()), value);
-            }
-            FieldMapInner::Open(map) => {
-                // Only Json values are meaningful in Open — NonStatic is already implied
-                // for any absent key, so there's no need to record it explicitly.
-                if let Some(json) = expr_to_json(&prop.value) {
-                    map.insert(Box::from(key.as_ref()), json);
-                }
-            }
-        }
+        // Open and closed maps alike record explicit declarations, including
+        // NonStatic ones: `get_declared` must distinguish a written
+        // `key: expr` from a key that merely might exist behind a spread.
+        let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
+        map.insert(Box::from(key.as_ref()), value);
     }
 
-    FieldMap(inner)
+    FieldMap { map, open }
 }
 
 /// Convert an f64 to a JSON value following `JSON.stringify` semantics.
@@ -458,7 +470,9 @@ fn f64_to_json_number(value: f64) -> serde_json::Value {
 /// Returns `None` if the expression contains non-JSON-literal nodes
 /// (function calls, identifiers, template literals, etc.)
 fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
-    let expr = expr.without_parentheses();
+    // Unwrap TS-only wrappers (see `extract_config_from_expr`) so a typed
+    // literal value like `'./web' as const` still extracts.
+    let expr = expr.get_inner_expression();
     match expr {
         Expression::NullLiteral(_) => Some(serde_json::Value::Null),
 
@@ -532,6 +546,30 @@ mod tests {
     /// Shorthand for asserting a field extracted as JSON.
     fn assert_json(map: &FieldMap, key: &str, expected: serde_json::Value) {
         assert_eq!(map.get(key), Some(FieldValue::Json(expected)));
+    }
+
+    #[test]
+    fn get_declared_ignores_undeclared_keys_in_open_maps() {
+        // A spread makes the map open: `get` reports any key as possibly
+        // present, but `get_declared` only reports explicitly written ones.
+        let map = parse("const base = {};\nexport default { ...base, run: { tasks: {} } };");
+        assert_eq!(map.get("defaultPackage"), Some(FieldValue::NonStatic));
+        assert_eq!(map.get_declared("defaultPackage"), None);
+        assert!(map.get_declared("run").is_some());
+
+        // Closed map: explicitly declared non-static values still surface.
+        let map = parse("export default { defaultPackage: process.env.DIR };");
+        assert_eq!(map.get_declared("defaultPackage"), Some(FieldValue::NonStatic));
+
+        // Open map: an explicit non-static declaration after a spread is
+        // still a declaration, not an unknown.
+        let map =
+            parse("const base = {};\nexport default { ...base, defaultPackage: process.env.DIR };");
+        assert_eq!(map.get_declared("defaultPackage"), Some(FieldValue::NonStatic));
+
+        // Closed map without the key: definitively absent either way.
+        let map = parse("export default { run: {} };");
+        assert_eq!(map.get_declared("defaultPackage"), None);
     }
 
     /// Shorthand for asserting a field is `NonStatic`.
@@ -619,6 +657,40 @@ mod tests {
         let result = parse("export default { foo: 'bar', num: 42 }");
         assert_json(&result, "foo", serde_json::json!("bar"));
         assert_json(&result, "num", serde_json::json!(42));
+    }
+
+    #[test]
+    fn unwraps_typescript_wrappers_around_the_config_object() {
+        // `satisfies`, `as`, `as const`, and non-null wrappers are TS-only and
+        // leave the underlying object statically analyzable.
+        for source in [
+            "export default { foo: 'bar' } satisfies UserConfig",
+            "export default { foo: 'bar' } as const",
+            "export default { foo: 'bar' } as UserConfig",
+            "export default ({ foo: 'bar' } satisfies UserConfig)",
+            "module.exports = { foo: 'bar' } satisfies UserConfig",
+        ] {
+            assert_json(&parse(source), "foo", serde_json::json!("bar"));
+        }
+        // Wrappers inside defineConfig(...) and inside a config factory's
+        // return must be unwrapped too.
+        for source in [
+            "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ foo: 'bar' } satisfies UserConfig)",
+            "import { defineConfig } from 'vite-plus';\nexport default defineConfig(() => ({ foo: 'bar' } satisfies UserConfig))",
+        ] {
+            assert_json(&parse(source), "foo", serde_json::json!("bar"));
+        }
+        // TS wrappers on a property VALUE must be unwrapped too.
+        assert_json(
+            &parse("export default { foo: 'bar' as const }"),
+            "foo",
+            serde_json::json!("bar"),
+        );
+        assert_json(
+            &parse("export default { foo: ('bar' satisfies string) }"),
+            "foo",
+            serde_json::json!("bar"),
+        );
     }
 
     #[test]

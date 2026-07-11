@@ -231,8 +231,6 @@ fn check_npm_global_install_result(
     node_dir: &AbsolutePath,
     node_version: &str,
 ) {
-    use std::io::IsTerminal;
-
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
@@ -249,7 +247,7 @@ fn check_npm_global_install_result(
         }
     }
 
-    let is_interactive = std::io::stdin().is_terminal();
+    let is_interactive = vite_shared::is_stdin_terminal();
     // (bin_name, source_path, package_name)
     let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
     let mut managed_conflicts: Vec<(String, String)> = Vec::new();
