@@ -11,6 +11,7 @@ use vite_error::Error;
 pub async fn write_native_shims(
     source_file: impl AsRef<Path>,
     to_bin: impl AsRef<Path>,
+    subcommand: Option<&str>,
 ) -> Result<(), Error> {
     let to_bin = to_bin.as_ref();
     let parent = to_bin
@@ -23,9 +24,9 @@ pub async fn write_native_shims(
         .to_str()
         .ok_or_else(|| Error::CannotFindBinaryPath("shim path is not valid UTF-8".into()))?;
 
-    write(to_bin, native_sh_shim(relative_file)).await?;
-    write(to_bin.with_extension("cmd"), native_cmd_shim(relative_file)).await?;
-    write(to_bin.with_extension("ps1"), native_pwsh_shim(relative_file)).await?;
+    write(to_bin, native_sh_shim(relative_file, subcommand)).await?;
+    write(to_bin.with_extension("cmd"), native_cmd_shim(relative_file, subcommand)).await?;
+    write(to_bin.with_extension("ps1"), native_pwsh_shim(relative_file, subcommand)).await?;
 
     // set executable permission for unix
     #[cfg(unix)]
@@ -39,7 +40,8 @@ pub async fn write_native_shims(
 }
 
 /// Unix shell shim for native binaries.
-pub fn native_sh_shim(relative_file: &str) -> String {
+pub fn native_sh_shim(relative_file: &str, subcommand: Option<&str>) -> String {
+    let subcommand = subcommand.map_or_else(String::new, |value| format!(" {value}"));
     formatdoc! {
         r#"
         #!/bin/sh
@@ -53,17 +55,18 @@ pub fn native_sh_shim(relative_file: &str) -> String {
             ;;
         esac
 
-        exec "$basedir/{relative_file}" "$@"
+        exec "$basedir/{relative_file}"{subcommand} "$@"
         "#
     }
 }
 
 /// Windows Command Prompt shim for native binaries.
-pub fn native_cmd_shim(relative_file: &str) -> String {
+pub fn native_cmd_shim(relative_file: &str, subcommand: Option<&str>) -> String {
+    let subcommand = subcommand.map_or_else(String::new, |value| format!(" {value}"));
     formatdoc! {
         r#"
         @SETLOCAL
-        @"%~dp0\{relative_file}" %*
+        @"%~dp0\{relative_file}"{subcommand} %*
         "#,
         relative_file = relative_file.replace('/', "\\")
     }
@@ -71,7 +74,8 @@ pub fn native_cmd_shim(relative_file: &str) -> String {
 }
 
 /// `PowerShell` shim for native binaries.
-pub fn native_pwsh_shim(relative_file: &str) -> String {
+pub fn native_pwsh_shim(relative_file: &str, subcommand: Option<&str>) -> String {
+    let subcommand = subcommand.map_or_else(String::new, |value| format!(" {value}"));
     formatdoc! {
         r#"
         #!/usr/bin/env pwsh
@@ -80,9 +84,9 @@ pub fn native_pwsh_shim(relative_file: &str) -> String {
         $ret=0
         # Support pipeline input
         if ($MyInvocation.ExpectingInput) {{
-            $input | & "$basedir/{relative_file}" $args
+            $input | & "$basedir/{relative_file}"{subcommand} $args
         }} else {{
-            & "$basedir/{relative_file}" $args
+            & "$basedir/{relative_file}"{subcommand} $args
         }}
         $ret=$LASTEXITCODE
         exit $ret
@@ -197,6 +201,8 @@ pub fn pwsh_shim(relative_file: &str) -> String {
 #[cfg(test)]
 #[cfg(not(windows))] // FIXME
 mod tests {
+    use std::{os::unix::fs::PermissionsExt, process::Command};
+
     use tempfile::TempDir;
     use tokio::fs::read_to_string;
 
@@ -204,6 +210,29 @@ mod tests {
 
     fn format_shim(shim: &str) -> String {
         shim.replace(' ', "·")
+    }
+
+    #[tokio::test]
+    async fn test_native_shim_forwards_subcommand() {
+        let temp_dir = TempDir::new().unwrap();
+        let source = temp_dir.path().join("bin").join("bun.native");
+        let target = temp_dir.path().join("bin").join("bunx");
+
+        tokio::fs::create_dir_all(source.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&source, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").await.unwrap();
+        tokio::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o755)).await.unwrap();
+
+        write_native_shims(&source, &target, Some("x")).await.unwrap();
+
+        let output = Command::new(&target).args(["--bun", "vitest"]).output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), "x\n--bun\nvitest\n");
+
+        let cmd = read_to_string(target.with_extension("cmd")).await.unwrap();
+        assert!(cmd.contains("@\"%~dp0\\bun.native\" x %*"));
+
+        let pwsh = read_to_string(target.with_extension("ps1")).await.unwrap();
+        assert!(pwsh.contains("& \"$basedir/bun.native\" x $args"));
     }
 
     #[test]
