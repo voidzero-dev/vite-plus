@@ -3,21 +3,9 @@
 //! On Unix, uses execve to replace the current process.
 //! On Windows, spawns the process and waits for completion.
 
+use vite_command::exit_code_from_status;
 use vite_path::AbsolutePath;
 use vite_shared::output;
-
-/// Convert a process ExitStatus to an exit code.
-/// On Unix, if the process was killed by a signal, returns 128 + signal_number.
-fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
-    }
-    status.code().unwrap_or(1)
-}
 
 /// Spawn a tool as a child process and wait for completion.
 ///
