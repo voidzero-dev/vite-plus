@@ -8420,6 +8420,7 @@ dependencies = [
  "snapshot_test",
  "tempfile",
  "toml",
+ "vite_shared",
  "which",
 ]
 

@@ -18,6 +18,7 @@ cp_r = { workspace = true }
 ctrlc = { workspace = true }
 pty_terminal_test_client = { workspace = true, features = ["testing"] }
 serde_json = { workspace = true }
+vite_shared = { workspace = true }
 
 [dev-dependencies]
 cow-utils = { workspace = true }

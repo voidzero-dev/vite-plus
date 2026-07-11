@@ -768,23 +768,12 @@ fn run_step_piped(
     let mut output = stdout_thread.join().unwrap();
     output.push_str(&stderr_thread.join().unwrap());
     match status {
-        Some(status) => {
-            (TerminationState::Exited(i64::from(exit_code_from_status(status))), output)
-        }
+        Some(status) => (
+            TerminationState::Exited(i64::from(vite_shared::exit_code_from_status(status))),
+            output,
+        ),
         None => (TerminationState::TimedOut, output),
     }
-}
-
-/// Preserve Unix signal termination using the shell's `128 + signal` convention.
-fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
-    }
-    status.code().unwrap_or(1)
 }
 
 /// Marks the command a process-group leader on Unix so a timeout can kill

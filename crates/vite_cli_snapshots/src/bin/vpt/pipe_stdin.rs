@@ -31,17 +31,5 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let status = child.wait()?;
-    std::process::exit(exit_code_from_status(status));
-}
-
-/// Preserve Unix signal termination using the shell's `128 + signal` convention.
-fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
-    }
-    status.code().unwrap_or(1)
+    std::process::exit(vite_shared::exit_code_from_status(status));
 }
