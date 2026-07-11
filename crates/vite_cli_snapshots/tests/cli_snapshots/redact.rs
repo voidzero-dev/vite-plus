@@ -117,6 +117,12 @@ static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static WHICH_NODE_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(Node:\s+|"nodeVersion":\s*")\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#).unwrap()
 });
+// `vp env which` prints the package's install date, which is whatever day the
+// recording (or CI run) happened; mask by the `Installed:` label so
+// fixture-controlled dates elsewhere (registry publish timestamps in
+// `vp view` output) stay assertable.
+static INSTALLED_DATE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(Installed:\s+)\d{4}-\d{2}-\d{2}").unwrap());
 // Output bytes differ across OSes (line endings, embedded paths), so byte
 // sizes and content-derived asset hashes can never be part of a shared
 // snapshot. The unit is kept ("<size> kB"): it only changes when content
@@ -385,6 +391,10 @@ pub fn redact_output(
     // Redact the environment's managed default runtime version by label/key
     // context (see WHICH_NODE_VERSION_RE).
     output = WHICH_NODE_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Mask the run-day install date in `vp env which` output by label context
+    // (see INSTALLED_DATE_RE).
+    output = INSTALLED_DATE_RE.replace_all(&output, "${1}<date>").into_owned();
 
     // Redact thread counts like "16 threads" to "<n> threads"
     output = THREAD_RE.replace_all(&output, "<n> threads").into_owned();
