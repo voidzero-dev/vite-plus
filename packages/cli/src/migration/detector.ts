@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { findSupportedConfigFile } from '../utils/config-files.ts';
+
 export interface ConfigFiles {
   viteConfig?: string;
   vitestConfig?: string;
@@ -44,22 +46,10 @@ export const PRETTIER_CONFIG_FILES = [
 export function detectConfigs(projectPath: string): ConfigFiles {
   const configs: ConfigFiles = {};
 
-  // Check for vite.config.*
+  // Check for supported Vite/Nuxt config entry files.
   // https://vite.dev/config/
-  const viteConfigs = [
-    'vite.config.ts',
-    'vite.config.mts',
-    'vite.config.cts',
-    'vite.config.js',
-    'vite.config.mjs',
-    'vite.config.cjs',
-  ];
-  for (const config of viteConfigs) {
-    if (fs.existsSync(path.join(projectPath, config))) {
-      configs.viteConfig = config;
-      break;
-    }
-  }
+  const supportedConfigFile = findSupportedConfigFile(projectPath);
+  configs.viteConfig = supportedConfigFile ? path.basename(supportedConfigFile) : undefined;
 
   // Check for vitest.config.*
   // https://vitest.dev/config/

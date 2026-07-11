@@ -202,7 +202,7 @@ export async function resolveOrgManifestForCreate(args: {
 
 /**
  * Read the `create` config (`defaultTemplate` + validated `templates`) from
- * a workspace's `vite.config.ts` in a single config evaluation.
+ * a workspace's supported config file in a single config evaluation.
  *
  * By default, walks up from `startDir` via `findWorkspaceRoot` (monorepo
  * markers only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,

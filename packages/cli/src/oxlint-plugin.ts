@@ -8,7 +8,7 @@ import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
-import viteConfigEntryBasenames from './vite-config-entry-basenames.json' with { type: 'json' };
+import { VITE_CONFIG_ENTRY_BASENAMES } from './utils/config-files.ts';
 
 // `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
 // intentionally preserved by `vp migrate` (see migration's import_rewriter and
@@ -34,14 +34,12 @@ function isVitestFamilyDeclareModuleSpecifier(specifier: string): boolean {
 // `vite-config-entry-basenames.json` at compile time (import_rewriter.rs). The
 // lint rule sees one file at a time, so it recognizes the standard basenames only
 // (no migrate-resolved custom path). vitest/tsdown/@vitest are unaffected.
-const VITE_CONFIG_FILE_BASENAMES = new Set(viteConfigEntryBasenames);
-
 function isViteSpecifier(specifier: string): boolean {
   return specifier === 'vite' || specifier.startsWith('vite/');
 }
 
 function isViteConfigFile(filename: string): boolean {
-  return VITE_CONFIG_FILE_BASENAMES.has(path.basename(filename));
+  return VITE_CONFIG_ENTRY_BASENAMES.has(path.basename(filename));
 }
 
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {

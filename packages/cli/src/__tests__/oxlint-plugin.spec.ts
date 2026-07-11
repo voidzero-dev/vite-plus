@@ -206,6 +206,12 @@ new RuleTester({
       output: `import { defineConfig } from 'vite-plus'`,
     },
     {
+      code: `import { defineConfig } from 'vite'`,
+      errors: 1,
+      filename: 'nuxt.config.ts',
+      output: `import { defineConfig } from 'vite-plus'`,
+    },
+    {
       code: `export { defineConfig } from "vite"`,
       errors: 1,
       filename: 'vitest.config.ts',

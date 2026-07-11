@@ -5,6 +5,7 @@ import { hasConfigKey, mergeJsonConfig } from '../binding/index.js';
 import { createDefaultVitePlusLintConfig } from './oxlint-plugin-config.ts';
 import { fmt as resolveFmt } from './resolve-fmt.ts';
 import { runCommandSilently } from './utils/command.ts';
+import { findSupportedConfigFile } from './utils/config-files.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.ts';
 import { warnMsg } from './utils/terminal.ts';
 import { fixBaseUrlInTsconfig, hasBaseUrlInTsconfig } from './utils/tsconfig.ts';
@@ -31,15 +32,6 @@ const INIT_COMMAND_SPECS: Record<string, InitCommandSpec> = {
 function normalizeInitCommand(command: string | undefined): string | undefined {
   return command === 'format' ? 'fmt' : command;
 }
-
-const VITE_CONFIG_FILES = [
-  'vite.config.ts',
-  'vite.config.mts',
-  'vite.config.cts',
-  'vite.config.js',
-  'vite.config.mjs',
-  'vite.config.cjs',
-] as const;
 
 export interface InitCommandInspection {
   handled: boolean;
@@ -113,13 +105,7 @@ function resolveGeneratedConfigPath(
 }
 
 function findViteConfigPath(projectPath: string): string | null {
-  for (const filename of VITE_CONFIG_FILES) {
-    const fullPath = path.join(projectPath, filename);
-    if (fs.existsSync(fullPath)) {
-      return fullPath;
-    }
-  }
-  return null;
+  return findSupportedConfigFile(projectPath) ?? null;
 }
 
 function ensureViteConfigPath(projectPath: string): string {
@@ -197,7 +183,8 @@ export function inspectInitCommand(
 
 /**
  * Merge generated tool config from `vp lint/fmt --init` (and fmt --migrate)
- * into the project's vite config, then remove the generated standalone file.
+ * into the project's supported config file, then remove the generated
+ * standalone file.
  *
  * Returns true when the command was an init/migrate command (handled), false otherwise.
  */

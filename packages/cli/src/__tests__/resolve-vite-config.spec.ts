@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findViteConfigUp } from '../resolve-vite-config.js';
+import { findViteConfig, findViteConfigUp } from '../resolve-vite-config.js';
 
 describe('findViteConfigUp', () => {
   let tempDir: string;
@@ -116,5 +116,22 @@ describe('findViteConfigUp', () => {
 
     const result = findViteConfigUp(subDir, tempDir);
     expect(result).toBe(path.join(tempDir, 'vite.config.mjs'));
+  });
+
+  it('should find nuxt config files', () => {
+    const subDir = path.join(tempDir, 'packages', 'my-lib');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'nuxt.config.ts'), '');
+
+    const result = findViteConfigUp(subDir, tempDir);
+    expect(result).toBe(path.join(tempDir, 'nuxt.config.ts'));
+  });
+
+  it('should prefer vite config files over nuxt config files', () => {
+    fs.writeFileSync(path.join(tempDir, 'vite.config.ts'), '');
+    fs.writeFileSync(path.join(tempDir, 'nuxt.config.ts'), '');
+
+    const result = findViteConfig(tempDir);
+    expect(result).toBe(path.join(tempDir, 'vite.config.ts'));
   });
 });
