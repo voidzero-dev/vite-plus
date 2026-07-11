@@ -16,8 +16,20 @@
 
 use std::{
     env,
-    process::{self, Command},
+    process::{self, Command, ExitStatus},
 };
+
+/// Preserve Unix signal termination using the shell's `128 + signal` convention.
+fn exit_code_from_status(status: ExitStatus) -> i32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+    status.code().unwrap_or(1)
+}
 
 fn main() {
     // 1. Determine tool name from our own executable filename
@@ -58,7 +70,7 @@ fn main() {
     // 5. Execute and propagate exit code.
     //    Use write_all instead of eprintln!/format! to avoid pulling in core::fmt (~100KB).
     match cmd.status() {
-        Ok(s) => process::exit(s.code().unwrap_or(1)),
+        Ok(status) => process::exit(exit_code_from_status(status)),
         Err(_) => {
             use std::io::Write;
             let stderr = std::io::stderr();
@@ -68,6 +80,17 @@ fn main() {
             let _ = handle.write_all(b"\n");
             process::exit(1);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_signal_exit_code() {
+        let status = Command::new("/bin/sh").arg("-c").arg("kill -ILL $$").status().unwrap();
+        assert_eq!(exit_code_from_status(status), 132);
     }
 }
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { runCommandSilently } from '../command.ts';
+import { runCommand, runCommandSilently } from '../command.ts';
 
-describe('runCommandSilently', () => {
+describe('command runners', () => {
   it('resolves with the child output when no timeout is set', async () => {
     const result = await runCommandSilently({
       command: process.execPath,
@@ -37,4 +37,30 @@ describe('runCommandSilently', () => {
     });
     expect(result.exitCode).toBe(3);
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves the signal exit code for captured commands',
+    async () => {
+      const result = await runCommandSilently({
+        command: process.execPath,
+        args: ['-e', 'process.kill(process.pid, "SIGILL")'],
+        cwd: process.cwd(),
+        envs: process.env,
+      });
+      expect(result.exitCode).toBe(132);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves the signal exit code for inherited commands',
+    async () => {
+      const result = await runCommand({
+        command: process.execPath,
+        args: ['-e', 'process.kill(process.pid, "SIGILL")'],
+        cwd: process.cwd(),
+        envs: process.env,
+      });
+      expect(result.exitCode).toBe(132);
+    },
+  );
 });

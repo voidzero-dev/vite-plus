@@ -480,7 +480,7 @@ impl DlxCommand {
 
         let exit_status = package_manager.run_dlx_command(&options, &self.cwd).await?;
 
-        Ok(exit_status.code().unwrap_or(1))
+        Ok(vite_shared::exit_code_from_status(exit_status))
     }
 }
 ```

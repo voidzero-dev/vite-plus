@@ -310,7 +310,7 @@ async fn execute_pm_command(
         }
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
     };
-    Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+    Ok(ExitStatus(vite_shared::exit_code_from_status(status) as u8))
 }
 
 #[cfg(test)]

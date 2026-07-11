@@ -3,9 +3,8 @@
 //! On Unix, uses execve to replace the current process.
 //! On Windows, spawns the process and waits for completion.
 
-use vite_command::exit_code_from_status;
 use vite_path::AbsolutePath;
-use vite_shared::output;
+use vite_shared::{exit_code_from_status, output};
 
 /// Spawn a tool as a child process and wait for completion.
 ///

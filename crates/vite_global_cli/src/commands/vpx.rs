@@ -120,7 +120,7 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         args: positional,
     };
     match vite_pm_cli::dispatch(cwd, dlx).await {
-        Ok(status) => status.code().unwrap_or(1),
+        Ok(status) => vite_shared::exit_code_from_status(status),
         Err(e) => {
             output::error(&format!("vpx: {e}"));
             1

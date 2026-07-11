@@ -113,7 +113,7 @@ pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult>
         );
     }
 
-    let exit_code = vite_command::exit_code_from_status(result.status);
+    let exit_code = vite_shared::exit_code_from_status(result.status);
 
     Ok(RunCommandResult { exit_code, path_accesses })
 }
