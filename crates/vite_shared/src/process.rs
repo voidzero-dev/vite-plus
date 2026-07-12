@@ -13,11 +13,11 @@ pub fn exit_code_from_status(status: ExitStatus) -> i32 {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::exit_code_from_status;
 
     /// Regression test for https://github.com/voidzero-dev/vite-plus/issues/2041.
-    #[cfg(unix)]
     #[test]
     fn preserves_signal_exit_code() {
         let status =
