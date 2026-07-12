@@ -2,7 +2,7 @@
   "name": "shim-bun-runs-node-child",
   "private": true,
   "scripts": {
-    "node-child": "node -v"
+    "node-child": "node -e \"if (process.version !== 'v22.12.0') process.exit(1)\""
   },
   "engines": {
     "node": "22.12.0"

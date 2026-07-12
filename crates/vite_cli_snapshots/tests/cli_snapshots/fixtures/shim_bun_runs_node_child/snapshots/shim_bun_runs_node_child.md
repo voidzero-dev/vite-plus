@@ -8,6 +8,5 @@
 Bun scripts can invoke the managed Node runtime
 
 ```
-$ node -v
-<version>
+$ node -e "if (process.version !== '<version>') process.exit(1)"
 ```
