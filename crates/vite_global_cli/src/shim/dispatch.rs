@@ -954,66 +954,60 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 /// Finds the package that provides this binary and executes it with the
 /// Node.js version that was used to install the package.
 async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
-    if let Some(pm_family) = PackageManagerType::from_tool(tool) {
-        let cwd = match current_dir() {
-            Ok(path) => path,
-            Err(e) => {
-                eprintln!("vp: Failed to get current directory: {e}");
-                return 1;
-            }
-        };
+    let cwd = match current_dir() {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("vp: Failed to get current directory: {e}");
+            return 1;
+        }
+    };
 
-        match resolve_matching_package_manager_tool(&cwd, tool).await {
-            Ok(Some(tool_path)) => {
-                // Bun is a native binary and does not need a Node.js runtime on PATH;
-                // JS-based PMs (npm/pnpm/yarn) do.
-                if pm_family != PackageManagerType::Bun {
-                    let node_version = match resolve_with_cache(&cwd).await {
-                        Ok(resolution) => resolution.version,
-                        Err(_) => match find_package_for_binary(tool).await {
-                            Ok(Some(metadata)) => metadata.platform.node,
-                            _ => String::new(),
-                        },
-                    };
+    match resolve_matching_package_manager_tool(&cwd, tool).await {
+        Ok(Some(tool_path)) => {
+            let node_version = match resolve_with_cache(&cwd).await {
+                Ok(resolution) => resolution.version,
+                Err(_) => match find_package_for_binary(tool).await {
+                    Ok(Some(metadata)) => metadata.platform.node,
+                    _ => String::new(),
+                },
+            };
 
-                    if !node_version.is_empty() {
-                        match ensure_installed(&node_version).await {
-                            Ok(node_path) => {
-                                if let Some(node_bin_dir) = node_path.parent() {
-                                    if let Err(e) =
-                                        prepend_js_child_process_path_env(&cwd, node_bin_dir).await
-                                    {
-                                        eprintln!(
-                                            "vp: Failed to resolve package manager for child \
+            if !node_version.is_empty() {
+                match ensure_installed(&node_version).await {
+                    Ok(node_path) => {
+                        if let Some(node_bin_dir) = node_path.parent() {
+                            if let Err(e) =
+                                prepend_js_child_process_path_env(&cwd, node_bin_dir).await
+                            {
+                                eprintln!(
+                                    "vp: Failed to resolve package manager for child \
                                              process PATH: {e}"
-                                        );
-                                        return 1;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("vp: Failed to install Node {}: {e}", node_version);
+                                );
                                 return 1;
                             }
                         }
                     }
+                    Err(e) => {
+                        eprintln!("vp: Failed to install Node {}: {e}", node_version);
+                        return 1;
+                    }
                 }
-
-                if let Some(pm_bin_dir) = tool_path.parent() {
-                    let _ = prepend_to_path_env(pm_bin_dir, PrependOptions::default());
-                }
-
-                // SAFETY: Setting env vars at this point before exec is safe
-                unsafe {
-                    std::env::set_var(RECURSION_ENV_VAR, "1");
-                }
-                return exec::exec_tool(&tool_path, args);
             }
-            Ok(None) => {}
-            Err(e) => {
-                eprintln!("vp: Failed to resolve package manager for '{tool}': {e}");
-                return 1;
+
+            if let Some(pm_bin_dir) = tool_path.parent() {
+                let _ = prepend_to_path_env(pm_bin_dir, PrependOptions::default());
             }
+
+            // SAFETY: Setting env vars at this point before exec is safe
+            unsafe {
+                std::env::set_var(RECURSION_ENV_VAR, "1");
+            }
+            return exec::exec_tool(&tool_path, args);
+        }
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!("vp: Failed to resolve package manager for '{tool}': {e}");
+            return 1;
         }
     }
 
