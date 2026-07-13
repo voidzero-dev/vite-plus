@@ -125,7 +125,7 @@ local-registry = false                      # optional; serve checkout packages 
 seed-runtime = true                         # default; symlink a provisioned managed JS
                                             #   runtime into the case VP_HOME (false for
                                             #   runtime-provisioning tests)
-env = { VITE_DISABLE_AUTO_INSTALL = "1" }   # optional; case-wide env additions
+env = { CUSTOM_ENV = "value" }             # optional; case-wide env additions
 unset-env = ["GITHUB_ACTIONS"]              # optional; remove from the baseline env
 steps = [ ... ]
 after = [ ... ]                             # optional cleanup steps, never snapshotted

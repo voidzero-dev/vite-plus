@@ -2,7 +2,6 @@
 name = "command_exec_monorepo_filter_v2"
 vp = "local"
 skip-platforms = ["windows"]
-env = { VITE_DISABLE_AUTO_INSTALL = "1" }
 steps = [
   { argv = ["vp", "exec", "-F", "app-a", "--", "echo", "hello"], comment = "-F short flag for --filter", continue-on-failure = true },
   { argv = ["vp", "exec", "-F", "app-a", "-F", "lib-c", "--", "echo", "hello"], comment = "-F short flag multiple", continue-on-failure = true },

@@ -2,7 +2,6 @@
 name = "command_exec_monorepo_order"
 vp = "local"
 skip-platforms = ["windows"]
-env = { VITE_DISABLE_AUTO_INSTALL = "1" }
 steps = [
   { argv = ["vp", "exec", "-r", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "recursive: topological order", continue-on-failure = true },
   { argv = ["vp", "exec", "--filter", "app-web...", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "filter with transitive deps", continue-on-failure = true },
