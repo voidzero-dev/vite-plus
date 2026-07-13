@@ -1,0 +1,6 @@
+[[case]]
+name = "command_publish_bun"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "publish", "--help"], comment = "should show help", continue-on-failure = true },
+]

@@ -1,0 +1,7 @@
+[[case]]
+name = "command_staged_broken_config"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default {\n  staged: {\n    \"*.ts\": \"vp check --fix\",\n  },\n  // syntax error: missing closing brace\n"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "staged"], comment = "should show actual config error, not 'No staged config found'", continue-on-failure = true },
+]

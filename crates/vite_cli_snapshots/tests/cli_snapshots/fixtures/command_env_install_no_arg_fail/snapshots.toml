@@ -1,0 +1,8 @@
+[[case]]
+name = "command_env_install_no_arg_fail"
+vp = "global"
+skip-platforms = ["windows"]
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "install"], comment = "No version config - should error", continue-on-failure = true },
+]

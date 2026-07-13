@@ -1,0 +1,14 @@
+[[case]]
+name = "command_link_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "../test-lib-npm"], comment = "create test library" },
+  { argv = ["vpt", "write-file", "../test-lib-npm/package.json", "{\"name\": \"test-lib-npm\", \"version\": \"1.0.0\"}\n"], continue-on-failure = true },
+  { argv = ["vp", "link", "../test-lib-npm"], comment = "should link local directory" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "ln", "../test-lib-npm"], comment = "should work with ln alias" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "unlink", "test-lib-npm"], comment = "cleanup temp states" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

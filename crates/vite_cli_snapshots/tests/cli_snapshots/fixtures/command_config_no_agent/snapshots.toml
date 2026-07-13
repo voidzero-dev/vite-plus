@@ -1,0 +1,9 @@
+[[case]]
+name = "command_config_no_agent"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config", "--no-agent"], comment = "should install hooks but skip agent instruction updates", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "AGENTS.md", "OUTDATED CONTENT"], comment = "agent must stay unchanged (outdated marker still present)" },
+]

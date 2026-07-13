@@ -1,3 +1,0 @@
-{
-  "commands": ["vp run foo # should run vp config command", "vp run bar # should throw error"]
-}

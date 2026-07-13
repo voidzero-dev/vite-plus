@@ -1,7 +1,7 @@
 //! Normalization of captured terminal screens before they enter a snapshot.
 //!
-//! Deliberately minimal compared to the old snap-test `replaceUnstableOutput`:
-//! grid rendering already removes ANSI noise, spinner frames, and
+//! Redaction stays deliberately minimal: grid rendering already removes ANSI
+//! noise, spinner frames, and
 //! stdout/stderr interleaving, so every rule here should correspond to a real
 //! source of nondeterminism (paths, durations, versions, machine parallelism).
 
@@ -127,6 +127,88 @@ static SIZE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 static ASSET_HASH_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"-([A-Za-z0-9_-]{8})\.(js|mjs|cjs|css)\b").unwrap());
+// The per-case local-registry proxy binds an ephemeral port that package
+// managers echo back in error messages (`GET http://127.0.0.1:57984/...`).
+// The `http://` anchor keeps static help-text hosts (`127.0.0.1:9229`)
+// verbatim.
+static LOCAL_REGISTRY_URL_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"http://127\.0\.0\.1:\d+").unwrap());
+// npm names its debug log after the wall-clock start of the failing run.
+static NPM_LOG_NAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}_\d{3}Z(-debug-\d+\.log)").unwrap()
+});
+// A live spinner's captured frame is whichever glyph was on screen when the
+// step ended; normalize all Braille frames to one glyph.
+static SPINNER_FRAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        "[\u{280B}\u{2819}\u{2839}\u{2838}\u{283C}\u{2834}\u{2826}\u{2827}\u{2807}\u{280F}]",
+    )
+    .unwrap()
+});
+// pnpm's install progress lines (`Progress: resolved 1, ...`, `Packages: +1`)
+// appear and interleave nondeterministically under a PTY; strip them.
+static PNPM_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^(Progress: resolved .*|Packages: \+\d+|\++)\n?").unwrap()
+});
+// Stack frames under file:// URLs carry line:column offsets of the bundled
+// chunk that produced them, which shift with every build of the bundle (and
+// the chunk hash in the frame path shifts with content); the error message
+// above the trace is the assertion, so drop the frames.
+static STACK_FRAME_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^\s+at .*file://.*\n?").unwrap());
+// The npm 404 line echoes the upstream registry's message tail, which differs
+// between registries (npmjs vs a mirror behind the local-registry proxy).
+static NPM_404_TAIL_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)(404 Not Found - GET \S+ - ).*$").unwrap());
+// yarn1 prefixes its summary with a sparkles emoji only when the console
+// supports it (absent on the Windows runner); strip it.
+static YARN_SPARKLE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new("\u{2728}\\s+").unwrap());
+// The global-install spinner row shows how many packages had finished when
+// the terminal painted (`Installing global packages (1/2)`), a race against
+// the error output that follows.
+static INSTALL_PROGRESS_COUNT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(Installing global packages \()\d+/(\d+\))").unwrap());
+// pnpm's self-update banner (a box-drawing block around "Update available!
+// X -> Y") appears whenever the fixture's pinned pnpm is older than the
+// latest release its cache knows, so its content churns with pnpm releases
+// and its position races other output. The closure guard keeps every other
+// box (oxlint code frames, vp's own message boxes) verbatim.
+static BOX_BLOCK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)(?:^[ \t]*\n)*^[ \t]*\u{256D}.*\n(?:^[ \t]*\u{2502}.*\n)+^[ \t]*\u{2570}.*\n(?:^[ \t]*\n)*").unwrap()
+});
+// yarn1 prefixes its `[1/4] Resolving packages...` step lines with an emoji
+// on macOS only (its emoji default is darwin-gated), so a baseline recorded
+// on one platform breaks the others; strip the emoji and its padding.
+static YARN1_STEP_EMOJI_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^(\[\d/\d\]) [\x{1F300}-\x{1FAFF}]\x{FE0F}?\s+").unwrap()
+});
+// yarn berry prints a two-line YN0065 telemetry notice (plus a blank line)
+// only on the first run against a given global folder, so its presence
+// depends on what ran earlier in the environment; strip it entirely.
+static YARN_TELEMETRY_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^\u{27A4} YN0065: [^\n]*\n(?:[ \t]*\n)*").unwrap());
+// `vp staged` reports the backup stash it created; the short hash covers a
+// commit of the working tree at run time, so it can never be stable.
+static STASH_HASH_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(git stash \()[0-9a-f]+(\))").unwrap());
+// Package managers emit blank separator lines whose count races their own
+// progress rendering under a PTY; collapse runs so spacing is stable.
+static BLANK_RUN_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\n{3,}").unwrap());
+// pnpm prints its dependency-section headers and summary line with a blank
+// count that races its own progress repainting; pin exactly one blank line
+// before each so parallel-load timing cannot shift the layout.
+static PNPM_SECTION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\n+((?:dependencies|devDependencies|optionalDependencies):\n)").unwrap()
+});
+static PNPM_DONE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\n+(Done in <duration>)").unwrap());
+// pnpm's per-project change-summary rows (`.        |   +1 +`) race the
+// progress rows painted around them; pin them flush against the preceding
+// line. Stacked rows are untouched (a single newline does not match).
+static PNPM_SUMMARY_ROW_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\n{2,}([^\n|]*\|\s+[+-]\d+[ +-]*\n)").unwrap());
 static NODE_WARNING_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?m)^\(node:\d+\) ExperimentalWarning:.*\n?").unwrap());
 static NODE_TRACE_WARNING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -181,8 +263,15 @@ fn redact_string(s: &mut String, redactions: &[(&str, &str)], normalize_separato
                 *s = replaced;
             }
         }
-        if let Cow::Owned(replaced) = s.as_str().cow_replace('\\', "/") {
-            *s = replaced;
+        // Selective: only a backslash BETWEEN path-like characters is a
+        // separator (`src\index.ts`). A blanket replacement would also
+        // rewrite backslashes in ASCII art (a cowsay speech bubble) that
+        // must stay identical across platforms. Looped because matches
+        // cannot overlap (`a\b\c` needs two passes).
+        static SEP_RE: LazyLock<regex::Regex> =
+            LazyLock::new(|| regex::Regex::new(r"([a-zA-Z0-9._>-])\\([a-zA-Z0-9._@-])").unwrap());
+        while SEP_RE.is_match(s) {
+            *s = SEP_RE.replace_all(s, "$1/$2").into_owned();
         }
     }
 }
@@ -203,8 +292,16 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
     // so those need their own variants). Longest-first ordering makes the
     // more specific spellings win.
     let stripped = path.strip_prefix(r"\\?\").unwrap_or(path);
-    let mut variants: Vec<String> = [path, stripped]
+    // macOS tmpdirs live behind a /var -> /private/var symlink; tools that
+    // canonicalize (pnpm link, yarn portals) print the resolved form, so
+    // redact that spelling too.
+    let canonical = dunce::canonicalize(path)
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
+        .filter(|c| c != path && c != stripped);
+    let mut variants: Vec<String> = [Some(path), Some(stripped), canonical.as_deref()]
         .into_iter()
+        .flatten()
         .flat_map(|p| {
             [
                 p.to_owned(),
@@ -324,6 +421,64 @@ pub fn redact_output(
     // bare-version-block mask is NOT applied here: it is scoped to version-probe
     // steps via `redact_version_probe_output`.
     output = NPM_NOTICE_RE.replace_all(&output, "").into_owned();
+
+    // Strip pnpm's self-update banner (guarded: only boxes that contain it).
+    // Whether the banner appears at all races pnpm's notifier cache, so the
+    // stripped text must equal the banner-absent text: the block plus its
+    // surrounding blank runs collapses to a single paragraph break, and
+    // trailing blank lines are trimmed below so an end-positioned banner
+    // leaves no residue either.
+    output = BOX_BLOCK_RE
+        .replace_all(&output, |caps: &regex::Captures| {
+            if caps[0].contains("Update available") { "\n".to_owned() } else { caps[0].to_owned() }
+        })
+        .into_owned();
+
+    // Normalize yarn's timing-dependent completion text: yarn appends
+    // "in Xs Ys" only when the step was slow enough to time, a race;
+    // DURATION_RE has already masked the numbers.
+    {
+        use cow_utils::CowUtils as _;
+        if let Cow::Owned(replaced) =
+            output.as_str().cow_replace("Completed in <duration> <duration>", "Completed")
+        {
+            output = replaced;
+        }
+    }
+
+    // Mask the racy completed-count in the global-install spinner row
+    output = INSTALL_PROGRESS_COUNT_RE.replace_all(&output, "${1}<n>/${2}").into_owned();
+
+    // Drop build-dependent stack frames, normalize the upstream-dependent npm
+    // 404 tail, and strip yarn1's console-dependent sparkles prefix
+    output = STACK_FRAME_RE.replace_all(&output, "").into_owned();
+    output = NPM_404_TAIL_RE.replace_all(&output, "${1}<message>").into_owned();
+    output = YARN_SPARKLE_RE.replace_all(&output, "").into_owned();
+
+    // Strip yarn1's darwin-only step emoji, yarn berry's first-run telemetry
+    // notice, and the stash hash `vp staged` reports for its backup
+    output = YARN1_STEP_EMOJI_RE.replace_all(&output, "${1} ").into_owned();
+    output = YARN_TELEMETRY_RE.replace_all(&output, "").into_owned();
+    output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
+
+    // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
+    // log name, live spinner frames, and pnpm's nondeterministic progress lines
+    output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
+    output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
+    output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
+    output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
+
+    // Pin racy blank-line layout last, after every rule above that strips
+    // whole lines (banner box, stack frames, progress rows) has run, so the
+    // newlines those strips leave behind collapse the same way whether or not
+    // the stripped text appeared.
+    output = PNPM_SECTION_RE.replace_all(&output, "\n\n${1}").into_owned();
+    output = PNPM_DONE_RE.replace_all(&output, "\n\n${1}").into_owned();
+    output = PNPM_SUMMARY_ROW_RE.replace_all(&output, "\n${1}").into_owned();
+    output = BLANK_RUN_RE.replace_all(&output, "\n\n").into_owned();
+    while output.ends_with("\n\n") {
+        output.pop();
+    }
 
     // Mask vitest's nondeterministic wall-clock "Start at" time
     output = START_AT_TIME_RE.replace_all(&output, "${1}<time>").into_owned();

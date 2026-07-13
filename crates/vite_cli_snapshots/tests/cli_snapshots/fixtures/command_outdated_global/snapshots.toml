@@ -1,0 +1,13 @@
+[[case]]
+name = "command_outdated_global"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "testnpm2@1.0.0"], comment = "should prepare global outdated package", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "outdated", "definitely-not-installed-vite-plus-snap-pkg", "-g", "--format", "json"], comment = "should support empty global json output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "-g", "--format", "json"], comment = "should support global json output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "-g", "--format", "list", "--concurrency", "5"], comment = "should support global list output", continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "testnpm2"], continue-on-failure = true },
+]

@@ -1,0 +1,42 @@
+# command_config_postinstall_auto_hooks
+
+## `git init`
+
+
+## `vp config`
+
+should install hooks automatically without prompting
+
+```
+```
+
+## `git config --local core.hooksPath`
+
+should be .vite-hooks/_
+
+```
+.vite-hooks/_
+```
+
+## `vpt print-file .vite-hooks/pre-commit`
+
+should have vp staged
+
+```
+vp staged
+```
+
+## `vpt print-file vite.config.ts`
+
+should have staged config
+
+```
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+
+});
+```

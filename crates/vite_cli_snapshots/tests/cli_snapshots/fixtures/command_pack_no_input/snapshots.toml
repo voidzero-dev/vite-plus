@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pack_no_input"
+vp = "local"
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "pack"], comment = "should not mention tsdown in error", continue-on-failure = true },
+]

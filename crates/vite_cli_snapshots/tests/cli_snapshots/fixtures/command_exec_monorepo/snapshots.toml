@@ -1,0 +1,29 @@
+[[case]]
+name = "command_exec_monorepo"
+vp = "local"
+skip-platforms = ["windows"]
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "exec", "-r", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "recursive exec with env var", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-*", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "glob filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "lib-c", "--", "echo", "lib-only"], comment = "exact name filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-a...", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "filter with dependencies", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-a^...", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "dependencies only, exclude self", continue-on-failure = true },
+  { argv = ["vp", "exec", "-r", "--parallel", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "parallel mode", continue-on-failure = true },
+  { argv = ["vp", "exec", "-r", "-c", "echo shell-$VP_PACKAGE_NAME"], comment = "recursive + shell mode (vp's own shell expands the variable)", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "./packages/app-a", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "path filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "{./packages/app-a}", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "braced path filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "{./packages/app-a}...", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "braced path filter with deps", continue-on-failure = true },
+  { argv = ["vp", "exec", "-r", "--reverse", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "reverse order", continue-on-failure = true },
+  { argv = ["vp", "exec", "-r", "--resume-from", "lib-c", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "resume from", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "!app-b", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "exclusion-only filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "!app-a", "--filter", "!app-b", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "multiple exclusion-only filters", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-a", "--filter", "lib-c", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "multiple inclusion filters (union)", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app-*", "--filter", "!app-b", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "mixed inclusion + exclusion filters", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "!no-such-pkg", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "exclusion of nonexistent pkg returns all", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter=app-*", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "equals-form filter", continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "*", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "glob star includes root", continue-on-failure = true },
+  { argv = ["vp", "exec", "-w", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "workspace root only", continue-on-failure = true },
+  { argv = ["vp", "exec", "-r", "--report-summary", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "report summary", continue-on-failure = true },
+  { argv = ["node", "-e", "const r=JSON.parse(require('fs').readFileSync('vp-exec-summary.json','utf8'));const s=r.executionStatus;for(const[k,v]of Object.entries(s)){console.log(k+': '+v.status+' '+(typeof v.duration==='number'?'has_duration':'no_duration'))}"], comment = "verify summary file", continue-on-failure = true },
+]

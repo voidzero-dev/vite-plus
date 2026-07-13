@@ -1,0 +1,9 @@
+[[case]]
+name = "command_config_npm10"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "config", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should get config value from project scope", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "delete", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should delete config key from project scope" },
+  { argv = ["vpt", "print-file", ".npmrc"], continue-on-failure = true },
+]

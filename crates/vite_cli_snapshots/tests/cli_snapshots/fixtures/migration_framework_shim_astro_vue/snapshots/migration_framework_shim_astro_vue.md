@@ -7,7 +7,6 @@ migration should add both Vue and Astro shims
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Formatting code...
 
 Code formatted

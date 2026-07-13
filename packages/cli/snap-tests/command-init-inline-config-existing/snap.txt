@@ -1,8 +1,0 @@
-> vp lint --init
-Skipped initialization: 'lint' already exists in 'vite.config.ts'.
-
-> test ! -f .oxlintrc.json # check .oxlintrc.json is not created
-> vp fmt --init
-Skipped initialization: 'fmt' already exists in 'vite.config.ts'.
-
-> test ! -f .oxfmtrc.json # check .oxfmtrc.json is not created

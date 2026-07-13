@@ -89,7 +89,7 @@ struct StepTable {
 ///   visible (`\x1b[…m`) so colour/style attributes are asserted.
 /// - `timeout`: per-step override in ms (default `STEP_TIMEOUT`).
 /// - `snapshot = false`: omit the screen while the step succeeds; failures
-///   always keep their output (legacy `ignoreOutput` semantics).
+///   always keep their output.
 /// - `tty = false`: piped stdio instead of a PTY, for non-TTY assertions;
 ///   interactions require a PTY.
 /// - `continue_on_failure`: on failure, execution skips past the next step
@@ -348,6 +348,12 @@ struct Case {
     /// provisioning tests set false to start from a genuinely empty home.
     #[serde(default = "default_true", rename = "seed-runtime")]
     seed_runtime: bool,
+    /// Expose the run-root node_modules as the workspace's parent-dir
+    /// node_modules for fixtures that address the linked checkout packages by path (`node
+    /// ../node_modules/vite-plus/bin/oxlint`) rather than by specifier
+    /// through Node's upward walk.
+    #[serde(default, rename = "link-node-modules")]
+    link_node_modules: bool,
     /// Case-wide environment additions on top of the runner baseline.
     #[serde(default)]
     env: BTreeMap<String, String>,
@@ -444,6 +450,20 @@ impl CaseInstall {
             return Ok(self.vpt.clone());
         }
 
+        // An explicit `./`-prefixed program runs a file the case itself
+        // produced inside the staged workspace (a packed executable); the
+        // prefix keeps bare names on the PATH rule below. The prefix is
+        // dropped from the joined path: a `/./` component would survive into
+        // output that records the executable's own path (`vp env setup`
+        // writes shim targets from it).
+        if let Some(rel) = program.strip_prefix("./") {
+            let candidate = cwd.join(rel);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+            return Err(format!("`{program}` does not exist relative to the step cwd"));
+        }
+
         let found = which::which_in(program, Some(case_path), cwd)
             .map_err(|e| format!("`{program}` not found on the case PATH: {e}"))?;
         // Git is a fixture dependency in real create/migrate flows, so steps may
@@ -506,12 +526,19 @@ impl CaseHome {
         self.run_env_setup(&vp)?;
 
         let vp_bin_dir = self.vp_home().join("bin");
-        let tool_dirs = match flavor {
+        let mut tool_dirs = match flavor {
             Flavor::Global => vec![vp_bin_dir],
             Flavor::Local => vec![local_bin_dir, vp_bin_dir],
         };
         let mut path_dirs = vec![runtime.runner_bin_dir.clone()];
         path_dirs.extend(tool_dirs.iter().cloned());
+        // The whole case root is case-owned for resolution (not PATH): a
+        // fixture that runs `vp env setup` against an isolated
+        // `VP_HOME=${workspace}/home` then invokes the shims it created
+        // through a per-step PATH prefix.
+        if let Some(case_root) = self.home.parent() {
+            tool_dirs.push(case_root.to_path_buf());
+        }
 
         Ok(CaseInstall {
             path_env: compose_path_env(&path_dirs),
@@ -641,10 +668,15 @@ impl CaseHome {
     /// the npm prefix is a sibling of `home`, which the `<home>` pair never
     /// matches, and it leaked raw temp paths into snapshots until it was
     /// paired here.
-    fn redaction_paths(&self) -> [(String, &'static str); 2] {
+    fn redaction_paths(&self) -> [(String, &'static str); 3] {
+        let root = self.home.parent().unwrap();
         [
             (self.home.to_str().unwrap().to_owned(), "<home>"),
             (self.npm_prefix().to_str().unwrap().to_owned(), "<npm-prefix>"),
+            // Last, so the specific dirs above win: fixtures may create
+            // siblings of the workspace (`vpt mkdir -p ../test-lib`), whose
+            // paths tools then echo back (a yarn portal resolution).
+            (root.to_str().unwrap().to_owned(), "<case>"),
         ]
     }
 }
@@ -776,6 +808,35 @@ fn wait_with_deadline(
 
 /// Effective env, cwd, and resolved program for one step; shared by the
 /// main and cleanup loops so their semantics cannot drift.
+/// Expands `${NAME}` references in a step env value. `${workspace}` resolves
+/// to the step's working directory and any other name to the case env, so a
+/// fixture can express the shell forms `VP_HOME="$(pwd)/home"` and
+/// `PATH="$(pwd)/home/bin:$PATH"` without a shell. Unknown names stay
+/// verbatim, like vpt's argument expansion.
+fn expand_env_value(value: &str, cwd: &Path, case_env: &BTreeMap<String, OsString>) -> OsString {
+    let mut out = OsString::new();
+    let mut rest = value;
+    while let Some(start) = rest.find("${") {
+        let (before, from_ref) = rest.split_at(start);
+        out.push(before);
+        let Some(end) = from_ref.find('}') else {
+            rest = from_ref;
+            break;
+        };
+        let name = &from_ref[2..end];
+        if name == "workspace" {
+            out.push(cwd.as_os_str());
+        } else if let Some(resolved) = case_env.get(name) {
+            out.push(resolved);
+        } else {
+            out.push(&from_ref[..=end]);
+        }
+        rest = &from_ref[end + 1..];
+    }
+    out.push(rest);
+    out
+}
+
 fn step_context<'a>(
     step: &Step,
     case_env: &'a BTreeMap<String, OsString>,
@@ -786,13 +847,20 @@ fn step_context<'a>(
 ) -> Result<(std::borrow::Cow<'a, BTreeMap<String, OsString>>, PathBuf, PathBuf), String> {
     use std::borrow::Cow;
     assert!(!step.argv.is_empty(), "step argv must not be empty");
+    // The empty relative dir maps to the stage itself rather than through
+    // `join("")`, whose trailing separator would leak into `${workspace}`
+    // expansions (`<stage>//home`).
+    let rel_cwd = step.cwd.as_deref().unwrap_or(case_cwd);
+    let cwd = if rel_cwd.is_empty() { stage.to_path_buf() } else { stage.join(rel_cwd) };
     // Most steps add no env of their own; borrow the case env then.
     let env: Cow<'a, BTreeMap<String, OsString>> = if step.envs.is_empty() {
         Cow::Borrowed(case_env)
     } else {
         let mut env = case_env.clone();
         for (k, v) in &step.envs {
-            env.insert(k.clone(), v.into());
+            // References resolve against the case env, never a sibling step
+            // env, so the entries stay order-independent.
+            env.insert(k.clone(), expand_env_value(v, &cwd, case_env));
         }
         Cow::Owned(env)
     };
@@ -800,7 +868,6 @@ fn step_context<'a>(
     // (relative PATH entries resolve as the child would see them), so shim
     // and custom-prefix steps run exactly the child's tool.
     let path = env.get("PATH").cloned().unwrap_or_else(|| case_path.clone());
-    let cwd = stage.join(step.cwd.as_deref().unwrap_or(case_cwd));
     let program = install.resolve_program(&step.argv[0], &path, &cwd)?;
     Ok((env, cwd, program))
 }
@@ -892,6 +959,8 @@ fn start_local_registry(
     let mut cmd = std::process::Command::new(node);
     cmd.arg(&script)
         .arg("--serve")
+        // The server discovers the fixture's own packages relative to the
+        // staged workspace, so it must run from there.
         .current_dir(stage)
         .env_clear()
         .envs(case_env)
@@ -998,6 +1067,9 @@ fn run_case(
     let case_root = tmpdir.join(format!("{fixture_name}_case_{case_index}_{}", flavor.as_str()));
     let stage = case_root.join("workspace");
     std::fs::create_dir_all(&stage).unwrap();
+    if case.link_node_modules {
+        flavor::link_dir(&tmpdir.join("node_modules"), &case_root.join("node_modules"));
+    }
     // The case definition and recorded snapshots are runner metadata, not
     // part of the workspace under test, so they are never copied in.
     CopyOptions::new()
@@ -1029,7 +1101,12 @@ fn run_case(
     let _registry = if case.local_registry {
         let pack_dir = local_registry_pack
             .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
-        let registry_node = case_install.resolve_program("node", &case_path, &stage)?;
+        // Prefer the seed runtime's real node binary over the case's node
+        // shim: the shim resolves the project's pinned runtime from its cwd,
+        // and a fixture pinning an older Node (a `.node-version` under test)
+        // must not pick the runtime executing this TypeScript helper.
+        let registry_node = flavor::seed_runtime_node()
+            .map_or_else(|| case_install.resolve_program("node", &case_path, &stage), Ok)?;
         let (registry_env, handle) =
             start_local_registry(&registry_node, &stage, pack_dir, &case_env)?;
         for (key, value) in registry_env {
@@ -1041,8 +1118,8 @@ fn run_case(
     };
 
     // Installs through the local registry are slower than pure vp commands, so
-    // local-registry steps get the legacy 120s default (still overridable
-    // per step); everything else keeps the standard per-step default.
+    // local-registry steps get a 120s default (still overridable per step);
+    // everything else keeps the standard per-step default.
     let step_default_timeout =
         if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
 
@@ -1250,8 +1327,7 @@ fn run_case(
         }
 
         // `snapshot = false` suppresses the screen only on success; failures
-        // always keep their output for diagnosis (legacy ignoreOutput
-        // semantics).
+        // always keep their output for diagnosis.
         let succeeded = matches!(termination_state, TerminationState::Exited(0));
         if step.snapshot || !succeeded {
             let mut redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
@@ -1270,9 +1346,8 @@ fn run_case(
 
         // Shell-like `&&` semantics with line boundaries: a failing step
         // skips the rest of its line, up to and including the next
-        // continue-on-failure step (the line terminator in migrated
-        // fixtures), and the following line resumes, exactly the legacy
-        // model. Hand-written cases without markers stop here entirely.
+        // continue-on-failure step, then the following line resumes.
+        // Cases without markers stop here entirely.
         if !succeeded && !step.continue_on_failure {
             match case.steps[step_index + 1..].iter().position(|s| s.continue_on_failure) {
                 Some(offset) => {

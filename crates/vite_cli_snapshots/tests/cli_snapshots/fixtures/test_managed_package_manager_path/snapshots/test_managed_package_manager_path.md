@@ -17,7 +17,6 @@ no host pnpm reachable; vp test still exposes the managed pnpm
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
  RUN  <version> <workspace>
 
  ✓ src/managed-pm-path.test.ts (1 test) <duration>

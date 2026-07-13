@@ -7,7 +7,6 @@ migration should work with pnpm, write overrides and peerDependencyRules to pnpm
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Formatting code...
 
 Code formatted

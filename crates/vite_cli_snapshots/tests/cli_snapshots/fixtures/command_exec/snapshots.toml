@@ -1,0 +1,18 @@
+[[case]]
+name = "command_exec"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["node", "setup-bin.js"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "exec", "hello-test"], comment = "exec binary from node_modules/.bin", continue-on-failure = true },
+  { argv = ["vp", "exec", "echo", "hello"], comment = "basic exec", continue-on-failure = true },
+  { argv = ["vp", "exec", "--", "echo", "with-separator"], comment = "explicit -- separator", continue-on-failure = true },
+  { argv = ["vp", "exec", "node", "-e", "console.log('from node')"], comment = "exec node with args", continue-on-failure = true },
+  { argv = ["vp", "exec", "-c", "echo hello from shell"], comment = "shell mode", continue-on-failure = true },
+  { argv = ["vp", "exec", "--parallel", "--", "echo", "hello"], comment = "--parallel with single package should stream output", continue-on-failure = true },
+  { argv = ["vp", "exec", "./my-local"], cwd = "subdir", comment = "resolve relative executable from caller cwd", continue-on-failure = true },
+  { argv = ["vp", "exec", "--help"], comment = "help message", continue-on-failure = true },
+  { argv = ["vp", "exec"], comment = "missing command should error", continue-on-failure = true },
+  { argv = ["vp", "exec", "nonexistent-cmd-12345"], comment = "command not found error", continue-on-failure = true },
+  { argv = ["vp", "run", "foo"], comment = "vp exec works in package.json scripts", continue-on-failure = true },
+]

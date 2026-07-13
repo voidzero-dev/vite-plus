@@ -84,8 +84,7 @@ resolve via the registered create.templates entry
 Generating project…
 
 Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --directory demo-pkg --offline --skip-requests
-┌  ✨ my-generator@0.0.0 ✨
-│
+┌  my-generator@0.0.0 │
 ◇  Running with mode --setup
 │
 │  --offline enabled. You'll need to git push any changes manually.
@@ -100,7 +99,6 @@ Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --dire
 │  to create and sync a remote repository on GitHub.
 │
 └  Thanks for using my-generator! 💝
-
 
 Monorepo integration...
 

@@ -5,9 +5,8 @@ real pseudo-terminal backed by a vt100 emulator, so interactive flows
 (prompts, pickers, watch modes, ctrl-c) are first-class testable surfaces.
 Snapshots are Markdown files with real pass/fail semantics.
 
-**Write new CLI tests here.** The legacy trees (`packages/cli/snap-tests/`,
-`packages/cli/snap-tests-global/`) are being migrated to this suite and
-must not receive new cases. Design rationale: `rfcs/interactive-snapshot-tests.md`.
+**Write new CLI tests here.** Design rationale:
+`rfcs/interactive-snapshot-tests.md`.
 
 ## Quick start
 
@@ -77,6 +76,9 @@ cwd = "packages/app"          # optional, relative to the fixture root
 skip-platforms = ["windows"]  # or { os = "linux", libc = "musl" }
 ignore = false                # true: only runs with `-- --ignored`
 seed-runtime = true           # false: start from an empty VP_HOME
+link-node-modules = false     # true: expose the run-root node_modules as
+                              #   the workspace's parent-dir node_modules,
+                              #   for `../node_modules/vite-plus/...` paths
 env = { MY_VAR = "1" }        # case-wide env additions
 unset-env = ["SOME_VAR"]      # remove baseline env entries
 steps = [ ... ]
@@ -99,7 +101,11 @@ A step is a bare argv array or a table:
 { argv = ["vp", "create"],
   cwd = "sub",                # per-step working dir
   comment = "...",            # rendered under the step heading
-  envs = [["K", "V"]],        # per-step env
+  envs = [["K", "V"]],        # per-step env; values expand `${NAME}`:
+                              #   `${workspace}` is the step's working dir,
+                              #   any other name resolves from the case env
+                              #   (`PATH = "${workspace}/bin:${PATH}"` is
+                              #   the shell's `PATH="$(pwd)/bin:$PATH"`)
   timeout = 120000,           # ms, default 50s
   snapshot = false,           # omit the screen while the step succeeds
                               #   (failures always keep their output)
@@ -198,21 +204,3 @@ Fixture trees are excluded from repo-wide fmt, lint, typecheck, and vitest
 (`vite.config.ts`, `tsconfig.json`); recorded snapshots and
 `snapshots.toml` are runner metadata and never appear inside the staged
 workspace a test runs in.
-
-## Migrating a legacy case
-
-```bash
-node packages/tools/src/bin.js migrate-snap-tests packages/cli/snap-tests --vp local <name-filter>
-UPDATE_SNAPSHOTS=1 just snapshot-test <name_filter>
-# review each new .md against the deleted snap.txt in git diff, then commit
-```
-
-The migrator converts `steps.json` fields, splits `&&` chains, maps shell
-built-ins to `vpt`, removes cleanly converted (TODO-free) old case
-directories (`--keep-old` defers that; git history keeps the originals),
-and reports anything needing hand conversion in `MIGRATION-REPORT.md`
-(generated, gitignored). Cases with TODOs keep their legacy dir until the
-hand conversion lands, so placeholder steps never silently replace real
-coverage. A case whose target fixture already exists is skipped and
-reported: the same name in both legacy trees means a hand merge, usually a
-second `[[case]]` in the fixture or a `vp = ["local", "global"]` matrix.

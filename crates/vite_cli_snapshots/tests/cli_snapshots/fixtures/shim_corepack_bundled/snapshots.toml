@@ -1,0 +1,10 @@
+[[case]]
+name = "shim_corepack_bundled"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "remove", "-g", "corepack"], comment = "Isolate from a leftover managed corepack, which would win over the bundled one", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", ".node-version", "20.18.0\n"], comment = "Pin the project Node.js version", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "node", "--version"], comment = "Ensure Node.js is installed first", timeout = 120000 },
+  { argv = ["corepack", "--version"], comment = "corepack shim runs the Node-bundled corepack" },
+]

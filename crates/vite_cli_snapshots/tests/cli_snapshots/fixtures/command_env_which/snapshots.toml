@@ -1,0 +1,17 @@
+[[case]]
+name = "command_env_which"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "remove", "-g", "corepack"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "node", "--version"], comment = "Ensure Node.js is installed first", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "node"], comment = "Core tool - shows resolved Node.js binary path", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "npm"], comment = "Core tool - shows resolved npm binary path", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "npx"], comment = "Core tool - shows resolved npx binary path", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "corepack"], comment = "Core tool - corepack bundled with the resolved Node.js", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "cowsay@1.6.0"], comment = "Install a global package via vp", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "cowsay"], comment = "Global package - shows binary path with metadata", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "cowsay"], comment = "Cleanup", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "unknown-tool"], comment = "Unknown tool - error message", continue-on-failure = true },
+]

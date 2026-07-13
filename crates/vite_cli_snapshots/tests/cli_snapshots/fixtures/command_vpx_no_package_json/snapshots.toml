@@ -1,0 +1,8 @@
+[[case]]
+name = "command_vpx_no_package_json"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "should work without package.json", continue-on-failure = true },
+]

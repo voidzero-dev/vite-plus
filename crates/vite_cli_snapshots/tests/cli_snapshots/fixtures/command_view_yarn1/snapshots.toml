@@ -1,0 +1,7 @@
+[[case]]
+name = "command_view_yarn1"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "view", "testnpm2"], comment = "should view testnpm2 package information (uses yarn info)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "version"], comment = "should view testnpm2 version field (uses yarn info)", continue-on-failure = true },
+]

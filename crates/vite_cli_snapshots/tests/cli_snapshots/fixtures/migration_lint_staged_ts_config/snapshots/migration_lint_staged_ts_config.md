@@ -10,7 +10,6 @@ migration should warn about unsupported TS lint-staged config
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>

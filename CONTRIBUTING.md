@@ -70,7 +70,7 @@ vp upgrade --force
 
 ## Validate the local build against a real project
 
-Unit and snap tests don't cover everything. Interactive flows in particular (prompts, pickers, scaffolding) are easiest to validate by running your work-in-progress CLI inside a real Vite+ project.
+Automated tests don't cover everything. Complex flows such as prompts, pickers, and scaffolding are also worth validating by running your work-in-progress CLI inside a real Vite+ project.
 
 First, understand how `vp` picks which `vite-plus` to run: for JS-backed commands (such as `vp create`), the global `vp` binary resolves `vite-plus` from the project's `node_modules` first and only falls back to the global installation in `~/.vite-plus`. If your test project has `vite-plus` installed from npm, `pnpm bootstrap-cli` alone will not make it run your local code.
 
@@ -118,7 +118,7 @@ pnpm local-registry --pack --serve
 Notes:
 
 - The served versions carry an old publish time, so `minimumReleaseAge` gates never quarantine them, and wrapped runs get throwaway Yarn Berry / bun caches (both cache registry state in ways that would otherwise leak stale local builds between runs).
-- The same server backs the install snap fixtures (`localVitePlusPackages` in `steps.json`) and ecosystem e2e (`ecosystem-ci/patch-project.ts`), so a flow that works here works there too.
+- The same server backs PTY snapshot cases with `local-registry = true` and ecosystem e2e (`ecosystem-ci/patch-project.ts`), so a flow that works here works there too.
 - `pnpm local-registry:ps` lists any registry processes still running (e.g. a `--serve` you forgot, or a wrapper that was killed mid-run); `pnpm local-registry:kill` stops them all and removes their leftover temp caches.
 
 ### Global CLI (Rust) changes
@@ -154,25 +154,6 @@ UPDATE_SNAPSHOTS=1 just snapshot-test create
 ```
 
 The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
-
-## Running Snap Tests (legacy)
-
-The legacy snap trees in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI) still run in CI while they are migrated to the PTY runner (`tool migrate-snap-tests`). Do not add new cases to them.
-
-```bash
-# Run all snap tests (local + global)
-pnpm -F vite-plus snap-test
-
-# Run only local CLI snap tests
-pnpm -F vite-plus snap-test-local
-pnpm -F vite-plus snap-test-local <name-filter>
-
-# Run only global CLI snap tests
-pnpm -F vite-plus snap-test-global
-pnpm -F vite-plus snap-test-global <name-filter>
-```
-
-Legacy snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
 ## Verified Commits
 

@@ -1,3 +1,0 @@
-{
-  "commands": ["vp staged -h", "vp staged --help", "vp help staged"]
-}

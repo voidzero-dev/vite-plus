@@ -1,3 +1,0 @@
-{
-  "commands": ["vp fmt -h", "vp fmt --help", "vp help fmt"]
-}

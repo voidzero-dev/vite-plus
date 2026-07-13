@@ -7,7 +7,6 @@ migration should work with npm, add overrides, and update lockfile
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Formatting code...
 
 Code formatted

@@ -7,7 +7,6 @@ migration should add Vue shim when vue dependency is detected
 ```
 VITE+ - The Unified Toolchain for the Web
 
-
 Formatting code...
 
 Code formatted

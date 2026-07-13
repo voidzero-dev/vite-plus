@@ -1,0 +1,10 @@
+[[case]]
+name = "command_outdated_bun"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "outdated", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2"], comment = "should show outdated package", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-r"], comment = "should support recursive output", continue-on-failure = true },
+]

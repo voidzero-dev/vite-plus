@@ -3,9 +3,6 @@
 ## `vp install --no-frozen-lockfile`
 
 ```
-➤ YN0065: Yarn will periodically gather anonymous telemetry: https://yarnpkg.com/advanced/telemetry
-➤ YN0065: Run yarn config set --home enableTelemetry 0 to disable
-
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
