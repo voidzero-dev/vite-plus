@@ -54,6 +54,24 @@ describe('alignMonorepoTypeScriptVersion', () => {
     expect(readDevDependencies(libraryDir)).toEqual({
       typescript: '~6.0.2',
       '@types/node': '^26.1.1',
+      '@typescript/native-preview': 'npm:typescript@^7.0.2',
+      'vite-plus': 'catalog:',
+    });
+  });
+
+  it('preserves an existing native-preview dependency when aligning TypeScript', () => {
+    writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, {
+      typescript: '^7.0.2',
+      '@typescript/native-preview': '7.0.0-dev.20260509.2',
+      'vite-plus': 'catalog:',
+    });
+
+    alignMonorepoTypeScriptVersion(appDir, libraryDir);
+
+    expect(readDevDependencies(libraryDir)).toEqual({
+      typescript: '~6.0.2',
+      '@typescript/native-preview': '7.0.0-dev.20260509.2',
       'vite-plus': 'catalog:',
     });
   });
