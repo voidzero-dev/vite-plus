@@ -5,7 +5,68 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.js';
-import { dropAliasedRuntimeDevDeps } from '../templates/monorepo.js';
+import {
+  alignMonorepoTypeScriptVersion,
+  dropAliasedRuntimeDevDeps,
+} from '../templates/monorepo.js';
+
+function writePackageJson(directory: string, devDependencies: Record<string, string>): void {
+  fs.writeFileSync(
+    path.join(directory, 'package.json'),
+    JSON.stringify({ private: true, devDependencies }, null, 2),
+  );
+}
+
+function readDevDependencies(directory: string): Record<string, string> {
+  const pkg = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8')) as {
+    devDependencies?: Record<string, string>;
+  };
+  return pkg.devDependencies ?? {};
+}
+
+describe('alignMonorepoTypeScriptVersion', () => {
+  let tmpDir: string;
+  let appDir: string;
+  let libraryDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-monorepo-typescript-'));
+    appDir = path.join(tmpDir, 'apps', 'website');
+    libraryDir = path.join(tmpDir, 'packages', 'utils');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.mkdirSync(libraryDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('aligns the library with the app TypeScript range', () => {
+    writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, {
+      typescript: '^7.0.2',
+      '@types/node': '^26.1.1',
+      'vite-plus': 'catalog:',
+    });
+
+    alignMonorepoTypeScriptVersion(appDir, libraryDir);
+
+    expect(readDevDependencies(libraryDir)).toEqual({
+      typescript: '~6.0.2',
+      '@types/node': '^26.1.1',
+      'vite-plus': 'catalog:',
+    });
+  });
+
+  it('leaves the library unchanged when the app has no TypeScript dependency', () => {
+    writePackageJson(appDir, { 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, { typescript: '^7.0.2', 'vite-plus': 'catalog:' });
+
+    alignMonorepoTypeScriptVersion(appDir, libraryDir);
+
+    expect(readDevDependencies(libraryDir).typescript).toBe('^7.0.2');
+  });
+});
 
 describe('dropAliasedRuntimeDevDeps', () => {
   let tmpDir: string;
@@ -19,17 +80,7 @@ describe('dropAliasedRuntimeDevDeps', () => {
   });
 
   function writeWebsitePackageJson(devDependencies: Record<string, string>): void {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ name: 'website', private: true, devDependencies }, null, 2),
-    );
-  }
-
-  function readDevDependencies(): Record<string, string> {
-    const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')) as {
-      devDependencies?: Record<string, string>;
-    };
-    return pkg.devDependencies ?? {};
+    writePackageJson(tmpDir, devDependencies);
   }
 
   // Regression test for "vp why vite reports the override as ineffective" in a
@@ -48,7 +99,7 @@ describe('dropAliasedRuntimeDevDeps', () => {
 
     dropAliasedRuntimeDevDeps(tmpDir, PackageManager.pnpm);
 
-    const devDependencies = readDevDependencies();
+    const devDependencies = readDevDependencies(tmpDir);
     expect(devDependencies.vite).toBe('catalog:');
     expect(devDependencies.vitest).toBe('catalog:');
     expect(devDependencies['vite-plus']).toBe('catalog:');
@@ -68,7 +119,7 @@ describe('dropAliasedRuntimeDevDeps', () => {
 
       dropAliasedRuntimeDevDeps(tmpDir, packageManager);
 
-      const devDependencies = readDevDependencies();
+      const devDependencies = readDevDependencies(tmpDir);
       expect(devDependencies.vite).toBeUndefined();
       expect(devDependencies.vitest).toBeUndefined();
       expect(devDependencies['vite-plus']).toBe('latest');

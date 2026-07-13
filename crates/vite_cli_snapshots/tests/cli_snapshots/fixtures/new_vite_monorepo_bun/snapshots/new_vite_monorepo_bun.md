@@ -157,7 +157,7 @@ check utils normalizes vite-plus to catalog:
   "devDependencies": {
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
-    "typescript": "^7.0.2",
+    "typescript": "~6.0.2",
     "vite-plus": "catalog:"
   }
 }
