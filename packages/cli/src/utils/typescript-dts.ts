@@ -74,7 +74,7 @@ export function configureTypeScript7Dts(config: ResolvedConfig): void {
   if (typeof tsgo === 'object' && tsgo.path) {
     return;
   }
-  if (tsgo === false || (typeof tsgo === 'object' && tsgo.enabled === false)) {
+  if (tsgo === false) {
     throw new Error(
       'TypeScript 7 declaration generation requires `pack.dts.tsgo` or `pack.dts.oxc`. ' +
         'Remove `tsgo: false`, enable the Oxc declaration generator, or use TypeScript 6.',
