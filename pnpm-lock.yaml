@@ -517,9 +517,6 @@ importers:
       '@oxc-project/types':
         specifier: 'catalog:'
         version: 0.139.0
-      '@typescript/native-preview':
-        specifier: 'catalog:'
-        version: 7.0.0-dev.20260605.1
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 24.13.2

@@ -41,7 +41,7 @@ describe('alignMonorepoTypeScriptVersion', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('aligns the library with the app TypeScript range', () => {
+  it('aligns the app with the library TypeScript range', () => {
     writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
     writePackageJson(libraryDir, {
       typescript: '^7.0.2',
@@ -51,20 +51,19 @@ describe('alignMonorepoTypeScriptVersion', () => {
 
     alignMonorepoTypeScriptVersion(appDir, libraryDir);
 
-    expect(readDevDependencies(libraryDir)).toEqual({
-      typescript: '~6.0.2',
-      '@types/node': '^26.1.1',
+    expect(readDevDependencies(appDir)).toEqual({
+      typescript: '^7.0.2',
       'vite-plus': 'catalog:',
     });
   });
 
-  it('leaves the library unchanged when the app has no TypeScript dependency', () => {
+  it('leaves the app unchanged when it has no TypeScript dependency', () => {
     writePackageJson(appDir, { 'vite-plus': 'catalog:' });
     writePackageJson(libraryDir, { typescript: '^7.0.2', 'vite-plus': 'catalog:' });
 
     alignMonorepoTypeScriptVersion(appDir, libraryDir);
 
-    expect(readDevDependencies(libraryDir).typescript).toBe('^7.0.2');
+    expect(readDevDependencies(appDir).typescript).toBeUndefined();
   });
 });
 

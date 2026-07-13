@@ -169,26 +169,27 @@ export async function executeMonorepoTemplate(
  * The two projects come from independently updated remote templates. If their
  * TypeScript majors drift apart, package managers either create separate
  * vite-plus peer contexts (pnpm) or hoist a compiler that the bundled tsdown
- * resolver cannot use for the other workspace (npm/Yarn). The app template is
- * the compatibility baseline for the generated workspace, so the library
- * adopts its TypeScript range.
+ * resolver cannot use for the other workspace (npm/Yarn). The library
+ * template is the compatibility baseline because its declaration build may
+ * require a newer compiler, so the app adopts its TypeScript range instead of
+ * silently downgrading the library.
  */
 export function alignMonorepoTypeScriptVersion(
   appProjectPath: string,
   libraryProjectPath: string,
 ): void {
-  const appPackage = JSON.parse(
-    fs.readFileSync(path.join(appProjectPath, 'package.json'), 'utf8'),
+  const libraryPackage = JSON.parse(
+    fs.readFileSync(path.join(libraryProjectPath, 'package.json'), 'utf8'),
   ) as {
     devDependencies?: Record<string, string>;
   };
-  const typescriptVersion = appPackage.devDependencies?.typescript;
+  const typescriptVersion = libraryPackage.devDependencies?.typescript;
   if (!typescriptVersion) {
     return;
   }
 
   editJsonFile<{ devDependencies?: Record<string, string> }>(
-    path.join(libraryProjectPath, 'package.json'),
+    path.join(appProjectPath, 'package.json'),
     (pkg) => {
       if (
         !pkg.devDependencies?.typescript ||

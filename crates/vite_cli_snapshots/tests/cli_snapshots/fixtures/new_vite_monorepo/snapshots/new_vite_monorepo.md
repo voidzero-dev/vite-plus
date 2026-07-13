@@ -194,7 +194,7 @@ check website keeps aliased vite for pnpm (workspace override stays effective)
     "preview": "vp preview"
   },
   "devDependencies": {
-    "typescript": "~6.0.2",
+    "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   }
@@ -241,7 +241,7 @@ check utils normalizes vite-plus to catalog:
   "devDependencies": {
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
-    "typescript": "~6.0.2",
+    "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   }

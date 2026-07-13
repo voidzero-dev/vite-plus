@@ -68,6 +68,15 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
 }
 
 #[test]
+fn masks_managed_runtime_install_date_by_label_context() {
+    let input = "  Installed:  2026-07-13\n  Created:    fixture-value\n".to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        "  Installed:  <date>\n  Created:    fixture-value\n"
+    );
+}
+
+#[test]
 fn masks_vite_plus_version_by_context_only() {
     // The workspace vite-plus/core version bumps every release and is masked by
     // package context; third-party dep versions, `catalog:` refs, and package

@@ -12,6 +12,7 @@ import {
 import { cac } from 'cac';
 
 import { resolveViteConfig } from './resolve-vite-config.ts';
+import { configureTypeScript7Dts } from './utils/typescript-dts.ts';
 
 // Matches a `.d.ts` / `.d.mts` / `.d.cts` importer.
 const RE_DTS = /\.d\.[cm]?ts$/;
@@ -166,6 +167,9 @@ cli
           merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
         }
         const resolvedConfig = await resolveUserConfig(merged, flags, configDeps);
+        for (const config of resolvedConfig) {
+          configureTypeScript7Dts(config);
+        }
         configs.push(...resolvedConfig);
       }
 
