@@ -102,6 +102,7 @@
   "dependencies": {
     "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "lightningcss": "catalog:",
     "postcss": "^8.5.6",
     "yuku-codegen": "^0.5.44",

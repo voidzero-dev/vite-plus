@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
 
 import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
@@ -172,9 +171,7 @@ export async function executeMonorepoTemplate(
  * vite-plus peer contexts (pnpm) or hoist a compiler that the bundled tsdown
  * resolver cannot use for the other workspace (npm/Yarn). The app template is
  * the compatibility baseline for the generated workspace, so the library
- * adopts its TypeScript range. When that down-aligns a TS7 library, preserve
- * its native compiler under the compatibility alias expected by tsdown's
- * bundled declaration generator.
+ * adopts its TypeScript range.
  */
 export function alignMonorepoTypeScriptVersion(
   appProjectPath: string,
@@ -193,25 +190,13 @@ export function alignMonorepoTypeScriptVersion(
   editJsonFile<{ devDependencies?: Record<string, string> }>(
     path.join(libraryProjectPath, 'package.json'),
     (pkg) => {
-      const { devDependencies } = pkg;
-      const libraryTypeScriptVersion = devDependencies?.typescript;
-      if (!libraryTypeScriptVersion || libraryTypeScriptVersion === typescriptVersion) {
+      if (
+        !pkg.devDependencies?.typescript ||
+        pkg.devDependencies.typescript === typescriptVersion
+      ) {
         return undefined;
       }
-
-      const appTypeScriptMajor = semver.minVersion(typescriptVersion)?.major;
-      const libraryTypeScriptMajor = semver.minVersion(libraryTypeScriptVersion)?.major;
-      if (
-        libraryTypeScriptMajor != null &&
-        libraryTypeScriptMajor >= 7 &&
-        appTypeScriptMajor != null &&
-        appTypeScriptMajor < 7 &&
-        !devDependencies['@typescript/native-preview']
-      ) {
-        devDependencies['@typescript/native-preview'] =
-          `npm:typescript@${libraryTypeScriptVersion}`;
-      }
-      devDependencies.typescript = typescriptVersion;
+      pkg.devDependencies.typescript = typescriptVersion;
       return pkg;
     },
   );
