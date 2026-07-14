@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
 
 import {
@@ -50,7 +51,8 @@ const SVELTE_RUNE_GLOBALS = {
 export function ensureSvelteRuneGlobals(config: OxlintConfig): void {
   for (const override of config.overrides ?? []) {
     const targetsSvelte = override.files.some(
-      (file: string) => !file.startsWith('!') && file.includes('.svelte'),
+      (file: string) =>
+        !file.startsWith('!') && braceExpand(file).some((pattern) => pattern.includes('.svelte')),
     );
     if (!targetsSvelte) {
       continue;

@@ -1212,6 +1212,18 @@ describe('ensureSvelteRuneGlobals', () => {
     });
   });
 
+  it('detects Svelte in brace-expanded override patterns', () => {
+    const config: import('oxlint').OxlintConfig = {
+      overrides: [{ files: ['**/*.{js,ts,svelte}'] }],
+    };
+
+    ensureSvelteRuneGlobals(config);
+
+    expect(config.overrides?.[0]?.globals).toMatchObject({
+      $props: 'readonly',
+    });
+  });
+
   it('does not modify unrelated or negated-only overrides', () => {
     const config: import('oxlint').OxlintConfig = {
       overrides: [{ files: ['**/*.ts'] }, { files: ['!**/*.svelte'] }],
@@ -1245,7 +1257,7 @@ describe('mergeViteConfigFiles — Svelte rune globals', () => {
       JSON.stringify({
         overrides: [
           {
-            files: ['*.svelte', '**/*.svelte'],
+            files: ['**/*.{js,ts,svelte}'],
             globals: { customGlobal: 'writable' },
           },
         ],
