@@ -127,20 +127,19 @@ pub(super) fn format_count(count: usize, singular: &str, plural: &str) -> String
     if count == 1 { format!("1 {singular}") } else { format!("{count} {plural}") }
 }
 
-pub(super) fn print_stdout_block(block: &str) {
+pub(super) fn print_stdout_block(block: &str) -> std::io::Result<()> {
     let trimmed = block.trim_matches('\n');
     if trimmed.is_empty() {
-        return;
+        return Ok(());
     }
 
-    use std::io::Write;
     let mut stdout = std::io::stdout().lock();
-    let _ = stdout.write_all(trimmed.as_bytes());
-    let _ = stdout.write_all(b"\n");
+    output::write_all_with_backpressure(&mut stdout, trimmed.as_bytes())?;
+    output::write_all_with_backpressure(&mut stdout, b"\n")
 }
 
-pub(super) fn print_summary_line(message: &str) {
-    output::raw("");
+pub(super) fn print_summary_line(message: &str) -> std::io::Result<()> {
+    output::try_raw("")?;
     if std::io::stdout().is_terminal() && message.contains('`') {
         let mut formatted = String::with_capacity(message.len());
         let mut segments = message.split('`');
@@ -156,18 +155,22 @@ pub(super) fn print_summary_line(message: &str) {
             }
             is_accent = !is_accent;
         }
-        output::raw(&formatted);
+        output::try_raw(&formatted)
     } else {
-        output::raw(message);
+        output::try_raw(message)
     }
 }
 
-pub(super) fn print_error_block(error_msg: &str, combined_output: &str, summary_msg: &str) {
+pub(super) fn print_error_block(
+    error_msg: &str,
+    combined_output: &str,
+    summary_msg: &str,
+) -> std::io::Result<()> {
     output::error(error_msg);
     if !combined_output.trim().is_empty() {
-        print_stdout_block(combined_output);
+        print_stdout_block(combined_output)?;
     }
-    print_summary_line(summary_msg);
+    print_summary_line(summary_msg)
 }
 
 pub(super) fn print_pass_line(message: &str, detail: Option<&str>) {

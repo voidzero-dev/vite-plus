@@ -61,7 +61,7 @@ pub(crate) async fn execute_check(
         output::error("No checks enabled");
         print_summary_line(
             "Enable `lint.options.typeCheck` in vite.config.ts for type-check only, drop a `--no-fmt`/`--no-lint` flag, or re-enable `check.fmt`/`check.lint` in vite.config.ts.",
-        );
+        )?;
         return Ok(ExitStatus(1));
     }
 
@@ -103,13 +103,13 @@ pub(crate) async fn execute_check(
                 ),
                 Some(Err(failure)) => {
                     output::error("Formatting issues found");
-                    print_stdout_block(&failure.issue_files.join("\n"));
+                    print_stdout_block(&failure.issue_files.join("\n"))?;
                     print_summary_line(&format!(
                         "Found formatting issues in {} ({}, {} threads). Run `vp check --fix` to fix them.",
                         format_count(failure.issue_count, "file", "files"),
                         failure.summary.duration,
                         failure.summary.threads
-                    ));
+                    ))?;
                 }
                 None => {
                     // oxfmt handles --no-error-on-unmatched-pattern natively and
@@ -121,7 +121,7 @@ pub(crate) async fn execute_check(
                             "Formatting could not start",
                             &combined_output,
                             "Formatting failed before analysis started",
-                        );
+                        )?;
                     }
                 }
             }
@@ -139,7 +139,7 @@ pub(crate) async fn execute_check(
                     "Formatting could not complete",
                     &combined_output,
                     "Formatting failed during fix",
-                );
+                )?;
             }
             return Ok(status);
         }
@@ -202,7 +202,7 @@ pub(crate) async fn execute_check(
                 } else {
                     output::error(lint_message_kind.issue_heading());
                 }
-                print_stdout_block(&failure.diagnostics);
+                print_stdout_block(&failure.diagnostics)?;
                 print_summary_line(&format!(
                     "Found {} and {} in {} ({}, {} threads)",
                     format_count(failure.errors, "error", "errors"),
@@ -210,7 +210,7 @@ pub(crate) async fn execute_check(
                     format_count(failure.summary.files, "file", "files"),
                     failure.summary.duration,
                     failure.summary.threads
-                ));
+                ))?;
             }
             None => {
                 // oxlint handles --no-error-on-unmatched-pattern natively and
@@ -220,9 +220,9 @@ pub(crate) async fn execute_check(
                 if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
                     output::error("Linting could not start");
                     if !combined_output.trim().is_empty() {
-                        print_stdout_block(&combined_output);
+                        print_stdout_block(&combined_output)?;
                     }
-                    print_summary_line("Linting failed before analysis started");
+                    print_summary_line("Linting failed before analysis started")?;
                 }
             }
         }
@@ -262,7 +262,7 @@ pub(crate) async fn execute_check(
                 "Formatting could not finish after lint fixes",
                 &combined_output,
                 "Formatting failed after lint fixes were applied",
-            );
+            )?;
             return Ok(status);
         }
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
