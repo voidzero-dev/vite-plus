@@ -3,6 +3,41 @@ import { describe, expect, test } from 'vitest';
 
 import { mergePnpmWorkspaces, syncCargoOxcVersions } from '../sync-remote-deps.ts';
 
+describe('mergePnpmWorkspaces() patchedDependencies', () => {
+  test('drops an upstream patch superseded by an exact root override', () => {
+    const main = {
+      overrides: { 'postcss-modules': '9.0.1' },
+      patchedDependencies: { 'root-only@1.0.0': 'patches/root-only.patch' },
+    };
+    const vite = {
+      patchedDependencies: {
+        'postcss-modules@9.0.0': 'patches/postcss-modules@9.0.0.patch',
+        'sirv@3.0.2': './patches/sirv@3.0.2.patch',
+      },
+    };
+
+    const result = mergePnpmWorkspaces(main, {}, vite, semver);
+
+    expect(result.patchedDependencies).toEqual({
+      'root-only@1.0.0': 'patches/root-only.patch',
+      'sirv@3.0.2': './vite/patches/sirv@3.0.2.patch',
+    });
+  });
+
+  test('keeps an upstream patch when the exact override still targets it', () => {
+    const main = { overrides: { '@scope/pkg': '1.2.3' } };
+    const vite = {
+      patchedDependencies: { '@scope/pkg@1.2.3': 'patches/scope-pkg.patch' },
+    };
+
+    const result = mergePnpmWorkspaces(main, {}, vite, semver);
+
+    expect(result.patchedDependencies).toEqual({
+      '@scope/pkg@1.2.3': 'vite/patches/scope-pkg.patch',
+    });
+  });
+});
+
 describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
   test('drops versioned upstream entries already covered by a glob or bare pattern', () => {
     // The main workspace already excludes whole namespaces via globs
