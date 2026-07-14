@@ -111,7 +111,7 @@ check website uses catalog:
     "preview": "vp preview"
   },
   "devDependencies": {
-    "typescript": "~6.0.2",
+    "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   }
 }
