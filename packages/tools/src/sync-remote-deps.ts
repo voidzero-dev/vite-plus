@@ -528,21 +528,6 @@ function parseExcludeEntry(entry: string): { name: string; version?: string } {
   return { name: entry };
 }
 
-// An exact root override to a different version makes an upstream versioned
-// patch impossible to apply. Do not copy that patch into the merged workspace,
-// otherwise pnpm rejects the install because its target is no longer resolved.
-function isPatchSupersededByOverride(
-  dependency: string,
-  overrides: Record<string, string> | undefined,
-  semver: typeof import('semver'),
-): boolean {
-  const { name, version } = parseExcludeEntry(dependency);
-  const override = overrides?.[name];
-  const patchVersion = version && semver.valid(version);
-  const overrideVersion = override && semver.valid(override);
-  return Boolean(patchVersion && overrideVersion && !semver.eq(patchVersion, overrideVersion));
-}
-
 // Build a matcher for a version-less name pattern. The exclude list only ever
 // uses the `*` wildcard, so a tiny *-only glob (escape regex specials, `*` ->
 // `.*`, anchored) is enough and keeps `minimatch` out of this module: it is
@@ -647,9 +632,6 @@ export function mergePnpmWorkspaces(
   if (main.patchedDependencies || rolldownVite.patchedDependencies) {
     result.patchedDependencies = { ...main.patchedDependencies };
     for (const [dep, patchPath] of Object.entries(rolldownVite.patchedDependencies ?? {})) {
-      if (isPatchSupersededByOverride(dep, main.overrides, semver)) {
-        continue;
-      }
       // Prepend vite directory to patch paths
       result.patchedDependencies[dep] = patchPath.startsWith('./')
         ? `./${VITE_DIR}/${patchPath.slice(2)}`

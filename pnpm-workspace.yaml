@@ -201,8 +201,12 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
-  # Includes the loader type fix carried by Vite's postcss-modules@9.0.0 patch.
-  postcss-modules: 9.0.1
+  # Vite ships a patch keyed to postcss-modules@9.0.0 (removes an obsolete
+  # `declare module "postcss-modules/loader"`). 9.0.1 already dropped that line
+  # upstream, so `^9.0.0` re-resolves to 9.0.1 and the patch goes unused, failing
+  # install. Pin to 9.0.0 so the still-shipped vite patch applies; functionally
+  # identical to 9.0.1.
+  postcss-modules: 9.0.0
 packageExtensions:
   '@rollup/plugin-dynamic-import-vars':
     dependencies:
@@ -217,6 +221,7 @@ patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
+  postcss-modules@9.0.0: vite/patches/postcss-modules@9.0.0.patch
 peerDependencyRules:
   allowAny:
     - vite
