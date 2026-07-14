@@ -294,12 +294,44 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
     true
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Detect shim mode (vp invoked as node/npm/npx/...) up front. `detect_shim_tool`
+    // reads and clears the VP_SHIM_TOOL env vars, so it must run exactly once and
+    // while the process is still single-threaded, before the async runtime starts.
+    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+    let shim_tool = shim::detect_shim_tool(argv0);
+
+    // Advertise that this process tree is running under Vite+ so the tools we
+    // invoke (e.g. `vp dlx create-vite`) can detect vp as the package manager.
+    // The underlying package managers overwrite `npm_config_user_agent` with
+    // their own value, so we expose a dedicated variable that is passed through
+    // untouched and inherited by every child process (including the `npx`
+    // fallback used when there is no local `package.json`).
+    //
+    // Only set it for a real `vp` invocation, not when vp is acting as a shim:
+    // there the user is invoking the wrapped tool (e.g. `npm`/`npx`), not vp.
+    //
+    // SAFETY: `set_var` must run while the process is still single-threaded.
+    // This runs before the async runtime (and its worker threads) are created.
+    if shim_tool.is_none() {
+        unsafe {
+            std::env::set_var(
+                vite_shared::env_vars::VP_USER_AGENT,
+                concat!("vp/", env!("CARGO_PKG_VERSION")),
+            );
+        }
+    }
+
+    tokio::runtime::Runtime::new()
+        .expect("failed to build tokio runtime")
+        .block_on(run(args, shim_tool))
+}
+
+async fn run(mut args: Vec<String>, shim_tool: Option<String>) -> ExitCode {
     // Initialize tracing
     vite_shared::init_tracing();
-
-    let mut args: Vec<String> = std::env::args().collect();
 
     // Replace bash completion script to fix completion for items containing ':'
     if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {
@@ -310,11 +342,7 @@ async fn main() -> ExitCode {
     // Handle shell completion
     CompleteEnv::with_factory(command_with_help).var("VP_COMPLETE").complete();
 
-    // Check for shim mode (invoked as node, npm, or npx)
-    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
-    tracing::debug!("argv0: {argv0}");
-
-    if let Some(tool) = shim::detect_shim_tool(argv0) {
+    if let Some(tool) = shim_tool {
         // Shim mode - dispatch to the appropriate tool. stdout belongs to the
         // wrapped tool; route vp's own output to stderr.
         output::route_user_output_to_stderr();
