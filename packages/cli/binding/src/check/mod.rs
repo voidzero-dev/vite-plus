@@ -45,10 +45,10 @@ pub(crate) async fn execute_check(
     let config_fmt_off = !json_bool(resolved_vite_config.check.as_ref(), "fmt", true);
     let config_lint_off = !json_bool(resolved_vite_config.check.as_ref(), "lint", true);
     if config_fmt_off && !no_fmt_flag {
-        output::note("Format skipped (check.fmt: false in vite.config.ts)");
+        output::try_note("Format skipped (check.fmt: false in vite.config.ts)")?;
     }
     if config_lint_off && !no_lint_flag {
-        output::note("Lint skipped (check.lint: false in vite.config.ts)");
+        output::try_note("Lint skipped (check.lint: false in vite.config.ts)")?;
     }
     let no_fmt = no_fmt_flag || config_fmt_off;
     let no_lint = no_lint_flag || config_lint_off;
@@ -91,16 +91,18 @@ pub(crate) async fn execute_check(
 
         if !fix {
             match analyze_fmt_check_output(&combined_output) {
-                Some(Ok(success)) => print_pass_line(
-                    &format!(
-                        "All {} are correctly formatted",
-                        format_count(success.summary.files, "file", "files")
-                    ),
-                    Some(&format!(
-                        "({}, {} threads)",
-                        success.summary.duration, success.summary.threads
-                    )),
-                ),
+                Some(Ok(success)) => {
+                    print_pass_line(
+                        &format!(
+                            "All {} are correctly formatted",
+                            format_count(success.summary.files, "file", "files")
+                        ),
+                        Some(&format!(
+                            "({}, {} threads)",
+                            success.summary.duration, success.summary.threads
+                        )),
+                    )?;
+                }
                 Some(Err(failure)) => {
                     output::error("Formatting issues found");
                     print_stdout_block(&failure.issue_files.join("\n"))?;
@@ -131,7 +133,7 @@ pub(crate) async fn execute_check(
             print_pass_line(
                 "Formatting completed for checked files",
                 Some(&format!("({})", format_elapsed(fmt_start.elapsed()))),
-            );
+            )?;
         }
         if status != ExitStatus::SUCCESS {
             if fix {
@@ -193,7 +195,7 @@ pub(crate) async fn execute_check(
                 if fix && !no_fmt {
                     deferred_lint_pass = Some((message, detail));
                 } else {
-                    print_pass_line(&message, Some(&detail));
+                    print_pass_line(&message, Some(&detail))?;
                 }
             }
             Some(Err(failure)) => {
@@ -230,7 +232,7 @@ pub(crate) async fn execute_check(
             // Surface fmt `--fix` completion before bailing so users can see
             // the working tree was mutated before the lint/type-check error.
             if fix && !no_fmt {
-                flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+                flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass)?;
             }
             return Ok(status);
         }
@@ -265,13 +267,13 @@ pub(crate) async fn execute_check(
             )?;
             return Ok(status);
         }
-        flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+        flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass)?;
     }
 
     // Type-check-only mode skips the re-fmt block above, so flush deferred
     // pass lines here.
     if fix && !no_fmt && run_lint_phase && !lint_enabled {
-        flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+        flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass)?;
     }
 
     Ok(status)
@@ -280,16 +282,17 @@ pub(crate) async fn execute_check(
 fn flush_deferred_pass_lines(
     fmt_fix_started: &mut Option<Instant>,
     deferred_lint_pass: &mut Option<(String, String)>,
-) {
+) -> std::io::Result<()> {
     if let Some(started) = fmt_fix_started.take() {
         print_pass_line(
             "Formatting completed for checked files",
             Some(&format!("({})", format_elapsed(started.elapsed()))),
-        );
+        )?;
     }
     if let Some((message, detail)) = deferred_lint_pass.take() {
-        print_pass_line(&message, Some(&detail));
+        print_pass_line(&message, Some(&detail))?;
     }
+    Ok(())
 }
 
 /// Combine stdout and stderr from a captured command output.

@@ -133,9 +133,7 @@ pub(super) fn print_stdout_block(block: &str) -> std::io::Result<()> {
         return Ok(());
     }
 
-    let mut stdout = std::io::stdout().lock();
-    output::write_all_with_backpressure(&mut stdout, trimmed.as_bytes())?;
-    output::write_all_with_backpressure(&mut stdout, b"\n")
+    output::try_raw_stdout(trimmed)
 }
 
 pub(super) fn print_summary_line(message: &str) -> std::io::Result<()> {
@@ -173,11 +171,11 @@ pub(super) fn print_error_block(
     print_summary_line(summary_msg)
 }
 
-pub(super) fn print_pass_line(message: &str, detail: Option<&str>) {
+pub(super) fn print_pass_line(message: &str, detail: Option<&str>) -> std::io::Result<()> {
     if let Some(detail) = detail {
-        output::raw(&format!("{} {message} {}", "pass:".bright_blue().bold(), detail.dimmed()));
+        output::try_raw(&format!("{} {message} {}", "pass:".bright_blue().bold(), detail.dimmed()))
     } else {
-        output::pass(message);
+        output::try_pass(message)
     }
 }
 
