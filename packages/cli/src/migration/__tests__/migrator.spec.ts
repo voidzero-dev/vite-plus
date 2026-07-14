@@ -42,6 +42,8 @@ const {
   injectCreateDefaultTemplate,
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
+  ensureSvelteRuneGlobals,
+  mergeViteConfigFiles,
   rewriteEslintPackageJson,
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
@@ -1169,6 +1171,94 @@ describe('collectInstalledPackageNames', () => {
     const config = { jsPlugins: ['eslint-plugin-only-peer'] };
     sanitizeMigratedOxlintConfig(config, available);
     expect(config.jsPlugins).toEqual([]);
+  });
+});
+
+describe('ensureSvelteRuneGlobals', () => {
+  it('adds all built-in runes to Svelte overrides', () => {
+    const config: import('oxlint').OxlintConfig = {
+      overrides: [{ files: ['*.svelte', '**/*.svelte.ts'] }],
+    };
+
+    ensureSvelteRuneGlobals(config);
+
+    expect(config.overrides?.[0]?.globals).toEqual({
+      $state: 'readonly',
+      $derived: 'readonly',
+      $effect: 'readonly',
+      $props: 'readonly',
+      $bindable: 'readonly',
+      $inspect: 'readonly',
+      $host: 'readonly',
+    });
+  });
+
+  it('preserves existing globals and explicit rune values', () => {
+    const config: import('oxlint').OxlintConfig = {
+      overrides: [
+        {
+          files: ['**/*.svelte'],
+          globals: { customGlobal: 'writable', $state: 'writable' },
+        },
+      ],
+    };
+
+    ensureSvelteRuneGlobals(config);
+
+    expect(config.overrides?.[0]?.globals).toMatchObject({
+      customGlobal: 'writable',
+      $state: 'writable',
+      $props: 'readonly',
+    });
+  });
+
+  it('does not modify unrelated or negated-only overrides', () => {
+    const config: import('oxlint').OxlintConfig = {
+      overrides: [{ files: ['**/*.ts'] }, { files: ['!**/*.svelte'] }],
+    };
+
+    ensureSvelteRuneGlobals(config);
+
+    expect(config.overrides).toEqual([{ files: ['**/*.ts'] }, { files: ['!**/*.svelte'] }]);
+  });
+});
+
+describe('mergeViteConfigFiles — Svelte rune globals', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-svelte-runes-'));
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'test' }));
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({});\n",
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('merges built-in rune globals into the final lint config', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.oxlintrc.json'),
+      JSON.stringify({
+        overrides: [
+          {
+            files: ['*.svelte', '**/*.svelte'],
+            globals: { customGlobal: 'writable' },
+          },
+        ],
+      }),
+    );
+
+    mergeViteConfigFiles(tmpDir, true);
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toMatch(/["']\$props["']\s*:\s*["']readonly["']/);
+    expect(viteConfig).toMatch(/["']\$host["']\s*:\s*["']readonly["']/);
+    expect(viteConfig).toMatch(/["']customGlobal["']\s*:\s*["']writable["']/);
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
   });
 });
 
