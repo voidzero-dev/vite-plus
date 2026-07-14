@@ -224,7 +224,9 @@ fn write_line_with_backpressure<W: Write + ?Sized>(writer: &mut W, msg: &str) ->
 mod tests {
     use std::io::{self, Write};
 
-    use super::{write_all_with_backpressure, write_all_with_backpressure_inner};
+    #[cfg(unix)]
+    use super::write_all_with_backpressure;
+    use super::write_all_with_backpressure_inner;
 
     #[derive(Default)]
     struct BackpressuredWriter {
