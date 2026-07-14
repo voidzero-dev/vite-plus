@@ -23,8 +23,8 @@ catalog:
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@tsdown/css': ^0.22.4
-  '@tsdown/exe': ^0.22.4
+  '@tsdown/css': ^0.22.7
+  '@tsdown/exe': ^0.22.7
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -117,7 +117,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.22.4
+  tsdown: ^0.22.7
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -198,6 +198,9 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
+  # Pin postcss-modules to the version vite patches (its ^9.0.0 range now
+  # resolves to 9.0.1, which would orphan vite/patches/postcss-modules@9.0.0.patch).
+  postcss-modules: 9.0.0
 packageExtensions:
   '@rollup/plugin-dynamic-import-vars':
     dependencies:
@@ -212,6 +215,7 @@ patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
+  postcss-modules@9.0.0: vite/patches/postcss-modules@9.0.0.patch
 peerDependencyRules:
   allowAny:
     - vite
