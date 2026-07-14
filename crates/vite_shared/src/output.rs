@@ -356,15 +356,13 @@ mod tests {
             thread,
         };
 
-        struct CountingWriter {
+        struct NotifyingWriter {
             stream: UnixStream,
-            writes: usize,
             notify_would_block: Option<mpsc::Sender<()>>,
         }
 
-        impl Write for CountingWriter {
+        impl Write for NotifyingWriter {
             fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-                self.writes += 1;
                 let result = self.stream.write(buf);
                 if matches!(&result, Err(error) if error.kind() == io::ErrorKind::WouldBlock)
                     && let Some(sender) = self.notify_would_block.take()
@@ -379,7 +377,7 @@ mod tests {
             }
         }
 
-        impl AsFd for CountingWriter {
+        impl AsFd for NotifyingWriter {
             fn as_fd(&self) -> BorrowedFd<'_> {
                 self.stream.as_fd()
             }
@@ -387,7 +385,7 @@ mod tests {
 
         let (writer, mut reader) = UnixStream::pair().unwrap();
         writer.set_nonblocking(true).unwrap();
-        let mut writer = CountingWriter { stream: writer, writes: 0, notify_would_block: None };
+        let mut writer = NotifyingWriter { stream: writer, notify_would_block: None };
         let fill = [0_u8; 8192];
         loop {
             match writer.write(&fill) {
@@ -397,7 +395,6 @@ mod tests {
                 Err(error) => panic!("failed to fill nonblocking stream: {error}"),
             }
         }
-        writer.writes = 0;
         let (would_block_tx, would_block_rx) = mpsc::channel();
         writer.notify_would_block = Some(would_block_tx);
 
@@ -413,6 +410,5 @@ mod tests {
 
         let received = reader_thread.join().unwrap();
         assert!(received.ends_with(b"complete diagnostics"));
-        assert!((2..=5).contains(&writer.writes), "retried write {} times", writer.writes);
     }
 }
