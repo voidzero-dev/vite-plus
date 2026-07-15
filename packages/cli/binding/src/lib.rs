@@ -42,6 +42,7 @@ use crate::cli::{
 #[napi_derive::module_init]
 #[allow(clippy::disallowed_macros)]
 pub fn init() {
+    vite_shared::ensure_blocking_stdio();
     crate::cli::init_tracing();
 
     // Install a Vite+ panic hook so panics are correctly attributed to Vite+.
@@ -53,6 +54,12 @@ pub fn init() {
             "\nPlease report this issue at: https://github.com/voidzero-dev/vite-plus/issues/new?template=bug_report.yml"
         );
     }));
+}
+
+/// Re-enable blocking stdio after Node.js has initialized its lazy standard streams.
+#[napi]
+pub fn ensure_blocking_stdio() {
+    vite_shared::ensure_blocking_stdio();
 }
 
 /// Configuration options passed from JavaScript to Rust.

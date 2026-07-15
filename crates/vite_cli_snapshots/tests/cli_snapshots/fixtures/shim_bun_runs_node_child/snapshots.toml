@@ -1,0 +1,7 @@
+[[case]]
+name = "shim_bun_runs_node_child"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "bun"], snapshot = false },
+  { argv = ["bun", "run", "node-child"], comment = "Bun scripts can invoke the managed Node runtime" },
+]
