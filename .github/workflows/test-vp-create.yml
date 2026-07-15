@@ -134,7 +134,14 @@ jobs:
           - name: monorepo
             create-args: vite:monorepo --directory test-project
             template-args: ''
-            verify-command: vp run ready
+            # The trailing check pins the dts deliverable: the utils library
+            # builds with `vp pack` and TypeScript 7, so a green `vp run ready`
+            # alone could still ship a type-less package if declaration
+            # generation is silently skipped. tsdown emits `index.d.mts` next
+            # to the ESM bundle.
+            verify-command: |
+              vp run ready
+              test -f packages/utils/dist/index.d.mts
             verify-migration: 'false'
           - name: application
             create-args: vite:application --directory test-project
