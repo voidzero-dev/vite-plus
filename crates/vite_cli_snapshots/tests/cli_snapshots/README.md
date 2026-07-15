@@ -131,7 +131,9 @@ is identical on every platform:
 `vpt print`, `vpt print-color`, `vpt print-env`, `vpt print-cwd`,
 `vpt print-native-path` (prints OS-native separators, for redaction
 self-tests), `vpt check-tty`, `vpt read-stdin`, `vpt exit <code>`,
-`vpt exit-on-ctrlc`, `vpt barrier`.
+`vpt exit-on-ctrlc`, `vpt barrier`, and the Unix-only
+`vpt backpressure-run [--digest <head>,<tail>] -- <argv...>`
+for running a command with deliberately backpressured, non-blocking stdout.
 
 ## Interactive cases
 

@@ -849,6 +849,7 @@ module.exports.shutdownAsyncRuntime = nativeBinding.shutdownAsyncRuntime;
 module.exports.startAsyncRuntime = nativeBinding.startAsyncRuntime;
 module.exports.detectWorkspace = nativeBinding.detectWorkspace;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
+module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;
 module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;

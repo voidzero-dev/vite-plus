@@ -87,7 +87,7 @@ VITE+ - The Unified Toolchain for the Web
   Package:    cowsay@1.6.0
   Binaries:   cowsay, cowthink
   Node:       <version>
-  Installed:  2026-07-10
+  Installed:  <date>
 ```
 
 ## `vp remove -g cowsay`
