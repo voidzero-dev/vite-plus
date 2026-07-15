@@ -12,7 +12,7 @@
 
 import path from 'node:path';
 
-import { run } from '../binding/index.js';
+import { ensureBlockingStdio, run } from '../binding/index.js';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
 import { doc } from './resolve-doc.ts';
 import { fmt } from './resolve-fmt.ts';
@@ -22,6 +22,12 @@ import { test } from './resolve-test.ts';
 import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
+
+// Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
+// the output streams before restoring the blocking semantics expected by Rust.
+void process.stdout;
+void process.stderr;
+ensureBlockingStdio();
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {

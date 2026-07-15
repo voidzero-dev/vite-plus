@@ -238,6 +238,13 @@ static NPM_NOTICE_RE: LazyLock<regex::Regex> =
 // <duration>).
 static START_AT_TIME_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Start at\s+)\d{1,2}:\d{2}:\d{2}").unwrap());
+// `vp env which` prints an `Installed:` field for a global package holding the
+// wall-clock date the install ran, so it drifts with the calendar rather than
+// with any fixture input. Mask by the label context (like the sibling `Node:`
+// field above) so deterministic package-metadata dates elsewhere (a registry's
+// published-at timestamps in `vp view`) stay verbatim.
+static INSTALLED_DATE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(Installed:\s+)\d{4}-\d{2}-\d{2}").unwrap());
 
 #[expect(
     clippy::disallowed_types,
@@ -482,6 +489,9 @@ pub fn redact_output(
 
     // Mask vitest's nondeterministic wall-clock "Start at" time
     output = START_AT_TIME_RE.replace_all(&output, "${1}<time>").into_owned();
+
+    // Mask the calendar-dependent install date in `vp env which` output
+    output = INSTALLED_DATE_RE.replace_all(&output, "${1}<date>").into_owned();
 
     // Remove ^C echo that Unix terminal drivers emit when ETX (0x03) is written
     // to the PTY. Windows ConPTY does not echo it.

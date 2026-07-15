@@ -296,6 +296,8 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    vite_shared::ensure_blocking_stdio();
+
     // Initialize tracing
     vite_shared::init_tracing();
 

@@ -17,6 +17,7 @@ mod json_edit;
 pub mod output;
 mod package_json;
 mod path_env;
+mod stdio;
 pub mod string_similarity;
 mod tls;
 mod tracing;
@@ -33,5 +34,6 @@ pub use path_env::{
     PrependOptions, PrependResult, format_path_prepended, format_path_with_prepend,
     prepend_to_path_env,
 };
+pub use stdio::ensure_blocking_stdio;
 pub use tls::ensure_tls_provider;
 pub use tracing::init_tracing;
