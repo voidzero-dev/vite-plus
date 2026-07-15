@@ -937,40 +937,30 @@ fn open_lock_file(lock_path: &Path) -> io::Result<File> {
 }
 
 fn get_bun_platform_package_name() -> Result<String, Error> {
-    get_bun_platform_package_name_for(
-        env::consts::OS,
-        env::consts::ARCH,
-        cfg!(target_env = "musl"),
-        bun_requires_baseline(),
-    )
-}
-
-fn get_bun_platform_package_name_for(
-    os: &str,
-    arch: &str,
-    is_musl: bool,
-    requires_baseline: bool,
-) -> Result<String, Error> {
-    let name = match (os, arch, is_musl) {
-        ("macos", "aarch64", _) => "@oven/bun-darwin-aarch64",
-        ("macos", "x86_64", _) => "@oven/bun-darwin-x64",
-        ("linux", "aarch64", true) => "@oven/bun-linux-aarch64-musl",
-        ("linux", "aarch64", false) => "@oven/bun-linux-aarch64",
-        ("linux", "x86_64", true) => "@oven/bun-linux-x64-musl",
-        ("linux", "x86_64", false) => "@oven/bun-linux-x64",
-        ("windows", "x86_64", _) => "@oven/bun-windows-x64",
-        ("windows", "aarch64", _) => "@oven/bun-windows-aarch64",
-        (os, arch, _) => {
+    let name = match (env::consts::OS, env::consts::ARCH) {
+        ("macos", "aarch64") => "@oven/bun-darwin-aarch64",
+        ("macos", "x86_64") => "@oven/bun-darwin-x64",
+        #[cfg(target_env = "musl")]
+        ("linux", "aarch64") => "@oven/bun-linux-aarch64-musl",
+        #[cfg(not(target_env = "musl"))]
+        ("linux", "aarch64") => "@oven/bun-linux-aarch64",
+        #[cfg(target_env = "musl")]
+        ("linux", "x86_64") => "@oven/bun-linux-x64-musl",
+        #[cfg(not(target_env = "musl"))]
+        ("linux", "x86_64") => "@oven/bun-linux-x64",
+        ("windows", "x86_64") => "@oven/bun-windows-x64",
+        ("windows", "aarch64") => "@oven/bun-windows-aarch64",
+        (os, arch) => {
             return Err(Error::UnsupportedPackageManager(
                 format!("bun (unsupported platform: {os}-{arch})").into(),
             ));
         }
     };
-    if arch == "x86_64" && requires_baseline {
-        Ok(format!("{name}-baseline"))
-    } else {
-        Ok(name.to_string())
-    }
+    Ok(with_bun_baseline(name, bun_requires_baseline()))
+}
+
+fn with_bun_baseline(name: &str, requires_baseline: bool) -> String {
+    if requires_baseline { format!("{name}-baseline") } else { name.to_string() }
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -3481,21 +3471,15 @@ mod tests {
 
     #[test]
     fn test_get_bun_platform_package_name_uses_baseline_without_avx2() {
-        for (os, is_musl, expected) in [
-            ("macos", false, "@oven/bun-darwin-x64-baseline"),
-            ("linux", false, "@oven/bun-linux-x64-baseline"),
-            ("linux", true, "@oven/bun-linux-x64-musl-baseline"),
-            ("windows", false, "@oven/bun-windows-x64-baseline"),
+        for (name, expected) in [
+            ("@oven/bun-darwin-x64", "@oven/bun-darwin-x64-baseline"),
+            ("@oven/bun-linux-x64", "@oven/bun-linux-x64-baseline"),
+            ("@oven/bun-linux-x64-musl", "@oven/bun-linux-x64-musl-baseline"),
+            ("@oven/bun-windows-x64", "@oven/bun-windows-x64-baseline"),
         ] {
-            assert_eq!(
-                get_bun_platform_package_name_for(os, "x86_64", is_musl, true).unwrap(),
-                expected
-            );
+            assert_eq!(with_bun_baseline(name, true), expected);
         }
-        assert_eq!(
-            get_bun_platform_package_name_for("linux", "x86_64", false, false).unwrap(),
-            "@oven/bun-linux-x64"
-        );
+        assert_eq!(with_bun_baseline("@oven/bun-linux-x64", false), "@oven/bun-linux-x64");
     }
 
     #[tokio::test]
