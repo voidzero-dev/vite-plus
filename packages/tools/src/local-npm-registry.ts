@@ -302,6 +302,41 @@ function serializeForRegistry(value: unknown, registry: string): string {
   return JSON.stringify(value).replaceAll('{REGISTRY}', registry);
 }
 
+// Rewrite every publish timestamp in a packument to the far past so
+// package-manager "minimum release age" gates (pnpm `minimumReleaseAge` and
+// its pnpm 11 supply-chain quarantine, Yarn Berry hardened-mode
+// `npmMinimalAgeGate`) never quarantine a proxied dependency. Locally served
+// tarballs already use `LOCAL_PACKAGE_TIME` for this reason; proxied upstream
+// deps need the same treatment so a test running right after a toolchain
+// release (e.g. a freshly published oxc/oxfmt/oxlint bump) stays deterministic
+// instead of failing because the version is "too new".
+function neutralizePackumentTime(packument: Packument): Packument {
+  if (!packument.time || typeof packument.time !== 'object') {
+    return packument;
+  }
+  const time: Record<string, string> = {};
+  for (const key of Object.keys(packument.time)) {
+    time[key] = LOCAL_PACKAGE_TIME;
+  }
+  return { ...packument, time };
+}
+
+// Cache proxied packuments (with neutralized times) — an install fetches each
+// package's metadata repeatedly. `null` records a miss (non-200/unparseable),
+// so those keys fall through to the byte-for-byte proxy instead of refetching.
+const proxiedPackuments = new Map<string, Packument | null>();
+
+async function resolveProxiedPackument(name: string): Promise<Packument | null> {
+  const cached = proxiedPackuments.get(name);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const upstream = await fetchUpstreamPackument(name);
+  const result = upstream ? neutralizePackumentTime(upstream) : null;
+  proxiedPackuments.set(name, result);
+  return result;
+}
+
 function fetchUpstreamPackument(name: string): Promise<Packument | null> {
   return new Promise((resolve) => {
     httpsGet(
@@ -486,6 +521,26 @@ const server = createServer(async (req, res) => {
       return;
     } catch {
       // fall through to proxy
+    }
+  }
+  // Package metadata (packument) requests: serve upstream metadata with
+  // neutralized publish times so age gates never quarantine a freshly
+  // published dependency. Only whole-packument GETs are intercepted — tarballs
+  // (`/-/`), version-specific manifests (`name/1.2.3`), and non-GET traffic
+  // (e.g. the audit bulk POST) keep proxying byte-for-byte below.
+  const isPackumentKey =
+    key.length > 0 &&
+    !key.includes('/-/') &&
+    (key.startsWith('@') ? key.split('/').length === 2 : !key.includes('/'));
+  if ((req.method ?? 'GET') === 'GET' && isPackumentKey) {
+    const packument = await resolveProxiedPackument(key);
+    if (packument) {
+      const address = server.address();
+      const registry =
+        address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(serializeForRegistry(packument, registry));
+      return;
     }
   }
   // Proxy anything we don't mock (pnpm/latest, tarball downloads for real
