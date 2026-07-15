@@ -412,6 +412,7 @@ This RFC documents an existing command with no breaking changes:
 
 The `exe` option accepts an object for advanced configuration:
 
+<!-- prettier-ignore -->
 ```ts
 export default {
   pack: {

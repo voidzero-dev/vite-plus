@@ -20,6 +20,9 @@ pty_terminal_test_client = { workspace = true, features = ["testing"] }
 serde_json = { workspace = true }
 vite_shared = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, features = ["fs", "poll", "socket"] }
+
 [dev-dependencies]
 cow-utils = { workspace = true }
 dunce = { workspace = true }

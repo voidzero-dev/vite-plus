@@ -18,6 +18,7 @@ pub mod output;
 mod package_json;
 mod path_env;
 mod process;
+mod stdio;
 pub mod string_similarity;
 mod tls;
 mod tracing;
@@ -35,5 +36,6 @@ pub use path_env::{
     prepend_to_path_env,
 };
 pub use process::exit_code_from_status;
+pub use stdio::ensure_blocking_stdio;
 pub use tls::ensure_tls_provider;
 pub use tracing::init_tracing;
