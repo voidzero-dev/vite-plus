@@ -82,19 +82,32 @@ jobs:
 
       - uses: voidzero-dev/setup-vp@13e7afb99c66525824db54e107d667216e795d37 # v1.14.0
         with:
-          # The workspace `vite-plus` version can be ahead of the registry, so
-          # pin the released build instead of auto-detecting from package.json.
+          # Install the released package to evaluate `vite.config.ts` without a
+          # full workspace install. The formatter itself is pinned below to the
+          # version used by this checkout.
           version: latest
           run-install: false
 
-      - name: Run vp fmt --check
+      - name: Run oxfmt --check
         run: |
-          # `vp fmt` loads the root vite.config.ts, whose `import ... from 'vite-plus'`
-          # must resolve at runtime. Link the released package out of the global
-          # install instead of installing the whole workspace.
-          mkdir -p node_modules
+          oxfmt_version="$(awk '$1 == "oxfmt:" { sub(/^=/, "", $2); print $2; exit }' pnpm-workspace.yaml)"
+          if [[ -z "$oxfmt_version" ]]; then
+            echo "::error::Could not resolve the workspace oxfmt version"
+            exit 1
+          fi
+
+          # Keep this job lightweight while using the same formatter version as
+          # code CI. Oxfmt needs `vite-plus` beside both its CLI and the generated
+          # config module in order to load the root `fmt` configuration.
+          oxfmt_dir="$RUNNER_TEMP/docs-fmt-oxfmt"
+          mkdir -p "$oxfmt_dir" node_modules
+          pnpm --dir "$oxfmt_dir" add --save-exact "oxfmt@$oxfmt_version"
+          ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" "$oxfmt_dir/node_modules/vite-plus"
           ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" node_modules/vite-plus
-          vp fmt --check
+
+          VP_VERSION="$(node -p "require(process.env.HOME + '/.vite-plus/current/node_modules/vite-plus/package.json').version")" \
+            VP_RESOLVING_CONFIG_METADATA=1 \
+            "$oxfmt_dir/node_modules/.bin/oxfmt" --check --disable-nested-config
 
   download-previous-rolldown-binaries:
     needs: detect-changes
