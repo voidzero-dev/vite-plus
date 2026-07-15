@@ -417,7 +417,8 @@ export default {
   pack: {
     entry: 'src/cli.ts',
     exe: {
-      seaConfig: {/* Node.js SEA config overrides */},
+      // Node.js SEA config overrides
+      seaConfig: {},
       fileName: 'my-cli',
       targets: [
         { platform: 'linux', arch: 'x64', nodeVersion: '25.7.0' },
