@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 directories = { workspace = true }
-nix = { workspace = true, features = ["poll", "term"] }
+nix = { workspace = true, features = ["fs", "poll", "term"] }
 owo-colors = { workspace = true }
 serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`

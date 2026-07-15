@@ -9,6 +9,8 @@
 #![expect(clippy::print_stderr, reason = "CLI tool error output")]
 #![expect(clippy::print_stdout, reason = "CLI tool output")]
 
+#[cfg(unix)]
+mod backpressure_run;
 mod barrier;
 mod check_tty;
 mod chmod;
@@ -61,7 +63,7 @@ fn main() {
     if args.len() < 2 {
         eprintln!("Usage: vpt <subcommand> [args...]");
         eprintln!(
-            "Subcommands: barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
+            "Subcommands: backpressure-run (Unix), barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
         );
         std::process::exit(1);
     }
@@ -70,6 +72,8 @@ fn main() {
     }
 
     let result: Result<(), Box<dyn std::error::Error>> = match args[1].as_str() {
+        #[cfg(unix)]
+        "backpressure-run" => backpressure_run::run(&args[2..]),
         "barrier" => barrier::run(&args[2..]),
         "check-tty" => {
             check_tty::run();

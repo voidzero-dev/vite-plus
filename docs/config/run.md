@@ -2,6 +2,7 @@
 
 You can configure Vite Task under the `run` field in `vite.config.ts`. Check out [`vp run`](/guide/run) to learn more about running scripts and tasks with Vite+.
 
+<!-- prettier-ignore -->
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
