@@ -3366,6 +3366,9 @@ export interface DownloadPackageManagerResult {
   version: string;
 }
 
+/** Re-enable blocking stdio after Node.js has initialized its lazy standard streams. */
+export declare function ensureBlockingStdio(): void;
+
 /**
  * Whether `config_key` is already declared as a top-level property in the
  * vite config's `defineConfig({...})` (or equivalent) object literal.

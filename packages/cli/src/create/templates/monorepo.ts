@@ -8,6 +8,7 @@ import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
+import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
@@ -158,7 +159,70 @@ export async function executeMonorepoTemplate(
     options?.silent ?? false,
   );
 
+  alignMonorepoTypeScriptVersion(fullPath, appProjectPath, libraryProjectPath);
+
   return { exitCode: 0, projectDir: templateInfo.targetDir };
+}
+
+/**
+ * Keep every scaffolded workspace member on the same TypeScript version.
+ *
+ * The app and library come from independently updated remote templates. If
+ * their TypeScript ranges resolve to different versions, `typescript` — an
+ * optional peer of vite-plus — resolves differently per member, so package
+ * managers either create separate vite-plus peer instances (pnpm) or hoist a
+ * compiler the other workspace member did not ask for (npm/Yarn). The library
+ * template is the compatibility baseline because its declaration build may
+ * require a newer compiler, so the app adopts its TypeScript range instead of
+ * silently downgrading the library. The workspace catalog entry follows the
+ * same baseline so members that reference `typescript: "catalog:"` (e.g. a
+ * later `vite:generator` scaffold) stay on the workspace's compiler.
+ */
+export function alignMonorepoTypeScriptVersion(
+  workspaceRootPath: string,
+  appProjectPath: string,
+  libraryProjectPath: string,
+): void {
+  const libraryPackage = JSON.parse(
+    fs.readFileSync(path.join(libraryProjectPath, 'package.json'), 'utf8'),
+  ) as {
+    devDependencies?: Record<string, string>;
+  };
+  const typescriptVersion = libraryPackage.devDependencies?.typescript;
+  if (!typescriptVersion) {
+    return;
+  }
+
+  editJsonFile<{ devDependencies?: Record<string, string> }>(
+    path.join(appProjectPath, 'package.json'),
+    (pkg) => {
+      if (
+        !pkg.devDependencies?.typescript ||
+        pkg.devDependencies.typescript === typescriptVersion
+      ) {
+        return undefined;
+      }
+      pkg.devDependencies.typescript = typescriptVersion;
+      return pkg;
+    },
+  );
+
+  for (const catalogFile of ['pnpm-workspace.yaml', '.yarnrc.yml']) {
+    const catalogPath = path.join(workspaceRootPath, catalogFile);
+    if (!fs.existsSync(catalogPath)) {
+      continue;
+    }
+    const workspaceConfig = readYamlFile(catalogPath) as {
+      catalog?: Record<string, unknown>;
+    } | null;
+    const catalogEntry = workspaceConfig?.catalog?.typescript;
+    if (catalogEntry === undefined || catalogEntry === typescriptVersion) {
+      continue;
+    }
+    editYamlFile(catalogPath, (doc) => {
+      doc.setIn(['catalog', 'typescript'], typescriptVersion);
+    });
+  }
 }
 
 /**
