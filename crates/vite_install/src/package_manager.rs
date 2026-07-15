@@ -936,29 +936,51 @@ fn open_lock_file(lock_path: &Path) -> io::Result<File> {
     fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lock_path)
 }
 
-/// Get the platform-specific npm package name for bun.
-/// Returns the `@oven/bun-{os}-{arch}` package name for the current platform.
-fn get_bun_platform_package_name() -> Result<&'static str, Error> {
-    let name = match (env::consts::OS, env::consts::ARCH) {
-        ("macos", "aarch64") => "@oven/bun-darwin-aarch64",
-        ("macos", "x86_64") => "@oven/bun-darwin-x64",
-        #[cfg(target_env = "musl")]
-        ("linux", "aarch64") => "@oven/bun-linux-aarch64-musl",
-        #[cfg(not(target_env = "musl"))]
-        ("linux", "aarch64") => "@oven/bun-linux-aarch64",
-        #[cfg(target_env = "musl")]
-        ("linux", "x86_64") => "@oven/bun-linux-x64-musl",
-        #[cfg(not(target_env = "musl"))]
-        ("linux", "x86_64") => "@oven/bun-linux-x64",
-        ("windows", "x86_64") => "@oven/bun-windows-x64",
-        ("windows", "aarch64") => "@oven/bun-windows-aarch64",
-        (os, arch) => {
+fn get_bun_platform_package_name() -> Result<String, Error> {
+    get_bun_platform_package_name_for(
+        env::consts::OS,
+        env::consts::ARCH,
+        cfg!(target_env = "musl"),
+        bun_requires_baseline(),
+    )
+}
+
+fn get_bun_platform_package_name_for(
+    os: &str,
+    arch: &str,
+    is_musl: bool,
+    requires_baseline: bool,
+) -> Result<String, Error> {
+    let name = match (os, arch, is_musl) {
+        ("macos", "aarch64", _) => "@oven/bun-darwin-aarch64",
+        ("macos", "x86_64", _) => "@oven/bun-darwin-x64",
+        ("linux", "aarch64", true) => "@oven/bun-linux-aarch64-musl",
+        ("linux", "aarch64", false) => "@oven/bun-linux-aarch64",
+        ("linux", "x86_64", true) => "@oven/bun-linux-x64-musl",
+        ("linux", "x86_64", false) => "@oven/bun-linux-x64",
+        ("windows", "x86_64", _) => "@oven/bun-windows-x64",
+        ("windows", "aarch64", _) => "@oven/bun-windows-aarch64",
+        (os, arch, _) => {
             return Err(Error::UnsupportedPackageManager(
                 format!("bun (unsupported platform: {os}-{arch})").into(),
             ));
         }
     };
-    Ok(name)
+    if arch == "x86_64" && requires_baseline {
+        Ok(format!("{name}-baseline"))
+    } else {
+        Ok(name.to_string())
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn bun_requires_baseline() -> bool {
+    !std::arch::is_x86_feature_detected!("avx2")
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn bun_requires_baseline() -> bool {
+    false
 }
 
 /// Download bun package manager (native binary) from npm.
@@ -972,7 +994,6 @@ async fn download_bun_package_manager(
     home_dir: &AbsolutePath,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "bun".into();
-    let platform_package_name = get_bun_platform_package_name()?;
 
     // $VP_HOME/package_manager/bun/{version}
     let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
@@ -984,11 +1005,14 @@ async fn download_bun_package_manager(
         return Ok((install_dir, package_name, version.clone()));
     }
 
+    // Temporary by design: select a CPU-compatible package for new downloads without replacing existing installs.
+    let platform_package_name = get_bun_platform_package_name()?;
+
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
 
     // Download the platform-specific package directly
-    let platform_tgz_url = get_npm_package_tgz_url(platform_package_name, version);
+    let platform_tgz_url = get_npm_package_tgz_url(&platform_package_name, version);
     // Keep the TempDir guard alive so a failure path cleans up the temp dir.
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
@@ -3450,10 +3474,48 @@ mod tests {
         // On musl targets, the package name should contain "-musl"
         #[cfg(target_env = "musl")]
         assert!(
-            name.ends_with("-musl"),
-            "On musl targets, package name should end with -musl, got: {name}"
+            name.contains("-musl"),
+            "On musl targets, package name should contain -musl, got: {name}"
         );
     }
+
+    #[test]
+    fn test_get_bun_platform_package_name_uses_baseline_without_avx2() {
+        for (os, is_musl, expected) in [
+            ("macos", false, "@oven/bun-darwin-x64-baseline"),
+            ("linux", false, "@oven/bun-linux-x64-baseline"),
+            ("linux", true, "@oven/bun-linux-x64-musl-baseline"),
+            ("windows", false, "@oven/bun-windows-x64-baseline"),
+        ] {
+            assert_eq!(
+                get_bun_platform_package_name_for(os, "x86_64", is_musl, true).unwrap(),
+                expected
+            );
+        }
+        assert_eq!(
+            get_bun_platform_package_name_for("linux", "x86_64", false, false).unwrap(),
+            "@oven/bun-linux-x64"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_download_bun_package_manager_preserves_existing_install() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let version: Str = "1.3.14".into();
+        write_pm_install(&vp_home, "bun", version.as_str(), InstallState::Complete);
+        let native_bin = vp_home
+            .join("package_manager")
+            .join("bun")
+            .join(version.as_str())
+            .join("bun/bin/bun.native");
+        fs::write(&native_bin, "existing bun").unwrap();
+
+        download_bun_package_manager(&version, &vp_home).await.unwrap();
+
+        assert_eq!(fs::read_to_string(native_bin).unwrap(), "existing bun");
+    }
+
     /// Note: The true ERROR_SHARING_VIOLATION occurs when *multiple processes*
     /// attempt to lock the file concurrently on Windows (e.g. during parallel MSBuild tasks).
     /// Standard cargo tests run in a single process, which the Windows OS allows to bypass
