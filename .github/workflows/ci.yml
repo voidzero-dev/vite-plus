@@ -943,6 +943,17 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
+      # https://github.com/marketplace/actions/setup-nu
+      - name: Install Nushell
+        if: runner.os == 'Linux'
+        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
+        with:
+          version: '*'
+
+      - name: Test generated Nushell environment
+        if: runner.os == 'Linux'
+        run: VP_BIN_UNDER_TEST="$HOME/.vite-plus/bin/vp" .github/scripts/test-nushell-env.sh
+
       # Provision the managed runtime once into the real home so cases can
       # seed from it (seed-runtime) instead of each downloading ~50MB.
       # Best-effort: without a seed, cases that need the runtime download it
