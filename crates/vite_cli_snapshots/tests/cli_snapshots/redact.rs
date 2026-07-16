@@ -40,7 +40,7 @@ static RULE_COUNT_RE: LazyLock<regex::Regex> =
 // stays assertable.
 static TOOL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"\b((?i:node(?:\.js)?|npm|pnpm|yarn|bun|deno))([ /]+)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b",
+        r"\b((?i:node(?:\.js)?|npm|pnpm|yarn|bun|deno|vp))([ /]+)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b",
     )
     .unwrap()
 });
@@ -81,6 +81,16 @@ static DEV_ENGINES_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // Unified Toolchain` header untouched.
 static VP_BANNER_VERSION_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Vite\+ )\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?").unwrap());
+// The upgrade checker includes the running CLI's bare version in its diagnostic
+// (`found vite-plus@<remote> (current: 0.2.4)`) and action line (`Update
+// available: 0.2.4 → <remote>`). The remote version belongs to the fixture and
+// stays assertable; only the current version changes on every Vite+ release.
+static VP_CURRENT_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(found vite-plus@[^\n]+ \(current: |Update available: )\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?",
+    )
+    .unwrap()
+});
 // `vp migrate`'s dependency version-change table prints `<name> <from> →
 // <to>` rows (`vite-plus  0.1.21 → 0.2.4`, `vite  8.0.0 → 8.1.3`, `vitest
 // 3.2.4 → 4.1.10`). The target of every managed-toolchain row (vite-plus,
@@ -379,6 +389,10 @@ pub fn redact_output(
     // Redact the CLI's own version in the `vp migrate` completion banner
     // (see VP_BANNER_VERSION_RE), which bumps on every release.
     output = VP_BANNER_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
+
+    // Redact the CLI's own current version in upgrade-check output while
+    // preserving the fixture-controlled remote version.
+    output = VP_CURRENT_VERSION_RE.replace_all(&output, "${1}<version>").into_owned();
 
     // Redact the managed-toolchain row targets of `vp migrate`'s version-change
     // table (see VP_UPGRADE_TARGET_RE); the CLI/bundled target bumps on release.
