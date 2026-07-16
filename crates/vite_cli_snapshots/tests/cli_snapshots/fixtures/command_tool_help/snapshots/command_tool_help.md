@@ -16,21 +16,20 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --host [HOST]            Specify hostname
-  --port <PORT>            Specify port
-  --open [PATH]            Open browser on startup
-  --cors                   Enable CORS
-  --strictPort             Exit if specified port is already in use
-  --force                  Ignore the optimizer cache and re-bundle
-  --experimentalBundle     Use experimental full bundle mode
-  --base <PATH>            Public base path
-  -l, --logLevel <LEVEL>   Set log level
-  --clearScreen            Allow or disable clearing the screen
-  --configLoader <LOADER>  Set the config loader
-  -d, --debug [FEAT]       Show debug logs
-  -f, --filter <FILTER>    Filter debug logs
-  -m, --mode <MODE>        Set env mode
-  -h, --help               Print help
+  --host [HOST]           Specify hostname
+  --port <PORT>           Specify port
+  --open [PATH]           Open browser on startup
+  --cors                  Enable CORS
+  --strictPort            Exit if specified port is already in use
+  --force                 Ignore the optimizer cache and re-bundle
+  --experimentalBundle    Use experimental full bundle mode
+  --base <PATH>           Public base path
+  -l, --logLevel <LEVEL>  Set log level
+  --clearScreen           Allow or disable clearing the screen
+  -d, --debug [FEAT]      Show debug logs
+  -f, --filter <FILTER>   Filter debug logs
+  -m, --mode <MODE>       Set env mode
+  -h, --help              Print help
 
 Examples:
   vp dev
@@ -69,7 +68,6 @@ Options:
   --base <PATH>                 Public base path
   -l, --logLevel <LEVEL>        Set log level
   --clearScreen                 Allow or disable clearing the screen
-  --configLoader <LOADER>       Set the config loader
   -d, --debug [FEAT]            Show debug logs
   -f, --filter <FILTER>         Filter debug logs
   -m, --mode <MODE>             Set env mode
@@ -97,19 +95,18 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --host [HOST]            Specify hostname
-  --port <PORT>            Specify port
-  --strictPort             Exit if specified port is already in use
-  --open [PATH]            Open browser on startup
-  --outDir <DIR>           Output directory to preview
-  --base <PATH>            Public base path
-  -l, --logLevel <LEVEL>   Set log level
-  --clearScreen            Allow or disable clearing the screen
-  --configLoader <LOADER>  Set the config loader
-  -d, --debug [FEAT]       Show debug logs
-  -f, --filter <FILTER>    Filter debug logs
-  -m, --mode <MODE>        Set env mode
-  -h, --help               Print help
+  --host [HOST]           Specify hostname
+  --port <PORT>           Specify port
+  --strictPort            Exit if specified port is already in use
+  --open [PATH]           Open browser on startup
+  --outDir <DIR>          Output directory to preview
+  --base <PATH>           Public base path
+  -l, --logLevel <LEVEL>  Set log level
+  --clearScreen           Allow or disable clearing the screen
+  -d, --debug [FEAT]      Show debug logs
+  -f, --filter <FILTER>   Filter debug logs
+  -m, --mode <MODE>       Set env mode
+  -h, --help              Print help
 
 Examples:
   vp preview
@@ -123,7 +120,7 @@ Documentation: https://viteplus.dev/guide/build
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp test [COMMAND] [FILTERS] [OPTIONS]
+Usage: vp test [COMMAND] [FILTERS]... [OPTIONS]
 
 Run tests once by default.
 Options are forwarded to Vitest.
@@ -134,26 +131,85 @@ Commands:
   dev      Run tests in development mode
   related  Run tests related to changed files
   bench    Run benchmarks
-  init     Initialize Vitest config
   list     List matching tests
 
+Arguments:
+  [FILTERS]...  Test file filters
+
 Options:
-  -r, --root <PATH>                Set the project root
-  -u, --update [TYPE]              Update snapshots
-  -w, --watch                      Enable watch mode
-  -t, --testNamePattern <PATTERN>  Run tests matching regexp
-  --dir <PATH>                     Set the directory to scan for tests
-  --ui                             Enable UI
-  --open                           Open UI automatically
-  --coverage                       Enable coverage
-  --reporter <NAME>                Specify reporter
-  --browser <NAME>                 Run tests in the browser
-  --pool <POOL>                    Set the worker pool
-  --maxWorkers <WORKERS>           Set the maximum number of workers
-  --environment <NAME>             Set the test environment
-  --passWithNoTests                Pass when no tests are found
-  --run                            Disable watch mode
-  -h, --help                       Print help
+  -r, --root <PATH>                   Root path
+  -u, --update [TYPE]                 Update snapshot (accepts boolean, "new", "all" or "none")
+  -w, --watch                         Enable watch mode
+  -t, --testNamePattern <PATTERN>     Run tests with full names matching the specified regexp pattern
+  --dir <PATH>                        Base directory to scan for the test files
+  --ui                                Enable UI
+  --open                              Open UI automatically (default: !process.env.CI)
+  --api [PORT]                        Specify server port; if true, defaults to 51204
+  --silent [VALUE]                    Silent console output from tests. Use 'passed-only' to see logs from failing tests only
+  --hideSkippedTests                  Hide logs for skipped tests
+  --reporter <NAME>                   Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
+  --outputFile <FILENAME/-S>          Write test results to a file; use dot notation for individual outputs of multiple reporters (for example, --outputFile.tap=./tap.txt)
+  --coverage                          Enable coverage reporting
+  --mode <NAME>                       Override Vite mode (default: test or benchmark)
+  --isolate                           Run every test file in isolation. Use --no-isolate to disable (default: true)
+  --globals                           Inject APIs globally
+  --dom                               Mock browser API with happy-dom
+  --browser <NAME>                    Run tests in the browser (default: false)
+  --pool <POOL>                       Specify pool when not running in the browser (default: forks)
+  --execArgv <OPTION>                 Pass additional arguments to Node.js when spawning worker threads or child processes
+  --vmMemoryLimit <LIMIT>             Memory limit for VM pools
+  --fileParallelism                   Run test files in parallel. Use --no-file-parallelism to disable (default: true)
+  --maxWorkers <WORKERS>              Maximum number or percentage of workers to run tests in
+  --environment <NAME>                Specify runner environment (default: node)
+  --passWithNoTests                   Pass when no tests are found
+  --logHeapUsage                      Show the size of the heap for each test when running in Node.js
+  --detectAsyncLeaks                  Detect asynchronous resources leaking from test files (default: false)
+  --allowOnly                         Allow tests and suites marked as only (default: !process.env.CI)
+  --dangerouslyIgnoreUnhandledErrors  Ignore any unhandled errors that occur
+  --shard <SHARDS>                    Test suite shard to execute in the format <index>/<count>
+  --changed [SINCE]                   Run tests affected by changed files (default: false)
+  --sequence <OPTIONS>                Configure test sorting
+  --inspect [[HOST:]PORT]             Enable Node.js inspector (default: 127.0.0.1:9229)
+  --inspectBrk [[HOST:]PORT]          Enable Node.js inspector and break before tests start
+  --testTimeout <TIMEOUT>             Default test timeout in milliseconds (default: 5000; 0 disables)
+  --hookTimeout <TIMEOUT>             Default hook timeout in milliseconds (default: 10000; 0 disables)
+  --bail <NUMBER>                     Stop test execution after the given number of failures (default: 0)
+  --retry <TIMES>                     Retry failed tests (default: 0)
+  --diff <PATH>                       DiffOptions object or path to a module exporting one
+  --exclude <GLOB>                    Additional file globs to exclude from tests
+  --expandSnapshotDiff                Show the full diff when a snapshot fails
+  --disableConsoleIntercept           Disable automatic interception of console logging (default: false)
+  --typecheck                         Enable typechecking alongside tests (default: false)
+  --project <NAME>                    Select one or more Vitest workspace projects by name or wildcard
+  --slowTestThreshold <THRESHOLD>     Threshold for a test or suite to be considered slow (default: <duration>)
+  --teardownTimeout <TIMEOUT>         Default teardown timeout in milliseconds (default: 10000)
+  --cache                             Enable cache
+  --maxConcurrency <NUMBER>           Maximum number of concurrent tests and suites (default: 5)
+  --expect                            Configure expect matchers
+  --printConsoleTrace                 Always print console stack traces
+  --includeTaskLocation               Collect test and suite locations in the location property
+  --attachmentsDir <DIR>              Directory for attachments created with context.annotate (default: .vitest-attachments)
+  --run                               Disable watch mode
+  --no-color                          Remove colors from console output (default: true)
+  --clearScreen                       Clear the terminal when rerunning tests in watch mode (default: true)
+  --standalone                        Start Vitest without running tests until files change (default: false)
+  --mergeReports [PATH]               Merge previously recorded blob reports without running tests
+  --listTags [TYPE]                   List available tags instead of running tests
+  --clearCache                        Delete all Vitest caches without running tests
+  --tagsFilter <EXPRESSION>           Run only tests matching the tag expression
+  --strictTags                        Error when a test uses an undefined tag (default: true)
+  --experimental <FEATURES>           Enable experimental features
+  -h, --help                          Display this message
+
+Bench Options:
+  --compare <FILENAME>     Benchmark output file to compare against
+  --outputJson <FILENAME>  Benchmark output file
+
+List Options:
+  --json [TRUE/PATH]                Print collected tests as JSON or write to a file (default: false)
+  --filesOnly                       Print only test files without test cases
+  --staticParse                     Parse files statically instead of running them (default: false)
+  --staticParseConcurrency <LIMIT>  Number of test files to process concurrently
 
 Examples:
   vp test
@@ -173,21 +229,46 @@ Usage: vp pack [...FILES] [OPTIONS]
 Build a library.
 Options are forwarded to Vite+ Pack.
 
+Arguments:
+  [...FILES]  Files to bundle
+
 Options:
-  --config-loader <LOADER>  Set the config loader
-  --no-config               Disable the config file
-  -f, --format <FORMAT>     Bundle format: esm, cjs, iife, umd
-  -d, --out-dir <DIR>       Output directory
-  --target <TARGET>         Bundle target
-  --platform <PLATFORM>     Target platform
-  --sourcemap               Generate source maps
-  --dts                     Generate declaration files
-  --minify                  Minify output
-  --exe                     Bundle as an executable
-  -W, --workspace [DIR]     Enable workspace mode
-  -F, --filter <PATTERN>    Filter workspace configs
-  -w, --watch [PATH]        Watch mode
-  -h, --help                Print help
+  -f, --format <FORMAT>         Bundle format: esm, cjs, iife, umd (default: esm)
+  --clean                       Clean output directory, --no-clean to disable
+  --deps.never-bundle <MODULE>  Mark dependencies as external
+  --minify                      Minify output
+  --devtools                    Enable devtools integration
+  --debug [FEAT]                Show debug logs
+  --target <TARGET>             Bundle target, e.g "es2015", "esnext"
+  -l, --logLevel <LEVEL>        Set log level: info, warn, error, silent
+  --fail-on-warn                Fail on warnings (default: true)
+  --no-write                    Disable writing files to disk, incompatible with watch mode (default: true)
+  -d, --out-dir <DIR>           Output directory (default: dist)
+  --treeshake                   Tree-shake bundle (default: true)
+  --sourcemap                   Generate source map (default: false)
+  --shims                       Enable cjs and esm shims (default: false)
+  --platform <PLATFORM>         Target platform (default: node)
+  --dts                         Generate dts files
+  --publint                     Enable publint (default: false)
+  --attw                        Enable Are the types wrong integration (default: false)
+  --unused                      Enable unused dependencies check (default: false)
+  -w, --watch [PATH]            Watch mode
+  --ignore-watch <PATH>         Ignore custom paths in watch mode
+  --report                      Size report (default: true)
+  --env.* <VALUE>               Define compile-time env variables
+  --env-file <FILE>             Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-prefix <PREFIX>         Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
+  --on-success <COMMAND>        Command to run on success
+  --copy <DIR>                  Copy files to output dir
+  --public-dir <DIR>            Alias for --copy, deprecated
+  --tsconfig <TSCONFIG>         Set tsconfig path
+  --unbundle                    Unbundle mode
+  --root <DIR>                  Root directory of input files
+  --exe                         Bundle as executable
+  -W, --workspace [DIR]         Enable workspace mode
+  -F, --filter <PATTERN>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
+  --exports                     Generate export-related metadata for package.json (experimental)
+  -h, --help                    Display this message
 
 Examples:
   vp pack

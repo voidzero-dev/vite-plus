@@ -16,21 +16,20 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --host [HOST]            Specify hostname
-  --port <PORT>            Specify port
-  --open [PATH]            Open browser on startup
-  --cors                   Enable CORS
-  --strictPort             Exit if specified port is already in use
-  --force                  Ignore the optimizer cache and re-bundle
-  --experimentalBundle     Use experimental full bundle mode
-  --base <PATH>            Public base path
-  -l, --logLevel <LEVEL>   Set log level
-  --clearScreen            Allow or disable clearing the screen
-  --configLoader <LOADER>  Set the config loader
-  -d, --debug [FEAT]       Show debug logs
-  -f, --filter <FILTER>    Filter debug logs
-  -m, --mode <MODE>        Set env mode
-  -h, --help               Print help
+  --host [HOST]           Specify hostname
+  --port <PORT>           Specify port
+  --open [PATH]           Open browser on startup
+  --cors                  Enable CORS
+  --strictPort            Exit if specified port is already in use
+  --force                 Ignore the optimizer cache and re-bundle
+  --experimentalBundle    Use experimental full bundle mode
+  --base <PATH>           Public base path
+  -l, --logLevel <LEVEL>  Set log level
+  --clearScreen           Allow or disable clearing the screen
+  -d, --debug [FEAT]      Show debug logs
+  -f, --filter <FILTER>   Filter debug logs
+  -m, --mode <MODE>       Set env mode
+  -h, --help              Print help
 
 Examples:
   vp dev
@@ -55,21 +54,20 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --host [HOST]            Specify hostname
-  --port <PORT>            Specify port
-  --open [PATH]            Open browser on startup
-  --cors                   Enable CORS
-  --strictPort             Exit if specified port is already in use
-  --force                  Ignore the optimizer cache and re-bundle
-  --experimentalBundle     Use experimental full bundle mode
-  --base <PATH>            Public base path
-  -l, --logLevel <LEVEL>   Set log level
-  --clearScreen            Allow or disable clearing the screen
-  --configLoader <LOADER>  Set the config loader
-  -d, --debug [FEAT]       Show debug logs
-  -f, --filter <FILTER>    Filter debug logs
-  -m, --mode <MODE>        Set env mode
-  -h, --help               Print help
+  --host [HOST]           Specify hostname
+  --port <PORT>           Specify port
+  --open [PATH]           Open browser on startup
+  --cors                  Enable CORS
+  --strictPort            Exit if specified port is already in use
+  --force                 Ignore the optimizer cache and re-bundle
+  --experimentalBundle    Use experimental full bundle mode
+  --base <PATH>           Public base path
+  -l, --logLevel <LEVEL>  Set log level
+  --clearScreen           Allow or disable clearing the screen
+  -d, --debug [FEAT]      Show debug logs
+  -f, --filter <FILTER>   Filter debug logs
+  -m, --mode <MODE>       Set env mode
+  -h, --help              Print help
 
 Examples:
   vp dev

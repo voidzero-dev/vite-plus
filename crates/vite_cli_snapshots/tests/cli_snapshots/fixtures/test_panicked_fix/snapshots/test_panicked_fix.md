@@ -20,7 +20,6 @@ Options:
   --type-aware                     Enable rules requiring type information
   --type-check                     Enable experimental type checking
   --import-plugin                  Enable the import plugin
-  --disable-nested-config          Disable nested config discovery
   --no-error-on-unmatched-pattern  Do not exit with error when no files are selected
   --rules                          List registered rules
   -h, --help                       Print help

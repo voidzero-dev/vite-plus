@@ -1,7 +1,9 @@
 import { renderCliDoc, type CliDoc } from './utils/help.ts';
 import { log, printHeader } from './utils/terminal.ts';
 
+// Tool version flags stay hidden; vp --version reports the Vite+ version.
 const commandHelpDocs = {
+  // Vite+ owns config discovery, so Vite-backed help omits --config and --configLoader.
   dev: {
     usage: 'vp dev [ROOT] [OPTIONS]',
     summary: ['Run the development server.', 'Options are forwarded to Vite.'],
@@ -25,7 +27,6 @@ const commandHelpDocs = {
           { label: '--base <PATH>', description: 'Public base path' },
           { label: '-l, --logLevel <LEVEL>', description: 'Set log level' },
           { label: '--clearScreen', description: 'Allow or disable clearing the screen' },
-          { label: '--configLoader <LOADER>', description: 'Set the config loader' },
           { label: '-d, --debug [FEAT]', description: 'Show debug logs' },
           { label: '-f, --filter <FILTER>', description: 'Filter debug logs' },
           { label: '-m, --mode <MODE>', description: 'Set env mode' },
@@ -67,7 +68,6 @@ const commandHelpDocs = {
           { label: '--base <PATH>', description: 'Public base path' },
           { label: '-l, --logLevel <LEVEL>', description: 'Set log level' },
           { label: '--clearScreen', description: 'Allow or disable clearing the screen' },
-          { label: '--configLoader <LOADER>', description: 'Set the config loader' },
           { label: '-d, --debug [FEAT]', description: 'Show debug logs' },
           { label: '-f, --filter <FILTER>', description: 'Filter debug logs' },
           { label: '-m, --mode <MODE>', description: 'Set env mode' },
@@ -102,7 +102,6 @@ const commandHelpDocs = {
           { label: '--base <PATH>', description: 'Public base path' },
           { label: '-l, --logLevel <LEVEL>', description: 'Set log level' },
           { label: '--clearScreen', description: 'Allow or disable clearing the screen' },
-          { label: '--configLoader <LOADER>', description: 'Set the config loader' },
           { label: '-d, --debug [FEAT]', description: 'Show debug logs' },
           { label: '-f, --filter <FILTER>', description: 'Filter debug logs' },
           { label: '-m, --mode <MODE>', description: 'Set env mode' },
@@ -114,7 +113,7 @@ const commandHelpDocs = {
     documentationUrl: 'https://viteplus.dev/guide/build',
   },
   test: {
-    usage: 'vp test [COMMAND] [FILTERS] [OPTIONS]',
+    usage: 'vp test [COMMAND] [FILTERS]... [OPTIONS]',
     summary: ['Run tests once by default.', 'Options are forwarded to Vitest.'],
     sections: [
       {
@@ -125,29 +124,268 @@ const commandHelpDocs = {
           { label: 'dev', description: 'Run tests in development mode' },
           { label: 'related', description: 'Run tests related to changed files' },
           { label: 'bench', description: 'Run benchmarks' },
-          { label: 'init', description: 'Initialize Vitest config' },
           { label: 'list', description: 'List matching tests' },
         ],
       },
       {
+        title: 'Arguments',
+        rows: [{ label: '[FILTERS]...', description: 'Test file filters' }],
+      },
+      {
         title: 'Options',
         rows: [
-          { label: '-r, --root <PATH>', description: 'Set the project root' },
-          { label: '-u, --update [TYPE]', description: 'Update snapshots' },
+          // Vitest config files bypass the unified test block, so omit --config and --configLoader.
+          { label: '-r, --root <PATH>', description: 'Root path' },
+          {
+            label: '-u, --update [TYPE]',
+            description: 'Update snapshot (accepts boolean, "new", "all" or "none")',
+          },
           { label: '-w, --watch', description: 'Enable watch mode' },
-          { label: '-t, --testNamePattern <PATTERN>', description: 'Run tests matching regexp' },
-          { label: '--dir <PATH>', description: 'Set the directory to scan for tests' },
+          {
+            label: '-t, --testNamePattern <PATTERN>',
+            description: 'Run tests with full names matching the specified regexp pattern',
+          },
+          { label: '--dir <PATH>', description: 'Base directory to scan for the test files' },
           { label: '--ui', description: 'Enable UI' },
-          { label: '--open', description: 'Open UI automatically' },
-          { label: '--coverage', description: 'Enable coverage' },
-          { label: '--reporter <NAME>', description: 'Specify reporter' },
-          { label: '--browser <NAME>', description: 'Run tests in the browser' },
-          { label: '--pool <POOL>', description: 'Set the worker pool' },
-          { label: '--maxWorkers <WORKERS>', description: 'Set the maximum number of workers' },
-          { label: '--environment <NAME>', description: 'Set the test environment' },
+          { label: '--open', description: 'Open UI automatically (default: !process.env.CI)' },
+          {
+            label: '--api [PORT]',
+            description: 'Specify server port; if true, defaults to 51204',
+          },
+          {
+            label: '--silent [VALUE]',
+            description:
+              "Silent console output from tests. Use 'passed-only' to see logs from failing tests only",
+          },
+          { label: '--hideSkippedTests', description: 'Hide logs for skipped tests' },
+          {
+            label: '--reporter <NAME>',
+            description:
+              'Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)',
+          },
+          {
+            label: '--outputFile <FILENAME/-S>',
+            description:
+              'Write test results to a file; use dot notation for individual outputs of multiple reporters (for example, --outputFile.tap=./tap.txt)',
+          },
+          {
+            label: '--coverage',
+            description: 'Enable coverage reporting',
+          },
+          {
+            label: '--mode <NAME>',
+            description: 'Override Vite mode (default: test or benchmark)',
+          },
+          {
+            label: '--isolate',
+            description:
+              'Run every test file in isolation. Use --no-isolate to disable (default: true)',
+          },
+          { label: '--globals', description: 'Inject APIs globally' },
+          { label: '--dom', description: 'Mock browser API with happy-dom' },
+          {
+            label: '--browser <NAME>',
+            description: 'Run tests in the browser (default: false)',
+          },
+          {
+            label: '--pool <POOL>',
+            description: 'Specify pool when not running in the browser (default: forks)',
+          },
+          {
+            label: '--execArgv <OPTION>',
+            description:
+              'Pass additional arguments to Node.js when spawning worker threads or child processes',
+          },
+          {
+            label: '--vmMemoryLimit <LIMIT>',
+            description: 'Memory limit for VM pools',
+          },
+          {
+            label: '--fileParallelism',
+            description:
+              'Run test files in parallel. Use --no-file-parallelism to disable (default: true)',
+          },
+          {
+            label: '--maxWorkers <WORKERS>',
+            description: 'Maximum number or percentage of workers to run tests in',
+          },
+          {
+            label: '--environment <NAME>',
+            description: 'Specify runner environment (default: node)',
+          },
           { label: '--passWithNoTests', description: 'Pass when no tests are found' },
+          {
+            label: '--logHeapUsage',
+            description: 'Show the size of the heap for each test when running in Node.js',
+          },
+          {
+            label: '--detectAsyncLeaks',
+            description: 'Detect asynchronous resources leaking from test files (default: false)',
+          },
+          {
+            label: '--allowOnly',
+            description: 'Allow tests and suites marked as only (default: !process.env.CI)',
+          },
+          {
+            label: '--dangerouslyIgnoreUnhandledErrors',
+            description: 'Ignore any unhandled errors that occur',
+          },
+          {
+            label: '--shard <SHARDS>',
+            description: 'Test suite shard to execute in the format <index>/<count>',
+          },
+          {
+            label: '--changed [SINCE]',
+            description: 'Run tests affected by changed files (default: false)',
+          },
+          {
+            label: '--sequence <OPTIONS>',
+            description: 'Configure test sorting',
+          },
+          {
+            label: '--inspect [[HOST:]PORT]',
+            description: 'Enable Node.js inspector (default: 127.0.0.1:9229)',
+          },
+          {
+            label: '--inspectBrk [[HOST:]PORT]',
+            description: 'Enable Node.js inspector and break before tests start',
+          },
+          {
+            label: '--testTimeout <TIMEOUT>',
+            description: 'Default test timeout in milliseconds (default: 5000; 0 disables)',
+          },
+          {
+            label: '--hookTimeout <TIMEOUT>',
+            description: 'Default hook timeout in milliseconds (default: 10000; 0 disables)',
+          },
+          {
+            label: '--bail <NUMBER>',
+            description: 'Stop test execution after the given number of failures (default: 0)',
+          },
+          {
+            label: '--retry <TIMES>',
+            description: 'Retry failed tests (default: 0)',
+          },
+          {
+            label: '--diff <PATH>',
+            description: 'DiffOptions object or path to a module exporting one',
+          },
+          {
+            label: '--exclude <GLOB>',
+            description: 'Additional file globs to exclude from tests',
+          },
+          {
+            label: '--expandSnapshotDiff',
+            description: 'Show the full diff when a snapshot fails',
+          },
+          {
+            label: '--disableConsoleIntercept',
+            description: 'Disable automatic interception of console logging (default: false)',
+          },
+          {
+            label: '--typecheck',
+            description: 'Enable typechecking alongside tests (default: false)',
+          },
+          {
+            label: '--project <NAME>',
+            description: 'Select one or more Vitest workspace projects by name or wildcard',
+          },
+          {
+            label: '--slowTestThreshold <THRESHOLD>',
+            description: 'Threshold for a test or suite to be considered slow (default: 300ms)',
+          },
+          {
+            label: '--teardownTimeout <TIMEOUT>',
+            description: 'Default teardown timeout in milliseconds (default: 10000)',
+          },
+          {
+            label: '--cache',
+            description: 'Enable cache',
+          },
+          {
+            label: '--maxConcurrency <NUMBER>',
+            description: 'Maximum number of concurrent tests and suites (default: 5)',
+          },
+          {
+            label: '--expect',
+            description: 'Configure expect matchers',
+          },
+          { label: '--printConsoleTrace', description: 'Always print console stack traces' },
+          {
+            label: '--includeTaskLocation',
+            description: 'Collect test and suite locations in the location property',
+          },
+          {
+            label: '--attachmentsDir <DIR>',
+            description:
+              'Directory for attachments created with context.annotate (default: .vitest-attachments)',
+          },
           { label: '--run', description: 'Disable watch mode' },
-          { label: '-h, --help', description: 'Print help' },
+          {
+            label: '--no-color',
+            description: 'Remove colors from console output (default: true)',
+          },
+          {
+            label: '--clearScreen',
+            description: 'Clear the terminal when rerunning tests in watch mode (default: true)',
+          },
+          {
+            label: '--standalone',
+            description: 'Start Vitest without running tests until files change (default: false)',
+          },
+          {
+            label: '--mergeReports [PATH]',
+            description: 'Merge previously recorded blob reports without running tests',
+          },
+          {
+            label: '--listTags [TYPE]',
+            description: 'List available tags instead of running tests',
+          },
+          {
+            label: '--clearCache',
+            description: 'Delete all Vitest caches without running tests',
+          },
+          {
+            label: '--tagsFilter <EXPRESSION>',
+            description: 'Run only tests matching the tag expression',
+          },
+          {
+            label: '--strictTags',
+            description: 'Error when a test uses an undefined tag (default: true)',
+          },
+          {
+            label: '--experimental <FEATURES>',
+            description: 'Enable experimental features',
+          },
+          { label: '-h, --help', description: 'Display this message' },
+        ],
+      },
+      {
+        title: 'Bench Options',
+        rows: [
+          {
+            label: '--compare <FILENAME>',
+            description: 'Benchmark output file to compare against',
+          },
+          { label: '--outputJson <FILENAME>', description: 'Benchmark output file' },
+        ],
+      },
+      {
+        title: 'List Options',
+        rows: [
+          {
+            label: '--json [TRUE/PATH]',
+            description: 'Print collected tests as JSON or write to a file (default: false)',
+          },
+          { label: '--filesOnly', description: 'Print only test files without test cases' },
+          {
+            label: '--staticParse',
+            description: 'Parse files statically instead of running them (default: false)',
+          },
+          {
+            label: '--staticParseConcurrency <LIMIT>',
+            description: 'Number of test files to process concurrently',
+          },
         ],
       },
       {
@@ -162,22 +400,145 @@ const commandHelpDocs = {
     summary: ['Lint code.', 'Options are forwarded to Oxlint.'],
     sections: [
       {
-        title: 'Options',
+        title: 'Arguments',
+        rows: [{ label: '[PATH]...', description: 'Files or directories to lint' }],
+      },
+      {
+        title: 'Basic Configuration',
         rows: [
-          { label: '--tsconfig <PATH>', description: 'Override the TypeScript config' },
+          // Direct and nested Oxlint config selection bypasses the unified lint block.
+          {
+            label: '--tsconfig <PATH>',
+            description: 'Override the TypeScript config used for import resolution',
+          },
+          {
+            label: '--init',
+            description: 'Initialize lint configuration in vite.config.ts with Vite+ defaults',
+          },
+        ],
+      },
+      {
+        title: 'Rule Severity',
+        rows: [
+          { label: '-A, --allow <NAME>', description: 'Allow a rule or category' },
+          { label: '-W, --warn <NAME>', description: 'Emit a warning for a rule or category' },
+          { label: '-D, --deny <NAME>', description: 'Emit an error for a rule or category' },
+        ],
+      },
+      {
+        title: 'Plugins',
+        rows: [
+          {
+            label: '--disable-unicorn-plugin',
+            description: 'Disable the unicorn plugin, which is enabled by default',
+          },
+          {
+            label: '--disable-oxc-plugin',
+            description: 'Disable Oxc-specific rules, which are enabled by default',
+          },
+          {
+            label: '--disable-typescript-plugin',
+            description: 'Disable the TypeScript plugin, which is enabled by default',
+          },
+          { label: '--import-plugin', description: 'Enable the import plugin' },
+          { label: '--react-plugin', description: 'Enable the React plugin' },
+          { label: '--jsdoc-plugin', description: 'Enable the JSDoc plugin' },
+          { label: '--jest-plugin', description: 'Enable the Jest plugin' },
+          { label: '--vitest-plugin', description: 'Enable the Vitest plugin' },
+          { label: '--jsx-a11y-plugin', description: 'Enable the JSX accessibility plugin' },
+          { label: '--nextjs-plugin', description: 'Enable the Next.js plugin' },
+          { label: '--react-perf-plugin', description: 'Enable the React performance plugin' },
+          { label: '--promise-plugin', description: 'Enable the promise plugin' },
+          { label: '--node-plugin', description: 'Enable the Node.js plugin' },
+          { label: '--vue-plugin', description: 'Enable the Vue plugin' },
+        ],
+      },
+      {
+        title: 'Fix Problems',
+        rows: [
           { label: '--fix', description: 'Fix issues when possible' },
           { label: '--fix-suggestions', description: 'Apply auto-fixable suggestions' },
           { label: '--fix-dangerously', description: 'Apply dangerous fixes and suggestions' },
-          { label: '--type-aware', description: 'Enable rules requiring type information' },
-          { label: '--type-check', description: 'Enable experimental type checking' },
-          { label: '--import-plugin', description: 'Enable the import plugin' },
-          { label: '--disable-nested-config', description: 'Disable nested config discovery' },
+        ],
+      },
+      {
+        title: 'Ignore Files',
+        rows: [
+          { label: '--ignore-path <PATH>', description: 'Use the specified .eslintignore file' },
+          {
+            label: '--ignore-pattern <PATTERN>',
+            description: 'Add file patterns to ignore',
+          },
+          { label: '--no-ignore', description: 'Disable file exclusion from ignore rules' },
+        ],
+      },
+      {
+        title: 'Handle Warnings',
+        rows: [
+          { label: '--quiet', description: 'Report errors only' },
+          { label: '--deny-warnings', description: 'Exit non-zero when warnings are reported' },
+          {
+            label: '--max-warnings <INT>',
+            description: 'Set the warning threshold before exiting non-zero',
+          },
+        ],
+      },
+      {
+        title: 'Output',
+        rows: [
+          {
+            label: '-f, --format <FORMAT>',
+            description:
+              'Set output format: checkstyle, default, agent, github, gitlab, json, junit, sarif, stylish, or unix',
+          },
+          {
+            label: '--debug <OPTIONS>',
+            description: 'Enable comma-separated debug output options: files or timings',
+          },
+        ],
+      },
+      {
+        title: 'Miscellaneous',
+        rows: [
+          { label: '--silent', description: 'Do not display diagnostics' },
           {
             label: '--no-error-on-unmatched-pattern',
-            description: 'Do not exit with error when no files are selected',
+            description: 'Do not exit with an error when no files are selected for linting',
           },
-          { label: '--rules', description: 'List registered rules' },
-          { label: '-h, --help', description: 'Print help' },
+          {
+            label: '--threads <INT>',
+            description: 'Number of threads to use; set to 1 to use one CPU core',
+          },
+          {
+            label: '--print-config',
+            description: 'Print the resolved configuration without linting',
+          },
+        ],
+      },
+      {
+        title: 'Inline Configuration',
+        rows: [
+          {
+            label: '--report-unused-disable-directives',
+            description: 'Report unused oxlint-disable directives',
+          },
+          {
+            label: '--report-unused-disable-directives-severity <SEVERITY>',
+            description: 'Report unused disable directives at the specified severity',
+          },
+        ],
+      },
+      {
+        title: 'Options',
+        rows: [
+          { label: '--rules', description: 'List all registered rules' },
+          { label: '--lsp', description: 'Start the language server' },
+          { label: '--type-aware', description: 'Enable rules requiring type information' },
+          {
+            label: '--type-check',
+            description: 'Enable experimental type checking and compiler diagnostics',
+          },
+          { label: '-h, --help', description: 'Print help information' },
         ],
       },
       {
@@ -196,21 +557,70 @@ const commandHelpDocs = {
     summary: ['Format code.', 'Options are forwarded to Oxfmt.'],
     sections: [
       {
-        title: 'Options',
+        title: 'Arguments',
+        rows: [
+          {
+            label: '[PATH]...',
+            description: 'Files, directories, or glob patterns (default: current directory)',
+          },
+        ],
+      },
+      {
+        title: 'Mode Options',
+        rows: [
+          // Vite+ merges init and migrate output into vite.config.ts; direct config selection stays hidden.
+          { label: '--init', description: 'Initialize fmt configuration in vite.config.ts' },
+          {
+            label: '--migrate <SOURCE>',
+            description: 'Migrate configuration from Prettier or Biome into vite.config.ts',
+          },
+          { label: '--lsp', description: 'Start the language server' },
+          {
+            label: '--stdin-filepath <PATH>',
+            description: 'Specify the file name used to infer the parser for stdin',
+          },
+        ],
+      },
+      {
+        title: 'Output Options',
         rows: [
           { label: '--write', description: 'Format and write files in place' },
-          { label: '--check', description: 'Check if files are formatted' },
+          {
+            label: '--check',
+            description: 'Check whether files are formatted and show statistics',
+          },
           { label: '--list-different', description: 'List files that would be changed' },
-          { label: '--disable-nested-config', description: 'Disable nested config discovery' },
-          { label: '--ignore-path <PATH>', description: 'Path to ignore file(s)' },
-          { label: '--with-node-modules', description: 'Format files in node_modules' },
+        ],
+      },
+      {
+        title: 'Ignore Options',
+        rows: [
+          {
+            label: '--ignore-path <PATH>',
+            description: 'Path to an ignore file; may be specified multiple times',
+          },
+          {
+            label: '--with-node-modules',
+            description: 'Format files in node_modules, which are skipped by default',
+          },
+        ],
+      },
+      {
+        title: 'Runtime Options',
+        rows: [
           {
             label: '--no-error-on-unmatched-pattern',
-            description: 'Do not exit with error when no files are selected',
+            description: 'Do not exit with an error when the pattern is unmatched',
           },
-          { label: '--threads <INT>', description: 'Number of threads to use' },
-          { label: '-h, --help', description: 'Print help' },
+          {
+            label: '--threads <INT>',
+            description: 'Number of threads to use; set to 1 to use one CPU core',
+          },
         ],
+      },
+      {
+        title: 'Options',
+        rows: [{ label: '-h, --help', description: 'Print help information' }],
       },
       { title: 'Examples', lines: ['  vp fmt', '  vp fmt src --check', '  vp fmt . --write'] },
     ],
@@ -253,22 +663,88 @@ const commandHelpDocs = {
     summary: ['Build a library.', 'Options are forwarded to Vite+ Pack.'],
     sections: [
       {
+        title: 'Arguments',
+        rows: [{ label: '[...FILES]', description: 'Files to bundle' }],
+      },
+      {
         title: 'Options',
         rows: [
-          { label: '--config-loader <LOADER>', description: 'Set the config loader' },
-          { label: '--no-config', description: 'Disable the config file' },
-          { label: '-f, --format <FORMAT>', description: 'Bundle format: esm, cjs, iife, umd' },
-          { label: '-d, --out-dir <DIR>', description: 'Output directory' },
-          { label: '--target <TARGET>', description: 'Bundle target' },
-          { label: '--platform <PLATFORM>', description: 'Target platform' },
-          { label: '--sourcemap', description: 'Generate source maps' },
-          { label: '--dts', description: 'Generate declaration files' },
+          // Vite+ owns config loading, so omit --config-loader, --no-config, and --from-vite; keep the remaining options aligned with pack-bin.
+          {
+            label: '-f, --format <FORMAT>',
+            description: 'Bundle format: esm, cjs, iife, umd (default: esm)',
+          },
+          { label: '--clean', description: 'Clean output directory, --no-clean to disable' },
+          {
+            label: '--deps.never-bundle <MODULE>',
+            description: 'Mark dependencies as external',
+          },
           { label: '--minify', description: 'Minify output' },
-          { label: '--exe', description: 'Bundle as an executable' },
-          { label: '-W, --workspace [DIR]', description: 'Enable workspace mode' },
-          { label: '-F, --filter <PATTERN>', description: 'Filter workspace configs' },
+          { label: '--devtools', description: 'Enable devtools integration' },
+          { label: '--debug [FEAT]', description: 'Show debug logs' },
+          {
+            label: '--target <TARGET>',
+            description: 'Bundle target, e.g "es2015", "esnext"',
+          },
+          {
+            label: '-l, --logLevel <LEVEL>',
+            description: 'Set log level: info, warn, error, silent',
+          },
+          { label: '--fail-on-warn', description: 'Fail on warnings (default: true)' },
+          {
+            label: '--no-write',
+            description:
+              'Disable writing files to disk, incompatible with watch mode (default: true)',
+          },
+          { label: '-d, --out-dir <DIR>', description: 'Output directory (default: dist)' },
+          { label: '--treeshake', description: 'Tree-shake bundle (default: true)' },
+          { label: '--sourcemap', description: 'Generate source map (default: false)' },
+          { label: '--shims', description: 'Enable cjs and esm shims (default: false)' },
+          { label: '--platform <PLATFORM>', description: 'Target platform (default: node)' },
+          { label: '--dts', description: 'Generate dts files' },
+          { label: '--publint', description: 'Enable publint (default: false)' },
+          {
+            label: '--attw',
+            description: 'Enable Are the types wrong integration (default: false)',
+          },
+          {
+            label: '--unused',
+            description: 'Enable unused dependencies check (default: false)',
+          },
           { label: '-w, --watch [PATH]', description: 'Watch mode' },
-          { label: '-h, --help', description: 'Print help' },
+          { label: '--ignore-watch <PATH>', description: 'Ignore custom paths in watch mode' },
+          { label: '--report', description: 'Size report (default: true)' },
+          {
+            label: '--env.* <VALUE>',
+            description: 'Define compile-time env variables',
+          },
+          {
+            label: '--env-file <FILE>',
+            description:
+              'Load environment variables from a file, when used together with --env, variables in --env take precedence',
+          },
+          {
+            label: '--env-prefix <PREFIX>',
+            description:
+              'Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)',
+          },
+          { label: '--on-success <COMMAND>', description: 'Command to run on success' },
+          { label: '--copy <DIR>', description: 'Copy files to output dir' },
+          { label: '--public-dir <DIR>', description: 'Alias for --copy, deprecated' },
+          { label: '--tsconfig <TSCONFIG>', description: 'Set tsconfig path' },
+          { label: '--unbundle', description: 'Unbundle mode' },
+          { label: '--root <DIR>', description: 'Root directory of input files' },
+          { label: '--exe', description: 'Bundle as executable' },
+          { label: '-W, --workspace [DIR]', description: 'Enable workspace mode' },
+          {
+            label: '-F, --filter <PATTERN>',
+            description: 'Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name',
+          },
+          {
+            label: '--exports',
+            description: 'Generate export-related metadata for package.json (experimental)',
+          },
+          { label: '-h, --help', description: 'Display this message' },
         ],
       },
       {

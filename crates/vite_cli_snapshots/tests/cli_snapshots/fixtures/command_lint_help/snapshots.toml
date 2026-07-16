@@ -1,6 +1,6 @@
 [[case]]
 name = "command_lint_help"
-vp = "local"
+vp = "global"
 steps = [
   { argv = ["vp", "lint", "-h"], continue-on-failure = true },
   { argv = ["vp", "lint", "--help"], continue-on-failure = true },

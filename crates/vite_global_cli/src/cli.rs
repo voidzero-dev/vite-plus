@@ -1000,6 +1000,8 @@ fn print_runtime_header(show_header: bool) {
 }
 
 fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool) {
+    // Delegated help renders its own header from the project-local CLI. Normal commands do not,
+    // so the global launcher prints it before resolving or downloading the managed runtime.
     let delegates_help = match command {
         "run" | "exec" | "cache" => {
             matches!(args, [arg] if matches!(arg.as_str(), "-h" | "--help"))
