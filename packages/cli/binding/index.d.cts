@@ -1631,11 +1631,16 @@ export declare class BindingDevEngine {
   getBundleState(): Promise<BindingBundleState>;
   ensureLatestBuildOutput(): Promise<BindingResult<undefined>>;
   triggerFullBuild(): void;
-  invalidate(
-    caller: string,
-    firstInvalidatedBy?: string | undefined | null,
-  ): Promise<BindingResult<Array<BindingClientHmrUpdate>>>;
-  registerModules(clientId: string, modules: Array<string>): Promise<void>;
+  /**
+   * Client-connect signal (the clientId hello): creates the per-client session
+   * with an empty ship map. Reconnects arrive as fresh clientIds.
+   */
+  registerClient(clientId: string): Promise<void>;
+  /**
+   * Delivery notification from the serving middleware: the response for
+   * `filename` completed, so record its modules as shipped to that client.
+   */
+  notifyPayloadDelivered(filename: string): Promise<void>;
   removeClient(clientId: string): Promise<void>;
   close(): Promise<void>;
   /**
@@ -1645,7 +1650,7 @@ export declare class BindingDevEngine {
    * The module was previously stubbed with a proxy, and now we need to compile the
    * actual module and its dependencies.
    */
-  compileEntry(moduleId: string, clientId: string): Promise<string>;
+  compileEntry(moduleId: string, clientId: string): Promise<BindingLazyChunkOutput>;
 }
 
 export declare class BindingLoadPluginContext {
@@ -2355,19 +2360,18 @@ export interface BindingGeneratedCodeOptions {
   preset?: string;
 }
 
-export interface BindingHmrBoundaryOutput {
-  boundary: string;
-  acceptedVia: string;
-}
-
 export type BindingHmrUpdate =
   | {
       type: 'Patch';
       code: string;
       filename: string;
       sourcemap?: string;
-      sourcemapFilename?: string;
-      hmrBoundaries: Array<BindingHmrBoundaryOutput>;
+      sourcemapFilename?: string /**
+       * Stable ids of the changed modules — the `changedIds` of the push envelope.
+       * The client walks from these on its own graph.
+       */;
+      changedIds: Array<string> /** Per-client envelope sequence number. */;
+      seq: number;
     }
   | { type: 'FullReload'; reason?: string }
   | { type: 'Noop' };
@@ -2536,6 +2540,15 @@ export interface BindingJsonSourcemap {
 
 export interface BindingJsWatchChangeEvent {
   event: string;
+}
+
+/**
+ * The client-facing slice of a lazy-compile result. The carried modules and
+ * stamps stay server-side as the engine's pending-payload entry.
+ */
+export interface BindingLazyChunkOutput {
+  code: string;
+  filename: string;
 }
 
 export interface BindingLog {
@@ -2843,8 +2856,7 @@ export declare const enum BindingPropertyWriteSideEffects {
 
 export declare const enum BindingRebuildStrategy {
   Always = 0,
-  Auto = 1,
-  Never = 2,
+  Never = 1,
 }
 
 export interface BindingReplacePluginConfig {
@@ -3189,7 +3201,6 @@ export interface JsOutputChunk {
   map?: BindingSourcemap;
   sourcemapFilename?: string;
   preliminaryFilename: string;
-  preliminarySourcemapFilename?: string;
 }
 
 /** Error emitted from native side, it only contains kind and message, no stack trace. */
