@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
@@ -15,10 +19,11 @@ function installResult(exitCode: number, stdout = '', stderr = '') {
   return { exitCode, stdout: Buffer.from(stdout), stderr: Buffer.from(stderr) };
 }
 
-describe('runViteInstall with detectIgnoredBuilds', () => {
+describe('runViteInstall', () => {
   beforeEach(() => {
     mockRun.mockReset();
     delete process.env.VP_SKIP_INSTALL;
+    delete process.env.VP_VERSION;
   });
 
   it('treats pnpm >= 11 ERR_PNPM_IGNORED_BUILDS exit-1 as a completed install', async () => {
@@ -76,5 +81,30 @@ describe('runViteInstall with detectIgnoredBuilds', () => {
     expect(mockRun).toHaveBeenCalledWith(
       expect.objectContaining({ args: ['install', '--ignore-scripts'] }),
     );
+  });
+
+  it('temporarily relaxes an npm age gate when the pinned npm lacks exclusions', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-plus-install-policy-'));
+    try {
+      fs.writeFileSync(path.join(dir, '.npmrc'), 'min-release-age=3\n');
+      mockRun.mockResolvedValue(installResult(0));
+
+      await runViteInstall(dir, false, undefined, {
+        silent: true,
+        packageManager: PackageManager.npm,
+        packageManagerVersion: '11.12.1',
+      });
+
+      expect(mockRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          envs: expect.objectContaining({ NPM_CONFIG_MIN_RELEASE_AGE: '0' }),
+        }),
+      );
+      expect(fs.readFileSync(path.join(dir, '.npmrc'), 'utf8')).not.toContain(
+        'min-release-age-exclude',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

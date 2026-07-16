@@ -60,6 +60,65 @@ describe('reconcilePreviewBridgeRegistry', () => {
     expect(fs.readFileSync(path.join(dir, '.npmrc'), 'utf8')).toContain(`registry=${BRIDGE}`);
   });
 
+  it('exempts managed packages from an npm minimum release age gate', () => {
+    fs.writeFileSync(
+      path.join(dir, '.npmrc'),
+      'min-release-age=3\nmin-release-age-exclude[]=user-package\n',
+    );
+    reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.npm, '11.17.0');
+    reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.npm, '11.17.0');
+    const npmrc = fs.readFileSync(path.join(dir, '.npmrc'), 'utf8');
+    expect(npmrc).toContain('min-release-age-exclude[]=user-package');
+    for (const name of [
+      'vite-plus',
+      '@voidzero-dev/vite-plus-core',
+      '@voidzero-dev/vite-plus-darwin-x64',
+      'vitest',
+      '@vitest/browser',
+    ]) {
+      expect(
+        npmrc.split(/\r?\n/).filter((line) => line === `min-release-age-exclude[]=${name}`),
+      ).toHaveLength(1);
+    }
+  });
+
+  it('exempts managed packages from a Bun minimum release age gate', () => {
+    fs.writeFileSync(
+      path.join(dir, 'bunfig.toml'),
+      '[install]\nminimumReleaseAge = 259200\nminimumReleaseAgeExcludes = ["@demo/*"]\n\n[run]\nsilent = true\n',
+    );
+    reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.bun);
+    reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.bun);
+    const bunfig = fs.readFileSync(path.join(dir, 'bunfig.toml'), 'utf8');
+    expect(bunfig).toContain('minimumReleaseAgeExcludes = ["@demo/*", "vite-plus"');
+    expect(bunfig).toContain('"@voidzero-dev/vite-plus-core"');
+    expect(bunfig).toContain('"@voidzero-dev/vite-plus-darwin-x64"');
+    expect(bunfig).toContain('"vitest"');
+    expect(bunfig).toContain('"@vitest/browser"');
+    expect(bunfig.match(/"@vitest\/browser"/g)).toHaveLength(1);
+    expect(bunfig).toContain('[run]\nsilent = true');
+  });
+
+  it('adds exact preview trust exclusions for pnpm and removes them for a real release', () => {
+    fs.writeFileSync(
+      path.join(dir, 'pnpm-workspace.yaml'),
+      "packages: []\ntrustPolicy: no-downgrade\ntrustPolicyExclude:\n  - 'webpack@5.0.0'\n",
+    );
+    reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.pnpm);
+    reconcilePreviewBridgeRegistry(dir, PREVIEW, PackageManager.pnpm);
+    let workspace = fs.readFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'utf8');
+    expect(workspace).toContain(`vite-plus@${PREVIEW}`);
+    expect(workspace).toContain(`@voidzero-dev/vite-plus-core@${PREVIEW}`);
+    expect(workspace).toContain(`@voidzero-dev/vite-plus-darwin-x64@${PREVIEW}`);
+    expect(workspace.match(new RegExp(`vite-plus@${PREVIEW}`, 'g'))).toHaveLength(1);
+    expect(workspace).toContain('webpack@5.0.0');
+
+    reconcilePreviewBridgeRegistry(dir, '0.2.1', PackageManager.pnpm);
+    workspace = fs.readFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'utf8');
+    expect(workspace).not.toContain('0.0.0-commit');
+    expect(workspace).toContain('webpack@5.0.0');
+  });
+
   it('appends to an existing .npmrc without clobbering it', () => {
     fs.writeFileSync(path.join(dir, '.npmrc'), '@scope:registry=https://npm.example.com/\n');
     reconcilePreviewBridgeRegistry(dir, PREVIEW);

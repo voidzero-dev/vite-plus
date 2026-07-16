@@ -5,7 +5,7 @@ import { downloadPackageManager as downloadPackageManagerBinding } from '../../b
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { runCommandSilently } from './command.ts';
-import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
+import { getManagedInstallEnv, reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
 
@@ -109,14 +109,20 @@ export async function runViteInstall(
     detectIgnoredBuilds?: boolean;
   },
 ) {
-  // Reconcile the project's registry with this build before installing: a
-  // preview/test build points it at the registry bridge so the
+  // Reconcile the project's registry and managed-package install policies
+  // before installing. A preview/test build points it at the registry bridge so the
   // `0.0.0-commit.<sha>` versions migrate/create just pinned resolve (npmjs has
   // no such version); a real release removes any bridge registry a prior preview
-  // run left behind so installs don't hit the test bridge. No-op for a real build
-  // with no leftover. Done before the VP_SKIP_INSTALL return so it persists for
-  // the project's own CI even when this run skips the install.
-  reconcilePreviewBridgeRegistry(cwd, undefined, options?.packageManager);
+  // run left behind so installs don't hit the test bridge. Package age/trust
+  // policies receive only the exemptions needed by Vite+-managed artifacts.
+  // Done before the VP_SKIP_INSTALL return so supported settings persist for the
+  // project's own CI even when this run skips the install.
+  reconcilePreviewBridgeRegistry(
+    cwd,
+    undefined,
+    options?.packageManager,
+    options?.packageManagerVersion,
+  );
 
   // install dependencies on non-CI environment
   if (process.env.VP_SKIP_INSTALL) {
@@ -145,7 +151,7 @@ export async function runViteInstall(
     command: process.env.VP_CLI_BIN ?? 'vp',
     args: ['install', ...installArgs],
     cwd,
-    envs: process.env,
+    envs: getManagedInstallEnv(cwd, options?.packageManager, options?.packageManagerVersion),
   });
   const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
   const pendingBuilds = detectIgnoredBuilds
