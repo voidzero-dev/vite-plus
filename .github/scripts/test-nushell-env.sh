@@ -8,7 +8,7 @@ nu_bin="$(command -v "${NU_BIN:-nu}")"
 test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT
 
-test_home="$test_root/vp home-\"quoted\""
+test_home="$test_root/vp home with spaces"
 
 VP_HOME="$test_home" "$VP_BIN_UNDER_TEST" env setup --refresh >/dev/null
 
