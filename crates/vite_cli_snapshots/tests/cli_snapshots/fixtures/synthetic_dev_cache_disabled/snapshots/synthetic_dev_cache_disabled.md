@@ -6,7 +6,7 @@ synthetic dev (vp dev) should have cache disabled even with cacheScripts
 
 ```
 $ vp dev --help ⊘ cache disabled
-vp/0.2.4
+vp/<version>
 
 Usage:
   $ vp [root]
