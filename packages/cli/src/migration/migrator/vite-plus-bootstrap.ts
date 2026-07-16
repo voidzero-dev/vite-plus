@@ -20,6 +20,7 @@ import {
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
   ensureDirectViteForPnpm,
+  ensurePnpmPeerOverrideCompatibility,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
@@ -31,6 +32,7 @@ import {
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
+  pnpmPeerOverrideCompatibilityPending,
   pnpmSupportsWorkspaceSettings,
   supportsCatalog,
   pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
@@ -744,12 +746,26 @@ export function detectVitePlusBootstrapPending(
         return (
           catalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
           !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest, catalogDependencyResolver) ||
+          pnpmPeerOverrideCompatibilityPending(
+            pkg.pnpm?.overrides,
+            projectPath,
+            packages,
+            resolvedPackageManagerVersion,
+            usesVitest,
+          ) ||
           !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
         );
       }
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
         !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest) ||
+        pnpmPeerOverrideCompatibilityPending(
+          pkg.pnpm?.overrides,
+          projectPath,
+          packages,
+          resolvedPackageManagerVersion,
+          usesVitest,
+        ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
       );
     }
@@ -1057,6 +1073,14 @@ export function ensureVitePlusBootstrap(
         pkg.pnpm.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
+      packageJsonChanged =
+        ensurePnpmPeerOverrideCompatibility(
+          (pkg.pnpm.overrides ??= ensured.overrides),
+          projectPath,
+          workspaceInfo.packages,
+          workspaceInfo.downloadPackageManager.version,
+          usesVitest,
+        ) || packageJsonChanged;
       packageJsonChanged = ensurePnpmPeerDependencyRules(pkg, usesVitest) || packageJsonChanged;
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
         const beforePnpm = JSON.stringify(pkg.pnpm);

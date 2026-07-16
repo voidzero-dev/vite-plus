@@ -87,6 +87,8 @@ export function pnpmSupportsWorkspaceSettings(version: string): boolean {
 
 const PNPM_CATALOG_MIN_VERSION = '9.5.0';
 
+const PNPM_INVALID_PEER_OVERRIDE_FIXED_VERSION = '10.2.0';
+
 // pnpm catalogs (the `catalog:` protocol and the pnpm-workspace.yaml
 // `catalog`/`catalogs` fields) shipped in pnpm 9.5.0 as a minor change ("Added
 // support for catalogs", https://github.com/pnpm/pnpm/releases/tag/v9.5.0), and
@@ -102,6 +104,123 @@ export function pnpmSupportsCatalog(version: string): boolean {
     return semver.gte(coerced, PNPM_CATALOG_MIN_VERSION);
   }
   return version === 'latest' || version === 'next';
+}
+
+// pnpm 10.0 and 10.1 apply root overrides to workspace peerDependencies before
+// validating those peer specs. A managed npm:/file: alias therefore turns a
+// valid public peer range into an invalid peer spec and aborts installation.
+// pnpm fixed this in 10.2.0 by moving invalid overridden peers to production
+// dependencies (pnpm/pnpm#9000).
+function pnpmNeedsPeerOverrideCompatibility(version: string): boolean {
+  const coerced = semver.coerce(version);
+  return Boolean(
+    coerced &&
+    semver.gte(coerced, '10.0.0') &&
+    semver.lt(coerced, PNPM_INVALID_PEER_OVERRIDE_FIXED_VERSION),
+  );
+}
+
+function isValidPnpmPeerSpec(
+  spec: string | undefined,
+  dependencyName?: string,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  if (!spec) {
+    return false;
+  }
+  if (semver.validRange(spec) || spec.startsWith('workspace:')) {
+    return true;
+  }
+  if (!dependencyName || !spec.startsWith('catalog:')) {
+    return false;
+  }
+  const resolved = catalogDependencyResolver?.(spec, dependencyName);
+  return Boolean(resolved && (semver.validRange(resolved) || resolved.startsWith('workspace:')));
+}
+
+/**
+ * Keep managed alias overrides installable on pnpm 10.0–10.1 workspaces.
+ *
+ * A package-specific selector is more specific than the global managed
+ * override, so pnpm leaves that workspace package's public peer range valid
+ * while continuing to apply the managed override everywhere else. Existing
+ * valid scoped overrides are user policy and remain untouched.
+ */
+export function ensurePnpmPeerOverrideCompatibility(
+  overrides: Record<string, string>,
+  projectPath: string,
+  packages: WorkspacePackage[] | undefined,
+  pnpmVersion: string,
+  usesVitest: boolean,
+): boolean {
+  if (!pnpmNeedsPeerOverrideCompatibility(pnpmVersion)) {
+    return false;
+  }
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    projectPath,
+    PackageManager.pnpm,
+  );
+  const managed = managedOverridePackages(usesVitest);
+  const invalidManagedPeers = Object.entries(managed)
+    .filter(([name, spec]) => !isValidPnpmPeerSpec(spec, name, catalogDependencyResolver))
+    .map(([name]) => name);
+  if (invalidManagedPeers.length === 0) {
+    return false;
+  }
+
+  let changed = false;
+  const packagePaths = [
+    projectPath,
+    ...(packages ?? []).map((pkg) => path.join(projectPath, pkg.path)),
+  ];
+  for (const packagePath of packagePaths) {
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      continue;
+    }
+    const pkg = readJsonFile(packageJsonPath) as {
+      name?: string;
+      peerDependencies?: Record<string, string>;
+    };
+    if (!pkg.name || !pkg.peerDependencies) {
+      continue;
+    }
+    for (const dependencyName of invalidManagedPeers) {
+      const declaredPeerSpec = pkg.peerDependencies[dependencyName];
+      const peerSpec = declaredPeerSpec?.startsWith('catalog:')
+        ? getCatalogDependencySpec(declaredPeerSpec, managed[dependencyName], true, {
+            dependencyField: 'peerDependencies',
+            dependencyName,
+            catalogDependencyResolver,
+          })
+        : declaredPeerSpec;
+      if (!isValidPnpmPeerSpec(peerSpec, dependencyName, catalogDependencyResolver)) {
+        continue;
+      }
+      const selector = `${pkg.name}>${dependencyName}`;
+      if (!isValidPnpmPeerSpec(overrides[selector], dependencyName, catalogDependencyResolver)) {
+        overrides[selector] = peerSpec;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+export function pnpmPeerOverrideCompatibilityPending(
+  overrides: Record<string, string> | undefined,
+  projectPath: string,
+  packages: WorkspacePackage[] | undefined,
+  pnpmVersion: string,
+  usesVitest: boolean,
+): boolean {
+  return ensurePnpmPeerOverrideCompatibility(
+    { ...overrides },
+    projectPath,
+    packages,
+    pnpmVersion,
+    usesVitest,
+  );
 }
 
 const YARN_CATALOG_MIN_VERSION = '4.10.0';
@@ -1248,6 +1367,15 @@ export function rewriteRootWorkspacePackageJson(
             delete pkg.pnpm.overrides[key];
           }
         }
+      }
+      if (pkg.pnpm?.overrides && !usePnpmWorkspaceSettings) {
+        ensurePnpmPeerOverrideCompatibility(
+          pkg.pnpm.overrides,
+          projectPath,
+          packages,
+          pnpmVersion ?? '',
+          workspaceUsesVitest,
+        );
       }
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
         applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);

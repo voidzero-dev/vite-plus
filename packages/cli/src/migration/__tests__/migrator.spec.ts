@@ -32,6 +32,7 @@ const {
   detectPendingCoreMigration,
   detectVitePlusBootstrapPending,
   ensureVitePlusBootstrap,
+  ensurePnpmPeerOverrideCompatibility,
   finalizeCoreMigrationForExistingVitePlus,
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
@@ -3732,6 +3733,71 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.pnpm.overrides.react).toBe('18.3.1');
     expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.pnpm.peerDependencyRules.allowAny).toEqual(['react', 'vite']);
+  });
+
+  it('scopes managed alias overrides away from workspace peers on pnpm 10.0–10.1', () => {
+    const pluginDir = path.join(tmpDir, 'packages/plugin');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:vite-stack' },
+        pnpm: { overrides: { react: '18.3.1' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(pluginDir, 'package.json'),
+      JSON.stringify({
+        name: 'vite-plugin-test',
+        devDependencies: { 'vite-plus': 'catalog:vite-stack' },
+        peerDependencies: { vite: '^7.3.0 || ^8.0.0' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalogs:',
+        '  vite-stack:',
+        '    vite: npm:@voidzero-dev/vite-plus-core@0.1.21',
+        '    vite-plus: 0.1.21',
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '10.0.0');
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['packages/*'];
+    workspaceInfo.packages = [{ name: 'vite-plugin-test', path: 'packages/plugin' }];
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: { overrides: Record<string, string> };
+    };
+    const pluginPkg = readJson(path.join(pluginDir, 'package.json')) as {
+      peerDependencies: Record<string, string>;
+    };
+    expect(rootPkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(rootPkg.pnpm.overrides['vite-plugin-test>vite']).toBe('^7.3.0 || ^8.0.0');
+    expect(pluginPkg.peerDependencies.vite).toBe('^7.3.0 || ^8.0.0');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages, '10.0.0'),
+    ).toBe(false);
+
+    const fixedVersionOverrides: Record<string, string> = {};
+    expect(
+      ensurePnpmPeerOverrideCompatibility(
+        fixedVersionOverrides,
+        tmpDir,
+        workspaceInfo.packages,
+        '10.2.0',
+        true,
+      ),
+    ).toBe(false);
+    expect(fixedVersionOverrides).toEqual({});
   });
 
   it('preserves unknown package.json pnpm keys while moving supported settings', () => {
