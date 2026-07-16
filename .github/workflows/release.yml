@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'packages/cli/package.json'
+  workflow_dispatch:
 
 permissions: {}
 
@@ -153,7 +154,7 @@ jobs:
           merge-multiple: true
 
       - name: 'Setup npm'
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.18.0
 
       - name: Prepare and publish native addons
         run: node ./packages/cli/publish-native-addons.ts --mode npm
