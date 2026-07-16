@@ -1,8 +1,46 @@
-# global_cli_fallback
+# command_tool_help
 
-## `vp build -h`
+Tool-backed command help is rendered by the local vite-plus CLI.
 
-should fall back to global vite-plus and show build help
+## `vp dev --help`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp dev [ROOT] [OPTIONS]
+
+Run the development server.
+Options are forwarded to Vite.
+
+Arguments:
+  [ROOT]  Project root directory (default: current directory)
+
+Options:
+  --host [HOST]            Specify hostname
+  --port <PORT>            Specify port
+  --open [PATH]            Open browser on startup
+  --cors                   Enable CORS
+  --strictPort             Exit if specified port is already in use
+  --force                  Ignore the optimizer cache and re-bundle
+  --experimentalBundle     Use experimental full bundle mode
+  --base <PATH>            Public base path
+  -l, --logLevel <LEVEL>   Set log level
+  --clearScreen            Allow or disable clearing the screen
+  --configLoader <LOADER>  Set the config loader
+  -d, --debug [FEAT]       Show debug logs
+  -f, --filter <FILTER>    Filter debug logs
+  -m, --mode <MODE>        Set env mode
+  -h, --help               Print help
+
+Examples:
+  vp dev
+  vp dev --open
+  vp dev --host localhost --port 5173
+
+Documentation: https://viteplus.dev/guide/dev
+```
+
+## `vp build --help`
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -45,16 +83,14 @@ Examples:
 Documentation: https://viteplus.dev/guide/build
 ```
 
-## `vp dev -h`
-
-should fall back to global vite-plus and show dev help
+## `vp preview --help`
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp dev [ROOT] [OPTIONS]
+Usage: vp preview [ROOT] [OPTIONS]
 
-Run the development server.
+Preview a production build.
 Options are forwarded to Vite.
 
 Arguments:
@@ -63,11 +99,9 @@ Arguments:
 Options:
   --host [HOST]            Specify hostname
   --port <PORT>            Specify port
-  --open [PATH]            Open browser on startup
-  --cors                   Enable CORS
   --strictPort             Exit if specified port is already in use
-  --force                  Ignore the optimizer cache and re-bundle
-  --experimentalBundle     Use experimental full bundle mode
+  --open [PATH]            Open browser on startup
+  --outDir <DIR>           Output directory to preview
   --base <PATH>            Public base path
   -l, --logLevel <LEVEL>   Set log level
   --clearScreen            Allow or disable clearing the screen
@@ -78,16 +112,13 @@ Options:
   -h, --help               Print help
 
 Examples:
-  vp dev
-  vp dev --open
-  vp dev --host localhost --port 5173
+  vp preview
+  vp preview --port 4173
 
-Documentation: https://viteplus.dev/guide/dev
+Documentation: https://viteplus.dev/guide/build
 ```
 
-## `vp test -h`
-
-should fall back to global vite-plus and show test help
+## `vp test --help`
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -130,4 +161,56 @@ Examples:
   vp test watch --coverage
 
 Documentation: https://viteplus.dev/guide/test
+```
+
+## `vp pack --help`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pack [...FILES] [OPTIONS]
+
+Build a library.
+Options are forwarded to Vite+ Pack.
+
+Options:
+  --config-loader <LOADER>  Set the config loader
+  --no-config               Disable the config file
+  -f, --format <FORMAT>     Bundle format: esm, cjs, iife, umd
+  -d, --out-dir <DIR>       Output directory
+  --target <TARGET>         Bundle target
+  --platform <PLATFORM>     Target platform
+  --sourcemap               Generate source maps
+  --dts                     Generate declaration files
+  --minify                  Minify output
+  --exe                     Bundle as an executable
+  -W, --workspace [DIR]     Enable workspace mode
+  -F, --filter <PATTERN>    Filter workspace configs
+  -w, --watch [PATH]        Watch mode
+  -h, --help                Print help
+
+Examples:
+  vp pack
+  vp pack src/index.ts --dts
+  vp pack --watch
+
+Documentation: https://viteplus.dev/guide/pack
+```
+
+## `vp cache --help`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp cache <COMMAND>
+
+Manage the task cache.
+
+Commands:
+  clean  Clean up all the cache
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/cache
 ```

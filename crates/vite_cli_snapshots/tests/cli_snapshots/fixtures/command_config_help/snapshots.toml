@@ -1,6 +1,6 @@
 [[case]]
 name = "command_config_help"
-vp = "global"
+vp = "local"
 steps = [
   { argv = ["vp", "config", "-h"], continue-on-failure = true },
   { argv = ["vp", "config", "--help"], continue-on-failure = true },

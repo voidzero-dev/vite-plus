@@ -1,8 +1,9 @@
 [[case]]
 name = "command_fmt_help"
-vp = "global"
+vp = "local"
 steps = [
   { argv = ["vp", "fmt", "-h"], continue-on-failure = true },
   { argv = ["vp", "fmt", "--help"], continue-on-failure = true },
   { argv = ["vp", "help", "fmt"], continue-on-failure = true },
+  { argv = ["vp", "format", "--help"], continue-on-failure = true },
 ]

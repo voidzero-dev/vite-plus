@@ -11,12 +11,17 @@ Lint code.
 Options are forwarded to Oxlint.
 
 Options:
-  --tsconfig <PATH>  TypeScript tsconfig path
-  --fix              Fix issues when possible
-  --type-aware       Enable rules requiring type information
-  --import-plugin    Enable import plugin
-  --rules            List registered rules
-  -h, --help         Print help
+  --tsconfig <PATH>                Override the TypeScript config
+  --fix                            Fix issues when possible
+  --fix-suggestions                Apply auto-fixable suggestions
+  --fix-dangerously                Apply dangerous fixes and suggestions
+  --type-aware                     Enable rules requiring type information
+  --type-check                     Enable experimental type checking
+  --import-plugin                  Enable the import plugin
+  --disable-nested-config          Disable nested config discovery
+  --no-error-on-unmatched-pattern  Do not exit with error when no files are selected
+  --rules                          List registered rules
+  -h, --help                       Print help
 
 Examples:
   vp lint
@@ -37,12 +42,17 @@ Lint code.
 Options are forwarded to Oxlint.
 
 Options:
-  --tsconfig <PATH>  TypeScript tsconfig path
-  --fix              Fix issues when possible
-  --type-aware       Enable rules requiring type information
-  --import-plugin    Enable import plugin
-  --rules            List registered rules
-  -h, --help         Print help
+  --tsconfig <PATH>                Override the TypeScript config
+  --fix                            Fix issues when possible
+  --fix-suggestions                Apply auto-fixable suggestions
+  --fix-dangerously                Apply dangerous fixes and suggestions
+  --type-aware                     Enable rules requiring type information
+  --type-check                     Enable experimental type checking
+  --import-plugin                  Enable the import plugin
+  --disable-nested-config          Disable nested config discovery
+  --no-error-on-unmatched-pattern  Do not exit with error when no files are selected
+  --rules                          List registered rules
+  -h, --help                       Print help
 
 Examples:
   vp lint
@@ -63,12 +73,17 @@ Lint code.
 Options are forwarded to Oxlint.
 
 Options:
-  --tsconfig <PATH>  TypeScript tsconfig path
-  --fix              Fix issues when possible
-  --type-aware       Enable rules requiring type information
-  --import-plugin    Enable import plugin
-  --rules            List registered rules
-  -h, --help         Print help
+  --tsconfig <PATH>                Override the TypeScript config
+  --fix                            Fix issues when possible
+  --fix-suggestions                Apply auto-fixable suggestions
+  --fix-dangerously                Apply dangerous fixes and suggestions
+  --type-aware                     Enable rules requiring type information
+  --type-check                     Enable experimental type checking
+  --import-plugin                  Enable the import plugin
+  --disable-nested-config          Disable nested config discovery
+  --no-error-on-unmatched-pattern  Do not exit with error when no files are selected
+  --rules                          List registered rules
+  -h, --help                       Print help
 
 Examples:
   vp lint

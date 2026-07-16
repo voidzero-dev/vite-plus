@@ -4,41 +4,27 @@
 
 synthetic dev (vp dev) should have cache disabled even with cacheScripts
 
+**Exit code:** 130
+
+**→ expect-milestone:** `dev-server:ready`
+
 ```
-$ vp dev --help ⊘ cache disabled
-vp/<version>
+$ vp dev --host 127.0.0.1 --port 0 ⊘ cache disabled
 
-Usage:
-  $ vp [root]
+  VITE+ <version>
 
-Commands:
-  [root]           start dev server
-  build [root]     build for production
-  optimize [root]  pre-bundle dependencies (deprecated, the pre-bundle process runs automatically and does not need to be called)
-  preview [root]   locally preview production build
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+```
 
-For more info, run any command with the `--help` flag:
-  $ vp --help
-  $ vp build --help
-  $ vp optimize --help
-  $ vp preview --help
+**← write-key:** `ctrl-c`
 
-Options:
-  --host [host]            [string] specify hostname
-  --port <port>            [number] specify port
-  --open [path]            [boolean | string] open browser on startup
-  --cors                   [boolean] enable CORS
-  --strictPort             [boolean] exit if specified port is already in use
-  --force                  [boolean] force the optimizer to ignore the cache and re-bundle
-  --experimentalBundle     [boolean] use experimental full bundle mode (this is highly experimental)
-  -c, --config <file>      [string] use specified config file
-  --base <path>            [string] public base path (default: /)
-  -l, --logLevel <level>   [string] info | warn | error | silent
-  --clearScreen            [boolean] allow/disable clear screen when logging
-  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle)
-  -d, --debug [feat]       [string | boolean] show debug logs
-  -f, --filter <filter>    [string] filter debug logs
-  -m, --mode <mode>        [string] set env mode
-  -h, --help               Display this message
-  -v, --version            Display version number
+```
+$ vp dev --host 127.0.0.1 --port 0 ⊘ cache disabled
+
+  VITE+ <version>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+
 ```

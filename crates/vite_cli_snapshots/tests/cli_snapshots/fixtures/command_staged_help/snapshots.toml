@@ -1,6 +1,6 @@
 [[case]]
 name = "command_staged_help"
-vp = "global"
+vp = "local"
 steps = [
   { argv = ["vp", "staged", "-h"], continue-on-failure = true },
   { argv = ["vp", "staged", "--help"], continue-on-failure = true },

@@ -897,33 +897,21 @@ pub async fn run_command_with_options(
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => {
-            if help::maybe_print_unified_delegate_help("dev", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("dev", &args, render_options.show_header);
             commands::delegate::execute(cwd, "dev", &args).await
         }
 
         Commands::Build { args } => {
-            if help::maybe_print_unified_delegate_help("build", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("build", &args, render_options.show_header);
             commands::delegate::execute(cwd, "build", &args).await
         }
 
         Commands::Test { args } => {
-            if help::maybe_print_unified_delegate_help("test", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("test", &args, render_options.show_header);
             commands::delegate::execute(cwd, "test", &args).await
         }
 
         Commands::Lint { args } => {
-            if help::maybe_print_unified_delegate_help("lint", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
             maybe_print_runtime_header("lint", &args, render_options.show_header);
             if should_force_global_delegate("lint", &args) {
                 commands::delegate::execute_global(cwd, "lint", &args).await
@@ -933,9 +921,6 @@ pub async fn run_command_with_options(
         }
 
         Commands::Fmt { args } => {
-            if help::maybe_print_unified_delegate_help("fmt", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
             maybe_print_runtime_header("fmt", &args, render_options.show_header);
             if should_force_global_delegate("fmt", &args) {
                 commands::delegate::execute_global(cwd, "fmt", &args).await
@@ -945,51 +930,32 @@ pub async fn run_command_with_options(
         }
 
         Commands::Check { args } => {
-            if help::maybe_print_unified_delegate_help("check", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("check", &args, render_options.show_header);
             commands::delegate::execute(cwd, "check", &args).await
         }
 
         Commands::Pack { args } => {
-            if help::maybe_print_unified_delegate_help("pack", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("pack", &args, render_options.show_header);
             commands::delegate::execute(cwd, "pack", &args).await
         }
 
         Commands::Run { args } => {
-            if help::maybe_print_unified_delegate_help("run", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("run", &args, render_options.show_header);
             commands::delegate::execute(cwd, "run", &args).await
         }
 
         Commands::Exec { args } => {
-            if help::maybe_print_unified_delegate_help("exec", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("exec", &args, render_options.show_header);
             commands::delegate::execute(cwd, "exec", &args).await
         }
 
         Commands::Preview { args } => {
-            if help::maybe_print_unified_delegate_help("preview", &args, render_options.show_header)
-            {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("preview", &args, render_options.show_header);
             commands::delegate::execute(cwd, "preview", &args).await
         }
 
         Commands::Cache { args } => {
-            if help::maybe_print_unified_delegate_help("cache", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("cache", &args, render_options.show_header);
             commands::delegate::execute(cwd, "cache", &args).await
         }
 
@@ -1034,7 +1000,13 @@ fn print_runtime_header(show_header: bool) {
 }
 
 fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool) {
-    if should_suppress_header_for_subcommand(command, args) {
+    let delegates_help = match command {
+        "run" | "exec" | "cache" => {
+            matches!(args, [arg] if matches!(arg.as_str(), "-h" | "--help"))
+        }
+        _ => help::has_help_flag_before_terminator(args),
+    };
+    if delegates_help || should_suppress_header_for_subcommand(command, args) {
         return;
     }
     print_runtime_header(show_header);

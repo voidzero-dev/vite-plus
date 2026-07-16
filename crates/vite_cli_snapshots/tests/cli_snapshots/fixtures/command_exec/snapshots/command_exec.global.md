@@ -88,17 +88,18 @@ Arguments:
   [COMMAND]...  Command and arguments to execute
 
 Options:
-  -r, --recursive              Select all packages in the workspace
-  -t, --transitive             Select the current package and its transitive dependencies
-  -w, --workspace-root         Select the workspace root package
-  -F, --filter <FILTERS>       Match packages by name, directory, or glob pattern
-  --fail-if-no-match           Exit with a non-zero status if a filter matches no packages
-  -c, --shell-mode             Execute the command within a shell environment
-  --parallel                   Run concurrently without topological ordering
-  --reverse                    Reverse execution order
-  --resume-from <RESUME_FROM>  Resume from a specific package
-  --report-summary             Save results to vp-exec-summary.json
-  -h, --help                   Print help (see more with '--help')
+  -r, --recursive          Select all packages in the workspace
+  -t, --transitive         Select the current package and its transitive dependencies
+  -w, --workspace-root     Select the workspace root package
+  -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
+  --fail-if-no-match       Exit with a non-zero status if a `--filter` expression matches no packages
+                           Without this flag, unmatched filters only warn and exit successfully
+  -c, --shell-mode         Execute the command within a shell environment
+  --parallel               Run concurrently without topological ordering
+  --reverse                Reverse execution order
+  --resume-from <PACKAGE>  Resume from a specific package
+  --report-summary         Save results to vp-exec-summary.json
+  -h, --help               Print help
 
 Filter Patterns:
   --filter <pattern>        Select by package name (e.g. foo, @scope/*)

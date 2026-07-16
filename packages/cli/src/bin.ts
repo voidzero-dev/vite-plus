@@ -13,6 +13,7 @@
 import path from 'node:path';
 
 import { ensureBlockingStdio, run } from '../binding/index.js';
+import { maybePrintCommandHelp } from './help.ts';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
 import { doc } from './resolve-doc.ts';
 import { fmt } from './resolve-fmt.ts';
@@ -52,8 +53,9 @@ if (args[0] === 'help' && args[1]) {
 
 const command = args[0];
 
-// Global commands — handled by tsdown-bundled modules in dist/
-if (command === 'create') {
+if (maybePrintCommandHelp(args)) {
+  // Help is rendered by the local CLI so it matches the installed toolchain.
+} else if (command === 'create') {
   await import('./create/bin.js');
 } else if (command === 'migrate') {
   await import('./migration/bin.js');
