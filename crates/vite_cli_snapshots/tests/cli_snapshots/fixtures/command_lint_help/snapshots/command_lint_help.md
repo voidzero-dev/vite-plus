@@ -15,7 +15,6 @@ Arguments:
 
 Basic Configuration:
   --tsconfig <PATH>  Override the TypeScript config used for import resolution
-  --init             Initialize lint configuration in vite.config.ts with Vite+ defaults
 
 Rule Severity:
   -A, --allow <NAME>  Allow a rule or category
@@ -69,7 +68,6 @@ Inline Configuration:
 
 Options:
   --rules       List all registered rules
-  --lsp         Start the language server
   --type-aware  Enable rules requiring type information
   --type-check  Enable experimental type checking and compiler diagnostics
   -h, --help    Print help information
@@ -97,7 +95,6 @@ Arguments:
 
 Basic Configuration:
   --tsconfig <PATH>  Override the TypeScript config used for import resolution
-  --init             Initialize lint configuration in vite.config.ts with Vite+ defaults
 
 Rule Severity:
   -A, --allow <NAME>  Allow a rule or category
@@ -151,7 +148,6 @@ Inline Configuration:
 
 Options:
   --rules       List all registered rules
-  --lsp         Start the language server
   --type-aware  Enable rules requiring type information
   --type-check  Enable experimental type checking and compiler diagnostics
   -h, --help    Print help information
@@ -179,7 +175,6 @@ Arguments:
 
 Basic Configuration:
   --tsconfig <PATH>  Override the TypeScript config used for import resolution
-  --init             Initialize lint configuration in vite.config.ts with Vite+ defaults
 
 Rule Severity:
   -A, --allow <NAME>  Allow a rule or category
@@ -233,7 +228,6 @@ Inline Configuration:
 
 Options:
   --rules       List all registered rules
-  --lsp         Start the language server
   --type-aware  Enable rules requiring type information
   --type-check  Enable experimental type checking and compiler diagnostics
   -h, --help    Print help information

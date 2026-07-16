@@ -14,9 +14,6 @@ Arguments:
   [PATH]...  Files, directories, or glob patterns (default: current directory)
 
 Mode Options:
-  --init                   Initialize fmt configuration in vite.config.ts
-  --migrate <SOURCE>       Migrate configuration from Prettier or Biome into vite.config.ts
-  --lsp                    Start the language server
   --stdin-filepath <PATH>  Specify the file name used to infer the parser for stdin
 
 Output Options:
@@ -57,9 +54,6 @@ Arguments:
   [PATH]...  Files, directories, or glob patterns (default: current directory)
 
 Mode Options:
-  --init                   Initialize fmt configuration in vite.config.ts
-  --migrate <SOURCE>       Migrate configuration from Prettier or Biome into vite.config.ts
-  --lsp                    Start the language server
   --stdin-filepath <PATH>  Specify the file name used to infer the parser for stdin
 
 Output Options:
@@ -100,9 +94,6 @@ Arguments:
   [PATH]...  Files, directories, or glob patterns (default: current directory)
 
 Mode Options:
-  --init                   Initialize fmt configuration in vite.config.ts
-  --migrate <SOURCE>       Migrate configuration from Prettier or Biome into vite.config.ts
-  --lsp                    Start the language server
   --stdin-filepath <PATH>  Specify the file name used to infer the parser for stdin
 
 Output Options:
@@ -143,9 +134,6 @@ Arguments:
   [PATH]...  Files, directories, or glob patterns (default: current directory)
 
 Mode Options:
-  --init                   Initialize fmt configuration in vite.config.ts
-  --migrate <SOURCE>       Migrate configuration from Prettier or Biome into vite.config.ts
-  --lsp                    Start the language server
   --stdin-filepath <PATH>  Specify the file name used to infer the parser for stdin
 
 Output Options:

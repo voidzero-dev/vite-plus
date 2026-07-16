@@ -37,6 +37,7 @@ Options:
   --unused                      Enable unused dependencies check (default: false)
   -w, --watch [PATH]            Watch mode
   --ignore-watch <PATH>         Ignore custom paths in watch mode
+  --from-vite [VITEST]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
   --env.* <VALUE>               Define compile-time env variables
   --env-file <FILE>             Load environment variables from a file, when used together with --env, variables in --env take precedence

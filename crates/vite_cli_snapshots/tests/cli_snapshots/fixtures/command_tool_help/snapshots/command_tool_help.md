@@ -154,7 +154,7 @@ Options:
   --isolate                           Run every test file in isolation. Use --no-isolate to disable (default: true)
   --globals                           Inject APIs globally
   --dom                               Mock browser API with happy-dom
-  --browser <NAME>                    Run tests in the browser (default: false)
+  --browser <NAME>                    Run tests in the browser; equivalent to --browser.enabled (default: false)
   --pool <POOL>                       Specify pool when not running in the browser (default: forks)
   --execArgv <OPTION>                 Pass additional arguments to Node.js when spawning worker threads or child processes
   --vmMemoryLimit <LIMIT>             Memory limit for VM pools
@@ -194,7 +194,7 @@ Options:
   --clearScreen                       Clear the terminal when rerunning tests in watch mode (default: true)
   --standalone                        Start Vitest without running tests until files change (default: false)
   --mergeReports [PATH]               Merge previously recorded blob reports without running tests
-  --listTags [TYPE]                   List available tags instead of running tests
+  --listTags [TYPE]                   List available tags; --list-tags=json outputs JSON
   --clearCache                        Delete all Vitest caches without running tests
   --tagsFilter <EXPRESSION>           Run only tests matching the tag expression
   --strictTags                        Error when a test uses an undefined tag (default: true)
@@ -254,6 +254,7 @@ Options:
   --unused                      Enable unused dependencies check (default: false)
   -w, --watch [PATH]            Watch mode
   --ignore-watch <PATH>         Ignore custom paths in watch mode
+  --from-vite [VITEST]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
   --env.* <VALUE>               Define compile-time env variables
   --env-file <FILE>             Load environment variables from a file, when used together with --env, variables in --env take precedence
