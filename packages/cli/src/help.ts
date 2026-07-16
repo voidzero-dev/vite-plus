@@ -1,9 +1,8 @@
 import { renderCliDoc, type CliDoc } from './utils/help.ts';
 import { log, printHeader } from './utils/terminal.ts';
 
-// Tool version flags stay hidden; vp --version reports the Vite+ version.
+// Tool-backed docs mirror upstream even when Vite+ overrides the documented behavior.
 const commandHelpDocs = {
-  // Vite+ owns config discovery, so Vite-backed help omits --config and --configLoader.
   dev: {
     usage: 'vp dev [ROOT] [OPTIONS]',
     summary: ['Run the development server.', 'Options are forwarded to Vite.'],
@@ -24,13 +23,19 @@ const commandHelpDocs = {
           { label: '--strictPort', description: 'Exit if specified port is already in use' },
           { label: '--force', description: 'Ignore the optimizer cache and re-bundle' },
           { label: '--experimentalBundle', description: 'Use experimental full bundle mode' },
+          { label: '-c, --config <FILE>', description: 'Use the specified config file' },
           { label: '--base <PATH>', description: 'Public base path' },
           { label: '-l, --logLevel <LEVEL>', description: 'Set log level' },
           { label: '--clearScreen', description: 'Allow or disable clearing the screen' },
+          {
+            label: '--configLoader <LOADER>',
+            description: 'Set the config loader: bundle, runner, or native (default: bundle)',
+          },
           { label: '-d, --debug [FEAT]', description: 'Show debug logs' },
           { label: '-f, --filter <FILTER>', description: 'Filter debug logs' },
           { label: '-m, --mode <MODE>', description: 'Set env mode' },
           { label: '-h, --help', description: 'Print help' },
+          { label: '-v, --version', description: 'Display version number' },
         ],
       },
       {
@@ -65,13 +70,19 @@ const commandHelpDocs = {
           { label: '--emptyOutDir', description: 'Empty outDir even when it is outside root' },
           { label: '-w, --watch', description: 'Rebuild when files change' },
           { label: '--app', description: 'Build an application with the builder API' },
+          { label: '-c, --config <FILE>', description: 'Use the specified config file' },
           { label: '--base <PATH>', description: 'Public base path' },
           { label: '-l, --logLevel <LEVEL>', description: 'Set log level' },
           { label: '--clearScreen', description: 'Allow or disable clearing the screen' },
+          {
+            label: '--configLoader <LOADER>',
+            description: 'Set the config loader: bundle, runner, or native (default: bundle)',
+          },
           { label: '-d, --debug [FEAT]', description: 'Show debug logs' },
           { label: '-f, --filter <FILTER>', description: 'Filter debug logs' },
           { label: '-m, --mode <MODE>', description: 'Set env mode' },
           { label: '-h, --help', description: 'Print help' },
+          { label: '-v, --version', description: 'Display version number' },
         ],
       },
       {
@@ -99,13 +110,19 @@ const commandHelpDocs = {
           { label: '--strictPort', description: 'Exit if specified port is already in use' },
           { label: '--open [PATH]', description: 'Open browser on startup' },
           { label: '--outDir <DIR>', description: 'Output directory to preview' },
+          { label: '-c, --config <FILE>', description: 'Use the specified config file' },
           { label: '--base <PATH>', description: 'Public base path' },
           { label: '-l, --logLevel <LEVEL>', description: 'Set log level' },
           { label: '--clearScreen', description: 'Allow or disable clearing the screen' },
+          {
+            label: '--configLoader <LOADER>',
+            description: 'Set the config loader: bundle, runner, or native (default: bundle)',
+          },
           { label: '-d, --debug [FEAT]', description: 'Show debug logs' },
           { label: '-f, --filter <FILTER>', description: 'Filter debug logs' },
           { label: '-m, --mode <MODE>', description: 'Set env mode' },
           { label: '-h, --help', description: 'Print help' },
+          { label: '-v, --version', description: 'Display version number' },
         ],
       },
       { title: 'Examples', lines: ['  vp preview', '  vp preview --port 4173'] },
@@ -124,7 +141,9 @@ const commandHelpDocs = {
           { label: 'dev', description: 'Run tests in development mode' },
           { label: 'related', description: 'Run tests related to changed files' },
           { label: 'bench', description: 'Run benchmarks' },
+          { label: 'init <PROJECT>', description: 'Initialize a Vitest project' },
           { label: 'list', description: 'List matching tests' },
+          { label: 'complete [SHELL]', description: 'Set up shell completion' },
         ],
       },
       {
@@ -134,8 +153,9 @@ const commandHelpDocs = {
       {
         title: 'Options',
         rows: [
-          // Vitest config files bypass the unified test block, so omit --config and --configLoader.
+          { label: '-v, --version', description: 'Display version number' },
           { label: '-r, --root <PATH>', description: 'Root path' },
+          { label: '-c, --config <PATH>', description: 'Path to config file' },
           {
             label: '-u, --update [TYPE]',
             description: 'Update snapshot (accepts boolean, "new", "all" or "none")',
@@ -185,7 +205,8 @@ const commandHelpDocs = {
           { label: '--dom', description: 'Mock browser API with happy-dom' },
           {
             label: '--browser <NAME>',
-            description: 'Run tests in the browser (default: false)',
+            description:
+              'Run tests in the browser; equivalent to --browser.enabled (default: false)',
           },
           {
             label: '--pool <POOL>',
@@ -330,6 +351,11 @@ const commandHelpDocs = {
             description: 'Clear the terminal when rerunning tests in watch mode (default: true)',
           },
           {
+            label: '--configLoader <LOADER>',
+            description:
+              'Use bundle to bundle the config or runner to process it on the fly (default: bundle)',
+          },
+          {
             label: '--standalone',
             description: 'Start Vitest without running tests until files change (default: false)',
           },
@@ -339,7 +365,7 @@ const commandHelpDocs = {
           },
           {
             label: '--listTags [TYPE]',
-            description: 'List available tags instead of running tests',
+            description: 'List available tags; --list-tags=json outputs JSON',
           },
           {
             label: '--clearCache',
@@ -406,14 +432,14 @@ const commandHelpDocs = {
       {
         title: 'Basic Configuration',
         rows: [
-          // Direct and nested Oxlint config selection bypasses the unified lint block.
+          { label: '-c, --config <PATH>', description: 'Oxlint configuration file' },
           {
             label: '--tsconfig <PATH>',
             description: 'Override the TypeScript config used for import resolution',
           },
           {
             label: '--init',
-            description: 'Initialize lint configuration in vite.config.ts with Vite+ defaults',
+            description: 'Initialize Oxlint configuration with default values',
           },
         ],
       },
@@ -533,12 +559,17 @@ const commandHelpDocs = {
         rows: [
           { label: '--rules', description: 'List all registered rules' },
           { label: '--lsp', description: 'Start the language server' },
+          {
+            label: '--disable-nested-config',
+            description: 'Disable automatic loading of nested configuration files',
+          },
           { label: '--type-aware', description: 'Enable rules requiring type information' },
           {
             label: '--type-check',
             description: 'Enable experimental type checking and compiler diagnostics',
           },
           { label: '-h, --help', description: 'Print help information' },
+          { label: '-V, --version', description: 'Print version information' },
         ],
       },
       {
@@ -568,16 +599,25 @@ const commandHelpDocs = {
       {
         title: 'Mode Options',
         rows: [
-          // Vite+ merges init and migrate output into vite.config.ts; direct config selection stays hidden.
-          { label: '--init', description: 'Initialize fmt configuration in vite.config.ts' },
+          { label: '--init', description: 'Initialize .oxfmtrc.json with default values' },
           {
             label: '--migrate <SOURCE>',
-            description: 'Migrate configuration from Prettier or Biome into vite.config.ts',
+            description: 'Migrate configuration from Prettier or Biome to .oxfmtrc.json',
           },
           { label: '--lsp', description: 'Start the language server' },
           {
             label: '--stdin-filepath <PATH>',
             description: 'Specify the file name used to infer the parser for stdin',
+          },
+        ],
+      },
+      {
+        title: 'Config Options',
+        rows: [
+          { label: '-c, --config <PATH>', description: 'Path to the configuration file' },
+          {
+            label: '--disable-nested-config',
+            description: 'Do not search for configuration files in subdirectories',
           },
         ],
       },
@@ -620,7 +660,10 @@ const commandHelpDocs = {
       },
       {
         title: 'Options',
-        rows: [{ label: '-h, --help', description: 'Print help information' }],
+        rows: [
+          { label: '-h, --help', description: 'Print help information' },
+          { label: '-V, --version', description: 'Print version information' },
+        ],
       },
       { title: 'Examples', lines: ['  vp fmt', '  vp fmt src --check', '  vp fmt . --write'] },
     ],
@@ -669,7 +712,11 @@ const commandHelpDocs = {
       {
         title: 'Options',
         rows: [
-          // Vite+ owns config loading, so omit --config-loader, --no-config, and --from-vite; keep the remaining options aligned with pack-bin.
+          {
+            label: '--config-loader <LOADER>',
+            description: 'Set the config loader: auto, native, tsx, or unrun (default: auto)',
+          },
+          { label: '--no-config', description: 'Disable the config file' },
           {
             label: '-f, --format <FORMAT>',
             description: 'Bundle format: esm, cjs, iife, umd (default: esm)',
@@ -713,6 +760,7 @@ const commandHelpDocs = {
           },
           { label: '-w, --watch [PATH]', description: 'Watch mode' },
           { label: '--ignore-watch <PATH>', description: 'Ignore custom paths in watch mode' },
+          { label: '--from-vite [VITEST]', description: 'Reuse config from Vite or Vitest' },
           { label: '--report', description: 'Size report (default: true)' },
           {
             label: '--env.* <VALUE>',
