@@ -15,7 +15,7 @@ env:
 
 jobs:
   check:
-    if: github.repository == 'voidzero-dev/vite-plus'
+    if: github.repository == 'voidzero-dev/vite-plus' && github.ref == 'refs/heads/main'
     name: Check version
     runs-on: ubuntu-latest
     permissions:
