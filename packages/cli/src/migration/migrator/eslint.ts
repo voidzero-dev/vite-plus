@@ -88,39 +88,49 @@ export function detectEslintProject(
 
 /**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
- * Returns true on success, false on failure (spawn error or non-zero exit).
+ *
+ * `migratePackages` lists candidate `@oxlint/migrate` specs to try in order,
+ * falling through to the next only when a candidate fails to run at all (spawn
+ * error or non-zero exit, e.g. the pinned version isn't published). This lets
+ * the caller prefer the bundled oxlint version while tolerating `@oxlint/migrate`
+ * lagging oxlint's publish cadence — oxlint X.Y.Z can ship before
+ * `@oxlint/migrate` X.Y.Z, which would otherwise 404 and abort the migration.
+ *
+ * Returns the spec that succeeded so the caller can reuse it for later steps,
+ * or `{ ok: false }` once every candidate has failed.
  */
 async function runOxlintMigrateStep(
   vpBin: string,
   cwd: string,
-  migratePackage: string,
+  migratePackages: string[],
   args: string[],
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
   manualHint: string,
-): Promise<boolean> {
-  try {
-    const result = await runCommandSilently({
-      command: vpBin,
-      args: ['dlx', migratePackage, ...args],
-      cwd,
-      envs: process.env,
-    });
-    if (result.exitCode !== 0) {
-      spinner.stop(failMessage);
-      const stderr = result.stderr.toString().trim();
-      if (stderr) {
-        prompts.log.warn(`⚠ ${stderr}`);
+): Promise<{ ok: true; migratePackage: string } | { ok: false }> {
+  let lastStderr = '';
+  for (const migratePackage of migratePackages) {
+    try {
+      const result = await runCommandSilently({
+        command: vpBin,
+        args: ['dlx', migratePackage, ...args],
+        cwd,
+        envs: process.env,
+      });
+      if (result.exitCode === 0) {
+        return { ok: true, migratePackage };
       }
-      prompts.log.info(manualHint);
-      return false;
+      lastStderr = result.stderr.toString().trim();
+    } catch {
+      lastStderr = '';
     }
-    return true;
-  } catch {
-    spinner.stop(failMessage);
-    prompts.log.info(manualHint);
-    return false;
   }
+  spinner.stop(failMessage);
+  if (lastStderr) {
+    prompts.log.warn(`⚠ ${lastStderr}`);
+  }
+  prompts.log.info(manualHint);
+  return { ok: false };
 }
 
 export async function migrateEslintToOxlint(
@@ -147,10 +157,15 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    // Pin @oxlint/migrate to the bundled oxlint version.
+    // Prefer @oxlint/migrate at the bundled oxlint version so the generated
+    // rules stay aligned with the oxlint that lints them, but fall back to the
+    // latest published @oxlint/migrate when that exact version isn't on the
+    // registry yet (oxlint can publish ahead of @oxlint/migrate). It tracks
+    // oxlint's release train and never leads it, so `@latest` stays compatible.
     // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
-    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
+    const migratePackagePinned = `@oxlint/migrate@${versions.oxlint}`;
+    const migratePackageCandidates = [migratePackagePinned, '@oxlint/migrate@latest'];
     const migrateArgs = [
       '--merge',
       ...(!hasBaseUrlInTsconfig(projectPath) ? ['--type-aware'] : []),
@@ -160,32 +175,34 @@ export async function migrateEslintToOxlint(
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
-    const migrateOk = await runOxlintMigrateStep(
+    const migrateResult = await runOxlintMigrateStep(
       vpBin,
       projectPath,
-      migratePackage,
+      migratePackageCandidates,
       migrateArgs,
       spinner,
       'ESLint migration failed',
-      `You can run \`vp dlx ${migratePackage} ${migrateArgs.join(' ')}\` manually later`,
+      `You can run \`vp dlx ${migratePackagePinned} ${migrateArgs.join(' ')}\` manually later`,
     );
-    if (!migrateOk) {
+    if (!migrateResult.ok) {
       return false;
     }
+    // Reuse whichever @oxlint/migrate spec actually resolved for the follow-up.
+    const migratePackage = migrateResult.migratePackage;
     spinner.stop('ESLint config migrated to .oxlintrc.json');
 
     // Step 2: Replace eslint-disable comments with oxlint-disable
     spinner.start('Replacing ESLint comments with Oxlint equivalents...');
-    const replaceOk = await runOxlintMigrateStep(
+    const replaceResult = await runOxlintMigrateStep(
       vpBin,
       projectPath,
-      migratePackage,
+      [migratePackage],
       ['--replace-eslint-comments'],
       spinner,
       'ESLint comment replacement failed',
       `You can run \`vp dlx ${migratePackage} --replace-eslint-comments\` manually later`,
     );
-    if (replaceOk) {
+    if (replaceResult.ok) {
       spinner.stop('ESLint comments replaced');
     }
     // Continue with cleanup regardless — .oxlintrc.json was generated successfully

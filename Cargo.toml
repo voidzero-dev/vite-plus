@@ -208,11 +208,11 @@ indexmap = "2.9.0"
 indoc = "2.0.5"
 infer = "0.19.0"
 insta = "1.43.1"
-itertools = "0.14.0"
+itertools = "0.15.0"
 itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
-jsonschema = { version = "0.46.5", default-features = false }
+jsonschema = { version = "0.47.0", default-features = false }
 junction = "1.4.1"
 libtest-mimic = "0.8.2"
 memchr = "2.7.4"
@@ -247,7 +247,7 @@ pnp = "0.12.9"
 percent-encoding = "2.3.1"
 petgraph = "0.8.2"
 pretty_assertions = "1.4.1"
-phf = "0.13.0"
+phf = { version = "0.14.0", features = ["macros"] }
 prettyplease = "0.2.32"
 proc-macro2 = "1"
 pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "4003f65a3e5e3d957ff81b157e85e6ee41cc59fc" }
@@ -276,7 +276,7 @@ simdutf8 = "0.1.5"
 smallvec = { version = "1.15.1", features = ["union"] }
 snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "4003f65a3e5e3d957ff81b157e85e6ee41cc59fc" }
 string_cache = "0.9.0"
-sugar_path = { version = "2.0.1", features = ["cached_current_dir"] }
+sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
 syn = { version = "2", default-features = false }
 tar = "0.4.43"
@@ -317,7 +317,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.139.0", features = [
+oxc = { version = "0.140.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -329,22 +329,22 @@ oxc = { version = "0.139.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.139.0", features = ["pool"] }
-oxc_ast = "0.139.0"
-oxc_ecmascript = "0.139.0"
-oxc_parser = "0.139.0"
-oxc_span = "0.139.0"
-oxc_napi = "0.139.0"
-oxc_str = "0.139.0"
-oxc_minify_napi = "0.139.0"
-oxc_parser_napi = "0.139.0"
-oxc_transform_napi = "0.139.0"
-oxc_traverse = "0.139.0"
+oxc_allocator = { version = "0.140.0", features = ["pool"] }
+oxc_ast = "0.140.0"
+oxc_ecmascript = "0.140.0"
+oxc_parser = "0.140.0"
+oxc_span = "0.140.0"
+oxc_napi = "0.140.0"
+oxc_str = "0.140.0"
+oxc_minify_napi = "0.140.0"
+oxc_parser_napi = "0.140.0"
+oxc_transform_napi = "0.140.0"
+oxc_traverse = "0.140.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }
-oxc_resolver = { version = "11.23.0", features = ["yarn_pnp"] }
-oxc_resolver_napi = { version = "11.23.0", default-features = false, features = ["yarn_pnp"] }
+oxc_resolver = { version = "11.24.2", features = ["yarn_pnp"] }
+oxc_resolver_napi = { version = "11.24.2", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "8.1.0"
 
 # rolldown crates
