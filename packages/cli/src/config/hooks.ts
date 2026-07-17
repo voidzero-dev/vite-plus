@@ -37,7 +37,7 @@ export function hookScript(dir: string): string {
   const depth = segments + 2; // +2 for _ subdir and hook filename
   const rootExpr = nestedDirname(depth);
   return `#!/usr/bin/env sh
-{ [ "$HUSKY" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
+{ [ "$HUSKY" = "2" ] || [ "$VP_GIT_HOOKS" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
 
@@ -47,7 +47,7 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 [ ! -f "$i" ] && i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
 
-{ [ "\${HUSKY-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
+{ [ "\${HUSKY-}" = "0" ] || [ "\${VP_GIT_HOOKS-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
 d=${rootExpr}
 __vp_shell=/bin/sh
@@ -77,7 +77,12 @@ export interface InstallResult {
 }
 
 export function install(dir = '.vite-hooks'): InstallResult {
-  if (process.env.HUSKY === '0' || process.env.VITE_GIT_HOOKS === '0') {
+  // VP_GIT_HOOKS is the canonical name; VITE_GIT_HOOKS is kept for backwards compatibility.
+  if (
+    process.env.HUSKY === '0' ||
+    process.env.VP_GIT_HOOKS === '0' ||
+    process.env.VITE_GIT_HOOKS === '0'
+  ) {
     return { message: 'skip install (git hooks disabled)', isError: false };
   }
   if (dir.includes('..')) {

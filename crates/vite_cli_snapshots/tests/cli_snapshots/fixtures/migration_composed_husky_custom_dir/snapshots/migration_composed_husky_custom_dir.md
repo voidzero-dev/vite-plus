@@ -71,7 +71,7 @@ hook dispatcher should resolve repo root correctly for nested dirs
 
 ```
 #!/usr/bin/env sh
-{ [ "$HUSKY" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
+{ [ "$HUSKY" = "2" ] || [ "$VP_GIT_HOOKS" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
 
@@ -81,7 +81,7 @@ i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 [ ! -f "$i" ] && i="${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
 
-{ [ "${HUSKY-}" = "0" ] || [ "${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
+{ [ "${HUSKY-}" = "0" ] || [ "${VP_GIT_HOOKS-}" = "0" ] || [ "${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
 d="$(dirname "$(dirname "$(dirname "$(dirname "$0")")")")"
 __vp_shell=/bin/sh
