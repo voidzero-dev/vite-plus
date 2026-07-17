@@ -150,6 +150,17 @@ const ZED_SETTINGS = {
   },
 } as const;
 
+const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalDependencies">
+    <plugin id="com.github.oxc.project.oxcintellijplugin" />
+    <plugin id="intellij.vitejs" />
+  </component>
+</project>
+`;
+
+type EditorConfigValue = Record<string, unknown> | string;
+
 export const EDITORS = [
   {
     id: 'vscode',
@@ -166,6 +177,14 @@ export const EDITORS = [
     targetDir: '.zed',
     files: {
       'settings.json': ZED_SETTINGS as Record<string, unknown>,
+    },
+  },
+  {
+    id: 'jetbrains',
+    label: 'JetBrains (IntelliJ, WebStorm, etc)',
+    targetDir: '.idea',
+    files: {
+      'externalDependencies.xml': JETBRAINS_EXTERNAL_DEPENDENCIES,
     },
   },
 ] as const;
@@ -386,11 +405,12 @@ async function writeEditorConfig({
   await fsPromises.mkdir(targetDir, { recursive: true });
 
   for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
-    const incoming =
+    const incoming: EditorConfigValue =
       editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
         ? { ...extraVsCodeSettings, ...baseIncoming }
         : baseIncoming;
     const filePath = path.join(targetDir, fileName);
+    const jsonFormat = isJsonLikeFile(fileName);
 
     if (fs.existsSync(filePath)) {
       const displayPath = `${editorConfig.targetDir}/${fileName}`;
@@ -406,13 +426,17 @@ async function writeEditorConfig({
             `${displayPath} already exists.\n  ` +
             styleText(
               'gray',
-              `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`,
+              jsonFormat
+                ? `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`
+                : `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Overwrite replaces the existing file with the generated config.`,
             ),
           options: [
             {
-              label: 'Merge',
+              label: jsonFormat ? 'Merge' : 'Overwrite',
               value: 'merge',
-              hint: 'Merge new settings into existing file',
+              hint: jsonFormat
+                ? 'Merge new settings into existing file'
+                : 'Replace existing file with generated config',
             },
             {
               label: 'Skip',
@@ -424,12 +448,19 @@ async function writeEditorConfig({
         });
         conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'merge';
       } else {
-        // Non-interactive: always merge (safe because existing keys are never overwritten)
-        conflictAction = 'merge';
+        // Non-interactive: merge JSON safely, skip non-JSON to avoid destructive overwrite.
+        conflictAction = jsonFormat ? 'merge' : 'skip';
       }
 
       if (conflictAction === 'merge') {
-        mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
+        if (jsonFormat) {
+          if (!isPlainObject(incoming)) {
+            throw new Error(`Cannot merge editor config: ${displayPath} incoming value is not JSON`);
+          }
+          mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
+        } else {
+          writeTextEditorConfig(filePath, incoming, displayPath, silent);
+        }
       } else {
         if (!silent) {
           prompts.log.info(`Skipped writing ${displayPath}`);
@@ -438,11 +469,44 @@ async function writeEditorConfig({
       continue;
     }
 
-    writeJsonFile(filePath, incoming);
+    if (jsonFormat) {
+      if (!isPlainObject(incoming)) {
+        throw new Error(`Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`);
+      }
+      writeJsonFile(filePath, incoming);
+    } else {
+      writeTextEditorConfig(filePath, incoming, `${editorConfig.targetDir}/${fileName}`, silent);
+    }
     if (!silent) {
       prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
     }
   }
+}
+
+function isJsonLikeFile(fileName: string): boolean {
+  const ext = path.extname(fileName).toLowerCase();
+  return ext === '.json' || ext === '.jsonc';
+}
+
+function writeTextEditorConfig(
+  filePath: string,
+  incoming: EditorConfigValue,
+  displayPath: string,
+  silent = false,
+) {
+  if (typeof incoming !== 'string') {
+    throw new Error(`Cannot write editor config: ${displayPath} must be text content`);
+  }
+
+  const existingText = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
+  if (existingText === incoming) {
+    if (!silent) {
+      prompts.log.info(`No changes needed for ${displayPath}`);
+    }
+    return;
+  }
+
+  fs.writeFileSync(filePath, incoming, 'utf-8');
 }
 
 function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
