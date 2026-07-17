@@ -30,7 +30,7 @@ added 5 packages in <duration>
 should update in specific package
 
 ```
-warn: npm doesn't support --latest flag. Updating within semver range only.
+warn: npm does not support --latest.
 
 up to date in <duration>
 ```

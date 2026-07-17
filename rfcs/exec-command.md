@@ -247,7 +247,7 @@ The following existing code is reused:
 | `vite_command`   | `resolve_bin()`                    | Resolve binary path via PATH lookup               |
 | `vite_command`   | `build_command()`                  | Build a `tokio::process::Command` for a binary    |
 | `vite_command`   | `build_shell_command()`            | Build a shell command for `-c` mode               |
-| `vite_install`   | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
+| `vite_pm_cli`    | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
 | `vite_workspace` | `find_workspace_root()`            | Locate workspace root from cwd                    |
 | `vite_workspace` | `load_package_graph()`             | Load workspace packages and dependency graph      |
 | `vite_workspace` | `PackageQueryArgs`                 | CLI args struct for package selection             |

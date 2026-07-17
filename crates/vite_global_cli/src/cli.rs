@@ -11,7 +11,7 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
-use vite_pm_cli::PackageManagerCommand;
+use vite_pm_cli::{ManagedGlobalCommand, PackageManagerCommand};
 use vite_shared::output;
 
 use crate::{
@@ -552,80 +552,60 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
 
 /// Handle a parsed package-manager command.
 ///
-/// `Install`/`Add`/`Update`/`Remove` invoked with `-g`/`--global` are routed
-/// through the vite-plus-managed Node.js install store (`commands::global`).
-/// Everything else is forwarded to `vite_pm_cli::dispatch`, which executes
-/// the underlying package manager (pnpm/npm/yarn/bun).
+/// Commands projected by [`PackageManagerCommand::managed_global_command`] are
+/// routed through the vite-plus-managed Node.js install store
+/// (`commands::global`). Everything else is forwarded to
+/// `vite_pm_cli::dispatch`, which executes the underlying package manager
+/// (pnpm/npm/yarn/bun).
 async fn run_package_manager_command(
     cwd: AbsolutePathBuf,
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
-    match command {
-        PackageManagerCommand::Install {
-            global: true,
-            packages: Some(pkgs),
-            node,
-            force,
-            concurrency,
-            ..
-        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force, concurrency).await,
-
-        PackageManagerCommand::Add {
-            global: true, ref packages, ref node, concurrency, ..
-        } => managed_install(packages, node.as_deref(), false, concurrency).await,
-
-        PackageManagerCommand::Remove { global: true, ref packages, dry_run, .. } => {
-            managed_uninstall(packages, dry_run).await
+    match command.managed_global_command() {
+        Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) => {
+            return managed_install(packages, node, force, concurrency).await;
         }
-
-        PackageManagerCommand::Update {
-            global: true,
-            ref packages,
+        Some(ManagedGlobalCommand::Remove { packages, dry_run }) => {
+            return managed_uninstall(packages, dry_run).await;
+        }
+        Some(ManagedGlobalCommand::Update {
+            packages,
             concurrency,
             reinstall_node_mismatch,
             ignore_node_mismatch,
-            ..
-        } => {
+        }) => {
             if reinstall_node_mismatch && ignore_node_mismatch {
                 output::error(
                     "--reinstall-node-mismatch and --ignore-node-mismatch cannot be used together",
                 );
                 return Ok(exit_status(1));
             }
-            managed_update(packages, concurrency, reinstall_node_mismatch, ignore_node_mismatch)
-                .await
+            return managed_update(
+                packages,
+                concurrency,
+                reinstall_node_mismatch,
+                ignore_node_mismatch,
+            )
+            .await;
         }
-
-        PackageManagerCommand::Outdated {
-            global: true,
-            ref packages,
-            long,
-            format,
-            concurrency,
-            ..
-        } => {
-            global::outdated::execute(
+        Some(ManagedGlobalCommand::Outdated { packages, long, format, concurrency }) => {
+            return global::outdated::execute(
                 packages,
                 long,
                 format,
                 concurrency.unwrap_or(DEFAULT_GLOBAL_VIEW_CONCURRENCY),
             )
-            .await
+            .await;
         }
-
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
-        PackageManagerCommand::Pm(vite_pm_cli::cli::PmCommands::List {
-            global: true,
-            json,
-            ref pattern,
-            ..
-        }) => global::packages::execute(json, pattern.as_deref()).await,
-
-        cmd => {
-            commands::prepend_js_runtime_to_path_env(&cwd).await?;
-            Ok(vite_pm_cli::dispatch(&cwd, cmd).await?)
+        Some(ManagedGlobalCommand::List { json, pattern }) => {
+            return global::packages::execute(json, pattern).await;
         }
+        None => {}
     }
+
+    commands::prepend_js_runtime_to_path_env(&cwd).await?;
+    Ok(vite_pm_cli::dispatch(&cwd, command).await?)
 }
 
 async fn managed_install(
@@ -880,8 +860,8 @@ pub async fn run_command_with_options(
         // global install, falling through to `vite_pm_cli::dispatch` for
         // every project-scoped PM operation.
         Commands::PackageManager(pm_command) => {
-            if let PackageManagerCommand::Install { silent, .. } = &pm_command {
-                print_runtime_header(render_options.show_header && !*silent);
+            if let Some(silent) = pm_command.install_silent() {
+                print_runtime_header(render_options.show_header && !silent);
             }
             run_package_manager_command(cwd, pm_command).await
         }

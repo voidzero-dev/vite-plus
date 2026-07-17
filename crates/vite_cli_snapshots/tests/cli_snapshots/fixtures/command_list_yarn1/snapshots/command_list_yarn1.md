@@ -82,7 +82,7 @@ should list packages in JSON format
 should show warning that --prod not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --prod, ignoring --prod flag
+warn: yarn does not support --prod.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -97,7 +97,7 @@ Done in <duration>.
 should show warning that --dev not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --dev, ignoring --dev flag
+warn: yarn does not support --dev.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -112,7 +112,7 @@ Done in <duration>.
 should show warning that --no-optional not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --no-optional, ignoring --no-optional flag
+warn: yarn does not support --no-optional.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -127,7 +127,7 @@ Done in <duration>.
 should show warning that --exclude-peers not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --exclude-peers, ignoring flag
+warn: yarn does not support --exclude-peers.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -142,7 +142,7 @@ Done in <duration>.
 should show warning that --only-projects not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --only-projects, ignoring flag
+warn: yarn does not support --only-projects.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -157,7 +157,7 @@ Done in <duration>.
 should show warning that --find-by not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --find-by, ignoring flag
+warn: yarn does not support --find-by.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -172,7 +172,7 @@ Done in <duration>.
 should show warning that --recursive not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --recursive, ignoring --recursive flag
+warn: yarn does not support --recursive.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field
@@ -187,7 +187,7 @@ Done in <duration>.
 should show warning that --filter not supported by yarn@1
 
 ```
-warn: yarn@1 does not support --filter, ignoring --filter flag
+warn: yarn does not support --filter.
 yarn list <version>
 warning package.json: No license field
 warning command-list-yarn1@1.0.0: No license field

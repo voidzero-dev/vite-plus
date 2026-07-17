@@ -169,22 +169,20 @@ async fn envs_with_explicit_package_manager_path(
     cwd: &AbsolutePath,
     envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
 ) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
-    let Some(resolution) =
-        (match vite_install::package_manager::resolve_package_manager_from_package_json(cwd) {
-            Ok(resolution) => resolution,
-            Err(error) => {
-                tracing::debug!(
-                    ?error,
-                    "failed to resolve explicit packageManager for direct command PATH setup"
-                );
-                return Ok(envs);
-            }
-        })
-    else {
+    let Some(resolution) = (match vite_pm_cli::resolve_package_manager_from_package_json(cwd) {
+        Ok(resolution) => resolution,
+        Err(error) => {
+            tracing::debug!(
+                ?error,
+                "failed to resolve explicit packageManager for direct command PATH setup"
+            );
+            return Ok(envs);
+        }
+    }) else {
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vite_install::download_package_manager(
+    let (install_dir, _, _) = match vite_pm_cli::download_package_manager(
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
@@ -232,7 +230,7 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    if let Ok(pm) = vite_install::PackageManager::builder(&cwd).build().await {
+    if let Ok(pm) = vite_pm_cli::PackageManager::builder(&cwd).build().await {
         let bin_prefix = pm.get_bin_prefix();
         let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
     }
@@ -290,10 +288,10 @@ async fn execute_pm_command(
     command: vite_pm_cli::PackageManagerCommand,
     cwd: &AbsolutePath,
 ) -> Result<ExitStatus, Error> {
-    // `-g`/`--global` operations on install/add/remove/update/`pm list` map to
-    // a vite-plus-managed package store on the global CLI; the local CLI has
-    // no such store, so refuse rather than silently doing the wrong thing
-    // (mutating the project, dropping `--node`, ignoring `--dry-run`, …).
+    // Commands projected into the vite-plus-managed package store only work
+    // in the global CLI. The local CLI has no such store, so refuse rather
+    // than silently doing the wrong thing (mutating the project, dropping
+    // `--node`, ignoring `--dry-run`, …).
     if command.is_managed_global() {
         return Err(Error::Anyhow(anyhow::anyhow!(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",

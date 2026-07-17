@@ -8,20 +8,46 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
+backon = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+cow-utils = { workspace = true }
+crossterm = { workspace = true }
+flate2 = { workspace = true }
+futures-util = { workspace = true }
+hex = { workspace = true }
+indoc = { workspace = true }
+node-semver = { workspace = true }
+pathdiff = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs", "process", "rt", "macros"] }
+tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vite_command = { workspace = true }
 vite_error = { workspace = true }
-vite_install = { workspace = true }
 vite_path = { workspace = true }
+vite_pm_cli_macros = { workspace = true }
+vite_shared = { workspace = true }
 vite_str = { workspace = true }
 vite_workspace = { workspace = true }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+reqwest = { workspace = true, features = ["stream", "rustls-no-provider", "json"] }
+
 [lib]
 doctest = false
+
+[dev-dependencies]
+httpmock = { workspace = true }
+test-log = { workspace = true }
 
 [lints]
 workspace = true

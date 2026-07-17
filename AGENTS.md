@@ -34,11 +34,10 @@ vite-plus/
 ├── crates/vite_command/       # Shared command execution helpers
 ├── crates/vite_error/         # Shared error types
 ├── crates/vite_global_cli/    # Standalone global vp binary and top-level command routing
-├── crates/vite_install/       # Package-manager detection/install behavior
 ├── crates/vite_installer/     # Installer binary support
 ├── crates/vite_js_runtime/    # Managed Node.js runtime support
 ├── crates/vite_migration/     # Rust migration helpers
-├── crates/vite_pm_cli/        # Package-manager command surface
+├── crates/vite_pm_cli/        # Package-manager detection, download, command resolution, and dispatch
 ├── crates/vite_setup/         # Setup helpers
 ├── crates/vite_shared/        # Shared Rust env config, tracing, output, utilities
 ├── crates/vite_static_config/ # Static extraction of vite.config.* data
@@ -52,7 +51,7 @@ vite-plus/
 - **JS-backed CLI behavior**: start at `packages/cli/src/bin.ts` and nearby `packages/cli/src/**` files.
 - **Local CLI / NAPI-backed behavior**: start at `packages/cli/binding/src/lib.rs` and `packages/cli/binding/src/cli/mod.rs`.
 - **Global `vp` routing, aliases, and runtime bootstrap**: start at `crates/vite_global_cli/src/main.rs` and `crates/vite_global_cli/src/cli.rs`.
-- **Package-manager commands**: start at `crates/vite_pm_cli/` and `crates/vite_install/`.
+- **Package-manager behavior**: start at `crates/vite_pm_cli/`.
 - **Managed Node runtime / shims**: start at `crates/vite_js_runtime/`.
 - **Static `vite.config.ts` extraction**: start at `crates/vite_static_config/README.md` and `packages/cli/src/resolve-vite-config.ts`.
 - **Migration behavior**: `docs/guide/migrate-rules.md`.
@@ -178,7 +177,7 @@ Use the validation matrix above as the source of truth. For behavior-bearing cha
 - Use `vp help` and `vp <command> --help` to inspect command surfaces.
 - For command routing bugs, compare the global path (`crates/vite_global_cli/`) with the local/NAPI path (`packages/cli/src/bin.ts`, `packages/cli/binding/`).
 - For config-loading bugs, compare the static extractor (`crates/vite_static_config/`) with the JS resolver fallback (`packages/cli/src/resolve-vite-config.ts`).
-- For package-manager behavior, inspect `crates/vite_pm_cli/`, `crates/vite_install/`, and related PTY snapshot cases.
+- For package-manager behavior, inspect `crates/vite_pm_cli/` and related PTY snapshot cases.
 - For `vp check`, lint, format, or type-check behavior, validate end-to-end because bundled-tool routing can hide silent config drift.
 
 ## AI Assistant Tips

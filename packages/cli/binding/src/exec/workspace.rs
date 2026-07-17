@@ -112,7 +112,7 @@ pub(super) async fn execute_exec_workspace(
     let base_path_dirs: Vec<std::path::PathBuf> = {
         let mut dirs = Vec::new();
         // Include package manager bin dir
-        if let Ok(pm) = vite_install::PackageManager::builder(&*workspace_root.path).build().await {
+        if let Ok(pm) = vite_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
             dirs.push(pm.get_bin_prefix().as_path().to_path_buf());
         }
         // Include workspace root's node_modules/.bin

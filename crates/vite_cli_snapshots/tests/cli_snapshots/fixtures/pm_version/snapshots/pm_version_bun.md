@@ -23,8 +23,7 @@ Bun rejects unsupported JSON output
 **Exit code:** 1
 
 ```
-error: Invalid argument: `--json` is not supported by Bun `version`.
-* Invalid argument: `--json` is not supported by Bun `version`.
+Invalid argument: `--json` is not supported by Bun `version`.
 ```
 
 ## `vpt print-file package.json`

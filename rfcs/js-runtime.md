@@ -9,7 +9,7 @@ Currently, vite-plus relies on the user's system-installed Node.js runtime. This
 3. **No runtime pinning**: Projects cannot specify and enforce a specific Node.js version
 4. **Future extensibility**: As alternatives like Bun and Deno mature, projects may want to use different runtimes
 
-The PackageManager implementation in `vite_install` successfully handles automatic downloading and caching of package managers (pnpm, yarn, npm). We can apply the same pattern to JavaScript runtimes.
+The PackageManager implementation in `vite_pm_cli` successfully handles automatic downloading and caching of package managers (pnpm, yarn, npm). We can apply the same pattern to JavaScript runtimes.
 
 ## Goals
 
@@ -526,15 +526,15 @@ Same pattern as PackageManager:
 - File-based locking to prevent race conditions
 - Check cache after acquiring lock (another process may have completed)
 
-## Integration with vite_install
+## Integration with vite_pm_cli
 
-The `vite_install` crate can use `vite_js_runtime` to:
+The `vite_pm_cli` crate can use `vite_js_runtime` to:
 
 1. Ensure the correct Node.js version before running package manager commands
 2. Use the managed Node.js to execute package manager binaries
 
 ```rust
-// Example integration in vite_install
+// Example integration in vite_pm_cli
 use vite_js_runtime::{JsRuntimeType, download_runtime};
 
 async fn run_with_managed_node(
@@ -638,7 +638,7 @@ pub enum Error {
 - Easier to test in isolation
 - Clear single responsibility: download and cache runtimes
 
-### 2. Separate Crate vs. Extending vite_install
+### 2. Separate Crate vs. Extending vite_pm_cli
 
 **Decision**: Create a new `vite_js_runtime` crate.
 

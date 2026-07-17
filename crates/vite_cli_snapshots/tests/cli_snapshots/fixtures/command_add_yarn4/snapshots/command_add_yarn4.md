@@ -70,6 +70,7 @@ should add package as dev dependencies
 should add packages to dependencies
 
 ```
+warn: yarn does not support --allow-build.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0

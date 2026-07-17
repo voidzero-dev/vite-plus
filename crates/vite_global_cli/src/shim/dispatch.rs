@@ -5,11 +5,11 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core tools and package binaries)
 
-use vite_install::package_manager::{
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
+use vite_pm_cli::{
     PackageManagerType, download_package_manager, package_manager_bin_path,
     package_manager_install_dir, resolve_package_manager_from_package_json,
 };
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 
 use super::{
