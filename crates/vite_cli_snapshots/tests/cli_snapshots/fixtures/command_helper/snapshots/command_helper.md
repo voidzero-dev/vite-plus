@@ -254,7 +254,7 @@ Available options:
 build help message
 
 ```
-vp/0.2.4
+vp/<version>
 
 Usage:
   $ vp build [root]
@@ -391,7 +391,7 @@ Options:
 preview help message
 
 ```
-vp/0.2.4
+vp/<version>
 
 Usage:
   $ vp preview [root]
@@ -418,7 +418,7 @@ Options:
 dev help message
 
 ```
-vp/0.2.4
+vp/<version>
 
 Usage:
   $ vp [root]
