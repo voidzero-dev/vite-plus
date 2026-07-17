@@ -61,9 +61,6 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Ensure home directory exists (env files are written here)
     tokio::fs::create_dir_all(&vite_plus_home).await?;
 
-    // TODO: remove this cleanup logic before the beta release
-    cleanup_legacy_completion_dir(&vite_plus_home).await;
-
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files(&vite_plus_home).await?;
 
@@ -82,6 +79,9 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
 
     // Ensure bin directory exists
     tokio::fs::create_dir_all(&bin_dir).await?;
+
+    #[cfg(windows)]
+    tokio::fs::write(bin_dir.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
 
     // Get the current executable path (for shims)
     let current_exe = std::env::current_exe()?;
@@ -522,17 +522,6 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePat
     }
 }
 
-/// Remove `~/.vite-plus/completion` directory
-///
-/// In older versions, static completion scripts were generated in `~/.vite-plus/completion/`.
-/// This is no longer needed with dynamic completion support.
-async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath) {
-    let completion_dir = vite_plus_home.join("completion");
-    if tokio::fs::remove_dir_all(&completion_dir).await.is_ok() {
-        tracing::debug!("Removed legacy completion directory: {:?}", completion_dir);
-    }
-}
-
 // POSIX env file (bash/zsh)
 // When sourced multiple times, removes existing entry and re-prepends to front
 // Uses parameter expansion to split PATH around the bin entry in O(1) operations
@@ -540,6 +529,7 @@ async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath)
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
+export VP_HOME="__VP_HOME__"
 __vp_bin="__VP_BIN__"
 case ":${PATH}:" in
     *":${__vp_bin}:"*)
@@ -587,6 +577,7 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
+set -gx VP_HOME "__VP_HOME__"
 set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
@@ -622,6 +613,7 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
+$env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
@@ -682,6 +674,7 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
+$env:VP_HOME = "__VP_HOME_WIN__"
 $__vp_bin = "__VP_BIN_WIN__"
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
@@ -742,37 +735,64 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
-const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
+#[cfg(windows)]
+const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset VP_HOME=%~dp0..\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
+
+fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
+    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
+    // This makes the env file portable across sessions where HOME may differ.
+    home_dir
+        .and_then(|h| path.strip_prefix(h).ok())
+        .map(|s| {
+            if s.as_os_str().is_empty() {
+                "$HOME".to_string()
+            } else {
+                // Normalize to forward slashes for $HOME/... paths (POSIX-style)
+                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
+            }
+        })
+        .unwrap_or_else(|| path.display().to_string().replace('\\', "/"))
+}
+
+fn render_nu_path_ref(path_ref: &str) -> String {
+    match path_ref.strip_prefix("$HOME") {
+        Some("") => "~".to_string(),
+        Some(suffix) if suffix.starts_with('/') => format!("~{suffix}"),
+        _ => path_ref.to_string(),
+    }
+}
 
 /// Render the env-file content for `shell` against `vite_plus_home`.
 fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath) -> String {
     let bin_path = vite_plus_home.join("bin");
-
-    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
-    // This makes the env file portable across sessions where HOME may differ.
     let home_dir = vite_shared::EnvConfig::get().user_home;
-    let bin_path_ref = home_dir
-        .as_ref()
-        .and_then(|h| bin_path.as_path().strip_prefix(h).ok())
-        .map(|s| {
-            // Normalize to forward slashes for $HOME/... paths (POSIX-style)
-            format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
-        })
-        .unwrap_or_else(|| bin_path.as_path().display().to_string().replace('\\', "/"));
+    let home_dir = home_dir.as_deref();
+    let home_path_ref = render_home_relative_path(vite_plus_home.as_path(), home_dir);
+    let bin_path_ref = render_home_relative_path(bin_path.as_path(), home_dir);
 
     match shell {
-        EnvShell::Posix => ENV_TEMPLATE_POSIX.replace("__VP_BIN__", &bin_path_ref),
-        EnvShell::Fish => ENV_TEMPLATE_FISH.replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Posix => ENV_TEMPLATE_POSIX
+            .replace("__VP_HOME__", &home_path_ref)
+            .replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Fish => ENV_TEMPLATE_FISH
+            .replace("__VP_HOME__", &home_path_ref)
+            .replace("__VP_BIN__", &bin_path_ref),
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
-            let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
-            ENV_TEMPLATE_NU.replace("__VP_BIN__", &bin_path_ref_nu)
+            let home_path_ref_nu = render_nu_path_ref(&home_path_ref);
+            let bin_path_ref_nu = render_nu_path_ref(&bin_path_ref);
+            ENV_TEMPLATE_NU
+                .replace("__VP_HOME__", &home_path_ref_nu)
+                .replace("__VP_BIN__", &bin_path_ref_nu)
         }
         EnvShell::Powershell => {
             // PowerShell uses the actual absolute path (not $HOME-relative)
+            let home_path_win = vite_plus_home.as_path().display().to_string();
             let bin_path_win = bin_path.as_path().display().to_string();
-            ENV_TEMPLATE_PS1.replace("__VP_BIN_WIN__", &bin_path_win)
+            ENV_TEMPLATE_PS1
+                .replace("__VP_HOME_WIN__", &home_path_win)
+                .replace("__VP_BIN_WIN__", &bin_path_win)
         }
     }
 }
@@ -784,17 +804,10 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath)
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
 /// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
-/// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
         let content = render_env_content(shell, vite_plus_home);
         tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
-    }
-
-    // Only write the cmd wrapper if bin directory exists (it may not during --env-only)
-    let bin_path = vite_plus_home.join("bin");
-    if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
-        tokio::fs::write(bin_path.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
     }
 
     Ok(())
@@ -884,6 +897,37 @@ mod tests {
         })
     }
 
+    #[cfg(windows)]
+    struct FakeTrampolineGuard(Option<std::ffi::OsString>);
+
+    #[cfg(windows)]
+    impl FakeTrampolineGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let trampoline = dir.join("vp-shim.exe");
+            std::fs::write(&trampoline, b"fake-trampoline").unwrap();
+            let previous = std::env::var_os(vite_shared::env_vars::VP_TRAMPOLINE_PATH);
+            // SAFETY: This Windows-only test is serialized and the guard restores the variable.
+            unsafe {
+                std::env::set_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH, &trampoline);
+            }
+            Self(previous)
+        }
+    }
+
+    #[cfg(windows)]
+    impl Drop for FakeTrampolineGuard {
+        fn drop(&mut self) {
+            // SAFETY: This Windows-only test is serialized and restores the previous value.
+            unsafe {
+                if let Some(previous) = self.0.take() {
+                    std::env::set_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH, previous);
+                } else {
+                    std::env::remove_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH);
+                }
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_create_env_files_creates_all_files() {
         let temp_dir = TempDir::new().unwrap();
@@ -933,13 +977,16 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_replaces_placeholder_with_home_relative_path() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("vp_home")).unwrap();
         let _guard = home_guard(temp_dir.path());
+        tokio::fs::create_dir_all(&home).await.unwrap();
 
         create_env_files(&home).await.unwrap();
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
         // Placeholder should be fully replaced
         assert!(
@@ -950,15 +997,45 @@ mod tests {
             !fish_content.contains("__VP_BIN__"),
             "env.fish file should not contain __VP_BIN__ placeholder"
         );
+        assert!(
+            !env_content.contains("__VP_HOME__") && !fish_content.contains("__VP_HOME__"),
+            "env files should not contain __VP_HOME__ placeholder"
+        );
+        assert!(
+            !nu_content.contains("__VP_HOME__") && !ps1_content.contains("__VP_HOME_WIN__"),
+            "env files should not contain VP_HOME placeholders"
+        );
 
         // Should use $HOME-relative path since install dir is under HOME
         assert!(
-            env_content.contains("$HOME/bin"),
-            "env file should reference $HOME/bin, got: {env_content}"
+            env_content.contains("$HOME/vp_home/bin"),
+            "env file should reference $HOME/vp_home/bin, got: {env_content}"
         );
         assert!(
-            fish_content.contains("$HOME/bin"),
-            "env.fish file should reference $HOME/bin, got: {fish_content}"
+            fish_content.contains("$HOME/vp_home/bin"),
+            "env.fish file should reference $HOME/vp_home/bin, got: {fish_content}"
+        );
+        assert!(
+            env_content.contains("export VP_HOME=\"$HOME/vp_home\""),
+            "env file should export VP_HOME, got: {env_content}"
+        );
+        assert!(
+            fish_content.contains("set -gx VP_HOME \"$HOME/vp_home\""),
+            "env.fish file should export VP_HOME, got: {fish_content}"
+        );
+        assert!(
+            nu_content.contains("$env.VP_HOME = (\"~/vp_home\" | path expand --no-symlink)"),
+            "env.nu file should set home-relative VP_HOME, got: {nu_content}"
+        );
+        assert!(
+            nu_content.contains("~/vp_home/bin"),
+            "env.nu file should reference ~/vp_home/bin, got: {nu_content}"
+        );
+
+        let expected_home = home.as_path().display().to_string();
+        assert!(
+            ps1_content.contains(&format!("$env:VP_HOME = \"{expected_home}\"")),
+            "env.ps1 file should set VP_HOME, got: {ps1_content}"
         );
     }
 
@@ -977,6 +1054,7 @@ mod tests {
         // Should use absolute path since install dir is not under HOME
         let expected_bin = home.join("bin");
         let expected_str = expected_bin.as_path().display().to_string().replace('\\', "/");
+        let expected_home = home.as_path().display().to_string().replace('\\', "/");
         assert!(
             env_content.contains(&expected_str),
             "env file should use absolute path {expected_str}, got: {env_content}"
@@ -984,6 +1062,14 @@ mod tests {
         assert!(
             fish_content.contains(&expected_str),
             "env.fish file should use absolute path {expected_str}, got: {fish_content}"
+        );
+        assert!(
+            env_content.contains(&format!("export VP_HOME=\"{expected_home}\"")),
+            "env file should export absolute VP_HOME {expected_home}, got: {env_content}"
+        );
+        assert!(
+            fish_content.contains(&format!("set -gx VP_HOME \"{expected_home}\"")),
+            "env.fish file should export absolute VP_HOME {expected_home}, got: {fish_content}"
         );
 
         // Should NOT use $HOME-relative path
@@ -1131,6 +1217,52 @@ mod tests {
         assert!(
             !ps1_content.contains("__VP_BIN_WIN__"),
             "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    #[serial_test::serial]
+    async fn test_execute_creates_cmd_wrapper_in_fresh_home() {
+        let temp_dir = TempDir::new().unwrap();
+        let fresh_home = temp_dir.path().join("new-vite-plus");
+        let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
+        let _env_guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vite_plus_home: Some(fresh_home.clone()),
+            user_home: Some(temp_dir.path().to_path_buf()),
+            ..vite_shared::EnvConfig::for_test()
+        });
+
+        assert!(!fresh_home.exists(), "VP_HOME should not exist before initial setup");
+        let status = execute(false, false).await.unwrap();
+
+        assert!(status.success(), "initial vp env setup should succeed");
+        let bin_dir = AbsolutePathBuf::new(fresh_home.join("bin")).unwrap();
+        let cmd_content = tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
+        assert!(
+            cmd_content.contains("set VP_HOME=%~dp0..\r\nfor /f"),
+            "vp-use.cmd should set VP_HOME before invoking vp env use, got: {cmd_content}"
+        );
+        assert!(
+            cmd_content.contains("%~dp0..\\current\\bin\\vp.exe env use %*"),
+            "vp-use.cmd should invoke the install-local vp.exe"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_create_env_files_does_not_create_cmd_wrapper_on_unix() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+        let bin_dir = home.join("bin");
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+
+        create_env_files(&home).await.unwrap();
+
+        assert!(
+            !bin_dir.join("vp-use.cmd").as_path().exists(),
+            "vp-use.cmd should only be created on Windows"
         );
     }
 

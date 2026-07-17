@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp pm stage --help # should list the staged-publishing subcommands",
-    "vp pm stage publish --help # should show stage publish options",
-    "vp pm stage approve --help # should show stage approve options"
-  ]
-}

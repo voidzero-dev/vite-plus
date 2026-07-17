@@ -1,0 +1,34 @@
+# create_framework_shim_vue
+
+## `vp create vite:application --no-interactive -- --template vue-ts`
+
+create Vue+TS app
+
+
+## `vpt print-file vite-plus-application/src/env.d.ts`
+
+check Vue shim was added
+
+```
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<{}, {}, unknown>;
+  export default component;
+}
+```
+
+## `cd vite-plus-application && vp install`
+
+install dependencies
+
+
+## `cd vite-plus-application && vp check --fix`
+
+fix generated formatting and ensure no errors
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+pass: Formatting completed for checked files (<duration>)
+pass: Found no warnings, lint errors, or type errors in 5 files (<duration>, <n> threads)
+```

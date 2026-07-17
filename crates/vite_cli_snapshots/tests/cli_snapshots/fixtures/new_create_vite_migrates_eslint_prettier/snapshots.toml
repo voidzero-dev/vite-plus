@@ -1,0 +1,11 @@
+[[case]]
+name = "new_create_vite_migrates_eslint_prettier"
+vp = "global"
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["vp", "create", "vite@9.0.5", "--no-interactive", "--", "my-react-ts", "--template", "react-ts"], comment = "create vite app with pinned version + react-ts template, should auto-migrate ESLint -> Oxlint and merge lint config into vite.config.ts", timeout = 180000, snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-react-ts/eslint.config.js", "--assert-not", "file"], comment = "eslint config deleted", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-react-ts/.oxlintrc.json", "--assert-not", "file"], comment = "migration output merged by rewrite step (matches vp migrate)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-react-ts/vite.config.ts"], comment = "merged vite config should contain lint and fmt sections", continue-on-failure = true },
+  { argv = ["node", "check-pkg.cjs"], comment = "scripts rewritten, eslint dep removed, vite-plus added", continue-on-failure = true },
+]

@@ -247,6 +247,36 @@ impl JsExecutor {
         self.run_js_entry_output(project_path, &node_binary, &bin_prefix, args).await
     }
 
+    /// Delegate `migrate`, escalating to the global CLI when the project's local
+    /// `vite-plus` is older than this global `vp`. A stale local CLI predates the
+    /// upgrade logic and would otherwise run (and leave the project unmigrated),
+    /// so the newer global CLI must perform the upgrade; it re-pins `vite-plus`,
+    /// so the next invocation resolves the upgraded local CLI. When local == global
+    /// (or local is newer, or none is installed) keep local-first semantics
+    /// (`delegate_to_local_cli` already falls back to the global bin when no local
+    /// vite-plus is resolvable).
+    pub async fn delegate_migrate(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        // CARGO_PKG_VERSION is stamped to the published version at build time
+        // (the release version, or `0.0.0-commit.<sha>` for a pkg.pr.new build),
+        // so a preview global build compares as a preview and wins. No need to
+        // read the installed package.json.
+        let global = env!("CARGO_PKG_VERSION");
+        let escalate = resolve_local_vite_plus_version(project_path)
+            .is_some_and(|local| local_vite_plus_is_older(&local, global));
+        if escalate {
+            tracing::debug!(
+                "Local vite-plus is older than global vp {global}; running migrate from the global CLI"
+            );
+            self.delegate_to_global_cli(project_path, args).await
+        } else {
+            self.delegate_to_local_cli(project_path, args).await
+        }
+    }
+
     /// Delegate to the global vite-plus CLI entrypoint directly.
     ///
     /// Unlike [`delegate_to_local_cli`], this bypasses project-local resolution and always runs
@@ -265,8 +295,7 @@ impl JsExecutor {
         let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
 
-        let status = cmd.status().await?;
-        Ok(status)
+        Ok(vite_command::execute_with_terminal_guard(cmd).await?)
     }
 
     /// Delegate to local or global vite-plus CLI using the CLI's own runtime.
@@ -322,9 +351,8 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
-        let status = cmd.status().await?;
-        Ok(status)
+        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        Ok(vite_command::execute_with_terminal_guard(cmd).await?)
     }
 
     /// Like [`run_js_entry`], but returns `Output`.
@@ -361,6 +389,58 @@ impl JsExecutor {
             tracing::debug!("Local vite-plus found but dist/bin.js missing at {:?}", bin_js);
             None
         }
+    }
+}
+
+/// Resolve the version of the project-local `vite-plus`, if one is installed.
+fn resolve_local_vite_plus_version(project_path: &AbsolutePath) -> Option<String> {
+    use oxc_resolver::{ResolveOptions, Resolver};
+
+    let resolver = Resolver::new(ResolveOptions {
+        condition_names: vec!["import".into(), "node".into()],
+        ..ResolveOptions::default()
+    });
+    let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
+    read_package_json_version(resolved.path())
+}
+
+/// Read the top-level `version` string from a package.json. Returns `None` when
+/// the file is missing, unreadable, or has no string `version`.
+fn read_package_json_version(pkg_json: impl AsRef<std::path::Path>) -> Option<String> {
+    let content = std::fs::read_to_string(pkg_json).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    value.get("version")?.as_str().map(str::to_string)
+}
+
+/// True when a version is a pkg.pr.new / registry-bridge preview build.
+///
+/// Preview builds are published as `0.0.0-commit.<sha>` (and, more generally,
+/// any `0.0.0-<prerelease>`). A real release is never `0.0.0`, so this reliably
+/// flags a build under test.
+fn is_preview_version(version: &str) -> bool {
+    version.starts_with("0.0.0-")
+}
+
+/// True when the local `vite-plus` should be treated as older than `global`, so
+/// migrate escalates to the global CLI.
+///
+/// A preview build (`0.0.0-commit.<sha>`) is an unreleased build under test and
+/// can't be semver-ranked against a release or another preview. When either side
+/// is a preview, the global is the build the user is currently running, so
+/// escalate to it unless local and global are the exact same build (already on
+/// it: a no-op, so stay local). This lets `vp migrate` move a project off a
+/// leftover preview onto the latest preview or the shipped release.
+///
+/// When neither side is a preview, semver-compare and return false if a version
+/// fails to parse (be conservative: never escalate on a version we can't
+/// understand).
+fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
+    if is_preview_version(local) || is_preview_version(global) {
+        return local != global;
+    }
+    match (node_semver::Version::parse(local), node_semver::Version::parse(global)) {
+        (Ok(local_v), Ok(global_v)) => local_v < global_v,
+        _ => false,
     }
 }
 
@@ -426,6 +506,49 @@ mod tests {
     use serial_test::serial;
 
     use super::*;
+
+    #[test]
+    fn test_local_vite_plus_is_older() {
+        // Older local should escalate.
+        assert!(local_vite_plus_is_older("0.1.24", "0.2.1"));
+        // Equal versions keep local-first semantics.
+        assert!(!local_vite_plus_is_older("0.2.1", "0.2.1"));
+        // Newer local keeps local-first semantics.
+        assert!(!local_vite_plus_is_older("0.3.0", "0.2.1"));
+        // Unparsable versions are conservative: never escalate.
+        assert!(!local_vite_plus_is_older("latest", "0.2.1"));
+    }
+
+    #[test]
+    fn test_preview_version_routing() {
+        // A preview on either side is a build the user explicitly chose and can't
+        // be semver-ranked; the global is what they are running now, so escalate to
+        // it unless the local is already that exact build.
+
+        // Preview local, stable-release global: escalate. A leftover preview build
+        // under test is upgraded to the shipped release once it lands and you run
+        // migrate with the released global.
+        assert!(local_vite_plus_is_older("0.0.0-commit.abc1234", "0.2.1"));
+        // Stable-release local, preview global: escalate to the build under test,
+        // even from a newer-looking release local.
+        assert!(local_vite_plus_is_older("0.2.1", "0.0.0-commit.abc1234"));
+        assert!(local_vite_plus_is_older("0.3.0", "0.0.0-commit.abc1234"));
+        // Two different preview builds: escalate to the global (the latest test
+        // build the user installed) instead of reporting "already using Vite+".
+        assert!(local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.bbb"));
+        // Same preview build on both sides: already on it, stay local (no-op).
+        assert!(!local_vite_plus_is_older("0.0.0-commit.aaa", "0.0.0-commit.aaa"));
+    }
+
+    #[test]
+    fn test_is_preview_version() {
+        assert!(is_preview_version("0.0.0-commit.abc1234"));
+        assert!(is_preview_version("0.0.0-pr.1891"));
+        assert!(!is_preview_version("0.2.1"));
+        assert!(!is_preview_version("0.0.1"));
+        assert!(!is_preview_version("0.0.0"));
+        assert!(!is_preview_version("latest"));
+    }
 
     #[test]
     fn test_js_executor_new() {
@@ -512,8 +635,7 @@ mod tests {
             EnvConfig::test_guard(EnvConfig::for_test_with_home(vp_home.path().to_path_buf()));
 
         // Pin Node 20.0.0 via `.node-version`: well below the declared floor and
-        // exactly the case the removed gate rejected (see the deleted
-        // `runtime-with-incompatible-project-node` snap test).
+        // exactly the case the removed gate rejected.
         let project = TempDir::new().unwrap();
         tokio::fs::write(project.path().join(".node-version"), "20.0.0\n").await.unwrap();
         let project_path = AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();

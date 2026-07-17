@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_upgrade_pnpm_named_catalog"
+vp = "global"
+env = { VP_OVERRIDE_PACKAGES = "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\"}", VP_VERSION = "0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617" }
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "reuse the existing named-only Vite stack catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "catalog:vite-stack dependency references are preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the bridge commit version is written into vite-stack", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "named-only catalog migration is idempotent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "rerun leaves package.json unchanged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "rerun leaves catalog placement unchanged", continue-on-failure = true },
+]

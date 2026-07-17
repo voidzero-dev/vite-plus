@@ -1,0 +1,14 @@
+[[case]]
+name = "create_framework_shim_vue"
+vp = "global"
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+# The legacy case set `linkCheckoutPackages` so its `vp check --fix` loaded the
+# checkout's `vite-plus/oxlint-plugin`; `local-registry` already installs the
+# packed checkout build, so the plugin resolves without it.
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--", "--template", "vue-ts"], comment = "create Vue+TS app", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-application/src/env.d.ts"], comment = "check Vue shim was added", continue-on-failure = true },
+  { argv = ["vp", "install"], cwd = "vite-plus-application", comment = "install dependencies", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "check", "--fix"], cwd = "vite-plus-application", comment = "fix generated formatting and ensure no errors", continue-on-failure = true },
+]

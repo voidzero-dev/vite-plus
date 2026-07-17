@@ -1,0 +1,9 @@
+[[case]]
+name = "plain_terminal_ui_nested"
+vp = "local"
+env = { VP_CLI_TEST = "0" }
+steps = [
+  { argv = ["vp", "run", "hello"], continue-on-failure = true },
+  { argv = ["vpt", "write-file", "a.ts", "console.log(123)\n"], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "report cache status from the inner runner", continue-on-failure = true },
+]

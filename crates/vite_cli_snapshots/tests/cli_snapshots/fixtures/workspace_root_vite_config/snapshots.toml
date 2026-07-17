@@ -1,0 +1,7 @@
+[[case]]
+name = "workspace_root_vite_config"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "fmt", "packages/app-b/index.js", "--check"], continue-on-failure = true },
+]

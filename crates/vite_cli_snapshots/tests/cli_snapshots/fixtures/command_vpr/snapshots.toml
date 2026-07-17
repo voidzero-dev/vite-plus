@@ -1,0 +1,11 @@
+[[case]]
+name = "command_vpr"
+vp = ["local", "global"]
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpr", "-h"], comment = "should show vp run help", continue-on-failure = true },
+  { argv = ["vpr", "hello"], comment = "should run script via vpr shorthand", continue-on-failure = true },
+  { argv = ["vpr", "greet", "--arg1", "value1"], comment = "should pass through additional args", continue-on-failure = true },
+  { argv = ["vpr", "nonexistent"], tty = false, comment = "should show pnpm missing script error", continue-on-failure = true },
+]

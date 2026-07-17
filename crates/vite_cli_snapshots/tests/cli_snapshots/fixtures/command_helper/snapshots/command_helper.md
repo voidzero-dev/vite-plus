@@ -1,0 +1,456 @@
+# command_helper
+
+## `vp -h`
+
+help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp <COMMAND>
+
+Core Commands:
+  create         Create a new project from a template
+  migrate        Migrate an existing project to Vite+
+  dev            Run the development server
+  build          Build for production
+  test           Run tests
+  lint           Lint code
+  fmt, format    Format code
+  check          Run format, lint, and type checks
+  pack           Build library
+  run            Run tasks
+  exec           Execute a command from local node_modules/.bin
+  preview        Preview production build
+  cache          Manage the task cache
+  config         Configure hooks and agent integration
+  staged         Run linters on staged files
+
+Package Manager Commands:
+  install    Install all dependencies, or add packages if package names are provided
+
+Options:
+  -h, --help  Print help
+```
+
+## `vp pack -h`
+
+pack help message
+
+```
+vp pack
+
+Usage:
+  $ vp pack [...files]
+
+Commands:
+  [...files]  Bundle files
+
+For more info, run any command with the `--help` flag:
+  $ vp pack --help
+
+Options:
+  --config-loader <loader>      Config loader to use: auto, native, tsx, unrun (default: auto)
+  --no-config                   Disable config file (default: true)
+  -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
+  --clean                       Clean output directory, --no-clean to disable
+  --deps.never-bundle <module>  Mark dependencies as external
+  --minify                      Minify output
+  --devtools                    Enable devtools integration
+  --debug [feat]                Show debug logs
+  --target <target>             Bundle target, e.g "es2015", "esnext"
+  -l, --logLevel <level>        Set log level: info, warn, error, silent
+  --fail-on-warn                Fail on warnings (default: true)
+  --no-write                    Disable writing files to disk, incompatible with watch mode (default: true)
+  -d, --out-dir <dir>           Output directory (default: dist)
+  --treeshake                   Tree-shake bundle (default: true)
+  --sourcemap                   Generate source map (default: false)
+  --shims                       Enable cjs and esm shims (default: false)
+  --platform <platform>         Target platform (default: node)
+  --dts                         Generate dts files
+  --publint                     Enable publint (default: false)
+  --attw                        Enable Are the types wrong integration (default: false)
+  --unused                      Enable unused dependencies check (default: false)
+  -w, --watch [path]            Watch mode
+  --ignore-watch <path>         Ignore custom paths in watch mode
+  --from-vite [vitest]          Reuse config from Vite or Vitest
+  --report                      Size report (default: true)
+  --env.* <value>               Define compile-time env variables
+  --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
+  --on-success <command>        Command to run on success
+  --copy <dir>                  Copy files to output dir
+  --public-dir <dir>            Alias for --copy, deprecated
+  --tsconfig <tsconfig>         Set tsconfig path
+  --unbundle                    Unbundle mode
+  --root <dir>                  Root directory of input files
+  --exe                         Bundle as executable
+  -W, --workspace [dir]         Enable workspace mode
+  -F, --filter <pattern>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
+  --exports                     Generate export-related metadata for package.json (experimental)
+  -h, --help                    Display this message
+```
+
+## `vp fmt -h`
+
+fmt help message
+
+```
+Usage: [-c=PATH] [PATH]...
+
+Mode Options:
+        --init               Initialize `.oxfmtrc.json` with default values
+        --migrate=SOURCE     Migrate configuration to `.oxfmtrc.json` from specified source
+                             Available sources: prettier, biome
+        --lsp                Start language server protocol (LSP) server
+        --stdin-filepath=PATH  Specify the file name to use to infer which parser to use
+
+Output Options:
+        --write              Format and write files in place (default)
+        --check              Check if files are formatted, also show statistics
+        --list-different     List files that would be changed
+
+Config Options
+    -c, --config=PATH        Path to the configuration file (.json, .jsonc, .ts, .mts, .cts, .js,
+                             .mjs, .cjs)
+        --disable-nested-config  Do not search for configuration files in subdirectories
+
+Ignore Options
+        --ignore-path=PATH   Path to ignore file(s). Can be specified multiple times. If not
+                             specified, .gitignore and .prettierignore in the current directory are
+                             used.
+        --with-node-modules  Format code in node_modules directory (skipped by default)
+
+Runtime Options
+        --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+        --threads=INT        Number of threads to use. Set to 1 for using only 1 CPU core.
+
+Available positional items:
+    PATH                     Single file, path or list of paths. Glob patterns are also supported.
+                             (Be sure to quote them, otherwise your shell may expand them before
+                             passing.) Exclude patterns with `!` prefix like `'!**/fixtures/*.js'`
+                             are also supported. If not provided, current working directory is used.
+
+Available options:
+    -h, --help               Prints help information
+    -V, --version            Prints version information
+```
+
+## `vp lint -h`
+
+lint help message
+
+```
+Usage: [-c=<./.oxlintrc.json>] [PATH]...
+
+Basic Configuration
+    -c, --config=<./.oxlintrc.json>  Oxlint configuration file
+                              * `.json` and `.jsonc` config files are supported in all runtimes
+                              * JavaScript/TypeScript config files are experimental and require
+                              running via Node.js
+                              * you can use comments in configuration files.
+                              * tries to be compatible with ESLint v8's format
+        --tsconfig=<./tsconfig.json>  Override the TypeScript config used for import resolution.
+                              Oxlint automatically discovers the relevant `tsconfig.json` for each
+                              file. Use this only when your project uses a non-standard tsconfig
+                              name or location.
+        --init                Initialize oxlint configuration with default values
+
+Allowing / Denying Multiple Lints
+   Accumulate rules and categories from left to right on the command-line.
+   For example `-D correctness -A no-debugger` or `-A all -D no-debugger`.
+   The categories are:
+   * `correctness` - Code that is outright wrong or useless (default)
+   * `suspicious`  - Code that is most likely wrong or useless
+   * `pedantic`    - Lints which are rather strict or have occasional false positives
+   * `perf`        - Code that could be written in a more performant way
+   * `style`       - Code that should be written in a more idiomatic way
+   * `restriction` - Lints which prevent the use of language and library features
+   * `nursery`     - New lints that are still under development
+   * `all`         - All categories listed above except `nursery`. Does not enable plugins
+  automatically.
+    -A, --allow=NAME          Allow the rule or category (suppress the lint)
+    -W, --warn=NAME           Deny the rule or category (emit a warning)
+    -D, --deny=NAME           Deny the rule or category (emit an error)
+
+Enable/Disable Plugins
+        --disable-unicorn-plugin  Disable unicorn plugin, which is turned on by default
+        --disable-oxc-plugin  Disable oxc unique rules, which is turned on by default
+        --disable-typescript-plugin  Disable TypeScript plugin, which is turned on by default
+        --import-plugin       Enable import plugin and detect ESM problems.
+        --react-plugin        Enable react plugin, which is turned off by default
+        --jsdoc-plugin        Enable jsdoc plugin and detect JSDoc problems
+        --jest-plugin         Enable the Jest plugin and detect test problems
+        --vitest-plugin       Enable the Vitest plugin and detect test problems
+        --jsx-a11y-plugin     Enable the JSX-a11y plugin and detect accessibility problems
+        --nextjs-plugin       Enable the Next.js plugin and detect Next.js problems
+        --react-perf-plugin   Enable the React performance plugin and detect rendering performance
+                              problems
+        --promise-plugin      Enable the promise plugin and detect promise usage problems
+        --node-plugin         Enable the node plugin and detect node usage problems
+        --vue-plugin          Enable the vue plugin and detect vue usage problems
+
+Fix Problems
+        --fix                 Fix as many issues as possible. Only unfixed issues are reported in
+                              the output.
+        --fix-suggestions     Apply auto-fixable suggestions. May change program behavior.
+        --fix-dangerously     Apply dangerous fixes and suggestions
+
+Ignore Files
+        --ignore-path=PATH    Specify the file to use as your `.eslintignore`
+        --ignore-pattern=PAT  Specify patterns of files to ignore (in addition to those in
+                              `.eslintignore`)
+        --no-ignore           Disable excluding files from `.eslintignore` files, --ignore-path
+                              flags and --ignore-pattern flags
+
+Handle Warnings
+        --quiet               Disable reporting on warnings, only errors are reported
+        --deny-warnings       Ensure warnings produce a non-zero exit code
+        --max-warnings=INT    Specify a warning threshold, which can be used to force exit with an
+                              error status if there are too many warning-level rule violations in
+                              your project
+
+Output
+    -f, --format=ARG          Use a specific output format. Possible values: `checkstyle`,
+                              `default`, `agent`, `github`, `gitlab`, `json`, `junit`, `sarif`,
+                              `stylish`, `unix`
+        --debug=OPTIONS       Enable debug output options. Options are comma-separated. Possible
+                              values:
+                               * `files` - Print the list of files that will be linted, then exit.
+                               * `timings` - Enable per-rule timing information.
+
+Miscellaneous
+        --silent              Do not display any diagnostics
+        --no-error-on-unmatched-pattern  Do not exit with an error when no files are selected for
+                              linting (for example, after applying ignore patterns)
+        --threads=INT         Number of threads to use. Set to 1 for using only 1 CPU core.
+        --print-config        This option outputs the configuration to be used. When present, no
+                              linting is performed and only config-related options are valid.
+
+Inline Configuration Comments
+        --report-unused-disable-directives  Report directive comments like `// oxlint-disable-line`,
+                              when no errors would have been reported on that line anyway
+        --report-unused-disable-directives-severity=SEVERITY  Same as
+                              `--report-unused-disable-directives`, but allows you to specify the
+                              severity level of the reported errors. Only one of these two options
+                              can be used at a time.
+
+Available positional items:
+    PATH                      Single file, single path or list of paths
+
+Available options:
+        --rules               List all the rules that are currently registered
+        --lsp                 Start the language server
+        --disable-nested-config  Disable the automatic loading of nested configuration files
+        --type-aware          Enable rules that require type information
+        --type-check          Enable experimental type checking (includes TypeScript compiler
+                              diagnostics)
+    -h, --help                Prints help information
+    -V, --version             Prints version information
+```
+
+## `vp build -h`
+
+build help message
+
+```
+vp/<version>
+
+Usage:
+  $ vp build [root]
+
+Options:
+  --target <target>             [string] transpile target (default: 'baseline-widely-available')
+  --outDir <dir>                [string] output directory (default: dist)
+  --assetsDir <dir>             [string] directory under outDir to place assets in (default: assets)
+  --assetsInlineLimit <number>  [number] static asset base64 inline threshold in bytes (default: 4096)
+  --ssr [entry]                 [string] build specified entry for server-side rendering
+  --sourcemap [output]          [boolean | "inline" | "hidden"] output source maps for build (default: false)
+  --minify [minifier]           [boolean | "oxc" | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: oxc)
+  --manifest [name]             [boolean | string] emit build manifest json
+  --ssrManifest [name]          [boolean | string] emit ssr manifest json
+  --emptyOutDir                 [boolean] force empty outDir when it's outside of root
+  -w, --watch                   [boolean] rebuilds when modules have changed on disk
+  --app                         [boolean] same as `builder: {}`
+  -c, --config <file>           [string] use specified config file
+  --base <path>                 [string] public base path (default: /)
+  -l, --logLevel <level>        [string] info | warn | error | silent
+  --clearScreen                 [boolean] allow/disable clear screen when logging
+  --configLoader <loader>       [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle)
+  -d, --debug [feat]            [string | boolean] show debug logs
+  -f, --filter <filter>         [string] filter debug logs
+  -m, --mode <mode>             [string] set env mode
+  -h, --help                    Display this message
+```
+
+## `vp test -h`
+
+test help message
+
+```
+vitest/4.1.10
+ WARN: no options were found for your subcommands so we printed the whole output
+
+Usage:
+  $ vitest [...filters]
+
+Commands:
+  run [...filters]
+  related [...filters]
+  watch [...filters]
+  dev [...filters]
+  bench [...filters]
+  init <project>
+  list [...filters]
+  [...filters]
+  complete [shell]
+
+For more info, run any command with the `--help` flag:
+  $ vitest run --help
+  $ vitest related --help
+  $ vitest watch --help
+  $ vitest dev --help
+  $ vitest bench --help
+  $ vitest init --help
+  $ vitest list --help
+  $ vitest --help
+  $ vitest complete --help
+  $ vitest --help --expand-help
+
+Options:
+  -v, --version                                              Display version number
+  -r, --root <path>                                          Root path
+  -c, --config <path>                                        Path to config file
+  -u, --update [type]                                        Update snapshot (accepts boolean, "new", "all" or "none")
+  -w, --watch                                                Enable watch mode
+  -t, --testNamePattern <pattern>                            Run tests with full names matching the specified regexp pattern
+  --dir <path>                                               Base directory to scan for the test files
+  --ui                                                       Enable UI
+  --open                                                     Open UI automatically (default: !process.env.CI)
+  --api [port]                                               Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204. Use '--help --api' for more info.
+  --silent [value]                                           Silent console output from tests. Use 'passed-only' to see logs from failing tests only.
+  --hideSkippedTests                                         Hide logs for skipped tests
+  --reporter <name>                                          Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
+  --outputFile <filename/-s>                                 Write test results to a file when supporter reporter is also specified, use cac's dot notation for individual outputs of multiple reporters (example: --outputFile.tap=./tap.txt)
+  --coverage                                                 Enable coverage report. Use '--help --coverage' for more info.
+  --mode <name>                                              Override Vite mode (default: test or benchmark)
+  --isolate                                                  Run every test file in isolation. To disable isolation, use --no-isolate (default: true)
+  --globals                                                  Inject apis globally
+  --dom                                                      Mock browser API with happy-dom
+  --browser <name>                                           Run tests in the browser. Equivalent to --browser.enabled (default: false). Use '--help --browser' for more info.
+  --pool <pool>                                              Specify pool, if not running in the browser (default: forks)
+  --execArgv <option>                                        Pass additional arguments to node process when spawning worker_threads or child_process.
+  --vmMemoryLimit <limit>                                    Memory limit for VM pools. If you see memory leaks, try to tinker this value.
+  --fileParallelism                                          Should all test files run in parallel. Use --no-file-parallelism to disable (default: true)
+  --maxWorkers <workers>                                     Maximum number or percentage of workers to run tests in
+  --environment <name>                                       Specify runner environment, if not running in the browser (default: node)
+  --passWithNoTests                                          Pass when no tests are found
+  --logHeapUsage                                             Show the size of heap for each test when running in node
+  --detectAsyncLeaks                                         Detect asynchronous resources leaking from the test file (default: false)
+  --allowOnly                                                Allow tests and suites that are marked as only (default: !process.env.CI)
+  --dangerouslyIgnoreUnhandledErrors                         Ignore any unhandled errors that occur
+  --shard <shards>                                           Test suite shard to execute in a format of <index>/<count>
+  --changed [since]                                          Run tests that are affected by the changed files (default: false)
+  --sequence <options>                                       Options for how tests should be sorted. Use '--help --sequence' for more info.
+  --inspect [[host:]port]                                    Enable Node.js inspector (default: 127.0.0.1:9229)
+  --inspectBrk [[host:]port]                                 Enable Node.js inspector and break before the test starts
+  --testTimeout <timeout>                                    Default timeout of a test in milliseconds (default: 5000). Use 0 to disable timeout completely.
+  --hookTimeout <timeout>                                    Default hook timeout in milliseconds (default: 10000). Use 0 to disable timeout completely.
+  --bail <number>                                            Stop test execution when given number of tests have failed (default: 0)
+  --retry <times>                                            Retry the test specific number of times if it fails (default: 0). Use '--help --retry' for more info.
+  --diff <path>                                              DiffOptions object or a path to a module which exports DiffOptions object. Use '--help --diff' for more info.
+  --exclude <glob>                                           Additional file globs to be excluded from test
+  --expandSnapshotDiff                                       Show full diff when snapshot fails
+  --disableConsoleIntercept                                  Disable automatic interception of console logging (default: false)
+  --typecheck                                                Enable typechecking alongside tests (default: false). Use '--help --typecheck' for more info.
+  --project <name>                                           The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern.
+  --slowTestThreshold <threshold>                            Threshold in milliseconds for a test or suite to be considered slow (default: 300)
+  --teardownTimeout <timeout>                                Default timeout of a teardown function in milliseconds (default: 10000)
+  --cache                                                    Enable cache. Use '--help --cache' for more info.
+  --maxConcurrency <number>                                  Maximum number of concurrent tests and suites during test file execution (default: 5)
+  --expect                                                   Configuration options for expect() matches. Use '--help --expect' for more info.
+  --printConsoleTrace                                        Always print console stack traces
+  --includeTaskLocation                                      Collect test and suite locations in the location property
+  --attachmentsDir <dir>                                     The directory where attachments from context.annotate are stored in (default: .vitest-attachments)
+  --run                                                      Disable watch mode
+  --no-color                                                 Removes colors from the console output (default: true)
+  --clearScreen                                              Clear terminal screen when re-running tests during watch mode (default: true)
+  --configLoader <loader>                                    Use bundle to bundle the config with esbuild or runner (experimental) to process it on the fly. This is only available in vite version 6.1.0 and above. (default: bundle)
+  --standalone                                               Start Vitest without running tests. Tests will be running only on change. If browser mode is enabled, the UI will be opened automatically. This option is ignored when CLI file filters are passed. (default: false)
+  --mergeReports [path]                                      Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests
+  --listTags [type]                                          List all available tags instead of running tests. --list-tags=json will output tags in JSON format, unless there are no tags.
+  --clearCache                                               Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run.
+  --tagsFilter <expression>                                  Run only tests with the specified tags. You can use logical operators && (and), || (or) and ! (not) to create complex expressions, see https://vitest.dev/guide/test-tags#syntax for more information.
+  --strictTags                                               Should Vitest throw an error if test has a tag that is not defined in the config. (default: true)
+  --experimental <features>                                  Experimental features.. Use '--help --experimental' for more info.
+  -h, --help                                                 Display this message
+```
+
+## `vp preview -h`
+
+preview help message
+
+```
+vp/<version>
+
+Usage:
+  $ vp preview [root]
+
+Options:
+  --host [host]            [string] specify hostname
+  --port <port>            [number] specify port
+  --strictPort             [boolean] exit if specified port is already in use
+  --open [path]            [boolean | string] open browser on startup
+  --outDir <dir>           [string] output directory (default: dist)
+  -c, --config <file>      [string] use specified config file
+  --base <path>            [string] public base path (default: /)
+  -l, --logLevel <level>   [string] info | warn | error | silent
+  --clearScreen            [boolean] allow/disable clear screen when logging
+  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle)
+  -d, --debug [feat]       [string | boolean] show debug logs
+  -f, --filter <filter>    [string] filter debug logs
+  -m, --mode <mode>        [string] set env mode
+  -h, --help               Display this message
+```
+
+## `vp dev -h`
+
+dev help message
+
+```
+vp/<version>
+
+Usage:
+  $ vp [root]
+
+Commands:
+  [root]           start dev server
+  build [root]     build for production
+  optimize [root]  pre-bundle dependencies (deprecated, the pre-bundle process runs automatically and does not need to be called)
+  preview [root]   locally preview production build
+
+For more info, run any command with the `--help` flag:
+  $ vp --help
+  $ vp build --help
+  $ vp optimize --help
+  $ vp preview --help
+
+Options:
+  --host [host]            [string] specify hostname
+  --port <port>            [number] specify port
+  --open [path]            [boolean | string] open browser on startup
+  --cors                   [boolean] enable CORS
+  --strictPort             [boolean] exit if specified port is already in use
+  --force                  [boolean] force the optimizer to ignore the cache and re-bundle
+  --experimentalBundle     [boolean] use experimental full bundle mode (this is highly experimental)
+  -c, --config <file>      [string] use specified config file
+  --base <path>            [string] public base path (default: /)
+  -l, --logLevel <level>   [string] info | warn | error | silent
+  --clearScreen            [boolean] allow/disable clear screen when logging
+  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle)
+  -d, --debug [feat]       [string | boolean] show debug logs
+  -f, --filter <filter>    [string] filter debug logs
+  -m, --mode <mode>        [string] set env mode
+  -h, --help               Display this message
+  -v, --version            Display version number
+```

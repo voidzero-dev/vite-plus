@@ -1,2 +1,0 @@
-> vp check --no-fmt
-pass: Found no warnings or lint errors in 1 file (<variable>ms, <variable> threads)

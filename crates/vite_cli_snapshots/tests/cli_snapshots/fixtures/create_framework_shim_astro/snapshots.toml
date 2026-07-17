@@ -1,0 +1,18 @@
+[[case]]
+name = "create_framework_shim_astro"
+vp = "global"
+skip-platforms = ["windows"]
+# Ignored: `vp create astro` runs the external `create-astro` scaffolder, which
+# pins the latest `astro` version at scaffold time. That version can be absent
+# from the registry we install against (seen v0.2.4: it pinned `astro@^7.0.7`
+# while npm's latest was `7.0.6`, so `vp install` failed `ERR_PNPM_NO_MATCHING_
+# VERSION`). Un-ignore once the astro version is pinned deterministically.
+local-registry = true
+ignore = true
+steps = [
+  { argv = ["vp", "create", "astro", "--no-interactive", "--", "my-astro-app", "--yes", "--skip-houston", "--template", "basics"], comment = "create Astro app", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-astro-app/src/env.d.ts"], comment = "check Astro shim", continue-on-failure = true },
+  { argv = ["vp", "install", "--ignore-scripts", "--", "--no-frozen-lockfile"], cwd = "my-astro-app", comment = "install dependencies", snapshot = false, continue-on-failure = true },
+  { argv = ["node", "delete-lines.cjs", "my-astro-app/vite.config.ts", "jsPlugins", "rules:", "options:"], comment = "fix generated formatting and ensure no errors", snapshot = false },
+  { argv = ["vp", "check", "--fix"], cwd = "my-astro-app", continue-on-failure = true },
+]

@@ -1,0 +1,7 @@
+{
+  "name": "vite-import-static-no-run",
+  "private": true,
+  "scripts": {
+    "build": "vpt print package-build-ran"
+  }
+}

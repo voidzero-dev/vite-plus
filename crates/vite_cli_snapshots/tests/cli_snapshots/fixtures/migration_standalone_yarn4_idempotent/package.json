@@ -1,0 +1,11 @@
+{
+  "name": "migration-standalone-yarn4-idempotent",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  },
+  "packageManager": "yarn@4.12.0"
+}

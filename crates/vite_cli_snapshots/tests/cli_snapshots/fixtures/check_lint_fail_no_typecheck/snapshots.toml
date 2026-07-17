@@ -1,0 +1,7 @@
+[[case]]
+name = "check_lint_fail_no_typecheck"
+vp = "local"
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "check"], continue-on-failure = true },
+]

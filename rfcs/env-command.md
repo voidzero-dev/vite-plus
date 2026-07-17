@@ -179,7 +179,12 @@ vp env install latest
 
 # Uninstall a Node.js version
 vp env uninstall 20.18.0
+
+# Clean unused managed caches
+vp env clean
 ```
+
+`vp env clean` removes all locally installed Node.js runtimes except the current resolved version and the configured default version. It also removes all downloaded Vite+ package-manager installs under `~/.vite-plus/package_manager` and runs `corepack cache clean` to clear Corepack-managed package-manager downloads.
 
 ### Global Package Commands
 
@@ -2132,6 +2137,27 @@ $ vp env list-remote --json
 }
 ```
 
+## Clean Command
+
+The `vp env clean` command reclaims space used by managed runtime and package-manager downloads.
+
+### Behavior
+
+- Preserves the Node.js version currently resolved for the working directory.
+- Preserves the configured global default Node.js version, when one is set.
+- Removes every other directory under `~/.vite-plus/js_runtime/node/`.
+- Removes all downloaded package-manager installs under `~/.vite-plus/package_manager/`.
+- Runs `corepack cache clean` so Corepack-managed package-manager downloads are removed too.
+
+### Example
+
+```bash
+$ vp env clean
+✓ Cleaned Corepack cache
+✓ Removed 2 Node.js runtimes
+✓ Removed 4 package manager installs
+```
+
 ### Current Command (JSON)
 
 ```bash
@@ -2331,8 +2357,9 @@ env-doctor/
 9. Implement `vp env pin [version]` for per-directory version pinning
 10. Implement `vp env unpin` as alias for `pin --unpin`
 11. Implement `vp env list` (local) and `vp env list-remote` (remote) to show versions
-12. Implement recursion prevention (`VP_TOOL_RECURSION`)
-13. Implement `vp env exec --node <version>` command
+12. Implement `vp env clean` to remove unused managed runtime and package-manager caches
+13. Implement recursion prevention (`VP_TOOL_RECURSION`)
+14. Implement `vp env exec --node <version>` command
 
 ### Phase 2: Full Tool Support (P1)
 

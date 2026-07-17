@@ -1,0 +1,9 @@
+[[case]]
+name = "command_config_no_agent_writes"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config"], tty = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "CLAUDE.md"], comment = "should be unchanged", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "AGENTS.md"], comment = "AGENTS.md must not be created" },
+]

@@ -161,15 +161,22 @@ export function renameFiles(projectDir: string): void {
   }
 }
 
+const DOTENV_GITIGNORE_LINES = [
+  '# dotenv environment variable files',
+  '.env',
+  '.env.*',
+  '!.env.example',
+] as const;
+
 /**
- * Make sure the scaffolded project's `.gitignore` excludes `node_modules`.
+ * Make sure the scaffolded project's `.gitignore` excludes default generated
+ * project artifacts.
  *
  * Called right after `git init` so even bundled `@org` templates (which
- * may ship without a `.gitignore`) don't end up tracking installed
- * dependencies on the user's first commit. No-op when an existing
- * `.gitignore` already lists `node_modules`.
+ * may ship without a `.gitignore`) don't end up tracking dependencies or
+ * local environment files on the user's first commit.
  */
-export function ensureGitignoreNodeModules(projectDir: string): void {
+export function ensureDefaultGitignoreEntries(projectDir: string): void {
   const gitignorePath = path.join(projectDir, '.gitignore');
   let content = '';
   try {
@@ -177,11 +184,44 @@ export function ensureGitignoreNodeModules(projectDir: string): void {
   } catch {
     // No existing .gitignore — we'll write a fresh one below.
   }
-  if (/^\s*node_modules\/?\s*$/m.test(content)) {
+
+  const lines: string[] = [];
+  if (!hasNodeModulesGitignoreLine(content)) {
+    lines.push('node_modules');
+  }
+
+  const missingDotenvLines = DOTENV_GITIGNORE_LINES.filter(
+    (line) => !hasGitignoreLine(content, line),
+  );
+  if (missingDotenvLines.length > 0) {
+    const startsDotenvSection = missingDotenvLines[0] === DOTENV_GITIGNORE_LINES[0];
+    if (lines.length > 0 || (startsDotenvSection && content.trim() !== '')) {
+      lines.push('');
+    }
+    lines.push(...missingDotenvLines);
+  }
+
+  appendGitignoreLines(gitignorePath, content, lines);
+}
+
+function hasNodeModulesGitignoreLine(content: string): boolean {
+  return /^\s*node_modules\/?\s*$/m.test(content);
+}
+
+function hasGitignoreLine(content: string, line: string): boolean {
+  return content.split(/\r?\n/).some((entry) => entry.trim() === line);
+}
+
+function appendGitignoreLines(
+  gitignorePath: string,
+  content: string,
+  lines: readonly string[],
+): void {
+  if (lines.length === 0) {
     return;
   }
   const prefix = content === '' || content.endsWith('\n') ? '' : '\n';
-  fs.appendFileSync(gitignorePath, `${prefix}node_modules\n`);
+  fs.appendFileSync(gitignorePath, `${prefix}${lines.join('\n')}\n`);
 }
 
 const VSCODE_SETTINGS_PATH = '.vscode/settings.json';
@@ -216,18 +256,6 @@ function appendGitignoreVsCodeEditorConfigsBlock(gitignorePath: string, content:
     return;
   }
   appendGitignoreLines(gitignorePath, content, VSCODE_CONFIG_UNIGNORE_BLOCK);
-}
-
-function appendGitignoreLines(
-  gitignorePath: string,
-  content: string,
-  lines: readonly string[],
-): void {
-  if (lines.length === 0) {
-    return;
-  }
-  const prefix = content === '' || content.endsWith('\n') ? '' : '\n';
-  fs.appendFileSync(gitignorePath, `${prefix}${lines.join('\n')}\n`);
 }
 
 export function formatDisplayTargetDir(targetDir: string) {

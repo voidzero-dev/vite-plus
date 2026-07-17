@@ -1,0 +1,391 @@
+name: Native Binary Size
+
+permissions: {}
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: native-binary-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  inputs:
+    name: Detect native input changes
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      merge_base_sha: ${{ steps.merge_base.outputs.sha }}
+    steps:
+      - name: Check out PR
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Full commit graph for merge-base resolution, but no historical
+          # blobs: the job only materializes the head and merge-base trees.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      # Compare against the PR's fork point (merge base) rather than the live
+      # tip of the base branch: a branch that forked before a native-input
+      # change landed on the base branch would otherwise rebuild and report
+      # deltas from commits already on the base branch (e.g. a docs-only PR
+      # forked before a deps upgrade).
+      - name: Resolve merge base
+        id: merge_base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          echo "sha=$MERGE_BASE" >> "$GITHUB_OUTPUT"
+          if git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- .github/workflows/vp-binary-size.yml; then
+            echo "workflow_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflow_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute PR native input hash
+        id: head
+        uses: ./.github/actions/compute-native-cache-input-hash
+
+      - name: Check out merge base
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.merge_base.outputs.sha }}
+          persist-credentials: false
+
+      - name: Compute merge-base native input hash
+        id: base
+        uses: ./.github/actions/compute-native-cache-input-hash
+
+      - name: Compare native inputs
+        id: compare
+        env:
+          BASE_HASH: ${{ steps.base.outputs.hash }}
+          HEAD_HASH: ${{ steps.head.outputs.hash }}
+          WORKFLOW_CHANGED: ${{ steps.merge_base.outputs.workflow_changed }}
+        run: |
+          if [[ "$BASE_HASH" != "$HEAD_HASH" || "$WORKFLOW_CHANGED" == "true" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build ${{ matrix.source }} ${{ matrix.settings.label }}
+    needs: inputs
+    if: needs.inputs.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [base, head]
+        settings:
+          - label: Linux x64
+            builder: upstream
+            os: namespace-profile-linux-x64-default
+            platform: linux
+            target: x86_64-unknown-linux-gnu
+          - label: macOS ARM64
+            builder: upstream
+            os: namespace-profile-mac-default
+            platform: macos
+            target: aarch64-apple-darwin
+          - label: Windows x64
+            builder: windows-cross
+            os: namespace-profile-linux-x64-default
+            platform: windows
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.settings.os }}
+    permissions:
+      contents: read
+    env:
+      DEBUG: 'napi:*'
+      RELEASE_BUILD: 'true'
+      VERSION: '0.0.0-native-size'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ matrix.source == 'base' && needs.inputs.outputs.merge_base_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 - Swatinem/rust-cache v2.9.1 for node24)
+        if: matrix.settings.builder == 'upstream'
+        with:
+          save-cache: false
+          cache-key: native-binary-size-${{ matrix.source }}-${{ matrix.settings.target }}
+
+      - name: Add Rust target
+        if: matrix.settings.builder == 'upstream'
+        run: rustup target add ${{ matrix.settings.target }}
+
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
+        if: matrix.settings.builder == 'upstream'
+
+      - name: Build final artifacts
+        if: matrix.settings.builder == 'upstream'
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.settings.target }}
+
+      - name: Cross-compile final Windows artifacts
+        if: matrix.settings.builder == 'windows-cross'
+        uses: ./.github/actions/build-windows-cli
+        with:
+          artifact-name: windows-cli-binaries-size-${{ matrix.source }}
+          save-cache: false
+
+      - name: Measure final artifacts
+        env:
+          PLATFORM: ${{ matrix.settings.platform }}
+          SIZE_FILE: ${{ runner.temp }}/native-size-${{ matrix.source }}-${{ matrix.settings.platform }}.json
+          SOURCE: ${{ matrix.source }}
+          TARGET: ${{ matrix.settings.target }}
+        run: |
+          node <<'NODE'
+          const { existsSync, readFileSync, writeFileSync } = require('node:fs');
+          const { gzipSync } = require('node:zlib');
+
+          const target = process.env.TARGET;
+          const paths =
+            process.env.PLATFORM === 'linux'
+              ? {
+                  vp: `target/${target}/release/vp`,
+                  napi: 'packages/cli/binding/vite-plus.linux-x64-gnu.node',
+                }
+              : process.env.PLATFORM === 'macos'
+                ? {
+                    vp: `target/${target}/release/vp`,
+                    napi: 'packages/cli/binding/vite-plus.darwin-arm64.node',
+                  }
+              : {
+                  vp: `target/${target}/release/vp.exe`,
+                  napi: 'packages/cli/binding/vite-plus.win32-x64-msvc.node',
+                  trampoline: `target/${target}/release/vp-shim.exe`,
+                  installer: `target/${target}/release/vp-setup.exe`,
+                };
+
+          const artifacts = {};
+          for (const [name, file] of Object.entries(paths)) {
+            if (!existsSync(file)) {
+              throw new Error(`Expected final ${name} artifact at ${file}`);
+            }
+            const contents = readFileSync(file);
+            artifacts[name] = {
+              path: file,
+              raw: contents.length,
+              gzip: gzipSync(contents, { level: 9 }).length,
+            };
+          }
+
+          const result = {
+            source: process.env.SOURCE,
+            target,
+            artifacts,
+          };
+          writeFileSync(process.env.SIZE_FILE, `${JSON.stringify(result, null, 2)}\n`);
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+
+      - name: Upload size measurements
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-size-${{ matrix.source }}-${{ matrix.settings.platform }}
+          path: ${{ runner.temp }}/native-size-${{ matrix.source }}-${{ matrix.settings.platform }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  cleanup:
+    name: Clear stale binary size report
+    needs: inputs
+    if: needs.inputs.outputs.changed != 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Delete stale size comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const marker = '<!-- vp-binary-size -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+              });
+            }
+
+  comment:
+    name: Report binary size
+    needs: build
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download size measurements
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: native-size-*
+          path: ${{ runner.temp }}/native-size
+          merge-multiple: true
+
+      - name: Comment size comparison
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SIZE_DIR: ${{ runner.temp }}/native-size
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+
+            const marker = '<!-- vp-binary-size -->';
+            const load = (source, platform) =>
+              JSON.parse(
+                fs.readFileSync(path.join(process.env.SIZE_DIR, `native-size-${source}-${platform}.json`)),
+              );
+            const baseLinux = load('base', 'linux');
+            const headLinux = load('head', 'linux');
+            const baseMacos = load('base', 'macos');
+            const headMacos = load('head', 'macos');
+            const baseWindows = load('base', 'windows');
+            const headWindows = load('head', 'windows');
+            const artifacts = [
+              {
+                name: '`vp` (Linux x64)',
+                baseRaw: baseLinux.artifacts.vp.raw,
+                baseGzip: baseLinux.artifacts.vp.gzip,
+                headRaw: headLinux.artifacts.vp.raw,
+                headGzip: headLinux.artifacts.vp.gzip,
+              },
+              {
+                name: 'NAPI (Linux x64)',
+                baseRaw: baseLinux.artifacts.napi.raw,
+                baseGzip: baseLinux.artifacts.napi.gzip,
+                headRaw: headLinux.artifacts.napi.raw,
+                headGzip: headLinux.artifacts.napi.gzip,
+              },
+              {
+                name: '`vp` (macOS ARM64)',
+                baseRaw: baseMacos.artifacts.vp.raw,
+                baseGzip: baseMacos.artifacts.vp.gzip,
+                headRaw: headMacos.artifacts.vp.raw,
+                headGzip: headMacos.artifacts.vp.gzip,
+              },
+              {
+                name: 'NAPI (macOS ARM64)',
+                baseRaw: baseMacos.artifacts.napi.raw,
+                baseGzip: baseMacos.artifacts.napi.gzip,
+                headRaw: headMacos.artifacts.napi.raw,
+                headGzip: headMacos.artifacts.napi.gzip,
+              },
+              {
+                name: '`vp` (Windows x64)',
+                baseRaw: baseWindows.artifacts.vp.raw,
+                baseGzip: baseWindows.artifacts.vp.gzip,
+                headRaw: headWindows.artifacts.vp.raw,
+                headGzip: headWindows.artifacts.vp.gzip,
+              },
+              {
+                name: 'NAPI (Windows x64)',
+                baseRaw: baseWindows.artifacts.napi.raw,
+                baseGzip: baseWindows.artifacts.napi.gzip,
+                headRaw: headWindows.artifacts.napi.raw,
+                headGzip: headWindows.artifacts.napi.gzip,
+              },
+              {
+                name: 'Trampoline (Windows x64)',
+                baseRaw: baseWindows.artifacts.trampoline.raw,
+                baseGzip: baseWindows.artifacts.trampoline.gzip,
+                headRaw: headWindows.artifacts.trampoline.raw,
+                headGzip: headWindows.artifacts.trampoline.gzip,
+              },
+              {
+                name: 'Installer (Windows x64)',
+                baseRaw: baseWindows.artifacts.installer.raw,
+                baseGzip: baseWindows.artifacts.installer.gzip,
+                headRaw: headWindows.artifacts.installer.raw,
+                headGzip: headWindows.artifacts.installer.gzip,
+              },
+            ];
+
+            const formatSize = (bytes, includePlus = false) => {
+              const absolute = Math.abs(bytes);
+              const sign = bytes < 0 ? '-' : includePlus && bytes > 0 ? '+' : '';
+              if (absolute >= 1024 ** 2) {
+                return `${sign}${(absolute / 1024 ** 2).toFixed(2)} MiB`;
+              }
+              if (absolute >= 1024) {
+                return `${sign}${(absolute / 1024).toFixed(2)} KiB`;
+              }
+              return `${sign}${absolute.toLocaleString('en-US')} B`;
+            };
+            const formatDelta = (base, head) => {
+              const delta = head - base;
+              const percent = base === 0 ? 0 : (delta / base) * 100;
+              const sign = delta > 0 ? '+' : '';
+              return `${formatSize(delta, true)} (${sign}${percent.toFixed(2)}%)`;
+            };
+
+            const shortSha = process.env.HEAD_SHA.slice(0, 7);
+            const rows = artifacts.flatMap((artifact) => [
+              `| ${artifact.name} | Binary | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
+              `| ${artifact.name} | gzip -9 | ${formatSize(artifact.baseGzip)} | ${formatSize(artifact.headGzip)} | ${formatDelta(artifact.baseGzip, artifact.headGzip)} |`,
+            ]);
+            const body = [
+              marker,
+              '',
+              `### Native binary sizes (\`${shortSha}\`)`,
+              '',
+              'Final release artifacts built by the canonical `build-upstream` and `build-windows-cli` actions.',
+              '',
+              '| Artifact | Format | Base | PR | Change |',
+              '| --- | --- | ---: | ---: | ---: |',
+              ...rows,
+            ].join('\n');
+
+            await core.summary.addRaw(body.replace(marker, '')).write();
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

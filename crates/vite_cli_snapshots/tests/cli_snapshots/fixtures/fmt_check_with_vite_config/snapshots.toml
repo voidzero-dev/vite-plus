@@ -1,0 +1,6 @@
+[[case]]
+name = "fmt_check_with_vite_config"
+vp = "local"
+steps = [
+  { argv = ["vp", "fmt", "--check"], comment = "Test that vp fmt --check uses vite.config.ts", continue-on-failure = true },
+]

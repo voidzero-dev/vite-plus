@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "env": {},
-  "commands": [
-    "vp install -g pnpm > /dev/null # Ensure pnpm is globally installed",
-    "vp env exec node -v # Node version resolved from .node-version",
-    "vp env exec pnpm exec node -v # pnpm should use same project Node version"
-  ]
-}

@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "0.2.1",
+  "version": "0.2.5",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -16,7 +16,8 @@
   "bin": {
     "oxfmt": "./bin/oxfmt",
     "oxlint": "./bin/oxlint",
-    "vp": "./bin/vp"
+    "vp": "./bin/vp",
+    "vpr": "./bin/vpr"
   },
   "files": [
     "AGENTS.md",
@@ -354,9 +355,6 @@
     "build": "oxnode -C dev ./build.ts",
     "build-ts": "oxnode -C dev ./build.ts --skip-native",
     "build-native": "oxnode -C dev ./build.ts --skip-ts",
-    "snap-test": "pnpm snap-test-local && pnpm snap-test-global",
-    "snap-test-local": "tool snap-test",
-    "snap-test-global": "tool snap-test --dir snap-tests-global --bin-dir ~/.vite-plus/bin",
     "publish-native": "node ./publish-native-addons.ts",
     "test": "vitest run"
   },

@@ -1,7 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
-  "commands": ["vp pack src/index.ts --exe"]
-}

@@ -15,6 +15,10 @@ const taskRunnerGuideItems = [
   {
     text: 'Task Caching',
     link: '/guide/cache',
+    items: [
+      { text: 'Automatic Data Tracking', link: '/guide/automatic-data-tracking' },
+      { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
+    ],
   },
   {
     text: 'Running Binaries',
@@ -31,6 +35,7 @@ const guideSidebar = [
       { text: 'Migrate to Vite+', link: '/guide/migrate' },
       { text: 'Installing Dependencies', link: '/guide/install' },
       { text: 'Environment', link: '/guide/env' },
+      { text: 'Installer Environment Variables', link: '/guide/installer-env-vars' },
       { text: 'Why Vite+', link: '/guide/why' },
     ],
   },
@@ -72,6 +77,7 @@ const guideSidebar = [
     items: [
       { text: 'IDE Integration', link: '/guide/ide-integration' },
       { text: 'CI', link: '/guide/ci' },
+      { text: 'Docker', link: '/guide/docker' },
       { text: 'Commit Hooks', link: '/guide/commit-hooks' },
       { text: 'Monorepo Guide', link: '/guide/monorepo' },
       { text: 'Troubleshooting', link: '/guide/troubleshooting' },
@@ -149,7 +155,7 @@ export default extendConfig(
               { text: 'Releases', link: 'https://github.com/voidzero-dev/vite-plus/releases' },
               {
                 text: 'Announcement',
-                link: 'https://voidzero.dev/posts/announcing-vite-plus-alpha',
+                link: 'https://voidzero.dev/posts/announcing-vite-plus-beta',
               },
               {
                 text: 'Contributing',

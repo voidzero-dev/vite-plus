@@ -1,0 +1,7 @@
+[[case]]
+name = "command_outdated_yarn4"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "outdated", "--", "-h"], comment = "should show yarn upgrade-interactive help", continue-on-failure = true },
+]

@@ -1,0 +1,54 @@
+[[case]]
+name = "pm_version_npm"
+vp = "local"
+cwd = "npm"
+steps = [
+  { argv = ["vp", "pm", "version", "patch", "--", "--no-git-tag-version"], comment = "npm bumps the package version", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "2.0.0", "--json", "--", "--no-git-tag-version"], comment = "npm accepts an explicit version with JSON output", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "prerelease", "--", "--preid", "beta", "--no-git-tag-version"], comment = "npm creates a prerelease with a custom identifier", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify the version was updated" },
+]
+
+[[case]]
+name = "pm_version_pnpm"
+vp = "local"
+cwd = "pnpm"
+steps = [
+  { argv = ["vp", "pm", "version", "patch", "--", "--no-git-tag-version"], comment = "pnpm bumps the package version", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "2.0.0", "--json", "--", "--no-git-tag-version"], comment = "pnpm accepts an explicit version with JSON output", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "prerelease", "--", "--preid", "beta", "--no-git-tag-version"], comment = "pnpm creates a prerelease with a custom identifier", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify the version was updated" },
+]
+
+[[case]]
+name = "pm_version_yarn"
+vp = "local"
+cwd = "yarn"
+steps = [
+  { argv = ["vp", "pm", "version", "patch", "--json", "--", "--no-git-tag-version"], comment = "Yarn Classic bumps the package version with JSON output", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "2.0.0", "--json", "--", "--no-git-tag-version"], comment = "Yarn Classic accepts an explicit version with JSON output", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "prerelease", "--json", "--", "--preid", "beta", "--no-git-tag-version"], comment = "Yarn Classic creates a prerelease with a custom identifier", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify the version was updated" },
+]
+
+[[case]]
+name = "pm_version_yarn_berry"
+vp = "local"
+cwd = "yarn_berry"
+env = { YARN_ENABLE_TELEMETRY = "0" }
+steps = [
+  { argv = ["vp", "pm", "version", "patch"], comment = "Yarn Berry bumps the package version", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "2.0.0", "--json"], comment = "Yarn Berry rejects unsupported JSON output", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify the rejected command did not update the version" },
+]
+
+[[case]]
+name = "pm_version_bun"
+vp = "local"
+cwd = "bun"
+steps = [
+  { argv = ["vp", "pm", "version", "patch", "--", "--no-git-tag-version"], comment = "Bun bumps the package version", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "prerelease", "--", "--preid", "beta", "--no-git-tag-version"], comment = "Bun creates a prerelease with a custom identifier", continue-on-failure = true },
+  { argv = ["vp", "pm", "version", "2.0.0", "--json"], comment = "Bun rejects unsupported JSON output", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify the rejected command did not update the version" },
+]

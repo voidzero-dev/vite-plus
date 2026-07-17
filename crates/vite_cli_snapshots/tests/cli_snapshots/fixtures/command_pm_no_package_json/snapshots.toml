@@ -1,0 +1,10 @@
+[[case]]
+name = "command_pm_no_package_json"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "ls"], comment = "should show friendly error", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune"], comment = "should show friendly error", continue-on-failure = true },
+  { argv = ["vp", "outdated"], comment = "should show friendly error", continue-on-failure = true },
+  { argv = ["vp", "why", "lodash"], comment = "should show friendly error", continue-on-failure = true },
+]

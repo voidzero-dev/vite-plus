@@ -1,0 +1,28 @@
+[[case]]
+name = "cli_helper_message"
+vp = "global"
+steps = [
+  { argv = ["vp", "-h"], comment = "show help message" },
+  { argv = ["vp", "-V"], comment = "show version" },
+  { argv = ["vp", "install", "-h"], comment = "show install help message" },
+  { argv = ["vp", "add", "-h"], comment = "show add help message" },
+  { argv = ["vp", "remove", "-h"], comment = "show remove help message" },
+  { argv = ["vp", "update", "-h"], comment = "show update help message" },
+  { argv = ["vp", "link", "-h"], comment = "show link help message" },
+  { argv = ["vp", "unlink", "-h"], comment = "show unlink help message" },
+  { argv = ["vp", "dedupe", "-h"], comment = "show dedupe help message" },
+  { argv = ["vp", "outdated", "-h"], comment = "show outdated help message" },
+  { argv = ["vp", "why", "-h"], comment = "show why help message" },
+  { argv = ["vp", "info", "-h"], comment = "show info help message" },
+  { argv = ["vp", "pm", "-h"], comment = "show pm help message" },
+  { argv = ["vp", "env"], comment = "show env help message" },
+  { argv = ["vp", "upgrade", "-h"], comment = "show upgrade help message" },
+]
+
+[[case]]
+name = "cli_helper_message_local"
+vp = "local"
+steps = [
+  { argv = ["vp", "-h"], comment = "show help message" },
+  { argv = ["vp", "-V"], comment = "show version" },
+]

@@ -1,0 +1,520 @@
+# cli_helper_message
+
+## `vp -h`
+
+show help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp [COMMAND]
+
+Start:
+  create      Create a new project from a template
+  migrate     Migrate an existing project to Vite+
+  config      Configure hooks and agent integration
+  staged      Run linters on staged files
+  install, i  Install all dependencies, or add packages if package names are provided
+  env         Manage Node.js versions
+
+Develop:
+  dev          Run the development server
+  check        Run format, lint, and type checks
+  lint         Lint code
+  fmt, format  Format code
+  test         Run tests
+
+Execute:
+  run    Run tasks (also available as standalone `vpr`)
+  exec   Execute a command from local node_modules/.bin
+  node   Run a Node.js script (shorthand for `env exec node`)
+  dlx    Execute a package binary without installing it as a dependency
+  cache  Manage the task cache
+
+Build:
+  build    Build for production
+  pack     Build library
+  preview  Preview production build
+
+Manage Dependencies:
+  add                        Add packages to dependencies
+  remove, rm, un, uninstall  Remove packages from dependencies
+  update, up                 Update packages to their latest versions
+  dedupe                     Deduplicate dependencies by removing older versions
+  outdated                   Check for outdated packages
+  list, ls                   List installed packages
+  why, explain               Show why a package is installed
+  info, view, show           View package information from the registry
+  link, ln                   Link packages for local development
+  unlink                     Unlink packages
+  rebuild                    Rebuild native modules
+  pm                         Forward a command to the package manager
+
+Maintain:
+  upgrade  Update vp itself to the latest version
+  implode  Remove vp and all related data
+
+Documentation: https://viteplus.dev/guide/
+
+Options:
+  -V, --version  Print version
+  -h, --help     Print help
+```
+
+## `vp -V`
+
+show version
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+vp <version>
+
+Local vite-plus:
+  vite-plus  <version>
+
+Tools:
+  vite             <version>
+  rolldown         <version>
+  vitest           <version>
+  oxfmt            <version>
+  oxlint           <version>
+  oxlint-tsgolint  <version>
+  tsdown           <version>
+
+Environment:
+  Package manager  Not found
+  Node.js          <version>
+```
+
+## `vp install -h`
+
+show install help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Install all dependencies, or add packages if package names are provided
+
+Arguments:
+  [PACKAGES]...           Packages to add (if provided, acts as `vp add`)
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -P, --prod                   Do not install devDependencies
+  -D, --dev                    Only install devDependencies (install) / Save to devDependencies (add)
+  --no-optional                Do not install optionalDependencies
+  --frozen-lockfile            Fail if lockfile needs to be updated (CI mode)
+  --no-frozen-lockfile         Allow lockfile updates (opposite of --frozen-lockfile)
+  --lockfile-only              Only update lockfile, don't install
+  --prefer-offline             Use cached packages when available
+  --offline                    Only use packages already in cache
+  -f, --force                  Force reinstall all dependencies
+  --ignore-scripts             Do not run lifecycle scripts
+  --no-lockfile                Don't read or generate lockfile
+  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --shamefully-hoist           Create flat `node_modules` (pnpm only)
+  --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
+  --silent                     Suppress output (silent mode)
+  --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root         Install in workspace root only
+  -E, --save-exact             Save exact version (only when adding packages)
+  --save-peer                  Save to peerDependencies (only when adding packages)
+  -O, --save-optional          Save to optionalDependencies (only when adding packages)
+  --save-catalog               Save the new dependency to the default catalog (only when adding packages)
+  -g, --global                 Install globally (requires package names)
+  --node <NODE>                Node.js version to use for global installation (only with -g)
+  --concurrency <CONCURRENCY>  Number of global package installs to run in parallel (only with -g)
+  -h, --help                   Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp add -h`
+
+show add help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Add packages to dependencies
+
+Arguments:
+  <PACKAGES>...           Packages to add
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -P, --save-prod                     Save to `dependencies` (default)
+  -D, --save-dev                      Save to `devDependencies`
+  --save-peer                         Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional                 Save to `optionalDependencies`
+  -E, --save-exact                    Save exact version rather than semver range
+  --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
+  --save-catalog                      Save the new dependency to the default catalog
+  --allow-build <NAMES>               A list of package names allowed to run postinstall
+  --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root                Add to workspace root
+  --workspace                         Only add if package exists in workspace (pnpm-specific)
+  -g, --global                        Install globally
+  --node <NODE>                       Node.js version to use for global installation (only with -g)
+  --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
+  -h, --help                          Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp remove -h`
+
+show remove help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Remove packages from dependencies
+
+Arguments:
+  <PACKAGES>...           Packages to remove
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -D, --save-dev        Only remove from `devDependencies` (pnpm-specific)
+  -O, --save-optional   Only remove from `optionalDependencies` (pnpm-specific)
+  -P, --save-prod       Only remove from `dependencies` (pnpm-specific)
+  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root  Remove from workspace root
+  -r, --recursive       Remove recursively from all workspace packages
+  -g, --global          Remove global packages
+  --dry-run             Preview what would be removed without actually removing (only with -g)
+  -h, --help            Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp update -h`
+
+show update help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Update packages to their latest versions
+
+Arguments:
+  [PACKAGES]...           Packages to update (optional - updates all if omitted)
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -L, --latest                 Update to latest version (ignore semver range)
+  -g, --global                 Update global packages
+  --concurrency <CONCURRENCY>  Number of global package updates to run in parallel (only with -g)
+  --reinstall-node-mismatch    Reinstall up-to-date global packages installed with a different Node.js version
+  --ignore-node-mismatch       Skip up-to-date global packages installed with a different Node.js version
+  -r, --recursive              Update recursively in all workspace packages
+  --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root         Include workspace root
+  -D, --dev                    Update only devDependencies
+  -P, --prod                   Update only dependencies (production)
+  -i, --interactive            Interactive mode
+  --no-optional                Don't update optionalDependencies
+  --no-save                    Update lockfile only, don't modify package.json
+  --workspace                  Only update if package exists in workspace (pnpm-specific)
+  -h, --help                   Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp link -h`
+
+show link help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp link [PACKAGE|DIR] [ARGS]...
+
+Link packages for local development
+
+Arguments:
+  [PACKAGE|DIR]  Package name or directory to link
+  [ARGS]...      Arguments to pass to package manager
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp unlink -h`
+
+show unlink help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+
+Unlink packages
+
+Arguments:
+  [PACKAGE|DIR]  Package name to unlink
+  [ARGS]...      Arguments to pass to package manager
+
+Options:
+  -r, --recursive  Unlink in every workspace package
+  -h, --help       Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp dedupe -h`
+
+show dedupe help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Deduplicate dependencies
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  --check     Check if deduplication would make changes
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp outdated -h`
+
+show outdated help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Check for outdated packages
+
+Arguments:
+  [PACKAGES]...           Package name(s) to check
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  --long                       Show extended information
+  --format <FORMAT>            Output format: table (default), list, or json
+  -r, --recursive              Check recursively across all workspaces
+  --filter <PATTERN>           Filter packages in monorepo
+  -w, --workspace-root         Include workspace root
+  -P, --prod                   Only production and optional dependencies
+  -D, --dev                    Only dev dependencies
+  --no-optional                Exclude optional dependencies
+  --compatible                 Only show compatible versions
+  --sort-by <FIELD>            Sort results by field
+  -g, --global                 Check globally installed packages
+  --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
+  -h, --help                   Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp why -h`
+
+show why help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Show why a package is installed
+
+Arguments:
+  <PACKAGES>...           Package(s) to check
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Show parseable output
+  -r, --recursive          Check recursively across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -w, --workspace-root     Check in workspace root
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --depth <DEPTH>          Limit tree depth
+  --no-optional            Exclude optional dependencies
+  --exclude-peers          Exclude peer dependencies
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
+  -h, --help               Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp info -h`
+
+show info help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp info [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+
+View package information from the registry
+
+Arguments:
+  <PACKAGE>               Package name with optional version
+  [FIELD]                 Specific field to view
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  --json      Output in JSON format
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp pm -h`
+
+show pm help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm <COMMAND>
+
+Forward a command to the package manager
+
+Commands:
+  approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
+  prune             Remove unnecessary packages
+  pack              Create a tarball of the package
+  list, ls          List installed packages
+  view, info, show  View package information from the registry
+  version           Forward the native package version command
+  publish           Publish package to registry
+  stage             Stage a package for publishing (npm staged publishing workflow)
+  owner, author     Manage package owners
+  cache             Manage package cache
+  config, c         Manage package manager configuration
+  login, adduser    Log in to a registry
+  logout            Log out from a registry
+  whoami            Show the current logged-in user
+  token             Manage authentication tokens
+  audit             Run a security audit
+  dist-tag          Manage distribution tags
+  deprecate         Deprecate a package version
+  search            Search for packages in the registry
+  rebuild, rb       Rebuild native modules
+  fund              Show funding information for installed packages
+  ping              Ping the registry
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp env`
+
+show env help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp env [COMMAND]
+
+Manage Node.js versions
+
+Setup:
+  setup  Create or update shims in VP_HOME/bin
+  on     Enable managed mode - shims always use vite-plus managed Node.js
+  off    Enable system-first mode - shims prefer system Node.js, fallback to managed
+  print  Print shell snippet to set environment for current session
+
+Manage:
+  default         Set or show the global default Node.js version
+  pin             Pin a Node.js version in the current directory
+  unpin           Remove the Node.js pin from the current directory (alias for `pin --unpin`)
+  use             Use a specific Node.js version for this shell session
+  install, i      Install a Node.js version
+  uninstall, uni  Uninstall a Node.js version
+  clean           Remove unused managed runtimes and package manager caches
+  exec, run       Execute a command with a specific Node.js version
+
+Inspect:
+  current                 Show current environment information
+  doctor                  Run diagnostics and show environment status
+  which                   Show path to the tool that would be executed
+  list, ls                List locally installed Node.js versions
+  list-remote, ls-remote  List available Node.js versions from the registry
+
+Examples:
+  Setup:
+    vp env setup                  # Create shims for node, npm, npx, corepack
+    vp env on                     # Use vite-plus managed Node.js
+    vp env print                  # Print shell snippet for this session
+
+  Manage:
+    vp env pin lts                # Pin to latest LTS version
+    vp env install                # Install version from .node-version / package.json
+    vp env use 20                 # Use Node.js 20 for this shell session
+    vp env use --unset            # Remove session override
+    vp env clean                  # Remove unused managed caches
+
+  Inspect:
+    vp env current                # Show current resolved environment
+    vp env current --json         # JSON output for automation
+    vp env doctor                 # Check environment configuration
+    vp env which node             # Show which node binary will be used
+    vp env list-remote --lts      # List only LTS versions
+
+  Execute:
+    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
+    vp env exec node -v           # Shim mode (version auto-resolved)
+
+Related Commands:
+  vp install -g <package>       # Install a package globally
+  vp uninstall -g <package>     # Uninstall a package globally
+  vp update -g [package]        # Update global packages
+  vp outdated -g [package]      # List outdated packages
+  vp list -g [package]          # List global packages
+
+Documentation: https://viteplus.dev/guide/env
+```
+
+## `vp upgrade -h`
+
+show upgrade help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp upgrade [OPTIONS] [VERSION]
+
+Update vp itself to the latest version
+
+Arguments:
+  [VERSION]  Target version (e.g., "0.2.0"). Defaults to latest
+
+Options:
+  --tag <TAG>            npm dist-tag to install (default: "latest", also: "alpha") [default: latest]
+  --check                Check for updates without installing
+  --rollback             Revert to the previously active version
+  --force                Force reinstall even if already on the target version
+  --silent               Suppress output
+  --registry <REGISTRY>  Custom npm registry URL
+  -h, --help             Print help
+
+Documentation: https://viteplus.dev/guide/upgrade
+```

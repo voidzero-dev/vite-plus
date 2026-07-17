@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
+import { readPackageJsonFromTarball } from './org-tarball.ts';
 
 /**
  * A single template entry shared by org manifests (`createConfig.templates`)
@@ -291,6 +292,11 @@ async function fetchPackument(
  * - the package does not exist on the registry (404), or
  * - the package exists but has no `createConfig.templates` field
  *
+ * When the packument version metadata lacks `createConfig` entirely, the
+ * published tarball's package.json is consulted before giving up — some
+ * registries (GitHub Packages among them) strip custom fields from version
+ * metadata while preserving the tarball byte-for-byte.
+ *
  * Throws when:
  * - the `createConfig.templates` field is present but malformed (`OrgManifestSchemaError`), or
  * - the registry request fails for any non-404 reason
@@ -331,7 +337,22 @@ export async function readOrgManifest(
   if (!meta) {
     return null;
   }
-  const templates = validateManifest(meta, packageName);
+  let templates = validateManifest(meta, packageName);
+  if (!templates && meta.createConfig === undefined && meta.dist?.tarball) {
+    // `createConfig` absent (not merely empty) means the registry either
+    // stripped it from the version metadata or the package has no manifest;
+    // probe the published tarball to tell the two apart (see
+    // `readPackageJsonFromTarball`). The probe is best-effort: any
+    // download/integrity/parse failure degrades to "no manifest" so a normal
+    // `@scope/create` package still reaches the passthrough path. A manifest
+    // that IS present but malformed still throws, because `validateManifest`
+    // runs outside the catch.
+    const packageJson = await readPackageJsonFromTarball(
+      meta.dist.tarball,
+      meta.dist.integrity,
+    ).catch(() => null);
+    templates = validateManifest(packageJson, packageName);
+  }
   if (!templates) {
     return null;
   }

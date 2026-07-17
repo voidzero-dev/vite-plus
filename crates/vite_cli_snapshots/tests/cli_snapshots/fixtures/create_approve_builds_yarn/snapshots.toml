@@ -1,0 +1,12 @@
+[[case]]
+name = "create_approve_builds_yarn"
+vp = "local"
+env = { ADBLOCK = "1" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:with-build-dep", "--no-interactive", "--approve-builds", "--package-manager", "yarn", "--directory", "approved-app"], comment = "yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "approved-app/package.json"], comment = "core-js recorded under dependenciesMeta.built", continue-on-failure = true },
+  { argv = ["vp", "create", "@your-org:with-build-dep", "--no-interactive", "--package-manager", "yarn", "--directory", "default-app"], comment = "default run surfaces the gated build with guidance, leaving it disabled", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "default-app/package.json"], comment = "no dependenciesMeta, the build was not run", continue-on-failure = true },
+]

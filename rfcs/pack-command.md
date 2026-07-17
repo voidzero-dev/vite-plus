@@ -412,14 +412,13 @@ This RFC documents an existing command with no breaking changes:
 
 The `exe` option accepts an object for advanced configuration:
 
+<!-- prettier-ignore -->
 ```ts
 export default {
   pack: {
     entry: 'src/cli.ts',
     exe: {
-      seaConfig: {
-        /* Node.js SEA config overrides */
-      },
+      seaConfig: {/* Node.js SEA config overrides */},
       fileName: 'my-cli',
       targets: [
         { platform: 'linux', arch: 'x64', nodeVersion: '25.7.0' },

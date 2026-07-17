@@ -1,0 +1,12 @@
+[[case]]
+name = "command_env_use"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_ENV_USE_EVAL_ENABLE = "1" }
+steps = [
+  { argv = ["vp", "env", "use", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should output export command to stdout", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "--unset"], comment = "should output unset command to stdout", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "d"], comment = "should show friendly error for invalid version", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "abc"], comment = "should show friendly error for invalid version", continue-on-failure = true },
+]

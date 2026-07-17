@@ -1,0 +1,11 @@
+[[case]]
+name = "command_config_postinstall_auto_hooks"
+vp = "global"
+env = { npm_lifecycle_event = "postinstall" }
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config"], comment = "should install hooks automatically without prompting", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "should have vp staged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "should have staged config", continue-on-failure = true },
+]

@@ -1,0 +1,117 @@
+name: Test Docker Image
+
+permissions: {}
+
+on:
+  # Manual runs can pin a specific vp version or verify a PR's registry-bridge
+  # build. Leave both blank to use the Dockerfile defaults (VP_VERSION=latest).
+  workflow_dispatch:
+    inputs:
+      vp_version:
+        description: 'vp version or dist-tag to install (blank = Dockerfile default: latest)'
+        required: false
+        type: string
+      vp_pr_version:
+        description: 'PR number or commit SHA to build a preview image from the registry bridge (overrides vp_version)'
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/test-docker-image.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-smoke-test:
+    name: Build and smoke-test the toolchain image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      IMAGE: vite-plus:ci-smoke
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      # Only forward build-args that were provided (manual runs), so
+      # empty inputs fall back to the Dockerfile defaults instead of overriding
+      # them with empty strings.
+      - name: Resolve build args
+        id: buildargs
+        env:
+          VP_VERSION: ${{ inputs.vp_version }}
+          VP_PR_VERSION: ${{ inputs.vp_pr_version }}
+        run: |
+          {
+            echo "args<<__EOF__"
+            if [ -n "$VP_VERSION" ]; then echo "VP_VERSION=$VP_VERSION"; fi
+            if [ -n "$VP_PR_VERSION" ]; then echo "VP_PR_VERSION=$VP_PR_VERSION"; fi
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      # Build the toolchain image locally and load it into the daemon (no push).
+      # amd64-only keeps it fast; the release build covers arm64.
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}
+          build-args: ${{ steps.buildargs.outputs.args }}
+          provenance: false
+
+      # Guard the security/DX balance the image commits to: it stays non-root by
+      # default, yet the vp user can reach root through sudo. The apt-get check is
+      # the exact escalation `playwright install --with-deps` performs, so this
+      # would have caught the missing-sudo failure from issue #2087.
+      - name: Smoke test
+        run: |
+          docker run --rm "$IMAGE" sh -euc '
+            echo "== default user is the non-root vp (uid 1000) =="
+            user=$(whoami); uid=$(id -u)
+            echo "user=$user uid=$uid"
+            [ "$user" = vp ] || { echo "FAIL: expected default user vp, got $user"; exit 1; }
+            [ "$uid" = 1000 ] || { echo "FAIL: expected uid 1000, got $uid"; exit 1; }
+
+            echo "== sudo present so playwright install --with-deps takes the sudo branch =="
+            command -v sudo >/dev/null || { echo "FAIL: sudo not on PATH"; exit 1; }
+
+            echo "== passwordless sudo works (no su-root password fallback) =="
+            sudo -n true || { echo "FAIL: passwordless sudo did not work"; exit 1; }
+
+            echo "== the exact apt-get escalation playwright runs succeeds =="
+            sudo -n -- sh -c "apt-get --version >/dev/null" || { echo "FAIL: elevated apt-get"; exit 1; }
+
+            echo "== vp is installed and runnable =="
+            vp --version
+
+            echo "ALL SMOKE CHECKS PASSED"
+          '
+
+      # End-to-end proof for issue #2087: run a real Vitest browser-mode test
+      # (Playwright, headless Chromium) with `vp test` inside the image. This
+      # exercises the whole path the report needed and the smoke test only
+      # simulates: `playwright install --with-deps` escalating to root via sudo,
+      # then launching Chromium as the non-root vp user. On the old (sudo-less)
+      # image the install step fails with `su: Authentication failure`.
+      # Repro repo: https://github.com/why-reproductions-are-required/vite-plus-vitest-browser-mode
+      - name: Vitest browser mode e2e (vp test)
+        run: |
+          docker run --rm -w /app "$IMAGE" bash -euc '
+            git clone --depth 1 https://github.com/why-reproductions-are-required/vite-plus-vitest-browser-mode .
+            vp install --frozen-lockfile
+            vp exec playwright install --with-deps chromium
+            vp test
+          '

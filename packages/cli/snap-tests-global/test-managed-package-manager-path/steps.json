@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "sh -c 'vp_bin=$(command -v vp) && node_path=$(command -v node) && node_bin=$(mktemp -d) && ln -s \"$node_path\" \"$node_bin/node\" && sanitized_path=\"$node_bin:/bin:/usr/bin\" && PATH=\"$sanitized_path\" node --version >/dev/null && if PATH=\"$sanitized_path\" command -v pnpm >/dev/null; then echo \"pnpm unexpectedly available on sanitized PATH\"; exit 1; fi && PATH=\"$sanitized_path\" \"$vp_bin\" test --slowTestThreshold 10000'"
-  ]
-}

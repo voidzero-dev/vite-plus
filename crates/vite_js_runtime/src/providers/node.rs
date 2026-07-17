@@ -497,7 +497,7 @@ fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Er
 /// # Errors
 ///
 /// Returns an error if no matching version is found or if the version requirement is invalid.
-fn resolve_version_from_list(
+pub fn resolve_version_from_list(
     version_req: &str,
     versions: &[NodeVersionEntry],
 ) -> Result<Str, Error> {

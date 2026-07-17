@@ -1,0 +1,30 @@
+[[case]]
+name = "file_roundtrip"
+vp = "global"
+comment = "vpt setup/assertion helpers behave identically across platforms."
+steps = [
+  ["vpt", "write-file", "notes/hello.txt", "hello from vpt"],
+  ["vpt", "print-file", "notes/hello.txt"],
+  ["vpt", "stat-file", "notes/hello.txt", "missing.txt"],
+  ["vpt", "list-dir", "notes"],
+  ["vpt", "json-edit", "package.json", "scripts.build", "vp build"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vpt", "touch-file", "created-by-touch.txt"], comment = "touch-file creates missing files" },
+  { argv = ["vpt", "stat-file", "created-by-touch.txt", "notes"], comment = "stat-file reports the entry type: file, dir, symlink, or missing" },
+  { argv = ["vpt", "rm", "-f", "never-existed.txt"], comment = "rm -f ignores missing targets" },
+  { argv = ["vpt", "cp", "created-by-touch.txt", "notes"], comment = "cp into an existing directory, like real cp" },
+  ["vpt", "list-dir", "notes"],
+  { argv = ["vpt", "list-dir", "notes/hello.txt"], comment = "list-dir on a file prints the path, like ls" },
+  { argv = ["vpt", "chmod", "+x", "created-by-touch.txt"], comment = "symbolic +x is accepted (no-op on Windows)" },
+  { argv = ["vpt", "pipe-stdin", "--", "vpt", "read-stdin"], comment = "empty pipe-stdin data means empty stdin, not a bare newline" },
+  { argv = ["vpt", "pipe-stdin", "hello", "--", "vpt", "read-stdin"] },
+  { argv = ["vpt", "touch-file", "multi-a.txt", "multi-b.txt"], comment = "touch-file creates every operand" },
+  ["vpt", "stat-file", "multi-b.txt"],
+  ["vpt", "mkdir", "existing-dir"],
+  { argv = ["vpt", "cp", "-r", "notes", "existing-dir"], comment = "cp -r into an existing directory nests like real cp" },
+  ["vpt", "list-dir", "existing-dir/notes"],
+  { argv = ["vpt", "grep-file", "notes/hello.txt", "from vpt"], comment = "grep-file succeeds on a match" },
+  { argv = ["vpt", "grep-file", "notes/hello.txt", "absent text"], comment = "grep-file fails like grep when the pattern is absent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "no-such-file.txt"], comment = "print-file fails like cat on a missing operand", continue-on-failure = true },
+  { argv = ["vpt", "exit", "3"], comment = "Nonzero exit codes are recorded in the snapshot." },
+]

@@ -1,0 +1,84 @@
+# command_dlx_npm10
+
+## `vp dlx --help`
+
+should show help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp dlx [OPTIONS] <ARGS>...
+
+Execute a package binary without installing it
+
+Arguments:
+  <ARGS>...  Package to execute and arguments
+
+Options:
+  -p, --package <NAME>  Package(s) to install before running
+  -c, --shell-mode      Execute within a shell environment
+  -s, --silent          Suppress all output except the executed command's output
+  -h, --help            Print help
+
+Documentation: https://viteplus.dev/guide/vpx
+```
+
+## `vp dlx -s cowsay hello`
+
+should run cowsay with npm exec
+
+```
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```
+
+## `vp dlx -s cowsay@1.6.0 hello`
+
+should run specific version
+
+```
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```
+
+## `vp dlx -s -p cowsay -p lolcatjs cowsay hello`
+
+should run with multiple packages
+
+```
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```
+
+## `vp dlx -s -p cowsay -c 'echo hello-from-shell | cowsay'`
+
+should run shell mode command (vp's own shell handles the pipe)
+
+```
+ __________________
+< hello-from-shell >
+ ------------------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```

@@ -1,0 +1,8 @@
+[[case]]
+name = "test_inline_snapshot_indent"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "test", "run", "-u", "src/inline-snapshot.test.ts"], comment = "write inline snapshot via --update (regression test for #1553)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/inline-snapshot.test.ts"], comment = "snapshot must use 2-space indentation, not tabs", continue-on-failure = true },
+]

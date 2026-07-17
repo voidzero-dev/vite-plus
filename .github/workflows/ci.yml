@@ -11,8 +11,13 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
+    # `paths` with negations instead of paths-ignore: PTY snapshot baselines
+    # are .md files (crates/vite_cli_snapshots/**/snapshots/*.md) and a
+    # baseline-only push must still run CI. Later patterns win.
+    paths:
+      - '**'
+      - '!**/*.md'
+      - 'crates/vite_cli_snapshots/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -44,10 +49,13 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      code-changed: ${{ steps.filter.outputs.code }}
+      # snapshots is OR-ed in because the PTY runner stores its assertions
+      # as .md files (fixtures/**/snapshots/*.md), which the code filter's
+      # markdown exclusion would otherwise classify as docs-only.
+      code-changed: ${{ steps.filter.outputs.code == 'true' || steps.filter.outputs.snapshots == 'true' }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           predicate-quantifier: every
@@ -55,6 +63,38 @@ jobs:
             code:
               - '!**/*.md'
               - '!docs/**'
+              - '!.github/workflows/deploy-docs-preview.yml'
+              - '!.github/workflows/deploy-docs.yml'
+              - '!netlify.toml'
+            snapshots:
+              - 'crates/vite_cli_snapshots/**'
+
+  docs-fmt:
+    name: Docs format check
+    needs: detect-changes
+    # Docs-only changes skip the full CI matrix, so nothing else format-checks
+    # them (code changes get `vp check` in cli-e2e-test). Non-blocking:
+    # intentionally not listed in the `done` job's needs.
+    if: needs.detect-changes.outputs.code-changed == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: voidzero-dev/setup-vp@13e7afb99c66525824db54e107d667216e795d37 # v1.14.0
+        with:
+          # The workspace `vite-plus` version can be ahead of the registry, so
+          # pin the released build instead of auto-detecting from package.json.
+          version: latest
+          run-install: false
+
+      - name: Run vp fmt --check
+        run: |
+          # `vp fmt` loads the root vite.config.ts, whose `import ... from 'vite-plus'`
+          # must resolve at runtime. Link the released package out of the global
+          # install instead of installing the whole workspace.
+          mkdir -p node_modules
+          ln -s "$HOME/.vite-plus/current/node_modules/vite-plus" node_modules/vite-plus
+          vp fmt --check
 
   download-previous-rolldown-binaries:
     needs: detect-changes
@@ -78,8 +118,6 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
@@ -87,22 +125,11 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
           tools: just
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - run: cargo check --all-targets --all-features
         env:
@@ -110,13 +137,139 @@ jobs:
 
       - run: just test
 
+  # Windows tests are cross-compiled on a fast Linux runner with cargo-xwin
+  # (clang-cl + lld-link against the xwin-downloaded MSVC CRT/Windows SDK)
+  # and packed into a portable nextest archive. The test-windows job then
+  # only downloads the archive and runs it: no Rust toolchain, dev drive, or
+  # compilation on the slow Windows runner. Same approach as
+  # voidzero-dev/vite-task#443.
+  build-windows-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
+    name: Build Windows tests
+    runs-on: namespace-profile-linux-x64-default
+    env:
+      XWIN_ACCEPT_LICENSE: '1'
+      # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
+      # version newer than what runner images ship. Microsoft's documented
+      # escape hatch lets Detours (C++, via the fspy git dependency) compile
+      # with the runner's clang-cl; cargo-xwin folds a pre-set CXXFLAGS into
+      # the per-target CXXFLAGS it generates.
+      CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: ./.github/actions/setup-xwin
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: windows-cross
+          tools: cargo-nextest
+
+      # `cargo xwin env` resolves the rustflags configured in
+      # .cargo/config.toml (including the cfg-based Windows section), appends
+      # its -Lnative Windows SDK paths, and re-exports the result as
+      # CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS, so plain cargo
+      # invocations cross-compile exactly like `cargo xwin` would. It renders
+      # its intended *removal* of RUSTFLAGS as `export RUSTFLAGS="";`, which
+      # must become a real unset: a set RUSTFLAGS takes precedence over the
+      # target-specific rustflags and would shadow them.
+      - name: Check Windows target
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          # Fail fast if cargo-xwin ever stops folding the repo's cfg-based
+          # Windows rustflags (--cfg tokio_unstable, /STACK:8388608) into the
+          # target env var; a dropped /STACK would be a silent runtime
+          # difference in the shipped test binaries.
+          case "$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS" in
+            *tokio_unstable*STACK:8388608*) ;;
+            *)
+              echo "::error::cargo-xwin dropped the .cargo/config.toml Windows rustflags: $CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"
+              exit 1
+              ;;
+          esac
+          export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS -D warnings"
+          cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
+
+      # Keep the package selection in sync with the `test` recipe in justfile.
+      # vite_cli_snapshots is excluded there too: its snapshot suite needs a
+      # built vp and node at runtime and joins the Windows archive later.
+      - name: Build test archive
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vite_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
+            --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-archive
+          path: windows-tests.tar.zst
+          retention-days: 7
+
+      # Separate archive for the PTY snapshot suite (excluded from the
+      # unit-test archive above): its suite needs vp, node, and a built
+      # packages/cli/dist at runtime, which only cli-snapshot-test-windows
+      # provides. The archive carries the cli_snapshots test binary plus the
+      # vpt helper; nextest rewrites CARGO_MANIFEST_DIR/CARGO_BIN_EXE_vpt at
+      # run time so the relocated binaries find fixtures and helpers.
+      - name: Build snapshot test archive
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          cargo nextest archive -p vite_cli_snapshots \
+            --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-snapshot-test-archive
+          path: windows-snapshot-tests.tar.zst
+          retention-days: 7
+
+  test-windows:
+    needs: build-windows-tests
+    name: Test (Windows)
+    runs-on: namespace-profile-windows-4c-8g
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-test-archive
+
+      - uses: taiki-e/install-action@c93ccc03e00cd0e08e494f5fd058a6c55a6a1907 # v2.82.8
+        with:
+          tool: cargo-nextest
+
+      # `cargo-nextest` is invoked directly so the job never depends on the
+      # runner's Rust toolchain.
+      # --test-threads=1: nextest runs each test in its own process, so
+      # serial_test's in-process locks no longer serialize tests that contend
+      # on cross-process shared state (fixed temp paths, e.g.
+      # `vp-test-custom-home` in vite_shared::home tests). The whole suite is
+      # only ~1 minute of test time, so full serialization is cheap
+      # insurance; revisit if it becomes the bottleneck.
+      - name: Run tests
+        run: cargo-nextest nextest run --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
+        env:
+          RUST_MIN_STACK: '8388608'
+          # Keep Windows env parity with the `test` recipe in justfile.
+          __COMPAT_LAYER: RunAsInvoker
+          # Snapshot assertions resolve paths from the Linux build machine's
+          # workspace root baked in at compile time; point insta at this
+          # checkout instead (without it, insta shells out to a `cargo` that
+          # is not installed here).
+          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
+
   test-musl:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
     runs-on: namespace-profile-linux-x64-default
     container:
-      image: node:22-alpine3.21
+      image: node:25-alpine3.21
     env:
       # GitHub Actions sets HOME=/github/home in containers, but the euid home is /root.
       # Pin Rust tooling paths to avoid $HOME mismatch issues.
@@ -172,7 +325,7 @@ jobs:
           just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@37bb98842b0d8c4ffebdb75301a13db0267cef89 # v1.47.2
+      - uses: crate-ci/typos@bee27e3a4fd1ea2111cf90ab89cd076c870fce14 # v1.48.0
         with:
           files: .
 
@@ -187,10 +340,32 @@ jobs:
       - name: Deduplicate dependencies
         run: pnpm dedupe --check || pnpm dedupe --check
 
+  # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
+  # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
+  # cargo-xwin, then publishes them as the windows-cli-binaries artifact. The
+  # Windows entries of cli-e2e-test and install-e2e-test-sfw
+  # download that artifact instead of each spending ~24 minutes rebuilding the
+  # same binaries on slow windows-latest runners whenever build-upstream's
+  # NAPI binding cache misses. Release builds are unaffected: they keep
+  # building natively on Windows via reusable-release-build.yml (their cache
+  # keys differ through RELEASE_BUILD/VERSION).
+  build-windows-cli:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
+    name: Build Windows CLI binaries
+    runs-on: namespace-profile-linux-x64-default
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/build-windows-cli
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+
   cli-e2e-test:
     name: CLI E2E test
     needs:
       - download-previous-rolldown-binaries
+      - build-windows-cli
     strategy:
       fail-fast: false
       matrix:
@@ -199,28 +374,20 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
+      # Windows runs against the prebuilt binaries from build-windows-cli,
+      # so it needs no Rust toolchain or dev drive here.
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: runner.os != 'Windows'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-${{ matrix.target }}
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
@@ -233,10 +400,22 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
+      # paths are workspace-relative, so this places the binding into
+      # packages/cli/binding/ and the CLI binaries into
+      # target/x86_64-pc-windows-msvc/release/ where
+      # `tool install-global-cli` finds them.
+      - name: Download prebuilt Windows binaries
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+          skip-native: ${{ runner.os == 'Windows' }}
 
       - name: Ensure no unexpected file changes after build
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
@@ -319,7 +498,7 @@ jobs:
           node --version
 
       - name: Test global package install (cmd)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: cmd
         run: |
           echo "PATH: %PATH%"
@@ -503,7 +682,7 @@ jobs:
           }
 
       - name: Test upgrade (cmd)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: cmd
         run: |
           REM See bash block above for why we assert on the install dir basename.
@@ -540,7 +719,7 @@ jobs:
           )
 
       - name: Test same-version forced upgrade (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: |
           # Force-reinstall the published `latest` version rather than the local
@@ -592,7 +771,7 @@ jobs:
           }
 
       - name: Test same-version forced upgrade (Unix)
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ runner.os != 'Windows' }}
         shell: bash
         run: |
           # Unix mirror of the Windows same-version forced-upgrade test above.
@@ -698,7 +877,7 @@ jobs:
           vp --version
 
       - name: Test implode (cmd)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         shell: cmd
         run: |
           REM Retry — Windows file locks can cause transient "Access is denied" errors
@@ -720,8 +899,14 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
-  cli-snap-test:
-    name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
+  # Runs the PTY snapshot suite (crates/vite_cli_snapshots) with BOTH vp
+  # flavors on Linux and macOS: the local flavor uses the packages/cli build
+  # from this job, the global flavor reuses the installed release binary via
+  # VP_SNAP_GLOBAL_VP (no vite_global_cli compile; build-upstream builds or
+  # cache-restores it). One leg per OS: the suite is not sharded. Windows
+  # runs in cli-snapshot-test-windows via the cross-compiled archive.
+  cli-snapshot-test:
+    name: CLI snapshot test (${{ matrix.target }})
     needs:
       - download-previous-rolldown-binaries
     strategy:
@@ -730,85 +915,19 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 3
-            shardTotal: 3
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 3
-            shardTotal: 3
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            shard: 1
-            shardTotal: 3
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            shard: 2
-            shardTotal: 3
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            shard: 3
-            shardTotal: 3
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          # Route TEMP/TMP onto the Dev Drive (ReFS) so `tmpdir()` from
-          # `packages/tools/src/snap-test.ts` lives on a filesystem that
-          # cleanly resolves pnpm's junction reparse points. NTFS-on-C:
-          # preserves the junction-target backslashes during resolution,
-          # which produces mixed `\` / `/` paths that break Node's ESM
-          # subpath-import walk-up (`#module-sync-enabled` inside
-          # `@voidzero-dev/vite-plus-core` → `ERR_PACKAGE_IMPORT_NOT_DEFINED`
-          # during `vp fmt --write` in the
-          # `new-create-vite-migrates-eslint-prettier` snap test).
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-            TEMP,{{ DEV_DRIVE }}/Temp
-            TMP,{{ DEV_DRIVE }}/Temp
-
-      - name: Create TEMP/TMP on Dev Drive
-        if: runner.os == 'Windows'
-        # `setup-dev-drive` only mounts the drive; it doesn't create the
-        # dir we point TEMP/TMP at. Anything that calls `os.tmpdir()` /
-        # `lstat($TEMP)` before this dir exists fails (e.g. the bootstrap
-        # CLI installer's `lstat 'E:\Temp'` ENOENT).
-        shell: bash
-        run: mkdir -p "$TEMP" "$TMP"
-
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-snap-test-${{ matrix.target }}
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
+          cache-key: cli-snapshot-test-${{ matrix.target }}
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
-
-      - name: Install docs dependencies
-        run: pnpm -C docs install --frozen-lockfile
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -822,21 +941,128 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Install Global CLI vp
-        run: |
-          pnpm bootstrap-cli:ci
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
-          else
-            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
-          fi
+        run: pnpm bootstrap-cli:ci
 
-      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
+      # Provision the managed runtime once into the real home so cases can
+      # seed from it (seed-runtime) instead of each downloading ~50MB.
+      # Best-effort: without a seed, cases that need the runtime download it
+      # themselves.
+      - name: Prewarm managed runtime
         run: |
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          bash .github/scripts/retry-failed-snap-tests.sh
+          "$HOME/.vite-plus/bin/vp" node --version \
+            || echo "prewarm failed; cases will download the runtime on demand"
+
+      - name: Run PTY snapshot tests
+        run: |
+          VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
+          VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
+          cargo test -p vite_cli_snapshots
         env:
-          RUST_MIN_STACK: 8388608
+          RUST_BACKTRACE: '1'
+
+  # Runs the PTY snapshot suite (crates/vite_cli_snapshots) on Windows with
+  # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
+  # and vpt arrive cross-compiled in the nextest archive from
+  # build-windows-tests, the global vp comes prebuilt from build-windows-cli,
+  # and the JS CLI is built here (skip-native) for the local flavor.
+  cli-snapshot-test-windows:
+    name: CLI snapshot test (Windows)
+    needs:
+      - download-previous-rolldown-binaries
+      - build-windows-cli
+      - build-windows-tests
+    # Runs on the Namespace Windows runner. This is a PTY snapshot suite that
+    # opens a pseudo-console (ConPTY) and spawns vp into it. It previously stayed
+    # on GitHub-hosted windows-latest because Namespace's Windows runners ran
+    # under a Session-0 service account with no interactive console, where the
+    # ConPTY spawn blocked and every case timed out at 60s. #2126 (vite-task
+    # bump) resolved that; revert to windows-latest if it recurs.
+    runs-on: namespace-profile-windows-4c-8g
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      # Route TEMP/TMP onto a Dev Drive (ReFS): staged fixture workspaces
+      # live under os.tmpdir() and must resolve pnpm junction reparse points
+      # cleanly. NTFS-on-C: preserves the junction-target backslashes during
+      # resolution, which produces mixed `\` / `/` paths that break Node's
+      # ESM subpath-import walk-up (`#module-sync-enabled` inside
+      # `@voidzero-dev/vite-plus-core` -> `ERR_PACKAGE_IMPORT_NOT_DEFINED`).
+      - name: Setup Dev Drive
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            TEMP,{{ DEV_DRIVE }}/Temp
+            TMP,{{ DEV_DRIVE }}/Temp
+
+      - name: Create TEMP/TMP on Dev Drive
+        shell: bash
+        run: mkdir -p "$TEMP" "$TMP"
+
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      # See the cli-e2e-test job for details on the prebuilt binaries.
+      - name: Download prebuilt Windows binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-pc-windows-msvc
+          skip-native: true
+
+      - name: Install Global CLI vp
+        shell: bash
+        run: pnpm bootstrap-cli:ci
+
+      # Provision the managed runtime once into the real home so cases can
+      # seed from it (seed-runtime) instead of each downloading ~50MB.
+      # Best-effort: without a seed, cases that need the runtime download it
+      # themselves.
+      - name: Prewarm managed runtime
+        shell: bash
+        run: |
+          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
+            || echo "prewarm failed; cases will download the runtime on demand"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-snapshot-test-archive
+
+      - uses: taiki-e/install-action@c93ccc03e00cd0e08e494f5fd058a6c55a6a1907 # v2.82.8
+        with:
+          tool: cargo-nextest
+
+      # `cargo-nextest` is invoked directly so the job never depends on the
+      # runner's Rust toolchain. --workspace-remap makes nextest rewrite
+      # CARGO_MANIFEST_DIR and CARGO_BIN_EXE_vpt to this checkout, which is
+      # how the relocated test binary finds fixtures and helpers.
+      - name: Run PTY snapshot tests
+        shell: bash
+        run: |
+          # current/bin, not bin: on Windows bin\vp.exe is the trampoline,
+          # which re-execs %VP_HOME%\current\bin\vp.exe; the runner gives
+          # each case an isolated VP_HOME with no install inside, so the
+          # trampoline would fail. current\bin\vp.exe is the real CLI.
+          export VP_SNAP_GLOBAL_VP="$USERPROFILE/.vite-plus/current/bin/vp.exe"
+          export VP_SNAP_JS_RUNTIME_DIR="$USERPROFILE/.vite-plus/js_runtime"
+          # --no-fail-fast: on a snapshot suite every diff is diagnostic
+          # signal; cancelling on the first failure hides the rest.
+          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
+        env:
+          RUST_BACKTRACE: '1'
+          # Keep Windows env parity with the `test` recipe in justfile.
+          __COMPAT_LAYER: RunAsInvoker
 
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
@@ -911,7 +1137,6 @@ jobs:
 
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test
-              bash .github/scripts/retry-failed-snap-tests.sh
             "
 
   install-e2e-test:
@@ -955,9 +1180,13 @@ jobs:
           export PATH=$PWD/node_modules/.bin:$PATH
           vp -h
           # Test vp install on various repositories with different package managers
+          # Entry format: "owner/repo:dir" or "owner/repo:dir:ref" (tag or branch to clone)
           repos=(
             # pnpm workspace
-            "pnpm/pnpm:pnpm"
+            # Pinned to the latest stable tag: pnpm main pins pnpm v12 alphas,
+            # whose @pnpm/exe ships a placeholder bin that breaks pnpm's
+            # version self-switch (pnpm/pnpm#12811)
+            "pnpm/pnpm:pnpm:v11.11.0"
             "vitejs/vite:vite"
             # yarn workspace
             "napi-rs/napi-rs:napi-rs"
@@ -968,13 +1197,17 @@ jobs:
           )
 
           for repo_info in "${repos[@]}"; do
-            IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vp install on $repo…"
+            IFS=':' read -r repo dir_name ref <<< "$repo_info"
+            echo "Testing vp install on $repo${ref:+ ($ref)}…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"
             fi
-            git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
+            clone_args=(--depth 1)
+            if [ -n "$ref" ]; then
+              clone_args+=(--branch "$ref")
+            fi
+            git clone "${clone_args[@]}" "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
             vp install --no-frozen-lockfile
             # run again to show install cache increase by time
@@ -987,6 +1220,7 @@ jobs:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
     needs:
       - download-previous-rolldown-binaries
+      - build-windows-cli
     # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
     # Heavy job (3 OSes × real registry traffic) — gated to avoid running on every PR.
     if: >-
@@ -1012,7 +1246,7 @@ jobs:
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
             vp_insecure_tls: ''
-          - os: windows-latest
+          - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
             sfw_asset: sfw-free-windows-x86_64.exe
             # On Windows vp ships as `vp.exe`; sfw spawns its child process
@@ -1024,21 +1258,13 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
+      # Windows runs against the prebuilt binaries from build-windows-cli,
+      # so it needs no Rust toolchain or dev drive here.
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: runner.os != 'Windows'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test-sfw-${{ matrix.os }}
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
@@ -1048,10 +1274,18 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # See the cli-e2e-test job for details on the prebuilt binaries.
+      - name: Download prebuilt Windows binaries
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+          skip-native: ${{ runner.os == 'Windows' }}
 
       - name: Build CLI
         run: |
@@ -1113,11 +1347,15 @@ jobs:
     if: always()
     needs:
       - test
+      - build-windows-tests
+      - test-windows
+      - build-windows-cli
       - test-musl
       - lint
       - cli-e2e-test
       - cli-e2e-test-musl
-      - cli-snap-test
+      - cli-snapshot-test
+      - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
       # `contains(needs.*.result, 'failure')` ignores "skipped" results.
       - install-e2e-test-sfw

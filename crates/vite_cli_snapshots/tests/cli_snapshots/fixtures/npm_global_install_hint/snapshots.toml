@@ -1,0 +1,12 @@
+[[case]]
+name = "npm_global_install_hint"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["npm", "install", "-g", "./npm-global-hint-pkg"], tty = false, comment = "Should install and create link", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-hint-cli", "--assert", "symlink"], comment = "Link should exist", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "npm-global-hint-cli"], comment = "Should report npm-created link", continue-on-failure = true },
+  { argv = ["npm-global-hint-cli"], comment = "Should be callable via the link", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/bin/npm-global-hint-cli"], comment = "Cleanup link", continue-on-failure = true },
+  { argv = ["npm", "uninstall", "-g", "npm-global-hint-pkg"], tty = false, comment = "Cleanup npm install", continue-on-failure = true },
+]

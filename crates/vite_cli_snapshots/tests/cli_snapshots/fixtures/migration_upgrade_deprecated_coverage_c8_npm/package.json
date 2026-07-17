@@ -1,0 +1,19 @@
+{
+  "name": "migration-upgrade-deprecated-coverage-c8-npm",
+  "devDependencies": {
+    "@vitest/coverage-c8": "^0.33.0",
+    "vite-plus": "latest",
+    "vitest": "4.1.8"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "4.1.8"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

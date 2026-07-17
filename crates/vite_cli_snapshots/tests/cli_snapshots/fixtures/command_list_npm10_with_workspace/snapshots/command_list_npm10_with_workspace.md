@@ -1,0 +1,203 @@
+# command_list_npm10_with_workspace
+
+## `vp install`
+
+should install packages first
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+added 4 packages, and audited 7 packages in <duration>
+
+found 0 vulnerabilities
+```
+
+## `vp pm list --json`
+
+should list current workspace root dependencies
+
+```
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10-with-workspace",
+  "dependencies": {
+    "@vite-plus-test/utils": {
+      "version": "1.0.0",
+      "resolved": "file:../../packages/utils",
+      "overridden": false,
+      "dependencies": {
+        "testnpm2": {
+          "version": "1.0.1",
+          "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+          "overridden": false
+        }
+      }
+    },
+    "app": {
+      "version": "1.0.0",
+      "resolved": "file:../packages/app",
+      "overridden": false,
+      "dependencies": {
+        "test-vite-plus-package-optional": {
+          "version": "1.0.0",
+          "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+          "overridden": false
+        },
+        "testnpm2": {
+          "version": "1.0.1"
+        }
+      }
+    }
+  }
+}
+```
+
+## `vp pm list --recursive --json`
+
+should list all packages in workspace (uses --workspaces)
+
+```
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10-with-workspace",
+  "dependencies": {
+    "@vite-plus-test/utils": {
+      "version": "1.0.0",
+      "resolved": "file:../../packages/utils",
+      "overridden": false,
+      "dependencies": {
+        "testnpm2": {
+          "version": "1.0.1",
+          "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+          "overridden": false
+        }
+      }
+    },
+    "app": {
+      "version": "1.0.0",
+      "resolved": "file:../packages/app",
+      "overridden": false,
+      "dependencies": {
+        "test-vite-plus-package-optional": {
+          "version": "1.0.0",
+          "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+          "overridden": false
+        },
+        "testnpm2": {
+          "version": "1.0.1"
+        }
+      }
+    }
+  }
+}
+```
+
+## `vp pm list --filter app --json`
+
+should list specific workspace package (uses --workspace app)
+
+```
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10-with-workspace",
+  "dependencies": {
+    "app": {
+      "version": "1.0.0",
+      "resolved": "file:../packages/app",
+      "overridden": false,
+      "dependencies": {
+        "test-vite-plus-package-optional": {
+          "version": "1.0.0",
+          "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+          "overridden": false
+        },
+        "testnpm2": {
+          "version": "1.0.1",
+          "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+          "overridden": false
+        }
+      }
+    }
+  }
+}
+```
+
+## `vp pm list --filter app --filter @vite-plus-test/utils --json`
+
+should list multiple workspace packages
+
+```
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10-with-workspace",
+  "dependencies": {
+    "@vite-plus-test/utils": {
+      "version": "1.0.0",
+      "resolved": "file:../../packages/utils",
+      "overridden": false,
+      "dependencies": {
+        "testnpm2": {
+          "version": "1.0.1",
+          "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+          "overridden": false
+        }
+      }
+    },
+    "app": {
+      "version": "1.0.0",
+      "resolved": "file:../packages/app",
+      "overridden": false,
+      "dependencies": {
+        "test-vite-plus-package-optional": {
+          "version": "1.0.0",
+          "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+          "overridden": false
+        },
+        "testnpm2": {
+          "version": "1.0.1"
+        }
+      }
+    }
+  }
+}
+```
+
+## `vp pm list --recursive --depth 0 --json`
+
+should list workspace packages with depth limit
+
+```
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10-with-workspace",
+  "dependencies": {
+    "@vite-plus-test/utils": {
+      "version": "1.0.0",
+      "resolved": "file:../../packages/utils",
+      "overridden": false,
+      "dependencies": {
+        "testnpm2": {
+          "version": "1.0.1",
+          "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+          "overridden": false
+        }
+      }
+    },
+    "app": {
+      "version": "1.0.0",
+      "resolved": "file:../packages/app",
+      "overridden": false,
+      "dependencies": {
+        "test-vite-plus-package-optional": {
+          "version": "1.0.0",
+          "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+          "overridden": false
+        },
+        "testnpm2": {
+          "version": "1.0.1"
+        }
+      }
+    }
+  }
+}
+```

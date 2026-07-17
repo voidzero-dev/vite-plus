@@ -1,0 +1,12 @@
+[[case]]
+name = "command_rebuild_pnpm11"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "rebuild", "--help"], comment = "should show help with [PACKAGES]... positional", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "set up node_modules", continue-on-failure = true },
+  { argv = ["vp", "rebuild"], comment = "bare rebuild, no args", continue-on-failure = true },
+  { argv = ["vp", "rebuild", "testnpm2"], comment = "should accept positional package name", continue-on-failure = true },
+  { argv = ["vp", "rebuild", "testnpm2", "--", "--recursive"], comment = "package name + pass-through args", continue-on-failure = true },
+]

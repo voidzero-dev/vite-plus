@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_lint_staged_ts_config"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should warn about unsupported TS lint-staged config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check lint-staged NOT added to package.json, husky/lint-staged removed from devDependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "lint-staged.config.ts"], comment = "check TS config is not modified", continue-on-failure = true },
+]

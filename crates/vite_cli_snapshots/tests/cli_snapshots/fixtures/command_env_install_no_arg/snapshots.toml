@@ -1,0 +1,8 @@
+[[case]]
+name = "command_env_install_no_arg"
+vp = "global"
+skip-platforms = ["windows"]
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "install"], comment = "Install version from .node-version (22.x)", continue-on-failure = true },
+]

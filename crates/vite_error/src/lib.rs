@@ -9,21 +9,9 @@ use vite_str::Str;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    Sqlite(#[from] rusqlite::Error),
-
-    #[error(transparent)]
-    BincodeEncode(#[from] bincode::error::EncodeError),
-
-    #[error(transparent)]
-    BincodeDecode(#[from] bincode::error::DecodeError),
-
-    #[error("Unrecognized db version: {0}")]
-    UnrecognizedDbVersion(u32),
-
-    #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    #[error("IO error: {err} at {path:?}")]
+    #[error("IO error: {err} at {}", .path.as_path().display())]
     IoWithPath { err: std::io::Error, path: Arc<AbsolutePath> },
 
     #[error(transparent)]
@@ -50,12 +38,7 @@ pub enum Error {
     #[error(transparent)]
     Utf8Error(#[from] bstr::Utf8Error),
 
-    #[error(transparent)]
-    WaxBuild(#[from] wax::BuildError),
-
-    #[error(transparent)]
-    WaxWalk(#[from] wax::WalkError),
-
+    #[cfg(feature = "migration")]
     #[error(transparent)]
     IgnoreError(#[from] ignore::Error),
 
@@ -83,7 +66,7 @@ pub enum Error {
     #[error("Resolve universal vite config failed")]
     ResolveUniversalViteConfigFailed { status: Str, reason: Str },
 
-    #[error("The path ({path:?}) is not a valid relative path because: {reason}")]
+    #[error("The path ({}) is not a valid relative path because: {reason}", .path.display())]
     InvalidRelativePath { path: Box<Path>, reason: FromPathError },
 
     #[error("Unsupported package manager: {0}")]
@@ -96,7 +79,8 @@ pub enum Error {
     UnrecognizedPackageManager,
 
     #[error(
-        "Package manager {name}@{version} in {package_json_path:?} is invalid, expected format: 'package-manager-name@major.minor.patch'"
+        "Package manager {name}@{version} in {} is invalid, expected format: 'package-manager-name@major.minor.patch'",
+        .package_json_path.as_path().display()
     )]
     PackageManagerVersionInvalid { name: Str, version: Str, package_json_path: AbsolutePathBuf },
 
@@ -135,6 +119,7 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
 
+    #[cfg(feature = "migration")]
     #[error(transparent)]
     AstGrepConfigError(#[from] ast_grep_config::RuleConfigError),
 

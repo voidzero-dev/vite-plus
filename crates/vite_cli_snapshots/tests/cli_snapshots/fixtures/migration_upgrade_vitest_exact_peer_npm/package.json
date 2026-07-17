@@ -1,0 +1,23 @@
+{
+  "name": "migration-upgrade-vitest-exact-peer-npm",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/eslint-plugin": "^1.6.0",
+    "@vitest/ui": "^4.1.8",
+    "@vitest/utils": "^4.1.8",
+    "@vitest/web-worker": "^4.1.8",
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

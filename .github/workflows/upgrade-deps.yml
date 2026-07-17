@@ -63,7 +63,7 @@ jobs:
       - name: Check upgrade dependencies
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@521136812280ae7ef256e06045655b9da02793f0 # v1.0.158
+        uses: anthropics/claude-code-action@558b1d6cab4085c7753fe402c10bef0fbb92ac7a # v1.0.165
         env:
           RELEASE_BUILD: 'true'
         with:
@@ -145,12 +145,11 @@ jobs:
             ### Final validation (this step is complete ONLY when all pass)
             1. `just build` exits 0.
             2. `pnpm bootstrap-cli:ci && pnpm test` exits 0.
-            3. `git diff` on `packages/cli/snap-tests/**/snap.txt` and
-               `packages/cli/snap-tests-global/**/snap.txt` contains no real regressions.
-               IMPORTANT: `pnpm test` always exits 0 even when snap outputs differ, so you
-               MUST inspect the diff yourself. Cosmetic drift from the upgrade (e.g. a
-               bumped version string in help output) is acceptable; unexpected stack
-               traces, missing output, or diverging CLI behavior are regressions to fix.
+            3. `just snapshot-test` exits 0. Snapshot mismatches fail the run with a
+               unified diff. Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic
+               drift from the upgrade (e.g. a bumped version string in help output);
+               unexpected stack traces, missing output, or diverging CLI behavior are
+               regressions to fix.
             4. `git status --short` and `git diff --stat` have been inspected, and
                every changed file is intentional for the upgrade PR. Pay special
                attention to generated NAPI binding files, because later CI runs fail
@@ -202,7 +201,7 @@ jobs:
       - name: Enhance PR description with Claude
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@521136812280ae7ef256e06045655b9da02793f0 # v1.0.158
+        uses: anthropics/claude-code-action@558b1d6cab4085c7753fe402c10bef0fbb92ac7a # v1.0.165
         with:
           claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

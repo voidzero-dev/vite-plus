@@ -1,0 +1,13 @@
+[[case]]
+name = "command_init_inline_config"
+vp = "local"
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "lint", "--init"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "check .oxlintrc.json is removed", continue-on-failure = true },
+  { argv = ["vpt", "rm", "vite.config.ts"], continue-on-failure = true },
+  { argv = ["vp", "fmt", "--init"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"], comment = "check .oxfmtrc.json is removed", continue-on-failure = true },
+]

@@ -35,6 +35,7 @@ use vite_install::{
         token::TokenSubcommand,
         unlink::UnlinkCommandOptions,
         update::UpdateCommandOptions,
+        version::VersionCommandOptions,
         view::ViewCommandOptions,
         whoami::WhoamiCommandOptions,
         why::WhyCommandOptions,
@@ -175,6 +176,7 @@ pub async fn run_pm_subcommand(
             | PmCommands::Prune { .. }
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
+            | PmCommands::Version { .. }
             | PmCommands::Publish { .. }
             | PmCommands::Stage(StageCommands::Publish { .. })
             | PmCommands::Rebuild { .. }
@@ -279,6 +281,15 @@ pub async fn run_pm_subcommand(
                 pass_through_args: pass_through_args.as_deref(),
             };
             Ok(pm.run_view_command(&options, cwd).await?)
+        }
+
+        PmCommands::Version { new_version, json, pass_through_args } => {
+            let options = VersionCommandOptions {
+                new_version: new_version.as_deref(),
+                json,
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(pm.run_version_command(&options, cwd).await?)
         }
 
         PmCommands::Publish {

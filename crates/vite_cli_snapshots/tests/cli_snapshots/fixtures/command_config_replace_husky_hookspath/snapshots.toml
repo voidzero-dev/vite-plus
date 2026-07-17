@@ -1,0 +1,9 @@
+[[case]]
+name = "command_config_replace_husky_hookspath"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config", "--no-agent"], tty = false, comment = "should replace .husky/_ with .vite-hooks/_", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+]

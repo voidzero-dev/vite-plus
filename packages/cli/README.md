@@ -194,7 +194,7 @@ You need to add overrides to your package manager so that other packages resolve
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.9"
+  "vitest": "4.1.10"
 }
 ```
 
@@ -203,7 +203,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 4.1.9
+  vitest: 4.1.10
 ```
 
 Or, if you are using Yarn:
@@ -211,10 +211,10 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.9"
+  "vitest": "4.1.10"
 }
 ```
 
 ## Sponsors
 
-Thanks to [namespace.so](https://namespace.so) for powering our CI/CD pipelines with fast, free macOS and Linux runners.
+Thanks to [namespace.so](https://namespace.so) for powering our CI/CD pipelines with fast, free macOS, Linux, and Windows runners.

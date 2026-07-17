@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_standalone_yarn4_idempotent"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "implicit Yarn Berry PnP converts before the first pass", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "migrated dependency specs use the Yarn catalog immediately", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".yarnrc.yml"], comment = "managed catalog entries are available to those specs", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "example.spec.ts"], comment = "ordinary Vitest imports use the Vite+ public surface", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a freshly migrated standalone Yarn project is complete", continue-on-failure = true },
+]

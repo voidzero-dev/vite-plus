@@ -57,6 +57,7 @@ export default defineConfig([
       // Without these, tsdown inlines them into bin.js, breaking on-demand loading.
       'create/bin': './src/create/bin.ts',
       'migration/bin': './src/migration/bin.ts',
+      'migration/compat/worker': './src/migration/compat/worker.ts',
       version: './src/version.ts',
       'config/bin': './src/config/bin.ts',
       'staged/bin': './src/staged/bin.ts',

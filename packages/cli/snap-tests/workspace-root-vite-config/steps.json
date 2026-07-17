@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "# Test that lint picks up workspace root config",
-    "# vp lint",
-    "# Test that fmt picks up workspace root config - specify file",
-    "vp fmt packages/app-b/index.js --check"
-  ]
-}

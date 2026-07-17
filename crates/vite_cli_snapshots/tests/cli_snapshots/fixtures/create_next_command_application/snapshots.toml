@@ -1,0 +1,6 @@
+[[case]]
+name = "create_next_command_application"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive"], comment = "verify next command suggests vp run", continue-on-failure = true },
+]

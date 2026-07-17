@@ -1,0 +1,7 @@
+{
+  "name": "pm-version-yarn",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "yarn@1.22.22"
+}

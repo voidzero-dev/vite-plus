@@ -707,6 +707,20 @@ pub enum PmCommands {
         pass_through_args: Option<Vec<String>>,
     },
 
+    /// Forward the native package version command
+    Version {
+        /// Version number or increment strategy
+        new_version: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Arguments to pass to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
     /// Publish package to registry
     Publish {
         /// Tarball or folder to publish
@@ -944,6 +958,7 @@ impl PmCommands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::List { json, parseable, .. } => *json || *parseable,
+            Self::Version { json, .. } => *json,
             Self::Pack { json, .. }
             | Self::View { json, .. }
             | Self::Publish { json, .. }
@@ -1414,6 +1429,39 @@ mod tests {
             panic!("expected ApproveBuilds variant");
         };
         assert_eq!(pass_through_args, Some(vec!["--workspace-root".to_string()]));
+    }
+
+    #[test]
+    fn version_forwards_native_args_and_detects_json() {
+        let command = parse_pm_command(&[
+            "vp",
+            "pm",
+            "version",
+            "prerelease",
+            "--json",
+            "--",
+            "--preid",
+            "beta",
+        ])
+        .expect("version arguments should parse");
+
+        assert!(command.is_quiet_or_machine_readable());
+        let PackageManagerCommand::Pm(PmCommands::Version { new_version, json, pass_through_args }) =
+            command
+        else {
+            panic!("expected Version variant");
+        };
+        assert_eq!(new_version.as_deref(), Some("prerelease"));
+        assert!(json);
+        assert_eq!(pass_through_args, Some(vec!["--preid".to_string(), "beta".to_string()]));
+    }
+
+    #[test]
+    fn version_uses_vite_plus_help() {
+        let error = parse_pm_command(&["vp", "pm", "version", "--help"])
+            .expect_err("version help should be rendered by Vite+");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::DisplayHelp);
     }
 
     #[test]

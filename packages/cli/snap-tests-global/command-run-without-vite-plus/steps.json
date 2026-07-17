@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp run hello # should execute via global vite-plus task runner",
-    "vp run greet --arg1 value1 # should pass through args",
-    "vp run nonexistent # should show task not found error"
-  ]
-}

@@ -1,0 +1,6 @@
+[[case]]
+name = "task_config_cwd"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "hello"], continue-on-failure = true },
+]

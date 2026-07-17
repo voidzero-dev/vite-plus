@@ -39,7 +39,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 
 ### Setup
 
-- `vp env setup` creates or updates shims in `VP_HOME/bin` (and writes the per-shell setup scripts under `~/.vite-plus/`)
+- `vp env setup` creates or updates shims in `VP_HOME/bin` (and writes the per-shell setup scripts under `VP_HOME`)
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
@@ -64,6 +64,16 @@ Open the profile file for editing:
 Invoke-Item $PROFILE
 ```
 
+Windows Command Prompt (`cmd.exe`) cannot define the wrapper function needed for `vp env use` to update the current shell session. Use the generated `vp-use.cmd` command instead:
+
+```batch
+vp-use 20
+node --version
+vp-use --unset
+```
+
+Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 
 ### Manage
@@ -74,6 +84,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 - `vp env use` sets a Node.js version for the current shell session
 - `vp env install` installs a Node.js version
 - `vp env uninstall` removes an installed Node.js version
+- `vp env clean` removes unused managed Node.js runtimes, all downloaded package managers, and the Corepack cache.
 - `vp env exec` runs a command with a specific Node.js version
 - `vp node` runs a Node.js script — shorthand for `vp env exec node`
 
@@ -105,6 +116,7 @@ vp env install                # Install the version from .node-version or packag
 vp env default lts            # Set the global default version
 vp env use 20                 # Use Node.js 20 for the current shell session
 vp env use --unset            # Remove the session override
+vp env clean                  # Remove unused managed caches
 
 # Inspect
 vp env current                # Show current resolved environment

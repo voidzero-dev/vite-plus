@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pack_external"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pack", "--deps.never-bundle", "node:path", "src/index.ts"], comment = "should bundle with deps.never-bundle flag", continue-on-failure = true },
+  { argv = ["vp", "pack", "--external", "node:path", "src/index.ts"], comment = "should bundle with legacy external flag", continue-on-failure = true },
+]

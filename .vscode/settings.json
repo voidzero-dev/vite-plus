@@ -18,5 +18,5 @@
   "typescript.reportStyleChecksAsWarnings": false,
   "typescript.updateImportsOnFileMove.enabled": "always",
   "typescript.experimental.useTsgo": true,
-  "vitest.configSearchPatternExclude": "{**/node_modules/**,**/vendor/**,**/.*/**,**/*.d.ts,{**/packages/cli/snap-tests*/**}}"
+  "vitest.configSearchPatternExclude": "{**/node_modules/**,**/vendor/**,**/.*/**,**/*.d.ts,**/crates/vite_cli_snapshots/tests/cli_snapshots/**}"
 }
