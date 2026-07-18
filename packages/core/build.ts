@@ -632,10 +632,15 @@ async function wireBundledTsdownExtensions() {
   // bundled), which resolves to core's own `lightningcss` dependency.
   let exeWired = false;
   let cssWired = false;
-  // The `import("@tsdown/css")` call site may already be deduped to the bundled
-  // entry by rolldown; track whether the bundled load ends up referenced either
-  // way so a silent miss (no rewrite and no dedup) fails the build.
+  // The `import("@tsdown/css")` call site may already be resolved by rolldown to a
+  // bundled local chunk; track whether the css plugin load ends up referenced from a
+  // local chunk (either way) so a silent miss (external resolution) fails the build.
+  // Newer tsdown emits `const { CssPlugin } = await import("@tsdown/css")`, which
+  // rolldown bundles and dedups into a hashed chunk (e.g. `await import("./dist-XXX.js")`)
+  // rather than leaving a bare specifier for us to rewrite to `./tsdown-css.js`.
   let cssLoadWired = false;
+  // Matches the css plugin being loaded from a relative local chunk, whatever its name.
+  const cssPluginLocalImport = /CssPlugin[\s\S]{0,40}?await import\("\.\/[^"]+"\)/;
   for (const chunkFile of chunkFiles) {
     let content = await readFile(chunkFile, 'utf-8');
     let changed = false;
@@ -653,7 +658,7 @@ async function wireBundledTsdownExtensions() {
       content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
       changed = true;
     }
-    if (content.includes('import("./tsdown-css.js")')) {
+    if (content.includes('import("./tsdown-css.js")') || cssPluginLocalImport.test(content)) {
       cssLoadWired = true;
     }
     if (changed) {
@@ -667,7 +672,9 @@ async function wireBundledTsdownExtensions() {
     throw new Error('wireBundledTsdownExtensions: `pkgExists("@tsdown/css")` not found');
   }
   if (!cssLoadWired) {
-    throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
+    throw new Error(
+      'wireBundledTsdownExtensions: bundled `@tsdown/css` is never imported from a local chunk',
+    );
   }
 }
 

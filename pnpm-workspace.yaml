@@ -10,21 +10,22 @@ catalog:
   '@babel/preset-typescript': ^7.29.7
   '@clack/core': ^1.0.0
   '@iconify/vue': ^5.0.0
-  '@napi-rs/cli': ^3.7.2
+  '@jridgewell/trace-mapping': ^0.3.31
+  '@napi-rs/cli': ^3.7.3
   '@napi-rs/wasm-runtime': ^1.1.6
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.139.0
-  '@oxc-project/types': =0.139.0
+  '@oxc-project/runtime': =0.140.0
+  '@oxc-project/types': =0.140.0
   '@oxlint/plugins': =1.73.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@tsdown/css': ^0.22.7
-  '@tsdown/exe': ^0.22.7
+  '@tsdown/css': ^0.22.9
+  '@tsdown/exe': ^0.22.9
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -92,12 +93,17 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.139.0
-  oxc-parser: =0.139.0
-  oxc-transform: =0.139.0
-  oxfmt: =0.58.0
+  oxc-minify: =0.140.0
+  oxc-parser: =0.140.0
+  oxc-transform: =0.140.0
+  oxfmt: =0.59.0
+  # Hold oxlint at 1.73.0: `vp migrate` runs `@oxlint/migrate@<bundled oxlint>`
+  # (version-pinned to this exact version), but `@oxlint/migrate` publishes one
+  # release per oxlint minor and 1.74.0 is not published yet (latest is 1.73.0).
+  # Bumping oxlint ahead of `@oxlint/migrate` breaks `vp migrate`. Bump this once
+  # `@oxlint/migrate@1.74.0` (or newer) is available.
   oxlint: =1.73.0
-  oxlint-tsgolint: =0.24.0
+  oxlint-tsgolint: =0.25.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -106,7 +112,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.34.1
-  rolldown-plugin-dts: ^0.26.0
+  rolldown-plugin-dts: ^0.27.0
   rollup: ^4.60.4
   semver: ^7.8.0
   serve-static: ^2.0.0
@@ -117,7 +123,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.22.7
+  tsdown: ^0.22.9
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -198,9 +204,6 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
-  # Pin postcss-modules to the version vite patches (its ^9.0.0 range now
-  # resolves to 9.0.1, which would orphan vite/patches/postcss-modules@9.0.0.patch).
-  postcss-modules: 9.0.0
 packageExtensions:
   '@rollup/plugin-dynamic-import-vars':
     dependencies:
@@ -215,7 +218,6 @@ patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
-  postcss-modules@9.0.0: vite/patches/postcss-modules@9.0.0.patch
 peerDependencyRules:
   allowAny:
     - vite
