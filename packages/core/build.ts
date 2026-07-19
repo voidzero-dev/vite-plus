@@ -653,7 +653,16 @@ async function wireBundledTsdownExtensions() {
       content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
       changed = true;
     }
-    if (content.includes('import("./tsdown-css.js")')) {
+    // The css plugin ends up loading from a bundled sibling chunk in one of two
+    // ways: either the rewrite above pointed it at `./tsdown-css.js`, or rolldown
+    // already deduped the static `import("@tsdown/css")` into its own shared chunk
+    // (e.g. `const { CssPlugin } = await import("./dist-<hash>.js")`). Either way
+    // `@tsdown/css` stays inside the bundle; only a bare specifier that escapes to
+    // the top-level package would be a miss.
+    if (
+      content.includes('import("./tsdown-css.js")') ||
+      /\bCssPlugin\b[^\n]*await import\((["'])\.\/[^"']+\1\)/.test(content)
+    ) {
       cssLoadWired = true;
     }
     if (changed) {
@@ -667,7 +676,7 @@ async function wireBundledTsdownExtensions() {
     throw new Error('wireBundledTsdownExtensions: `pkgExists("@tsdown/css")` not found');
   }
   if (!cssLoadWired) {
-    throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
+    throw new Error('wireBundledTsdownExtensions: bundled `@tsdown/css` is never imported');
   }
 }
 

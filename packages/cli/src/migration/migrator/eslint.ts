@@ -87,40 +87,63 @@ export function detectEslintProject(
 }
 
 /**
+ * Candidate `@oxlint/migrate` specifiers, most-preferred first.
+ *
+ * We prefer the exact bundled oxlint version so the migrator's rule mappings
+ * match the oxlint that will actually lint. But `@oxlint/migrate` publishes can
+ * lag oxlint's patch releases (e.g. oxlint 1.74.0 shipped while the newest
+ * `@oxlint/migrate` was still 1.73.0), which would make an exact pin unresolvable
+ * on the registry. Fall back to the latest release in the same major, which
+ * translates config compatibly.
+ */
+function oxlintMigrateSpecs(oxlintVersion: string): string[] {
+  const exact = `@oxlint/migrate@${oxlintVersion}`;
+  const major = oxlintVersion.split('.')[0];
+  const majorRange = `@oxlint/migrate@^${major}.0.0`;
+  return exact === majorRange ? [exact] : [exact, majorRange];
+}
+
+/**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
- * Returns true on success, false on failure (spawn error or non-zero exit).
+ *
+ * Tries each candidate specifier in order until one runs successfully, so an
+ * unpublished exact version transparently falls back to the latest compatible
+ * release. Returns the resolved specifier on success (so later steps reuse the
+ * same one) or `undefined` on failure (spawn error or non-zero exit for every
+ * candidate).
  */
 async function runOxlintMigrateStep(
   vpBin: string,
   cwd: string,
-  migratePackage: string,
+  migratePackages: string[],
   args: string[],
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
-  manualHint: string,
-): Promise<boolean> {
-  try {
-    const result = await runCommandSilently({
-      command: vpBin,
-      args: ['dlx', migratePackage, ...args],
-      cwd,
-      envs: process.env,
-    });
-    if (result.exitCode !== 0) {
-      spinner.stop(failMessage);
-      const stderr = result.stderr.toString().trim();
-      if (stderr) {
-        prompts.log.warn(`⚠ ${stderr}`);
+  manualHint: (migratePackage: string) => string,
+): Promise<string | undefined> {
+  let lastStderr = '';
+  for (const migratePackage of migratePackages) {
+    try {
+      const result = await runCommandSilently({
+        command: vpBin,
+        args: ['dlx', migratePackage, ...args],
+        cwd,
+        envs: process.env,
+      });
+      if (result.exitCode === 0) {
+        return migratePackage;
       }
-      prompts.log.info(manualHint);
-      return false;
+      lastStderr = result.stderr.toString().trim();
+    } catch {
+      lastStderr = '';
     }
-    return true;
-  } catch {
-    spinner.stop(failMessage);
-    prompts.log.info(manualHint);
-    return false;
   }
+  spinner.stop(failMessage);
+  if (lastStderr) {
+    prompts.log.warn(`⚠ ${lastStderr}`);
+  }
+  prompts.log.info(manualHint(migratePackages[migratePackages.length - 1]));
+  return undefined;
 }
 
 export async function migrateEslintToOxlint(
@@ -147,10 +170,11 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    // Pin @oxlint/migrate to the bundled oxlint version.
+    // Pin @oxlint/migrate to the bundled oxlint version (with a fallback for
+    // publish lag — see oxlintMigrateSpecs).
     // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
-    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
+    const migratePackages = oxlintMigrateSpecs(versions.oxlint);
     const migrateArgs = [
       '--merge',
       ...(!hasBaseUrlInTsconfig(projectPath) ? ['--type-aware'] : []),
@@ -160,30 +184,33 @@ export async function migrateEslintToOxlint(
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
-    const migrateOk = await runOxlintMigrateStep(
+    const resolvedPackage = await runOxlintMigrateStep(
       vpBin,
       projectPath,
-      migratePackage,
+      migratePackages,
       migrateArgs,
       spinner,
       'ESLint migration failed',
-      `You can run \`vp dlx ${migratePackage} ${migrateArgs.join(' ')}\` manually later`,
+      (migratePackage) =>
+        `You can run \`vp dlx ${migratePackage} ${migrateArgs.join(' ')}\` manually later`,
     );
-    if (!migrateOk) {
+    if (!resolvedPackage) {
       return false;
     }
     spinner.stop('ESLint config migrated to .oxlintrc.json');
 
-    // Step 2: Replace eslint-disable comments with oxlint-disable
+    // Step 2: Replace eslint-disable comments with oxlint-disable. Reuse the
+    // specifier that resolved in step 1 so we don't re-probe the fallback.
     spinner.start('Replacing ESLint comments with Oxlint equivalents...');
     const replaceOk = await runOxlintMigrateStep(
       vpBin,
       projectPath,
-      migratePackage,
+      [resolvedPackage],
       ['--replace-eslint-comments'],
       spinner,
       'ESLint comment replacement failed',
-      `You can run \`vp dlx ${migratePackage} --replace-eslint-comments\` manually later`,
+      (migratePackage) =>
+        `You can run \`vp dlx ${migratePackage} --replace-eslint-comments\` manually later`,
     );
     if (replaceOk) {
       spinner.stop('ESLint comments replaced');
