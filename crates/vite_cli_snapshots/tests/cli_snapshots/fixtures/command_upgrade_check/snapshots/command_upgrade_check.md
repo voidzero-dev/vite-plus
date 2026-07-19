@@ -6,7 +6,7 @@ alpha tag avoids release-day flake (dev version equals npm latest right after a 
 
 ```
 info: checking for updates...
-info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)
-Update available: 0.2.4 → 0.1.21-alpha.7
+info: found vite-plus@0.1.21-alpha.7 (current: <version>)
+Update available: <version> → 0.1.21-alpha.7
 Run `vp upgrade` to update.
 ```

@@ -60,10 +60,26 @@ fn masks_only_v_prefixed_versions() {
 #[test]
 fn masks_bare_runtime_tool_versions_by_name_context() {
     // vp create prints these without the v prefix.
-    let input = "Node 24.18.0  pnpm 10.34.4 (agent npm/11.4.2)\n".to_owned();
+    let input = "Node 24.18.0  pnpm 10.34.4 (agents npm/11.4.2 vp/0.2.4)\n".to_owned();
     assert_eq!(
         redact_output(input, &[], true),
-        "Node <version>  pnpm <version> (agent npm/<version>)\n"
+        "Node <version>  pnpm <version> (agents npm/<version> vp/<version>)\n"
+    );
+}
+
+#[test]
+fn masks_current_vite_plus_version_in_upgrade_check_output() {
+    let input = concat!(
+        "info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)\n",
+        "Update available: 0.2.4 → 0.1.21-alpha.7\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "info: found vite-plus@0.1.21-alpha.7 (current: <version>)\n",
+            "Update available: <version> → 0.1.21-alpha.7\n",
+        )
     );
 }
 
