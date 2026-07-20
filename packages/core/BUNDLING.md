@@ -43,7 +43,7 @@ await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginu
 
 - `@rolldown/pluginutils` → `@voidzero-dev/vite-plus-core/rolldown/pluginutils`
 - `rolldown/*` → `@voidzero-dev/vite-plus-core/rolldown/*`
-- In release builds: `@rolldown/binding-*` → `vite-plus/binding`
+- In release builds: `@rolldown/binding-*` → `@voidzero-dev/vite-plus-*`
 
 **Input**: `rolldown/packages/rolldown/dist/`
 **Output**: `dist/rolldown/`
@@ -96,6 +96,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 - `peerDependencies` - Merged from tsdown and vite
 - `peerDependenciesMeta` - Merged from tsdown and vite
 - `bundledVersions` - Records vite, rolldown, and tsdown versions
+- `optionalDependencies` - Adds the Vite+ native platform packages that release-built Rolldown may load
 
 ---
 
@@ -147,8 +148,7 @@ During release builds (`RELEASE_BUILD=1`), an additional critical transformation
 ```typescript
 // In bundleRolldown()
 if (process.env.RELEASE_BUILD) {
-  // @rolldown/binding-darwin-arm64 → vite-plus/binding
-  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
+  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, '@voidzero-dev/vite-plus-$1');
   // Sync version strings
   source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
 }
@@ -156,31 +156,37 @@ if (process.env.RELEASE_BUILD) {
 
 **Platform-specific binding rewrites**:
 
-| Original Import                     | Rewritten Import    |
-| ----------------------------------- | ------------------- |
-| `@rolldown/binding-darwin-arm64`    | `vite-plus/binding` |
-| `@rolldown/binding-darwin-x64`      | `vite-plus/binding` |
-| `@rolldown/binding-linux-arm64-gnu` | `vite-plus/binding` |
-| `@rolldown/binding-linux-x64-gnu`   | `vite-plus/binding` |
-| `@rolldown/binding-win32-x64-msvc`  | `vite-plus/binding` |
+| Original Import                      | Rewritten Import                           |
+| ------------------------------------ | ------------------------------------------ |
+| `@rolldown/binding-darwin-arm64`     | `@voidzero-dev/vite-plus-darwin-arm64`     |
+| `@rolldown/binding-darwin-x64`       | `@voidzero-dev/vite-plus-darwin-x64`       |
+| `@rolldown/binding-linux-arm64-gnu`  | `@voidzero-dev/vite-plus-linux-arm64-gnu`  |
+| `@rolldown/binding-linux-arm64-musl` | `@voidzero-dev/vite-plus-linux-arm64-musl` |
+| `@rolldown/binding-linux-x64-gnu`    | `@voidzero-dev/vite-plus-linux-x64-gnu`    |
+| `@rolldown/binding-linux-x64-musl`   | `@voidzero-dev/vite-plus-linux-x64-musl`   |
+| `@rolldown/binding-win32-arm64-msvc` | `@voidzero-dev/vite-plus-win32-arm64-msvc` |
+| `@rolldown/binding-win32-x64-msvc`   | `@voidzero-dev/vite-plus-win32-x64-msvc`   |
 
 **Why this matters**:
 
 1. **Self-contained distribution** - Users don't need to install separate `@rolldown/binding-*` packages
-2. **Version alignment** - The rolldown binding version is synced to the vite-plus version
-3. **Single native module** - The `vite-plus/binding` export points to the CLI's compiled `.node` file which includes `rolldown_binding` when built with `RELEASE_BUILD=1`
+2. **Declared dependency graph** - Core declares the Vite+ platform packages it may load, so pnpm global virtual store and Yarn PnP do not depend on hidden hoisting
+3. **Version alignment** - The rolldown binding version is synced to the vite-plus version
+4. **Compatibility** - `vite-plus/binding` remains exported by the CLI package for direct consumers
 
 **Resolution chain**:
 
 ```
 User code imports '@voidzero-dev/vite-plus-core/rolldown'
   → dist/rolldown/index.mjs
-    → imports 'vite-plus/binding' (rewritten from @rolldown/binding-*)
-      → vite-plus CLI package ./binding export
-        → binding/vite-plus.darwin-arm64.node (contains rolldown_binding)
+    → imports '@voidzero-dev/vite-plus-<platform>'
+      (rewritten from '@rolldown/binding-<platform>')
+      → vite-plus.<platform>.node (contains rolldown_binding)
 ```
 
-See [CLI Package Bundling](../cli/BUNDLING.md#rolldown-native-binding-integration) for details on how the CLI compiles rolldown bindings.
+For example, `darwin-arm64`, `linux-x64-gnu`, and `win32-x64-msvc` resolve through their matching `@voidzero-dev/vite-plus-*` platform packages.
+
+See [CLI Package Bundling](../cli/BUNDLING.md#rolldown-native-binding-integration) for details on how the CLI compiles and publishes the platform packages. The CLI's `vite-plus/binding` export uses the same platform packages as a compatibility entrypoint.
 
 ---
 
@@ -350,7 +356,7 @@ dist/
 # Build the core package
 pnpm -C packages/core build
 
-# Release build (rewrites @rolldown/binding-* to vite-plus/binding)
+# Release build (rewrites @rolldown/binding-* to @voidzero-dev/vite-plus-*)
 RELEASE_BUILD=1 pnpm -C packages/core build
 ```
 

@@ -18,8 +18,10 @@ import { glob } from 'tinyglobby';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
+import cliPkgJson from '../cli/package.json' with { type: 'json' };
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
+import { getNativePlatformPackageName } from './build-support/native-platform-packages.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
 import {
   createRolldownRewriteRules,
@@ -370,6 +372,8 @@ async function bundleRolldown() {
     },
   });
 
+  const vitePlusNativePackages = new Set(cliPkgJson.napi.targets.map(getNativePlatformPackageName));
+
   // Rewrite @rolldown/pluginutils imports in JS and type declaration files
   for (const file of rolldownFiles) {
     if (
@@ -386,9 +390,23 @@ async function bundleRolldown() {
             with: { type: 'json' },
           })
         ).default.version;
-        // @rolldown/binding-darwin-arm64 → @voidzero-dev/vite-plus-darwin-arm64/binding
-        source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
-        source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
+        source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, (specifier, suffix) => {
+          const packageName = `@voidzero-dev/vite-plus-${suffix}`;
+          return vitePlusNativePackages.has(packageName) ? packageName : specifier;
+        });
+        source = source
+          .replaceAll(
+            `bindingPackageVersion !== "${rolldownBindingVersion}"`,
+            `bindingPackageVersion !== "${pkgJson.version}"`,
+          )
+          .replaceAll(
+            `bindingPackageVersion !== '${rolldownBindingVersion}'`,
+            `bindingPackageVersion !== '${pkgJson.version}'`,
+          )
+          .replaceAll(
+            `expected ${rolldownBindingVersion} but got`,
+            `expected ${pkgJson.version} but got`,
+          );
       }
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
@@ -793,6 +811,11 @@ async function mergePackageJson() {
     rolldown: rolldownPkg.version,
     tsdown: tsdownPkg.version,
   };
+
+  destPkg.optionalDependencies = { ...destPkg.optionalDependencies };
+  for (const target of cliPkgJson.napi.targets) {
+    destPkg.optionalDependencies[getNativePlatformPackageName(target)] = destPkg.version;
+  }
 
   const { code, errors } = await format(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n', {
     sortPackageJson: true,

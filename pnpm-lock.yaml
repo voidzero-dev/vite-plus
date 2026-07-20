@@ -654,6 +654,30 @@ importers:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: 'link:'
     optionalDependencies:
+      '@voidzero-dev/vite-plus-darwin-arm64':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-darwin-x64':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-linux-arm64-gnu':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-linux-arm64-musl':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-linux-x64-gnu':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-linux-x64-musl':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-win32-arm64-msvc':
+        specifier: 0.2.2
+        version: 0.2.2
+      '@voidzero-dev/vite-plus-win32-x64-msvc':
+        specifier: 0.2.2
+        version: 0.2.2
       fsevents:
         specifier: ~2.3.3
         version: 2.3.3
@@ -4935,6 +4959,58 @@ packages:
 
   '@vitest/utils@4.1.9':
     resolution: {integrity: sha512-A51o8ymO5PpqlWNnBP9ZHPXDIpuMtTLlGSjN7la4US+LJzoUMyhwjA5QXlm39JexgwHKW4Xjs8Z2d3dLCXOeuA==}
+
+  '@voidzero-dev/vite-plus-darwin-arm64@0.2.2':
+    resolution: {integrity: sha512-Wy0Shx3Waa2cQZGSrPm0cpO1Y5oNyKyC1jarv12bBcgV+4uoEBKX+ep2Nh7zwjfd8Ja4QMiePE7wciOSXxu8oQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@voidzero-dev/vite-plus-darwin-x64@0.2.2':
+    resolution: {integrity: sha512-09xcW67OvsQItVPzmF8UckI+glM3DzyQO3A98deNQ4QtUF7Mt+4/cYKKcLKg2ExRWWXGNDnVG/j7/hiLjZzynw==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@voidzero-dev/vite-plus-linux-arm64-gnu@0.2.2':
+    resolution: {integrity: sha512-bR6287UFNwulMiQRhbtXF8GYs9a8EjvefXf+Glm7AzbePUXnamW9cwYIj2j4Dgoje0yC4gA52UePEFjXZnJcjA==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@voidzero-dev/vite-plus-linux-arm64-musl@0.2.2':
+    resolution: {integrity: sha512-YGtvTHT7qP4c5pZmM4kLL78/d8hj2NS150R92cR2SVOW/l9Ilq5R5WrEiMA4k5Ea3B++IJWZT5MRFI0tW9qlcg==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@voidzero-dev/vite-plus-linux-x64-gnu@0.2.2':
+    resolution: {integrity: sha512-FvaMI/vsy4PVM+Qd73K+KM8blfCAfaoZaGaGWNrrlMryhyPThXPnHoB1AQcrKbEAWb+z2fc4zLS4sH+8uI65fw==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@voidzero-dev/vite-plus-linux-x64-musl@0.2.2':
+    resolution: {integrity: sha512-ZsMochHqXqxj2sGTJNJzz3vabppbe4BFgZAjJfsnVzkwR7jv6c5p1BM71LFWxP4qd5LL0TJT7lbeRhALlI44RQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@voidzero-dev/vite-plus-win32-arm64-msvc@0.2.2':
+    resolution: {integrity: sha512-noBNyJufux0cf18eDpQLOQUZ1Kybfx9zlr+yQ6gAnxMEsQXSvYqZgWymfRDesBE3G/0XB5bg+AUtWijp3TwVcw==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@voidzero-dev/vite-plus-win32-x64-msvc@0.2.2':
+    resolution: {integrity: sha512-+VUui1OIaFX0tqdUAXjmoKVlujEtWVdcsFDw2Jff+D6b4LUTQaOMAaaic8nNdfZL6wEjweRREQLZi/icZAXtNQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [win32]
 
   '@voidzero-dev/vite-task-client@0.2.0':
     resolution: {integrity: sha512-y932hw4I0qrdlqbDhOC4VS7mtLad+MtXToSVJIZ79Cd7Ib6p4bRuoTRrx6OeedhdPm2yf9+r8ndlhJjn8LbsxQ==}
@@ -12343,6 +12419,30 @@ snapshots:
       '@vitest/pretty-format': 4.1.9
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@voidzero-dev/vite-plus-darwin-arm64@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-darwin-x64@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-linux-arm64-gnu@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-linux-arm64-musl@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-linux-x64-gnu@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-linux-x64-musl@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-win32-arm64-msvc@0.2.2':
+    optional: true
+
+  '@voidzero-dev/vite-plus-win32-x64-msvc@0.2.2':
+    optional: true
 
   '@voidzero-dev/vite-task-client@0.2.0': {}
 

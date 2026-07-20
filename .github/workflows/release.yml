@@ -155,6 +155,21 @@ jobs:
       - name: Prepare and publish native addons
         run: node ./packages/cli/publish-native-addons.ts --mode npm
 
+      - name: Pin core native optional dependencies
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFile, writeFile } from 'node:fs/promises';
+
+          const file = 'packages/core/package.json';
+          const pkg = JSON.parse(await readFile(file, 'utf8'));
+          for (const name of Object.keys(pkg.optionalDependencies ?? {})) {
+            if (name.startsWith('@voidzero-dev/vite-plus-')) {
+              pkg.optionalDependencies[name] = process.env.VERSION;
+            }
+          }
+          await writeFile(file, `${JSON.stringify(pkg, null, 2)}\n`);
+          EOF
+
       - name: Publish
         run: |
           pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
