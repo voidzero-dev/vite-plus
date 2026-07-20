@@ -153,6 +153,31 @@ pub struct PackageManager {
     pub install_dir: AbsolutePathBuf,
 }
 
+#[cfg(test)]
+pub(crate) fn create_mock_package_manager(client: PackageManagerType) -> PackageManager {
+    create_mock_package_manager_with_version(client, "1.0.0")
+}
+
+#[cfg(test)]
+pub(crate) fn create_mock_package_manager_with_version(
+    client: PackageManagerType,
+    version: &str,
+) -> PackageManager {
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+    let root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+    PackageManager {
+        client,
+        package_name: client.to_string().into(),
+        version: version.into(),
+        hash: None,
+        bin_name: client.to_string().into(),
+        workspace_root: root.clone(),
+        is_monorepo: false,
+        install_dir: root.join("install"),
+    }
+}
+
 #[derive(Debug)]
 pub struct PackageManagerBuilder {
     client_override: Option<PackageManagerType>,
