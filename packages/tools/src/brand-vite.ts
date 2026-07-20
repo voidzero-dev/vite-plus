@@ -8,7 +8,7 @@
  * Changes applied:
  * 1. constants.ts: Add VITE_PLUS_VERSION constant
  * 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name/version, and make banner blue
- * 3. build.ts: Import VITE_PLUS_VERSION, rebrand startup build banner, and change error prefix
+ * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  */
@@ -76,7 +76,7 @@ function removeAnyInFile(
   return 'already';
 }
 
-function logPatch(file: string, desc: string, result: ReturnType<typeof removeAnyInFile>) {
+function logPatch(file: string, desc: string, result: 'patched' | 'already') {
   if (result === 'patched') {
     log(`  ✓ ${file}: ${desc}`);
   } else {
@@ -128,24 +128,18 @@ export function brandVite(rootDir: string = process.cwd()) {
     cliResults.includes('patched') ? 'patched' : 'already',
   );
 
-  // 3. build.ts: Import VITE_PLUS_VERSION, rebrand startup build banner, and update error prefix
+  // 3. build.ts: Remove startup build banner and update error prefix
   const buildFile = join(nodeDir, 'build.ts');
   const buildResults = [
-    replaceInFile(
-      buildFile,
-      "  VERSION,\n} from './constants'",
-      "  VERSION,\n  VITE_PLUS_VERSION,\n} from './constants'",
-    ),
-    replaceInFile(
-      buildFile,
-      '`vite v${VERSION} ${colors.green(',
-      '`vite+ v${VITE_PLUS_VERSION} ${colors.green(',
-    ),
+    removeAnyInFile(buildFile, [
+      / {2}logger\.info\(\n {4}colors\.[a-zA-Z]+\(\n {6}`vite v\$\{VERSION\} \$\{colors\.green\(\n {8}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {6}\)\}`,\n {4}\),\n {2}\)\n/,
+      / {2}logger\.info\(\n {4}colors\.[a-zA-Z]+\(\n {6}`vite\+ v\$\{VITE_PLUS_VERSION\} \$\{colors\.green\(\n {8}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {6}\)\}`,\n {4}\),\n {2}\)\n/,
+    ]),
     replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed'),
   ];
   logPatch(
     'build.ts',
-    'Imported VITE_PLUS_VERSION, rebranded startup banner, and updated error prefix',
+    'Removed startup banner and updated error prefix',
     buildResults.includes('patched') ? 'patched' : 'already',
   );
 
