@@ -52,10 +52,7 @@ function replaceInFile(
   );
 }
 
-function removeAnyInFile(
-  filePath: string,
-  searches: Array<string | RegExp>,
-): 'patched' | 'already' {
+function removeAnyInFile(filePath: string, searches: Array<string | RegExp>): 'patched' {
   const content = readFileSync(filePath, 'utf-8');
   for (const search of searches) {
     if (typeof search === 'string') {
@@ -73,7 +70,11 @@ function removeAnyInFile(
       return 'patched';
     }
   }
-  return 'already';
+  throw new Error(
+    `[brand-vite] Patch failed in ${filePath}:\n` +
+      `  Could not find any expected search pattern.\n` +
+      `  The upstream code may have changed. Please update the search patterns in brand-vite.ts.`,
+  );
 }
 
 function logPatch(file: string, desc: string, result: 'patched' | 'already') {
