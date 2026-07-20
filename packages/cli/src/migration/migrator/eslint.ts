@@ -9,6 +9,7 @@ import { rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
+import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSpinner } from '../../utils/spinner.ts';
@@ -104,13 +105,42 @@ function oxlintMigrateSpecs(oxlintVersion: string): string[] {
 }
 
 /**
+ * Check whether `@oxlint/migrate@version` exists on the configured registry.
+ * Returns `undefined` when the registry can't be consulted (offline, auth
+ * failure, unexpected payload), so callers can tell "confirmed missing" apart
+ * from "unknown".
+ */
+async function isOxlintMigrateVersionPublished(version: string): Promise<boolean | undefined> {
+  try {
+    const response = await fetchNpmResource(`${getNpmRegistry('@oxlint')}/@oxlint/migrate`, {
+      headers: { accept: 'application/json' },
+      timeoutMs: 10_000,
+    });
+    if (response.status === 404) {
+      return false;
+    }
+    if (!response.ok) {
+      return undefined;
+    }
+    const packument = (await response.json()) as { versions?: Record<string, unknown> };
+    return packument.versions ? Object.hasOwn(packument.versions, version) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  *
- * Tries each candidate specifier in order until one runs successfully, so an
- * unpublished exact version transparently falls back to the latest compatible
- * release. Returns the resolved specifier on success (so later steps reuse the
- * same one) or `undefined` on failure (spawn error or non-zero exit for every
- * candidate).
+ * `vp dlx` forwards the executed package's exit status, so a nonzero exit can
+ * mean either "this exact version isn't published" or "the migrator ran and
+ * failed on this project". We only move on to the next candidate specifier
+ * when the registry confirms the failed version is missing — rerunning an
+ * older migrator after a genuine migration failure would repeat its edits and
+ * bury the real diagnostic.
+ *
+ * Returns the resolved specifier on success (so later steps reuse the same
+ * one) or `undefined` on failure.
  */
 async function runOxlintMigrateStep(
   vpBin: string,
@@ -121,8 +151,10 @@ async function runOxlintMigrateStep(
   failMessage: string,
   manualHint: (migratePackage: string) => string,
 ): Promise<string | undefined> {
-  let lastStderr = '';
-  for (const migratePackage of migratePackages) {
+  let stderrToReport = '';
+  let lastAttempted = migratePackages[0];
+  for (const [index, migratePackage] of migratePackages.entries()) {
+    lastAttempted = migratePackage;
     try {
       const result = await runCommandSilently({
         command: vpBin,
@@ -133,16 +165,26 @@ async function runOxlintMigrateStep(
       if (result.exitCode === 0) {
         return migratePackage;
       }
-      lastStderr = result.stderr.toString().trim();
+      stderrToReport = result.stderr.toString().trim() || stderrToReport;
     } catch {
-      lastStderr = '';
+      // Spawn failure — nothing new to report; keep any earlier stderr.
     }
+    if (migratePackages[index + 1] === undefined) {
+      break;
+    }
+    const version = migratePackage.slice(migratePackage.lastIndexOf('@') + 1);
+    if ((await isOxlintMigrateVersionPublished(version)) !== false) {
+      break;
+    }
+    // Confirmed unpublished: the captured stderr is just the resolution
+    // error, which falling back resolves — don't surface it later.
+    stderrToReport = '';
   }
   spinner.stop(failMessage);
-  if (lastStderr) {
-    prompts.log.warn(`⚠ ${lastStderr}`);
+  if (stderrToReport) {
+    prompts.log.warn(`⚠ ${stderrToReport}`);
   }
-  prompts.log.info(manualHint(migratePackages[migratePackages.length - 1]));
+  prompts.log.info(manualHint(lastAttempted));
   return undefined;
 }
 
