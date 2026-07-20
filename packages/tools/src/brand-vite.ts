@@ -18,14 +18,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const VITE_DIR = 'vite';
-const VITE_NODE_DIR = join('packages', 'vite', 'src', 'node');
-const VITE_BRAND_FILES = [
-  join(VITE_NODE_DIR, 'constants.ts'),
-  join(VITE_NODE_DIR, 'cli.ts'),
-  join(VITE_NODE_DIR, 'build.ts'),
-  join(VITE_NODE_DIR, 'logger.ts'),
-  join(VITE_NODE_DIR, 'plugins', 'reporter.ts'),
-];
+const VITE_NODE_DIR = join(VITE_DIR, 'packages', 'vite', 'src', 'node');
 
 function log(message: string) {
   console.log(`[brand-vite] ${message}`);
@@ -96,11 +89,12 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
 export function brandVite(rootDir: string = process.cwd()) {
   log('Applying Vite+ branding patches...');
 
-  const viteDir = join(rootDir, VITE_DIR);
   // Always patch raw upstream sources, including when sync-remote already applied branding.
-  execFileSync('git', ['restore', '--source=HEAD', '--', ...VITE_BRAND_FILES], { cwd: viteDir });
+  execFileSync('git', ['restore', '--source=HEAD', '--', '.'], {
+    cwd: join(rootDir, VITE_DIR),
+  });
 
-  const nodeDir = join(viteDir, VITE_NODE_DIR);
+  const nodeDir = join(rootDir, VITE_NODE_DIR);
 
   // 1. constants.ts: Add VITE_PLUS_VERSION constant after VERSION
   const constantsFile = join(nodeDir, 'constants.ts');
