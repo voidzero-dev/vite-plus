@@ -81,7 +81,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 
 - **Purpose**: Node.js distribution mirror URL
 - **Default**: `https://nodejs.org/dist`
-- **Details**: [Custom Node.js Mirror](/guide/env#custom-nodejs-mirror)
+- **Details**: [Custom Node.js Mirror](/guide/env#custom-node-js-mirror)
 
 ### `VP_NODE_VERSION`
 
@@ -98,7 +98,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 - **Purpose**: Skip PGP signature verification of Node.js downloads
 - **Values**: Any non-empty value
 - **Default**: None (verification enabled)
-- **Details**: [Node.js Signature Verification](/guide/env#nodejs-signature-verification)
+- **Details**: [Node.js Signature Verification](/guide/env#node-js-signature-verification)
 
 ### `VP_SHELL`
 
