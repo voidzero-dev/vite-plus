@@ -132,8 +132,8 @@ export function brandVite(rootDir: string = process.cwd()) {
   const buildFile = join(nodeDir, 'build.ts');
   const buildResults = [
     removeAnyInFile(buildFile, [
-      / {4}logger\.info\(\n {6}colors\.[a-zA-Z]+\(\n {8}`vite v\$\{VERSION\} \$\{colors\.green\(\n {10}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {8}\)\}`,\n {6}\),\n {4}\)\n/,
-      / {4}logger\.info\(\n {6}colors\.[a-zA-Z]+\(\n {8}`vite\+ v\$\{VITE_PLUS_VERSION\} \$\{colors\.green\(\n {10}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {8}\)\}`,\n {6}\),\n {4}\)\n/,
+      / {2}logger\.info\(\n {4}colors\.[a-zA-Z]+\(\n {6}`vite v\$\{VERSION\} \$\{colors\.green\(\n {8}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {6}\)\}`,\n {4}\),\n {2}\)\n/,
+      / {2}logger\.info\(\n {4}colors\.[a-zA-Z]+\(\n {6}`vite\+ v\$\{VITE_PLUS_VERSION\} \$\{colors\.green\(\n {8}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {6}\)\}`,\n {4}\),\n {2}\)\n/,
     ]),
     replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed'),
   ];
