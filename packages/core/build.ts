@@ -435,6 +435,12 @@ async function bundleTsdown() {
 
   // Re-build tsdown cli plus the bundled `@tsdown/exe` and `@tsdown/css`
   // extensions as stable named entries (`tsdown-exe.js`, `tsdown-css.js`).
+  // These named entries are a public contract (see the `command_pack_tsdown_extensions`
+  // snapshot test). `@tsdown/exe` also has to be wired into tsdown's runtime
+  // loader because it is loaded via `importWithError` (a runtime string import
+  // rolldown cannot follow); `@tsdown/css` is loaded via a static
+  // `import("@tsdown/css")` that rolldown bundles into its own chunk
+  // automatically (see wireBundledTsdownExtensions).
   await build({
     input: {
       run: join(tsdownSourceDir, 'dist/run.mjs'),
@@ -587,6 +593,63 @@ async function brandTsdown() {
         'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
     },
   ];
+
+  // The branded logger replacements above reference `bold`, `red`, and `yellow`.
+  // tsdown's own logger only imported the badge colors it actually used (e.g.
+  // `bgRed`, `bgYellow`), so depending on rolldown's chunking the chunk the
+  // logger lands in may not import all of these — leaving the branded output to
+  // crash at runtime with `ReferenceError: bold is not defined`. Locate the
+  // shared chunk that re-exports the color helpers (and the minified aliases
+  // rolldown assigned them) so we can add any missing imports to patched chunks.
+  const brandedColorNames = ['bold', 'red', 'yellow'];
+  let colorChunkBase: string | undefined;
+  const colorChunkAliases: Record<string, string> = {};
+  for (const candidateFile of loggerCandidateFiles) {
+    const content = await readFile(candidateFile, 'utf-8');
+    const exportBlock = (content.match(/export\s*\{[^}]*\}/g) ?? []).join('\n');
+    const aliases: Record<string, string> = {};
+    for (const name of brandedColorNames) {
+      const match = exportBlock.match(new RegExp(`\\b${name} as (\\w+)`));
+      if (match) {
+        aliases[name] = match[1];
+      }
+    }
+    if (brandedColorNames.every((name) => name in aliases)) {
+      colorChunkBase = parse(candidateFile).base;
+      Object.assign(colorChunkAliases, aliases);
+      break;
+    }
+  }
+  if (!colorChunkBase) {
+    throw new Error(
+      'brandTsdown: could not locate the color-helper chunk for branded logger imports',
+    );
+  }
+  const colorChunkImport = `"./${colorChunkBase}"`;
+
+  // Add imports for any color helper the branded replacements reference but the
+  // patched chunk does not already have in scope.
+  const ensureBrandedColorImports = (content: string, file: string): string => {
+    // When the logger lives in the color chunk itself, the helpers are local
+    // bindings and need no import.
+    if (parse(file).base === colorChunkBase) {
+      return content;
+    }
+    const missing = brandedColorNames.filter(
+      (name) => !new RegExp(`\\bas ${name}\\b`).test(content),
+    );
+    if (missing.length === 0) {
+      return content;
+    }
+    const specifiers = missing.map((name) => `${colorChunkAliases[name]} as ${name}`).join(', ');
+    const escapedBase = colorChunkBase.replaceAll('.', '\\.');
+    const importRe = new RegExp(`(import \\{[^}]*)(\\} from "\\./${escapedBase}")`);
+    if (importRe.test(content)) {
+      return content.replace(importRe, `$1, ${specifiers}$2`);
+    }
+    return `import { ${specifiers} } from ${colorChunkImport};\n${content}`;
+  };
+
   let loggerPatched = false;
 
   for (const candidateFile of loggerCandidateFiles) {
@@ -601,6 +664,7 @@ async function brandTsdown() {
     if (!changed) {
       continue;
     }
+    content = ensureBrandedColorImports(content, candidateFile);
     await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
@@ -623,18 +687,21 @@ async function wireBundledTsdownExtensions() {
     throw new Error('wireBundledTsdownExtensions: no chunk found in dist/tsdown/');
   }
 
-  // Route `@tsdown/exe` and `@tsdown/css` to the bundled entries.
+  // Wire the two bundled extensions into the bundled tsdown:
   //   - `importWithError("@tsdown/exe")` dynamically imports a runtime string,
   //     which rolldown cannot follow, so rewrite the call site to the chunk.
   //   - `pkgExists("@tsdown/css")` resolves the top-level package at runtime;
-  //     since it is bundled now, force it on and point the import at the chunk.
+  //     since it is bundled now, force the gate on so the css path is taken.
+  //     The gated `import("@tsdown/css")` is a static specifier that rolldown
+  //     already follows and bundles into its own chunk (rewriting the call site
+  //     to that chunk), so no manual import rewrite is needed for css.
   // `@tsdown/css` still imports `lightningcss` (a native module that cannot be
   // bundled), which resolves to core's own `lightningcss` dependency.
   let exeWired = false;
   let cssWired = false;
-  // The `import("@tsdown/css")` call site may already be deduped to the bundled
-  // entry by rolldown; track whether the bundled load ends up referenced either
-  // way so a silent miss (no rewrite and no dedup) fails the build.
+  // Confirm rolldown actually bundled the css plugin into a local chunk instead
+  // of leaving a bare `import("@tsdown/css")` that would fail at runtime.
+  const cssLoadPattern = /\{\s*CssPlugin\s*\}\s*=\s*await import\("\.\/[^"]+"\)/;
   let cssLoadWired = false;
   for (const chunkFile of chunkFiles) {
     let content = await readFile(chunkFile, 'utf-8');
@@ -649,11 +716,7 @@ async function wireBundledTsdownExtensions() {
       cssWired = true;
       changed = true;
     }
-    if (content.includes('import("@tsdown/css")')) {
-      content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
-      changed = true;
-    }
-    if (content.includes('import("./tsdown-css.js")')) {
+    if (cssLoadPattern.test(content)) {
       cssLoadWired = true;
     }
     if (changed) {
@@ -667,7 +730,7 @@ async function wireBundledTsdownExtensions() {
     throw new Error('wireBundledTsdownExtensions: `pkgExists("@tsdown/css")` not found');
   }
   if (!cssLoadWired) {
-    throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
+    throw new Error('wireBundledTsdownExtensions: bundled `CssPlugin` chunk is never imported');
   }
 }
 

@@ -147,10 +147,15 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    // Pin @oxlint/migrate to the bundled oxlint version.
+    // @oxlint/migrate ships alongside oxlint but can lag a freshly released
+    // oxlint version by a few days, so an exact pin (e.g. `@1.74.0`) fails to
+    // resolve while only `@1.73.0` is published. Pin to the bundled oxlint's
+    // major so `vp dlx` picks the latest published, compatible @oxlint/migrate;
+    // it upgrades automatically once the matching release lands.
     // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
-    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
+    const oxlintMajor = String(versions.oxlint).split('.')[0];
+    const migratePackage = `@oxlint/migrate@${oxlintMajor}`;
     const migrateArgs = [
       '--merge',
       ...(!hasBaseUrlInTsconfig(projectPath) ? ['--type-aware'] : []),
