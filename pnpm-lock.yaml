@@ -345,12 +345,6 @@ importers:
       lint-staged:
         specifier: 'catalog:'
         version: 16.4.0
-      oxfmt:
-        specifier: 'catalog:'
-        version: 0.58.0(vite-plus@packages+cli)
-      oxlint:
-        specifier: 'catalog:'
-        version: 1.73.0(oxlint-tsgolint@0.24.0)(vite-plus@packages+cli)
       playwright:
         specifier: 'catalog:'
         version: 1.57.0
