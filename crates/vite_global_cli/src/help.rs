@@ -1,60 +1,40 @@
 //! Unified help rendering for the global CLI.
 
-use std::{fmt::Write as _, io::IsTerminal};
+use std::{borrow::Cow, fmt::Write as _, io::IsTerminal};
 
 use clap::{CommandFactory, error::ErrorKind};
 use owo_colors::OwoColorize;
 
 #[derive(Clone, Debug)]
 pub struct HelpDoc {
-    pub usage: &'static str,
-    pub summary: Vec<&'static str>,
+    pub usage: Cow<'static, str>,
+    pub summary: Vec<Cow<'static, str>>,
     pub sections: Vec<HelpSection>,
-    pub documentation_url: Option<&'static str>,
+    pub documentation_url: Option<Cow<'static, str>>,
 }
 
 #[derive(Clone, Debug)]
 pub enum HelpSection {
-    Rows { title: &'static str, rows: Vec<HelpRow> },
-    Lines { title: &'static str, lines: Vec<&'static str> },
+    Rows { title: Cow<'static, str>, rows: Vec<HelpRow> },
+    Lines { title: Cow<'static, str>, lines: Vec<Cow<'static, str>> },
 }
 
 #[derive(Clone, Debug)]
 pub struct HelpRow {
-    pub label: &'static str,
-    pub description: Vec<&'static str>,
-}
-
-#[derive(Clone, Debug)]
-struct OwnedHelpDoc {
-    usage: String,
-    summary: Vec<String>,
-    sections: Vec<OwnedHelpSection>,
-    documentation_url: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-enum OwnedHelpSection {
-    Rows { title: String, rows: Vec<OwnedHelpRow> },
-    Lines { title: String, lines: Vec<String> },
-}
-
-#[derive(Clone, Debug)]
-struct OwnedHelpRow {
-    label: String,
-    description: Vec<String>,
+    pub label: Cow<'static, str>,
+    pub description: Vec<Cow<'static, str>>,
 }
 
 fn row(label: &'static str, description: &'static str) -> HelpRow {
-    HelpRow { label, description: vec![description] }
+    HelpRow { label: label.into(), description: vec![description.into()] }
 }
 
 fn section_rows(title: &'static str, rows: Vec<HelpRow>) -> HelpSection {
-    HelpSection::Rows { title, rows }
+    HelpSection::Rows { title: title.into(), rows }
 }
 
 fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
-    HelpSection::Lines { title, lines }
+    HelpSection::Lines { title: title.into(), lines: lines.into_iter().map(Into::into).collect() }
 }
 
 fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static str> {
@@ -111,29 +91,6 @@ fn render_rows(rows: &[HelpRow]) -> Vec<String> {
         return vec![];
     }
 
-    let label_width = rows.iter().map(|row| row.label.len()).max().unwrap_or(0);
-    let mut output = Vec::new();
-
-    for row in rows {
-        let mut description_iter = row.description.iter();
-        if let Some(first) = description_iter.next() {
-            output.push(format!("  {:label_width$}  {}", row.label, first));
-            for line in description_iter {
-                output.push(format!("  {:label_width$}  {}", "", line));
-            }
-        } else {
-            output.push(format!("  {}", row.label));
-        }
-    }
-
-    output
-}
-
-fn render_owned_rows(rows: &[OwnedHelpRow]) -> Vec<String> {
-    if rows.is_empty() {
-        return vec![];
-    }
-
     let label_width = rows.iter().map(|row| row.label.chars().count()).max().unwrap_or(0);
     let mut output = Vec::new();
 
@@ -171,7 +128,7 @@ fn render_muted_comment_suffix(line: &str) -> String {
 pub fn render_help_doc(doc: &HelpDoc) -> String {
     let mut output = String::new();
 
-    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(doc.usage));
+    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(&doc.usage));
 
     if !doc.summary.is_empty() {
         let _ = writeln!(output);
@@ -198,44 +155,7 @@ pub fn render_help_doc(doc: &HelpDoc) -> String {
         }
     }
 
-    if let Some(documentation_url) = doc.documentation_url {
-        write_documentation_footer(&mut output, documentation_url);
-    }
-
-    output
-}
-
-fn render_owned_help_doc(doc: &OwnedHelpDoc) -> String {
-    let mut output = String::new();
-
-    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(&doc.usage));
-
-    if !doc.summary.is_empty() {
-        let _ = writeln!(output);
-        for line in &doc.summary {
-            let _ = writeln!(output, "{line}");
-        }
-    }
-
-    for section in &doc.sections {
-        let _ = writeln!(output);
-        match section {
-            OwnedHelpSection::Rows { title, rows } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in render_owned_rows(rows) {
-                    let _ = writeln!(output, "{line}");
-                }
-            }
-            OwnedHelpSection::Lines { title, lines } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in lines {
-                    let _ = writeln!(output, "{}", render_muted_comment_suffix(line));
-                }
-            }
-        }
-    }
-
-    if let Some(documentation_url) = &doc.documentation_url {
+    if let Some(documentation_url) = doc.documentation_url.as_deref() {
         write_documentation_footer(&mut output, documentation_url);
     }
 
@@ -293,18 +213,18 @@ fn split_label_and_description(content: &str) -> Option<(String, String)> {
     None
 }
 
-fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+fn parse_rows(lines: &[String]) -> Vec<HelpRow> {
     parse_rows_with_alias_normalization(lines, false)
 }
 
-fn parse_command_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+fn parse_command_rows(lines: &[String]) -> Vec<HelpRow> {
     parse_rows_with_alias_normalization(lines, true)
 }
 
 fn parse_rows_with_alias_normalization(
     lines: &[String],
     normalize_alias_suffixes: bool,
-) -> Vec<OwnedHelpRow> {
+) -> Vec<HelpRow> {
     let mut rows = Vec::new();
 
     for line in lines {
@@ -324,23 +244,23 @@ fn parse_rows_with_alias_normalization(
             } else {
                 (label, description)
             };
-            rows.push(OwnedHelpRow { label, description: vec![description] });
+            rows.push(HelpRow { label: label.into(), description: vec![description.into()] });
             continue;
         }
 
         if leading >= 4 && content.starts_with('-') {
-            rows.push(OwnedHelpRow { label: content.to_string(), description: vec![] });
+            rows.push(HelpRow { label: content.to_string().into(), description: vec![] });
             continue;
         }
 
         if leading >= 4 {
             if let Some(last) = rows.last_mut() {
-                last.description.push(content.to_string());
+                last.description.push(content.to_string().into());
                 continue;
             }
         }
 
-        rows.push(OwnedHelpRow { label: content.to_string(), description: vec![] });
+        rows.push(HelpRow { label: content.to_string().into(), description: vec![] });
     }
 
     rows
@@ -384,7 +304,7 @@ fn strip_ansi(value: &str) -> String {
     output
 }
 
-fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
+fn parse_clap_help_to_doc(raw_help: &str) -> Option<HelpDoc> {
     let normalized = raw_help.replace("\r\n", "\n");
     let lines: Vec<String> = normalized.lines().map(strip_ansi).collect();
     let usage_index = lines.iter().position(|line| line.starts_with("Usage: "))?;
@@ -437,19 +357,28 @@ fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
             } else {
                 parse_rows(&body)
             };
-            sections.push(OwnedHelpSection::Rows { title, rows });
+            sections.push(HelpSection::Rows { title: title.into(), rows });
         } else {
-            let lines = body.into_iter().filter(|line| !line.trim().is_empty()).collect::<Vec<_>>();
-            sections.push(OwnedHelpSection::Lines { title, lines });
+            let lines = body
+                .into_iter()
+                .filter(|line| !line.trim().is_empty())
+                .map(Into::into)
+                .collect::<Vec<_>>();
+            sections.push(HelpSection::Lines { title: title.into(), lines });
         }
     }
 
-    Some(OwnedHelpDoc { usage, summary, sections, documentation_url: None })
+    Some(HelpDoc {
+        usage: usage.into(),
+        summary: summary.into_iter().map(Into::into).collect(),
+        sections,
+        documentation_url: None,
+    })
 }
 
 pub fn top_level_help_doc() -> HelpDoc {
     HelpDoc {
-        usage: "vp [COMMAND]",
+        usage: "vp [COMMAND]".into(),
         summary: Vec::new(),
         sections: vec![
             section_rows(
@@ -519,14 +448,14 @@ pub fn top_level_help_doc() -> HelpDoc {
                 ],
             ),
         ],
-        documentation_url: documentation_url_for_command_path(&[]),
+        documentation_url: documentation_url_for_command_path(&[]).map(Into::into),
     }
 }
 
 fn env_help_doc() -> HelpDoc {
     HelpDoc {
-        usage: "vp env [COMMAND]",
-        summary: vec!["Manage Node.js versions"],
+        usage: "vp env [COMMAND]".into(),
+        summary: vec!["Manage Node.js versions".into()],
         sections: vec![
             section_rows(
                 "Setup",
@@ -607,7 +536,7 @@ fn env_help_doc() -> HelpDoc {
                 ],
             ),
         ],
-        documentation_url: documentation_url_for_command_path(&["env"]),
+        documentation_url: documentation_url_for_command_path(&["env"]).map(Into::into),
     }
 }
 
@@ -739,14 +668,13 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     let Some(doc) = parse_clap_help_to_doc(&raw_help) else {
         return false;
     };
-    let doc = OwnedHelpDoc {
-        documentation_url: documentation_url_for_command_path(command_path)
-            .map(ToString::to_string),
+    let doc = HelpDoc {
+        documentation_url: documentation_url_for_command_path(command_path).map(Into::into),
         ..doc
     };
 
     vite_shared::header::print_header();
-    println!("{}", render_owned_help_doc(&doc));
+    println!("{}", render_help_doc(&doc));
     true
 }
 
@@ -954,10 +882,10 @@ Options:
     #[test]
     fn render_help_doc_appends_documentation_footer() {
         let output = render_help_doc(&HelpDoc {
-            usage: "vp demo",
+            usage: "vp demo".into(),
             summary: vec![],
             sections: vec![],
-            documentation_url: Some("https://viteplus.dev/guide/demo"),
+            documentation_url: Some("https://viteplus.dev/guide/demo".into()),
         });
 
         assert!(strip_ansi(&output).contains("Documentation: https://viteplus.dev/guide/demo"));

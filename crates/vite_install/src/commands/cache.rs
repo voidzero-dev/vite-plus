@@ -152,32 +152,9 @@ impl PackageManager {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::{TempDir, tempdir};
-    use vite_path::AbsolutePathBuf;
-    use vite_str::Str;
 
     use super::*;
-
-    fn create_temp_dir() -> TempDir {
-        tempdir().expect("Failed to create temp directory")
-    }
-
-    fn create_mock_package_manager(pm_type: PackageManagerType, version: &str) -> PackageManager {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let install_dir = temp_dir_path.join("install");
-
-        PackageManager {
-            client: pm_type,
-            package_name: pm_type.to_string().into(),
-            version: Str::from(version),
-            hash: None,
-            bin_name: pm_type.to_string().into(),
-            workspace_root: temp_dir_path.clone(),
-            is_monorepo: false,
-            install_dir,
-        }
-    }
+    use crate::package_manager::create_mock_package_manager_with_version as create_mock_package_manager;
 
     #[test]
     fn test_pnpm_cache_dir() {
