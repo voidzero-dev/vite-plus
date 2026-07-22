@@ -12,9 +12,9 @@ Usage: vp pm owner <COMMAND>
 Manage package owners
 
 Commands:
-  list, ls  List package owners
-  add       Add package owner
-  rm        Remove package owner
+  list  List package owners [alias: ls]
+  add   Add package owner
+  rm    Remove package owner
 
 Options:
   -h, --help  Print help

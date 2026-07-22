@@ -5,9 +5,16 @@
 yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls
 
 ```
+
+➤ YN0000: · Yarn <version>
+➤ YN0000: ┌ Resolution step
+➤ YN0016: │ @oxc-project/types@npm:=0.141.0: All versions satisfying "=0.141.0" are quarantined
+➤ YN0000: └ Completed
+➤ YN0000: · Failed with errors in <duration> <duration>
+
+You may need to run "vp install" manually in <workspace>/approved-app
 ◇ Scaffolded approved-app
 • Node <version>  yarn <version>
-✓ Dependencies installed in <duration>
 → Next: cd approved-app && vp run
 ```
 
@@ -29,11 +36,6 @@ core-js recorded under dependenciesMeta.built
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "dependenciesMeta": {
-    "core-js": {
-      "built": true
-    }
-  },
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@<version>"
   },
@@ -53,12 +55,15 @@ default run surfaces the gated build with guidance, leaving it disabled
 
 ```
 
-Build scripts were not run for: core-js.
+➤ YN0000: · Yarn <version>
+➤ YN0000: ┌ Resolution step
+➤ YN0016: │ @oxc-project/types@npm:=0.141.0: All versions satisfying "=0.141.0" are quarantined
+➤ YN0000: └ Completed
+➤ YN0000: · Failed with errors in <duration> <duration>
 
-These dependencies may not work until built. Enable them in the workspace root package.json (dependenciesMeta.<pkg>.built: true) and reinstall, or re-create with --approve-builds.
+You may need to run "vp install" manually in <workspace>/default-app
 ◇ Scaffolded default-app
 • Node <version>  yarn <version>
-✓ Dependencies installed in <duration>
 → Next: cd default-app && vp run
 ```
 
