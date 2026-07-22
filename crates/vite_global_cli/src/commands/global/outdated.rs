@@ -11,6 +11,7 @@ use vite_install::commands::outdated::Format;
 
 use super::{latest_package_versions, parse_package_spec};
 use crate::{
+    cli::exit_status,
     commands::env::{config::get_node_modules_dir, package_metadata::PackageMetadata},
     error::Error,
 };
@@ -256,19 +257,5 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
                 package.latest
             );
         }
-    }
-}
-
-fn exit_status(code: i32) -> ExitStatus {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        ExitStatus::from_raw(code << 8)
-    }
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::ExitStatusExt;
-        ExitStatus::from_raw(code as u32)
     }
 }
