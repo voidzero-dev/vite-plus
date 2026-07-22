@@ -419,7 +419,7 @@ Examples:
     #[command(visible_alias = "i")]
     Install {
         /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
-        /// If not provided, installs the version from .node-version or package.json
+        /// If not provided, installs the version from .node-version, package.json, or .nvmrc
         version: Option<String>,
     },
 
@@ -430,7 +430,7 @@ Examples:
   vp env use --unset    # Clear the session override")]
     Use {
         /// Version to use (e.g., "20", "20.18.0", "lts", "latest").
-        /// If omitted, reads from .node-version or package.json.
+        /// If omitted, reads from .node-version, package.json, or .nvmrc.
         version: Option<String>,
 
         /// Remove session override (revert to file-based resolution)

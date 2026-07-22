@@ -1,7 +1,7 @@
-//! `.node-version` file reading and writing utilities.
+//! Node version file reading and writing utilities.
 //!
-//! This module provides utilities for working with `.node-version` files,
-//! which are used to specify Node.js versions for projects.
+//! This module provides utilities for working with `.node-version` and `.nvmrc`
+//! files, which are used to specify Node.js versions for projects.
 //!
 //! For `PackageJson` types (devEngines, engines), see `vite_shared::package_json`.
 
@@ -44,6 +44,12 @@ pub fn parse_node_version_content(content: &str) -> Option<Str> {
     Some(version.into())
 }
 
+async fn read_node_version_file_name(project_path: &AbsolutePath, file_name: &str) -> Option<Str> {
+    let path = project_path.join(file_name);
+    let content = tokio::fs::read_to_string(&path).await.ok()?;
+    parse_node_version_content(&content)
+}
+
 /// Read and parse a `.node-version` file from the project root.
 ///
 /// # Arguments
@@ -52,9 +58,14 @@ pub fn parse_node_version_content(content: &str) -> Option<Str> {
 /// # Returns
 /// The version string if the file exists and contains a valid version.
 pub async fn read_node_version_file(project_path: &AbsolutePath) -> Option<Str> {
-    let path = project_path.join(".node-version");
-    let content = tokio::fs::read_to_string(&path).await.ok()?;
-    parse_node_version_content(&content)
+    read_node_version_file_name(project_path, ".node-version").await
+}
+
+/// Read and parse a `.nvmrc` file from the project root.
+///
+/// Supports the same simple single-line version formats as `.node-version`.
+pub async fn read_nvmrc_file(project_path: &AbsolutePath) -> Option<Str> {
+    read_node_version_file_name(project_path, ".nvmrc").await
 }
 
 /// Write a version to the `.node-version` file.
@@ -134,6 +145,17 @@ mod tests {
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "22.13.1\n").await.unwrap();
         assert_eq!(read_node_version_file(&temp_path).await, Some("22.13.1".into()));
+    }
+
+    #[tokio::test]
+    async fn test_read_nvmrc_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        assert!(read_nvmrc_file(&temp_path).await.is_none());
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "v22.13.1\n").await.unwrap();
+        assert_eq!(read_nvmrc_file(&temp_path).await, Some("22.13.1".into()));
     }
 
     #[tokio::test]

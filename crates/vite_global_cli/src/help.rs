@@ -591,7 +591,7 @@ fn env_help_doc() -> HelpDoc {
                     "",
                     "  Manage:",
                     "    vp env pin lts                # Pin to latest LTS version",
-                    "    vp env install                # Install version from .node-version / package.json",
+                    "    vp env install                # Install version from .node-version / package.json / .nvmrc",
                     "    vp env use 20                 # Use Node.js 20 for this shell session",
                     "    vp env use --unset            # Remove session override",
                     "    vp env clean                  # Remove unused managed caches",

@@ -8,7 +8,7 @@ use vite_str::Str;
 
 use crate::{
     Error, Platform,
-    dev_engines::{PackageJson, read_node_version_file},
+    dev_engines::{PackageJson, read_node_version_file, read_nvmrc_file},
     download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
     provider::{HashVerification, JsRuntimeProvider, ShasumsSignature},
     providers::NodeProvider,
@@ -304,8 +304,10 @@ pub enum VersionSource {
     NodeVersionFile,
     /// Version from `devEngines.runtime` in package.json
     DevEnginesRuntime,
-    /// Version from `engines.node` in package.json (lowest priority)
+    /// Version from `engines.node` in package.json
     EnginesNode,
+    /// Version from `.nvmrc` file (lower priority than package.json)
+    NvmrcFile,
 }
 
 impl std::fmt::Display for VersionSource {
@@ -314,6 +316,7 @@ impl std::fmt::Display for VersionSource {
             Self::NodeVersionFile => write!(f, ".node-version"),
             Self::EnginesNode => write!(f, "engines.node"),
             Self::DevEnginesRuntime => write!(f, "devEngines.runtime"),
+            Self::NvmrcFile => write!(f, ".nvmrc"),
         }
     }
 }
@@ -339,6 +342,7 @@ pub struct VersionResolution {
 /// 1. `.node-version` file
 /// 2. `package.json#devEngines.runtime[name="node"]`
 /// 3. `package.json#engines.node`
+/// 4. `.nvmrc` file
 ///
 /// If `walk_up` is true, walks up the directory tree checking each level until
 /// a version is found or the root is reached.
@@ -407,6 +411,17 @@ pub async fn resolve_node_version(
             }
         }
 
+        // 4. Check .nvmrc file
+        if let Some(version) = read_nvmrc_file(current).await {
+            let nvmrc_path = current.join(".nvmrc");
+            return Ok(Some(VersionResolution {
+                version,
+                source: VersionSource::NvmrcFile,
+                source_path: Some(nvmrc_path),
+                project_root: Some(current.to_absolute_path_buf()),
+            }));
+        }
+
         // Move to parent directory if walk_up is enabled
         if !walk_up {
             break;
@@ -427,7 +442,8 @@ pub async fn resolve_node_version(
 /// Reads Node.js version from multiple sources with the following priority:
 /// 1. `.node-version` file (highest)
 /// 2. `devEngines.runtime` in package.json
-/// 3. `engines.node` in package.json (lowest)
+/// 3. `engines.node` in package.json
+/// 4. `.nvmrc` file (lowest)
 ///
 /// If no version source is found, uses the latest installed version from cache,
 /// or falls back to the latest LTS version from the network.
@@ -1184,6 +1200,7 @@ mod tests {
         assert_eq!(VersionSource::NodeVersionFile.to_string(), ".node-version");
         assert_eq!(VersionSource::EnginesNode.to_string(), "engines.node");
         assert_eq!(VersionSource::DevEnginesRuntime.to_string(), "devEngines.runtime");
+        assert_eq!(VersionSource::NvmrcFile.to_string(), ".nvmrc");
     }
 
     // ==========================================
@@ -1567,6 +1584,53 @@ mod tests {
         // .node-version should take priority
         assert_eq!(&*resolution.version, "22.0.0");
         assert_eq!(resolution.source, VersionSource::NodeVersionFile);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_nvmrc() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "v20.18.0\n").await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::NvmrcFile);
+        assert_eq!(resolution.source_path, Some(temp_path.join(".nvmrc")));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_nvmrc_is_lowest_priority() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(temp_path.join(".node-version"), "22.0.0\n").await.unwrap();
+        tokio::fs::write(temp_path.join(".nvmrc"), "18.0.0\n").await.unwrap();
+        let package_json = r#"{
+  "engines": {"node": "20.18.0"},
+  "devEngines": {"runtime": {"name": "node", "version": "21.0.0"}}
+}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "22.0.0");
+        assert_eq!(resolution.source, VersionSource::NodeVersionFile);
+
+        tokio::fs::remove_file(temp_path.join(".node-version")).await.unwrap();
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "21.0.0");
+        assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
+
+        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::EnginesNode);
+
+        tokio::fs::remove_file(temp_path.join("package.json")).await.unwrap();
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "18.0.0");
+        assert_eq!(resolution.source, VersionSource::NvmrcFile);
     }
 
     // npm-install-checks: "spec 2" (runtime array [bun, node]: the node entry is used)

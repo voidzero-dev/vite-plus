@@ -12,7 +12,7 @@ Usage: vp env use [OPTIONS] [VERSION]
 Use a specific Node.js version for this shell session
 
 Arguments:
-  [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest"). If omitted, reads from .node-version or package.json
+  [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest"). If omitted, reads from .node-version, package.json, or .nvmrc
 
 Options:
   --unset                Remove session override (revert to file-based resolution)

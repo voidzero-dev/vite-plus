@@ -112,7 +112,7 @@ vp env print                  # Print shell snippet for this session
 
 # Manage
 vp env pin lts                # Pin the project to the latest LTS release
-vp env install                # Install the version from .node-version or package.json
+vp env install                # Install the version from .node-version, package.json, or .nvmrc
 vp env default lts            # Set the global default version
 vp env use 20                 # Use Node.js 20 for the current shell session
 vp env use --unset            # Remove the session override
