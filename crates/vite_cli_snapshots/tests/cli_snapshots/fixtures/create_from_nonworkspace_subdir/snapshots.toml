@@ -3,7 +3,8 @@ name = "create_from_nonworkspace_subdir"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "create", "--no-interactive", "vite:application"], cwd = "scripts", comment = "from non-monorepo subdir", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "--package-manager", "pnpm", "vite:application"], cwd = "scripts", comment = "explicit package manager overrides the non-workspace ancestor", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "stat-file", "scripts/vite-plus-application/package.json", "--assert", "file"], comment = "created at scripts/vite-plus-application", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "scripts/vite-plus-application/package.json", "\"name\": \"pnpm\""], comment = "pins pnpm in devEngines", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "vite-plus-application/package.json", "--assert-not", "file"], comment = "not created at parent root", continue-on-failure = true },
 ]
