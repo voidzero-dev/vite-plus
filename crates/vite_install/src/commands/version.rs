@@ -93,27 +93,9 @@ fn bun_supports_version_command(version: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::tempdir;
-    use vite_path::AbsolutePathBuf;
-    use vite_str::Str;
 
     use super::*;
-
-    fn create_mock_package_manager(pm_type: PackageManagerType) -> PackageManager {
-        let temp_dir = tempdir().expect("Failed to create temp directory");
-        let root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let install_dir = root.join("install");
-        PackageManager {
-            client: pm_type,
-            package_name: pm_type.to_string().into(),
-            version: Str::from("1.0.0"),
-            hash: None,
-            bin_name: pm_type.to_string().into(),
-            workspace_root: root,
-            is_monorepo: false,
-            install_dir,
-        }
-    }
+    use crate::package_manager::create_mock_package_manager;
 
     fn resolve(
         package_manager: &PackageManager,

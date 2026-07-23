@@ -118,16 +118,22 @@ if (project === 'vinext') {
 }
 
 if (project === 'dify') {
-  // dify sets `minimumReleaseAge` with `resolutionMode: time-based`. Keep the
-  // policy inactive for the ecosystem run so a same-day upstream publish does
-  // not fail resolution (the local Vite+ packages themselves carry an old
-  // `time` from the registry, so they always pass age gates).
+  // pnpm 11 defaults `minimumReleaseAge` to 24 hours when the setting is
+  // omitted, so keep dify's explicit opt-out instead of deleting it. Switch
+  // this ephemeral fixture away from `resolutionMode: time-based` as well:
+  // defining `minimumReleaseAge` there activates a resolution-policy path that
+  // vp's bundled pnpm cannot handle.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
   const workspace = await readFile(workspacePath, 'utf-8');
-  const patched = workspace.replace(/^minimumReleaseAge:.*\n/m, '');
-  if (patched === workspace) {
+  if (!/^minimumReleaseAge:/m.test(workspace)) {
     throw new Error(`dify patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
   }
+  if (!/^resolutionMode:\s*time-based[ \t]*$/m.test(workspace)) {
+    throw new Error(`dify patch: \`resolutionMode: time-based\` not found in ${workspacePath}`);
+  }
+  const patched = workspace
+    .replace(/^minimumReleaseAge:.*$/m, 'minimumReleaseAge: 0')
+    .replace(/^resolutionMode:\s*time-based[ \t]*$/m, 'resolutionMode: highest');
   await writeFile(workspacePath, patched, 'utf-8');
 }
 
@@ -158,13 +164,12 @@ const vitestOverrides = {
 // publish does not fail with ERR_PNPM_NO_MATURE_MATCHING_VERSION. pnpm >= 10.6
 // only reads the PNPM_CONFIG_* spelling; older pnpm reads the lowercase form.
 //
-// Projects with `resolutionMode: time-based` (currently dify) are the
-// exception: defining a minimumReleaseAge (even 0, via any env spelling)
-// activates pnpm's resolution-policy engine there, which vp's bundled pnpm
-// cannot handle (ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED, no
-// handleResolutionPolicyViolations callback wired). Their `minimumReleaseAge:`
-// key is stripped by the per-project patches above, so with no gate env the
-// policy stays inactive and installs work.
+// Projects that retain `resolutionMode: time-based` are the exception: defining
+// a minimumReleaseAge (even 0, via any env spelling) activates pnpm's
+// resolution-policy engine there, which vp's bundled pnpm cannot handle
+// (ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED, no
+// handleResolutionPolicyViolations callback wired). Dify is patched to
+// `resolutionMode: highest` above, so it follows the normal opt-out path.
 const workspaceYamlPath = join(repoRoot, 'pnpm-workspace.yaml');
 const timeBasedResolution =
   existsSync(workspaceYamlPath) &&

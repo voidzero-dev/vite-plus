@@ -28,7 +28,7 @@ pub(crate) use setup::{cleanup_legacy_windows_shim, get_trampoline_path, remove_
 use vite_path::AbsolutePathBuf;
 
 use crate::{
-    cli::{EnvArgs, EnvSubcommands},
+    cli::{EnvArgs, EnvSubcommands, exit_status},
     commands::shell::{Shell, detect_shell},
     error::Error,
 };
@@ -200,18 +200,4 @@ async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!("{snippet}");
 
     Ok(ExitStatus::default())
-}
-
-/// Create an exit status with the given code.
-fn exit_status(code: i32) -> ExitStatus {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        ExitStatus::from_raw(code << 8)
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::ExitStatusExt;
-        ExitStatus::from_raw(code as u32)
-    }
 }
