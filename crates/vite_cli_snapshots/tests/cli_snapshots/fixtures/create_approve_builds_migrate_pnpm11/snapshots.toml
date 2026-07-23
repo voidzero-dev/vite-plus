@@ -1,7 +1,7 @@
 [[case]]
 name = "create_approve_builds_migrate_pnpm11"
 vp = "local"
-env = { ADBLOCK = "1" }
+env = { ADBLOCK = "1", PNPM_CONFIG_MINIMUM_RELEASE_AGE = "0" }
 unset-env = ["VP_SKIP_INSTALL", "CI"]
 local-registry = true
 steps = [
