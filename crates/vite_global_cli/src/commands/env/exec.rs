@@ -13,6 +13,7 @@ use vite_js_runtime::NodeProvider;
 use vite_shared::{env_vars, format_path_prepended};
 
 use crate::{
+    cli::exit_status,
     error::Error,
     shim::{dispatch as shim_dispatch, is_shim_tool},
 };
@@ -189,20 +190,6 @@ fn classify_version(version: &str) -> VersionSelector<'_> {
         VersionSelector::Exact(version.strip_prefix('v').unwrap_or(version))
     } else {
         VersionSelector::Range(version)
-    }
-}
-
-/// Create an exit status with the given code.
-fn exit_status(code: i32) -> ExitStatus {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        ExitStatus::from_raw(code << 8)
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::ExitStatusExt;
-        ExitStatus::from_raw(code as u32)
     }
 }
 

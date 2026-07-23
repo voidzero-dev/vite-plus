@@ -71,6 +71,17 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
   ...VITEST_AGE_GATE_EXEMPT_PACKAGES,
 ] as const;
 
+// Whether `version` is at least `minVersion`. A non-coercible version passes
+// only when it is one of the given dist-tags, which always point at a current
+// (feature-capable) release.
+function versionAtLeast(version: string, minVersion: string, tags: string[]): boolean {
+  const coerced = semver.coerce(version);
+  if (coerced) {
+    return semver.gte(coerced, minVersion);
+  }
+  return tags.includes(version);
+}
+
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
 
 // pnpm 10.5 started reading package.json#pnpm settings from
@@ -78,11 +89,7 @@ const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
 // 10.5.1 and 10.6.2 respectively. Use the latter as the atomic migration
 // boundary so the complete object can move without splitting its ownership.
 export function pnpmSupportsWorkspaceSettings(version: string): boolean {
-  const coerced = semver.coerce(version);
-  if (coerced) {
-    return semver.gte(coerced, PNPM_WORKSPACE_SETTINGS_MIN_VERSION);
-  }
-  return version === 'latest' || version === 'next';
+  return versionAtLeast(version, PNPM_WORKSPACE_SETTINGS_MIN_VERSION, ['latest', 'next']);
 }
 
 const PNPM_CATALOG_MIN_VERSION = '9.5.0';
@@ -97,11 +104,7 @@ const PNPM_CATALOG_MIN_VERSION = '9.5.0';
 // already uses catalogs has its reconciled toolchain edges (vite/vite-plus and
 // the vitest ecosystem) inlined to concrete versions instead of kept `catalog:`.
 export function pnpmSupportsCatalog(version: string): boolean {
-  const coerced = semver.coerce(version);
-  if (coerced) {
-    return semver.gte(coerced, PNPM_CATALOG_MIN_VERSION);
-  }
-  return version === 'latest' || version === 'next';
+  return versionAtLeast(version, PNPM_CATALOG_MIN_VERSION, ['latest', 'next']);
 }
 
 const YARN_CATALOG_MIN_VERSION = '4.10.0';
@@ -115,11 +118,7 @@ const YARN_CATALOG_MIN_VERSION = '4.10.0';
 // not (yet) provably on a catalog-capable Yarn gets concrete specs instead of
 // `catalog:` references it cannot resolve. Mirrors `pnpmSupportsWorkspaceSettings`.
 export function yarnSupportsCatalog(version: string): boolean {
-  const coerced = semver.coerce(version);
-  if (coerced) {
-    return semver.gte(coerced, YARN_CATALOG_MIN_VERSION);
-  }
-  return version === 'latest' || version === 'next' || version === 'stable';
+  return versionAtLeast(version, YARN_CATALOG_MIN_VERSION, ['latest', 'next', 'stable']);
 }
 
 // Whether a `catalog:` reference resolves for this package manager and version:

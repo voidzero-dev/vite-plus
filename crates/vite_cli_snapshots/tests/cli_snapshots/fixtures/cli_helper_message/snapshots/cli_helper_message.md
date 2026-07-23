@@ -399,15 +399,15 @@ Commands:
   approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
   prune             Remove unnecessary packages
   pack              Create a tarball of the package
-  list, ls          List installed packages
+  list              List installed packages [alias: ls]
   view, info, show  View package information from the registry
   version           Forward the native package version command
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
-  owner, author     Manage package owners
+  owner             Manage package owners [alias: author]
   cache             Manage package cache
-  config, c         Manage package manager configuration
-  login, adduser    Log in to a registry
+  config            Manage package manager configuration [alias: c]
+  login             Log in to a registry [alias: adduser]
   logout            Log out from a registry
   whoami            Show the current logged-in user
   token             Manage authentication tokens
@@ -415,7 +415,7 @@ Commands:
   dist-tag          Manage distribution tags
   deprecate         Deprecate a package version
   search            Search for packages in the registry
-  rebuild, rb       Rebuild native modules
+  rebuild           Rebuild native modules [alias: rb]
   fund              Show funding information for installed packages
   ping              Ping the registry
 
