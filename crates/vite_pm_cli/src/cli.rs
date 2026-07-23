@@ -562,6 +562,13 @@ impl PackageManagerCommand {
 /// Package manager subcommands (`vp pm <subcommand>`).
 #[derive(Subcommand, Debug, Clone)]
 pub enum PmCommands {
+    /// Clean install dependencies for CI environments
+    Ci {
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     #[command(name = "approve-builds")]
     ApproveBuilds {
@@ -1385,6 +1392,24 @@ mod tests {
             .expect_err("expected --all + positional to fail");
 
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn ci_parses() {
+        let command = parse_pm_command(&["vp", "pm", "ci"]).expect("ci should parse");
+
+        assert!(matches!(command, PackageManagerCommand::Pm(PmCommands::Ci { .. })));
+    }
+
+    #[test]
+    fn ci_pass_through_args_capture() {
+        let command = parse_pm_command(&["vp", "pm", "ci", "--", "--ignore-scripts"])
+            .expect("pass-through args should parse");
+
+        let PackageManagerCommand::Pm(PmCommands::Ci { pass_through_args }) = command else {
+            panic!("expected Ci variant");
+        };
+        assert_eq!(pass_through_args, Some(vec!["--ignore-scripts".to_string()]));
     }
 
     #[test]

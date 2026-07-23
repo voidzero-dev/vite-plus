@@ -11,6 +11,7 @@ use vite_install::{
         approve_builds::ApproveBuildsCommandOptions,
         audit::AuditCommandOptions,
         cache::CacheCommandOptions,
+        ci::CiCommandOptions,
         config::ConfigCommandOptions,
         dedupe::DedupeCommandOptions,
         deprecate::DeprecateCommandOptions,
@@ -173,6 +174,7 @@ pub async fn run_pm_subcommand(
     let needs_project = matches!(
         command,
         PmCommands::ApproveBuilds { .. }
+            | PmCommands::Ci { .. }
             | PmCommands::Prune { .. }
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
@@ -191,6 +193,11 @@ pub async fn run_pm_subcommand(
     };
 
     match command {
+        PmCommands::Ci { pass_through_args } => {
+            let options = CiCommandOptions { pass_through_args: pass_through_args.as_deref() };
+            Ok(pm.run_ci_command(&options, cwd).await?)
+        }
+
         PmCommands::ApproveBuilds { packages, all, pass_through_args } => {
             let options = ApproveBuildsCommandOptions {
                 packages: &packages,

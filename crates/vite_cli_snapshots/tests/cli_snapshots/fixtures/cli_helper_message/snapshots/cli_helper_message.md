@@ -396,6 +396,7 @@ Usage: vp pm <COMMAND>
 Forward a command to the package manager
 
 Commands:
+  ci                Clean install dependencies for CI environments
   approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
   prune             Remove unnecessary packages
   pack              Create a tarball of the package
@@ -418,6 +419,26 @@ Commands:
   rebuild           Rebuild native modules [alias: rb]
   fund              Show funding information for installed packages
   ping              Ping the registry
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp pm ci -h`
+
+show pm ci help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm ci [-- <PASS_THROUGH_ARGS>...]
+
+Clean install dependencies for CI environments
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
   -h, --help  Print help
