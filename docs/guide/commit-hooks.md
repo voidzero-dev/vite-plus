@@ -87,11 +87,3 @@ export VITE_GIT_HOOKS=0
 ```
 
 Because the hook itself reads this file, it works even when the committing process does not inherit your shell environment — a daemon or web server making commits is still covered.
-
-### Skipping a single commit
-
-To bypass hooks for one commit without any environment setup, use Git's built-in flag:
-
-```bash
-git commit --no-verify
-```
