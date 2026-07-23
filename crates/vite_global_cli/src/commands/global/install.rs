@@ -683,14 +683,6 @@ async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
     }
 }
 
-async fn remove_file_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
-    match tokio::fs::remove_file(path).await {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-    }
-}
-
 fn install_dir_lock_path(install_dir: &AbsolutePathBuf) -> Result<AbsolutePathBuf, Error> {
     let parent = install_dir.as_path().parent().ok_or_else(|| {
         Error::ConfigError(
@@ -795,36 +787,36 @@ async fn cleanup_stale_installations(package_name: &str, current_install_id: &st
         }
     }
 
-    if let Err(error) = cleanup_legacy_installation_contents(package_name, current_install_id).await
-    {
+    if !is_nested_install_id(current_install_id) {
+        return;
+    }
+
+    let result: Result<(), Error> = async {
+        let package_dir = PackageMetadata::installation_dir_for(package_name, "")?;
+        let package_json = get_node_modules_dir(&package_dir, package_name).join("package.json");
+        if !tokio::fs::try_exists(&package_json).await.unwrap_or(false) {
+            return Ok(());
+        }
+
+        let Some((lock_path, lock_file)) = try_lock_install_dir(&package_dir)? else {
+            return Ok(());
+        };
+
+        remove_legacy_installation_contents(&package_dir).await?;
+
+        drop(lock_file);
+        match tokio::fs::remove_file(&lock_path).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+    .await;
+    if let Err(error) = result {
         tracing::warn!(
             "Failed to clean legacy global package installation for {package_name}: {error}"
         );
     }
-}
-
-async fn cleanup_legacy_installation_contents(
-    package_name: &str,
-    current_install_id: &str,
-) -> Result<(), Error> {
-    if !is_nested_install_id(current_install_id) {
-        return Ok(());
-    }
-
-    let package_dir = PackageMetadata::installation_dir_for(package_name, "")?;
-    let package_json = get_node_modules_dir(&package_dir, package_name).join("package.json");
-    if !tokio::fs::try_exists(&package_json).await.unwrap_or(false) {
-        return Ok(());
-    }
-
-    let Some((lock_path, lock_file)) = try_lock_install_dir(&package_dir)? else {
-        return Ok(());
-    };
-
-    remove_legacy_installation_contents(&package_dir).await?;
-
-    drop(lock_file);
-    remove_file_if_exists(&lock_path).await
 }
 
 async fn remove_legacy_installation_contents(package_dir: &AbsolutePathBuf) -> Result<(), Error> {
@@ -833,7 +825,9 @@ async fn remove_legacy_installation_contents(package_dir: &AbsolutePathBuf) -> R
     while let Some(entry) = entries.next_entry().await? {
         let file_name = entry.file_name();
         let Some(file_name) = file_name.to_str() else { continue };
-        if is_nested_install_entry(file_name) {
+        if is_nested_install_id(file_name)
+            || file_name.strip_suffix(".lock").is_some_and(is_nested_install_id)
+        {
             continue;
         }
 
@@ -856,11 +850,6 @@ async fn remove_legacy_installation_contents(package_dir: &AbsolutePathBuf) -> R
         }
         Err(error) => Err(error.into()),
     }
-}
-
-fn is_nested_install_entry(file_name: &str) -> bool {
-    is_nested_install_id(file_name)
-        || file_name.strip_suffix(".lock").is_some_and(is_nested_install_id)
 }
 
 async fn stale_installation_dirs(
@@ -909,7 +898,9 @@ async fn stale_installation_dirs(
         let Some(file_name) = file_name.to_str() else {
             continue;
         };
-        let Some(install_id) = legacy_install_id(base_name, file_name) else {
+        let Some(install_id) =
+            file_name.strip_prefix(base_name).filter(|install_id| is_legacy_install_id(install_id))
+        else {
             continue;
         };
         if install_id == current_install_id {
@@ -922,12 +913,6 @@ async fn stale_installation_dirs(
 
     Ok(stale_dirs)
 }
-
-fn legacy_install_id<'a>(base_name: &str, file_name: &'a str) -> Option<&'a str> {
-    let install_id = file_name.strip_prefix(base_name)?;
-    if is_legacy_install_id(install_id) { Some(install_id) } else { None }
-}
-
 async fn stale_bin_names_for_package(
     previous_metadata: Option<&PackageMetadata>,
     package_name: &str,
