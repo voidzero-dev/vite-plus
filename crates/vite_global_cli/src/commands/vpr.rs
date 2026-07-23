@@ -4,7 +4,7 @@
 //! vite-plus CLI to execute tasks.
 
 use vite_path::AbsolutePath;
-use vite_shared::output;
+use vite_shared::{exit_code_from_status, output};
 
 /// Main entry point for vpr execution.
 ///
@@ -16,7 +16,7 @@ pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
 
     let cwd_buf = cwd.to_absolute_path_buf();
     match super::delegate::execute(cwd_buf, "run", args).await {
-        Ok(status) => status.code().unwrap_or(1),
+        Ok(status) => exit_code_from_status(status),
         Err(e) => {
             output::error(&e.to_string());
             1

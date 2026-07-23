@@ -1,3 +1,5 @@
+import { constants } from 'node:os';
+
 import spawn from 'cross-spawn';
 
 export interface RunCommandOptions {
@@ -19,6 +21,14 @@ export interface ExecutionResult {
 export interface RunCommandResult extends ExecutionResult {
   stdout: Buffer;
   stderr: Buffer;
+}
+
+function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | null) {
+  if (code !== null) {
+    return code;
+  }
+  const signalNumber = signal && constants.signals[signal];
+  return signalNumber ? 128 + signalNumber : 1;
 }
 
 export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
@@ -50,14 +60,14 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     child.stderr?.on('data', (data) => {
       stderr.push(data);
     });
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       clearTimeout(timer);
       if (timedOut) {
         reject(new Error(`Command timed out after ${options.timeoutMs}ms: ${options.command}`));
         return;
       }
       resolve({
-        exitCode: code ?? 0,
+        exitCode: exitCodeFromClose(code, signal),
         stdout: Buffer.concat(stdout),
         stderr: Buffer.concat(stderr),
       });
@@ -77,8 +87,8 @@ export async function runCommand(options: RunCommandOptions): Promise<ExecutionR
     env: options.envs,
   });
   return new Promise<ExecutionResult>((resolve, reject) => {
-    child.on('close', (code) => {
-      resolve({ exitCode: code ?? 0 });
+    child.on('close', (code, signal) => {
+      resolve({ exitCode: exitCodeFromClose(code, signal) });
     });
     child.on('error', (err) => {
       reject(err);

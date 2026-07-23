@@ -293,7 +293,7 @@ pub async fn install_production_deps(
         if !release_age_blocked {
             return Err(Error::Setup(
                 format_install_failure_message(
-                    output.status.code().unwrap_or(-1),
+                    vite_shared::exit_code_from_status(output.status),
                     log_path.as_ref(),
                     false,
                 )
@@ -305,7 +305,7 @@ pub async fn install_production_deps(
         {
             return Err(Error::Setup(
                 format_install_failure_message(
-                    output.status.code().unwrap_or(-1),
+                    vite_shared::exit_code_from_status(output.status),
                     log_path.as_ref(),
                     true,
                 )
@@ -323,7 +323,7 @@ pub async fn install_production_deps(
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
             return Err(Error::Setup(
                 format_install_failure_message(
-                    retry_output.status.code().unwrap_or(-1),
+                    vite_shared::exit_code_from_status(retry_output.status),
                     retry_log_path.as_ref(),
                     false,
                 )
@@ -469,7 +469,7 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
             "Shim refresh exited with code {}, continuing anyway\n{}",
-            output.status.code().unwrap_or(-1),
+            vite_shared::exit_code_from_status(output.status),
             stderr.trim()
         );
     }
@@ -612,7 +612,7 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
             "env setup --env-only exited with code {}, continuing anyway\n{}",
-            output.status.code().unwrap_or(-1),
+            vite_shared::exit_code_from_status(output.status),
             stderr.trim()
         );
     }

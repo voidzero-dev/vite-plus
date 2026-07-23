@@ -133,7 +133,7 @@ fn main() {
 
     // 5. Propagate exit code (error message via write_all, not eprintln!)
     match cmd.status() {
-        Ok(s) => process::exit(s.code().unwrap_or(1)),
+        Ok(status) => process::exit(exit_code_from_status(status)),
         Err(_) => {
             use std::io::Write;
             let mut stderr = std::io::stderr().lock();

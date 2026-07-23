@@ -187,7 +187,7 @@ pub(super) async fn execute_exec_workspace(
             use std::io::Write;
             let _ = std::io::stdout().write_all(&output.stdout);
             let _ = std::io::stderr().write_all(&output.stderr);
-            let code = output.status.code().unwrap_or(1) as u8;
+            let code = vite_shared::exit_code_from_status(output.status) as u8;
             if code > worst_exit {
                 worst_exit = code;
             }
@@ -250,7 +250,7 @@ pub(super) async fn execute_exec_workspace(
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
             let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
             let duration = start.elapsed();
-            let code = status.code().unwrap_or(1) as u8;
+            let code = vite_shared::exit_code_from_status(status) as u8;
 
             if args.report_summary {
                 let pkg_status = if code == 0 { "passed" } else { "failed" };
