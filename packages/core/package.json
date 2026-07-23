@@ -116,7 +116,7 @@
     "@oxc-node/core": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@vitejs/devtools": "^0.4.2",
+    "@vitejs/devtools": "^0.4.3",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",

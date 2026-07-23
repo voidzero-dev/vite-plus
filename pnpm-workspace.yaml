@@ -143,6 +143,7 @@ ignoreScripts: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@babel/*'
+  - '@devframes/*'
   - '@napi-rs/*'
   - '@nkzw/*'
   - '@oxc-node/*'
