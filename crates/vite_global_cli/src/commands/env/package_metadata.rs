@@ -10,6 +10,7 @@ use vite_path::AbsolutePathBuf;
 use super::config::get_packages_dir;
 use crate::error::Error;
 
+// This is legacy, for old Vite+ version's compatibility
 const LEGACY_INSTALL_ID_PREFIX: char = '#';
 const INSTALL_ID_LENGTH: usize = 36;
 
