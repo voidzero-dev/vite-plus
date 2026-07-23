@@ -16,7 +16,8 @@ Options:
   -h, --help          Show this help message
 
 Environment:
-  VITE_GIT_HOOKS=0  Skip hook installation
+  VP_GIT_HOOKS=0    Skip hook installation
+  VITE_GIT_HOOKS=0  Deprecated alias of VP_GIT_HOOKS=0
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```
@@ -37,7 +38,8 @@ Options:
   -h, --help          Show this help message
 
 Environment:
-  VITE_GIT_HOOKS=0  Skip hook installation
+  VP_GIT_HOOKS=0    Skip hook installation
+  VITE_GIT_HOOKS=0  Deprecated alias of VP_GIT_HOOKS=0
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```
@@ -58,7 +60,8 @@ Options:
   -h, --help          Show this help message
 
 Environment:
-  VITE_GIT_HOOKS=0  Skip hook installation
+  VP_GIT_HOOKS=0    Skip hook installation
+  VITE_GIT_HOOKS=0  Deprecated alias of VP_GIT_HOOKS=0
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```
