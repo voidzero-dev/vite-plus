@@ -83,7 +83,7 @@ Global package - shows binary path with metadata
 ```
 VITE+ - The Unified Toolchain for the Web
 
-<home>/.vite-plus/packages/cowsay#<uuid>/lib/node_modules/cowsay/./cli.js
+<home>/.vite-plus/packages/cowsay/<uuid>/lib/node_modules/cowsay/./cli.js
   Package:    cowsay@1.6.0
   Binaries:   cowsay, cowthink
   Node:       <version>
