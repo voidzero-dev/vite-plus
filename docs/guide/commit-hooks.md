@@ -61,7 +61,7 @@ This is the default Vite+ approach and should replace separate `lint-staged` con
 
 ## Disabling Hooks in Specific Environments
 
-The installed hooks check the environment on every run, so you can disable them per machine or per process without uninstalling anything. This is useful when commits happen outside development — for example on a production server where a flat-file CMS commits content changes.
+The installed hooks check the environment on every run, so you can disable them per machine or per process without uninstalling anything. This is useful when commits happen outside development, for example through a flat file CMS or other processes.
 
 ### Environment variable
 
@@ -71,7 +71,7 @@ Set `VITE_GIT_HOOKS=0` in the environment of the process that runs `git commit`,
 VITE_GIT_HOOKS=0 git commit -m "content update"
 ```
 
-`HUSKY=0` is honored the same way for compatibility. Setting `VITE_GIT_HOOKS=0` in an environment also keeps `vp config` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
+`HUSKY=0` is honored the same way for ecosystem tooling compatibility. Setting `VITE_GIT_HOOKS=0` in an environment also keeps `vp config` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
 
 ### Init script
 
@@ -86,4 +86,4 @@ To disable hooks for a whole machine, create the init script and export the vari
 export VITE_GIT_HOOKS=0
 ```
 
-Because the hook itself reads this file, it works even when the committing process does not inherit your shell environment — a daemon or web server making commits is still covered.
+Because the hook itself reads this file, it works even when the committing process does not inherit your shell environment, for example if a daemon or web server is making commits.
