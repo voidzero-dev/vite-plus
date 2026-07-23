@@ -1,0 +1,19 @@
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/create_approve_builds_yarn/snapshots/create_approve_builds_yarn.md
+  s_b548b9d3d94f33::t_405f8a4e02de5b 10,32-36,56,58,61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3a7a0b7c4f1b0b61dd8fb80655f83db0fe27eda1",
+  "prompts": {},
+  "sessions": {
+    "s_b548b9d3d94f33": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_07684f400ffeuKQQFKe4fC4bCq",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
