@@ -1,0 +1,3 @@
+{
+  "commands": ["vp lint src # extends rules are preserved when a file override adds Vue rules"]
+}
