@@ -91,6 +91,14 @@ describe('detectExistingEditors', () => {
   it('returns undefined when no editor config files exist', () => {
     expect(detectExistingEditors(createTempDir())).toBeUndefined();
   });
+
+  it('detects existing jetbrains editor config files', () => {
+    const projectRoot = createTempDir();
+    fs.mkdirSync(path.join(projectRoot, '.idea'), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, '.idea', 'externalDependencies.xml'), '<project />');
+
+    expect(detectExistingEditors(projectRoot)).toEqual(['jetbrains']);
+  });
 });
 
 describe('writeEditorConfigs', () => {
@@ -538,5 +546,37 @@ describe('writeEditorConfigs', () => {
     expect(vscodeExtensions.recommendations).toContain('VoidZero.vite-plus-extension-pack');
     expect(zedSettings['npm.scriptRunner']).toBeUndefined();
     expect(zedSettings.lsp).toBeDefined();
+  });
+
+  it('writes jetbrains config as XML based on file extension', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+
+    const xml = fs.readFileSync(path.join(projectRoot, '.idea', 'externalDependencies.xml'), 'utf8');
+    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(xml).toContain('<component name="ExternalDependencies" />');
+  });
+
+  it('does not overwrite existing non-JSON editor config in non-interactive mode', async () => {
+    const projectRoot = createTempDir();
+    const xmlPath = path.join(projectRoot, '.idea', 'externalDependencies.xml');
+    fs.mkdirSync(path.dirname(xmlPath), { recursive: true });
+    fs.writeFileSync(xmlPath, '<project version="4"><component name="Custom"/></project>', 'utf8');
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+
+    const xml = fs.readFileSync(xmlPath, 'utf8');
+    expect(xml).toBe('<project version="4"><component name="Custom"/></project>');
   });
 });
