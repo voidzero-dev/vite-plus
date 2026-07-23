@@ -396,6 +396,13 @@ jobs:
               # submit a fix PR to varletjs/varlet after the next vite-plus release.
               vp run lint || true
               vp run test:coverage
+          - name: codiff
+            node-version: 24
+            command: |
+              # vp migrate rewrites package.json without reformatting,
+              # so format first before running the project's `vp check && vp test` task.
+              vp fmt
+              vp run test:all
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: namespace-profile-windows-4c-8g
@@ -421,6 +428,10 @@ jobs:
           - os: namespace-profile-windows-4c-8g
             project:
               name: varlet
+          # codiff is an Electron app; upstream CI is ubuntu-only
+          - os: windows-latest
+            project:
+              name: codiff
 
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
