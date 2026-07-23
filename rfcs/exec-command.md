@@ -454,9 +454,6 @@ command-exec-pnpm10/
 
 ```json
 {
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
   "commands": [
     "vp exec echo hello # basic exec, no vite-plus dep (global CLI handles directly)",
     "vp exec node -e \"console.log('hi')\" # exec with args passthrough",
