@@ -820,8 +820,16 @@ async fn cleanup_legacy_installation_contents(
     let Some((lock_path, lock_file)) = try_lock_install_dir(&package_dir)? else {
         return Ok(());
     };
+
+    remove_legacy_installation_contents(&package_dir).await?;
+
+    drop(lock_file);
+    remove_file_if_exists(&lock_path).await
+}
+
+async fn remove_legacy_installation_contents(package_dir: &AbsolutePathBuf) -> Result<(), Error> {
     // Preserve nested installs while removing npm contents from the legacy prefix.
-    let mut entries = tokio::fs::read_dir(&package_dir).await?;
+    let mut entries = tokio::fs::read_dir(package_dir).await?;
     while let Some(entry) = entries.next_entry().await? {
         let file_name = entry.file_name();
         let Some(file_name) = file_name.to_str() else { continue };
@@ -836,8 +844,18 @@ async fn cleanup_legacy_installation_contents(
         }
     }
 
-    drop(lock_file);
-    remove_file_if_exists(&lock_path).await
+    match tokio::fs::remove_dir(package_dir).await {
+        Ok(()) => Ok(()),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+            ) =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn is_nested_install_entry(file_name: &str) -> bool {
@@ -998,7 +1016,11 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         None => PackageMetadata::installation_dir_for(&package_name, "")?,
     };
     if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
-        tokio::fs::remove_dir_all(&package_dir).await?;
+        if metadata.as_ref().is_none_or(|metadata| metadata.install_id.is_empty()) {
+            remove_legacy_installation_contents(&package_dir).await?;
+        } else {
+            tokio::fs::remove_dir_all(&package_dir).await?;
+        }
     }
 
     // Remove metadata file
@@ -1469,6 +1491,53 @@ mod tests {
             );
         }
         assert!(!package_dir.as_path().exists(), "identified package directory should be removed");
+    }
+
+    #[tokio::test]
+    async fn test_uninstall_legacy_install_preserves_in_progress_nested_install() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+        let package_name = "test-package";
+
+        let metadata = PackageMetadata::new(
+            package_name.to_string(),
+            "1.0.0".to_string(),
+            "20.0.0".to_string(),
+            None,
+            Vec::new(),
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        metadata.save().await.unwrap();
+
+        let legacy_dir = metadata.installation_dir().unwrap();
+        let legacy_package_json =
+            get_node_modules_dir(&legacy_dir, package_name).join("package.json");
+        tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
+
+        // Model uninstall starting after npm populated the replacement but before metadata changed.
+        let replacement_dir = PackageMetadata::installation_dir_for(
+            package_name,
+            "123e4567-e89b-42d3-a456-426614174000",
+        )
+        .unwrap();
+        let replacement_package_json =
+            get_node_modules_dir(&replacement_dir, package_name).join("package.json");
+        let replacement_lock = lock_install_dir(&replacement_dir).unwrap();
+        tokio::fs::create_dir_all(replacement_package_json.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&replacement_package_json, "{}").await.unwrap();
+
+        uninstall(package_name, false).await.unwrap();
+
+        assert!(!legacy_package_json.as_path().exists());
+        assert!(replacement_package_json.as_path().exists());
+        assert!(install_dir_lock_path(&replacement_dir).unwrap().as_path().exists());
+        drop(replacement_lock);
     }
 
     #[tokio::test]
