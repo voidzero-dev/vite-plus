@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "localhelp": "vp dev --help"
+  }
+}

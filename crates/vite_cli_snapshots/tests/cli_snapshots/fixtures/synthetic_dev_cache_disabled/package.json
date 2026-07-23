@@ -1,6 +1,6 @@
 {
   "name": "synthetic-dev-cache-disabled-test",
   "scripts": {
-    "dev": "vp dev --help"
+    "dev": "vp dev --host 127.0.0.1 --port 0"
   }
 }

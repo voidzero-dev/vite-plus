@@ -64,57 +64,37 @@ hello from subdir
 help message
 
 ```
-Execute a command from local node_modules/.bin
+VITE+ - The Unified Toolchain for the Web
 
 Usage: vp exec [OPTIONS] [COMMAND]...
 
+Execute a command from local node_modules/.bin.
+
 Arguments:
-  [COMMAND]...
-          Command and arguments to execute
+  [COMMAND]...  Command and arguments to execute
 
 Options:
-  -r, --recursive
-          Select all packages in the workspace
+  -r, --recursive          Select all packages in the workspace
+  -t, --transitive         Select the current package and its transitive dependencies
+  -w, --workspace-root     Select the workspace root package
+  -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
+  --fail-if-no-match       Exit with a non-zero status if a `--filter` expression matches no packages
+                           Without this flag, unmatched filters only warn and exit successfully
+  -c, --shell-mode         Execute the command within a shell environment
+  --parallel               Run concurrently without topological ordering
+  --reverse                Reverse execution order
+  --resume-from <PACKAGE>  Resume from a specific package
+  --report-summary         Save results to vp-exec-summary.json
+  -h, --help               Print help
 
-  -t, --transitive
-          Select the current package and its transitive dependencies
-
-  -w, --workspace-root
-          Select the workspace root package
-
-  -F, --filter <FILTERS>
-          Match packages by name, directory, or glob pattern.
-
-            --filter <pattern>        Select by package name (e.g. foo, @scope/*)
-            --filter ./<dir>          Select packages under a directory
-            --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes
-            --filter <pattern>...     Select package and its dependencies
-            --filter ...<pattern>     Select package and its dependents
-            --filter <pattern>^...    Select only the dependencies (exclude the package itself)
-            --filter !<pattern>       Exclude packages matching the pattern
-
-      --fail-if-no-match
-          Exit with a non-zero status if a `--filter` expression matches no packages.
-
-          Without this flag, an unmatched filter (a typo, an empty glob, or a traversal like `{.}^...` that collapses to zero on a leaf package) only produces a warning and the command exits successfully.
-
-  -c, --shell-mode
-          Execute the command within a shell environment
-
-      --parallel
-          Run concurrently without topological ordering
-
-      --reverse
-          Reverse execution order
-
-      --resume-from <RESUME_FROM>
-          Resume from a specific package
-
-      --report-summary
-          Save results to vp-exec-summary.json
-
-  -h, --help
-          Print help (see a summary with '-h')
+Filter Patterns:
+  --filter <pattern>        Select by package name (e.g. foo, @scope/*)
+  --filter ./<dir>          Select packages under a directory
+  --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes
+  --filter <pattern>...     Select package and its dependencies
+  --filter ...<pattern>     Select package and its dependents
+  --filter <pattern>^...    Select only the dependencies (exclude the package itself)
+  --filter !<pattern>       Exclude packages matching the pattern
 
 Examples:
   vp exec node --version                             # Run local node
@@ -122,6 +102,8 @@ Examples:
   vp exec -c 'tsc --noEmit && prettier --check .'    # Shell mode
   vp exec -r -- tsc --noEmit                         # Run in all workspace packages
   vp exec --filter 'app...' -- tsc                   # Run in filtered packages
+
+Documentation: https://viteplus.dev/guide/vpx
 ```
 
 ## `vp exec`

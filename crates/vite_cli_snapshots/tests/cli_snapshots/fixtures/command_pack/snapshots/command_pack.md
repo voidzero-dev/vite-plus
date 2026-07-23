@@ -5,57 +5,61 @@
 should print the help message
 
 ```
-vp pack
+VITE+ - The Unified Toolchain for the Web
 
-Usage:
-  $ vp pack [...files]
+Usage: vp pack [...FILES] [OPTIONS]
 
-Commands:
-  [...files]  Bundle files
+Build a library.
+Options are forwarded to Vite+ Pack.
 
-For more info, run any command with the `--help` flag:
-  $ vp pack --help
+Arguments:
+  [...FILES]  Files to bundle
 
 Options:
-  --config-loader <loader>      Config loader to use: auto, native, tsx, unrun (default: auto)
-  --no-config                   Disable config file (default: true)
-  -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
+  -f, --format <FORMAT>         Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                       Clean output directory, --no-clean to disable
-  --deps.never-bundle <module>  Mark dependencies as external
+  --deps.never-bundle <MODULE>  Mark dependencies as external
   --minify                      Minify output
   --devtools                    Enable devtools integration
-  --debug [feat]                Show debug logs
-  --target <target>             Bundle target, e.g "es2015", "esnext"
-  -l, --logLevel <level>        Set log level: info, warn, error, silent
+  --debug [FEAT]                Show debug logs
+  --target <TARGET>             Bundle target, e.g "es2015", "esnext"
+  -l, --logLevel <LEVEL>        Set log level: info, warn, error, silent
   --fail-on-warn                Fail on warnings (default: true)
   --no-write                    Disable writing files to disk, incompatible with watch mode (default: true)
-  -d, --out-dir <dir>           Output directory (default: dist)
+  -d, --out-dir <DIR>           Output directory (default: dist)
   --treeshake                   Tree-shake bundle (default: true)
   --sourcemap                   Generate source map (default: false)
   --shims                       Enable cjs and esm shims (default: false)
-  --platform <platform>         Target platform (default: node)
+  --platform <PLATFORM>         Target platform (default: node)
   --dts                         Generate dts files
   --publint                     Enable publint (default: false)
   --attw                        Enable Are the types wrong integration (default: false)
   --unused                      Enable unused dependencies check (default: false)
-  -w, --watch [path]            Watch mode
-  --ignore-watch <path>         Ignore custom paths in watch mode
-  --from-vite [vitest]          Reuse config from Vite or Vitest
+  -w, --watch [PATH]            Watch mode
+  --ignore-watch <PATH>         Ignore custom paths in watch mode
+  --from-vite [VITEST]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
-  --env.* <value>               Define compile-time env variables
-  --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
-  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
-  --on-success <command>        Command to run on success
-  --copy <dir>                  Copy files to output dir
-  --public-dir <dir>            Alias for --copy, deprecated
-  --tsconfig <tsconfig>         Set tsconfig path
+  --env.* <VALUE>               Define compile-time env variables
+  --env-file <FILE>             Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-prefix <PREFIX>         Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
+  --on-success <COMMAND>        Command to run on success
+  --copy <DIR>                  Copy files to output dir
+  --public-dir <DIR>            Alias for --copy, deprecated
+  --tsconfig <TSCONFIG>         Set tsconfig path
   --unbundle                    Unbundle mode
-  --root <dir>                  Root directory of input files
+  --root <DIR>                  Root directory of input files
   --exe                         Bundle as executable
-  -W, --workspace [dir]         Enable workspace mode
-  -F, --filter <pattern>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
+  -W, --workspace [DIR]         Enable workspace mode
+  -F, --filter <PATTERN>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
   --exports                     Generate export-related metadata for package.json (experimental)
   -h, --help                    Display this message
+
+Examples:
+  vp pack
+  vp pack src/index.ts --dts
+  vp pack --watch
+
+Documentation: https://viteplus.dev/guide/pack
 ```
 
 ## `vp run pack`

@@ -44,6 +44,17 @@ impl CommandHandler for VitePlusCommandHandler {
         if program != "vp" && program != "vpr" {
             return Ok(HandledCommand::Verbatim);
         }
+
+        // Help must pass through the local JS entrypoint, which owns the prepared documents.
+        if command
+            .args
+            .iter()
+            .take_while(|arg| arg.as_str() != "--")
+            .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
+        {
+            return Ok(HandledCommand::Verbatim);
+        }
+
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
         let cli_args = match CLIArgs::try_parse_from(

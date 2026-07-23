@@ -5,110 +5,79 @@
 print help message and no panicked
 
 ```
-Usage: [-c=<./.oxlintrc.json>] [PATH]...
+VITE+ - The Unified Toolchain for the Web
 
-Basic Configuration
-    -c, --config=<./.oxlintrc.json>  Oxlint configuration file
-                              * `.json` and `.jsonc` config files are supported in all runtimes
-                              * JavaScript/TypeScript config files are experimental and require
-                              running via Node.js
-                              * you can use comments in configuration files.
-                              * tries to be compatible with ESLint v8's format
-        --tsconfig=<./tsconfig.json>  Override the TypeScript config used for import resolution.
-                              Oxlint automatically discovers the relevant `tsconfig.json` for each
-                              file. Use this only when your project uses a non-standard tsconfig
-                              name or location.
-        --init                Initialize oxlint configuration with default values
+Usage: vp lint [PATH]... [OPTIONS]
 
-Allowing / Denying Multiple Lints
-   Accumulate rules and categories from left to right on the command-line.
-   For example `-D correctness -A no-debugger` or `-A all -D no-debugger`.
-   The categories are:
-   * `correctness` - Code that is outright wrong or useless (default)
-   * `suspicious`  - Code that is most likely wrong or useless
-   * `pedantic`    - Lints which are rather strict or have occasional false positives
-   * `perf`        - Code that could be written in a more performant way
-   * `style`       - Code that should be written in a more idiomatic way
-   * `restriction` - Lints which prevent the use of language and library features
-   * `nursery`     - New lints that are still under development
-   * `all`         - All categories listed above except `nursery`. Does not enable plugins
-  automatically.
-    -A, --allow=NAME          Allow the rule or category (suppress the lint)
-    -W, --warn=NAME           Deny the rule or category (emit a warning)
-    -D, --deny=NAME           Deny the rule or category (emit an error)
+Lint code.
+Options are forwarded to Oxlint.
 
-Enable/Disable Plugins
-        --disable-unicorn-plugin  Disable unicorn plugin, which is turned on by default
-        --disable-oxc-plugin  Disable oxc unique rules, which is turned on by default
-        --disable-typescript-plugin  Disable TypeScript plugin, which is turned on by default
-        --import-plugin       Enable import plugin and detect ESM problems.
-        --react-plugin        Enable react plugin, which is turned off by default
-        --jsdoc-plugin        Enable jsdoc plugin and detect JSDoc problems
-        --jest-plugin         Enable the Jest plugin and detect test problems
-        --vitest-plugin       Enable the Vitest plugin and detect test problems
-        --jsx-a11y-plugin     Enable the JSX-a11y plugin and detect accessibility problems
-        --nextjs-plugin       Enable the Next.js plugin and detect Next.js problems
-        --react-perf-plugin   Enable the React performance plugin and detect rendering performance
-                              problems
-        --promise-plugin      Enable the promise plugin and detect promise usage problems
-        --node-plugin         Enable the node plugin and detect node usage problems
-        --vue-plugin          Enable the vue plugin and detect vue usage problems
+Arguments:
+  [PATH]...  Files or directories to lint
 
-Fix Problems
-        --fix                 Fix as many issues as possible. Only unfixed issues are reported in
-                              the output.
-        --fix-suggestions     Apply auto-fixable suggestions. May change program behavior.
-        --fix-dangerously     Apply dangerous fixes and suggestions
+Basic Configuration:
+  --tsconfig <PATH>  Override the TypeScript config used for import resolution
 
-Ignore Files
-        --ignore-path=PATH    Specify the file to use as your `.eslintignore`
-        --ignore-pattern=PAT  Specify patterns of files to ignore (in addition to those in
-                              `.eslintignore`)
-        --no-ignore           Disable excluding files from `.eslintignore` files, --ignore-path
-                              flags and --ignore-pattern flags
+Rule Severity:
+  -A, --allow <NAME>  Allow a rule or category
+  -W, --warn <NAME>   Emit a warning for a rule or category
+  -D, --deny <NAME>   Emit an error for a rule or category
 
-Handle Warnings
-        --quiet               Disable reporting on warnings, only errors are reported
-        --deny-warnings       Ensure warnings produce a non-zero exit code
-        --max-warnings=INT    Specify a warning threshold, which can be used to force exit with an
-                              error status if there are too many warning-level rule violations in
-                              your project
+Plugins:
+  --disable-unicorn-plugin     Disable the unicorn plugin, which is enabled by default
+  --disable-oxc-plugin         Disable Oxc-specific rules, which are enabled by default
+  --disable-typescript-plugin  Disable the TypeScript plugin, which is enabled by default
+  --import-plugin              Enable the import plugin
+  --react-plugin               Enable the React plugin
+  --jsdoc-plugin               Enable the JSDoc plugin
+  --jest-plugin                Enable the Jest plugin
+  --vitest-plugin              Enable the Vitest plugin
+  --jsx-a11y-plugin            Enable the JSX accessibility plugin
+  --nextjs-plugin              Enable the Next.js plugin
+  --react-perf-plugin          Enable the React performance plugin
+  --promise-plugin             Enable the promise plugin
+  --node-plugin                Enable the Node.js plugin
+  --vue-plugin                 Enable the Vue plugin
 
-Output
-    -f, --format=ARG          Use a specific output format. Possible values: `checkstyle`,
-                              `default`, `agent`, `github`, `gitlab`, `json`, `junit`, `sarif`,
-                              `stylish`, `unix`
-        --debug=OPTIONS       Enable debug output options. Options are comma-separated. Possible
-                              values:
-                               * `files` - Print the list of files that will be linted, then exit.
-                               * `timings` - Enable per-rule timing information.
+Fix Problems:
+  --fix              Fix issues when possible
+  --fix-suggestions  Apply auto-fixable suggestions
+  --fix-dangerously  Apply dangerous fixes and suggestions
 
-Miscellaneous
-        --silent              Do not display any diagnostics
-        --no-error-on-unmatched-pattern  Do not exit with an error when no files are selected for
-                              linting (for example, after applying ignore patterns)
-        --threads=INT         Number of threads to use. Set to 1 for using only 1 CPU core.
-        --print-config        This option outputs the configuration to be used. When present, no
-                              linting is performed and only config-related options are valid.
+Ignore Files:
+  --ignore-path <PATH>        Use the specified .eslintignore file
+  --ignore-pattern <PATTERN>  Add file patterns to ignore
+  --no-ignore                 Disable file exclusion from ignore rules
 
-Inline Configuration Comments
-        --report-unused-disable-directives  Report directive comments like `// oxlint-disable-line`,
-                              when no errors would have been reported on that line anyway
-        --report-unused-disable-directives-severity=SEVERITY  Same as
-                              `--report-unused-disable-directives`, but allows you to specify the
-                              severity level of the reported errors. Only one of these two options
-                              can be used at a time.
+Handle Warnings:
+  --quiet               Report errors only
+  --deny-warnings       Exit non-zero when warnings are reported
+  --max-warnings <INT>  Set the warning threshold before exiting non-zero
 
-Available positional items:
-    PATH                      Single file, single path or list of paths
+Output:
+  -f, --format <FORMAT>  Set output format: checkstyle, default, agent, github, gitlab, json, junit, sarif, stylish, or unix
+  --debug <OPTIONS>      Enable comma-separated debug output options: files or timings
 
-Available options:
-        --rules               List all the rules that are currently registered
-        --lsp                 Start the language server
-        --disable-nested-config  Disable the automatic loading of nested configuration files
-        --type-aware          Enable rules that require type information
-        --type-check          Enable experimental type checking (includes TypeScript compiler
-                              diagnostics)
-    -h, --help                Prints help information
-    -V, --version             Prints version information
+Miscellaneous:
+  --silent                         Do not display diagnostics
+  --no-error-on-unmatched-pattern  Do not exit with an error when no files are selected for linting
+  --threads <INT>                  Number of threads to use; set to 1 to use one CPU core
+  --print-config                   Print the resolved configuration without linting
+
+Inline Configuration:
+  --report-unused-disable-directives                      Report unused oxlint-disable directives
+  --report-unused-disable-directives-severity <SEVERITY>  Report unused disable directives at the specified severity
+
+Options:
+  --rules       List all registered rules
+  --type-aware  Enable rules requiring type information
+  --type-check  Enable experimental type checking and compiler diagnostics
+  -h, --help    Print help information
+
+Examples:
+  vp lint
+  vp lint src --fix
+  vp lint --type-aware --tsconfig ./tsconfig.json
+
+Documentation: https://viteplus.dev/guide/lint
 ```
