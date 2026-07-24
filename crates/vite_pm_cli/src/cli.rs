@@ -594,6 +594,27 @@ pub enum PmCommands {
         pass_through_args: Option<Vec<String>>,
     },
 
+    /// Prepare a package for local patching
+    Patch {
+        /// Package to patch
+        package: String,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Commit a prepared package patch
+    #[command(name = "patch-commit")]
+    PatchCommit {
+        /// Patch directory to commit
+        patch_dir: String,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
     /// Create a tarball of the package
     Pack {
         /// Pack all workspace packages

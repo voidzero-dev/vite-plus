@@ -1,0 +1,45 @@
+[[case]]
+name = "pm_patch_npm"
+vp = "local"
+cwd = "npm"
+steps = [
+  { argv = ["vp", "pm", "patch", "placeholder"], comment = "npm warns and exits successfully because patch is unsupported" },
+  { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "npm warns and exits successfully because patch-commit is unsupported" },
+]
+
+[[case]]
+name = "pm_patch_pnpm"
+vp = "local"
+cwd = "pnpm"
+steps = [
+  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "pnpm receives the patch command" },
+  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "pnpm receives the patch-commit command" },
+]
+
+[[case]]
+name = "pm_patch_yarn"
+vp = "local"
+cwd = "yarn"
+steps = [
+  { argv = ["vp", "pm", "patch", "placeholder"], comment = "Yarn Classic warns and exits successfully because patch is unsupported" },
+  { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Yarn Classic warns and exits successfully because patch-commit is unsupported" },
+]
+
+[[case]]
+name = "pm_patch_yarn_berry"
+vp = "local"
+cwd = "yarn_berry"
+env = { YARN_ENABLE_TELEMETRY = "0" }
+steps = [
+  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "Yarn Berry receives the patch command", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "Yarn Berry receives the patch-commit command", continue-on-failure = true },
+]
+
+[[case]]
+name = "pm_patch_bun"
+vp = "local"
+cwd = "bun"
+steps = [
+  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "Bun receives the patch command", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "Bun receives patch commit through the --commit flag", continue-on-failure = true },
+]

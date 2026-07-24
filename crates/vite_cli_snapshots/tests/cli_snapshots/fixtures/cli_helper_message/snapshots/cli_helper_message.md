@@ -398,6 +398,8 @@ Forward a command to the package manager
 Commands:
   approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
   prune             Remove unnecessary packages
+  patch             Prepare a package for local patching
+  patch-commit      Commit a prepared package patch
   pack              Create a tarball of the package
   list              List installed packages [alias: ls]
   view, info, show  View package information from the registry
