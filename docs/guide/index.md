@@ -10,6 +10,12 @@ Building with an AI assistant? Copy a ready-made setup prompt:
 
 ## Install `vp`
 
+### macOS (Homebrew)
+
+```bash
+brew install vite-plus
+```
+
 ### macOS / Linux
 
 ```bash
