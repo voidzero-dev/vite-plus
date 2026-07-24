@@ -38,7 +38,7 @@ struct Package<'a> {
 }
 
 struct InstalledPackage {
-    installed_version: String,
+    installed_version: Option<String>,
     bin_names: Vec<String>,
     js_bins: HashSet<String>,
     install_id: String,
@@ -393,10 +393,11 @@ pub async fn install(
                 continue;
             }
         };
+        let metadata_version = installed_version.as_deref().unwrap_or("unknown");
 
         let mut metadata = PackageMetadata::new(
             package_name.clone(),
-            installed_version.clone(),
+            metadata_version.to_string(),
             node_version.clone(),
             None,
             bin_names.clone(),
@@ -461,7 +462,7 @@ pub async fn install(
                 BinConfig::new(
                     bin_name.clone(),
                     package_name.clone(),
-                    installed_version.clone(),
+                    metadata_version.to_string(),
                     node_version.clone(),
                 )
                 .save()
@@ -504,7 +505,7 @@ pub async fn install(
             operation_past,
             package_name.bold(),
             if update { "to " } else { "" },
-            installed_version.bold()
+            installed_version.as_deref().unwrap_or("(no version)").bold()
         ));
         if !bin_names.is_empty() {
             let bins = bin_names
@@ -589,7 +590,7 @@ async fn install_one(
         }
     };
 
-    let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
+    let installed_version = package_json["version"].as_str().map(ToString::to_string);
     let binary_infos = extract_binaries(&package_json);
 
     let mut bin_names = Vec::new();
