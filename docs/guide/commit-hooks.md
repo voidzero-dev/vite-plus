@@ -58,3 +58,23 @@ export default defineConfig({
 ```
 
 This is the default Vite+ approach and should replace separate `lint-staged` configuration in most projects. Because `vp staged` reads from `vite.config.ts`, your staged-file checks stay in the same place as your lint, format, test, build, and task-runner config.
+
+## Removing commit hooks
+
+To fully remove Vite+ commit hooks, undo each thing `vp config` set up:
+
+1. Unset the Git hooks path that points at the Vite+ dispatcher:
+
+```bash
+git config --unset core.hooksPath
+```
+
+2. Remove the hooks directory (use your `--hooks-dir` value if you changed it):
+
+```bash
+rm -rf .vite-hooks
+```
+
+3. Remove `vp config` from the `prepare` script in `package.json`. Otherwise the next install re-runs `vp config` and reinstalls the hooks.
+
+4. Remove the `staged` block from `vite.config.ts` if it exists
