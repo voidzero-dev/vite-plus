@@ -277,3 +277,15 @@ fn collapses_debug_escaped_separators_and_preserves_urls() {
         "at \"<workspace>/src\" see https://viteplus.dev/guide/\n"
     );
 }
+
+#[test]
+fn masks_install_date_only_by_label() {
+    // `vp env which` prints the day the package was installed, which is
+    // whatever day the run happened.
+    let which = "  Installed:  2026-07-10\n".to_owned();
+    assert_eq!(redact_output(which, &[], true), "  Installed:  <date>\n");
+    // Registry publish timestamps in `vp view` output are fixture-controlled
+    // history and stay assertable.
+    let view = "Published: 2015-07-18T18:23:59.560Z\n".to_owned();
+    assert_eq!(redact_output(view.clone(), &[], true), view);
+}
