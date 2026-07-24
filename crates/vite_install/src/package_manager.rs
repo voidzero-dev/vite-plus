@@ -26,7 +26,7 @@ use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::{get_npm_package_metadata_url, get_npm_package_tgz_url, get_npm_package_version_url},
-    request::{HttpClient, download_and_extract_tgz_with_hash},
+    request::{HttpClient, download_and_extract_tgz_with_hash, verify_file_hash},
     shim,
 };
 
@@ -862,12 +862,12 @@ pub async fn download_package_manager(
         )
     })?;
 
+    let is_modern_yarn = matches!(package_manager_type, PackageManagerType::Yarn)
+        && VersionReq::parse(">=2.0.0")?.matches(&parsed_version);
     let mut package_name: Str = package_manager_type.to_string().into();
     // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
     // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
-    if matches!(package_manager_type, PackageManagerType::Yarn)
-        && VersionReq::parse(">=2.0.0")?.matches(&parsed_version)
-    {
+    if is_modern_yarn {
         package_name = "@yarnpkg/cli-dist".into();
     }
 
@@ -889,6 +889,9 @@ pub async fn download_package_manager(
     // If all shims already exist, return the target directory
     // $VP_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
+        if is_modern_yarn {
+            verify_yarn_binary_hash(&install_dir, expected_hash).await?;
+        }
         return Ok((install_dir, package_name, version));
     }
 
@@ -900,7 +903,8 @@ pub async fn download_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
-    download_and_extract_tgz_with_hash(&tgz_url, &target_dir_tmp, expected_hash).await.map_err(
+    let archive_hash = if is_modern_yarn { None } else { expected_hash };
+    download_and_extract_tgz_with_hash(&tgz_url, &target_dir_tmp, archive_hash).await.map_err(
         |err| {
             // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
             if let Error::Reqwest(e) = &err
@@ -917,6 +921,10 @@ pub async fn download_package_manager(
             }
         },
     )?;
+
+    if is_modern_yarn {
+        verify_yarn_binary_hash(&target_dir_tmp.join("package"), expected_hash).await?;
+    }
 
     // rename $target_dir_tmp/package to $target_dir_tmp/{bin_name}
     tracing::debug!("Rename package dir to {}", bin_name);
@@ -939,6 +947,9 @@ pub async fn download_package_manager(
     // the install is all-or-nothing)
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
         tracing::debug!("install already complete after lock acquisition, skip rename");
+        if is_modern_yarn {
+            verify_yarn_binary_hash(&install_dir, expected_hash).await?;
+        }
         return Ok((install_dir, package_name, version));
     }
 
@@ -952,6 +963,17 @@ pub async fn download_package_manager(
     create_shim_files(package_manager_type, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version))
+}
+
+/// Corepack hashes the extracted Yarn 2+ CLI instead of the npm tarball.
+async fn verify_yarn_binary_hash(
+    package_dir: impl AsRef<Path>,
+    expected_hash: Option<&str>,
+) -> Result<(), Error> {
+    if let Some(expected_hash) = expected_hash {
+        verify_file_hash(package_dir.as_ref().join("bin/yarn.js"), expected_hash).await?;
+    }
+    Ok(())
 }
 
 /// Open a lock file without truncating it. This is required on Windows
@@ -1501,6 +1523,25 @@ mod tests {
 
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")
+    }
+
+    fn create_yarn_package_tgz(yarn_js: &[u8]) -> Vec<u8> {
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_js.len() as u64);
+        header.set_mode(0o755);
+        tar_builder
+            .append_data(&mut header, "package/bin/yarn.js", std::io::Cursor::new(yarn_js))
+            .unwrap();
+
+        let tar_data = tar_builder.into_inner().unwrap();
+        let mut gz_data = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz_data, flate2::Compression::default());
+            std::io::copy(&mut std::io::Cursor::new(tar_data), &mut encoder).unwrap();
+        }
+        gz_data
     }
 
     fn create_package_json(dir: &AbsolutePath, content: &str) {
@@ -3155,6 +3196,41 @@ mod tests {
         assert_eq!(package_name, "@yarnpkg/cli-dist");
         assert_eq!(version, "4.9.2");
         remove_dir_all_force(target_dir).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_download_modern_yarn_verifies_corepack_binary_hash() {
+        use httpmock::prelude::*;
+        use sha2::{Digest, Sha512};
+
+        let vp_home = create_temp_dir();
+        let server = MockServer::start();
+        let yarn_js = b"#!/usr/bin/env node\nconsole.log('mock yarn');\n";
+        let mock_tgz = create_yarn_package_tgz(yarn_js);
+        let mock = server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
+        });
+        let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
+
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            npm_registry: server.base_url().into(),
+            vite_plus_home: Some(vp_home.path().to_path_buf()),
+            ..EnvConfig::for_test()
+        });
+
+        let (install_dir, _, _) =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await
+                .expect("Corepack's Yarn binary hash should be accepted");
+        assert_eq!(mock.hits(), 1);
+
+        fs::write(install_dir.join("bin/yarn.js"), "corrupt").unwrap();
+        let result =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await;
+        assert!(matches!(result, Err(Error::HashMismatch { .. })));
+        assert_eq!(mock.hits(), 1, "cached installs should be verified without downloading");
     }
 
     #[tokio::test]
