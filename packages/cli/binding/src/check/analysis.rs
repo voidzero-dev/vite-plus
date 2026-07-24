@@ -82,8 +82,21 @@ impl LintMessageKind {
 /// `typeCheck` requires `typeAware` as a prerequisite — oxlint's type-aware
 /// analysis must be on for TypeScript diagnostics to surface.
 pub(super) fn lint_config_type_check_enabled(lint_config: Option<&serde_json::Value>) -> bool {
-    let options = lint_config.and_then(|config| config.get("options"));
-    json_bool(options, "typeAware", false) && json_bool(options, "typeCheck", false)
+    let type_aware =
+        lint_config.and_then(|config| lint_config_option(config, "typeAware")).unwrap_or(false);
+    let type_check =
+        lint_config.and_then(|config| lint_config_option(config, "typeCheck")).unwrap_or(false);
+    type_aware && type_check
+}
+
+fn lint_config_option(config: &serde_json::Value, key: &str) -> Option<bool> {
+    if let Some(value) = config.get("options").and_then(|options| options.get(key)) {
+        return Some(value.as_bool().unwrap_or(false));
+    }
+
+    config.get("extends").and_then(serde_json::Value::as_array).and_then(|configs| {
+        configs.iter().filter_map(|config| lint_config_option(config, key)).last()
+    })
 }
 
 /// Read a boolean `key` from a JSON object, falling back to `default` when the
@@ -279,6 +292,27 @@ mod tests {
         assert_eq!(kind.success_label(), "Found no type errors");
         assert_eq!(kind.warning_heading(), "Type warnings found");
         assert_eq!(kind.issue_heading(), "Type errors found");
+    }
+
+    #[test]
+    fn lint_config_type_check_resolves_extends() {
+        let config = json!({
+            "extends": [
+                { "options": { "typeAware": false } },
+                {
+                    "extends": [{ "options": { "typeAware": true } }],
+                    "options": { "typeCheck": false }
+                }
+            ],
+            "options": { "typeCheck": true }
+        });
+        assert!(lint_config_type_check_enabled(Some(&config)));
+
+        let config = json!({
+            "extends": [{ "options": { "typeAware": true, "typeCheck": true } }],
+            "options": { "typeAware": false }
+        });
+        assert!(!lint_config_type_check_enabled(Some(&config)));
     }
 
     #[test]
