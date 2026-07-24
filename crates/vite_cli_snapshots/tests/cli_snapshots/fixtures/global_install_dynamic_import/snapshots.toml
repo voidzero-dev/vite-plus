@@ -1,0 +1,11 @@
+[[case]]
+name = "global_install_dynamic_import"
+vp = "global"
+comment = "Regression test for #2220: globally installed packages can dynamically import an absolute path inside their installation."
+steps = [
+  { argv = ["vp", "install", "-g", "."] },
+  { argv = ["global-install-dynamic-import"] },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "global-install-dynamic-import"], continue-on-failure = true },
+]
