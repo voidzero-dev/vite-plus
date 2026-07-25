@@ -53,6 +53,7 @@ Options:
   --root <dir>                  Root directory of input files
   --exe                         Bundle as executable
   -W, --workspace [dir]         Enable workspace mode
+  --concurrency <count>         Maximum number of Rolldown builds to run in parallel
   -F, --filter <pattern>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
   --exports                     Generate export-related metadata for package.json (experimental)
   -h, --help                    Display this message
