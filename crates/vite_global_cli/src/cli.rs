@@ -581,6 +581,7 @@ async fn run_package_manager_command(
         PackageManagerCommand::Update {
             global: true,
             ref packages,
+            latest,
             concurrency,
             reinstall_node_mismatch,
             ignore_node_mismatch,
@@ -592,8 +593,14 @@ async fn run_package_manager_command(
                 );
                 return Ok(exit_status(1));
             }
-            managed_update(packages, concurrency, reinstall_node_mismatch, ignore_node_mismatch)
-                .await
+            managed_update(
+                packages,
+                latest,
+                concurrency,
+                reinstall_node_mismatch,
+                ignore_node_mismatch,
+            )
+            .await
         }
 
         PackageManagerCommand::Outdated {
@@ -684,6 +691,7 @@ struct NodeMismatchPackage {
 
 async fn managed_update(
     packages: &[String],
+    latest: bool,
     concurrency: Option<usize>,
     reinstall_node_mismatch: bool,
     ignore_node_mismatch: bool,
@@ -691,6 +699,11 @@ async fn managed_update(
     let concurrency = concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY);
     let mut to_update: Vec<String> = Vec::new();
     let mut node_mismatches: Vec<NodeMismatchPackage> = Vec::new();
+    // Packages whose recorded version spec `--latest` clears. Reinstalls
+    // clear the spec on their own (the bare-name install records none), but
+    // packages already at the latest version are not reinstalled and must be
+    // rewritten explicitly.
+    let mut latest_spec_resets: Vec<String> = Vec::new();
     let current_node_version;
 
     let packages = if packages.is_empty() {
@@ -702,10 +715,13 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
+            if latest && metadata.version_spec.is_some() {
+                latest_spec_resets.push(metadata.name.clone());
+            }
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
-                    spec: metadata.name.clone(),
+                    spec: if latest { metadata.name.clone() } else { metadata.update_spec() },
                     installed_node: metadata.platform.node.clone(),
                 });
             }
@@ -724,12 +740,25 @@ async fn managed_update(
             }
 
             // It is not a local package, so `parse_package_spec` there won't return `Err()`
-            let (package_name, _) = global::parse_package_spec(package).unwrap();
+            let (package_name, version_spec) = global::parse_package_spec(package).unwrap();
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+                // `--latest` applies to bare names only; explicit specs win.
+                if latest && version_spec.is_none() && metadata.version_spec.is_some() {
+                    latest_spec_resets.push(package_name.clone());
+                }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
+                    // Match the spec `get_outdated_packages` resolves for this
+                    // package, so the dedup against outdated results holds.
+                    let spec = if version_spec.is_some() {
+                        package.clone()
+                    } else if latest {
+                        package_name.clone()
+                    } else {
+                        metadata.update_spec()
+                    };
                     node_mismatches.push(NodeMismatchPackage {
                         name: package_name,
-                        spec: package.clone(),
+                        spec,
                         installed_node: metadata.platform.node,
                     });
                 }
@@ -742,13 +771,34 @@ async fn managed_update(
         Some(managed_specs)
     };
 
-    let outdated = global::outdated::get_outdated_packages(
+    let report = global::outdated::get_outdated_packages(
         &packages.unwrap_or_default(),
         concurrency * 3,
-        true,
+        latest,
     )
     .await?;
-    to_update.extend(outdated.into_iter().map(|package| package.spec.unwrap_or(package.name)));
+    for failure in &report.failures {
+        output::warn(&format!("{failure}; skipping"));
+    }
+    to_update.extend(
+        report
+            .outdated
+            .into_iter()
+            // A newer `latest` alone (e.g. a version-pinned package) is not
+            // updatable; only a newer wanted version is.
+            .filter(|package| package.wanted != package.current)
+            .map(|package| package.spec.unwrap_or(package.name)),
+    );
+
+    // Clearing is idempotent for packages that are also reinstalled below;
+    // clearing before the install keeps the early up-to-date return covered.
+    for package_name in &latest_spec_resets {
+        if let Some(mut metadata) = PackageMetadata::load(package_name).await? {
+            if metadata.version_spec.take().is_some() {
+                metadata.save().await?;
+            }
+        }
+    }
 
     let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
     node_mismatches.retain(|package| !to_update_set.contains(package.spec.as_str()));

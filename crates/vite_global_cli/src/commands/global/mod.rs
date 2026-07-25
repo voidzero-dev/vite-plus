@@ -178,6 +178,27 @@ pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>),
     }
 }
 
+/// Return the version part of a registry package spec that update flows
+/// should keep resolving within: a dist-tag (e.g. `nightly` in
+/// `some-pkg@nightly`), a range, or an exact version. The implicit `latest`
+/// tag and non-registry version parts (URLs, aliases) yield `None`.
+pub(crate) fn update_version_spec(spec: &str) -> Option<String> {
+    if is_local_package_spec(spec) {
+        return None;
+    }
+    let (_, version_spec) = parse_package_spec(spec).ok()?;
+    let version_spec = version_spec?;
+    if version_spec.is_empty()
+        || version_spec == "latest"
+        || version_spec.contains(':')
+        || version_spec.contains('/')
+    {
+        None
+    } else {
+        Some(version_spec)
+    }
+}
+
 fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
     let path_spec = spec.strip_prefix("file:").unwrap_or(spec);
     let path = std::path::Path::new(path_spec);
@@ -300,5 +321,39 @@ mod tests {
     fn rejects_empty_output() {
         let error = parse_npm_view_version(b"\n").unwrap_err();
         assert!(error.to_string().contains("empty version"));
+    }
+
+    #[test]
+    fn update_version_spec_keeps_dist_tags() {
+        assert_eq!(update_version_spec("some-pkg@nightly"), Some("nightly".to_string()));
+        assert_eq!(update_version_spec("some-pkg@beta"), Some("beta".to_string()));
+        assert_eq!(update_version_spec("@scope/pkg@canary"), Some("canary".to_string()));
+    }
+
+    #[test]
+    fn update_version_spec_keeps_versions_and_ranges() {
+        assert_eq!(update_version_spec("some-pkg@1.2.3"), Some("1.2.3".to_string()));
+        assert_eq!(
+            update_version_spec("some-pkg@1.2.3-nightly.0"),
+            Some("1.2.3-nightly.0".to_string())
+        );
+        assert_eq!(update_version_spec("some-pkg@^1.0.0"), Some("^1.0.0".to_string()));
+        assert_eq!(update_version_spec("some-pkg@>=2"), Some(">=2".to_string()));
+    }
+
+    #[test]
+    fn update_version_spec_ignores_bare_names_and_latest() {
+        assert_eq!(update_version_spec("some-pkg"), None);
+        assert_eq!(update_version_spec("@scope/pkg"), None);
+        assert_eq!(update_version_spec("some-pkg@latest"), None);
+        assert_eq!(update_version_spec("some-pkg@"), None);
+    }
+
+    #[test]
+    fn update_version_spec_ignores_non_registry_specs() {
+        assert_eq!(update_version_spec("./local-pkg"), None);
+        assert_eq!(update_version_spec("file:../pkg"), None);
+        assert_eq!(update_version_spec("some-pkg@npm:other@1.0.0"), None);
+        assert_eq!(update_version_spec("some-pkg@github:user/repo"), None);
     }
 }

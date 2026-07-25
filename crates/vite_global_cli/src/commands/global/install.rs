@@ -27,7 +27,7 @@ use crate::{
             config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
             package_metadata::{INSTALL_ID_PREFIX, PackageMetadata, is_install_id},
         },
-        global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
+        global::{CORE_SHIMS, is_local_package_spec, parse_package_spec, update_version_spec},
     },
     error::Error,
 };
@@ -233,7 +233,7 @@ pub async fn install(
 
     // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
-    for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
+    for (index, (package_name, Package { spec, install })) in packages.into_iter().enumerate() {
         let lock_file = install_locks.remove(&package_name);
         let Some(InstalledPackage {
             installed_version,
@@ -405,6 +405,7 @@ pub async fn install(
         );
         metadata.install_id = install_id.clone();
         metadata.bins_restricted = bins_restricted;
+        metadata.version_spec = update_version_spec(spec);
 
         let mut finalized = true;
         for bin_name in &stale_bin_names {
