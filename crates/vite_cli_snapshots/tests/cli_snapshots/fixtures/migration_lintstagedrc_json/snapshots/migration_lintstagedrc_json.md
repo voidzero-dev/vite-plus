@@ -55,9 +55,10 @@ Migration Prompt:
     `vite.config.ts`
 
   Command mapping:
-  - `vp run <script>` is the equivalent of `pnpm run <script>`
-  - `vp test` runs the built-in test command, while `vp run test` runs the
-    `test` script from `package.json`
+  - `vp run <script>` is the equivalent of `pnpm run <script>`; `vpr` is the
+    shorthand for `vp run`
+  - `vp dev` and `vp test` always run the built-ins; `vpr dev` and `vpr test`
+    run the `dev` and `test` scripts from `package.json`
   - `vp install`, `vp add`, and `vp remove` delegate through the package
     manager declared by `packageManager`
   - `vp dev`, `vp build`, `vp preview`, `vp lint`, `vp fmt`, `vp check`,
