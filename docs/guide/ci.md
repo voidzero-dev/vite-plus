@@ -8,7 +8,7 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 ## GitHub Actions
 
-The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package manager setup, or manual dependency caching steps in your workflow.
+The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package-manager setup, or manual dependency caching steps in your workflow.
 
 ```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
@@ -24,7 +24,7 @@ The GitHub Action sets up Vite+, the required Node.js version, and the package m
 With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
 ::: tip
-`setup-vp` caches package manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
+`setup-vp` caches package-manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
 :::
 
 ## GitLab CI/CD
