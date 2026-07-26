@@ -150,6 +150,8 @@ const ZED_SETTINGS = {
   },
 } as const;
 
+// TODO Replace this raw XML template with a JSON-object definition
+// once the XML parser/merge support below is in place.
 const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ExternalDependencies">
@@ -159,6 +161,8 @@ const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 </project>
 `;
 
+// TODO: Extend this to allow XML files to be authored as JSON objects too
+// e.g. `Record<string, unknown> | string` -> add a dedicated XML-object type once an XML parser/differ is written
 type EditorConfigValue = Record<string, unknown> | string;
 
 export const EDITORS = [
@@ -188,6 +192,15 @@ export const EDITORS = [
     },
   },
 ] as const;
+
+// Since some file types may not be obvious (e.g. `.editorconfig`), it may be beneficial to add a property for declaring file type overrides for both read and write
+// The only problem is that now we have to maintain a list of file types and their extensions, which is not trivial. For now, we can just use the file extension to determine the file type and just deal with corner-case scenarios as we go.
+// TODO: Replace values with custom parser classes/objects implemented specifically for each file type
+export const FILE_TYPE_MAPPINGS = {
+  '.json': 'jsonc',
+  '.jsonc': 'jsonc',
+  '.xml': 'xml',
+}
 
 export type EditorId = (typeof EDITORS)[number]['id'];
 type EditorSelection = EditorId | readonly EditorId[] | undefined;
@@ -451,7 +464,9 @@ async function writeEditorConfig({
       if (conflictAction === 'merge') {
         if (jsonFormat) {
           if (!isPlainObject(incoming)) {
-            throw new Error(`Cannot merge editor config: ${displayPath} incoming value is not JSON`);
+            throw new Error(
+              `Cannot merge editor config: ${displayPath} incoming value is not JSON`,
+            );
           }
           mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
         } else {
@@ -467,7 +482,9 @@ async function writeEditorConfig({
 
     if (jsonFormat) {
       if (!isPlainObject(incoming)) {
-        throw new Error(`Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`);
+        throw new Error(
+          `Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`,
+        );
       }
       writeJsonFile(filePath, incoming);
     } else {
@@ -484,6 +501,9 @@ function isJsonLikeFile(fileName: string): boolean {
   return ext === '.json' || ext === '.jsonc';
 }
 
+// TODO: Add an `isXmlFile()` extension check (`.xml`) alongside `isJsonLikeFile()`,
+// and dispatch `.xml` files to write/merge instead of write/skip-on-conflict
+// See `writeEditorConfig()`'s `jsonFormat` branching for the call sites that need a parallel `xmlFormat` branch (conflict prompt copy, merge dispatch, initial write).
 function writeTextEditorConfig(
   filePath: string,
   incoming: EditorConfigValue,
@@ -502,6 +522,8 @@ function writeTextEditorConfig(
     return;
   }
 
+  // TODO: Once XML merge support exists, this plain overwrite-or-skip behavior should be replaced with a merge that preserves comments and formatting, similar to `mergeAndWriteEditorConfig()`.
+  // Likely will need to be extended for other file types too, so consider a generic `mergeAndWriteFile()` that dispatches to JSON/XML/text merge strategies based on file extension.
   fs.writeFileSync(filePath, incoming, 'utf-8');
 }
 
