@@ -134,7 +134,7 @@ You can also manually set up the IDE configuration to match your Vite+ setup:
         "javascript.nodejs.core.library.configured.version": "24.18.0", // Replace with your selected Node.js version
         "javascript.nodejs.core.library.typings.version": "24.13.3", // Replace with the version of @types/node that corresponds to your runtime (or omit if you don't want it)
         "javascript.preferred.runtime.type.id": "node",
-        "nodejs_interpreter_path": "~/.vite-plus/bin/node",
+        "nodejs_interpreter_path": "~/.vite-plus/bin/node", // Replace ~ with the path to your home directory, IntelliJ/WebStorm don't understand ~
         "nodejs_package_manager_path": "pnpm", // Replace with your package manager of choice
       }
     }]]>
