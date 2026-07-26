@@ -54,7 +54,7 @@ For advanced configuration and the complete input reference, see the [`setup-vp`
 
 ## Simplifying Existing Workflows
 
-If you are migrating an existing GitHub Actions workflow, you can often replace large blocks of Node.js, package-manager, and cache setup with a single `setup-vp` step.
+If you are migrating an existing GitHub Actions workflow, you can often replace large blocks of Node, package-manager, and cache setup with a single `setup-vp` step.
 
 #### Before:
 
