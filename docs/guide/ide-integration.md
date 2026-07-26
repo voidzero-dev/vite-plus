@@ -104,10 +104,53 @@ Setting `oxfmt.fmt.configPath` to `./vite.config.ts` keeps editor format-on-save
 
 For the best Vite+ experience with JetBrains IDEs such as IntelliJ & WebStorm, install the [Oxc](https://plugins.jetbrains.com/plugin/27061-oxc) plugin from the JetBrains marketplace.
 
-When you create or migrate a project, Vite+ prompts you to choose whether you want the editor config written for Zed.
+When you create or migrate a project, Vite+ prompts you to choose whether you want the editor config written for JetBrains IDEs.
 
-You can also manually set up the IDE configuration to utilise Oxc:
+::: tip Vite+ does not merge with existing config files
+Due to some complexities with merging XML files, Vite+ currently does not merge your current files if the files already exist.
+You'll be given the opportunity to replace your files, instead of merging.
+:::
 
-```json
+You can also manually set up the IDE configuration to match your Vite+ setup:
 
+```xml [.idea/externalDependencies.xml]
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalDependencies">
+    <plugin id="com.github.oxc.project.oxcintellijplugin" />
+    <plugin id="intellij.vitejs" />
+  </component>
+</project>
+```
+
+```xml [.idea/workspace.xml]
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <!-- other settings... -->
+  <component name="PropertiesComponent">
+    <![CDATA[{
+      "keyToString": {
+        // other settings
+        "javascript.nodejs.core.library.configured.version": "24.18.0", // Replace with your selected Node.js version
+        "javascript.nodejs.core.library.typings.version": "24.13.3", // Replace with the version of @types/node that corresponds to your runtime (or omit if you don't want it)
+        "javascript.preferred.runtime.type.id": "node",
+        "nodejs_interpreter_path": "~/.vite-plus/bin/node",
+        "nodejs_package_manager_path": "pnpm", // Replace with your package manager of choice
+      }
+    }]]>
+  </component>
+</project>
+```
+
+```xml [.idea/OxfmtSettings.xml]
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="OxfmtSettings">
+    <option name="preferOxfmtCodeStyleSettings" value="true" />
+  </component>
+</project>
+```
+
+```gitignore [.idea/.gitignore]
+!externalDependencies.xml
 ```
