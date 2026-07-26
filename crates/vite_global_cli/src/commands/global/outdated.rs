@@ -133,13 +133,17 @@ pub async fn get_outdated_packages(
     let mut failures = Vec::new();
     for (package, spec) in installed {
         let wanted_key = spec.clone().unwrap_or_else(|| package.name.clone());
-        let (wanted, latest) = match (resolve(&wanted_key), resolve(&package.name)) {
-            (Ok(wanted), Ok(latest)) => (wanted, latest),
-            (Err(error), _) | (_, Err(error)) => {
+        let wanted = match resolve(&wanted_key) {
+            Ok(wanted) => wanted,
+            Err(error) => {
                 failures.push(error);
                 continue;
             }
         };
+        // The latest tag is informational; updates only need `wanted`, so a
+        // failing bare-name lookup degrades the display instead of skipping
+        // the package.
+        let latest = resolve(&package.name).unwrap_or_else(|_| wanted.clone());
         let current = package.version.trim().to_string();
         if current == wanted && current == latest {
             continue;

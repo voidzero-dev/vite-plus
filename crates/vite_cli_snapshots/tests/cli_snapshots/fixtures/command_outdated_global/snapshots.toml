@@ -19,6 +19,9 @@ steps = [
   { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "1.0.1"], comment = "should clear a recorded version spec with --latest even without a reinstall", snapshot = false },
   { tty = false, argv = ["vp", "update", "-g", "--latest"], continue-on-failure = true },
   { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", "versionSpec"], comment = "should have removed the pin from the up-to-date package (grep-file prints missing)", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "1.0.0"], comment = "should persist an explicit spec switch without a reinstall", snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2@1.0.1"], continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", "versionSpec"], continue-on-failure = true },
 ]
 after = [
   { argv = ["vp", "remove", "-g", "testnpm2"], continue-on-failure = true },

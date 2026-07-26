@@ -192,6 +192,10 @@ pub(crate) fn update_version_spec(spec: &str) -> Option<String> {
         || version_spec == "latest"
         || version_spec.contains(':')
         || version_spec.contains('/')
+        // npm treats tarball-suffixed spec parts as file installs.
+        || version_spec.ends_with(".tgz")
+        || version_spec.ends_with(".tar.gz")
+        || version_spec.ends_with(".tar")
     {
         None
     } else {
@@ -286,7 +290,19 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
     match serde_json::from_str::<serde_json::Value>(trimmed) {
         Ok(serde_json::Value::String(version)) => Ok(version),
         Ok(serde_json::Value::Array(versions)) => {
-            let Some(version) = versions.iter().rev().find_map(|version| version.as_str()) else {
+            // A range query lists matching versions in publish order, so a
+            // backport release can come last (e.g. vite 4.5.14 after 5.0.x);
+            // pick the semver max like installs do, not the last element.
+            let max = versions
+                .iter()
+                .filter_map(|version| version.as_str())
+                .filter_map(|version| {
+                    node_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
+                })
+                .max_by(|(a, _), (b, _)| a.cmp(b))
+                .map(|(_, version)| version)
+                .or_else(|| versions.iter().rev().find_map(|version| version.as_str()));
+            let Some(version) = max else {
                 return Err(Error::Other("npm view returned an empty version list".into()));
             };
             Ok(version.to_string())
@@ -309,6 +325,18 @@ mod tests {
     fn parses_json_array_version() {
         let version = parse_npm_view_version(br#"["4.9.5","5.0.0"]"#).unwrap();
         assert_eq!(version, "5.0.0");
+    }
+
+    #[test]
+    fn parses_json_array_version_by_semver_not_publish_order() {
+        // A backport released after a higher version lists last in npm's
+        // publish-ordered output; the semver max must win.
+        let version = parse_npm_view_version(br#"["5.0.11","5.0.12","4.5.14"]"#).unwrap();
+        assert_eq!(version, "5.0.12");
+
+        let version =
+            parse_npm_view_version(br#"["2.0.0-beta.2","2.0.0-beta.10","2.0.0-beta.9"]"#).unwrap();
+        assert_eq!(version, "2.0.0-beta.10");
     }
 
     #[test]
@@ -355,5 +383,8 @@ mod tests {
         assert_eq!(update_version_spec("file:../pkg"), None);
         assert_eq!(update_version_spec("some-pkg@npm:other@1.0.0"), None);
         assert_eq!(update_version_spec("some-pkg@github:user/repo"), None);
+        assert_eq!(update_version_spec("some-pkg@archive.tgz"), None);
+        assert_eq!(update_version_spec("some-pkg@archive.tar.gz"), None);
+        assert_eq!(update_version_spec("some-pkg@archive.tar"), None);
     }
 }

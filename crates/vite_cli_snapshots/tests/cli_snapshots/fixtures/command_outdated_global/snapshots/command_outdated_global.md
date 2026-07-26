@@ -57,6 +57,8 @@ should warn and skip when the recorded version spec no longer resolves
 
 ## `vp update -g`
 
+**Exit code:** 1
+
 ```
 All global packages are up to date.
 [1m[33mwarn:[39m[0m npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
@@ -139,4 +141,21 @@ should have removed the pin from the up-to-date package (grep-file prints missin
 ```
 <home>/.vite-plus/packages/testnpm2.json: missing "versionSpec"
 pattern not found
+```
+
+## `vpt json-edit $VP_HOME/packages/testnpm2.json versionSpec 1.0.0`
+
+should persist an explicit spec switch without a reinstall
+
+
+## `vp update -g testnpm2@1.0.1`
+
+```
+All global packages are up to date.
+```
+
+## `vpt grep-file $VP_HOME/packages/testnpm2.json versionSpec`
+
+```
+<home>/.vite-plus/packages/testnpm2.json: found "versionSpec"
 ```
