@@ -4,11 +4,11 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 ## Overview
 
-[`voidzero-dev/setup-vp`](https://github.com/voidzero-dev/setup-vp) provides integrations for GitHub Actions and GitLab CI/CD. Both install Vite+ and can install project dependencies. The GitHub Action can also set up Node.js and cache package-manager data automatically, while the GitLab CI/CD template uses the Node.js runtime and cache configuration provided by the job.
+[`voidzero-dev/setup-vp`](https://github.com/voidzero-dev/setup-vp) provides integrations for GitHub Actions and GitLab CI/CD. Both install Vite+ and can install project dependencies. The GitHub Action can also set up Node.js and cache package manager data automatically, while the GitLab CI/CD template uses the Node.js runtime and cache configuration provided by the job.
 
 ## GitHub Actions
 
-The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package-manager setup, and manual dependency-cache steps in your workflow.
+The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package manager setup, or manual dependency caching steps in your workflow.
 
 ```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
@@ -24,7 +24,7 @@ The GitHub Action sets up Vite+, the required Node.js version, and the package m
 With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
 ::: tip
-`setup-vp` caches package-manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
+`setup-vp` caches package manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
 :::
 
 ## GitLab CI/CD
@@ -54,7 +54,7 @@ For advanced configuration and the complete input reference, see the [`setup-vp`
 
 ## Simplifying Existing Workflows
 
-If you are migrating an existing GitHub Actions workflow, you can often replace large blocks of Node, package-manager, and cache setup with a single `setup-vp` step.
+If you are migrating an existing GitHub Actions workflow, you can often replace large blocks of Node.js, package manager, and cache setup with a single `setup-vp` step.
 
 #### Before:
 
