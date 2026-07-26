@@ -703,7 +703,10 @@ async fn managed_update(
     // specs, an explicit `pkg@spec` argument replaces the stored one.
     // Reinstalls record the new spec on their own, but packages already at
     // the target version are not reinstalled and must be rewritten here.
-    let mut spec_rewrites: Vec<(String, Option<String>)> = Vec::new();
+    // Entries are `(package name, new spec, registry query spec)`; the query
+    // spec ties each rewrite to its lookup so failed resolutions never
+    // persist a policy the update could not act on.
+    let mut spec_rewrites: Vec<(String, Option<String>, String)> = Vec::new();
     let current_node_version;
 
     let packages = if packages.is_empty() {
@@ -716,7 +719,7 @@ async fn managed_update(
 
         for metadata in &all {
             if latest && metadata.version_spec.is_some() {
-                spec_rewrites.push((metadata.name.clone(), None));
+                spec_rewrites.push((metadata.name.clone(), None, metadata.name.clone()));
             }
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
@@ -747,11 +750,11 @@ async fn managed_update(
                     // the installed version already satisfies it.
                     let new_spec = global::update_version_spec(package);
                     if new_spec != metadata.version_spec {
-                        spec_rewrites.push((package_name.clone(), new_spec));
+                        spec_rewrites.push((package_name.clone(), new_spec, package.clone()));
                     }
                 } else if latest && metadata.version_spec.is_some() {
                     // `--latest` applies to bare names only; explicit specs win.
-                    spec_rewrites.push((package_name.clone(), None));
+                    spec_rewrites.push((package_name.clone(), None, package_name.clone()));
                 }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     // Match the spec `get_outdated_packages` resolves for this
@@ -784,8 +787,8 @@ async fn managed_update(
         latest,
     )
     .await?;
-    for failure in &report.failures {
-        output::warn(&format!("{failure}; skipping"));
+    for (_, message) in &report.failures {
+        output::warn(&format!("{message}; skipping"));
     }
     // Skipped lookups make the update incomplete; keep going but exit
     // nonzero so scripts can tell.
@@ -800,9 +803,19 @@ async fn managed_update(
             .map(|package| package.spec.unwrap_or(package.name)),
     );
 
-    // Rewrites are idempotent for packages that are also reinstalled below;
-    // applying before the install keeps the early up-to-date return covered.
-    for (package_name, new_spec) in &spec_rewrites {
+    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
+
+    // Persist rewrites only for packages that resolved but need no reinstall:
+    // reinstalled packages record their spec through the successful install
+    // (and keep the old one if it fails), and a failed lookup must not
+    // persist a policy the update could not act on.
+    let failed_specs =
+        report.failures.iter().map(|(spec, _)| spec.as_str()).collect::<HashSet<_>>();
+    for (package_name, new_spec, query_spec) in &spec_rewrites {
+        if failed_specs.contains(query_spec.as_str()) || to_update_set.contains(query_spec.as_str())
+        {
+            continue;
+        }
         if let Some(mut metadata) = PackageMetadata::load(package_name).await? {
             if metadata.version_spec != *new_spec {
                 metadata.version_spec = new_spec.clone();
@@ -811,7 +824,6 @@ async fn managed_update(
         }
     }
 
-    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
     node_mismatches.retain(|package| !to_update_set.contains(package.spec.as_str()));
 
     if should_reinstall_node_mismatches(

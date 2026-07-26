@@ -32,12 +32,13 @@ pub struct OutdatedPackage {
 }
 
 /// Outcome of a registry sweep over the managed global packages: the packages
-/// with a newer version, plus one message per package whose registry lookup
-/// failed (so callers can warn and continue instead of aborting).
+/// with a newer version, plus one `(query spec, message)` entry per package
+/// whose registry lookup failed (so callers can warn and continue instead of
+/// aborting, and can tell which packages were left unresolved).
 #[derive(Debug)]
 pub struct OutdatedReport {
     pub outdated: Vec<OutdatedPackage>,
-    pub failures: Vec<String>,
+    pub failures: Vec<(String, String)>,
 }
 
 /// For json output in `vp outdated` command
@@ -136,7 +137,7 @@ pub async fn get_outdated_packages(
         let wanted = match resolve(&wanted_key) {
             Ok(wanted) => wanted,
             Err(error) => {
-                failures.push(error);
+                failures.push((wanted_key, error));
                 continue;
             }
         };
@@ -187,8 +188,8 @@ pub async fn execute(
             }
         };
 
-    for failure in &failures {
-        vite_shared::output::warn(&format!("{failure}; skipping"));
+    for (_, message) in &failures {
+        vite_shared::output::warn(&format!("{message}; skipping"));
     }
 
     // Exit code 0 means fully checked and up to date; 1 means outdated or incomplete.

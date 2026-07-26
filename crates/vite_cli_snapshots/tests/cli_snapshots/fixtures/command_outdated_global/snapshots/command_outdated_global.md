@@ -154,8 +154,25 @@ should persist an explicit spec switch without a reinstall
 All global packages are up to date.
 ```
 
-## `vpt grep-file $VP_HOME/packages/testnpm2.json versionSpec`
+## `vpt grep-file $VP_HOME/packages/testnpm2.json 'versionSpec": "1.0.1'`
 
 ```
-<home>/.vite-plus/packages/testnpm2.json: found "versionSpec"
+<home>/.vite-plus/packages/testnpm2.json: found "versionSpec\": \"1.0.1"
+```
+
+## `vp update -g testnpm2@no-such-tag`
+
+should not persist an explicit spec that fails to resolve
+
+**Exit code:** 1
+
+```
+All global packages are up to date.
+[1m[33mwarn:[39m[0m npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
+```
+
+## `vpt grep-file $VP_HOME/packages/testnpm2.json 'versionSpec": "1.0.1'`
+
+```
+<home>/.vite-plus/packages/testnpm2.json: found "versionSpec\": \"1.0.1"
 ```
