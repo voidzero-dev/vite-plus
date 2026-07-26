@@ -1,0 +1,21 @@
+Cargo.toml
+  s_13beef4a2fbc3f::t_b8c81395fc3d17 196,253-254,277,308-312
+Cargo.lock
+  s_13beef4a2fbc3f::t_1ee6d838d29476 2022,2238,2273,2282,2297,2314,2331,2350,2368,2900,3087,3516,3524,3757,5048,5476,5486,5497,6741,6797,7351,7596,8410,8458,8558,8590,8599,8652,8679,8690,8700,8740,8753,8765,8787,8797,8825,8849,9077
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "88ab4592d55342c11a070c47e8fc7205f675fda3",
+  "prompts": {},
+  "sessions": {
+    "s_13beef4a2fbc3f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06bd19f8fffeD4iMcIeVNEmX3P",
+        "model": "gpt-5.6"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
