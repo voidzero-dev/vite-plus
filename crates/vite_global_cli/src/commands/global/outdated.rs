@@ -41,6 +41,66 @@ pub struct OutdatedReport {
     pub failures: Vec<(String, String)>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LookupMode {
+    /// Resolve only the version an update would install.
+    WantedOnly,
+    /// Also resolve the registry's `latest` dist-tag for outdated reporting.
+    WantedAndLatest,
+}
+
+fn registry_specs(
+    installed: &[(PackageMetadata, Option<String>)],
+    mode: LookupMode,
+) -> Vec<String> {
+    let mut specs = Vec::new();
+    let mut seen = HashSet::new();
+    for (package, spec) in installed {
+        let wanted_query = spec.as_deref().unwrap_or(&package.name);
+        let queries = std::iter::once(wanted_query).chain(
+            (mode == LookupMode::WantedAndLatest && wanted_query != package.name)
+                .then_some(package.name.as_str()),
+        );
+        for query in queries {
+            if seen.insert(query.to_string()) {
+                specs.push(query.to_string());
+            }
+        }
+    }
+    specs
+}
+
+fn resolve_registry_version(
+    versions: &HashMap<String, Result<String, String>>,
+    key: &str,
+) -> Result<String, String> {
+    match versions.get(key) {
+        Some(Ok(version)) => Ok(version.trim().to_string()),
+        // Keep the first line: npm's stderr goes on to multi-line advice and
+        // a timestamped log path, which is noise in a one-line warning.
+        Some(Err(error)) => {
+            Err(error.lines().next().unwrap_or("registry lookup failed").to_string())
+        }
+        None => Err(format!("no registry response for {key}")),
+    }
+}
+
+fn resolve_package_versions(
+    versions: &HashMap<String, Result<String, String>>,
+    package_name: &str,
+    wanted_key: &str,
+    mode: LookupMode,
+) -> Result<(String, String), (String, String)> {
+    let wanted = resolve_registry_version(versions, wanted_key)
+        .map_err(|error| (wanted_key.to_string(), error))?;
+    let latest = match mode {
+        LookupMode::WantedOnly => wanted.clone(),
+        LookupMode::WantedAndLatest => resolve_registry_version(versions, package_name)
+            .map_err(|error| (package_name.to_string(), error))?,
+    };
+    Ok((wanted, latest))
+}
+
 /// For json output in `vp outdated` command
 /// Use `npm outdated --json`'s data structure
 #[derive(Debug, Serialize)]
@@ -57,6 +117,7 @@ pub async fn get_outdated_packages(
     packages: &[String],
     concurrency: usize,
     latest: bool,
+    mode: LookupMode,
 ) -> Result<OutdatedReport, Error> {
     // 1. Resolve the command arguments to vite-plus-managed global packages.
     //    A missing explicit package is a command result, not an internal error.
@@ -98,20 +159,13 @@ pub async fn get_outdated_packages(
         return Ok(OutdatedReport { outdated: Vec::new(), failures: Vec::new() });
     }
 
-    // 2. Query the registry once per distinct spec: the wanted version comes
-    //    from the (possibly spec-qualified) query spec, the latest version
-    //    from the bare package name; for spec-less packages both coincide.
+    // 2. Query the registry once per distinct spec. The wanted version comes
+    //    from the (possibly spec-qualified) query spec. Outdated reporting
+    //    additionally needs the bare package name for the `latest` dist-tag,
+    //    while updates deliberately skip that informational lookup.
     //    A registry setup failure is fatal; per-package lookup failures are
     //    collected so callers can warn and continue.
-    let mut specs = Vec::new();
-    let mut seen = HashSet::new();
-    for (package, spec) in &installed {
-        for query in [spec.as_deref().unwrap_or(&package.name), package.name.as_str()] {
-            if seen.insert(query.to_string()) {
-                specs.push(query.to_string());
-            }
-        }
-    }
+    let specs = registry_specs(&installed, mode);
 
     let versions: HashMap<String, Result<String, String>> =
         latest_package_versions(&specs, concurrency)
@@ -119,13 +173,6 @@ pub async fn get_outdated_packages(
             .into_iter()
             .map(|(spec, version)| (spec, version.map_err(|error| error.to_string())))
             .collect();
-    let resolve = |key: &str| match versions.get(key) {
-        Some(Ok(version)) => Ok(version.trim().to_string()),
-        // Keep the first line: npm's stderr goes on to multi-line advice and
-        // a timestamped log path, which is noise in a one-line warning.
-        Some(Err(error)) => Err(error.lines().next().unwrap_or("registry lookup failed").into()),
-        None => Err(format!("no registry response for {key}")),
-    };
 
     // 3. Compare installed metadata with registry versions. Packages whose
     //    registry lookup failed are reported as failures because there is no
@@ -134,17 +181,14 @@ pub async fn get_outdated_packages(
     let mut failures = Vec::new();
     for (package, spec) in installed {
         let wanted_key = spec.clone().unwrap_or_else(|| package.name.clone());
-        let wanted = match resolve(&wanted_key) {
-            Ok(wanted) => wanted,
-            Err(error) => {
-                failures.push((wanted_key, error));
-                continue;
-            }
-        };
-        // The latest tag is informational; updates only need `wanted`, so a
-        // failing bare-name lookup degrades the display instead of skipping
-        // the package.
-        let latest = resolve(&package.name).unwrap_or_else(|_| wanted.clone());
+        let (wanted, latest) =
+            match resolve_package_versions(&versions, &package.name, &wanted_key, mode) {
+                Ok(versions) => versions,
+                Err(failure) => {
+                    failures.push(failure);
+                    continue;
+                }
+            };
         let current = package.version.trim().to_string();
         if current == wanted && current == latest {
             continue;
@@ -173,20 +217,24 @@ pub async fn execute(
     format: Option<Format>,
     concurrency: usize,
 ) -> Result<ExitStatus, Error> {
-    let OutdatedReport { outdated, failures } =
-        match get_outdated_packages(packages, concurrency, false).await {
-            Ok(report) => report,
-            Err(error) => {
-                if let Some(Format::Json) = format {
-                    vite_shared::output::raw("{}");
-                } else {
-                    vite_shared::output::error(&format!(
-                        "Could not get outdated packages: {error}"
-                    ));
-                }
-                return Err(error);
+    let OutdatedReport { outdated, failures } = match get_outdated_packages(
+        packages,
+        concurrency,
+        false,
+        LookupMode::WantedAndLatest,
+    )
+    .await
+    {
+        Ok(report) => report,
+        Err(error) => {
+            if let Some(Format::Json) = format {
+                vite_shared::output::raw("{}");
+            } else {
+                vite_shared::output::error(&format!("Could not get outdated packages: {error}"));
             }
-        };
+            return Err(error);
+        }
+    };
 
     for (_, message) in &failures {
         vite_shared::output::warn(&format!("{message}; skipping"));
@@ -335,5 +383,61 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
                 package.latest
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn installed(version_spec: Option<&str>) -> Vec<(PackageMetadata, Option<String>)> {
+        let mut package = PackageMetadata::new(
+            "some-pkg".into(),
+            "1.0.0".into(),
+            "22.0.0".into(),
+            None,
+            Vec::new(),
+            HashSet::new(),
+            "npm".into(),
+        );
+        package.version_spec = version_spec.map(str::to_string);
+        let query_spec = package.version_spec.is_some().then(|| package.update_spec());
+        vec![(package, query_spec)]
+    }
+
+    #[test]
+    fn wanted_only_skips_the_bare_latest_lookup() {
+        let specs = registry_specs(&installed(Some("^1.0.0")), LookupMode::WantedOnly);
+        assert_eq!(specs, ["some-pkg@^1.0.0"]);
+    }
+
+    #[test]
+    fn wanted_and_latest_resolves_both_distinct_specs() {
+        let specs = registry_specs(&installed(Some("^1.0.0")), LookupMode::WantedAndLatest);
+        assert_eq!(specs, ["some-pkg@^1.0.0", "some-pkg"]);
+    }
+
+    #[test]
+    fn wanted_and_latest_deduplicates_the_bare_spec() {
+        let specs = registry_specs(&installed(None), LookupMode::WantedAndLatest);
+        assert_eq!(specs, ["some-pkg"]);
+    }
+
+    #[test]
+    fn wanted_and_latest_reports_a_failed_latest_lookup() {
+        let versions = HashMap::from([
+            ("some-pkg@^1.0.0".into(), Ok("1.2.0".into())),
+            ("some-pkg".into(), Err("latest lookup failed\nnpm log path".into())),
+        ]);
+
+        let failure = resolve_package_versions(
+            &versions,
+            "some-pkg",
+            "some-pkg@^1.0.0",
+            LookupMode::WantedAndLatest,
+        )
+        .unwrap_err();
+
+        assert_eq!(failure, ("some-pkg".into(), "latest lookup failed".into()));
     }
 }

@@ -785,6 +785,7 @@ async fn managed_update(
         &packages.unwrap_or_default(),
         concurrency * 3,
         latest,
+        global::outdated::LookupMode::WantedOnly,
     )
     .await?;
     for (_, message) in &report.failures {
