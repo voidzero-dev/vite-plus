@@ -1,5 +1,5 @@
 crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vite_plugins_skip_on_format/snapshots/vite_plugins_skip_on_format.global.md
-  s_52928a3d059298::t_c7a7cd437f85c1 8-9
+  s_52928a3d059298::t_c7a7cd437f85c1 1-12,8-9
   s_52928a3d059298::t_64625e3cd0c073 1-7,10-12
 crates/vite_global_cli/src/main.rs
   s_52928a3d059298::t_e78e934abcf0ce 38,227-231,240,358-359,434
