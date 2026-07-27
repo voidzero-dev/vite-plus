@@ -1,0 +1,33 @@
+packages/cli/binding/src/cli/mod.rs
+  s_52928a3d059298::t_7026c89052bfa7 10,281-289
+Cargo.lock
+  s_52928a3d059298::t_7f87558e08eefb 2238,2273,2282,2297,2314,2331,2350,2368,3516,3524,3757,5476,5486,5497,7351,8410,8458,8558,8590,8599,8652,8679,8690,8739,8752,8764,8786,8796,8824,8848
+Cargo.toml
+  s_52928a3d059298::t_f999040b40ff21 196,253-254,277,308-312
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/package.json
+  s_52928a3d059298::t_6180bd41e77917 1-11
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots.toml
+  s_52928a3d059298::t_f792f62f29dc9d 1-26
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note.global.md
+  s_52928a3d059298::t_e457b8524c4d03 1-49
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note.local.md
+  s_52928a3d059298::t_04502084f4bcde 1-41
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note_inside_task.md
+  s_52928a3d059298::t_1660c38a50a4ab 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6ec2c5c25ff2a4b3e676f95b52d579113d969ad2",
+  "prompts": {},
+  "sessions": {
+    "s_52928a3d059298": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_062122aa5ffe7ONTcboWFyFTB5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
