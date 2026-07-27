@@ -1,0 +1,59 @@
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note_inside_task.md
+  s_52928a3d059298::t_1660c38a50a4ab 1-13
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots.toml
+  s_13beef4a2fbc3f::t_b1e335a4d365a2 2-3,12-14
+  s_52928a3d059298::t_f792f62f29dc9d 1,4-11,15-26
+  s_52928a3d059298::t_cd0681a8bc4b51 27
+Cargo.toml
+  s_52928a3d059298::t_f999040b40ff21 196,253-254,277,308-312
+packages/cli/binding/src/cli/mod.rs
+  s_52928a3d059298::t_7026c89052bfa7 10,281-289
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/package.json
+  s_13beef4a2fbc3f::t_b3fd787f0d5bb9 2,9
+  s_52928a3d059298::t_6180bd41e77917 1,3-8,10-12
+packages/cli/binding/src/cli/script_note.rs
+  s_13beef4a2fbc3f::t_1bf71469bfcb7c 8-46,59,62
+  s_52928a3d059298::t_ccf7a699603b7e 1-7,47-58,60-61,63
+Cargo.lock
+  s_52928a3d059298::t_7f87558e08eefb 2238,2273,2282,2297,2314,2331,2350,2368,3516,3524,3757,5476,5486,5497,7351,8410,8458,8558,8590,8599,8652,8679,8690,8739,8752,8764,8786,8796,8824,8848
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note.local.md
+  s_52928a3d059298::t_da349f13cd7c47 37,42-62
+  s_52928a3d059298::t_04502084f4bcde 1-36,38-41
+  s_52928a3d059298::t_cc1eee64bb463b 63-70
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note.global.md
+  s_52928a3d059298::t_e51d08e499b05b 43,50-72
+  s_52928a3d059298::t_e457b8524c4d03 1-42,44-49
+  s_52928a3d059298::t_8ca652e4b8d29f 73-82
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/src/valid.js
+  s_52928a3d059298::t_1ed48a00adf5d8 1-6
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/vite.config.ts
+  s_52928a3d059298::t_95002ca24a1cbe 1-8
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vp_build_cache/snapshots/vp_build_cache.md
+  s_52928a3d059298::t_d7d2b6f611d90c 36
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vp_build_cache_monorepo/snapshots/vp_build_cache_monorepo.md
+  s_52928a3d059298::t_c64efcdf4da34b 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b9ca7abec08ef1a84fc0f0a4cff9d379e535c555",
+  "prompts": {},
+  "sessions": {
+    "s_13beef4a2fbc3f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06bd19f8fffeD4iMcIeVNEmX3P",
+        "model": "gpt-5.6"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    },
+    "s_52928a3d059298": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_062122aa5ffe7ONTcboWFyFTB5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
