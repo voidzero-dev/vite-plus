@@ -33,14 +33,14 @@ If VS Code has multiple folders open, the shared Oxc language server may pick a 
 
 ## `vp dev` or `vp build` does not run my script
 
-Unlike package managers, built-in commands cannot be overwritten. If you are trying to run a `package.json` script, use `vp run <script>` or its `vpr <script>` shorthand instead.
+Unlike package managers, built-in commands cannot be overwritten. If you are trying to run a `package.json` script use `vp run <script>` instead.
 
 For example:
 
 - `vp dev` always starts the built-in Vite dev server
 - `vp build` always runs the built-in Vite build
 - `vp test` always runs the built-in Vitest command
-- `vpr dev`, `vpr build`, and `vpr test` run the matching `package.json` scripts instead
+- `vp run dev`, `vp run build`, and `vp run test` run the matching `package.json` scripts instead
 
 See [Built-in Commands vs Scripts](/guide/run#built-in-commands-vs-scripts) for when to prefer each path.
 
