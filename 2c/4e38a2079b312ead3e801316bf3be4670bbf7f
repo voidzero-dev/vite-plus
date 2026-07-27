@@ -1,0 +1,41 @@
+crates/vite_global_cli/src/commands/delegate.rs
+  s_52928a3d059298::t_4368019533c884 10-12,17,19,38-39,44,46
+crates/vite_global_cli/src/commands/vpr.rs
+  s_52928a3d059298::t_ce03b6d7aef512 18-19
+crates/vite_global_cli/src/commands/config.rs
+  s_52928a3d059298::t_9418f144bb76e1 10-15
+crates/vite_global_cli/src/commands/staged.rs
+  s_52928a3d059298::t_105c0fbc547261 10-15
+crates/vite_global_cli/src/main.rs
+  s_52928a3d059298::t_e78e934abcf0ce 227-231,240,358-359,434
+  s_52928a3d059298::t_934a8d00c74881 39
+crates/vite_global_cli/src/commands/create.rs
+  s_52928a3d059298::t_0c1cd027826043 10-15
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vite_plugins_skip_on_format/snapshots.toml
+  s_52928a3d059298::t_42ade2c994807a 1-3,6
+crates/vite_global_cli/src/js_executor.rs
+  s_52928a3d059298::t_65ee970a3ee580 34-35,46-55,354-356
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vite_plugins_skip_on_format/snapshots/vite_plugins_skip_on_format.global.md
+  s_52928a3d059298::t_c7a7cd437f85c1 8-9
+  s_52928a3d059298::t_49cfaa927ff024 1-7,10-12
+crates/vite_shared/src/env_vars.rs
+  s_52928a3d059298::t_840e7d18d86eb7 77-83
+crates/vite_global_cli/src/cli.rs
+  s_52928a3d059298::t_56fbc92e27f908 847-855,857-862,870,904,908,910,918,926,934,943,945,955,957,966,974,982,990,999,1007,1104,1107-1127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2c4e38a2079b312ead3e801316bf3be4670bbf7f",
+  "prompts": {},
+  "sessions": {
+    "s_52928a3d059298": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_062122aa5ffe7ONTcboWFyFTB5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
