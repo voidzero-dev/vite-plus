@@ -1,0 +1,66 @@
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots.toml
+  s_52928a3d059298::t_f792f62f29dc9d 1,4-11,16-27
+  s_52928a3d059298::t_cd0681a8bc4b51 28
+  s_13beef4a2fbc3f::t_b1e335a4d365a2 2-3,12-15
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/src/valid.js
+  s_52928a3d059298::t_1ed48a00adf5d8 1-6
+Cargo.lock
+  s_52928a3d059298::t_7f87558e08eefb 2238,2273,2282,2297,2314,2331,2350,2368,3516,3524,3757,5476,5486,5497,7351,8410,8458,8558,8590,8599,8652,8679,8690,8739,8752,8764,8786,8796,8824,8848
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vp_build_cache/snapshots/vp_build_cache.md
+  s_52928a3d059298::t_d7d2b6f611d90c 36
+packages/cli/src/bin.ts
+  s_52928a3d059298::t_ceb0bac841c0e3 45-46,91-93
+Cargo.toml
+  s_52928a3d059298::t_f999040b40ff21 196,253-254,277,308-312
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/vite.config.ts
+  s_52928a3d059298::t_95002ca24a1cbe 1-8
+packages/cli/binding/src/cli/script_note.rs
+  s_13beef4a2fbc3f::t_1bf71469bfcb7c 8-32,36,39,53
+  s_52928a3d059298::t_ccf7a699603b7e 1-7,38
+  s_52928a3d059298::t_f2202b93183270 37,40-52
+  s_13beef4a2fbc3f::t_ae15df6b6103e0 33-35
+  s_13beef4a2fbc3f::t_23dd59f815df10 54
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note.global.md
+  s_52928a3d059298::t_e457b8524c4d03 1-40
+  s_52928a3d059298::t_e51d08e499b05b 41-48
+  s_52928a3d059298::t_787c0d690e2b63 73-116
+  s_52928a3d059298::t_2d6cd0ee0813b1 49-72
+packages/cli/binding/src/cli/mod.rs
+  s_52928a3d059298::t_7026c89052bfa7 10,29,267-275,288-304
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/vp_build_cache_monorepo/snapshots/vp_build_cache_monorepo.md
+  s_52928a3d059298::t_c64efcdf4da34b 63
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/package.json
+  s_52928a3d059298::t_6180bd41e77917 1,3-8,10-12
+  s_13beef4a2fbc3f::t_b3fd787f0d5bb9 2,9
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note_inside_task.md
+  s_52928a3d059298::t_1660c38a50a4ab 1-13
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/builtin_script_note/snapshots/builtin_script_note.local.md
+  s_52928a3d059298::t_160d51a21aa05f 63-113
+  s_52928a3d059298::t_da349f13cd7c47 35-40
+  s_52928a3d059298::t_04502084f4bcde 1-34
+  s_52928a3d059298::t_d6d280908cfa82 41-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9b22a4927ccb16d4b504275c557fa719c25ac7ce",
+  "prompts": {},
+  "sessions": {
+    "s_13beef4a2fbc3f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06bd19f8fffeD4iMcIeVNEmX3P",
+        "model": "gpt-5.6"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    },
+    "s_52928a3d059298": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_062122aa5ffe7ONTcboWFyFTB5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
