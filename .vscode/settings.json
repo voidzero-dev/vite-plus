@@ -14,6 +14,7 @@
   "[json]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
+  "oxc.disableNestedConfig": true,
   "js/ts.preferences.importModuleSpecifierEnding": "js",
   "js/ts.reportStyleChecksAsWarnings": false,
   "js/ts.updateImportsOnFileMove.enabled": "always",
