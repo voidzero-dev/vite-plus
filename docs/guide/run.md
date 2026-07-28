@@ -38,6 +38,21 @@ Select a task (↑/↓, Enter to run, Esc to clear):
     test: jest
 ```
 
+## Built-in Commands vs Scripts
+
+`vp dev` is a built-in command. `vp run dev` is your `dev` script. Built-in commands cannot be overwritten, so adding a `dev` script does not change what `vp dev` does:
+
+| Command                    | What it runs                                                              |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `vp dev`                   | The built-in Vite dev server                                              |
+| `vp run dev` / `vpr dev`   | The `dev` script in `package.json`, or a `dev` task in `vite.config.ts`   |
+| `vp test`                  | The built-in Vitest command                                               |
+| `vp run test` / `vpr test` | The `test` script in `package.json`, or a `test` task in `vite.config.ts` |
+
+`build`, `preview`, `lint`, `fmt`, `check`, and `pack` work the same way.
+
+If the project defines that script or task, run it with `vp run <name>`. For example, with a `"dev": "astro dev"` script, `vp run dev` starts Astro, while `vp dev` ignores the script and starts Vite.
+
 ## Caching
 
 `package.json` scripts are not cached by default. Use `--cache` to enable caching:
