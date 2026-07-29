@@ -8640,6 +8640,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "supports-color 3.0.2",
+ "thiserror 2.0.19",
  "tracing",
  "tracing-subscriber",
  "vite_path",
