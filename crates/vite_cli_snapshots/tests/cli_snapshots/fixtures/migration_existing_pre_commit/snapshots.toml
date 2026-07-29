@@ -6,7 +6,53 @@ steps = [
   { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
   { argv = ["vpt", "write-file", ".husky/pre-commit", "#!/usr/bin/env sh\nnpm test\nsecret-scan\n"], snapshot = false },
   { argv = ["vpt", "chmod", "755", ".husky/pre-commit"], snapshot = false, continue-on-failure = true },
-  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "check existing pre-commit hook before migration", continue-on-failure = true },
-  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve existing pre-commit contents", continue-on-failure = true },
-  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check pre-commit hook preserves existing commands", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "existing hook", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migrate the hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "keep the custom hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "do not add staged config", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_hook_helpers_only"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/common.sh", "#!/usr/bin/env sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-commit.bak", "npm test\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "ignore helper and backup files", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert", "file"], snapshot = false },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "add the default hook", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "vite.config.ts", "staged:"], snapshot = false },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "add staged config", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_staged_pre_push"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-push", "#!/usr/bin/env sh\nnpx lint-staged\nnpm test\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migrate the existing policy", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert", "missing"], snapshot = false },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-push"], comment = "rewrite the same hook", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "vite.config.ts", "staged:"], snapshot = false },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "add staged config", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_staged_config_with_custom_hook"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "lint-staged", "{\"*.ts\":\"eslint --fix\"}"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.lint-staged", "\"^16.2.7\""], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-push", "#!/usr/bin/env sh\nnpm test\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migrate config without changing policy", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert", "missing"], snapshot = false },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-push"], comment = "keep the custom hook", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "vite.config.ts", "staged:"], snapshot = false },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "migrate staged config", continue-on-failure = true },
 ]

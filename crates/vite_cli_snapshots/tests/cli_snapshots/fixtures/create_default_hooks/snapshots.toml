@@ -1,0 +1,9 @@
+[[case]]
+name = "create_default_hooks"
+vp = "global"
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive"], comment = "create should scaffold the default hook policy", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-application/.vite-hooks/pre-commit"], comment = "project-owned pre-commit hook should run vp staged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-application/vite.config.ts"], comment = "vite config should contain the matching staged policy", continue-on-failure = true },
+]

@@ -9,3 +9,43 @@ steps = [
   { argv = ["vpt", "stat-file", ".nvmrc", "--assert", "file"], comment = "node version file is not migrated without --full", continue-on-failure = true },
   { argv = ["vpt", "stat-file", ".node-version", "--assert-not", "file"], comment = "only the hooks action ran", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_upgrade_hooks_standalone_staged_pnpm"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.lint-staged", "\"^16.2.7\""], snapshot = false },
+  { argv = ["vpt", "write-file", ".lintstagedrc.json", "{\"*.ts\":\"eslint --fix\"}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "migrate hooks and staged config", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "install the dispatcher", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".lintstagedrc.json", "--assert", "missing"], snapshot = false },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "add the staged hook", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "vite.config.ts", "staged:"], snapshot = false },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "inline staged config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "remove lint-staged", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_upgrade_hooks_standalone_staged_install_skip"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["git", "config", "core.hooksPath", ".custom-hooks"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".custom-hooks"], snapshot = false },
+  { argv = ["vpt", "write-file", ".custom-hooks/pre-commit", "npx lint-staged\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.lint-staged", "\"^16.2.7\""], snapshot = false },
+  { argv = ["vpt", "write-file", ".lintstagedrc.json", "{\"*.ts\":\"eslint --fix\"}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "skip dispatcher installation", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "keep the custom dispatcher", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".custom-hooks/pre-commit"], comment = "keep the active hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".lintstagedrc.json"], comment = "keep standalone config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "keep lint-staged", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite.config.ts", "--assert", "missing"], comment = "roll back staged config", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "--unset", "core.hooksPath"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "retry hook migration", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "install the dispatcher", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".lintstagedrc.json", "--assert", "missing"], comment = "remove standalone config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "keep the staged hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "remove lint-staged", continue-on-failure = true },
+]

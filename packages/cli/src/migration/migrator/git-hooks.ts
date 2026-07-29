@@ -6,9 +6,11 @@ import spawn from 'cross-spawn';
 import semver from 'semver';
 
 import { rewriteScripts } from '../../../binding/index.js';
+import { SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
 import { PackageManager } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
+import { detectConfigs } from '../detector.ts';
 import {
   createCatalogDependencyResolver,
   hasStagedConfigInViteConfig,
@@ -16,6 +18,7 @@ import {
   readPrepareRulesYaml,
   readRulesYaml,
   removeLintStagedFromPackageJson,
+  rewriteLintStagedConfigFile,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
@@ -240,15 +243,55 @@ export function setupGitHooks(
   // only the default .husky dir gets migrated to .vite-hooks.
   const isCustomDir = oldHooksDir != null && oldHooksDir !== '.husky';
   const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
+  const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
+  const hasExistingHookPolicy = projectHooksDirs.some((dir) =>
+    hasProjectHookScripts(projectPath, dir),
+  );
+  const hasStagedHookInvocation = projectHooksDirs.some((dir) =>
+    hasStagedCommandInProjectHooks(projectPath, dir),
+  );
+
+  // Custom hooks keep control of their policy.
+  let stagedMerged = hasStagedConfigInViteConfig(projectPath);
+  const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
+  let migratedStandaloneConfigPaths: string[] = [];
+  let rollbackStagedConfig: (() => void) | undefined;
+  if (!stagedMerged && hasStandaloneConfig) {
+    rollbackStagedConfig = captureStagedConfigRollback(projectPath, report);
+    migratedStandaloneConfigPaths = rewriteLintStagedConfigFile(projectPath, report, {
+      preserveOriginal: true,
+    });
+    stagedMerged = hasStagedConfigInViteConfig(projectPath);
+    if (!stagedMerged) {
+      rollbackStagedConfig = undefined;
+      return false;
+    }
+  }
+  if (!stagedMerged && !hasStandaloneConfig) {
+    const pkgData = readJsonFile(packageJsonPath) as {
+      'lint-staged'?: Record<string, string | string[]>;
+    };
+    const stagedConfig =
+      pkgData?.['lint-staged'] ??
+      (hasStagedHookInvocation || !hasExistingHookPolicy ? DEFAULT_STAGED_CONFIG : undefined);
+    if (stagedConfig) {
+      const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
+      const finalConfig: Record<string, string | string[]> = updated
+        ? JSON.parse(updated)
+        : stagedConfig;
+      stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent, report);
+      if (!stagedMerged) {
+        return false;
+      }
+    }
+  }
 
   editJsonFile<{
     scripts?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // Ensure vp config is present for projects that didn't have husky.
-    // Skip when prepare contains "husky" — rewritePrepareScript (called after
-    // setupGitHooks succeeds) will transform husky → vp config.
+    // Husky prepare scripts are rewritten after setup succeeds.
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
@@ -263,28 +306,6 @@ export function setupGitHooks(
 
     return pkg;
   });
-
-  // Add staged config to vite.config.ts if not present
-  let stagedMerged = hasStagedConfigInViteConfig(projectPath);
-  const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
-  if (!stagedMerged && !hasStandaloneConfig) {
-    // Use lint-staged config from package.json if available, otherwise use default
-    const pkgData = readJsonFile(packageJsonPath) as {
-      'lint-staged'?: Record<string, string | string[]>;
-    };
-    const stagedConfig = pkgData?.['lint-staged'] ?? DEFAULT_STAGED_CONFIG;
-    const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
-    const finalConfig: Record<string, string | string[]> = updated
-      ? JSON.parse(updated)
-      : stagedConfig;
-    stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent, report);
-  }
-
-  // Only remove lint-staged key from package.json after staged config is
-  // confirmed in vite.config.ts — prevents losing config on merge failure
-  if (stagedMerged) {
-    removeLintStagedFromPackageJson(packageJsonPath);
-  }
 
   // Copy default .husky/ hooks to .vite-hooks/ before creating pre-commit hook.
   // Custom dirs (e.g. .config/husky) are kept in-place — no copy needed.
@@ -307,15 +328,17 @@ export function setupGitHooks(
     }
   }
 
-  // Only create pre-commit hook if staged config was merged into vite.config.ts.
-  // Standalone lint-staged config files are NOT sufficient — `vp staged` only
-  // reads from vite.config.ts, so a hook without merged config would fail.
   if (stagedMerged) {
-    createPreCommitHook(projectPath, hooksDir);
+    if (hasExistingHookPolicy) {
+      migrateStagedCommandsInProjectHooks(projectPath, hooksDir);
+    } else {
+      createPreCommitHook(projectPath, hooksDir);
+    }
   }
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
+    finalizeStagedConfigMigration(packageJsonPath, migratedStandaloneConfigPaths, stagedMerged);
     removeReplacedHookPackages(packageJsonPath);
     return true;
   }
@@ -353,9 +376,11 @@ export function setupGitHooks(
     // already set, .git not found, etc.).
     const stdout = configResult.stdout?.toString().trim() ?? '';
     if (stdout) {
+      rollbackStagedConfig?.();
       warnMigration(`Git hooks not configured — ${stdout}`, report);
       return false;
     }
+    finalizeStagedConfigMigration(packageJsonPath, migratedStandaloneConfigPaths, stagedMerged);
     removeReplacedHookPackages(packageJsonPath);
     if (report) {
       report.gitHooksConfigured = true;
@@ -365,8 +390,51 @@ export function setupGitHooks(
     }
     return true;
   }
+  rollbackStagedConfig?.();
   warnMigration('Failed to install git hooks', report);
   return false;
+}
+
+function captureStagedConfigRollback(projectPath: string, report?: MigrationReport): () => void {
+  const existingConfig = detectConfigs(projectPath).viteConfig;
+  const existingConfigPath = existingConfig ? path.join(projectPath, existingConfig) : undefined;
+  const existingConfigContent = existingConfigPath
+    ? fs.readFileSync(existingConfigPath, 'utf8')
+    : undefined;
+  const reportCounts = report
+    ? {
+        createdViteConfigCount: report.createdViteConfigCount,
+        inlinedLintStagedConfigCount: report.inlinedLintStagedConfigCount,
+        mergedStagedConfigCount: report.mergedStagedConfigCount,
+      }
+    : undefined;
+
+  return () => {
+    if (existingConfigPath && existingConfigContent != null) {
+      fs.writeFileSync(existingConfigPath, existingConfigContent);
+    } else {
+      const createdConfig = detectConfigs(projectPath).viteConfig;
+      if (createdConfig) {
+        fs.rmSync(path.join(projectPath, createdConfig), { force: true });
+      }
+    }
+    if (report && reportCounts) {
+      Object.assign(report, reportCounts);
+    }
+  };
+}
+
+function finalizeStagedConfigMigration(
+  packageJsonPath: string,
+  standaloneConfigPaths: string[],
+  stagedMerged: boolean,
+): void {
+  for (const configPath of standaloneConfigPaths) {
+    fs.rmSync(configPath, { force: true });
+  }
+  if (stagedMerged) {
+    removeLintStagedFromPackageJson(packageJsonPath);
+  }
 }
 
 /**
@@ -374,6 +442,25 @@ export function setupGitHooks(
  */
 function hasStandaloneLintStagedConfig(projectPath: string): boolean {
   return LINT_STAGED_ALL_CONFIG_FILES.some((file) => fs.existsSync(path.join(projectPath, file)));
+}
+
+function hasProjectHookScripts(projectPath: string, dir: string): boolean {
+  return getProjectHookScriptPaths(projectPath, dir).length > 0;
+}
+
+const GIT_HOOK_NAME_SET = new Set<string>(SUPPORTED_GIT_HOOK_NAMES);
+
+function getProjectHookScriptPaths(projectPath: string, dir: string): string[] {
+  const hooksPath = path.join(projectPath, dir);
+  if (!fs.existsSync(hooksPath)) {
+    return [];
+  }
+  return fs
+    .readdirSync(hooksPath, { withFileTypes: true })
+    .filter(
+      (entry) => GIT_HOOK_NAME_SET.has(entry.name) && (entry.isFile() || entry.isSymbolicLink()),
+    )
+    .map((entry) => path.join(hooksPath, entry.name));
 }
 
 /**
@@ -404,19 +491,63 @@ const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
+const VP_STAGED_PATTERN = /^(?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*vp staged\b/;
 
 const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
 
-/**
- * Ensure the pre-commit hook exists with `vp staged`, and that
- * vite.config.ts contains a `staged` block (using the default config
- * if none is present). Called by `vp config` after hook installation.
- */
-export function ensurePreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
-  if (!hasStagedConfigInViteConfig(projectPath)) {
-    mergeStagedConfigToViteConfig(projectPath, DEFAULT_STAGED_CONFIG, true);
+function hasStagedCommandInProjectHooks(projectPath: string, dir: string): boolean {
+  return getProjectHookScriptPaths(projectPath, dir).some((hookPath) => {
+    const lines = fs.readFileSync(hookPath, 'utf8').split('\n');
+    return lines.some((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        return false;
+      }
+      return (
+        STALE_LINT_STAGED_PATTERNS.some((pattern) => pattern.test(trimmed)) ||
+        VP_STAGED_PATTERN.test(trimmed)
+      );
+    });
+  });
+}
+
+function replaceLintStagedCommand(line: string): string | undefined {
+  const trimmed = line.trim();
+  for (const pattern of STALE_LINT_STAGED_PATTERNS) {
+    const match = pattern.exec(trimmed);
+    if (!match) {
+      continue;
+    }
+    const envPrefix = match[1]?.trim() ?? '';
+    const rest = trimmed.slice(match[0].length).trim();
+    const replacement = [envPrefix, 'vp staged', rest].filter(Boolean).join(' ');
+    const start = line.indexOf(trimmed);
+    return `${line.slice(0, start)}${replacement}${line.slice(start + trimmed.length)}`;
   }
-  createPreCommitHook(projectPath, dir);
+  return undefined;
+}
+
+function migrateStagedCommandsInHook(hookPath: string): boolean {
+  const existing = fs.readFileSync(hookPath, 'utf8');
+  let changed = false;
+  const result = existing.split('\n').map((line) => {
+    const replacement = replaceLintStagedCommand(line);
+    if (replacement == null) {
+      return line;
+    }
+    changed = true;
+    return replacement;
+  });
+  if (changed) {
+    fs.writeFileSync(hookPath, result.join('\n'));
+  }
+  return changed;
+}
+
+function migrateStagedCommandsInProjectHooks(projectPath: string, dir: string): void {
+  for (const hookPath of getProjectHookScriptPaths(projectPath, dir)) {
+    migrateStagedCommandsInHook(hookPath);
+  }
 }
 
 export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
@@ -428,38 +559,8 @@ export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): v
     if (existing.includes('vp staged')) {
       return; // already has vp staged
     }
-    // Replace old lint-staged invocations in-place, preserve everything else
-    const lines = existing.split('\n');
-    let replaced = false;
-    const result: string[] = [];
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!replaced) {
-        let matched = false;
-        for (const pattern of STALE_LINT_STAGED_PATTERNS) {
-          const match = pattern.exec(trimmed);
-          if (match) {
-            // Preserve env var prefix (capture group 1) and flags/chained commands after lint-staged
-            const envPrefix = match[1]?.trim() ?? '';
-            const rest = trimmed.slice(match[0].length).trim();
-            const parts = [envPrefix, 'vp staged', rest].filter(Boolean);
-            result.push(parts.join(' '));
-            replaced = true;
-            matched = true;
-            break;
-          }
-        }
-        if (matched) {
-          continue;
-        }
-      }
-      result.push(line);
-    }
-    if (!replaced) {
-      // No lint-staged line found — append after existing content
-      fs.writeFileSync(hookPath, `${result.join('\n').trimEnd()}\nvp staged\n`);
-    } else {
-      fs.writeFileSync(hookPath, result.join('\n'));
+    if (!migrateStagedCommandsInHook(hookPath)) {
+      fs.writeFileSync(hookPath, `${existing.trimEnd()}\nvp staged\n`);
     }
   } else {
     fs.writeFileSync(hookPath, 'vp staged\n');

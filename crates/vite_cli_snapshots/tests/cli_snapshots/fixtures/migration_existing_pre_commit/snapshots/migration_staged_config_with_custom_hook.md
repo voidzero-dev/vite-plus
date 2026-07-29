@@ -1,56 +1,53 @@
-# migration_existing_pre_commit
+# migration_staged_config_with_custom_hook
 
 ## `git init`
+
+
+## `vpt json-edit package.json lint-staged '{"*.ts":"eslint --fix"}'`
+
+
+## `vpt json-edit package.json devDependencies.lint-staged '"^16.2.7"'`
 
 
 ## `vpt mkdir -p .husky`
 
 
-## `vpt write-file .husky/pre-commit '#'\!'/usr/bin/env sh
+## `vpt write-file .husky/pre-push '#'\!'/usr/bin/env sh
 npm test
-secret-scan
 '`
 
 
-## `vpt chmod 755 .husky/pre-commit`
-
-
-## `vpt print-file .husky/pre-commit`
-
-existing hook
-
-```
-#!/usr/bin/env sh
-npm test
-secret-scan
-```
-
 ## `vp migrate --no-interactive`
 
-migrate the hook
+migrate config without changing policy
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 1 config update applied
+• 2 config updates applied
 • Git hooks configured
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt stat-file .vite-hooks/pre-commit --assert missing`
+
+
+## `vpt print-file .vite-hooks/pre-push`
 
 keep the custom hook
 
 ```
 #!/usr/bin/env sh
 npm test
-secret-scan
 ```
+
+## `vpt grep-file vite.config.ts staged:`
+
 
 ## `vpt print-file vite.config.ts`
 
-do not add staged config
+migrate staged config
 
 ```
 import { defineConfig } from 'vite-plus';
@@ -58,5 +55,8 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
+  staged: {
+    "*.ts": "eslint --fix"
+  },
 });
 ```

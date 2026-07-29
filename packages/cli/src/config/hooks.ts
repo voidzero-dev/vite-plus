@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const HOOKS = [
+export const SUPPORTED_GIT_HOOK_NAMES = [
   'pre-commit',
   'pre-merge-commit',
   'prepare-commit-msg',
@@ -123,7 +123,7 @@ export function install(dir = '.vite-hooks'): InstallResult {
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
   writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
-  for (const hook of HOOKS) {
+  for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
     writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
   }
   return { message: '', isError: false };

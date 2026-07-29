@@ -14,9 +14,6 @@ VITE+ - The Unified Toolchain for the Web
 • Node <version>  pnpm <version>
 ! Warnings:
   - Failed to merge staged config into vite.config.ts
-  - Git hooks not configured — Failed to merge staged config into vite.config.ts
-
-Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 → Manual follow-up:
   - Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 ```
@@ -42,9 +39,6 @@ lint-staged config should be preserved when merge fails
       "version": "<version>",
       "onFail": "download"
     }
-  },
-  "scripts": {
-    "prepare": "vp config"
   }
 }
 ```
@@ -79,9 +73,6 @@ module.exports = config;
 
 no pre-commit hook when merge fails
 
-**Exit code:** 1
-
 ```
-.vite-hooks/pre-commit: file
-stat-file assertion failed
+.vite-hooks/pre-commit: missing
 ```
