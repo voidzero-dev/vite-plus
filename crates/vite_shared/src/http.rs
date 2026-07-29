@@ -136,6 +136,45 @@ mod tests {
 
     use super::*;
 
+    /// Valid PEM, invalid DER: `from_pem_bundle` accepts it, `build` rejects
+    /// it. Portable way into the build-failure branch, unlike an empty trust
+    /// store.
+    const PEM_WITH_INVALID_DER: &[u8] =
+        b"-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n";
+
+    /// Callers already treat "no HTTP client" as a handled outcome, but a panic
+    /// never reaches them: `[profile.release]` sets `panic = "abort"`, so this
+    /// is a SIGABRT, not a recoverable unwind. Reported in the wild as
+    /// "No CA certificates were loaded from the system" in an image with no CA
+    /// bundle. Unwinds here only because the `test` profile unwinds.
+    #[test]
+    #[serial_test::serial(env)]
+    fn client_build_failure_reaches_the_caller_instead_of_panicking() {
+        let bundle = std::env::temp_dir()
+            .join(vite_str::format!("vp-invalid-ca-{}.pem", std::process::id()).as_str());
+        std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
+        // SAFETY: env access in this module's tests is serialized.
+        unsafe {
+            std::env::set_var(env_vars::SSL_CERT_FILE, &bundle);
+        }
+
+        // Discard the value: only *how* the failure is reported is under test.
+        let outcome = std::panic::catch_unwind(|| {
+            let _ = shared_http_client();
+        });
+
+        unsafe {
+            std::env::remove_var(env_vars::SSL_CERT_FILE);
+        }
+        let _ = std::fs::remove_file(&bundle);
+
+        assert!(
+            outcome.is_ok(),
+            "building the shared HTTP client failed and panicked; a build failure has to be \
+             returned to the caller so it can be reported or handled"
+        );
+    }
+
     #[test]
     fn os_str_is_blank_matches_whitespace_only() {
         assert!(os_str_is_blank(&OsString::from("")));
