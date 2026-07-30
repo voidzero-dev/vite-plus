@@ -18,7 +18,7 @@ Set it as the global default (stored as the `lts` alias)
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Default Node.js version set to lts (currently 24.18.0)
+✓ Default Node.js version set to lts (currently <version>)
 ```
 
 ## `node -e 'const {execFileSync}=require('\''node:child_process'\''); const {versions}=JSON.parse(execFileSync('\''vp'\'',['\''env'\'','\''list-remote'\'','\''--lts'\'','\''--json'\''],{encoding:'\''utf8'\''})); console.log('\''installed marked:'\'', versions.some(v=>v.installed)); console.log('\''current marked:'\'', versions.some(v=>v.current)); console.log('\''default marked:'\'', versions.some(v=>v.default));'`
