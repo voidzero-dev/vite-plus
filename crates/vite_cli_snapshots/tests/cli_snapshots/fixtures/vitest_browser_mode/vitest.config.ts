@@ -1,5 +1,5 @@
 // import { defineProject } from 'vitest/config';
-import { playwright } from '@vitest/browser-playwright';
+import { playwright } from 'vite-plus/test/browser-playwright';
 
 export default {
   test: {
