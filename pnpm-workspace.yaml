@@ -24,8 +24,8 @@ catalog:
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@tsdown/css': ^0.22.13
-  '@tsdown/exe': ^0.22.13
+  '@tsdown/css': ^0.22.14
+  '@tsdown/exe': ^0.22.14
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -118,7 +118,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.22.13
+  tsdown: ^0.22.14
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -143,6 +143,7 @@ ignoreScripts: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@babel/*'
+  - '@devframes/*'
   - '@napi-rs/*'
   - '@nkzw/*'
   - '@oxc-node/*'
@@ -182,6 +183,7 @@ minimumReleaseAgeExclude:
   - tsdown
   - tsx
   - unrun
+  - verkit
   - vite
   - vitepress
   - vitest

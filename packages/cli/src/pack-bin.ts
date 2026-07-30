@@ -134,6 +134,7 @@ cli
   .option('--root <dir>', 'Root directory of input files')
   .option('--exe', 'Bundle as executable')
   .option('-W, --workspace [dir]', 'Enable workspace mode')
+  .option('--concurrency <count>', 'Maximum number of Rolldown builds to run in parallel')
   .option('-F, --filter <pattern>', 'Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name')
   .option('--exports', 'Generate export-related metadata for package.json (experimental)')
   .action(async (input: string[], flags: InlineConfig) => {

@@ -59,6 +59,35 @@ export default defineConfig({
 
 This is the default Vite+ approach and should replace separate `lint-staged` configuration in most projects. Because `vp staged` reads from `vite.config.ts`, your staged-file checks stay in the same place as your lint, format, test, build, and task-runner config.
 
+## Disabling Hooks in Specific Environments
+
+The installed hooks check the environment on every run, so you can disable them per machine or per process without uninstalling anything. This is useful when commits happen outside development, for example through a flat file CMS or other processes.
+
+### Environment variable
+
+Set `VITE_GIT_HOOKS=0` in the environment of the process that runs `git commit`, and every Vite+ hook exits immediately without running:
+
+```bash
+VITE_GIT_HOOKS=0 git commit -m "content update"
+```
+
+`HUSKY=0` is honored the same way for ecosystem tooling compatibility. Setting `VITE_GIT_HOOKS=0` in an environment also keeps `vp config` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
+
+### Init script
+
+Before checking the environment variable, each hook sources an init script if one exists:
+
+1. `$XDG_CONFIG_HOME/vite-plus/hooks-init.sh` (defaults to `~/.config/vite-plus/hooks-init.sh`)
+2. `$XDG_CONFIG_HOME/husky/init.sh` as a fallback
+
+To disable hooks for a whole machine, create the init script and export the variable there:
+
+```sh [~/.config/vite-plus/hooks-init.sh]
+export VITE_GIT_HOOKS=0
+```
+
+Because the hook itself reads this file, it works even when the committing process does not inherit your shell environment, for example if a daemon or web server is making commits.
+
 ## Removing commit hooks
 
 To fully remove Vite+ commit hooks, undo each thing `vp config` set up:
