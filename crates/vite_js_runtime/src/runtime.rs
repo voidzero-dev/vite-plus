@@ -1728,4 +1728,19 @@ mod tests {
         );
         assert_eq!(resolution.source, VersionSource::EnginesNode);
     }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_child_nvmrc_over_parent_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(parent_path.join(".node-version"), "22.0.0\n").await.unwrap();
+
+        let child_path = parent_path.join("child");
+        tokio::fs::create_dir(&child_path).await.unwrap();
+        tokio::fs::write(child_path.join(".nvmrc"), "20.18.0\n").await.unwrap();
+
+        let resolution = resolve_node_version(&child_path, true).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::NvmrcFile);
+    }
 }
