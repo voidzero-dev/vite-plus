@@ -31,6 +31,8 @@ pub struct JsExecutor {
     project_runtime: Option<JsRuntime>,
     /// Directory containing JS scripts (from `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR`)
     scripts_dir: Option<AbsolutePathBuf>,
+    /// Subcommand as the user wrote it, forwarded to the CLI this one runs
+    raw_subcommand: Option<String>,
 }
 
 impl JsExecutor {
@@ -41,7 +43,16 @@ impl JsExecutor {
     ///   If not provided, will be auto-detected from the binary location.
     #[must_use]
     pub const fn new(scripts_dir: Option<AbsolutePathBuf>) -> Self {
-        Self { cli_runtime: None, project_runtime: None, scripts_dir }
+        Self { cli_runtime: None, project_runtime: None, scripts_dir, raw_subcommand: None }
+    }
+
+    /// Forward the subcommand as the user wrote it to the CLI this one runs.
+    ///
+    /// A command runs under its canonical name, so the spelling the user used is
+    /// otherwise lost on the way down.
+    pub fn with_raw_subcommand(mut self, raw_subcommand: Option<&str>) -> Self {
+        self.raw_subcommand = raw_subcommand.map(ToOwned::to_owned);
+        self
     }
 
     /// Get the JS scripts directory.
@@ -340,6 +351,9 @@ impl JsExecutor {
 
         let mut cmd = Self::create_js_command(node_binary, bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        if let Some(raw_subcommand) = &self.raw_subcommand {
+            cmd.env(vite_shared::env_vars::VP_RAW_SUBCOMMAND, raw_subcommand);
+        }
         Ok(cmd)
     }
 

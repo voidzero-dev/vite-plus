@@ -15,7 +15,8 @@ pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
     }
 
     let cwd_buf = cwd.to_absolute_path_buf();
-    match super::delegate::execute(cwd_buf, "run", args).await {
+    // `vpr` is a shim, not a subcommand, so no subcommand was written.
+    match super::delegate::execute(cwd_buf, "run", args, None).await {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
             output::error(&e.to_string());
