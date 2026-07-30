@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { dirname, join, parse, resolve, relative } from 'node:path';
@@ -499,6 +499,46 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
+// Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
+// `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
+// import every color the Vite+ branding uses, so after the logger patches we
+// add any missing ones, resolving their (minified) export aliases from main's
+// own `export { ... }` map so the fix survives rolldown renaming them.
+async function ensureAnsisImports(
+  content: string,
+  names: string[],
+  distDir: string,
+): Promise<string> {
+  const importMatch = content.match(/import \{([^}]*)\} from "(\.\/main-[^"]+\.js)";/);
+  if (!importMatch) {
+    throw new Error('ensureAnsisImports: no `main-*.js` import found in branded logger chunk');
+  }
+  const [fullImport, bindings, mainSpecifier] = importMatch;
+  const localNames = new Set(
+    bindings.split(',').map((binding) => {
+      const trimmed = binding.trim();
+      const aliased = trimmed.match(/\bas\s+([A-Za-z0-9_$]+)$/);
+      return aliased ? aliased[1] : trimmed;
+    }),
+  );
+  const missing = names.filter((name) => !localNames.has(name));
+  if (missing.length === 0) {
+    return content;
+  }
+  const mainContent = await readFile(join(distDir, mainSpecifier.slice(2)), 'utf-8');
+  const additions = missing.map((name) => {
+    // main re-exports colors as `<local> as <alias>` (e.g. `bold as l`); the
+    // consumer side imports `<alias> as <local>`, so capture the alias here.
+    const exportAlias = mainContent.match(new RegExp(`\\b${name} as ([A-Za-z0-9_$]+)`));
+    if (!exportAlias) {
+      throw new Error(`ensureAnsisImports: \`${name}\` is not exported from ${mainSpecifier}`);
+    }
+    return `${exportAlias[1]} as ${name}`;
+  });
+  const newImport = `import { ${bindings.trim().replace(/,$/, '')}, ${additions.join(', ')} } from "${mainSpecifier}";`;
+  return content.replace(fullImport, newImport);
+}
+
 async function brandTsdown() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
   const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
@@ -601,6 +641,13 @@ async function brandTsdown() {
     if (!changed) {
       continue;
     }
+    // The branded logger output uses `bold(...)` and `red` (see loggerPatches),
+    // but tsdown's logger module only imports the other ansis colors it needs
+    // (`bgRed`, `bgYellow`, `yellow`, ...). Those identifiers only happened to be
+    // in scope when rolldown co-located them in this chunk; newer chunking splits
+    // them out, leaving `bold`/`red` undefined at runtime. Ensure the branded
+    // chunk imports them from the same shared chunk it already pulls colors from.
+    content = await ensureAnsisImports(content, ['bold', 'red'], tsdownDistDir);
     await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
@@ -636,6 +683,13 @@ async function wireBundledTsdownExtensions() {
   // entry by rolldown; track whether the bundled load ends up referenced either
   // way so a silent miss (no rewrite and no dedup) fails the build.
   let cssLoadWired = false;
+  // Newer rolldown neither leaves `import("@tsdown/css")` as a literal nor dedupes
+  // it to the `tsdown-css` entry: it splits `@tsdown/css` into its own generated
+  // chunk (`import("./dist-<hash>.js")`), leaving a redundant duplicate of the
+  // `tsdown-css.js` bundle. Collect those generated chunks (keyed off the stable
+  // `{ CssPlugin }` destructure, not the hashed name) so they can be dropped once
+  // the call site is repointed at the stable entry.
+  const redundantCssChunks = new Set<string>();
   for (const chunkFile of chunkFiles) {
     let content = await readFile(chunkFile, 'utf-8');
     let changed = false;
@@ -653,12 +707,25 @@ async function wireBundledTsdownExtensions() {
       content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
       changed = true;
     }
+    const cssChunkImport = content.match(/const \{ CssPlugin \} = await import\("(\.\/[^"]+)"\)/);
+    if (cssChunkImport && cssChunkImport[1] !== './tsdown-css.js') {
+      content = content.replaceAll(
+        cssChunkImport[0],
+        'const { CssPlugin } = await import("./tsdown-css.js")',
+      );
+      redundantCssChunks.add(cssChunkImport[1].slice(2));
+      changed = true;
+    }
     if (content.includes('import("./tsdown-css.js")')) {
       cssLoadWired = true;
     }
     if (changed) {
       await writeFile(chunkFile, content);
     }
+  }
+  // Drop the now-orphaned duplicate `@tsdown/css` chunks emitted by rolldown.
+  for (const chunk of redundantCssChunks) {
+    await rm(join(tsdownDistDir, chunk), { force: true });
   }
   if (!exeWired) {
     throw new Error('wireBundledTsdownExtensions: `importWithError("@tsdown/exe")` not found');

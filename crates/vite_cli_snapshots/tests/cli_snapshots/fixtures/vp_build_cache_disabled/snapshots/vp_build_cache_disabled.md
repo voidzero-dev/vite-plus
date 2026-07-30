@@ -20,7 +20,6 @@ cache disabled, no cache hit
 
 ```
 ~/packages/app$ vp build ⊘ cache disabled
-vite <version> building client environment for production...
 ✓ 4 modules transformed.
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -35,7 +34,6 @@ should show cache disabled
 
 ```
 ~/packages/app$ vp build ⊘ cache disabled
-vite <version> building client environment for production...
 ✓ 4 modules transformed.
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
