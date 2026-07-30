@@ -12,12 +12,12 @@ Failed to resolve dependency: vitest > @vitest/snapshot > magic-string, present 
 Failed to resolve dependency: vitest > @vitest/expect > chai, present in client 'optimizeDeps.include'
 <time> [vite] (client) warning:
 <repo>/packages/core/dist/vite/node/module-runner.js
-1007 |          }
-1008 |          runExternalModule(filepath) {
-1009 |                  return globalThis["__vitest_browser_runner__"].wrapDynamicImport(() => import(filepath));
+1006 |          }
+1007 |          runExternalModule(filepath) {
+1008 |                  return globalThis["__vitest_browser_runner__"].wrapDynamicImport(() => import(filepath));
      |                                                                                  ^^^^^^^^
-1010 |          }
-1011 |  };
+1009 |          }
+1010 |  };
 The above dynamic import cannot be analyzed by Vite.
 See https://vite.dev/guide/features#dynamic-import for supported dynamic import formats. If this is intended to be left as-is, you can use the /* @vite-ignore */ comment inside the import() call to suppress this warning.
 
@@ -45,12 +45,12 @@ $ vp test ○ cache miss: 'src/foo.js' modified, executing
 
 <time> [vite] (client) warning:
 <repo>/packages/core/dist/vite/node/module-runner.js
-1007 |          }
-1008 |          runExternalModule(filepath) {
-1009 |                  return globalThis["__vitest_browser_runner__"].wrapDynamicImport(() => import(filepath));
+1006 |          }
+1007 |          runExternalModule(filepath) {
+1008 |                  return globalThis["__vitest_browser_runner__"].wrapDynamicImport(() => import(filepath));
      |                                                                                  ^^^^^^^^
-1010 |          }
-1011 |  };
+1009 |          }
+1010 |  };
 The above dynamic import cannot be analyzed by Vite.
 See https://vite.dev/guide/features#dynamic-import for supported dynamic import formats. If this is intended to be left as-is, you can use the /* @vite-ignore */ comment inside the import() call to suppress this warning.
 
@@ -78,12 +78,12 @@ $ vp test ◉ cache hit, replaying
 
 <time> [vite] (client) warning:
 <repo>/packages/core/dist/vite/node/module-runner.js
-1007 |          }
-1008 |          runExternalModule(filepath) {
-1009 |                  return globalThis["__vitest_browser_runner__"].wrapDynamicImport(() => import(filepath));
+1006 |          }
+1007 |          runExternalModule(filepath) {
+1008 |                  return globalThis["__vitest_browser_runner__"].wrapDynamicImport(() => import(filepath));
      |                                                                                  ^^^^^^^^
-1010 |          }
-1011 |  };
+1009 |          }
+1010 |  };
 The above dynamic import cannot be analyzed by Vite.
 See https://vite.dev/guide/features#dynamic-import for supported dynamic import formats. If this is intended to be left as-is, you can use the /* @vite-ignore */ comment inside the import() call to suppress this warning.
 
