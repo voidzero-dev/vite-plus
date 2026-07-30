@@ -4,7 +4,6 @@
 [[case]]
 name = "vitest_browser_mode"
 vp = "local"
-skip-platforms = ["linux", "windows", "macos"]
 steps = [
   { argv = ["vp", "run", "test"] },
   { argv = ["vpt", "write-file", "src/foo.js", "export default 'foo';\n//comment\n"], snapshot = false },
