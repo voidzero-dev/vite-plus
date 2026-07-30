@@ -261,11 +261,6 @@ static NPM_NOTICE_RE: LazyLock<regex::Regex> =
 // <duration>).
 static START_AT_TIME_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Start at\s+)\d{1,2}:\d{2}:\d{2}").unwrap());
-// Vite prefixes warnings and errors with a locale-dependent wall-clock time
-// (`2:03:04 PM [vite]` or `14:03:04 [vite]`). Preserve the logger tag while
-// masking both timestamp forms.
-static VITE_LOG_TIME_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"(?m)^\d{1,2}:\d{2}:\d{2}(?: [AP]M)?( \[vite\])").unwrap());
 // `vp env which` prints an `Installed:` field for a global package holding the
 // wall-clock date the install ran, so it drifts with the calendar rather than
 // with any fixture input. Mask by the label context (like the sibling `Node:`
@@ -522,9 +517,6 @@ pub fn redact_output(
 
     // Mask vitest's nondeterministic wall-clock "Start at" time
     output = START_AT_TIME_RE.replace_all(&output, "${1}<time>").into_owned();
-
-    // Mask Vite's nondeterministic, locale-dependent log prefix.
-    output = VITE_LOG_TIME_RE.replace_all(&output, "<time>${1}").into_owned();
 
     // Mask the calendar-dependent install date in `vp env which` output
     output = INSTALLED_DATE_RE.replace_all(&output, "${1}<date>").into_owned();

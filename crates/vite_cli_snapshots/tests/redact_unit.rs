@@ -280,15 +280,6 @@ fn replaces_paths_with_labels() {
 }
 
 #[test]
-fn masks_vite_log_times_in_twelve_and_twenty_four_hour_formats() {
-    let input = "2:03:04 PM [vite] warning\n14:03:04 [vite] error\n14:03:04 unrelated\n".to_owned();
-    assert_eq!(
-        redact_output(input, &[], true),
-        "<time> [vite] warning\n<time> [vite] error\n14:03:04 unrelated\n"
-    );
-}
-
-#[test]
 fn redacts_forward_slash_windows_path_variants() {
     // Windows children also print file:// and stack-frame forms with forward
     // slashes; those must redact even though the pair is backslash-form.
