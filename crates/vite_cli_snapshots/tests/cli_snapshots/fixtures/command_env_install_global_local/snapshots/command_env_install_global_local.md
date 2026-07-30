@@ -25,7 +25,7 @@ info: Installing 1 global package with Node.js <version>
 ```
 Package                       Node version   Binaries
 ---                           ---            ---
-just-a-normal-package@0.0.0   24.18.0        just-a-normal-package
+just-a-normal-package@0.0.0   <version>        just-a-normal-package
 ```
 
 ## `vp list -g another-normal-package`
@@ -33,5 +33,5 @@ just-a-normal-package@0.0.0   24.18.0        just-a-normal-package
 ```
 Package                        Node version   Binaries
 ---                            ---            ---
-another-normal-package@0.0.1   24.18.0        another-normal-package
+another-normal-package@0.0.1   <version>        another-normal-package
 ```
