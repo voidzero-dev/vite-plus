@@ -8,6 +8,7 @@ import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
 interface PnpmWorkspace {
   packages?: string[];
   catalog?: Record<string, string>;
+  catalogs?: Record<string, Record<string, string>>;
   catalogMode?: string;
   minimumReleaseAge?: number;
   minimumReleaseAgeExclude?: string[];
@@ -618,6 +619,40 @@ export function mergePnpmWorkspaces(
       },
       {} as Record<string, string>,
     );
+
+  // Merge named catalogs (pnpm `catalogs:`). Upstream rolldown/vite reference
+  // named catalogs (e.g. `catalog:rollup-tests` in rolldown's `rollup-tests`
+  // package), so every named catalog they declare must survive into the merged
+  // workspace or pnpm fails with ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC.
+  const namedCatalogs: Record<string, Record<string, string>> = {};
+  for (const source of [main.catalogs, rolldown.catalogs, rolldownVite.catalogs]) {
+    for (const [name, entries] of Object.entries(source || {})) {
+      const target = (namedCatalogs[name] ??= {});
+      for (const [pkg, version] of Object.entries(entries)) {
+        target[pkg] = target[pkg]
+          ? mergeSemverVersions(target[pkg], version, pkg, semver)
+          : version;
+      }
+    }
+  }
+  const catalogNames = Object.keys(namedCatalogs).toSorted();
+  if (catalogNames.length > 0) {
+    result.catalogs = catalogNames.reduce(
+      (sorted, name) => {
+        sorted[name] = Object.keys(namedCatalogs[name])
+          .toSorted()
+          .reduce(
+            (inner, pkg) => {
+              inner[pkg] = namedCatalogs[name][pkg];
+              return inner;
+            },
+            {} as Record<string, string>,
+          );
+        return sorted;
+      },
+      {} as Record<string, Record<string, string>>,
+    );
+  }
 
   // Merge minimumReleaseAgeExclude
   result.minimumReleaseAgeExclude = mergeMinimumReleaseAgeExclude([

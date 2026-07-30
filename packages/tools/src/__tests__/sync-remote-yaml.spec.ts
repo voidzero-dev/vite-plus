@@ -70,4 +70,29 @@ describe('mergeWorkspaceYaml()', () => {
     expect(parsed.minimumReleaseAgeExclude).not.toContain('oxc-parser@0.134.0');
     expect(parsed.minimumReleaseAgeExclude).toContain('oxc-parser');
   });
+
+  // Upstream rolldown declares named catalogs (e.g. `rollup-tests`) that its
+  // packages reference via `catalog:rollup-tests`. Those named catalogs must
+  // survive into the merged workspace or pnpm install fails with
+  // ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC.
+  test('propagates and merges named catalogs from upstream workspaces', () => {
+    const rolldownWithNamed = `${ROLLDOWN_SRC}catalogs:
+  rollup-tests:
+    '@types/mocha': 10.0.10
+    mocha: ^11.7.5
+`;
+    const viteWithNamed = `${VITE_SRC}catalogs:
+  rollup-tests:
+    terser: ^5.49.0
+`;
+
+    const output = mergeWorkspaceYaml(MAIN_SRC, rolldownWithNamed, viteWithNamed, yaml, semver);
+    const parsed = yaml.parse(output);
+
+    expect(parsed.catalogs['rollup-tests']).toEqual({
+      '@types/mocha': '10.0.10',
+      mocha: '^11.7.5',
+      terser: '^5.49.0',
+    });
+  });
 });

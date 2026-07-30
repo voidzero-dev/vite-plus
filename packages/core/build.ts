@@ -504,6 +504,18 @@ async function bundleTsdown() {
 // import every color the Vite+ branding uses, so after the logger patches we
 // add any missing ones, resolving their (minified) export aliases from main's
 // own `export { ... }` map so the fix survives rolldown renaming them.
+// Whether `name` is bound in the chunk's module scope, either imported from a
+// sibling chunk (`import { <alias> as name } from "..."`) or destructured from
+// an inlined ansis instance (`const { ..., name, ... } = <ansis>`). Used to skip
+// the cross-chunk import fixup when rolldown has already colocated every ansis
+// color in the logger chunk.
+function isColorBound(content: string, name: string): boolean {
+  const escaped = name.replace(/[$]/g, '\\$&');
+  const inDestructure = new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\b${escaped}\\b[^}]*\\}\\s*=`);
+  const inImport = new RegExp(`import\\s*\\{[^}]*\\b${escaped}\\b[^}]*\\}\\s*from`);
+  return inDestructure.test(content) || inImport.test(content);
+}
+
 async function ensureAnsisImports(
   content: string,
   names: string[],
@@ -511,7 +523,17 @@ async function ensureAnsisImports(
 ): Promise<string> {
   const importMatch = content.match(/import \{([^}]*)\} from "(\.\/main-[^"]+\.js)";/);
   if (!importMatch) {
-    throw new Error('ensureAnsisImports: no `main-*.js` import found in branded logger chunk');
+    // Newer rolldown/tsdown chunking inlines the whole ansis instance into the
+    // logger chunk itself (`const { ..., bold, ..., red, ... } = <ansis>`), so
+    // every color is already bound in module scope and no cross-chunk import is
+    // needed. Only fail if a required color is genuinely not bound anywhere.
+    const missing = names.filter((name) => !isColorBound(content, name));
+    if (missing.length > 0) {
+      throw new Error(
+        `ensureAnsisImports: no \`main-*.js\` import and unbound colors in branded logger chunk: ${missing.join(', ')}`,
+      );
+    }
+    return content;
   }
   const [fullImport, bindings, mainSpecifier] = importMatch;
   const localNames = new Set(

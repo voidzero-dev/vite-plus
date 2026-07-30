@@ -36,6 +36,9 @@ should add package to auto-created package.json
 
 ```
 ✓ Lockfile passes supply-chain policies (verified <duration> ago)
+Packages are hard linked from the content-addressable store to the virtual store.
+  Content-addressable store is at: <home>/.local/share/pnpm/store/v11
+  Virtual store is at:             node_modules/.pnpm
 
 devDependencies:
  testnpm2 1.0.1
