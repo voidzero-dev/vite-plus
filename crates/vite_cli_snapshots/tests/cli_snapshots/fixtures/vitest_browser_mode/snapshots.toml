@@ -1,10 +1,9 @@
-# Disabled on every platform since the legacy suite; no snapshot is recorded
-# until the case is re-enabled. The legacy `echo //comment >> src/foo.js`
-# appends became write-file steps carrying the full appended content.
+# The legacy `echo //comment >> src/foo.js` appends became write-file steps
+# carrying the full appended content.
 [[case]]
 name = "vitest_browser_mode"
 vp = "local"
-skip-platforms = ["linux", "windows", "macos"]
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
 steps = [
   { argv = ["vp", "run", "test"] },
   { argv = ["vpt", "write-file", "src/foo.js", "export default 'foo';\n//comment\n"], snapshot = false },
