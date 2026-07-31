@@ -844,9 +844,22 @@ fn prompt_reinstall_node_mismatches(
         .unwrap_or(false)
 }
 
+/// The subcommand as the user wrote it, taken from `argv` before any rewriting.
+///
+/// Parsing resolves a subcommand to one clap variant, which does not record the
+/// spelling used, so it is read straight from the command line instead.
+#[must_use]
+pub fn raw_subcommand(argv: &[String]) -> Option<&str> {
+    argv.iter().skip(1).map(String::as_str).find(|arg| !arg.starts_with('-'))
+}
+
 /// Run the CLI command.
-pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus, Error> {
-    run_command_with_options(cwd, args, RenderOptions::default()).await
+pub async fn run_command(
+    cwd: AbsolutePathBuf,
+    args: Args,
+    raw_subcommand: Option<&str>,
+) -> Result<ExitStatus, Error> {
+    run_command_with_options(cwd, args, RenderOptions::default(), raw_subcommand).await
 }
 
 /// Run the CLI command with rendering options.
@@ -854,6 +867,7 @@ pub async fn run_command_with_options(
     cwd: AbsolutePathBuf,
     args: Args,
     render_options: RenderOptions,
+    raw_subcommand: Option<&str>,
 ) -> Result<ExitStatus, Error> {
     // Handle --version flag (Category B: delegates to JS)
     if args.version {
@@ -887,13 +901,13 @@ pub async fn run_command_with_options(
         }
 
         // Category B: JS Script Commands
-        Commands::Create { args } => commands::create::execute(cwd, &args).await,
+        Commands::Create { args } => commands::create::execute(cwd, &args, raw_subcommand).await,
 
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
-        Commands::Config { args } => commands::config::execute(cwd, &args).await,
+        Commands::Config { args } => commands::config::execute(cwd, &args, raw_subcommand).await,
 
-        Commands::Staged { args } => commands::staged::execute(cwd, &args).await,
+        Commands::Staged { args } => commands::staged::execute(cwd, &args, raw_subcommand).await,
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => {
@@ -901,7 +915,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "dev", &args).await
+            commands::delegate::execute(cwd, "dev", &args, raw_subcommand).await
         }
 
         Commands::Build { args } => {
@@ -909,7 +923,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "build", &args).await
+            commands::delegate::execute(cwd, "build", &args, raw_subcommand).await
         }
 
         Commands::Test { args } => {
@@ -917,7 +931,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "test", &args).await
+            commands::delegate::execute(cwd, "test", &args, raw_subcommand).await
         }
 
         Commands::Lint { args } => {
@@ -926,9 +940,9 @@ pub async fn run_command_with_options(
             }
             maybe_print_runtime_header("lint", &args, render_options.show_header);
             if should_force_global_delegate("lint", &args) {
-                commands::delegate::execute_global(cwd, "lint", &args).await
+                commands::delegate::execute_global(cwd, "lint", &args, raw_subcommand).await
             } else {
-                commands::delegate::execute(cwd, "lint", &args).await
+                commands::delegate::execute(cwd, "lint", &args, raw_subcommand).await
             }
         }
 
@@ -938,9 +952,9 @@ pub async fn run_command_with_options(
             }
             maybe_print_runtime_header("fmt", &args, render_options.show_header);
             if should_force_global_delegate("fmt", &args) {
-                commands::delegate::execute_global(cwd, "fmt", &args).await
+                commands::delegate::execute_global(cwd, "fmt", &args, raw_subcommand).await
             } else {
-                commands::delegate::execute(cwd, "fmt", &args).await
+                commands::delegate::execute(cwd, "fmt", &args, raw_subcommand).await
             }
         }
 
@@ -949,7 +963,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "check", &args).await
+            commands::delegate::execute(cwd, "check", &args, raw_subcommand).await
         }
 
         Commands::Pack { args } => {
@@ -957,7 +971,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "pack", &args).await
+            commands::delegate::execute(cwd, "pack", &args, raw_subcommand).await
         }
 
         Commands::Run { args } => {
@@ -965,7 +979,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "run", &args).await
+            commands::delegate::execute(cwd, "run", &args, raw_subcommand).await
         }
 
         Commands::Exec { args } => {
@@ -973,7 +987,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "exec", &args).await
+            commands::delegate::execute(cwd, "exec", &args, raw_subcommand).await
         }
 
         Commands::Preview { args } => {
@@ -982,7 +996,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "preview", &args).await
+            commands::delegate::execute(cwd, "preview", &args, raw_subcommand).await
         }
 
         Commands::Cache { args } => {
@@ -990,7 +1004,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "cache", &args).await
+            commands::delegate::execute(cwd, "cache", &args, raw_subcommand).await
         }
 
         Commands::Env(args) => commands::env::execute(cwd, args).await,
@@ -1086,9 +1100,30 @@ pub fn try_parse_args_from_with_options(
 #[cfg(test)]
 mod tests {
     use super::{
-        display_node_version, has_flag_before_terminator, is_same_node_version,
+        display_node_version, has_flag_before_terminator, is_same_node_version, raw_subcommand,
         should_force_global_delegate, should_suppress_header_for_subcommand,
     };
+
+    fn argv(args: &[&str]) -> Vec<String> {
+        args.iter().map(|arg| (*arg).to_string()).collect()
+    }
+
+    #[test]
+    fn raw_subcommand_is_the_token_as_written() {
+        assert_eq!(raw_subcommand(&argv(&["vp", "fmt", "src/"])), Some("fmt"));
+        assert_eq!(raw_subcommand(&argv(&["vp", "format", "src/"])), Some("format"));
+    }
+
+    #[test]
+    fn raw_subcommand_skips_leading_flags() {
+        assert_eq!(raw_subcommand(&argv(&["vp", "--silent", "install"])), Some("install"));
+    }
+
+    #[test]
+    fn raw_subcommand_is_none_without_a_subcommand() {
+        assert_eq!(raw_subcommand(&argv(&["vp"])), None);
+        assert_eq!(raw_subcommand(&argv(&["vp", "--version"])), None);
+    }
 
     #[test]
     fn detects_global_update_node_version_mismatch() {
