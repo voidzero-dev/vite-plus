@@ -35,7 +35,7 @@ use vite_shared::output;
 
 pub use crate::cli::try_parse_args_from;
 use crate::cli::{
-    RenderOptions, command_with_help, run_command, run_command_with_options,
+    RenderOptions, command_with_help, raw_subcommand, run_command, run_command_with_options,
     try_parse_args_from_with_options,
 };
 
@@ -224,9 +224,11 @@ fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
 
 async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
     let render_options = RenderOptions { show_header: false };
-    let args_with_program = std::iter::once("vp".to_string()).chain(raw_args.iter().cloned());
-    let normalized_args = normalize_args(args_with_program.collect());
-
+    let args_with_program: Vec<String> =
+        std::iter::once("vp".to_string()).chain(raw_args.iter().cloned()).collect();
+    // The subcommand as written, taken before `normalize_args` can rewrite it.
+    let raw_subcommand = raw_subcommand(&args_with_program).map(str::to_owned);
+    let normalized_args = normalize_args(args_with_program);
     let parsed = match try_parse_args_from_with_options(normalized_args, render_options) {
         Ok(args) => args,
         Err(e) => {
@@ -235,7 +237,9 @@ async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String
         }
     };
 
-    match run_command_with_options(cwd.clone(), parsed, render_options).await {
+    match run_command_with_options(cwd.clone(), parsed, render_options, raw_subcommand.as_deref())
+        .await
+    {
         Ok(exit_status) => exit_status_to_exit_code(exit_status),
         Err(e) => {
             if e.is_user_message() {
@@ -353,6 +357,8 @@ async fn main() -> ExitCode {
 
     // Capture user args (excluding argv0) before normalization.
     let raw_args = args[1..].to_vec();
+    // The subcommand as written, taken before `normalize_args` can rewrite it.
+    let raw_subcommand = raw_subcommand(&args).map(str::to_owned);
 
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
@@ -427,7 +433,7 @@ async fn main() -> ExitCode {
                 clap_error_to_exit_code(&e)
             }
         }
-        Ok(args) => match run_command(cwd.clone(), args).await {
+        Ok(args) => match run_command(cwd.clone(), args, raw_subcommand.as_deref()).await {
             Ok(exit_status) => exit_status_to_exit_code(exit_status),
             Err(e) => {
                 if e.is_user_message() {

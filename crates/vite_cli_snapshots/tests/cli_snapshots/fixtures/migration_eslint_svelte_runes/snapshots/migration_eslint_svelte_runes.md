@@ -84,6 +84,7 @@ valid Svelte rune usage should pass no-undef
 ```
 VITE+ - The Unified Toolchain for the Web
 
+note: You are running `vp lint` as a Vite+ built-in command. If you meant to run the lint npm script, use `vpr lint` instead.
 Found 0 warnings and 0 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
