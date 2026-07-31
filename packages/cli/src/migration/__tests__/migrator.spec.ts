@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8654,6 +8655,52 @@ describe('preflightGitHooksSetup husky catalog resolution', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
 
     expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
+  });
+});
+
+describe('preflightGitHooksSetup hook state', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-state-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: '^9.1.7' } }),
+    );
+    execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rejects an incompatible core.hooksPath before migration starts', () => {
+    execFileSync('git', ['config', '--local', 'core.hooksPath', '.custom-hooks'], {
+      cwd: tmpDir,
+    });
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'core.hooksPath is already set to ".custom-hooks"',
+    );
+  });
+
+  it('allows the dispatcher path installed by Vite+', () => {
+    execFileSync('git', ['config', '--local', 'core.hooksPath', '.vite-hooks/_'], {
+      cwd: tmpDir,
+    });
+
+    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
+  });
+
+  it('rejects conflicting project-owned hooks', () => {
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'vp run lint\n');
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Both .husky/pre-commit and .vite-hooks/pre-commit exist',
+    );
   });
 });
 

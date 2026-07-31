@@ -6,6 +6,17 @@
 ## `git config core.hooksPath .custom-hooks`
 
 
+## `vpt mkdir -p .custom-hooks`
+
+
+## `vpt write-file .custom-hooks/pre-commit 'npx lint-staged
+'`
+
+
+## `vpt write-file .lintstagedrc.json '{"*.ts":"eslint --fix"}
+'`
+
+
 ## `vp migrate --no-interactive`
 
 should skip hooks because core.hooksPath is already set
@@ -13,16 +24,15 @@ should skip hooks because core.hooksPath is already set
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ core.hooksPath is already set to ".custom-hooks", skipping git hooks setup.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-! Warnings:
-  - Git hooks not configured — core.hooksPath is already set to ".custom-hooks", skipping
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-prepare should stay 'husky' and husky must remain in devDependencies
+keep the existing hook dependencies
 
 ```
 {
@@ -32,6 +42,7 @@ prepare should stay 'husky' and husky must remain in devDependencies
   },
   "devDependencies": {
     "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
@@ -43,6 +54,35 @@ prepare should stay 'husky' and husky must remain in devDependencies
     }
   }
 }
+```
+
+## `vpt print-file .lintstagedrc.json`
+
+keep the active hook configuration
+
+```
+{"*.ts":"eslint --fix"}
+```
+
+## `vpt print-file .custom-hooks/pre-commit`
+
+keep the active custom hook
+
+```
+npx lint-staged
+```
+
+## `vpt print-file vite.config.ts`
+
+do not migrate staged configuration
+
+```
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
+});
 ```
 
 ## `vpt print-file pnpm-workspace.yaml`

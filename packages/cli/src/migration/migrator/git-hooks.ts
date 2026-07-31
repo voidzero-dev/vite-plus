@@ -187,6 +187,7 @@ export function getOldHooksDir(rootDir: string): string | undefined {
 export function preflightGitHooksSetup(
   projectPath: string,
   packageManager?: PackageManager,
+  oldHooksDir = getOldHooksDir(projectPath),
 ): string | null {
   const gitRoot = findGitRoot(projectPath);
   if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
@@ -208,6 +209,17 @@ export function preflightGitHooksSetup(
   if (huskyReason) {
     return huskyReason;
   }
+  const conflictingHook = findHookMigrationConflict(projectPath, oldHooksDir);
+  if (conflictingHook) {
+    return `Both .husky/${conflictingHook} and .vite-hooks/${conflictingHook} exist — skipping git hooks setup. Resolve the duplicate hooks and re-run migration.`;
+  }
+  if (gitRoot) {
+    const existingHooksPath = getExistingHooksPath(projectPath);
+    const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
+    if (!canReplaceHooksPath(existingHooksPath, hooksDir, oldHooksDir)) {
+      return `core.hooksPath is already set to "${existingHooksPath}", skipping git hooks setup.`;
+    }
+  }
   if (hasUnsupportedLintStagedConfig(projectPath)) {
     return 'Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.';
   }
@@ -226,7 +238,7 @@ export function setupGitHooks(
   report?: MigrationReport,
   packageManager?: PackageManager,
 ): boolean {
-  const reason = preflightGitHooksSetup(projectPath, packageManager);
+  const reason = preflightGitHooksSetup(projectPath, packageManager, oldHooksDir);
   if (reason) {
     warnMigration(reason, report);
     return false;
@@ -393,6 +405,45 @@ export function setupGitHooks(
   rollbackStagedConfig?.();
   warnMigration('Failed to install git hooks', report);
   return false;
+}
+
+function findHookMigrationConflict(
+  projectPath: string,
+  oldHooksDir: string | undefined,
+): string | undefined {
+  if (oldHooksDir !== '.husky') {
+    return undefined;
+  }
+  return SUPPORTED_GIT_HOOK_NAMES.find(
+    (hook) =>
+      fs.existsSync(path.join(projectPath, oldHooksDir, hook)) &&
+      fs.existsSync(path.join(projectPath, '.vite-hooks', hook)),
+  );
+}
+
+function getExistingHooksPath(projectPath: string): string {
+  const result = spawn.sync('git', ['config', '--local', 'core.hooksPath'], {
+    cwd: projectPath,
+    stdio: 'pipe',
+  });
+  return result.status === 0 ? (result.stdout?.toString().trim() ?? '') : '';
+}
+
+function canReplaceHooksPath(
+  existingHooksPath: string,
+  hooksDir: string,
+  oldHooksDir: string | undefined,
+): boolean {
+  if (!existingHooksPath || existingHooksPath === `${hooksDir}/_`) {
+    return true;
+  }
+  if (existingHooksPath === '.husky' || existingHooksPath.startsWith('.husky/')) {
+    return true;
+  }
+  return (
+    oldHooksDir != null &&
+    (existingHooksPath === oldHooksDir || existingHooksPath === `${oldHooksDir}/_`)
+  );
 }
 
 function captureStagedConfigRollback(projectPath: string, report?: MigrationReport): () => void {

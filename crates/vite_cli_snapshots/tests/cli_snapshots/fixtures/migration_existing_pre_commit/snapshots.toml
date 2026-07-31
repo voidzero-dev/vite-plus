@@ -28,6 +28,21 @@ steps = [
 ]
 
 [[case]]
+name = "migration_conflicting_project_hook"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", ".vite-hooks"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-commit", "npm test\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "vp run lint\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "skip migration instead of overwriting either hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "keep the Husky hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "keep the project-owned Vite+ hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "keep Husky configured", continue-on-failure = true },
+]
+
+[[case]]
 name = "migration_staged_pre_push"
 vp = "global"
 steps = [

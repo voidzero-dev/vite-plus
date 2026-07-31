@@ -4,8 +4,14 @@ vp = "global"
 steps = [
   { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
   { argv = ["git", "config", "core.hooksPath", ".custom-hooks"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".custom-hooks"], snapshot = false },
+  { argv = ["vpt", "write-file", ".custom-hooks/pre-commit", "npx lint-staged\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".lintstagedrc.json", "{\"*.ts\":\"eslint --fix\"}\n"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "should skip hooks because core.hooksPath is already set", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "package.json"], comment = "prepare should stay 'husky' and husky must remain in devDependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "keep the existing hook dependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".lintstagedrc.json"], comment = "keep the active hook configuration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".custom-hooks/pre-commit"], comment = "keep the active custom hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "do not migrate staged configuration", continue-on-failure = true },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
   { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should still be .custom-hooks", continue-on-failure = true },
 ]
