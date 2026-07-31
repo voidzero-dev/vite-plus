@@ -29,10 +29,9 @@ steps = [
 name = "pm_patch_yarn_berry"
 vp = "local"
 cwd = "yarn_berry"
-env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
-  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "Yarn Berry receives the patch command", continue-on-failure = true },
-  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "Yarn Berry receives the patch-commit command", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch", "--help"], comment = "Vite+ exposes the patch command" },
+  { argv = ["vp", "pm", "patch-commit", "--help"], comment = "Vite+ exposes the patch-commit command" },
 ]
 
 [[case]]
@@ -40,6 +39,6 @@ name = "pm_patch_bun"
 vp = "local"
 cwd = "bun"
 steps = [
-  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "Bun receives the patch command", continue-on-failure = true },
-  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "Bun receives patch commit through the --commit flag", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch", "--help"], comment = "Vite+ exposes the patch command" },
+  { argv = ["vp", "pm", "patch-commit", "--help"], comment = "Vite+ exposes the patch-commit command" },
 ]

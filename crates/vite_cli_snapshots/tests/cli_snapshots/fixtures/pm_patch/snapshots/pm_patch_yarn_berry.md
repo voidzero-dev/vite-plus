@@ -1,25 +1,35 @@
 # pm_patch_yarn_berry
 
-## `vp pm patch placeholder -- --version`
+## `vp pm patch --help`
 
-Yarn Berry receives the patch command
-
-**Exit code:** 1
+Vite+ exposes the patch command
 
 ```
-Unknown Syntax Error: Unsupported option name ("--version").
+Prepare a package for local patching
 
-$ yarn patch [-u,--update] [--json] <package>
+Usage: vp pm patch <PACKAGE> [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  <PACKAGE>               Package to patch
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
 ```
 
-## `vp pm patch-commit placeholder -- --version`
+## `vp pm patch-commit --help`
 
-Yarn Berry receives the patch-commit command
-
-**Exit code:** 1
+Vite+ exposes the patch-commit command
 
 ```
-Unknown Syntax Error: Unsupported option name ("--version").
+Commit a prepared package patch
 
-$ yarn patch-commit [-s,--save] <patchFolder>
+Usage: vp pm patch-commit <PATCH_DIR> [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  <PATCH_DIR>             Patch directory to commit
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
 ```

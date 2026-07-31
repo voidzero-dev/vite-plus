@@ -117,13 +117,14 @@ mod tests {
     #[test]
     fn yarn_berry_patch() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let extra = vec!["--json".to_string()];
         let result = pm.resolve_patch_command(&PatchCommandOptions {
             package: "left-pad",
-            ..Default::default()
+            pass_through_args: Some(&extra),
         });
         let result = result.expect("supported");
         assert_eq!(result.bin_path, "yarn");
-        assert_eq!(result.args, vec!["patch", "left-pad"]);
+        assert_eq!(result.args, vec!["patch", "left-pad", "--json"]);
     }
 
     #[test]

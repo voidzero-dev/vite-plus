@@ -1453,6 +1453,34 @@ mod tests {
     }
 
     #[test]
+    fn patch_pass_through_args_capture() {
+        let command = parse_pm_command(&["vp", "pm", "patch", "left-pad", "--", "--json"])
+            .expect("patch arguments should parse");
+
+        let PackageManagerCommand::Pm(PmCommands::Patch { package, pass_through_args }) = command
+        else {
+            panic!("expected Patch variant");
+        };
+        assert_eq!(package, "left-pad");
+        assert_eq!(pass_through_args, Some(vec!["--json".to_string()]));
+    }
+
+    #[test]
+    fn patch_commit_pass_through_args_capture() {
+        let command =
+            parse_pm_command(&["vp", "pm", "patch-commit", ".yarn/patch", "--", "--save"])
+                .expect("patch-commit arguments should parse");
+
+        let PackageManagerCommand::Pm(PmCommands::PatchCommit { patch_dir, pass_through_args }) =
+            command
+        else {
+            panic!("expected PatchCommit variant");
+        };
+        assert_eq!(patch_dir, ".yarn/patch");
+        assert_eq!(pass_through_args, Some(vec!["--save".to_string()]));
+    }
+
+    #[test]
     fn version_forwards_native_args_and_detects_json() {
         let command = parse_pm_command(&[
             "vp",

@@ -1,27 +1,35 @@
 # pm_patch_bun
 
-## `vp pm patch placeholder -- --version`
+## `vp pm patch --help`
 
-Bun receives the patch command
-
-**Exit code:** 1
+Vite+ exposes the patch command
 
 ```
-bun patch <version> (1e86cebd)
-No packages! Deleted empty lockfile
+Prepare a package for local patching
 
-[<duration>] done
+Usage: vp pm patch <PACKAGE> [-- <PASS_THROUGH_ARGS>...]
 
-error: package placeholder not found
+Arguments:
+  <PACKAGE>               Package to patch
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
 ```
 
-## `vp pm patch-commit placeholder -- --version`
+## `vp pm patch-commit --help`
 
-Bun receives patch commit through the --commit flag
-
-**Exit code:** 1
+Vite+ exposes the patch-commit command
 
 ```
-bun patch <version> (1e86cebd)
-error: Cannot find lockfile. Install packages with `bun install` before patching them.
+Commit a prepared package patch
+
+Usage: vp pm patch-commit <PATCH_DIR> [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  <PATCH_DIR>             Patch directory to commit
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
 ```

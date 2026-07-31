@@ -117,13 +117,14 @@ mod tests {
     #[test]
     fn yarn_berry_patch_commit() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let extra = vec!["--save".to_string()];
         let result = pm.resolve_patch_commit_command(&PatchCommitCommandOptions {
             patch_dir: "patches/left-pad",
-            ..Default::default()
+            pass_through_args: Some(&extra),
         });
         let result = result.expect("supported");
         assert_eq!(result.bin_path, "yarn");
-        assert_eq!(result.args, vec!["patch-commit", "patches/left-pad"]);
+        assert_eq!(result.args, vec!["patch-commit", "patches/left-pad", "--save"]);
     }
 
     #[test]
