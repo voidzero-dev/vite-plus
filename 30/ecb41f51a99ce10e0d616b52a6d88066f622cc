@@ -1,0 +1,19 @@
+packages/cli/binding/index.cjs
+  s_b548b9d3d94f33::t_8c14850fd2b17a 84,89,107,112,142,147,165,170,189,194,212,217,238,243,261,266,284,289,311,316,334,339,362,367,385,390,410,415,433,438,458,463,481,486,506,511,529,534,554,559,577,582,601,606,624,629,651,656,674,679,697,702
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "30ecb41f51a99ce10e0d616b52a6d88066f622cc",
+  "prompts": {},
+  "sessions": {
+    "s_b548b9d3d94f33": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_07684f400ffeuKQQFKe4fC4bCq",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "wan9chi <dk4rest@gmail.com>"
+    }
+  }
+}
