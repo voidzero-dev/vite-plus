@@ -67,14 +67,14 @@ pub fn error(msg: &str) {
     eprintln!("{} {msg}", "error:".red().bold());
 }
 
-/// Print a note message to stdout (supplementary info).
-#[expect(clippy::print_stdout, clippy::print_stderr, clippy::disallowed_macros)]
+/// Print a note message to stderr (supplementary info).
+///
+/// A note explains the situation around a command rather than being part of
+/// its result, so it belongs on the diagnostic stream: piping stdout to a file
+/// or a parser keeps the command's own output intact.
+#[expect(clippy::print_stderr, clippy::disallowed_macros)]
 pub fn note(msg: &str) {
-    if user_output_to_stderr() {
-        eprintln!("{} {msg}", "note:".dimmed().bold());
-    } else {
-        println!("{} {msg}", "note:".dimmed().bold());
-    }
+    eprintln!("{} {msg}", "note:".dimmed().bold());
 }
 
 /// Print a success line with checkmark to stdout.

@@ -15,9 +15,9 @@
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "oxc.disableNestedConfig": true,
-  "typescript.preferences.importModuleSpecifierEnding": "js",
-  "typescript.reportStyleChecksAsWarnings": false,
-  "typescript.updateImportsOnFileMove.enabled": "always",
-  "typescript.experimental.useTsgo": true,
+  "js/ts.preferences.importModuleSpecifierEnding": "js",
+  "js/ts.reportStyleChecksAsWarnings": false,
+  "js/ts.updateImportsOnFileMove.enabled": "always",
+  "js/ts.experimental.useTsgo": true,
   "vitest.configSearchPatternExclude": "{**/node_modules/**,**/vendor/**,**/.*/**,**/*.d.ts,**/crates/vite_cli_snapshots/tests/cli_snapshots/**}"
 }
