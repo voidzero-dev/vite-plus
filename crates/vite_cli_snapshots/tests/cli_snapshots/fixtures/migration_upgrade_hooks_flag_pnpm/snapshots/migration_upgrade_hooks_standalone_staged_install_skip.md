@@ -27,6 +27,7 @@ skip dispatcher installation
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ core.hooksPath is already set to ".custom-hooks", skipping git hooks setup.
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
@@ -34,8 +35,6 @@ VITE+ - The Unified Toolchain for the Web
     vite              → <version>
     vitest     0.1.21 → <version>
 • Package manager settings configured
-! Warnings:
-  - Git hooks not configured — core.hooksPath is already set to ".custom-hooks", skipping
 ```
 
 ## `git config --local core.hooksPath`
@@ -81,10 +80,7 @@ keep lint-staged
       "version": "10.33.0"
     }
   },
-  "name": "migration-upgrade-hooks-flag-pnpm",
-  "scripts": {
-    "prepare": "vp config"
-  }
+  "name": "migration-upgrade-hooks-flag-pnpm"
 }
 ```
 

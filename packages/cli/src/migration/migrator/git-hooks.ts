@@ -319,51 +319,24 @@ export function setupGitHooks(
     return pkg;
   });
 
-  // Copy default .husky/ hooks to .vite-hooks/ before creating pre-commit hook.
-  // Custom dirs (e.g. .config/husky) are kept in-place — no copy needed.
-  if (oldHooksDir && !isCustomDir) {
-    const oldDir = path.join(projectPath, oldHooksDir);
-    if (fs.existsSync(oldDir)) {
-      const targetDir = path.join(projectPath, hooksDir);
-      fs.mkdirSync(targetDir, { recursive: true });
-      for (const entry of fs.readdirSync(oldDir, { withFileTypes: true })) {
-        if (entry.isDirectory() || entry.name.startsWith('.')) {
-          continue;
-        }
-        const src = path.join(oldDir, entry.name);
-        const dest = path.join(targetDir, entry.name);
-        fs.copyFileSync(src, dest);
-        fs.chmodSync(dest, 0o755);
-      }
-      // Remove old .husky/ directory after copying hooks to .vite-hooks/
-      fs.rmSync(oldDir, { recursive: true, force: true });
-    }
-  }
-
-  if (stagedMerged) {
-    if (hasExistingHookPolicy) {
-      migrateStagedCommandsInProjectHooks(projectPath, hooksDir);
-    } else {
-      createPreCommitHook(projectPath, hooksDir);
-    }
-  }
-
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
+    migrateProjectHooks(
+      projectPath,
+      oldHooksDir,
+      hooksDir,
+      isCustomDir,
+      stagedMerged,
+      hasExistingHookPolicy,
+    );
     finalizeStagedConfigMigration(packageJsonPath, migratedStandaloneConfigPaths, stagedMerged);
     removeReplacedHookPackages(packageJsonPath);
     return true;
   }
 
-  // Clear husky's core.hooksPath so vp config can set the new one.
-  // Only clear if it matches the old husky directory — preserve genuinely custom paths.
+  const previousHooksPath = getExistingHooksPath(projectPath);
   if (oldHooksDir) {
-    const checkResult = spawn.sync('git', ['config', '--local', 'core.hooksPath'], {
-      cwd: projectPath,
-      stdio: 'pipe',
-    });
-    const existingPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
-    if (existingPath === `${oldHooksDir}/_` || existingPath === oldHooksDir) {
+    if (previousHooksPath === `${oldHooksDir}/_` || previousHooksPath === oldHooksDir) {
       spawn.sync('git', ['config', '--local', '--unset', 'core.hooksPath'], {
         cwd: projectPath,
         stdio: 'pipe',
@@ -389,9 +362,18 @@ export function setupGitHooks(
     const stdout = configResult.stdout?.toString().trim() ?? '';
     if (stdout) {
       rollbackStagedConfig?.();
+      restoreHooksPath(projectPath, previousHooksPath);
       warnMigration(`Git hooks not configured — ${stdout}`, report);
       return false;
     }
+    migrateProjectHooks(
+      projectPath,
+      oldHooksDir,
+      hooksDir,
+      isCustomDir,
+      stagedMerged,
+      hasExistingHookPolicy,
+    );
     finalizeStagedConfigMigration(packageJsonPath, migratedStandaloneConfigPaths, stagedMerged);
     removeReplacedHookPackages(packageJsonPath);
     if (report) {
@@ -403,8 +385,45 @@ export function setupGitHooks(
     return true;
   }
   rollbackStagedConfig?.();
+  restoreHooksPath(projectPath, previousHooksPath);
   warnMigration('Failed to install git hooks', report);
   return false;
+}
+
+function migrateProjectHooks(
+  projectPath: string,
+  oldHooksDir: string | undefined,
+  hooksDir: string,
+  isCustomDir: boolean,
+  stagedMerged: boolean,
+  hasExistingHookPolicy: boolean,
+): void {
+  if (oldHooksDir && !isCustomDir) {
+    const oldDir = path.join(projectPath, oldHooksDir);
+    if (fs.existsSync(oldDir)) {
+      const targetDir = path.join(projectPath, hooksDir);
+      fs.mkdirSync(targetDir, { recursive: true });
+      for (const entry of fs.readdirSync(oldDir, { withFileTypes: true })) {
+        if (entry.isDirectory() || entry.name.startsWith('.')) {
+          continue;
+        }
+        const src = path.join(oldDir, entry.name);
+        const dest = path.join(targetDir, entry.name);
+        fs.copyFileSync(src, dest);
+        fs.chmodSync(dest, 0o755);
+      }
+      fs.rmSync(oldDir, { recursive: true, force: true });
+    }
+  }
+
+  if (!stagedMerged) {
+    return;
+  }
+  if (hasExistingHookPolicy) {
+    migrateStagedCommandsInProjectHooks(projectPath, hooksDir);
+  } else {
+    createPreCommitHook(projectPath, hooksDir);
+  }
 }
 
 function findHookMigrationConflict(
@@ -427,6 +446,13 @@ function getExistingHooksPath(projectPath: string): string {
     stdio: 'pipe',
   });
   return result.status === 0 ? (result.stdout?.toString().trim() ?? '') : '';
+}
+
+function restoreHooksPath(projectPath: string, hooksPath: string): void {
+  const args = hooksPath
+    ? ['config', '--local', 'core.hooksPath', hooksPath]
+    : ['config', '--local', '--unset', 'core.hooksPath'];
+  spawn.sync('git', args, { cwd: projectPath, stdio: 'pipe' });
 }
 
 function canReplaceHooksPath(
