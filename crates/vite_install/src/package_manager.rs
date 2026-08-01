@@ -907,6 +907,8 @@ pub async fn download_package_manager(
 
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
     // directly (the main package only ships preinstall-replaced placeholders).
+    // A declared hash names the main tarball and is verified against it; the
+    // platform tarball itself is not integrity-pinned (same as bun above).
     if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
         return download_pnpm_native_package_manager(&version, &home_dir, expected_hash).await;
     }
