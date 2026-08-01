@@ -29,6 +29,10 @@ overrides:
 
 const ROLLDOWN_SRC = `catalog:
   some-rolldown-dep: ^1.0.0
+catalogs:
+  rollup-tests:
+    '@types/mocha': 10.0.10
+    mocha: ^11.7.5
 minimumReleaseAgeExclude:
   - oxc-parser@0.134.0
 `;
@@ -69,5 +73,15 @@ describe('mergeWorkspaceYaml()', () => {
     // The versioned exclude entry is redundant (covered by `oxc-parser`) and dropped.
     expect(parsed.minimumReleaseAgeExclude).not.toContain('oxc-parser@0.134.0');
     expect(parsed.minimumReleaseAgeExclude).toContain('oxc-parser');
+  });
+
+  test('carries upstream named catalogs (e.g. rollup-tests) into the merged workspace', () => {
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, semver);
+    const parsed = yaml.parse(output);
+
+    // Named catalogs referenced as `catalog:rollup-tests` must be preserved so
+    // `pnpm install` can resolve rolldown's rollup-tests package.
+    expect(parsed.catalogs['rollup-tests']['@types/mocha']).toBe('10.0.10');
+    expect(parsed.catalogs['rollup-tests'].mocha).toBe('^11.7.5');
   });
 });

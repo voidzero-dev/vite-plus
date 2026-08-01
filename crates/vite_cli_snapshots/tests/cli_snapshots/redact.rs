@@ -268,6 +268,16 @@ static START_AT_TIME_RE: LazyLock<regex::Regex> =
 // published-at timestamps in `vp view`) stay verbatim.
 static INSTALLED_DATE_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Installed:\s+)\d{4}-\d{2}-\d{2}").unwrap());
+// Vite's dep optimizer prints a timestamped "[vite] (<env>) [optimizer]
+// scanning dependencies..." progress line when it pre-bundles on a cold
+// optimize cache. Whether it appears at all — and its wall-clock timestamp —
+// depends on optimize-cache state and server-startup timing, which drift under
+// parallel test load, so the line is non-deterministic (e.g. it flakes in
+// `vp test`'s browser-mode output). Strip the whole line. The bracketed
+// `[optimizer]` tag only appears in this runtime progress line; the
+// deterministic `--force ... the optimizer` help text is unbracketed.
+static VITE_OPTIMIZER_LINE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^.*\[vite\] \([^)]*\) \[optimizer\].*\n?").unwrap());
 
 #[expect(
     clippy::disallowed_types,
@@ -450,6 +460,10 @@ pub fn redact_output(
     // Remove Node.js experimental warnings (e.g., Type Stripping warnings)
     output = NODE_WARNING_RE.replace_all(&output, "").into_owned();
     output = NODE_TRACE_WARNING_RE.replace_all(&output, "").into_owned();
+
+    // Strip Vite's non-deterministic dep-optimizer progress line (see
+    // VITE_OPTIMIZER_LINE_RE) so browser-mode `vp test` output is stable.
+    output = VITE_OPTIMIZER_LINE_RE.replace_all(&output, "").into_owned();
 
     // Strip npm's non-deterministic update notice (see NPM_NOTICE_RE). The
     // bare-version-block mask is NOT applied here: it is scoped to version-probe

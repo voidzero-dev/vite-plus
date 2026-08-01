@@ -178,5 +178,25 @@ export function brandVite(rootDir: string = process.cwd()) {
     reporterResults.includes('patched') ? 'patched' : 'already',
   );
 
+  // 6. config.ts: Suppress the `configLoader: 'native'` deprecation warning.
+  // Vite 8.2 warns whenever it bundle-loads a config that uses ESM syntax and
+  // could not yet be loaded by the future-default native loader. Every Vite+
+  // project ships an ESM `vite.config.ts`, so this upstream nag would otherwise
+  // print on essentially every command (check/lint/fmt/build/test) and in every
+  // spawned tool and vite-task run that reloads the config. Vite+ curates its
+  // output, so never emit it. Gating the collector plugin (rather than the
+  // env-var check) keeps it suppressed even inside vite-task runs, whose spawn
+  // env is filtered and would drop `VITE_CONFIG_NATIVE_IGNORE_WARNING`.
+  const configFile = join(nodeDir, 'config.ts');
+  logPatch(
+    'config.ts',
+    "Suppressed configLoader: 'native' deprecation warning",
+    replaceInFile(
+      configFile,
+      '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
+      '      // Vite+ curates output; never run the native-config-compat check.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
+    ),
+  );
+
   log('Done!');
 }
