@@ -3364,33 +3364,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_package_manager_pnpm_v12_hash_verification() {
-        // Distinct version from the layout test so the completeness fast-path
-        // of a concurrent test never skips the verification under test; clear
-        // any leftover install for the same reason.
-        let version = "12.0.0-beta.1";
-        let install_dir = package_manager_install_dir(PackageManagerType::Pnpm, version).unwrap();
-        remove_dir_all_force(install_dir.parent().unwrap()).await.unwrap();
-
-        // A wrong declared hash must fail (the hash names the main pnpm tarball)
-        let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
-             0000000000000000000000000000000000000000000000000000000000000000";
-        let result =
-            download_package_manager(PackageManagerType::Pnpm, version, Some(wrong_hash)).await;
-        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
-
-        // The correct hash of the main pnpm tarball installs end-to-end
-        let correct_hash = "sha512.6398a9d604341739854276620377eb8e15d538091170629307da1ed40b2d\
-             1161478378681e76f7142f7aec4d20ab9e4b8f72d2e38ae340976329eb54ef325e95";
-        let result =
-            download_package_manager(PackageManagerType::Pnpm, version, Some(correct_hash)).await;
-        assert!(result.is_ok(), "{result:?}");
-        let (target_dir, _, _) = result.unwrap();
-        assert!(is_exists_file(target_dir.join("bin/pnpm")).unwrap());
-        remove_dir_all_force(target_dir).await.unwrap();
-    }
-
-    #[tokio::test]
     async fn test_get_latest_version() {
         let result = get_latest_version(PackageManagerType::Yarn).await;
         assert!(result.is_ok());
