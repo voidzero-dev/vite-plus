@@ -12,6 +12,16 @@ pub async fn write_native_shims(
     source_file: impl AsRef<Path>,
     to_bin: impl AsRef<Path>,
 ) -> Result<(), Error> {
+    write_native_shims_with_args(source_file, to_bin, &[]).await
+}
+
+/// Like [`write_native_shims`], but injects fixed leading arguments
+/// (e.g. a `pnpx` shim execing `pnpm.native dlx "$@"`).
+pub async fn write_native_shims_with_args(
+    source_file: impl AsRef<Path>,
+    to_bin: impl AsRef<Path>,
+    args: &[&str],
+) -> Result<(), Error> {
     let to_bin = to_bin.as_ref();
     let parent = to_bin
         .parent()
@@ -23,9 +33,9 @@ pub async fn write_native_shims(
         .to_str()
         .ok_or_else(|| Error::CannotFindBinaryPath("shim path is not valid UTF-8".into()))?;
 
-    write(to_bin, native_sh_shim(relative_file)).await?;
-    write(to_bin.with_extension("cmd"), native_cmd_shim(relative_file)).await?;
-    write(to_bin.with_extension("ps1"), native_pwsh_shim(relative_file)).await?;
+    write(to_bin, native_sh_shim(relative_file, args)).await?;
+    write(to_bin.with_extension("cmd"), native_cmd_shim(relative_file, args)).await?;
+    write(to_bin.with_extension("ps1"), native_pwsh_shim(relative_file, args)).await?;
 
     // set executable permission for unix
     #[cfg(unix)]
@@ -38,8 +48,13 @@ pub async fn write_native_shims(
     Ok(())
 }
 
+/// Render injected args as `"arg1 arg2 "` (trailing space), or `""` when empty.
+fn format_injected_args(args: &[&str]) -> String {
+    if args.is_empty() { String::new() } else { format!("{} ", args.join(" ")) }
+}
+
 /// Unix shell shim for native binaries.
-pub fn native_sh_shim(relative_file: &str) -> String {
+pub fn native_sh_shim(relative_file: &str, args: &[&str]) -> String {
     formatdoc! {
         r#"
         #!/bin/sh
@@ -53,25 +68,27 @@ pub fn native_sh_shim(relative_file: &str) -> String {
             ;;
         esac
 
-        exec "$basedir/{relative_file}" "$@"
-        "#
+        exec "$basedir/{relative_file}" {injected_args}"$@"
+        "#,
+        injected_args = format_injected_args(args)
     }
 }
 
 /// Windows Command Prompt shim for native binaries.
-pub fn native_cmd_shim(relative_file: &str) -> String {
+pub fn native_cmd_shim(relative_file: &str, args: &[&str]) -> String {
     formatdoc! {
         r#"
         @SETLOCAL
-        @"%~dp0\{relative_file}" %*
+        @"%~dp0\{relative_file}" {injected_args}%*
         "#,
-        relative_file = relative_file.replace('/', "\\")
+        relative_file = relative_file.replace('/', "\\"),
+        injected_args = format_injected_args(args)
     }
     .replace('\n', "\r\n")
 }
 
 /// `PowerShell` shim for native binaries.
-pub fn native_pwsh_shim(relative_file: &str) -> String {
+pub fn native_pwsh_shim(relative_file: &str, args: &[&str]) -> String {
     formatdoc! {
         r#"
         #!/usr/bin/env pwsh
@@ -80,13 +97,14 @@ pub fn native_pwsh_shim(relative_file: &str) -> String {
         $ret=0
         # Support pipeline input
         if ($MyInvocation.ExpectingInput) {{
-            $input | & "$basedir/{relative_file}" $args
+            $input | & "$basedir/{relative_file}" {injected_args}$args
         }} else {{
-            & "$basedir/{relative_file}" $args
+            & "$basedir/{relative_file}" {injected_args}$args
         }}
         $ret=$LASTEXITCODE
         exit $ret
-        "#
+        "#,
+        injected_args = format_injected_args(args)
     }
 }
 
@@ -204,6 +222,35 @@ mod tests {
 
     fn format_shim(shim: &str) -> String {
         shim.replace(' ', "·")
+    }
+
+    #[test]
+    fn test_native_shims_without_args() {
+        let sh = native_sh_shim("bun.native", &[]);
+        assert!(sh.contains("exec \"$basedir/bun.native\" \"$@\""), "{}", format_shim(&sh));
+
+        let cmd = native_cmd_shim("bun.native", &[]);
+        assert!(cmd.contains("@\"%~dp0\\bun.native\" %*"), "{}", format_shim(&cmd));
+
+        let ps1 = native_pwsh_shim("bun.native", &[]);
+        assert!(ps1.contains("& \"$basedir/bun.native\" $args"), "{}", format_shim(&ps1));
+    }
+
+    #[test]
+    fn test_native_shims_with_injected_args() {
+        let sh = native_sh_shim("pnpm.native", &["dlx"]);
+        assert!(sh.contains("exec \"$basedir/pnpm.native\" dlx \"$@\""), "{}", format_shim(&sh));
+
+        let cmd = native_cmd_shim("pnpm.native", &["dlx"]);
+        assert!(cmd.contains("@\"%~dp0\\pnpm.native\" dlx %*"), "{}", format_shim(&cmd));
+
+        let ps1 = native_pwsh_shim("pnpm.native", &["dlx"]);
+        assert!(
+            ps1.contains("$input | & \"$basedir/pnpm.native\" dlx $args"),
+            "{}",
+            format_shim(&ps1)
+        );
+        assert!(ps1.contains("    & \"$basedir/pnpm.native\" dlx $args"), "{}", format_shim(&ps1));
     }
 
     #[test]
