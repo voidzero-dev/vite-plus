@@ -908,7 +908,7 @@ pub async fn download_package_manager(
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
     // directly (the main package only ships preinstall-replaced placeholders).
     if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
-        return download_pnpm_native_package_manager(&version, &home_dir).await;
+        return download_pnpm_native_package_manager(&version, &home_dir, expected_hash).await;
     }
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
@@ -1151,6 +1151,7 @@ fn get_pnpm_platform_package_name() -> Result<&'static str, Error> {
 async fn download_pnpm_native_package_manager(
     version: &Str,
     home_dir: &AbsolutePath,
+    expected_hash: Option<&str>,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "pnpm".into();
     let platform_package_name = get_pnpm_platform_package_name()?;
@@ -1163,6 +1164,16 @@ async fn download_pnpm_native_package_manager(
     // and the tgz download path)
     if is_package_manager_install_complete(&install_dir, "pnpm")? {
         return Ok((install_dir, package_name, version.clone()));
+    }
+
+    // A `packageManager` hash describes the main `pnpm` tarball, not the
+    // platform package: verify it against the artifact it names so a bad pin
+    // still fails, matching pnpm <= 11.
+    if let Some(expected_hash) = expected_hash {
+        let main_tgz_url = get_npm_package_tgz_url("pnpm", version);
+        let verify_dir = tempfile::tempdir()?;
+        download_and_extract_tgz_with_hash(&main_tgz_url, verify_dir.path(), Some(expected_hash))
+            .await?;
     }
 
     let parent_dir = target_dir.parent().unwrap();
@@ -3349,6 +3360,33 @@ mod tests {
         let result =
             download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
         assert!(result.is_ok(), "{result:?}");
+        remove_dir_all_force(target_dir).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_download_package_manager_pnpm_v12_hash_verification() {
+        // Distinct version from the layout test so the completeness fast-path
+        // of a concurrent test never skips the verification under test; clear
+        // any leftover install for the same reason.
+        let version = "12.0.0-beta.1";
+        let install_dir = package_manager_install_dir(PackageManagerType::Pnpm, version).unwrap();
+        remove_dir_all_force(install_dir.parent().unwrap()).await.unwrap();
+
+        // A wrong declared hash must fail (the hash names the main pnpm tarball)
+        let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
+             0000000000000000000000000000000000000000000000000000000000000000";
+        let result =
+            download_package_manager(PackageManagerType::Pnpm, version, Some(wrong_hash)).await;
+        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
+
+        // The correct hash of the main pnpm tarball installs end-to-end
+        let correct_hash = "sha512.6398a9d604341739854276620377eb8e15d538091170629307da1ed40b2d\
+             1161478378681e76f7142f7aec4d20ab9e4b8f72d2e38ae340976329eb54ef325e95";
+        let result =
+            download_package_manager(PackageManagerType::Pnpm, version, Some(correct_hash)).await;
+        assert!(result.is_ok(), "{result:?}");
+        let (target_dir, _, _) = result.unwrap();
+        assert!(is_exists_file(target_dir.join("bin/pnpm")).unwrap());
         remove_dir_all_force(target_dir).await.unwrap();
     }
 
