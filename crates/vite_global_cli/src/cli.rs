@@ -804,28 +804,8 @@ async fn managed_update(
             .map(|package| package.spec.unwrap_or(package.name)),
     );
 
-    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
-
-    // Persist rewrites only for packages that resolved but need no reinstall:
-    // reinstalled packages record their spec through the successful install
-    // (and keep the old one if it fails), and a failed lookup must not
-    // persist a policy the update could not act on.
-    let failed_specs =
-        report.failures.iter().map(|(spec, _)| spec.as_str()).collect::<HashSet<_>>();
-    for (package_name, new_spec, query_spec) in &spec_rewrites {
-        if failed_specs.contains(query_spec.as_str()) || to_update_set.contains(query_spec.as_str())
-        {
-            continue;
-        }
-        if let Some(mut metadata) = PackageMetadata::load(package_name).await? {
-            if metadata.version_spec != *new_spec {
-                metadata.version_spec = new_spec.clone();
-                metadata.save().await?;
-            }
-        }
-    }
-
-    node_mismatches.retain(|package| !to_update_set.contains(package.spec.as_str()));
+    let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
+    node_mismatches.retain(|package| !outdated_specs.contains(package.spec.as_str()));
 
     if should_reinstall_node_mismatches(
         &node_mismatches,
@@ -834,6 +814,23 @@ async fn managed_update(
         ignore_node_mismatch,
     ) {
         to_update.extend(node_mismatches.into_iter().map(|package| package.spec));
+    }
+
+    // Installs save the new spec only after they succeed.
+    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
+    let failed_specs =
+        report.failures.iter().map(|(spec, _)| spec.as_str()).collect::<HashSet<_>>();
+    for (package_name, new_spec, query_spec) in &spec_rewrites {
+        if failed_specs.contains(query_spec.as_str()) || to_update_set.contains(query_spec.as_str())
+        {
+            continue;
+        }
+        if let Some(mut metadata) = PackageMetadata::load(package_name).await?
+            && metadata.version_spec != *new_spec
+        {
+            metadata.version_spec = new_spec.clone();
+            metadata.save().await?;
+        }
     }
 
     if to_update.is_empty() {
