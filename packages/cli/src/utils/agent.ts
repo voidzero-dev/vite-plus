@@ -309,7 +309,7 @@ function orderAgentTargetPaths(projectRoot: string, targetPaths: string[]): stri
   const dedupedPaths: string[] = [];
   const seenDestinationPaths = new Set<string>();
   for (const targetPath of orderedPaths) {
-    const destinationKey = path.resolve(projectRoot, targetPath);
+    const destinationKey = path.resolve(path.join(projectRoot, targetPath));
     if (seenDestinationPaths.has(destinationKey)) {
       continue;
     }
