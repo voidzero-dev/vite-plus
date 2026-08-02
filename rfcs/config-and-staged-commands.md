@@ -105,7 +105,7 @@ Behavior:
 3. Creates hook scripts in `<hooks-dir>/_/` that source the user-defined hooks in `<hooks-dir>/`
 4. Agent instructions: silently updates existing files that contain Vite+ markers (`<!--VITE PLUS START-->`) when content is outdated. Never creates new agent files. Skipped with `--hooks-only`.
 5. Safe to run multiple times (idempotent)
-6. Exits 0 and skips hooks if `VITE_GIT_HOOKS=0` or `HUSKY=0` environment variable is set (backwards compatible)
+6. Exits 0 and skips hooks if `VP_GIT_HOOKS=0`, `VITE_GIT_HOOKS=0` (deprecated alias), or `HUSKY=0` environment variable is set (backwards compatible)
 7. Exits 0 and skips hooks if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
 8. Exits 1 on real errors (git command not found, `git config` failed)
 9. Agent update runs uniformly in all modes (lifecycle script, interactive, non-interactive). New agent file creation is handled by `vp create`/`vp migrate`.
@@ -291,7 +291,7 @@ Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsuppo
 ```
 vp config
 │
-├─ VITE_GIT_HOOKS=0 or HUSKY=0? ──→ Skip hooks (exit 0)
+├─ VP_GIT_HOOKS=0 / VITE_GIT_HOOKS=0 / HUSKY=0? ──→ Skip hooks (exit 0)
 │
 ├─ Not inside a git repo? ──→ Skip hooks (exit 0)
 │
