@@ -15,7 +15,7 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 - **`vp check`:** Run formatting, linting, and type checks in one command
 - **`vp test`:** Run tests through bundled Vitest
 - **`vp build`:** Build applications for production with Vite + Rolldown
-- **`vp run`:** Execute monorepo tasks with caching and dependency-aware scheduling
+- **`vp run`:** Run `package.json` scripts and monorepo tasks with caching and dependency-aware scheduling
 - **`vp pack`:** Build libraries for npm publishing or standalone app binaries
 - **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
 
