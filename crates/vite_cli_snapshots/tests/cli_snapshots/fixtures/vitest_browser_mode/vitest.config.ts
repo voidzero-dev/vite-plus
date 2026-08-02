@@ -8,7 +8,10 @@ export default {
       configResolved(config) {
         const info = config.logger.info;
         config.logger.info = (message, options) => {
-          if (!message.includes('is in use, trying another one')) {
+          if (
+            !message.includes('is in use, trying another one') &&
+            !message.includes('[optimizer] scanning dependencies...')
+          ) {
             info(message, options);
           }
         };
