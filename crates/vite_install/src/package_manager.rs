@@ -908,7 +908,7 @@ pub async fn download_package_manager(
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
     // directly (the main package only ships preinstall-replaced placeholders).
     // A declared hash names the main tarball and is verified against it; the
-    // platform tarball itself is not integrity-pinned (same as bun above).
+    // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
         return download_pnpm_native_package_manager(&version, &home_dir, expected_hash).await;
     }
@@ -1147,6 +1147,28 @@ fn get_pnpm_platform_package_name() -> Result<&'static str, Error> {
     Ok(name)
 }
 
+/// Registry version metadata subset: only the tarball integrity is needed.
+#[derive(Deserialize)]
+struct RegistryVersionMetadata {
+    #[serde(default)]
+    dist: RegistryDist,
+}
+
+#[derive(Deserialize, Default)]
+struct RegistryDist {
+    #[serde(default)]
+    integrity: Option<Str>,
+}
+
+/// Convert an npm SRI string (`sha512-{base64}`) into the `{algo}.{hex}`
+/// format that `download_and_extract_tgz_with_hash` verifies.
+fn sri_to_expected_hash(integrity: &str) -> Option<String> {
+    // SRI allows several space-separated hashes; npm registries serve one.
+    let (algorithm, b64) = integrity.split_whitespace().next()?.split_once('-')?;
+    let bytes = base64_simd::STANDARD.decode_to_vec(b64).ok()?;
+    Some(format!("{algorithm}.{}", hex::encode(bytes)))
+}
+
 /// Download pnpm >= 12 (native binary) via its platform-specific npm package.
 ///
 /// Layout: `$VP_HOME/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
@@ -1178,6 +1200,26 @@ async fn download_pnpm_native_package_manager(
             .await?;
     }
 
+    // The declared hash never covers the platform tarball, so verify it
+    // against the registry's `dist.integrity` for the platform package.
+    let metadata_url = get_npm_package_version_url(platform_package_name, version);
+    let metadata: RegistryVersionMetadata =
+        HttpClient::new().get_json(&metadata_url).await.map_err(|err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: "pnpm".into(),
+                    version: version.clone(),
+                    url: metadata_url.as_str().into(),
+                }
+            } else {
+                err
+            }
+        })?;
+    let platform_hash = metadata.dist.integrity.as_deref().and_then(sri_to_expected_hash);
+
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
 
@@ -1187,22 +1229,26 @@ async fn download_pnpm_native_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
-    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, None).await.map_err(
-        |err| {
-            if let Error::Reqwest(e) = &err
-                && let Some(status) = e.status()
-                && status == reqwest::StatusCode::NOT_FOUND
-            {
-                Error::PackageManagerVersionNotFound {
-                    name: "pnpm".into(),
-                    version: version.clone(),
-                    url: platform_tgz_url.into(),
-                }
-            } else {
-                err
+    download_and_extract_tgz_with_hash(
+        &platform_tgz_url,
+        &target_dir_tmp,
+        platform_hash.as_deref(),
+    )
+    .await
+    .map_err(|err| {
+        if let Error::Reqwest(e) = &err
+            && let Some(status) = e.status()
+            && status == reqwest::StatusCode::NOT_FOUND
+        {
+            Error::PackageManagerVersionNotFound {
+                name: "pnpm".into(),
+                version: version.clone(),
+                url: platform_tgz_url.into(),
             }
-        },
-    )?;
+        } else {
+            err
+        }
+    })?;
 
     // Create the expected directory structure: pnpm/bin/
     let tmp_bin_dir = target_dir_tmp.join("pnpm").join("bin");
@@ -3341,6 +3387,15 @@ mod tests {
         assert_eq!(package_name, "@yarnpkg/cli-dist");
         assert_eq!(version, "4.9.2");
         remove_dir_all_force(target_dir).await.unwrap();
+    }
+
+    #[test]
+    fn test_sri_to_expected_hash() {
+        use sha2::{Digest, Sha512};
+        let digest = Sha512::digest(b"Hello, World!");
+        let sri = format!("sha512-{}", base64_simd::STANDARD.encode_to_string(digest));
+        assert_eq!(sri_to_expected_hash(&sri).unwrap(), format!("sha512.{}", hex::encode(digest)));
+        assert_eq!(sri_to_expected_hash("garbage"), None);
     }
 
     #[tokio::test]
