@@ -1287,7 +1287,7 @@ async fn cached_project_source_still_current(
     else {
         return Ok(!matches!(
             entry.source.as_str(),
-            ".node-version" | "devEngines.runtime" | "engines.node"
+            ".node-version" | "devEngines.runtime" | "engines.node" | ".nvmrc"
         ));
     };
 
