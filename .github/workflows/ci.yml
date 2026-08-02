@@ -1171,10 +1171,16 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: certless-image-test
 
+      # Mounting the host rustup and cargo homes reuses the pinned nightly
+      # that setup-rust installed and the restored registry cache, so the
+      # container downloads nothing on a warm run (rustup dist binaries
+      # target glibc 2.17 and run on bookworm's 2.36). `rustup show` still
+      # installs the toolchain if the mount misses it.
       - name: Build the global vp in a bookworm container
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/work" \
+            -v "$HOME/.rustup:/usr/local/rustup" \
             -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
             -v "$HOME/.cargo/git:/usr/local/cargo/git" \
             -w /work rust:1-bookworm bash -c '
