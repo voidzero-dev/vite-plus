@@ -209,12 +209,9 @@ fn replace_top_level_typoed_subcommand(
 }
 
 fn exit_status_to_exit_code(exit_status: ExitStatus) -> ExitCode {
-    if exit_status.success() {
-        ExitCode::SUCCESS
-    } else {
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        ExitCode::from(exit_code_from_status(exit_status) as u8)
-    }
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let code = exit_code_from_status(exit_status) as u8;
+    ExitCode::from(code)
 }
 
 fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {

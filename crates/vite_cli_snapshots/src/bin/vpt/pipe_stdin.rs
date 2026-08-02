@@ -31,5 +31,5 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let status = child.wait()?;
-    std::process::exit(vite_shared::exit_code_from_status(status));
+    std::process::exit(crate::exit_code::exit_code_from_status(status));
 }

@@ -14,11 +14,26 @@ pub fn exit_code_from_status(status: ExitStatus) -> i32 {
 }
 
 #[cfg(test)]
-#[cfg(unix)]
 mod tests {
     use super::exit_code_from_status;
 
+    #[cfg(unix)]
+    #[test]
+    fn preserves_normal_exit_code() {
+        let status =
+            std::process::Command::new("/bin/sh").arg("-c").arg("exit 42").status().unwrap();
+        assert_eq!(exit_code_from_status(status), 42);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn preserves_normal_exit_code() {
+        let status = std::process::Command::new("cmd").args(["/C", "exit 42"]).status().unwrap();
+        assert_eq!(exit_code_from_status(status), 42);
+    }
+
     /// Regression test for https://github.com/voidzero-dev/vite-plus/issues/2041.
+    #[cfg(unix)]
     #[test]
     fn preserves_signal_exit_code() {
         let status =
