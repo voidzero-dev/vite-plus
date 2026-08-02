@@ -3,7 +3,7 @@ use std::{
     env, fmt,
     fs::{self, File},
     io::{self, BufReader, IsTerminal, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use crossterm::{
@@ -672,6 +672,30 @@ fn is_package_manager_install_complete(
     }
 }
 
+/// Locate the package root in an extracted npm tarball.
+///
+/// npm-generated tarballs conventionally use `package/`, but some published
+/// packages use a different top-level directory. For example, Yarn 1.22.19
+/// extracts to `yarn-v1.22.19/`.
+fn find_extracted_package_dir(target_dir: &Path) -> io::Result<PathBuf> {
+    let conventional_dir = target_dir.join("package");
+    if conventional_dir.is_dir() {
+        return Ok(conventional_dir);
+    }
+
+    for entry in fs::read_dir(target_dir)? {
+        let candidate = entry?.path();
+        if candidate.is_dir() && candidate.join("package.json").is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        "package manager archive does not contain a package directory",
+    ))
+}
+
 async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<Str, Error> {
     let package_name = if matches!(package_manager_type, PackageManagerType::Yarn) {
         // yarn latest version should use `@yarnpkg/cli-dist` as package name
@@ -918,9 +942,11 @@ pub async fn download_package_manager(
         },
     )?;
 
-    // rename $target_dir_tmp/package to $target_dir_tmp/{bin_name}
+    // Normalize the package root to $target_dir_tmp/{bin_name}. Most npm
+    // tarballs use `package/`, but the directory name is not guaranteed.
     tracing::debug!("Rename package dir to {}", bin_name);
-    tokio::fs::rename(&target_dir_tmp.join("package"), &target_dir_tmp.join(&bin_name)).await?;
+    let extracted_package_dir = find_extracted_package_dir(&target_dir_tmp)?;
+    tokio::fs::rename(&extracted_package_dir, &target_dir_tmp.join(&bin_name)).await?;
 
     // Use a file-based lock to ensure atomicity of remove + rename operations
     // This prevents DirectoryNotEmpty error when multiple processes/threads
@@ -3551,5 +3577,15 @@ mod tests {
             leftovers.is_empty(),
             "failed install leaked temp dir(s) in {pnpm_dir:?}: {leftovers:?}"
         );
+    }
+
+    #[test]
+    fn test_find_extracted_package_dir_with_nonstandard_root() {
+        let temp_dir = create_temp_dir();
+        let yarn_dir = temp_dir.path().join("yarn-v1.22.19");
+        fs::create_dir(&yarn_dir).unwrap();
+        fs::write(yarn_dir.join("package.json"), "{}").unwrap();
+
+        assert_eq!(find_extracted_package_dir(temp_dir.path()).unwrap(), yarn_dir);
     }
 }
