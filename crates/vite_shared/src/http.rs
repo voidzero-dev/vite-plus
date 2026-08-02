@@ -270,6 +270,11 @@ mod tests {
     /// fix: a bad `SSL_CERT_FILE` poisons the retry as well, and the original
     /// error surfaces. Exercises `build_client` directly because
     /// `shared_http_client` caches its first outcome process-wide.
+    ///
+    /// Non-Windows only, like the fallback itself: native-tls rejects the bad
+    /// PEM at parse time (skipped with a warning), so the build succeeds and
+    /// there is no failure for a retry to mask.
+    #[cfg(not(target_os = "windows"))]
     #[test]
     #[serial_test::serial(env)]
     fn bundled_roots_fallback_does_not_mask_other_build_failures() {
