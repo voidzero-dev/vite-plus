@@ -7,7 +7,10 @@ use vite_task::ExitStatus;
 
 use super::{
     resolver::SubcommandResolver,
-    types::{CapturedCommandOutput, ResolvedUniversalViteConfig, SynthesizableSubcommand, exit_status_from},
+    types::{
+        CapturedCommandOutput, ResolvedUniversalViteConfig, SynthesizableSubcommand,
+        exit_status_from,
+    },
 };
 
 /// Resolve a subcommand into a prepared `tokio::process::Command`.

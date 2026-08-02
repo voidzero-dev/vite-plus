@@ -770,10 +770,9 @@ fn run_step_piped(
     let mut output = stdout_thread.join().unwrap();
     output.push_str(&stderr_thread.join().unwrap());
     match status {
-        Some(status) => (
-            TerminationState::Exited(i64::from(exit_code::exit_code_from_status(status))),
-            output,
-        ),
+        Some(status) => {
+            (TerminationState::Exited(i64::from(exit_code::exit_code_from_status(status))), output)
+        }
         None => (TerminationState::TimedOut, output),
     }
 }
