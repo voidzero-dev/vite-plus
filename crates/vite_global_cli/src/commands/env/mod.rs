@@ -63,6 +63,18 @@ fn should_print_env_clean_tip(subcommand: &EnvSubcommands) -> bool {
     }
 }
 
+fn is_installable_version_source(source: &str) -> bool {
+    matches!(
+        source,
+        ".node-version"
+            | ".nvmrc"
+            | "engines.node"
+            | "devEngines.runtime"
+            | config::VERSION_ENV_VAR
+            | config::SESSION_VERSION_FILE
+    )
+}
+
 /// Execute the env command based on the provided arguments.
 pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, Error> {
     // Handle subcommands first
@@ -125,18 +137,11 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                         resolution.source.as_str(),
                         config::VERSION_ENV_VAR | config::SESSION_VERSION_FILE
                     );
-                    match resolution.source.as_str() {
-                        ".node-version"
-                        | "engines.node"
-                        | "devEngines.runtime"
-                        | config::VERSION_ENV_VAR
-                        | config::SESSION_VERSION_FILE => {}
-                        _ => {
-                            eprintln!("No Node.js version found in current project.");
-                            eprintln!("Specify a version: vp env install <VERSION>");
-                            eprintln!("Or pin one:       vp env pin <VERSION>");
-                            return Ok(exit_status(1));
-                        }
+                    if !is_installable_version_source(&resolution.source) {
+                        eprintln!("No Node.js version found in current project.");
+                        eprintln!("Specify a version: vp env install <VERSION>");
+                        eprintln!("Or pin one:       vp env pin <VERSION>");
+                        return Ok(exit_status(1));
                     }
                     (resolution.version, from_session_override)
                 };
@@ -200,4 +205,14 @@ async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!("{snippet}");
 
     Ok(ExitStatus::default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nvmrc_is_an_installable_version_source() {
+        assert!(is_installable_version_source(".nvmrc"));
+    }
 }

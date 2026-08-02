@@ -15,6 +15,7 @@ serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }
 supports-color = "3"
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
