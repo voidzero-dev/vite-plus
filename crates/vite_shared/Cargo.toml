@@ -27,6 +27,7 @@ reqwest = { workspace = true, features = ["native-tls-vendored", "stream", "json
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 reqwest = { workspace = true, features = ["rustls-no-provider", "stream", "json", "system-proxy"] }
 rustls = { workspace = true }
+webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }

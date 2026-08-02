@@ -8646,6 +8646,7 @@ dependencies = [
  "tracing-subscriber",
  "vite_path",
  "vite_str",
+ "webpki-root-certs",
 ]
 
 [[package]]
