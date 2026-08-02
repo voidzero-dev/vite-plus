@@ -49,7 +49,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { Agent as HttpsAgent, get as httpsGet, request as httpsRequest } from 'node:https';
-import { homedir, tmpdir } from 'node:os';
+import { constants as osConstants, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
@@ -578,7 +578,8 @@ server.listen(0, '127.0.0.1', () => {
   });
   child.on('exit', (code, signal) => {
     cleanupRegistryEnv(registryEnv);
-    const exitCode = code ?? (signal ? 128 : 0);
+    const signalNumber = signal && osConstants.signals[signal];
+    const exitCode = code ?? (signalNumber ? 128 + signalNumber : 1);
     server.close(() => process.exit(exitCode));
   });
 });

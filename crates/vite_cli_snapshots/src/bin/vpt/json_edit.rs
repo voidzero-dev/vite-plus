@@ -29,6 +29,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .ok_or_else(|| std::format!("parent of '{last}' is not an object"))?
         .insert((*last).to_owned(), new_value);
 
+    // Keep output stable when another dependency enables serde_json's
+    // workspace-wide `preserve_order` feature.
+    root.sort_all_objects();
     let mut out = serde_json::to_string_pretty(&root)?;
     out.push('\n');
     std::fs::write(path, out)?;
