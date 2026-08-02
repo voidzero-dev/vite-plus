@@ -205,14 +205,6 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         });
     }
 
-    // If install_dir exists but binary doesn't, it's an incomplete installation - clean it up
-    if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
-        tracing::warn!(
-            "Incomplete installation detected at {install_dir:?}, removing before re-download"
-        );
-        tokio::fs::remove_dir_all(&install_dir).await?;
-    }
-
     let download_message = format!("Downloading {} v{version}...", provider.name());
     tracing::info!("{download_message}");
 
@@ -272,7 +264,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     .await?;
 
     // Move extracted directory to cache location
-    move_to_cache(&extracted_path, &install_dir, version).await?;
+    move_to_cache(&extracted_path, &install_dir, &binary_path, version).await?;
 
     tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
 

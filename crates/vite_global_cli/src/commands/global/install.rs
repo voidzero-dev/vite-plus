@@ -18,14 +18,12 @@ use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
-#[cfg(test)]
-use crate::commands::env::package_metadata::INSTALL_ID_LENGTH;
 use crate::{
     commands::{
         env::{
             bin_config::BinConfig,
             config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
-            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata, is_install_id},
+            package_metadata::{PackageMetadata, is_legacy_install_id, is_nested_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
@@ -609,7 +607,7 @@ async fn install_one(
 }
 
 fn new_install_id() -> String {
-    format!("{INSTALL_ID_PREFIX}{}", Uuid::new_v4())
+    Uuid::new_v4().to_string()
 }
 
 async fn restore_package_metadata(package_name: &str, previous_metadata: Option<&PackageMetadata>) {
@@ -788,26 +786,108 @@ async fn cleanup_stale_installations(package_name: &str, current_install_id: &st
             );
         }
     }
+
+    if !is_nested_install_id(current_install_id) {
+        return;
+    }
+
+    let result: Result<(), Error> = async {
+        let package_dir = PackageMetadata::installation_dir_for(package_name, "")?;
+        let package_json = get_node_modules_dir(&package_dir, package_name).join("package.json");
+        if !tokio::fs::try_exists(&package_json).await.unwrap_or(false) {
+            return Ok(());
+        }
+
+        let Some((lock_path, lock_file)) = try_lock_install_dir(&package_dir)? else {
+            return Ok(());
+        };
+
+        remove_legacy_installation_contents(&package_dir).await?;
+
+        drop(lock_file);
+        match tokio::fs::remove_file(&lock_path).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+    .await;
+    if let Err(error) = result {
+        tracing::warn!(
+            "Failed to clean legacy global package installation for {package_name}: {error}"
+        );
+    }
+}
+
+async fn remove_legacy_installation_contents(package_dir: &AbsolutePathBuf) -> Result<(), Error> {
+    // Preserve nested installs while removing npm contents from the legacy prefix.
+    let mut entries = tokio::fs::read_dir(package_dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else { continue };
+        if is_nested_install_id(file_name)
+            || file_name.strip_suffix(".lock").is_some_and(is_nested_install_id)
+        {
+            continue;
+        }
+
+        if entry.file_type().await?.is_dir() {
+            tokio::fs::remove_dir_all(entry.path()).await?;
+        } else {
+            tokio::fs::remove_file(entry.path()).await?;
+        }
+    }
+
+    match tokio::fs::remove_dir(package_dir).await {
+        Ok(()) => Ok(()),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+            ) =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn stale_installation_dirs(
     package_name: &str,
     current_install_id: &str,
 ) -> Result<Vec<AbsolutePathBuf>, Error> {
-    let legacy_install_dir = PackageMetadata::installation_dir_for(package_name, "")?;
-    let Some(parent) = legacy_install_dir.as_path().parent() else {
-        return Ok(Vec::new());
-    };
-    if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
-        return Ok(Vec::new());
+    let package_dir = PackageMetadata::installation_dir_for(package_name, "")?;
+    let mut stale_dirs = Vec::new();
+    // Current installs are UUID children of the package directory.
+    if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
+        let mut entries = tokio::fs::read_dir(&package_dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            if !entry.file_type().await?.is_dir() {
+                continue;
+            }
+
+            let file_name = entry.file_name();
+            let Some(install_id) = file_name.to_str().filter(|name| is_nested_install_id(name))
+            else {
+                continue;
+            };
+            if install_id != current_install_id
+                && let Some(path) = AbsolutePathBuf::new(entry.path())
+            {
+                stale_dirs.push(path);
+            }
+        }
     }
 
-    let Some(base_name) = legacy_install_dir.as_path().file_name().and_then(|name| name.to_str())
-    else {
-        return Ok(Vec::new());
+    let Some(parent) = package_dir.as_path().parent() else { return Ok(stale_dirs) };
+    let Some(base_name) = package_dir.as_path().file_name().and_then(|name| name.to_str()) else {
+        return Ok(stale_dirs);
     };
+    if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+        return Ok(stale_dirs);
+    }
 
-    let mut stale_dirs = Vec::new();
+    // Vite+ 0.2.2 through 0.2.5 stored immutable installs as `<package>#<uuid>` siblings.
     let mut entries = tokio::fs::read_dir(parent).await?;
     while let Some(entry) = entries.next_entry().await? {
         if !entry.file_type().await?.is_dir() {
@@ -818,7 +898,9 @@ async fn stale_installation_dirs(
         let Some(file_name) = file_name.to_str() else {
             continue;
         };
-        let Some(install_id) = stale_install_id(base_name, file_name) else {
+        let Some(install_id) =
+            file_name.strip_prefix(base_name).filter(|install_id| is_legacy_install_id(install_id))
+        else {
             continue;
         };
         if install_id == current_install_id {
@@ -831,16 +913,6 @@ async fn stale_installation_dirs(
 
     Ok(stale_dirs)
 }
-
-fn stale_install_id<'a>(base_name: &str, file_name: &'a str) -> Option<&'a str> {
-    if file_name == base_name {
-        return Some("");
-    }
-
-    let install_id = file_name.strip_prefix(base_name)?;
-    if is_install_id(install_id) { Some(install_id) } else { None }
-}
-
 async fn stale_bin_names_for_package(
     previous_metadata: Option<&PackageMetadata>,
     package_name: &str,
@@ -929,7 +1001,11 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         None => PackageMetadata::installation_dir_for(&package_name, "")?,
     };
     if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
-        tokio::fs::remove_dir_all(&package_dir).await?;
+        if metadata.as_ref().is_none_or(|metadata| metadata.install_id.is_empty()) {
+            remove_legacy_installation_contents(&package_dir).await?;
+        } else {
+            tokio::fs::remove_dir_all(&package_dir).await?;
+        }
     }
 
     // Remove metadata file
@@ -1403,6 +1479,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_uninstall_legacy_install_preserves_in_progress_nested_install() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+        let package_name = "test-package";
+
+        let metadata = PackageMetadata::new(
+            package_name.to_string(),
+            "1.0.0".to_string(),
+            "20.0.0".to_string(),
+            None,
+            Vec::new(),
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        metadata.save().await.unwrap();
+
+        let legacy_dir = metadata.installation_dir().unwrap();
+        let legacy_package_json =
+            get_node_modules_dir(&legacy_dir, package_name).join("package.json");
+        tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
+
+        // Model uninstall starting after npm populated the replacement but before metadata changed.
+        let replacement_dir = PackageMetadata::installation_dir_for(
+            package_name,
+            "123e4567-e89b-42d3-a456-426614174000",
+        )
+        .unwrap();
+        let replacement_package_json =
+            get_node_modules_dir(&replacement_dir, package_name).join("package.json");
+        let replacement_lock = lock_install_dir(&replacement_dir).unwrap();
+        tokio::fs::create_dir_all(replacement_package_json.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&replacement_package_json, "{}").await.unwrap();
+
+        uninstall(package_name, false).await.unwrap();
+
+        assert!(!legacy_package_json.as_path().exists());
+        assert!(replacement_package_json.as_path().exists());
+        assert!(install_dir_lock_path(&replacement_dir).unwrap().as_path().exists());
+        drop(replacement_lock);
+    }
+
+    #[tokio::test]
     #[cfg_attr(windows, serial_test::serial)]
     async fn test_restore_previous_install_state_removes_partial_new_bins() {
         use tempfile::TempDir;
@@ -1478,13 +1601,47 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_cleanup_stale_installations_supports_all_layouts() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+        let package_name = "@scope/test-package";
+        let current_id = "123e4567-e89b-42d3-a456-426614174000";
+        let stale_id = "987e6543-e21b-42d3-a456-426614174000";
+        let legacy_id = "#2753e02c-9319-456f-bc0f-23d6d7b6fba5";
+        let package_dir = PackageMetadata::installation_dir_for(package_name, "").unwrap();
+        let current_dir = PackageMetadata::installation_dir_for(package_name, current_id).unwrap();
+        let stale_dir = PackageMetadata::installation_dir_for(package_name, stale_id).unwrap();
+        let legacy_dir = PackageMetadata::installation_dir_for(package_name, legacy_id).unwrap();
+
+        tokio::fs::create_dir_all(&current_dir).await.unwrap();
+        tokio::fs::create_dir_all(&stale_dir).await.unwrap();
+        tokio::fs::create_dir_all(&legacy_dir).await.unwrap();
+        tokio::fs::write(install_dir_lock_path(&current_dir).unwrap(), "").await.unwrap();
+        let legacy_package_json =
+            get_node_modules_dir(&package_dir, package_name).join("package.json");
+        tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
+
+        cleanup_stale_installations(package_name, current_id).await;
+
+        assert!(current_dir.as_path().is_dir());
+        assert!(install_dir_lock_path(&current_dir).unwrap().as_path().is_file());
+        assert!(!stale_dir.as_path().exists());
+        assert!(!legacy_dir.as_path().exists());
+        assert!(!legacy_package_json.as_path().exists());
+        assert!(!install_dir_lock_path(&package_dir).unwrap().as_path().exists());
+    }
+
     #[test]
-    fn test_new_install_id_has_fixed_reserved_shape() {
+    fn test_new_install_id_is_uuid() {
         let install_id = new_install_id();
 
-        assert!(is_install_id(&install_id));
-        assert_eq!(install_id.len(), INSTALL_ID_LENGTH);
-        assert!(install_id.starts_with(INSTALL_ID_PREFIX));
+        assert!(is_nested_install_id(&install_id));
     }
 
     #[test]
