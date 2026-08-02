@@ -9,7 +9,7 @@ const DEFAULT_PROMPT = `I want to use Vite+ in my project. Vite+ is the unified 
 
 First, read https://viteplus.dev/llms-full.txt to learn Vite+'s commands and configuration.
 
-Install the \`vp\` CLI:
+Install the \`vp\` CLI if it's not already on the system:
 - macOS / Linux: curl -fsSL https://vite.plus | bash
 - Windows (PowerShell): irm https://vite.plus/ps1 | iex
 
