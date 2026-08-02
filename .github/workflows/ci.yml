@@ -1150,6 +1150,55 @@ jobs:
               RUST_BACKTRACE=1 pnpm test
             "
 
+  # Regression test for #2278: Debian slim images ship no ca-certificates
+  # package, and every vp command that touched the network aborted there
+  # (0.1.23 to 0.2.6) or failed with a handled error (#2273). The global vp
+  # is built inside a bookworm container so the binary's glibc floor matches
+  # the runtime image, then runs in node:24-bookworm-slim (the image from the
+  # report) where HTTPS must work through the bundled Mozilla roots fallback.
+  certless-image-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
+    name: Cert-less image E2E test
+    runs-on: namespace-profile-linux-x64-default
+    timeout-minutes: 30
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: certless-image-test
+
+      - name: Build the global vp in a bookworm container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+            -v "$HOME/.cargo/git:/usr/local/cargo/git" \
+            -w /work rust:1-bookworm bash -c '
+              set -e
+              apt-get update -qq && apt-get install -y -qq --no-install-recommends cmake python3
+              rustup show
+              cargo build -p vite_global_cli
+            '
+
+      - name: Run vp in node:24-bookworm-slim without a CA store
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/target/debug/vp:/usr/local/bin/vp:ro" \
+            node:24-bookworm-slim bash -c '
+              set -ex
+              # The image must actually lack the CA bundle, or this job stops
+              # guarding anything.
+              test ! -e /etc/ssl/certs/ca-certificates.crt
+              vp --version
+              # HTTPS to nodejs.org through the shared client; exits nonzero
+              # without the bundled-roots fallback.
+              vp env list-remote --lts
+            '
+
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
@@ -1365,6 +1414,7 @@ jobs:
       - lint
       - cli-e2e-test
       - cli-e2e-test-musl
+      - certless-image-test
       - cli-snapshot-test
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
