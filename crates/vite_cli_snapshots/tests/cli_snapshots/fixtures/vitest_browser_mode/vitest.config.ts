@@ -6,9 +6,16 @@ export default {
     {
       name: 'vitest-browser-mode-suppress-known-vite-logs',
       configResolved(config) {
+        // "is in use, trying another one": port fallback depends on other
+        // concurrently running servers. "[optimizer]" progress lines fire on
+        // a 1s timer, so they only appear on slow cold-cache runs.
+        const nonDeterministicLogs = [
+          'is in use, trying another one',
+          '[optimizer]',
+        ];
         const info = config.logger.info;
         config.logger.info = (message, options) => {
-          if (!message.includes('is in use, trying another one')) {
+          if (!nonDeterministicLogs.some((log) => message.includes(log))) {
             info(message, options);
           }
         };
