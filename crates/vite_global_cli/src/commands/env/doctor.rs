@@ -97,10 +97,10 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Section: Version Resolution
     print_section("Version Resolution");
-    let resolved_version = check_current_resolution(&cwd, shim_mode, system_node_path).await;
+    let resolution = check_current_resolution(&cwd, shim_mode, system_node_path).await;
 
     // Section: devEngines (conditional, see rfcs/dev-engines.md)
-    check_dev_engines(&cwd, resolved_version.as_deref()).await;
+    check_dev_engines(&cwd, resolution.as_ref()).await;
 
     // Section: Conflicts (conditional)
     check_conflicts();
@@ -538,7 +538,7 @@ async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
-) -> Option<String> {
+) -> Option<config::VersionResolution> {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
     // In system-first mode, show system Node.js info instead of managed resolution
@@ -591,7 +591,7 @@ async fn check_current_resolution(
                 );
                 print_hint("Version will be downloaded on first use.");
             }
-            Some(resolution.version)
+            Some(resolution)
         }
         Err(e) => {
             print_check(
@@ -669,8 +669,8 @@ async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<
 /// All checks are semver-aware: an exact version satisfying a declared range is
 /// not a conflict. Findings are warnings or notes; they never fail the doctor run
 /// and are never auto-fixed.
-async fn check_dev_engines(cwd: &AbsolutePathBuf, resolved_version: Option<&str>) {
-    let findings = collect_dev_engines_findings(cwd, resolved_version).await;
+async fn check_dev_engines(cwd: &AbsolutePathBuf, resolution: Option<&config::VersionResolution>) {
+    let findings = collect_dev_engines_findings(cwd, resolution).await;
     if findings.is_empty() {
         return;
     }
@@ -708,19 +708,52 @@ async fn read_workspace_root_doc(
     Some((serde_json::from_str(&content).ok()?, serde_json::from_str(&content).ok()?))
 }
 
+async fn nvmrc_conflict_finding(
+    resolution: Option<&config::VersionResolution>,
+) -> Option<DevEnginesFinding> {
+    let resolution = resolution?;
+    if !matches!(
+        resolution.source.as_str(),
+        ".node-version" | "devEngines.runtime" | "engines.node"
+    ) {
+        return None;
+    }
+
+    let project_root = resolution.project_root.as_ref()?;
+    let declared = vite_js_runtime::read_nvmrc_file(project_root).await?;
+    let version = node_semver::Version::parse(&resolution.version).ok()?;
+    let range = node_semver::Range::parse(declared.as_str()).ok()?;
+    if range.satisfies(&version) {
+        return None;
+    }
+
+    Some(DevEnginesFinding::warn(
+        "Runtime",
+        format!(
+            ".nvmrc \"{declared}\" does not include resolved Node.js {version} from {source}",
+            source = resolution.source
+        ),
+    ))
+}
+
 /// Collect the devEngines findings for the nearest package.json.
 async fn collect_dev_engines_findings(
     cwd: &AbsolutePathBuf,
-    resolved_version: Option<&str>,
+    resolution: Option<&config::VersionResolution>,
 ) -> Vec<DevEnginesFinding> {
+    let mut findings = Vec::new();
+    if let Some(finding) = nvmrc_conflict_finding(resolution).await {
+        findings.push(finding);
+    }
+
     let Some((pkg_dir, content)) = find_nearest_package_json(cwd).await else {
-        return Vec::new();
+        return findings;
     };
     let Ok(raw) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return Vec::new();
+        return findings;
     };
     let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content) else {
-        return Vec::new();
+        return findings;
     };
 
     // Package-manager checks examine the WORKSPACE ROOT package.json: that is the
@@ -733,8 +766,6 @@ async fn collect_dev_engines_findings(
         Some((root_raw, root_pkg)) => (root_raw, root_pkg),
         None => (&raw, &pkg),
     };
-
-    let mut findings: Vec<DevEnginesFinding> = Vec::new();
 
     let runtime_field = pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref());
     let package_manager_field =
@@ -762,15 +793,18 @@ async fn collect_dev_engines_findings(
     }
 
     // Resolved Node.js version vs engines.node
-    if let Some(resolved) = resolved_version
+    if let Some(resolution) = resolution
         && let Some(engines_node) = pkg.engines.as_ref().and_then(|e| e.node.as_ref())
-        && let Ok(version) = node_semver::Version::parse(resolved)
+        && let Ok(version) = node_semver::Version::parse(&resolution.version)
         && let Ok(range) = node_semver::Range::parse(engines_node.as_str())
         && !range.satisfies(&version)
     {
         findings.push(DevEnginesFinding::warn(
             "Runtime",
-            format!("resolved Node.js {resolved} does not satisfy engines.node \"{engines_node}\""),
+            format!(
+                "resolved Node.js {} does not satisfy engines.node \"{engines_node}\"",
+                resolution.version
+            ),
         ));
     }
 
@@ -994,14 +1028,21 @@ mod tests {
     /// Test helper: write `files` into a temp project and collect devEngines findings.
     async fn dev_engines_findings_for(
         files: &[(&str, &str)],
-        resolved_version: Option<&str>,
+        resolved: Option<(&str, &str)>,
     ) -> Vec<DevEnginesFinding> {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         for (name, content) in files {
             tokio::fs::write(temp_path.join(*name), content).await.unwrap();
         }
-        collect_dev_engines_findings(&temp_path, resolved_version).await
+        let resolution = resolved.map(|(version, source)| config::VersionResolution {
+            version: version.into(),
+            source: source.into(),
+            source_path: None,
+            project_root: Some(temp_path.clone()),
+            is_range: false,
+        });
+        collect_dev_engines_findings(&temp_path, resolution.as_ref()).await
     }
 
     // npm-install-checks: "semver version is not in range" (via .node-version)
@@ -1052,7 +1093,7 @@ mod tests {
     async fn test_dev_engines_findings_resolved_violates_engines_node() {
         let findings = dev_engines_findings_for(
             &[("package.json", r#"{"engines":{"node":">=22.0.0"}}"#)],
-            Some("20.18.0"),
+            Some(("20.18.0", "engines.node")),
         )
         .await;
 
@@ -1063,6 +1104,53 @@ mod tests {
             "got: {}",
             findings[0].message
         );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_nvmrc_conflicts_with_dev_engines() {
+        let findings = dev_engines_findings_for(
+            &[
+                (".nvmrc", "20\n"),
+                (
+                    "package.json",
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"^22.0.0"}}}"#,
+                ),
+            ],
+            Some(("22.5.0", "devEngines.runtime")),
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].message.contains(".nvmrc \"20\" does not include"));
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_nvmrc_conflicts_without_package_json() {
+        let findings = dev_engines_findings_for(
+            &[(".node-version", "22.5.0\n"), (".nvmrc", "20\n")],
+            Some(("22.5.0", ".node-version")),
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].message.contains("from .node-version"));
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_nvmrc_satisfies_resolved_version() {
+        let findings = dev_engines_findings_for(
+            &[
+                (".nvmrc", "22\n"),
+                (
+                    "package.json",
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"^22.0.0"}}}"#,
+                ),
+            ],
+            Some(("22.5.0", "devEngines.runtime")),
+        )
+        .await;
+
+        assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
     }
 
     // npm-install-checks: "invalid name"
@@ -1349,7 +1437,7 @@ mod tests {
                     }"#,
                 ),
             ],
-            Some("24.1.0"),
+            Some(("24.1.0", ".node-version")),
         )
         .await;
 

@@ -37,7 +37,7 @@ pub async fn download_file(
     target_path: &AbsolutePath,
     message: &str,
 ) -> Result<(), Error> {
-    let client = vite_shared::shared_http_client();
+    let client = vite_shared::shared_http_client()?;
 
     tracing::debug!("Downloading {url} to {target_path:?}");
 
@@ -144,7 +144,7 @@ pub async fn download_file(
 /// Download text content from a URL with retry logic
 #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
 pub async fn download_text(url: &str) -> Result<String, Error> {
-    let client = vite_shared::shared_http_client();
+    let client = vite_shared::shared_http_client()?;
 
     tracing::debug!("Downloading text from {url}");
 
@@ -173,7 +173,7 @@ pub async fn fetch_json_with_cache_headers<T: DeserializeOwned>(
     url: &str,
     if_none_match: Option<&str>,
 ) -> Result<CachedFetchResponse<T>, Error> {
-    let client = vite_shared::shared_http_client();
+    let client = vite_shared::shared_http_client()?;
 
     tracing::debug!("Fetching with cache headers from {url}");
 
