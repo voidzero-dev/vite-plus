@@ -6,12 +6,16 @@
 
 Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
 
-The project Node.js version is resolved from these sources, in priority order:
+Vite+ checks the current directory first, then walks up through its parents. The nearest directory
+with a supported declaration wins. Within each directory, sources are checked in this order:
 
-1. `.node-version` file (current or parent directories)
+1. `.node-version` file
 2. `devEngines.runtime` in `package.json` (the [devEngines standard](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines))
 3. `engines.node` in `package.json`
-4. The global default (`vp env default`), then the latest LTS
+4. `.nvmrc` file
+
+If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the
+latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
@@ -112,7 +116,7 @@ vp env print                  # Print shell snippet for this session
 
 # Manage
 vp env pin lts                # Pin the project to the latest LTS release
-vp env install                # Install the version from .node-version or package.json
+vp env install                # Install the version from .node-version, package.json, or .nvmrc
 vp env default lts            # Set the global default version
 vp env use 20                 # Use Node.js 20 for the current shell session
 vp env use --unset            # Remove the session override
