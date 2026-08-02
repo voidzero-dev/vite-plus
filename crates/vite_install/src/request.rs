@@ -55,7 +55,7 @@ impl HttpClient {
     pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>, Error> {
         tracing::debug!("Fetching bytes from: {}", url);
 
-        let client = vite_shared::shared_http_client();
+        let client = vite_shared::shared_http_client()?;
 
         // Read the body inside the retry so a mid-body connection drop gets
         // retried instead of failing outright, like `download_file`.
@@ -116,7 +116,7 @@ impl HttpClient {
     ) -> Result<T, Error> {
         tracing::debug!("Fetching JSON from: {} (accept: {:?})", url, accept);
 
-        let client = vite_shared::shared_http_client();
+        let client = vite_shared::shared_http_client()?;
         (|| async {
             let mut request = client.get(url);
             if let Some(accept) = accept {
@@ -153,7 +153,7 @@ impl HttpClient {
         let target_path = target_path.as_ref();
         tracing::debug!("Downloading {} to {:?}", url, target_path);
 
-        let client = vite_shared::shared_http_client();
+        let client = vite_shared::shared_http_client()?;
 
         // Make the request *and* the body stream a single retried unit. Doing
         // the request inline (instead of calling `self.get`) avoids a double
