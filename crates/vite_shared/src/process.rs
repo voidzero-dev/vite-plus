@@ -1,6 +1,7 @@
 use std::process::ExitStatus;
 
 /// Convert a process status to the shell-compatible exit code used by CLI callers.
+#[expect(clippy::disallowed_methods, reason = "sole sanctioned `ExitStatus::code` caller")]
 pub fn exit_code_from_status(status: ExitStatus) -> i32 {
     #[cfg(unix)]
     {
