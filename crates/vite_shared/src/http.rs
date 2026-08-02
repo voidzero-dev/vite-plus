@@ -223,6 +223,24 @@ mod tests {
     const PEM_WITH_INVALID_DER: &[u8] =
         b"-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n";
 
+    /// Writes the invalid-DER fixture, points `SSL_CERT_FILE` at it around
+    /// `f`, and cleans up. Callers must hold the `serial(env)` lock.
+    fn with_invalid_ssl_cert_file<T>(tag: &str, f: impl FnOnce() -> T) -> T {
+        let bundle = std::env::temp_dir()
+            .join(vite_str::format!("vp-invalid-ca-{tag}-{}.pem", std::process::id()).as_str());
+        std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
+        // SAFETY: env access in this module's tests is serialized.
+        unsafe {
+            std::env::set_var(env_vars::SSL_CERT_FILE, &bundle);
+        }
+        let result = f();
+        unsafe {
+            std::env::remove_var(env_vars::SSL_CERT_FILE);
+        }
+        let _ = std::fs::remove_file(&bundle);
+        result
+    }
+
     /// Callers already treat "no HTTP client" as a handled outcome, but a panic
     /// never reaches them: `[profile.release]` sets `panic = "abort"`, so this
     /// is a SIGABRT, not a recoverable unwind. Reported in the wild as
@@ -231,23 +249,12 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn client_build_failure_reaches_the_caller_instead_of_panicking() {
-        let bundle = std::env::temp_dir()
-            .join(vite_str::format!("vp-invalid-ca-{}.pem", std::process::id()).as_str());
-        std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
-        // SAFETY: env access in this module's tests is serialized.
-        unsafe {
-            std::env::set_var(env_vars::SSL_CERT_FILE, &bundle);
-        }
-
         // Discard the value: only *how* the failure is reported is under test.
-        let outcome = std::panic::catch_unwind(|| {
-            let _ = shared_http_client();
+        let outcome = with_invalid_ssl_cert_file("panic", || {
+            std::panic::catch_unwind(|| {
+                let _ = shared_http_client();
+            })
         });
-
-        unsafe {
-            std::env::remove_var(env_vars::SSL_CERT_FILE);
-        }
-        let _ = std::fs::remove_file(&bundle);
 
         assert!(
             outcome.is_ok(),
@@ -278,20 +285,7 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn bundled_roots_fallback_does_not_mask_other_build_failures() {
-        let bundle = std::env::temp_dir()
-            .join(vite_str::format!("vp-invalid-ca-fallback-{}.pem", std::process::id()).as_str());
-        std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
-        // SAFETY: env access in this module's tests is serialized.
-        unsafe {
-            std::env::set_var(env_vars::SSL_CERT_FILE, &bundle);
-        }
-
-        let result = build_client();
-
-        unsafe {
-            std::env::remove_var(env_vars::SSL_CERT_FILE);
-        }
-        let _ = std::fs::remove_file(&bundle);
+        let result = with_invalid_ssl_cert_file("fallback", build_client);
 
         assert!(
             result.is_err(),
