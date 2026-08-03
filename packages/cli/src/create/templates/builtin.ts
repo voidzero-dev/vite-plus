@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -7,10 +8,16 @@ import colors from 'picocolors';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
+import { isTargetDirAvailable } from '../prompts.ts';
 import { setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
+
+function reportLibraryScaffoldFailure(result: ExecutionWithProjectDir, fallback: string) {
+  const output = result.stderr?.toString().trim() || result.stdout?.toString().trim();
+  prompts.log.error(output || fallback);
+}
 
 export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,
@@ -31,10 +38,18 @@ export async function executeBuiltinTemplate(
     }
     templateInfo.args.unshift(templateInfo.targetDir);
   } else if (templateInfo.command === BuiltinTemplate.library) {
+    const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
+    // `degit --force` is needed when the destination only contains `.git`,
+    // which Vite+ deliberately treats as available. Re-check immediately
+    // before invoking degit so force is not used when user files are present.
+    if (!isTargetDirAvailable(fullPath)) {
+      prompts.log.error(`Target directory "${fullPath}" is not empty`);
+      return { exitCode: 1 };
+    }
     // Use degit to download the template directly from GitHub
     const libraryTemplateInfo = discoverTemplate(
       LibraryTemplateRepo,
-      [templateInfo.targetDir],
+      [templateInfo.targetDir, '--force'],
       workspaceInfo,
     );
     const result = await runRemoteTemplateCommand(
@@ -45,9 +60,13 @@ export async function executeBuiltinTemplate(
       options?.silent ?? false,
     );
     if (result.exitCode !== 0) {
+      reportLibraryScaffoldFailure(result, 'Failed to download the library template');
       return { exitCode: result.exitCode };
     }
-    const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
+    if (!fs.existsSync(path.join(fullPath, 'package.json'))) {
+      reportLibraryScaffoldFailure(result, 'Library template did not create package.json');
+      return { exitCode: 1 };
+    }
     setPackageName(fullPath, templateInfo.packageName);
     return { ...result, projectDir: templateInfo.targetDir };
   }

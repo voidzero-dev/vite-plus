@@ -9,6 +9,9 @@ Usage: vp check [OPTIONS] [PATHS]...
 
 Run format, lint, and type checks.
 
+Arguments:
+  [PATHS]...  File paths to pass to fmt and lint
+
 Options:
   --fix                            Auto-fix format and lint issues
   --no-fmt                         Skip format check
@@ -33,6 +36,9 @@ Usage: vp check [OPTIONS] [PATHS]...
 
 Run format, lint, and type checks.
 
+Arguments:
+  [PATHS]...  File paths to pass to fmt and lint
+
 Options:
   --fix                            Auto-fix format and lint issues
   --no-fmt                         Skip format check
@@ -56,6 +62,9 @@ VITE+ - The Unified Toolchain for the Web
 Usage: vp check [OPTIONS] [PATHS]...
 
 Run format, lint, and type checks.
+
+Arguments:
+  [PATHS]...  File paths to pass to fmt and lint
 
 Options:
   --fix                            Auto-fix format and lint issues

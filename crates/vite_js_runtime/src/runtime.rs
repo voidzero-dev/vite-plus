@@ -786,6 +786,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_no_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -818,6 +822,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_does_not_write_back_when_no_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -899,6 +907,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_no_package_json() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1210,6 +1222,10 @@ mod tests {
     // ==========================================
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_invalid_node_version_file_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1232,6 +1248,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_invalid_engines_node_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1251,6 +1271,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_invalid_dev_engines_runtime_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1449,6 +1473,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_with_lts_latest_alias() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

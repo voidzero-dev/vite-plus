@@ -178,5 +178,24 @@ export function brandVite(rootDir: string = process.cwd()) {
     reporterResults.includes('patched') ? 'patched' : 'already',
   );
 
+  // 6. config.ts: Suppress the `configLoader: 'native'` migration notice.
+  // Vite+ manages config loading on the user's behalf and reads the config
+  // through the bundle loader for many commands (check/lint/fmt/build/run),
+  // where this upstream notice is pure noise across vp's output. The
+  // compat-check plugin only collects incompatibilities to feed the warning
+  // (its transform always returns null), so never registering it leaves the
+  // `nativeIncompatibilities` list empty and no warning is emitted. The `false`
+  // guard keeps the import referenced so the type-check stays clean.
+  const configFile = join(nodeDir, 'config.ts');
+  logPatch(
+    'config.ts',
+    'Suppressed native config loader migration notice',
+    replaceInFile(
+      configFile,
+      '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
+      "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
+    ),
+  );
+
   log('Done!');
 }

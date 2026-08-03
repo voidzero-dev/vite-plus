@@ -245,6 +245,8 @@ jobs:
 
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain.
+      # Cross-compiled archives may also contain host-built proc-macro tests;
+      # filter them out before Windows tries to list their ELF binaries.
       # --test-threads=1: nextest runs each test in its own process, so
       # serial_test's in-process locks no longer serialize tests that contend
       # on cross-process shared state (fixed temp paths, e.g.
@@ -252,7 +254,7 @@ jobs:
       # only ~1 minute of test time, so full serialization is cheap
       # insurance; revisit if it becomes the bottleneck.
       - name: Run tests
-        run: cargo-nextest nextest run --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
+        run: cargo-nextest nextest run -E 'platform(target)' --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
         env:
           RUST_MIN_STACK: '8388608'
           # Keep Windows env parity with the `test` recipe in justfile.

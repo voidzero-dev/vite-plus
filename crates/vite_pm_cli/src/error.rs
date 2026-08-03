@@ -20,6 +20,13 @@ pub enum Error {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("Invalid {manager} version {version}: {source}")]
+    InvalidPackageManagerVersion {
+        manager: crate::PackageManagerType,
+        version: String,
+        source: semver::Error,
+    },
+
     /// User-facing message printed without the "Error: " prefix.
     #[error("{0}")]
     UserMessage(Str),
