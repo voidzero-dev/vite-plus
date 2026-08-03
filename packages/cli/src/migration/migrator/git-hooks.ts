@@ -146,7 +146,7 @@ id: replace-standard-husky
 language: bash
 rule:
   kind: command
-  regex: '^husky(?:[ \t]+(?:init|install(?:[ \t]+(?:\./)?\.husky/?)?|(?:\./)?\.husky/?))?$'
+  regex: '^husky(?:[ \t]+(?:install(?:[ \t]+(?:\./)?\.husky/?)?|(?:\./)?\.husky/?))?$'
 fix: vp config
 `;
 

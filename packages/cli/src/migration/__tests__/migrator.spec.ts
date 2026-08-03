@@ -8624,7 +8624,6 @@ describe('conventional Husky prepare migration', () => {
   it.each([
     ['husky', 'vp config'],
     ['husky install', 'vp config'],
-    ['husky init && npm run build', 'vp config && npm run build'],
     ['husky .husky', 'vp config'],
     ['npm run build && husky install ./.husky', 'npm run build && vp config'],
     ['husky # initialize hooks\nnpm run build', 'vp config # initialize hooks\nnpm run build'],
@@ -8641,6 +8640,7 @@ describe('conventional Husky prepare migration', () => {
 
   it.each([
     'husky .config/husky',
+    'husky init',
     'husky install ".config/husky hooks" && npm run build',
     String.raw`husky install .config/husky\ hooks`,
     'husky $HOOKS_DIR',
