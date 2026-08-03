@@ -8915,6 +8915,18 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
+  it.skipIf(process.platform === 'win32')('rejects hard-linked project hooks', () => {
+    const externalHook = path.join(tmpDir, 'shared-pre-commit');
+    fs.mkdirSync(path.join(tmpDir, '.config', 'husky'), { recursive: true });
+    fs.writeFileSync(externalHook, 'npx lint-staged\n');
+    fs.linkSync(externalHook, path.join(tmpDir, '.config', 'husky', 'pre-commit'));
+
+    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
+      'Multiply linked Git hook path ".config/husky/pre-commit" cannot be migrated safely',
+    );
+    expect(fs.readFileSync(externalHook, 'utf8')).toBe('npx lint-staged\n');
+  });
+
   it('rejects a directory where a project hook file is expected', () => {
     fs.mkdirSync(path.join(tmpDir, '.husky', 'pre-commit'), { recursive: true });
 
