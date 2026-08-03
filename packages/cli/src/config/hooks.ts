@@ -32,9 +32,10 @@ function nestedDirname(depth: number): string {
 // `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
 export function hookScript(dir: string): string {
   // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
-  // Accept both POSIX and Windows separators, and filter out empty strings and
-  // '.' to handle paths like "./.config/husky".
-  const segments = dir.split(/[\\/]/).filter((s) => s !== '' && s !== '.').length;
+  // Git accepts forward slashes on every platform; Windows also accepts its
+  // native backslash. On POSIX, a backslash is a literal filename character.
+  const separators = process.platform === 'win32' ? /[\\/]/ : /\//;
+  const segments = dir.split(separators).filter((s) => s !== '' && s !== '.').length;
   const depth = segments + 2; // +2 for _ subdir and hook filename
   const rootExpr = nestedDirname(depth);
   return `#!/usr/bin/env sh

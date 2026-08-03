@@ -238,11 +238,15 @@ describe('hookScript', () => {
     expect(countDirnameCalls(withDot)).toBe(3);
   });
 
-  it('should handle Windows separators in nested dirs', () => {
+  it.skipIf(process.platform !== 'win32')('should handle Windows separators in nested dirs', () => {
     const withWindowsSeparators = hookScript('.config\\husky');
     const withPosixSeparators = hookScript('.config/husky');
     expect(countDirnameCalls(withWindowsSeparators)).toBe(countDirnameCalls(withPosixSeparators));
     expect(countDirnameCalls(withWindowsSeparators)).toBe(4);
+  });
+
+  it.skipIf(process.platform === 'win32')('treats a backslash as a literal POSIX filename', () => {
+    expect(countDirnameCalls(hookScript('.config\\husky'))).toBe(3);
   });
 
   it.skipIf(process.platform === 'win32')(
