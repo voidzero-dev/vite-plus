@@ -563,8 +563,8 @@ export function setupGitHooks(
           hasExistingHookPolicy,
         ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
       const preserveHusky =
-        hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
-        hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
+        hasHuskyCommandInProjectHooks(projectPath, hooksDir) ||
+        hasHuskyCommandInPackageScripts(packageJsonPath);
       finalizeStagedConfigMigration(
         packageJsonPath,
         migratedStandaloneConfigPaths,
@@ -622,8 +622,8 @@ export function setupGitHooks(
           hasExistingHookPolicy,
         ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
       const preserveHusky =
-        hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
-        hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
+        hasHuskyCommandInProjectHooks(projectPath, hooksDir) ||
+        hasHuskyCommandInPackageScripts(packageJsonPath);
       finalizeStagedConfigMigration(
         packageJsonPath,
         migratedStandaloneConfigPaths,
@@ -1128,6 +1128,17 @@ function hasLintStagedReferenceInProjectHooks(projectPath: string, dir: string):
 
 function hasLintStagedReferenceInPackageScripts(packageJsonPath: string): boolean {
   return hasToolReferenceInPackageScripts(packageJsonPath, /\blint-staged\b/);
+}
+
+function hasHuskyCommandInProjectHooks(projectPath: string, dir: string): boolean {
+  return getProjectHookFilePaths(projectPath, dir).some((hookPath) =>
+    Boolean(markHuskyCommands(fs.readFileSync(hookPath, 'utf8'))),
+  );
+}
+
+function hasHuskyCommandInPackageScripts(packageJsonPath: string): boolean {
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
+  return Object.values(pkg.scripts ?? {}).some((script) => Boolean(markHuskyCommands(script)));
 }
 
 function hasToolReferenceInProjectHooks(
