@@ -97,6 +97,31 @@ describe('install', () => {
     });
   });
 
+  it.skipIf(process.platform === 'win32')('does not replace an existing Husky hooks path', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-path-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      execSync('git config core.hooksPath .husky/_', { cwd: tmp });
+      mkdirSync(join(tmp, '.husky'));
+      writeFileSync(join(tmp, '.husky', 'pre-commit'), 'npm test\n');
+      process.chdir(tmp);
+
+      expect(install()).toEqual({
+        message: 'core.hooksPath is already set to ".husky/_", skipping',
+        isError: false,
+      });
+      expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+        '.husky/_',
+      );
+      expect(readFileSync(join(tmp, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
+      expect(existsSync(join(tmp, '.vite-hooks'))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')(
     'does not write through a symbolic dispatcher file',
     () => {

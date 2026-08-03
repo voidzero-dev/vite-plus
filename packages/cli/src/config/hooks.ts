@@ -172,12 +172,7 @@ export function install(dir = '.vite-hooks'): InstallResult {
   const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
   const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
-  if (
-    existingHooksPath &&
-    existingHooksPath !== target &&
-    existingHooksPath !== '.husky' &&
-    !existingHooksPath.startsWith('.husky/')
-  ) {
+  if (existingHooksPath && existingHooksPath !== target) {
     return {
       message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
       isError: false,
