@@ -1,1 +1,5 @@
-{ "name": "spread-config", "private": true }
+{
+  "name": "spread-config",
+  "type": "module",
+  "private": true
+}
