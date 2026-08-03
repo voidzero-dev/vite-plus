@@ -149,6 +149,9 @@ export function install(dir = '.vite-hooks'): InstallResult {
   if (isAbsolute(dir)) {
     return { message: 'absolute hooks directory not allowed', isError: false };
   }
+  if (relative(process.cwd(), resolve(process.cwd(), dir)) === '') {
+    return { message: 'hooks directory must be a project subdirectory', isError: false };
+  }
   const unsafeInstallPath = findUnsafeHookInstallPath(process.cwd(), dir);
   if (unsafeInstallPath) {
     return { message: describeUnsafeHookInstallPath(unsafeInstallPath), isError: false };

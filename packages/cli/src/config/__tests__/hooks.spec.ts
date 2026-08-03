@@ -90,6 +90,13 @@ describe('install', () => {
     });
   });
 
+  it.each(['', '.', './'])('rejects the project root as hooks directory: %j', (hooksDir) => {
+    expect(install(hooksDir)).toEqual({
+      message: 'hooks directory must be a project subdirectory',
+      isError: false,
+    });
+  });
+
   it.skipIf(process.platform === 'win32')(
     'does not write through a symbolic dispatcher file',
     () => {
