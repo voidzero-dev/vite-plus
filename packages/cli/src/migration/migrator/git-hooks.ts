@@ -130,13 +130,18 @@ function findGitRoot(startPath: string): string | null {
 }
 
 const HUSKY_COMMAND_MARKER = '__vite_plus_migrate_husky_command__';
-const MARKED_HUSKY_COMMAND_PATTERN = new RegExp(
-  `${HUSKY_COMMAND_MARKER}(?:\\s+install)?(?:\\s+(?:"(?<doubleQuotedDir>[^"]*)"|'(?<singleQuotedDir>[^']*)'|(?<bareDir>[^\\s;&|()<>]+)))?`,
-  'g',
-);
 
 interface MarkedHuskyCommand {
   dir: string | undefined;
+  rawDir: string | undefined;
+  start: number;
+  end: number;
+}
+
+interface ShellWord {
+  value: string;
+  raw: string;
+  end: number;
 }
 
 function markHuskyCommands(script: string): string | undefined {
@@ -149,14 +154,84 @@ function markHuskyCommands(script: string): string | undefined {
   return updated ? (JSON.parse(updated).prepare as string) : undefined;
 }
 
+function skipShellWhitespace(script: string, start: number): number {
+  let cursor = start;
+  while (/\s/.test(script[cursor] ?? '')) {
+    cursor++;
+  }
+  return cursor;
+}
+
+function parseShellWord(script: string, start: number): ShellWord | undefined {
+  const operator = /[;&|()<>]/;
+  let cursor = skipShellWhitespace(script, start);
+  const wordStart = cursor;
+  let value = '';
+  let quote: 'single' | 'double' | undefined;
+
+  while (cursor < script.length) {
+    const character = script[cursor];
+    if (!quote && (/\s/.test(character) || operator.test(character))) {
+      break;
+    }
+    if (!quote && character === "'") {
+      quote = 'single';
+      cursor++;
+      continue;
+    }
+    if (!quote && character === '"') {
+      quote = 'double';
+      cursor++;
+      continue;
+    }
+    if (quote === 'single' && character === "'") {
+      quote = undefined;
+      cursor++;
+      continue;
+    }
+    if (quote === 'double' && character === '"') {
+      quote = undefined;
+      cursor++;
+      continue;
+    }
+    if (quote !== 'single' && character === '\\') {
+      const escaped = script[cursor + 1];
+      if (escaped == null) {
+        return undefined;
+      }
+      value +=
+        quote === 'double' && !['$', '`', '"', '\\', '\n'].includes(escaped)
+          ? `\\${escaped}`
+          : escaped;
+      cursor += 2;
+      continue;
+    }
+    value += character;
+    cursor++;
+  }
+
+  if (quote || cursor === wordStart) {
+    return undefined;
+  }
+  return { value, raw: script.slice(wordStart, cursor), end: cursor };
+}
+
 function getMarkedHuskyCommands(script: string): MarkedHuskyCommand[] {
-  return [...script.matchAll(MARKED_HUSKY_COMMAND_PATTERN)].map((match) => {
-    const groups = match.groups as
-      | { doubleQuotedDir?: string; singleQuotedDir?: string; bareDir?: string }
-      | undefined;
-    const dir = groups?.doubleQuotedDir ?? groups?.singleQuotedDir ?? groups?.bareDir;
-    return { dir };
-  });
+  const commands: MarkedHuskyCommand[] = [];
+  let searchStart = 0;
+  while (true) {
+    const start = script.indexOf(HUSKY_COMMAND_MARKER, searchStart);
+    if (start === -1) {
+      return commands;
+    }
+    const markerEnd = start + HUSKY_COMMAND_MARKER.length;
+    const firstWord = parseShellWord(script, markerEnd);
+    const dirWord =
+      firstWord?.value === 'install' ? parseShellWord(script, firstWord.end) : firstWord;
+    const end = dirWord?.end ?? firstWord?.end ?? markerEnd;
+    commands.push({ dir: dirWord?.value, rawDir: dirWord?.raw, start, end });
+    searchStart = end;
+  }
 }
 
 /**
@@ -960,21 +1035,12 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
     if (markedPrepare) {
       const commands = getMarkedHuskyCommands(markedPrepare);
       oldDir = commands.at(-1)?.dir ?? '.husky';
-      pkg.scripts.prepare = markedPrepare.replace(
-        MARKED_HUSKY_COMMAND_PATTERN,
-        (...args: unknown[]) => {
-          const groups = args.at(-1) as
-            | { doubleQuotedDir?: string; singleQuotedDir?: string; bareDir?: string }
-            | undefined;
-          const rawDir =
-            groups?.doubleQuotedDir != null
-              ? `"${groups.doubleQuotedDir}"`
-              : groups?.singleQuotedDir != null
-                ? `'${groups.singleQuotedDir}'`
-                : groups?.bareDir;
-          return rawDir ? `vp config --hooks-dir ${rawDir}` : 'vp config';
-        },
-      );
+      pkg.scripts.prepare = commands.toReversed().reduce((prepare, command) => {
+        const replacement = command.rawDir
+          ? `vp config --hooks-dir ${command.rawDir}`
+          : 'vp config';
+        return `${prepare.slice(0, command.start)}${replacement}${prepare.slice(command.end)}`;
+      }, markedPrepare);
     }
     return pkg;
   });

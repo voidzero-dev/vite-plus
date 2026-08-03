@@ -8623,6 +8623,32 @@ describe('custom Husky directory parsing', () => {
       `vp config --hooks-dir ${quote}${hooksDir}${quote} && npm run build`,
     );
   });
+
+  it('preserves an escaped space in a custom directory', () => {
+    const prepare = String.raw`husky install .config/husky\ hooks && npm run build`;
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+
+    expect(getOldHooksDir(tmpDir)).toBe('.config/husky hooks');
+    expect(rewritePrepareScript(tmpDir)).toBe('.config/husky hooks');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe(
+      String.raw`vp config --hooks-dir .config/husky\ hooks && npm run build`,
+    );
+  });
+
+  it('preserves a backslash inside a double-quoted custom directory', () => {
+    const prepare = String.raw`husky ".config\husky"`;
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+
+    expect(getOldHooksDir(tmpDir)).toBe(String.raw`.config\husky`);
+    expect(rewritePrepareScript(tmpDir)).toBe(String.raw`.config\husky`);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe(String.raw`vp config --hooks-dir ".config\husky"`);
+  });
 });
 
 describe('preflightGitHooksSetup husky catalog resolution', () => {
