@@ -170,11 +170,7 @@ export function installGitHooks(
   packageManager?: PackageManager,
 ): boolean {
   const oldHooksDir = getOldHooksDir(projectPath);
-  if (setupGitHooks(projectPath, oldHooksDir, silent, report, packageManager)) {
-    rewritePrepareScript(projectPath);
-    return true;
-  }
-  return false;
+  return setupGitHooks(projectPath, oldHooksDir, silent, report, packageManager);
 }
 
 /**
@@ -388,6 +384,11 @@ export function setupGitHooks(
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
+    if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
+      rollbackProjectFiles();
+      warnMigration('Failed to rewrite the Husky prepare script', report);
+      return false;
+    }
     const preserveLintStaged = migrateProjectHooks(
       projectPath,
       oldHooksDir,
@@ -437,6 +438,12 @@ export function setupGitHooks(
       warnMigration(`Git hooks not configured — ${stdout}`, report);
       return false;
     }
+    if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
+      rollbackProjectFiles();
+      restoreHooksPath(projectPath, previousHooksPath);
+      warnMigration('Failed to rewrite the Husky prepare script', report);
+      return false;
+    }
     const preserveLintStaged = migrateProjectHooks(
       projectPath,
       oldHooksDir,
@@ -463,6 +470,20 @@ export function setupGitHooks(
   restoreHooksPath(projectPath, previousHooksPath);
   warnMigration('Failed to install git hooks', report);
   return false;
+}
+
+function rewriteDetectedHuskyPrepareScript(
+  projectPath: string,
+  oldHooksDir: string | undefined,
+): boolean {
+  if (oldHooksDir == null) {
+    return true;
+  }
+  try {
+    return rewritePrepareScript(projectPath) === oldHooksDir;
+  } catch {
+    return false;
+  }
 }
 
 function migrateProjectHooks(

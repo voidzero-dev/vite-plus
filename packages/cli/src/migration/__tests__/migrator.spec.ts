@@ -55,6 +55,7 @@ const {
   getOldHooksDir,
   installGitHooks,
   rewritePrepareScript,
+  setupGitHooks,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
   pnpmSupportsWorkspaceSettings,
@@ -8998,6 +8999,28 @@ describe('installGitHooks project hook migration', () => {
       } else {
         process.env.VP_CLI_BIN = previousVpCliBin;
       }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rolls back when the detected Husky directory disagrees with the prepare script', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-prepare-rollback-'));
+    try {
+      const packageJson = `${JSON.stringify(
+        {
+          scripts: { prepare: 'husky' },
+          devDependencies: { husky: '^9.1.7' },
+        },
+        null,
+        2,
+      )}\n`;
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+
+      expect(setupGitHooks(tmpDir, '.config/husky', true)).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+      expect(fs.existsSync(path.join(tmpDir, '.config', 'husky'))).toBe(false);
+    } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
