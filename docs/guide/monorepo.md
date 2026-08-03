@@ -209,7 +209,7 @@ vp -C apps/web build
 vp -C packages/ui pack
 ```
 
-Passing a folder as a positional (`vp dev apps/web`) still works, but keeps upstream Vite semantics: it sets Vite's `root` option without changing the working directory, so `process.cwd()` reads in configs and plugins resolve from where you ran vp. Prefer `-C` when the package should behave as if you had `cd`'d into it.
+Passing a folder as a positional (`vp dev apps/web`) still works, but keeps upstream Vite semantics: it sets Vite's `root` option without changing the working directory, so `process.cwd()` reads in configs and plugins resolve from where you ran vp. Prefer `-C` when the package should behave as if you had `cd`'d into it. When a directory positional is used, vp prints a one-line note pointing at the `-C` form.
 
 ### A fixed default with `defaultPackage`
 
@@ -223,7 +223,7 @@ export default {
 
 ```
 $ vp dev
-note: vp dev: using ./apps/web (defaultPackage)
+note: vp dev: using ./apps/web (defaultPackage in vite.config.ts)
 
   VITE+ v0.2.2
 

@@ -201,7 +201,7 @@ Bare app commands at the root now behave as `vp -C ./frontend <cmd>`, with one l
 
 ```
 $ vp dev
-vp dev: using ./frontend (defaultPackage)
+vp dev: using ./frontend (defaultPackage in vite.config.ts)
 
   VITE+ v0.2.2
 
@@ -368,7 +368,7 @@ The interactive picker gets pty snapshot coverage in the `vite_task` repo style 
 2. Add a `VP_DEFAULT_PACKAGE` env override later? Env companions are an established pattern (`NX_DEFAULT_PROJECT`); deferred from v1.
 3. Should `vp test` join the elicitation set? Probably not: Vitest already has first-class `projects` semantics at the root (`-C` works with it regardless).
 4. Exact non-interactive gate: the `vp run` picker's TTY check plus the `CI` check used by the global command picker?
-5. Should `vp dev <dir>` print a one-line tip pointing at `vp -C <dir> dev`, or would that be noise on a fully supported upstream form?
+5. Resolved during review: `vp dev <dir>` with a directory positional prints a one-line note pointing at `vp -C <dir> dev` (dev/build/preview only; pack positionals are entries, and flags-only or help invocations stay silent).
 
 ## Appendix: Naming Survey for `defaultPackage`
 

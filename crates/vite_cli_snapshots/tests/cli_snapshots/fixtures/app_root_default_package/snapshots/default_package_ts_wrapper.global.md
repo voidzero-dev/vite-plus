@@ -9,7 +9,7 @@ must be honored. vp builds ./frontend, not the wrapper root.
 ```
 VITE+ - The Unified Toolchain for the Web
 
-note: vp build: using ./frontend (defaultPackage)
+note: vp build: using ./frontend (defaultPackage in vite.config.ts)
 ✓ 2 modules transformed.
 computing gzip size...
 dist/index.html  <size> kB │ gzip: <size> kB

@@ -7,7 +7,7 @@ line and runs in the configured directory (rfcs/cwd-flag.md).
 ## `vp pack`
 
 ```
-note: vp pack: using ./packages/ui (defaultPackage)
+note: vp pack: using ./packages/ui (defaultPackage in vite.config.ts)
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <size> kB │ gzip: <size> kB

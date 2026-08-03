@@ -83,14 +83,32 @@ const PACK_BOOLEAN_FLAGS: &[&str] = &[
     "--unused",
 ];
 
-/// Bare = no positional target and no help-like flag. Mirrors the tools'
-/// own cac/mri parsing: a non-flag token after any non-boolean flag is that
-/// flag's value (the tool would never see it as a positional), while a token
-/// after a boolean flag is a positional target and disables elicitation.
-/// pack's workspace selectors already define their own target set and
-/// disable elicitation outright. Help/version requests are answered by the
-/// underlying tool and must never be redirected.
+/// How an app command's arguments target it, per the walk in
+/// [`classify_args`].
+enum ArgTarget<'a> {
+    /// No positional target and no help-like flag: elicitation territory.
+    Bare,
+    /// The first token the tool would treat as a positional (a Vite `[root]`
+    /// or a pack entry), including one after a `--` terminator.
+    Positional(&'a str),
+    /// Explicitly targeted without a positional (help/version request, an
+    /// explicit `-c`/`--config` file, pack workspace selectors): forward
+    /// untouched.
+    Explicit,
+}
+
+/// Bare = no positional target and no help-like flag.
 fn is_bare(command: &str, args: &[String]) -> bool {
+    matches!(classify_args(command, args), ArgTarget::Bare)
+}
+
+/// Mirrors the tools' own cac/mri parsing: a non-flag token after any
+/// non-boolean flag is that flag's value (the tool would never see it as a
+/// positional), while a token after a boolean flag is a positional target
+/// and disables elicitation. pack's workspace selectors already define their
+/// own target set and disable elicitation outright. Help/version requests
+/// are answered by the underlying tool and must never be redirected.
+fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
     /// `arg` is one of `flags`, exactly or in inline `flag=value` form.
     fn matches_flag(arg: &str, flags: &[&str]) -> bool {
         flags.iter().any(|f| arg == *f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
@@ -100,22 +118,28 @@ fn is_bare(command: &str, args: &[String]) -> bool {
     let booleans = if is_pack { PACK_BOOLEAN_FLAGS } else { VITE_BOOLEAN_FLAGS };
     let mut iter = args.iter().peekable();
     while let Some(arg) = iter.next() {
-        if !arg.starts_with('-') || super::help::is_app_tool_help_or_version_flag(arg) {
-            return false;
+        if !arg.starts_with('-') {
+            return ArgTarget::Positional(arg);
+        }
+        if super::help::is_app_tool_help_or_version_flag(arg) {
+            return ArgTarget::Explicit;
         }
         // `--` terminates options: whatever follows is an explicit positional.
         if arg == "--" {
-            return iter.next().is_none();
+            return match iter.next() {
+                Some(token) => ArgTarget::Positional(token),
+                None => ArgTarget::Bare,
+            };
         }
         // An explicit config file (`-c`/`--config`) is explicit build intent:
         // forward it to the tool instead of eliciting a package to override it.
         if matches_flag(arg, &["-c", "--config"]) {
-            return false;
+            return ArgTarget::Explicit;
         }
         // Workspace selectors and --root already specify pack's target;
         // these previously-valid targeted invocations must keep forwarding.
         if is_pack && matches_flag(arg, &["-W", "--workspace", "-F", "--filter", "--root"]) {
-            return false;
+            return ArgTarget::Explicit;
         }
         let is_boolean = booleans.contains(&arg.as_str()) || arg.starts_with("--no-");
         // An inline `=` already carries the value (`--port=3000`, `--env.FOO=bar`).
@@ -126,7 +150,7 @@ fn is_bare(command: &str, args: &[String]) -> bool {
             iter.next();
         }
     }
-    true
+    ArgTarget::Bare
 }
 
 /// Heuristic ranking signal: does a directory look runnable for `command`?
@@ -197,7 +221,7 @@ fn resolve_default_package(
             if !target.as_path().is_dir() {
                 return fail(&format!("defaultPackage points to a missing directory: {dir}"));
             }
-            output::note(&format!("vp {command}: using {dir} (defaultPackage)"));
+            output::note(&format!("vp {command}: using {dir} (defaultPackage in vite.config.ts)"));
             AppTarget::Dir(target)
         }
         vite_static_config::FieldValue::Json(other) => {
@@ -364,6 +388,28 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classif
     Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))
 }
 
+/// One-line guidance when a dev/build/preview positional names a directory:
+/// the positional keeps upstream Vite semantics (`root` only, cwd untouched),
+/// which diverges from `-C` exactly when the target is a directory, so this
+/// is the moment to teach the `cd`-equivalent form. pack positionals are
+/// tsdown entry files and never directories, so pack is excluded. Direct
+/// invocations only: the task-script interception path never reaches
+/// [`resolve_app_target`], keeping task output clean.
+fn note_directory_positional(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) {
+    let Some((command, args)) = app_command_parts(subcommand) else { return };
+    if command == "pack" {
+        return;
+    }
+    if let ArgTarget::Positional(target) = classify_args(command, args)
+        && cwd.join(target).clean().as_path().is_dir()
+    {
+        output::note(&format!(
+            "`vp {command} {target}` sets Vite's root without changing the working directory. \
+             To run as if started there, use `vp -C {target} {command}`."
+        ));
+    }
+}
+
 /// Resolve a bare app command's target. The second tuple element is the
 /// workspace root already found for `cwd`, present only when the command runs
 /// in the unchanged `cwd` (so it always matches a fresh lookup there); the
@@ -372,6 +418,7 @@ pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePath,
 ) -> Result<(AppTarget, Option<vite_workspace::WorkspaceRoot>), Error> {
+    note_directory_positional(subcommand, cwd);
     let (command, elicitation) = match classify(subcommand, cwd) {
         Classification::RunInPlace(workspace_root) => {
             return Ok((AppTarget::CurrentDir, workspace_root));
@@ -495,6 +542,24 @@ mod tests {
         assert!(!is_bare("build", &to_args(&["--watch", "--version"])));
         // Vite and tsdown are cac-based and use `-v` for version.
         assert!(!is_bare("build", &to_args(&["-v"])));
+    }
+
+    #[test]
+    fn classify_args_reports_the_positional_token() {
+        let to_args = |args: &[&str]| args.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        let positional = |command: &str, args: &[&str]| match classify_args(command, &to_args(args))
+        {
+            ArgTarget::Positional(token) => Some(token.to_string()),
+            _ => None,
+        };
+        assert_eq!(positional("dev", &["apps/web"]), Some("apps/web".to_string()));
+        assert_eq!(positional("build", &["--watch", "apps/web"]), Some("apps/web".to_string()));
+        assert_eq!(positional("build", &["--", "apps/web"]), Some("apps/web".to_string()));
+        // A value-consuming flag swallows the token: not a positional.
+        assert_eq!(positional("dev", &["--port", "3000"]), None);
+        // Help and explicit-config invocations are Explicit, not positional.
+        assert!(matches!(classify_args("dev", &to_args(&["--help"])), ArgTarget::Explicit));
+        assert!(matches!(classify_args("build", &to_args(&["-c", "x.ts"])), ArgTarget::Explicit));
     }
 
     #[test]

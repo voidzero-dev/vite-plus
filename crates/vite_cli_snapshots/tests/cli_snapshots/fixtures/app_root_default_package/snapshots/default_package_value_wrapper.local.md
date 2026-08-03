@@ -8,7 +8,7 @@ defaultPackage is not a static string literal.
 ## `cd value_wrapper && vp build`
 
 ```
-note: vp build: using ./frontend (defaultPackage)
+note: vp build: using ./frontend (defaultPackage in vite.config.ts)
 ✓ 2 modules transformed.
 computing gzip size...
 dist/index.html  <size> kB │ gzip: <size> kB
