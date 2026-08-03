@@ -327,6 +327,7 @@ fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result
 pub async fn move_to_cache(
     source: &AbsolutePath,
     target: &AbsolutePathBuf,
+    binary_path: &AbsolutePath,
     version: &str,
 ) -> Result<(), Error> {
     // Create parent directory
@@ -355,12 +356,17 @@ pub async fn move_to_cache(
     .await??;
     tracing::debug!("Lock acquired: {lock_path:?}");
 
-    // Check again after acquiring the lock, in case another process completed
-    // the installation while we were downloading
-    if fs::try_exists(target.as_path()).await.unwrap_or(false) {
-        tracing::debug!("Target already exists after lock acquisition, skipping move: {target:?}");
-        // Lock is released when lock_file is dropped at end of scope
+    // Under the lock, decide by the binary (not just the directory) and clean up
+    // here, so it can't delete a peer's install mid-race:
+    //   - binary present     -> a peer's complete install, keep it and skip
+    //   - dir without binary -> a stale/partial install, remove then move
+    if fs::try_exists(binary_path.as_path()).await.unwrap_or(false) {
+        tracing::debug!("Complete install already present at {target:?}, skipping move");
         return Ok(());
+    }
+    if fs::try_exists(target.as_path()).await.unwrap_or(false) {
+        tracing::debug!("Removing incomplete install at {target:?} before move");
+        fs::remove_dir_all(target.as_path()).await?;
     }
 
     // Atomic rename (lock is still held)
@@ -372,6 +378,8 @@ pub async fn move_to_cache(
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
     use super::*;
 
     #[test]
@@ -382,5 +390,70 @@ mod tests {
         assert_eq!(parse_max_age("no-cache"), None);
         assert_eq!(parse_max_age(""), None);
         assert_eq!(parse_max_age("max-age=invalid"), None);
+    }
+
+    fn cache_root(dir: &TempDir) -> AbsolutePathBuf {
+        AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap()
+    }
+
+    /// A fresh extracted download containing the binary.
+    async fn make_source(cache: &AbsolutePathBuf, contents: &[u8]) -> AbsolutePathBuf {
+        let source = cache.join("extract");
+        tokio::fs::create_dir_all(source.join("bin").as_path()).await.unwrap();
+        tokio::fs::write(source.join("bin").join("node").as_path(), contents).await.unwrap();
+        source
+    }
+
+    #[tokio::test]
+    async fn move_to_cache_moves_into_absent_target() {
+        let root = TempDir::new().unwrap();
+        let cache = cache_root(&root);
+        let source = make_source(&cache, b"new").await;
+
+        let target = cache.join("node").join("1.0.0");
+        let binary = target.join("bin").join("node");
+
+        move_to_cache(&source, &target, &binary, "1.0.0").await.unwrap();
+
+        assert_eq!(tokio::fs::read(binary.as_path()).await.unwrap(), b"new");
+    }
+
+    #[tokio::test]
+    async fn move_to_cache_replaces_stale_incomplete_target() {
+        let root = TempDir::new().unwrap();
+        let cache = cache_root(&root);
+        let source = make_source(&cache, b"new").await;
+
+        // Stale install: directory exists but the binary is missing.
+        let target = cache.join("node").join("1.0.0");
+        tokio::fs::create_dir_all(target.join("leftover").as_path()).await.unwrap();
+        let binary = target.join("bin").join("node");
+
+        move_to_cache(&source, &target, &binary, "1.0.0").await.unwrap();
+
+        assert_eq!(tokio::fs::read(binary.as_path()).await.unwrap(), b"new");
+        assert!(!tokio::fs::try_exists(target.join("leftover").as_path()).await.unwrap());
+    }
+
+    // Regression for the concurrent-install TOCTOU: a peer's complete install
+    // (dir + binary) must be kept, not clobbered by our own fresh copy.
+    #[tokio::test]
+    async fn move_to_cache_keeps_a_complete_target_intact() {
+        let root = TempDir::new().unwrap();
+        let cache = cache_root(&root);
+        let source = make_source(&cache, b"ours").await;
+
+        // A peer's complete install already at the target.
+        let target = cache.join("node").join("1.0.0");
+        let binary = target.join("bin").join("node");
+        tokio::fs::create_dir_all(target.join("bin").as_path()).await.unwrap();
+        tokio::fs::write(binary.as_path(), b"peer").await.unwrap();
+
+        move_to_cache(&source, &target, &binary, "1.0.0").await.unwrap();
+
+        // The peer's binary is preserved, not clobbered.
+        assert_eq!(tokio::fs::read(binary.as_path()).await.unwrap(), b"peer");
+        // Our source download is left untouched (not moved over the peer's install).
+        assert!(tokio::fs::try_exists(source.as_path()).await.unwrap());
     }
 }

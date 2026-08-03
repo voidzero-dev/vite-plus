@@ -236,7 +236,7 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
 /// # Arguments
 /// * `url` - The URL of the tgz file to download.
 /// * `target_dir` - The directory to extract the tgz file to.
-/// * `expected_hash` - Optional expected hash in format "algorithm.hash" (e.g., "sha512.abcd1234...")
+/// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
 ///
 /// # Returns
 /// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
@@ -335,27 +335,21 @@ fn is_retryable_download_error(err: &Error) -> bool {
     }
 }
 
-/// Computes the hash of the given content using the specified digest algorithm.
-///
-/// # Type Parameters
-/// * `D` - A type that implements the [`Digest`] trait, such as `Sha256`, `Sha512`, etc.
-///
-/// # Arguments
-/// * `content` - The byte slice to hash.
-///
-/// # Returns
-/// A hex-encoded string representing the computed digest.
-fn compute_hash<D: Digest>(content: &[u8]) -> String {
+/// Computes the digest of the given content using the specified algorithm.
+fn compute_digest<D: Digest>(content: &[u8]) -> Vec<u8> {
     let mut hasher = D::new();
     hasher.update(content);
-    hex::encode(hasher.finalize())
+    hasher.finalize().to_vec()
 }
 
 /// Verify the hash of a file against an expected hash.
 ///
 /// # Arguments
 /// * `file_path` - Path to the file to verify
-/// * `expected_hash` - Expected hash in format "algorithm.hash" (e.g., "sha512.abcd1234...")
+/// * `expected_hash` - Expected hash, either "algorithm.hex" (e.g.,
+///   "sha512.abcd1234...", the `packageManager` declaration format) or SRI
+///   "algorithm-base64" (e.g., "sha512-q83v...", the registry `dist.integrity`
+///   format)
 ///
 /// # Returns
 /// * `Ok(())` - If the file hash matches the expected hash
@@ -367,26 +361,35 @@ pub async fn verify_file_hash(
     let file_path = file_path.as_ref();
     let content = fs::read(file_path).await?;
 
-    // Parse the hash format (e.g., "sha512.abcd1234..." or "sha256.abcd1234...")
-    let (algorithm, expected_hex) = if let Some((algo, hash)) = expected_hash.split_once('.') {
-        (algo, hash)
+    // "algorithm.hex" carries the hash in hex, SRI "algorithm-base64" in
+    // base64; hex never contains '-' and base64 never contains '.', so the
+    // separator alone identifies the format.
+    let (algorithm, expected, separator) = if let Some((algo, hash)) = expected_hash.split_once('.')
+    {
+        (algo, hash, '.')
+    } else if let Some((algo, hash)) = expected_hash.split_once('-') {
+        (algo, hash, '-')
     } else {
         return Err(Error::InvalidHashFormat(expected_hash.into()));
     };
 
-    // Calculate the actual hash based on the algorithm
-    let actual_hex = match algorithm {
-        "sha512" => compute_hash::<Sha512>(&content),
-        "sha256" => compute_hash::<Sha256>(&content),
-        "sha224" => compute_hash::<Sha224>(&content),
-        "sha1" => compute_hash::<Sha1>(&content),
+    let digest = match algorithm {
+        "sha512" => compute_digest::<Sha512>(&content),
+        "sha256" => compute_digest::<Sha256>(&content),
+        "sha224" => compute_digest::<Sha224>(&content),
+        "sha1" => compute_digest::<Sha1>(&content),
         _ => return Err(Error::UnsupportedHashAlgorithm(algorithm.into())),
     };
+    let actual = if separator == '-' {
+        base64_simd::STANDARD.encode_to_string(&digest)
+    } else {
+        hex::encode(&digest)
+    };
 
-    if actual_hex != expected_hex {
+    if actual != expected {
         return Err(Error::HashMismatch {
             expected: expected_hash.into(),
-            actual: format!("{algorithm}.{actual_hex}").into(),
+            actual: format!("{algorithm}{separator}{actual}").into(),
         });
     }
 
@@ -821,6 +824,33 @@ mod tests {
         let wrong_hash = "sha1.0000000000000000000000000000000000000000";
         let result = verify_file_hash(&test_file, wrong_hash).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_verify_file_hash_sri() {
+        use sha2::{Digest, Sha512};
+        use tokio::io::AsyncWriteExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+
+        // Write test content
+        let content = b"Hello, World!";
+        let mut file = tokio::fs::File::create(&test_file).await.unwrap();
+        file.write_all(content).await.unwrap();
+
+        // Calculate the expected SRI (registry `dist.integrity` format)
+        let digest = Sha512::digest(content);
+        let expected_sri = format!("sha512-{}", base64_simd::STANDARD.encode_to_string(digest));
+
+        // Test successful verification
+        let result = verify_file_hash(&test_file, &expected_sri).await;
+        assert!(result.is_ok(), "{result:?}");
+
+        // Test failed verification
+        let wrong_sri = format!("sha512-{}", base64_simd::STANDARD.encode_to_string([0u8; 64]));
+        let result = verify_file_hash(&test_file, &wrong_sri).await;
+        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
     }
 
     #[tokio::test]

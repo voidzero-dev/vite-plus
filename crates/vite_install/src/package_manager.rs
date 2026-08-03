@@ -905,6 +905,14 @@ pub async fn download_package_manager(
         return download_bun_package_manager(&version, &home_dir).await;
     }
 
+    // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
+    // directly (the main package only ships preinstall-replaced placeholders).
+    // A declared hash names the main tarball and is verified against it; the
+    // platform tarball is verified against the registry's `dist.integrity`.
+    if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
+        return download_pnpm_native_package_manager(&version, &home_dir, expected_hash).await;
+    }
+
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
     // $VP_HOME/package_manager/pnpm/10.0.0
     let target_dir = home_dir.join("package_manager").join(&bin_name).join(&version);
@@ -1113,6 +1121,193 @@ async fn download_bun_package_manager(
     create_shim_files(PackageManagerType::Bun, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version.clone()))
+}
+
+/// Platform-specific `@pnpm/exe.{os}-{arch}` package name for pnpm >= 12.
+fn get_pnpm_platform_package_name() -> Result<&'static str, Error> {
+    let name = match (env::consts::OS, env::consts::ARCH) {
+        ("macos", "aarch64") => "@pnpm/exe.darwin-arm64",
+        ("macos", "x86_64") => "@pnpm/exe.darwin-x64",
+        #[cfg(target_env = "musl")]
+        ("linux", "aarch64") => "@pnpm/exe.linux-arm64-musl",
+        #[cfg(not(target_env = "musl"))]
+        ("linux", "aarch64") => "@pnpm/exe.linux-arm64",
+        #[cfg(target_env = "musl")]
+        ("linux", "x86_64") => "@pnpm/exe.linux-x64-musl",
+        #[cfg(not(target_env = "musl"))]
+        ("linux", "x86_64") => "@pnpm/exe.linux-x64",
+        ("windows", "x86_64") => "@pnpm/exe.win32-x64",
+        ("windows", "aarch64") => "@pnpm/exe.win32-arm64",
+        (os, arch) => {
+            return Err(Error::UnsupportedPackageManager(
+                format!("pnpm >= 12 (unsupported platform: {os}-{arch})").into(),
+            ));
+        }
+    };
+    Ok(name)
+}
+
+/// Registry version metadata subset: only the tarball integrity is needed.
+#[derive(Deserialize)]
+struct RegistryVersionMetadata {
+    #[serde(default)]
+    dist: RegistryDist,
+}
+
+#[derive(Deserialize, Default)]
+struct RegistryDist {
+    #[serde(default)]
+    integrity: Option<Str>,
+}
+
+/// Download pnpm >= 12 (native binary) via its platform-specific npm package.
+///
+/// Layout: `$VP_HOME/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
+async fn download_pnpm_native_package_manager(
+    version: &Str,
+    home_dir: &AbsolutePath,
+    expected_hash: Option<&str>,
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    let package_name: Str = "pnpm".into();
+    let platform_package_name = get_pnpm_platform_package_name()?;
+
+    // $VP_HOME/package_manager/pnpm/{version}
+    let target_dir = home_dir.join("package_manager").join("pnpm").join(version.as_str());
+    let install_dir = target_dir.join("pnpm");
+
+    // If shims already exist, return early (same completeness check as the cache
+    // and the tgz download path)
+    if is_package_manager_install_complete(&install_dir, "pnpm")? {
+        return Ok((install_dir, package_name, version.clone()));
+    }
+
+    // A `packageManager` hash describes the main `pnpm` tarball, not the
+    // platform package: verify it against the artifact it names so a bad pin
+    // still fails, matching pnpm <= 11.
+    if let Some(expected_hash) = expected_hash {
+        let main_tgz_url = get_npm_package_tgz_url("pnpm", version);
+        let verify_dir = tempfile::tempdir()?;
+        download_and_extract_tgz_with_hash(&main_tgz_url, verify_dir.path(), Some(expected_hash))
+            .await?;
+    }
+
+    // The declared hash never covers the platform tarball, so verify it
+    // against the registry's `dist.integrity` for the platform package.
+    let metadata_url = get_npm_package_version_url(platform_package_name, version);
+    let metadata: RegistryVersionMetadata =
+        HttpClient::new().get_json(&metadata_url).await.map_err(|err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: "pnpm".into(),
+                    version: version.clone(),
+                    url: metadata_url.as_str().into(),
+                }
+            } else {
+                err
+            }
+        })?;
+    // SRI allows several space-separated hashes; npm registries serve one.
+    let platform_hash =
+        metadata.dist.integrity.as_deref().and_then(|sri| sri.split_whitespace().next());
+
+    let parent_dir = target_dir.parent().unwrap();
+    tokio::fs::create_dir_all(parent_dir).await?;
+
+    // Download the platform-specific package directly
+    let platform_tgz_url = get_npm_package_tgz_url(platform_package_name, version);
+    // Keep the TempDir guard alive so a failure path cleans up the temp dir.
+    let tmp_dir = tempfile::tempdir_in(parent_dir)?;
+    let target_dir_tmp = tmp_dir.path().to_path_buf();
+
+    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, platform_hash)
+        .await
+        .map_err(|err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: "pnpm".into(),
+                    version: version.clone(),
+                    url: platform_tgz_url.into(),
+                }
+            } else {
+                err
+            }
+        })?;
+
+    // Create the expected directory structure: pnpm/bin/
+    let tmp_bin_dir = target_dir_tmp.join("pnpm").join("bin");
+    tokio::fs::create_dir_all(&tmp_bin_dir).await?;
+
+    // The platform package extracts to `package/` with the native binary at its root
+    let package_dir = target_dir_tmp.join("package");
+    let native_bin_src =
+        if cfg!(windows) { package_dir.join("pnpm.exe") } else { package_dir.join("pnpm") };
+
+    // Move native binary to bin/pnpm.native
+    let native_bin_dest = if cfg!(windows) {
+        tmp_bin_dir.join("pnpm.native.exe")
+    } else {
+        tmp_bin_dir.join("pnpm.native")
+    };
+    tokio::fs::rename(&native_bin_src, &native_bin_dest).await?;
+
+    // Set executable permission on the native binary
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&native_bin_dest, fs::Permissions::from_mode(0o755)).await?;
+    }
+
+    // Clean up the extracted package directory
+    remove_dir_all_force(&package_dir).await?;
+
+    // Acquire lock for atomic rename
+    let lock_path = parent_dir.join(format!("{version}.lock"));
+    tracing::debug!("Acquire lock file: {:?}", lock_path);
+    let lock_file = open_lock_file(lock_path.as_path())?;
+    lock_file.lock()?;
+    tracing::debug!("Lock acquired: {:?}", lock_path);
+
+    if is_package_manager_install_complete(&install_dir, "pnpm")? {
+        tracing::debug!("pnpm install already complete after lock acquisition, skip rename");
+        return Ok((install_dir, package_name, version.clone()));
+    }
+
+    // Rename temp dir to final location
+    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
+    remove_dir_all_force(&target_dir).await?;
+    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
+
+    // Create native binary shims
+    tracing::debug!("Create native shim files for pnpm");
+    create_pnpm_native_shim_files(&install_dir.join("bin")).await?;
+
+    Ok((install_dir, package_name, version.clone()))
+}
+
+/// Create shims for pnpm's native binary (pnpm >= 12): `pnpm` execs it
+/// directly, `pnpx` injects `dlx` (shims don't preserve the launch name).
+async fn create_pnpm_native_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
+    let native_bin = if cfg!(windows) {
+        bin_prefix.join("pnpm.native.exe")
+    } else {
+        bin_prefix.join("pnpm.native")
+    };
+    if !is_exists_file(&native_bin)? {
+        return Err(Error::CannotFindBinaryPath(
+            "pnpm native binary not found. Expected bin/pnpm.native".into(),
+        ));
+    }
+
+    shim::write_native_shims(&native_bin, &bin_prefix.join("pnpm")).await?;
+    shim::write_native_shims_with_args(&native_bin, &bin_prefix.join("pnpx"), &["dlx"]).await?;
+
+    Ok(())
 }
 
 /// Remove the directory and all its contents.
@@ -3184,6 +3379,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_download_package_manager_pnpm_v12_native() {
+        let result =
+            download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
+        assert!(result.is_ok(), "{result:?}");
+        let (target_dir, package_name, version) = result.unwrap();
+        // native binary plus pnpm/pnpx shims, no JS entrypoint
+        let native_name = if cfg!(windows) { "bin/pnpm.native.exe" } else { "bin/pnpm.native" };
+        assert!(is_exists_file(target_dir.join(native_name)).unwrap());
+        assert!(is_exists_file(target_dir.join("bin/pnpm")).unwrap());
+        assert!(is_exists_file(target_dir.join("bin/pnpm.cmd")).unwrap());
+        assert!(is_exists_file(target_dir.join("bin/pnpx")).unwrap());
+        assert_eq!(package_name, "pnpm");
+        assert_eq!(version, "12.0.0-beta.0");
+
+        // again should hit the completeness fast-path and skip download
+        let result =
+            download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
+        assert!(result.is_ok(), "{result:?}");
+        remove_dir_all_force(target_dir).await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_get_latest_version() {
         let result = get_latest_version(PackageManagerType::Yarn).await;
         assert!(result.is_ok());
@@ -3504,6 +3721,60 @@ mod tests {
             name.ends_with("-musl"),
             "On musl targets, package name should end with -musl, got: {name}"
         );
+    }
+
+    #[test]
+    fn test_get_pnpm_platform_package_name() {
+        let result = get_pnpm_platform_package_name();
+        assert!(result.is_ok(), "Should return a platform package name");
+        let name = result.unwrap();
+        assert!(
+            name.starts_with("@pnpm/exe."),
+            "Package name should start with @pnpm/exe., got: {name}"
+        );
+        #[cfg(target_env = "musl")]
+        assert!(
+            name.ends_with("-musl"),
+            "On musl targets, package name should end with -musl, got: {name}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(not(windows))]
+    async fn test_create_pnpm_native_shim_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let bin_prefix = AbsolutePathBuf::new(temp_dir.path().join("bin")).unwrap();
+        tokio::fs::create_dir_all(&bin_prefix).await.unwrap();
+        tokio::fs::write(bin_prefix.join("pnpm.native"), "fake binary").await.unwrap();
+
+        create_pnpm_native_shim_files(&bin_prefix).await.unwrap();
+
+        // pnpm shim execs the native binary as-is
+        let pnpm_shim = tokio::fs::read_to_string(bin_prefix.join("pnpm")).await.unwrap();
+        assert!(pnpm_shim.contains("exec \"$basedir/pnpm.native\" \"$@\""), "{pnpm_shim}");
+
+        // pnpx shim injects the dlx subcommand
+        let pnpx_shim = tokio::fs::read_to_string(bin_prefix.join("pnpx")).await.unwrap();
+        assert!(pnpx_shim.contains("exec \"$basedir/pnpm.native\" dlx \"$@\""), "{pnpx_shim}");
+
+        // completeness check accepts the install (bin/pnpm exists)
+        assert!(
+            is_package_manager_install_complete(
+                &AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap(),
+                "pnpm"
+            )
+            .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_pnpm_native_shim_files_missing_binary() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let bin_prefix = AbsolutePathBuf::new(temp_dir.path().join("bin")).unwrap();
+        tokio::fs::create_dir_all(&bin_prefix).await.unwrap();
+
+        let result = create_pnpm_native_shim_files(&bin_prefix).await;
+        assert!(result.is_err(), "should error when bin/pnpm.native is missing");
     }
     /// Note: The true ERROR_SHARING_VIOLATION occurs when *multiple processes*
     /// attempt to lock the file concurrently on Windows (e.g. during parallel MSBuild tasks).

@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 backon = { workspace = true }
+base64-simd = { workspace = true }
 crossterm = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
