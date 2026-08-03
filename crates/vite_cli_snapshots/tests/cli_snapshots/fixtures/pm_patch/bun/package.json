@@ -1,0 +1,7 @@
+{
+  "name": "pm-patch-bun",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "bun@1.3.5"
+}
