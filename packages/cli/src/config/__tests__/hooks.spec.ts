@@ -122,6 +122,22 @@ describe('install', () => {
     }
   });
 
+  it('refreshes an equivalent hooks path spelling', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-equivalent-path-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      execSync('git config core.hooksPath .custom-hooks/_', { cwd: tmp });
+      process.chdir(tmp);
+
+      expect(install('./.custom-hooks')).toEqual({ message: '', isError: false });
+      expect(existsSync(join(tmp, '.custom-hooks', '_', 'pre-commit'))).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')(
     'does not claim success over a worktree-scoped hooks path',
     () => {

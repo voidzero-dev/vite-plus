@@ -8809,6 +8809,21 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
+  it('allows an equivalent hooksPath spelling for a custom Husky directory', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky ./.custom-hooks' },
+        devDependencies: { husky: '^9.1.7' },
+      }),
+    );
+    execFileSync('git', ['config', '--local', 'core.hooksPath', '.custom-hooks/_'], {
+      cwd: tmpDir,
+    });
+
+    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
+  });
+
   it('allows the dispatcher path installed by Vite+', () => {
     execFileSync('git', ['config', '--local', 'core.hooksPath', '.vite-hooks/_'], {
       cwd: tmpDir,

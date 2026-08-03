@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 
 export const SUPPORTED_GIT_HOOK_NAMES = [
   'pre-commit',
@@ -81,6 +81,14 @@ export interface InstallResult {
 export interface UnsafeHookInstallPath {
   kind: 'symbolic' | 'linked' | 'not-directory' | 'not-file';
   relativePath: string;
+}
+
+export function normalizeHooksPath(hooksPath: string): string {
+  let normalized = normalize(hooksPath);
+  while (normalized.endsWith(sep)) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
 }
 
 export function findUnsafeHookInstallPath(root: string, dir: string): UnsafeHookInstallPath | null {
@@ -175,7 +183,7 @@ export function install(dir = '.vite-hooks'): InstallResult {
   // override the local value we are about to write.
   const checkResult = spawnSync('git', ['config', '--get', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
-  if (existingHooksPath && existingHooksPath !== target) {
+  if (existingHooksPath && normalizeHooksPath(existingHooksPath) !== normalizeHooksPath(target)) {
     return {
       message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
       isError: false,

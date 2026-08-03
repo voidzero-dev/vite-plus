@@ -7,7 +7,11 @@ import spawn from 'cross-spawn';
 import semver from 'semver';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
+import {
+  findUnsafeHookInstallPath,
+  normalizeHooksPath,
+  SUPPORTED_GIT_HOOK_NAMES,
+} from '../../config/hooks.ts';
 import { PackageManager } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
@@ -84,15 +88,7 @@ function isDefaultHuskyDirectory(dir: string | undefined): boolean {
   if (dir == null) {
     return false;
   }
-  return normalizeHuskyDirectory(dir) === '.husky';
-}
-
-function normalizeHuskyDirectory(dir: string): string {
-  let normalized = path.normalize(dir);
-  while (normalized.endsWith(path.sep)) {
-    normalized = normalized.slice(0, -1);
-  }
-  return normalized;
+  return normalizeHooksPath(dir) === '.husky';
 }
 
 function removeReplacedHookPackages(
@@ -375,7 +371,7 @@ export function preflightGitHooksSetup(
     return null; // silently skip
   }
   const detectedHuskyDirectories = new Set(
-    getDetectedHuskyDirectories(projectPath).map(normalizeHuskyDirectory),
+    getDetectedHuskyDirectories(projectPath).map(normalizeHooksPath),
   );
   if (detectedHuskyDirectories.size > 1) {
     return `Multiple Husky hook directories were detected in scripts.prepare (${[...detectedHuskyDirectories].join(', ')}) — skipping git hooks setup. Consolidate them and re-run migration.`;
@@ -443,10 +439,11 @@ export function preflightGitHooksSetup(
   if (gitRoot) {
     const existingHooksPath = getExistingHooksPath(projectPath);
     const localHooksPath = getLocalHooksPath(projectPath);
+    const normalizedExistingHooksPath = normalizeHooksPath(existingHooksPath);
     if (
       existingHooksPath &&
-      existingHooksPath !== localHooksPath &&
-      existingHooksPath !== `${hooksDir}/_`
+      normalizedExistingHooksPath !== normalizeHooksPath(localHooksPath) &&
+      normalizedExistingHooksPath !== normalizeHooksPath(`${hooksDir}/_`)
     ) {
       return `core.hooksPath is already set to "${existingHooksPath}" outside the local repository config, skipping git hooks setup.`;
     }
@@ -589,7 +586,11 @@ export function setupGitHooks(
     }
 
     if (oldHooksDir) {
-      if (previousHooksPath === `${oldHooksDir}/_` || previousHooksPath === oldHooksDir) {
+      const normalizedPreviousHooksPath = normalizeHooksPath(previousHooksPath);
+      if (
+        normalizedPreviousHooksPath === normalizeHooksPath(`${oldHooksDir}/_`) ||
+        normalizedPreviousHooksPath === normalizeHooksPath(oldHooksDir)
+      ) {
         spawn.sync('git', ['config', '--local', '--unset', 'core.hooksPath'], {
           cwd: projectPath,
           stdio: 'pipe',
@@ -921,15 +922,20 @@ function canReplaceHooksPath(
   hooksDir: string,
   oldHooksDir: string | undefined,
 ): boolean {
-  if (!existingHooksPath || existingHooksPath === `${hooksDir}/_`) {
+  const normalizedExistingHooksPath = normalizeHooksPath(existingHooksPath);
+  if (!existingHooksPath || normalizedExistingHooksPath === normalizeHooksPath(`${hooksDir}/_`)) {
     return true;
   }
-  if (existingHooksPath === '.husky' || existingHooksPath.startsWith('.husky/')) {
+  if (
+    normalizedExistingHooksPath === '.husky' ||
+    normalizedExistingHooksPath.startsWith(`.husky${path.sep}`)
+  ) {
     return true;
   }
   return (
     oldHooksDir != null &&
-    (existingHooksPath === oldHooksDir || existingHooksPath === `${oldHooksDir}/_`)
+    (normalizedExistingHooksPath === normalizeHooksPath(oldHooksDir) ||
+      normalizedExistingHooksPath === normalizeHooksPath(`${oldHooksDir}/_`))
   );
 }
 
