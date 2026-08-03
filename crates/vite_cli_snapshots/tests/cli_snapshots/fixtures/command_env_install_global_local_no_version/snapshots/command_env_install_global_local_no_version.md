@@ -15,5 +15,5 @@ info: Installing 1 global package with Node.js <version>
 ```
 Package                           Node version   Binaries
 ---                               ---            ---
-global-local-no-version@unknown   24.18.0        global-local-no-version
+global-local-no-version@unknown   <version>        global-local-no-version
 ```
