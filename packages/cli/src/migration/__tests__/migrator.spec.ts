@@ -50,6 +50,7 @@ const {
   sanitizeMigratedOxlintConfig,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
+  createPreCommitHook,
   detectLegacyGitHooksMigrationCandidate,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
@@ -8701,6 +8702,53 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toContain(
       'Both .husky/pre-commit and .vite-hooks/pre-commit exist',
     );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects symbolic project hooks', () => {
+    const externalHook = path.join(tmpDir, 'shared-pre-commit');
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.writeFileSync(externalHook, 'npx lint-staged\n');
+    fs.symlinkSync(externalHook, path.join(tmpDir, '.husky', 'pre-commit'));
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Symbolic Git hook path ".husky/pre-commit" cannot be migrated safely',
+    );
+  });
+});
+
+describe('createPreCommitHook command matching', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-create-pre-commit-'));
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it.each(['npm run lint-staged-check', 'npx lint-staged-extra'])(
+    'does not rewrite a longer command name: %s',
+    (command) => {
+      const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
+      fs.writeFileSync(hookPath, `${command}\n`);
+
+      createPreCommitHook(tmpDir);
+
+      expect(fs.readFileSync(hookPath, 'utf8')).toBe(`${command}\nvp staged\n`);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('does not write through a symbolic hook', () => {
+    const externalHook = path.join(tmpDir, 'shared-pre-commit');
+    const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
+    fs.writeFileSync(externalHook, 'npx lint-staged\n');
+    fs.symlinkSync(externalHook, hookPath);
+
+    createPreCommitHook(tmpDir);
+
+    expect(fs.readFileSync(externalHook, 'utf8')).toBe('npx lint-staged\n');
   });
 });
 

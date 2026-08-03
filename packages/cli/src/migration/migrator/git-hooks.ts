@@ -209,13 +209,17 @@ export function preflightGitHooksSetup(
   if (huskyReason) {
     return huskyReason;
   }
+  const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
+  const symbolicHook = findSymbolicProjectHook(projectPath, [oldHooksDir, hooksDir]);
+  if (symbolicHook) {
+    return `Symbolic Git hook path "${symbolicHook}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  }
   const conflictingHook = findHookMigrationConflict(projectPath, oldHooksDir);
   if (conflictingHook) {
     return `Both .husky/${conflictingHook} and .vite-hooks/${conflictingHook} exist — skipping git hooks setup. Resolve the duplicate hooks and re-run migration.`;
   }
   if (gitRoot) {
     const existingHooksPath = getExistingHooksPath(projectPath);
-    const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
     if (!canReplaceHooksPath(existingHooksPath, hooksDir, oldHooksDir)) {
       return `core.hooksPath is already set to "${existingHooksPath}", skipping git hooks setup.`;
     }
@@ -440,6 +444,37 @@ function findHookMigrationConflict(
   );
 }
 
+function findSymbolicProjectHook(
+  projectPath: string,
+  dirs: Array<string | undefined>,
+): string | undefined {
+  for (const dir of new Set(dirs.filter((value): value is string => value != null))) {
+    const hooksPath = path.join(projectPath, dir);
+    let hooksStats: fs.Stats;
+    try {
+      hooksStats = fs.lstatSync(hooksPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        continue;
+      }
+      throw error;
+    }
+    if (hooksStats.isSymbolicLink()) {
+      return dir;
+    }
+    if (!hooksStats.isDirectory()) {
+      continue;
+    }
+    const symbolicHook = fs
+      .readdirSync(hooksPath, { withFileTypes: true })
+      .find((entry) => GIT_HOOK_NAME_SET.has(entry.name) && entry.isSymbolicLink());
+    if (symbolicHook) {
+      return path.join(dir, symbolicHook.name);
+    }
+  }
+  return undefined;
+}
+
 function getExistingHooksPath(projectPath: string): string {
   const result = spawn.sync('git', ['config', '--local', 'core.hooksPath'], {
     cwd: projectPath,
@@ -534,9 +569,7 @@ function getProjectHookScriptPaths(projectPath: string, dir: string): string[] {
   }
   return fs
     .readdirSync(hooksPath, { withFileTypes: true })
-    .filter(
-      (entry) => GIT_HOOK_NAME_SET.has(entry.name) && (entry.isFile() || entry.isSymbolicLink()),
-    )
+    .filter((entry) => GIT_HOOK_NAME_SET.has(entry.name) && entry.isFile())
     .map((entry) => path.join(hooksPath, entry.name));
 }
 
@@ -565,10 +598,10 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 // The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
 // We still detect old lint-staged patterns to migrate existing hooks.
 const STALE_LINT_STAGED_PATTERNS = [
-  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
-  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
+  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged(?=$|[\s;&|()<>])/,
+  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged(?=$|[\s;&|()<>])/,
 ];
-const VP_STAGED_PATTERN = /^(?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*vp staged\b/;
+const VP_STAGED_PATTERN = /^(?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*vp staged(?=$|[\s;&|()<>])/;
 
 const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
 
@@ -631,6 +664,9 @@ export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): v
   const huskyDir = path.join(projectPath, dir);
   fs.mkdirSync(huskyDir, { recursive: true });
   const hookPath = path.join(huskyDir, 'pre-commit');
+  if (fs.lstatSync(hookPath, { throwIfNoEntry: false })?.isSymbolicLink()) {
+    return;
+  }
   if (fs.existsSync(hookPath)) {
     const existing = fs.readFileSync(hookPath, 'utf8');
     if (existing.includes('vp staged')) {
