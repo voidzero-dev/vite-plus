@@ -464,14 +464,15 @@ export function setupGitHooks(
       warnMigration('Failed to rewrite the Husky prepare script', report);
       return false;
     }
-    const preserveLintStaged = migrateProjectHooks(
-      projectPath,
-      oldHooksDir,
-      hooksDir,
-      isCustomDir,
-      stagedMerged,
-      hasExistingHookPolicy,
-    );
+    const preserveLintStaged =
+      migrateProjectHooks(
+        projectPath,
+        oldHooksDir,
+        hooksDir,
+        isCustomDir,
+        stagedMerged,
+        hasExistingHookPolicy,
+      ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
     finalizeStagedConfigMigration(
       packageJsonPath,
       migratedStandaloneConfigPaths,
@@ -519,14 +520,15 @@ export function setupGitHooks(
       warnMigration('Failed to rewrite the Husky prepare script', report);
       return false;
     }
-    const preserveLintStaged = migrateProjectHooks(
-      projectPath,
-      oldHooksDir,
-      hooksDir,
-      isCustomDir,
-      stagedMerged,
-      hasExistingHookPolicy,
-    );
+    const preserveLintStaged =
+      migrateProjectHooks(
+        projectPath,
+        oldHooksDir,
+        hooksDir,
+        isCustomDir,
+        stagedMerged,
+        hasExistingHookPolicy,
+      ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
     finalizeStagedConfigMigration(
       packageJsonPath,
       migratedStandaloneConfigPaths,
@@ -976,6 +978,11 @@ function hasLintStagedReferenceInProjectHooks(projectPath: string, dir: string):
   return getProjectHookFilePaths(projectPath, dir).some((hookPath) =>
     /\blint-staged\b/.test(fs.readFileSync(hookPath, 'utf8')),
   );
+}
+
+function hasLintStagedReferenceInPackageScripts(packageJsonPath: string): boolean {
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
+  return Object.values(pkg.scripts ?? {}).some((script) => /\blint-staged\b/.test(script));
 }
 
 const LEGACY_HUSKY_BOOTSTRAP_PATTERN =

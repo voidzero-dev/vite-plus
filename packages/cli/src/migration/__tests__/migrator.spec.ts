@@ -9083,6 +9083,37 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
+  it('preserves lint-staged when a package script still invokes it', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-script-wrapper-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          scripts: {
+            prepare: 'husky',
+            'lint:staged': 'npx --no-install lint-staged',
+          },
+          devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7' },
+          'lint-staged': { '*': 'eslint --fix' },
+        }),
+      );
+      fs.mkdirSync(path.join(tmpDir, '.husky'));
+      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        scripts: Record<string, string>;
+        devDependencies: Record<string, string>;
+        'lint-staged': Record<string, string>;
+      };
+      expect(pkg.scripts['lint:staged']).toBe('npx --no-install lint-staged');
+      expect(pkg.devDependencies).toEqual({ 'lint-staged': '^16.2.7' });
+      expect(pkg['lint-staged']).toEqual({ '*': 'eslint --fix' });
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')('preserves hook and helper permissions', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-permissions-'));
     try {
