@@ -36,7 +36,7 @@ async function main() {
         },
         {
           title: 'Environment',
-          rows: [{ label: 'VITE_GIT_HOOKS=0', description: 'Skip hook dispatcher installation' }],
+          rows: [{ label: 'VP_GIT_HOOKS=0', description: 'Skip hook dispatcher installation' }],
         },
       ],
     });

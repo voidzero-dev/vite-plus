@@ -113,8 +113,7 @@ pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult>
         );
     }
 
-    // Get the exit code
-    let exit_code = result.status.code().unwrap_or(1);
+    let exit_code = vite_shared::exit_code_from_status(result.status);
 
     Ok(RunCommandResult { exit_code, path_accesses })
 }

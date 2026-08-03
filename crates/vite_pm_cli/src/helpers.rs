@@ -1,9 +1,8 @@
 //! Shared helpers used by every PM handler.
 
-use vite_install::package_manager::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePath;
 
-use crate::error::Error;
+use crate::{PackageManager, PackageManagerType, error::Error};
 
 /// Build a `PackageManager`, converting `PackageJsonNotFound` into a
 /// friendly error message.
@@ -40,12 +39,7 @@ pub async fn build_package_manager_or_npm_default(
 pub(crate) fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager {
     PackageManager {
         client: PackageManagerType::Npm,
-        package_name: "npm".into(),
         version: "latest".into(),
-        hash: None,
-        bin_name: "npm".into(),
-        workspace_root: cwd.to_absolute_path_buf(),
-        is_monorepo: false,
         install_dir: cwd.to_absolute_path_buf(),
     }
 }

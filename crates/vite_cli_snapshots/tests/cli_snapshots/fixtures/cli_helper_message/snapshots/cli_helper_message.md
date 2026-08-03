@@ -398,6 +398,8 @@ Forward a command to the package manager
 Commands:
   approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
   prune             Remove unnecessary packages
+  patch             Prepare a package for local patching
+  patch-commit      Commit a prepared package patch
   pack              Create a tarball of the package
   list              List installed packages [alias: ls]
   view, info, show  View package information from the registry
@@ -467,7 +469,7 @@ Examples:
 
   Manage:
     vp env pin lts                # Pin to latest LTS version
-    vp env install                # Install version from .node-version / package.json
+    vp env install                # Install version from .node-version / package.json / .nvmrc
     vp env use 20                 # Use Node.js 20 for this shell session
     vp env use --unset            # Remove session override
     vp env clean                  # Remove unused managed caches

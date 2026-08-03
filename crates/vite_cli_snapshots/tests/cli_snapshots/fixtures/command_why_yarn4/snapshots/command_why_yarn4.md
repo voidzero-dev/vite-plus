@@ -71,7 +71,7 @@ warn: yarn only supports checking one package at a time, using first package
 should warn that --json not supported by yarn
 
 ```
-warn: --json not supported by yarn
+warn: yarn does not support --json.
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 ```
@@ -81,7 +81,7 @@ warn: --json not supported by yarn
 should warn that --long not supported by yarn
 
 ```
-warn: --long not supported by yarn
+warn: yarn does not support --long.
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 ```
@@ -91,7 +91,7 @@ warn: --long not supported by yarn
 should warn that --parseable not supported by yarn
 
 ```
-warn: --parseable not supported by yarn
+warn: yarn does not support --parseable.
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 ```
@@ -101,7 +101,7 @@ warn: --parseable not supported by yarn
 should warn that --prod not supported by yarn
 
 ```
-warn: --prod/--dev not supported by yarn
+warn: yarn does not support --prod.
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 ```
@@ -111,7 +111,7 @@ warn: --prod/--dev not supported by yarn
 should warn that --find-by not supported by yarn
 
 ```
-warn: --find-by not supported by yarn
+warn: yarn does not support --find-by.
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 ```

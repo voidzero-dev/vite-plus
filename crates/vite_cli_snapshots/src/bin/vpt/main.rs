@@ -16,6 +16,7 @@ mod check_tty;
 mod chmod;
 mod cp;
 mod exit;
+mod exit_code;
 mod exit_on_ctrlc;
 mod grep_file;
 mod json_edit;

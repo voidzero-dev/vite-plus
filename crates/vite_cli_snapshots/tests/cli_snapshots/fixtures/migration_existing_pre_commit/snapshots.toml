@@ -52,7 +52,7 @@ steps = [
   { argv = ["vpt", "write-file", ".husky/pre-commit", "npx lint-staged\n"], snapshot = false },
   { argv = ["vpt", "json-edit", "package.json", "devDependencies.lint-staged", "\"^16.2.7\""], snapshot = false },
   { argv = ["vpt", "write-file", ".lintstagedrc.json", "{\"*.ts\":\"eslint --fix\"}\n"], snapshot = false },
-  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], envs = [["VITE_GIT_HOOKS", "0"]], comment = "skip hooks before the full config rewrite", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], envs = [["VP_GIT_HOOKS", "0"]], comment = "skip hooks before the full config rewrite", continue-on-failure = true },
   { argv = ["git", "config", "--local", "core.hooksPath"], comment = "keep the Husky dispatcher", continue-on-failure = true },
   { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "keep the active lint-staged hook", continue-on-failure = true },
   { argv = ["vpt", "print-file", ".lintstagedrc.json"], comment = "keep standalone staged config", continue-on-failure = true },

@@ -10,17 +10,19 @@ use vite_path::AbsolutePathBuf;
 use super::config::get_packages_dir;
 use crate::error::Error;
 
-// `#` is filesystem-safe but invalid in npm package names, so sibling installs cannot collide.
-pub(crate) const INSTALL_ID_PREFIX: char = '#';
-// Keeps npm's 214-byte maximum package name within the common 255-byte filename limit.
-pub(crate) const INSTALL_ID_LENGTH: usize = 37;
+// This is legacy, for old Vite+ version's compatibility
+const LEGACY_INSTALL_ID_PREFIX: char = '#';
+const INSTALL_ID_LENGTH: usize = 36;
 
-pub(crate) fn is_install_id(value: &str) -> bool {
+pub(crate) fn is_nested_install_id(value: &str) -> bool {
     value.len() == INSTALL_ID_LENGTH
-        && value
-            .strip_prefix(INSTALL_ID_PREFIX)
-            .and_then(|uuid| Uuid::parse_str(uuid).ok())
+        && Uuid::parse_str(value)
+            .ok()
             .is_some_and(|uuid| uuid.get_version() == Some(Version::Random))
+}
+
+pub(crate) fn is_legacy_install_id(value: &str) -> bool {
+    value.strip_prefix(LEGACY_INSTALL_ID_PREFIX).is_some_and(is_nested_install_id)
 }
 
 /// Metadata for a globally installed package.
@@ -31,7 +33,7 @@ pub struct PackageMetadata {
     pub name: String,
     /// Package version
     pub version: String,
-    /// Directory identifier for this installation. Empty for legacy installs.
+    /// Directory identifier for this installation. Empty or `#`-prefixed for legacy installs.
     #[serde(default)]
     pub install_id: String,
     /// Platform versions used during installation
@@ -46,6 +48,11 @@ pub struct PackageMetadata {
     /// `corepack`). Updates keep the restriction; explicit installs reset it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bins_restricted: bool,
+    /// Version spec the package was installed with (a dist-tag like
+    /// `nightly`, a range, or an exact version), so `vp update -g` keeps
+    /// resolving within it. `None` means the implicit `latest` tag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version_spec: Option<String>,
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
@@ -81,8 +88,19 @@ impl PackageMetadata {
             bins,
             js_bins,
             bins_restricted: false,
+            version_spec: None,
             manager,
             installed_at: Utc::now(),
+        }
+    }
+
+    /// Registry spec update flows should reinstall this package with:
+    /// qualified with the recorded version spec when the install had one,
+    /// the bare name (implicit `latest`) otherwise.
+    pub fn update_spec(&self) -> String {
+        match &self.version_spec {
+            Some(spec) => format!("{}@{spec}", self.name),
+            None => self.name.clone(),
         }
     }
 
@@ -96,15 +114,18 @@ impl PackageMetadata {
         Self::installation_dir_for(&self.name, &self.install_id)
     }
 
-    /// Resolve an installation prefix, including the legacy empty-ID layout.
+    /// Resolve an installation prefix, including both legacy layouts.
     pub fn installation_dir_for(
         package_name: &str,
         install_id: &str,
     ) -> Result<AbsolutePathBuf, Error> {
         let packages_dir = get_packages_dir()?;
+        let package_dir = packages_dir.join(package_name);
         if install_id.is_empty() {
-            Ok(packages_dir.join(package_name))
-        } else if is_install_id(install_id) {
+            Ok(package_dir)
+        } else if is_nested_install_id(install_id) {
+            Ok(package_dir.join(install_id))
+        } else if is_legacy_install_id(install_id) {
             Ok(packages_dir.join(format!("{package_name}{install_id}")))
         } else {
             Err(Error::ConfigError(
@@ -238,10 +259,50 @@ mod tests {
         .unwrap();
 
         assert!(metadata.install_id.is_empty());
+        assert_eq!(metadata.version_spec, None);
     }
 
     #[test]
-    fn test_installation_dir_uses_install_id() {
+    fn test_version_spec_roundtrips_through_serialization() {
+        let mut metadata = PackageMetadata::new(
+            "some-pkg".to_string(),
+            "1.2.3-nightly.4".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec!["some-pkg".to_string()],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        metadata.version_spec = Some("nightly".to_string());
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains(r#""versionSpec":"nightly""#));
+        let loaded: PackageMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.version_spec, Some("nightly".to_string()));
+    }
+
+    #[test]
+    fn test_update_spec_follows_version_spec() {
+        let mut metadata = PackageMetadata::new(
+            "some-pkg".to_string(),
+            "1.0.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        assert_eq!(metadata.update_spec(), "some-pkg");
+
+        metadata.version_spec = Some("nightly".to_string());
+        assert_eq!(metadata.update_spec(), "some-pkg@nightly");
+
+        metadata.version_spec = Some("^1.0.0".to_string());
+        assert_eq!(metadata.update_spec(), "some-pkg@^1.0.0");
+    }
+
+    #[test]
+    fn test_installation_dir_supports_current_and_legacy_layouts() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
@@ -250,17 +311,27 @@ mod tests {
         );
 
         let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
-        let identified = PackageMetadata::installation_dir_for(
+        let legacy_identified = PackageMetadata::installation_dir_for(
             "@scope/pkg",
             "#123e4567-e89b-42d3-a456-426614174000",
+        )
+        .unwrap();
+        let identified = PackageMetadata::installation_dir_for(
+            "@scope/pkg",
+            "987e6543-e21b-42d3-a456-426614174000",
         )
         .unwrap();
 
         assert!(legacy.as_path().ends_with("packages/@scope/pkg"));
         assert!(
-            identified
+            legacy_identified
                 .as_path()
                 .ends_with("packages/@scope/pkg#123e4567-e89b-42d3-a456-426614174000")
+        );
+        assert!(
+            identified
+                .as_path()
+                .ends_with("packages/@scope/pkg/987e6543-e21b-42d3-a456-426614174000")
         );
         assert!(PackageMetadata::installation_dir_for("@scope/pkg", "invalid").is_err());
     }

@@ -41,6 +41,46 @@ describe('install', () => {
       }
     },
   );
+
+  it('skips install when VP_GIT_HOOKS=0', () => {
+    const prev = process.env.VP_GIT_HOOKS;
+    process.env.VP_GIT_HOOKS = '0';
+    try {
+      const result = install('.vite-hooks');
+      expect(result).toEqual({ message: 'skip install (git hooks disabled)', isError: false });
+    } finally {
+      if (prev === undefined) {
+        delete process.env.VP_GIT_HOOKS;
+      } else {
+        process.env.VP_GIT_HOOKS = prev;
+      }
+    }
+  });
+
+  it('skips install when deprecated VITE_GIT_HOOKS=0', () => {
+    const prev = process.env.VITE_GIT_HOOKS;
+    process.env.VITE_GIT_HOOKS = '0';
+    try {
+      const result = install('.vite-hooks');
+      expect(result).toEqual({ message: 'skip install (git hooks disabled)', isError: false });
+    } finally {
+      if (prev === undefined) {
+        delete process.env.VITE_GIT_HOOKS;
+      } else {
+        process.env.VITE_GIT_HOOKS = prev;
+      }
+    }
+  });
+});
+
+describe('hookScript env gates', () => {
+  it('honors VP_GIT_HOOKS and keeps VITE_GIT_HOOKS as a deprecated alias', () => {
+    const script = hookScript('.vite-hooks');
+    expect(script).toContain('"$VP_GIT_HOOKS" = "2"');
+    expect(script).toContain('"$VITE_GIT_HOOKS" = "2"');
+    expect(script).toContain('"${VP_GIT_HOOKS-}" = "0"');
+    expect(script).toContain('"${VITE_GIT_HOOKS-}" = "0"');
+  });
 });
 
 describe('hookScript', () => {

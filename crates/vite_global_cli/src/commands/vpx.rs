@@ -8,7 +8,7 @@
 //! 4. Remote download via `vp dlx`
 
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{PrependOptions, output, prepend_to_path_env};
+use vite_shared::{PrependOptions, exit_code_from_status, output, prepend_to_path_env};
 
 use crate::{commands::env::config, shim::dispatch};
 
@@ -113,14 +113,14 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         output::error(&format!("vpx: {e}"));
         return 1;
     }
-    let dlx = vite_pm_cli::PackageManagerCommand::Dlx {
-        package: flags.packages,
-        shell_mode: flags.shell_mode,
-        silent: flags.silent,
-        args: positional,
-    };
+    let dlx = vite_pm_cli::PackageManagerCommand::dlx(
+        flags.packages,
+        flags.shell_mode,
+        flags.silent,
+        positional,
+    );
     match vite_pm_cli::dispatch(cwd, dlx).await {
-        Ok(status) => status.code().unwrap_or(1),
+        Ok(status) => exit_code_from_status(status),
         Err(e) => {
             output::error(&format!("vpx: {e}"));
             1

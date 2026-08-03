@@ -215,7 +215,7 @@ should error because save-catalog is not supported at pnpm@9
 **Exit code:** 1
 
 ```
- ERROR  Unknown option: 'save-catalog-name'
-Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
+ ERROR  Unknown option: 'save-catalog'
+Did you mean 'save-exact', or 'save-prod'? Use "--config.unknown=value" to force an unknown option.
 For help, run: pnpm help add
 ```

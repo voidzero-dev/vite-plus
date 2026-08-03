@@ -308,9 +308,10 @@ jobs:
               vp test
           - name: vinext
             node-version: 24
-            # The vinext suite is ~7000 tests and needs more than the default
-            # 10-minute job budget on 4-core runners.
-            timeout: 15
+            # The full vinext suite (~7000 tests) outgrew a 15-minute budget
+            # on 4-core runners, so run one shard of the unit project here;
+            # the rest of the suite is covered by vinext's own CI.
+            timeout: 20
             command: |
               # vp migrate's auto-install passes --ignore-scripts on pnpm v11
               # (vinext pins pnpm 11), which skips vinext's approved
@@ -320,7 +321,7 @@ jobs:
               vp run build
               vp check --fix
               vp run check
-              vp run test
+              vp test run --project unit --shard=1/3
           - name: reactive-resume
             node-version: 24
             command: |

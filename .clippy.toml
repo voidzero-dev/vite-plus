@@ -12,6 +12,7 @@ disallowed-methods = [
   { path = "str::replace", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replace` instead." },
   { path = "str::replacen", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
   { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vite_path::current_dir` instead." },
+  { path = "std::process::ExitStatus::code", reason = "Returns None for signal-terminated processes on Unix. Use `vite_shared::exit_code_from_status` instead." },
 ]
 
 disallowed-types = [

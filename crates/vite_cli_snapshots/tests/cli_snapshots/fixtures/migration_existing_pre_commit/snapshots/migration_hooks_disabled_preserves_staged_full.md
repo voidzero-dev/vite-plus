@@ -20,14 +20,14 @@
 '`
 
 
-## `VITE_GIT_HOOKS=0 vp migrate --hooks --no-interactive`
+## `VP_GIT_HOOKS=0 vp migrate --hooks --no-interactive`
 
 skip hooks before the full config rewrite
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Git hooks are disabled through VITE_GIT_HOOKS=0 — skipping git hooks setup.
+⚠ Git hooks are disabled through VP_GIT_HOOKS=0 — skipping git hooks setup.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied

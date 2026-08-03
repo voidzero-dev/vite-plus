@@ -11,7 +11,7 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
-use vite_pm_cli::PackageManagerCommand;
+use vite_pm_cli::{ManagedGlobalCommand, PackageManagerCommand};
 use vite_shared::output;
 
 use crate::{
@@ -419,7 +419,7 @@ Examples:
     #[command(visible_alias = "i")]
     Install {
         /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
-        /// If not provided, installs the version from .node-version or package.json
+        /// If not provided, installs the version from .node-version, package.json, or .nvmrc
         version: Option<String>,
     },
 
@@ -430,7 +430,7 @@ Examples:
   vp env use --unset    # Clear the session override")]
     Use {
         /// Version to use (e.g., "20", "20.18.0", "lts", "latest").
-        /// If omitted, reads from .node-version or package.json.
+        /// If omitted, reads from .node-version, package.json, or .nvmrc.
         version: Option<String>,
 
         /// Remove session override (revert to file-based resolution)
@@ -552,80 +552,62 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
 
 /// Handle a parsed package-manager command.
 ///
-/// `Install`/`Add`/`Update`/`Remove` invoked with `-g`/`--global` are routed
-/// through the vite-plus-managed Node.js install store (`commands::global`).
-/// Everything else is forwarded to `vite_pm_cli::dispatch`, which executes
-/// the underlying package manager (pnpm/npm/yarn/bun).
+/// Commands projected by [`PackageManagerCommand::managed_global_command`] are
+/// routed through the vite-plus-managed Node.js install store
+/// (`commands::global`). Everything else is forwarded to
+/// `vite_pm_cli::dispatch`, which executes the underlying package manager
+/// (pnpm/npm/yarn/bun).
 async fn run_package_manager_command(
     cwd: AbsolutePathBuf,
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
-    match command {
-        PackageManagerCommand::Install {
-            global: true,
-            packages: Some(pkgs),
-            node,
-            force,
-            concurrency,
-            ..
-        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force, concurrency).await,
-
-        PackageManagerCommand::Add {
-            global: true, ref packages, ref node, concurrency, ..
-        } => managed_install(packages, node.as_deref(), false, concurrency).await,
-
-        PackageManagerCommand::Remove { global: true, ref packages, dry_run, .. } => {
-            managed_uninstall(packages, dry_run).await
+    match command.managed_global_command() {
+        Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) => {
+            return managed_install(packages, node, force, concurrency).await;
         }
-
-        PackageManagerCommand::Update {
-            global: true,
-            ref packages,
+        Some(ManagedGlobalCommand::Remove { packages, dry_run }) => {
+            return managed_uninstall(packages, dry_run).await;
+        }
+        Some(ManagedGlobalCommand::Update {
+            packages,
+            latest,
             concurrency,
             reinstall_node_mismatch,
             ignore_node_mismatch,
-            ..
-        } => {
+        }) => {
             if reinstall_node_mismatch && ignore_node_mismatch {
                 output::error(
                     "--reinstall-node-mismatch and --ignore-node-mismatch cannot be used together",
                 );
                 return Ok(exit_status(1));
             }
-            managed_update(packages, concurrency, reinstall_node_mismatch, ignore_node_mismatch)
-                .await
+            return managed_update(
+                packages,
+                latest,
+                concurrency,
+                reinstall_node_mismatch,
+                ignore_node_mismatch,
+            )
+            .await;
         }
-
-        PackageManagerCommand::Outdated {
-            global: true,
-            ref packages,
-            long,
-            format,
-            concurrency,
-            ..
-        } => {
-            global::outdated::execute(
+        Some(ManagedGlobalCommand::Outdated { packages, long, format, concurrency }) => {
+            return global::outdated::execute(
                 packages,
                 long,
                 format,
                 concurrency.unwrap_or(DEFAULT_GLOBAL_VIEW_CONCURRENCY),
             )
-            .await
+            .await;
         }
-
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
-        PackageManagerCommand::Pm(vite_pm_cli::cli::PmCommands::List {
-            global: true,
-            json,
-            ref pattern,
-            ..
-        }) => global::packages::execute(json, pattern.as_deref()).await,
-
-        cmd => {
-            commands::prepend_js_runtime_to_path_env(&cwd).await?;
-            Ok(vite_pm_cli::dispatch(&cwd, cmd).await?)
+        Some(ManagedGlobalCommand::List { json, pattern }) => {
+            return global::packages::execute(json, pattern).await;
         }
+        None => {}
     }
+
+    commands::prepend_js_runtime_to_path_env(&cwd).await?;
+    Ok(vite_pm_cli::dispatch(&cwd, command).await?)
 }
 
 async fn managed_install(
@@ -684,6 +666,7 @@ struct NodeMismatchPackage {
 
 async fn managed_update(
     packages: &[String],
+    latest: bool,
     concurrency: Option<usize>,
     reinstall_node_mismatch: bool,
     ignore_node_mismatch: bool,
@@ -691,6 +674,14 @@ async fn managed_update(
     let concurrency = concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY);
     let mut to_update: Vec<String> = Vec::new();
     let mut node_mismatches: Vec<NodeMismatchPackage> = Vec::new();
+    // Recorded version-spec changes this update implies: `--latest` clears
+    // specs, an explicit `pkg@spec` argument replaces the stored one.
+    // Reinstalls record the new spec on their own, but packages already at
+    // the target version are not reinstalled and must be rewritten here.
+    // Entries are `(package name, new spec, registry query spec)`; the query
+    // spec ties each rewrite to its lookup so failed resolutions never
+    // persist a policy the update could not act on.
+    let mut spec_rewrites: Vec<(String, Option<String>, String)> = Vec::new();
     let current_node_version;
 
     let packages = if packages.is_empty() {
@@ -702,10 +693,13 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
+            if latest && metadata.version_spec.is_some() {
+                spec_rewrites.push((metadata.name.clone(), None, metadata.name.clone()));
+            }
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
-                    spec: metadata.name.clone(),
+                    spec: if latest { metadata.name.clone() } else { metadata.update_spec() },
                     installed_node: metadata.platform.node.clone(),
                 });
             }
@@ -724,12 +718,32 @@ async fn managed_update(
             }
 
             // It is not a local package, so `parse_package_spec` there won't return `Err()`
-            let (package_name, _) = global::parse_package_spec(package).unwrap();
+            let (package_name, version_spec) = global::parse_package_spec(package).unwrap();
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+                if version_spec.is_some() {
+                    // An explicit spec replaces the recorded one even when
+                    // the installed version already satisfies it.
+                    let new_spec = global::update_version_spec(package);
+                    if new_spec != metadata.version_spec {
+                        spec_rewrites.push((package_name.clone(), new_spec, package.clone()));
+                    }
+                } else if latest && metadata.version_spec.is_some() {
+                    // `--latest` applies to bare names only; explicit specs win.
+                    spec_rewrites.push((package_name.clone(), None, package_name.clone()));
+                }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
+                    // Match the spec `get_outdated_packages` resolves for this
+                    // package, so the dedup against outdated results holds.
+                    let spec = if version_spec.is_some() {
+                        package.clone()
+                    } else if latest {
+                        package_name.clone()
+                    } else {
+                        metadata.update_spec()
+                    };
                     node_mismatches.push(NodeMismatchPackage {
                         name: package_name,
-                        spec: package.clone(),
+                        spec,
                         installed_node: metadata.platform.node,
                     });
                 }
@@ -742,16 +756,31 @@ async fn managed_update(
         Some(managed_specs)
     };
 
-    let outdated = global::outdated::get_outdated_packages(
+    let report = global::outdated::get_outdated_packages(
         &packages.unwrap_or_default(),
         concurrency * 3,
-        true,
+        latest,
+        global::outdated::LookupMode::WantedOnly,
     )
     .await?;
-    to_update.extend(outdated.into_iter().map(|package| package.spec.unwrap_or(package.name)));
+    for (_, message) in &report.failures {
+        output::warn(&format!("{message}; skipping"));
+    }
+    // Skipped lookups make the update incomplete; keep going but exit
+    // nonzero so scripts can tell.
+    let incomplete = !report.failures.is_empty();
+    to_update.extend(
+        report
+            .outdated
+            .into_iter()
+            // A newer `latest` alone (e.g. a version-pinned package) is not
+            // updatable; only a newer wanted version is.
+            .filter(|package| package.wanted != package.current)
+            .map(|package| package.spec.unwrap_or(package.name)),
+    );
 
-    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
-    node_mismatches.retain(|package| !to_update_set.contains(package.spec.as_str()));
+    let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
+    node_mismatches.retain(|package| !outdated_specs.contains(package.spec.as_str()));
 
     if should_reinstall_node_mismatches(
         &node_mismatches,
@@ -762,9 +791,26 @@ async fn managed_update(
         to_update.extend(node_mismatches.into_iter().map(|package| package.spec));
     }
 
+    // Installs save the new spec only after they succeed.
+    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
+    let failed_specs =
+        report.failures.iter().map(|(spec, _)| spec.as_str()).collect::<HashSet<_>>();
+    for (package_name, new_spec, query_spec) in &spec_rewrites {
+        if failed_specs.contains(query_spec.as_str()) || to_update_set.contains(query_spec.as_str())
+        {
+            continue;
+        }
+        if let Some(mut metadata) = PackageMetadata::load(package_name).await?
+            && metadata.version_spec != *new_spec
+        {
+            metadata.version_spec = new_spec.clone();
+            metadata.save().await?;
+        }
+    }
+
     if to_update.is_empty() {
         vite_shared::output::raw("All global packages are up to date.");
-        return Ok(ExitStatus::default());
+        return Ok(if incomplete { exit_status(1) } else { ExitStatus::default() });
     }
 
     // Call reinstall logic
@@ -786,7 +832,7 @@ async fn managed_update(
         ));
         return Ok(exit_status(1));
     }
-    Ok(ExitStatus::default())
+    Ok(if incomplete { exit_status(1) } else { ExitStatus::default() })
 }
 
 async fn get_current_node_version() -> Result<String, Error> {
@@ -894,8 +940,8 @@ pub async fn run_command_with_options(
         // global install, falling through to `vite_pm_cli::dispatch` for
         // every project-scoped PM operation.
         Commands::PackageManager(pm_command) => {
-            if let PackageManagerCommand::Install { silent, .. } = &pm_command {
-                print_runtime_header(render_options.show_header && !*silent);
+            if let Some(silent) = pm_command.install_silent() {
+                print_runtime_header(render_options.show_header && !silent);
             }
             run_package_manager_command(cwd, pm_command).await
         }
@@ -911,33 +957,21 @@ pub async fn run_command_with_options(
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => {
-            if help::maybe_print_unified_delegate_help("dev", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("dev", &args, render_options.show_header);
             commands::delegate::execute(cwd, "dev", &args, raw_subcommand).await
         }
 
         Commands::Build { args } => {
-            if help::maybe_print_unified_delegate_help("build", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("build", &args, render_options.show_header);
             commands::delegate::execute(cwd, "build", &args, raw_subcommand).await
         }
 
         Commands::Test { args } => {
-            if help::maybe_print_unified_delegate_help("test", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("test", &args, render_options.show_header);
             commands::delegate::execute(cwd, "test", &args, raw_subcommand).await
         }
 
         Commands::Lint { args } => {
-            if help::maybe_print_unified_delegate_help("lint", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
             maybe_print_runtime_header("lint", &args, render_options.show_header);
             if should_force_global_delegate("lint", &args) {
                 commands::delegate::execute_global(cwd, "lint", &args, raw_subcommand).await
@@ -947,9 +981,6 @@ pub async fn run_command_with_options(
         }
 
         Commands::Fmt { args } => {
-            if help::maybe_print_unified_delegate_help("fmt", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
             maybe_print_runtime_header("fmt", &args, render_options.show_header);
             if should_force_global_delegate("fmt", &args) {
                 commands::delegate::execute_global(cwd, "fmt", &args, raw_subcommand).await
@@ -959,51 +990,32 @@ pub async fn run_command_with_options(
         }
 
         Commands::Check { args } => {
-            if help::maybe_print_unified_delegate_help("check", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("check", &args, render_options.show_header);
             commands::delegate::execute(cwd, "check", &args, raw_subcommand).await
         }
 
         Commands::Pack { args } => {
-            if help::maybe_print_unified_delegate_help("pack", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("pack", &args, render_options.show_header);
             commands::delegate::execute(cwd, "pack", &args, raw_subcommand).await
         }
 
         Commands::Run { args } => {
-            if help::maybe_print_unified_delegate_help("run", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("run", &args, render_options.show_header);
             commands::delegate::execute(cwd, "run", &args, raw_subcommand).await
         }
 
         Commands::Exec { args } => {
-            if help::maybe_print_unified_delegate_help("exec", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("exec", &args, render_options.show_header);
             commands::delegate::execute(cwd, "exec", &args, raw_subcommand).await
         }
 
         Commands::Preview { args } => {
-            if help::maybe_print_unified_delegate_help("preview", &args, render_options.show_header)
-            {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("preview", &args, render_options.show_header);
             commands::delegate::execute(cwd, "preview", &args, raw_subcommand).await
         }
 
         Commands::Cache { args } => {
-            if help::maybe_print_unified_delegate_help("cache", &args, render_options.show_header) {
-                return Ok(ExitStatus::default());
-            }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("cache", &args, render_options.show_header);
             commands::delegate::execute(cwd, "cache", &args, raw_subcommand).await
         }
 
@@ -1048,7 +1060,15 @@ fn print_runtime_header(show_header: bool) {
 }
 
 fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool) {
-    if should_suppress_header_for_subcommand(command, args) {
+    // Delegated help renders its own header from the project-local CLI. Normal commands do not,
+    // so the global launcher prints it before resolving or downloading the managed runtime.
+    let delegates_help = match command {
+        "run" | "exec" | "cache" => {
+            matches!(args, [arg] if matches!(arg.as_str(), "-h" | "--help"))
+        }
+        _ => help::has_help_flag_before_terminator(args),
+    };
+    if delegates_help || should_suppress_header_for_subcommand(command, args) {
         return;
     }
     print_runtime_header(show_header);

@@ -5,45 +5,42 @@
 should show vp run help
 
 ```
-Run tasks
+VITE+ - The Unified Toolchain for the Web
 
 Usage: vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...
 
+Run tasks.
+
 Arguments:
-  [TASK_SPECIFIER] [ADDITIONAL_ARGS]...
-          Task to run, as `packageName#taskName` or just `taskName`.
-          Any arguments after the task name are forwarded to the task process.
-          Running `vp run` without a task name shows an interactive task selector.
+  [TASK_SPECIFIER]      `packageName#taskName` or `taskName`. If omitted, shows the task selector
+  [ADDITIONAL_ARGS]...  Additional arguments to pass to the task
 
 Options:
-  -r, --recursive
-          Select all packages in the workspace
-  -t, --transitive
-          Select the current package and its transitive dependencies
-  -w, --workspace-root
-          Select the workspace root package
-  -F, --filter <FILTERS>
-          Match packages by name, directory, or glob pattern
-      --fail-if-no-match
-          Exit with a non-zero status if a `--filter` expression matches no packages
-      --ignore-depends-on
-          Do not run dependencies specified in `dependsOn` fields
-  -v, --verbose
-          Show full detailed summary after execution
-      --cache
-          Force caching on for all tasks and scripts
-      --no-cache
-          Force caching off for all tasks and scripts
-      --log <LOG>
-          How task output is displayed [default: interleaved] [possible values: interleaved, labeled, grouped]
-      --concurrency-limit <CONCURRENCY_LIMIT>
-          Maximum number of tasks to run concurrently. Defaults to 4
-      --parallel
-          Run tasks without dependency ordering. Sets concurrency to unlimited unless `--concurrency-limit` is also specified
-      --last-details
-          Display the detailed summary of the last run
-  -h, --help
-          Print help (see more with '--help')
+  -r, --recursive          Select all packages in the workspace
+  -t, --transitive         Select the current package and its transitive dependencies
+  -w, --workspace-root     Select the workspace root package
+  -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
+  --fail-if-no-match       Exit with a non-zero status if a filter matches no packages
+  --ignore-depends-on      Do not run dependencies specified in `dependsOn` fields
+  -v, --verbose            Show the full detailed summary after execution
+  --cache                  Force caching on for all tasks and scripts
+  --no-cache               Force caching off for all tasks and scripts
+  --log <MODE>             Set output mode: interleaved (default), labeled, or grouped
+  --concurrency-limit <N>  Maximum number of tasks to run concurrently (default: 4)
+  --parallel               Run tasks without dependency ordering; concurrency is unlimited unless `--concurrency-limit` is specified
+  --last-details           Display the detailed summary of the last run
+  -h, --help               Print help
+
+Filter Patterns:
+  --filter <pattern>        Select by package name (e.g. foo, @scope/*)
+  --filter ./<dir>          Select packages under a directory
+  --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes
+  --filter <pattern>...     Select package and its dependencies
+  --filter ...<pattern>     Select package and its dependents
+  --filter <pattern>^...    Select only the dependencies (exclude the package itself)
+  --filter !<pattern>       Exclude packages matching the pattern
+
+Documentation: https://viteplus.dev/guide/run
 ```
 
 ## `vpr hello`
