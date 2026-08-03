@@ -9,6 +9,8 @@ import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
  * that call it; plain `runCommand` / `runCommandSilently` don't. */
 export interface ExecutionWithProjectDir extends ExecutionResult {
   projectDir?: string;
+  stdout?: Buffer;
+  stderr?: Buffer;
 }
 
 export async function runCommandAndDetectProjectDir(

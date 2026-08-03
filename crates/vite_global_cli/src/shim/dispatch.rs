@@ -194,7 +194,6 @@ fn resolve_package_name(spec: &str) -> Option<String> {
 ///
 /// Runs `npm config get prefix` to determine the global prefix, which respects
 /// `NPM_CONFIG_PREFIX` env var and `.npmrc` settings. Falls back to `node_dir`.
-#[allow(clippy::disallowed_types)]
 fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) -> AbsolutePathBuf {
     // `npm config get prefix` respects NPM_CONFIG_PREFIX, .npmrc, and other
     // npm config mechanisms.
@@ -223,7 +222,6 @@ fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) ->
 ///
 /// Otherwise, in interactive mode, prompt user to create bin links.
 /// In non-interactive mode, create links automatically.
-#[allow(clippy::disallowed_macros, clippy::disallowed_types)]
 fn check_npm_global_install_result(
     packages: &[String],
     original_path: Option<&std::ffi::OsStr>,
@@ -498,7 +496,6 @@ pub(crate) fn create_bin_link(
 /// When `npm install -g pkg-a pkg-b` and both declare the same binary name, we get
 /// duplicate entries. Without dedup, `create_bin_link` would fail on the second entry
 /// because the symlink already exists, leaving stale BinConfig for the first package.
-#[allow(clippy::disallowed_types)]
 fn dedup_missing_bins(
     missing_bins: Vec<(String, AbsolutePathBuf, String)>,
 ) -> Vec<(String, AbsolutePathBuf, String)> {
@@ -522,7 +519,6 @@ fn dedup_missing_bins(
 /// When a bin is owned by a **different** npm package (not being uninstalled), npm may
 /// still delete its binary from `npm_bin_dir`, leaving our symlink dangling. In that
 /// case we repair the link by pointing directly at the surviving package's binary.
-#[allow(clippy::disallowed_types)]
 fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefix: &AbsolutePath) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
@@ -613,7 +609,6 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
 
 /// Read the installed package.json from npm's node_modules directory.
 /// Tries the npm prefix first (handles custom prefix), then falls back to node_dir.
-#[allow(clippy::disallowed_types)]
 fn read_npm_package_json(
     npm_prefix: &AbsolutePath,
     node_dir: &AbsolutePath,
@@ -630,7 +625,6 @@ fn read_npm_package_json(
 }
 
 /// Collect (bin_name, package_name) pairs from packages by reading their installed package.json files.
-#[allow(clippy::disallowed_types)]
 fn collect_bin_names_from_npm(
     packages: &[String],
     npm_prefix: &AbsolutePath,
@@ -1293,7 +1287,7 @@ async fn cached_project_source_still_current(
     else {
         return Ok(!matches!(
             entry.source.as_str(),
-            ".node-version" | "devEngines.runtime" | "engines.node"
+            ".node-version" | "devEngines.runtime" | "engines.node" | ".nvmrc"
         ));
     };
 

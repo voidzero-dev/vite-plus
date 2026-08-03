@@ -31,11 +31,12 @@ switch (subcommand) {
     // script's own --ps/--kill maintenance matches.
     const { spawnSync } = await import('node:child_process');
     const { fileURLToPath } = await import('node:url');
+    const { exitCodeFromClose } = await import('./exit-code.ts');
     const registryScript = fileURLToPath(new URL('./local-npm-registry.ts', import.meta.url));
     const result = spawnSync(process.execPath, [registryScript, ...process.argv.slice(3)], {
       stdio: 'inherit',
     });
-    process.exit(result.status ?? 1);
+    process.exit(exitCodeFromClose(result.status, result.signal));
     break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);

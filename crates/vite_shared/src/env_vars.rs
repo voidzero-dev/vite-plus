@@ -74,6 +74,13 @@ pub const VP_SHIM_TOOL: &str = "VP_SHIM_TOOL";
 /// before forwarding to the actual tool.
 pub const VP_SHIM_WRAPPER: &str = "VP_SHIM_WRAPPER";
 
+/// The subcommand as the user wrote it, passed from the global CLI to the local
+/// one.
+///
+/// A command runs under its canonical name (`vp format` runs `fmt`), which loses
+/// the spelling. This carries the original alongside it.
+pub const VP_RAW_SUBCOMMAND: &str = "VP_RAW_SUBCOMMAND";
+
 /// Path to the vp binary, passed to JS scripts so they can invoke CLI commands.
 pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 
