@@ -76,6 +76,19 @@ function heading(label: string, color: boolean): string {
     : styleText(['blue', 'bold'], `${label}:`);
 }
 
+function renderMutedCommentSuffix(line: string, color: boolean): string {
+  if (!color) {
+    return line;
+  }
+
+  const commentIndex = line.indexOf(' #');
+  if (commentIndex === -1) {
+    return line;
+  }
+
+  return `${line.slice(0, commentIndex)}${styleText('gray', line.slice(commentIndex))}`;
+}
+
 export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): string {
   const color = options.color ?? true;
   const output: string[] = [];
@@ -101,7 +114,7 @@ export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): st
 
     const lines = toLines(section.lines);
     if (lines.length > 0) {
-      output.push(...lines);
+      output.push(...lines.map((line) => renderMutedCommentSuffix(line, color)));
     }
 
     if (section.rows && section.rows.length > 0) {
