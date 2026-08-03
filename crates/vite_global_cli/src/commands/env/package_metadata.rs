@@ -48,6 +48,11 @@ pub struct PackageMetadata {
     /// `corepack`). Updates keep the restriction; explicit installs reset it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bins_restricted: bool,
+    /// Version spec the package was installed with (a dist-tag like
+    /// `nightly`, a range, or an exact version), so `vp update -g` keeps
+    /// resolving within it. `None` means the implicit `latest` tag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version_spec: Option<String>,
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
@@ -83,8 +88,19 @@ impl PackageMetadata {
             bins,
             js_bins,
             bins_restricted: false,
+            version_spec: None,
             manager,
             installed_at: Utc::now(),
+        }
+    }
+
+    /// Registry spec update flows should reinstall this package with:
+    /// qualified with the recorded version spec when the install had one,
+    /// the bare name (implicit `latest`) otherwise.
+    pub fn update_spec(&self) -> String {
+        match &self.version_spec {
+            Some(spec) => format!("{}@{spec}", self.name),
+            None => self.name.clone(),
         }
     }
 
@@ -243,6 +259,46 @@ mod tests {
         .unwrap();
 
         assert!(metadata.install_id.is_empty());
+        assert_eq!(metadata.version_spec, None);
+    }
+
+    #[test]
+    fn test_version_spec_roundtrips_through_serialization() {
+        let mut metadata = PackageMetadata::new(
+            "some-pkg".to_string(),
+            "1.2.3-nightly.4".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec!["some-pkg".to_string()],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        metadata.version_spec = Some("nightly".to_string());
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains(r#""versionSpec":"nightly""#));
+        let loaded: PackageMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.version_spec, Some("nightly".to_string()));
+    }
+
+    #[test]
+    fn test_update_spec_follows_version_spec() {
+        let mut metadata = PackageMetadata::new(
+            "some-pkg".to_string(),
+            "1.0.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        assert_eq!(metadata.update_spec(), "some-pkg");
+
+        metadata.version_spec = Some("nightly".to_string());
+        assert_eq!(metadata.update_spec(), "some-pkg@nightly");
+
+        metadata.version_spec = Some("^1.0.0".to_string());
+        assert_eq!(metadata.update_spec(), "some-pkg@^1.0.0");
     }
 
     #[test]
