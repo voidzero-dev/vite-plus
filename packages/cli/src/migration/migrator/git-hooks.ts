@@ -210,7 +210,11 @@ export function preflightGitHooksSetup(
     return huskyReason;
   }
   const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
-  const symbolicHook = findSymbolicProjectHook(projectPath, [oldHooksDir, hooksDir]);
+  const symbolicHook = findSymbolicProjectHook(
+    projectPath,
+    [oldHooksDir, hooksDir],
+    oldHooksDir === '.husky' ? oldHooksDir : undefined,
+  );
   if (symbolicHook) {
     return `Symbolic Git hook path "${symbolicHook}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
   }
@@ -407,10 +411,7 @@ function migrateProjectHooks(
     if (fs.existsSync(oldDir)) {
       const targetDir = path.join(projectPath, hooksDir);
       fs.mkdirSync(targetDir, { recursive: true });
-      for (const entry of fs.readdirSync(oldDir, { withFileTypes: true })) {
-        if (entry.isDirectory() || entry.name.startsWith('.')) {
-          continue;
-        }
+      for (const entry of getMigratableHookEntries(oldDir)) {
         const src = path.join(oldDir, entry.name);
         const dest = path.join(targetDir, entry.name);
         fs.copyFileSync(src, dest);
@@ -437,16 +438,19 @@ function findHookMigrationConflict(
   if (oldHooksDir !== '.husky') {
     return undefined;
   }
-  return SUPPORTED_GIT_HOOK_NAMES.find(
-    (hook) =>
-      fs.existsSync(path.join(projectPath, oldHooksDir, hook)) &&
-      fs.existsSync(path.join(projectPath, '.vite-hooks', hook)),
-  );
+  const oldDir = path.join(projectPath, oldHooksDir);
+  if (!fs.existsSync(oldDir)) {
+    return undefined;
+  }
+  return getMigratableHookEntries(oldDir).find((entry) =>
+    pathExistsIncludingSymbolicLink(path.join(projectPath, '.vite-hooks', entry.name)),
+  )?.name;
 }
 
 function findSymbolicProjectHook(
   projectPath: string,
   dirs: Array<string | undefined>,
+  migrationSourceDir: string | undefined,
 ): string | undefined {
   for (const dir of new Set(dirs.filter((value): value is string => value != null))) {
     const hooksPath = path.join(projectPath, dir);
@@ -467,12 +471,37 @@ function findSymbolicProjectHook(
     }
     const symbolicHook = fs
       .readdirSync(hooksPath, { withFileTypes: true })
-      .find((entry) => GIT_HOOK_NAME_SET.has(entry.name) && entry.isSymbolicLink());
+      .find(
+        (entry) =>
+          entry.isSymbolicLink() &&
+          (GIT_HOOK_NAME_SET.has(entry.name) ||
+            (dir === migrationSourceDir && isMigratableHookEntry(entry))),
+      );
     if (symbolicHook) {
       return path.join(dir, symbolicHook.name);
     }
   }
   return undefined;
+}
+
+function getMigratableHookEntries(hooksPath: string): fs.Dirent[] {
+  return fs.readdirSync(hooksPath, { withFileTypes: true }).filter(isMigratableHookEntry);
+}
+
+function isMigratableHookEntry(entry: fs.Dirent): boolean {
+  return !entry.isDirectory() && !entry.name.startsWith('.');
+}
+
+function pathExistsIncludingSymbolicLink(filePath: string): boolean {
+  try {
+    fs.lstatSync(filePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
 }
 
 function getExistingHooksPath(projectPath: string): string {

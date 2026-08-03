@@ -8704,6 +8704,17 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
+  it('rejects conflicting project-owned hook helpers', () => {
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'common.sh'), 'old helper\n');
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'common.sh'), 'project helper\n');
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Both .husky/common.sh and .vite-hooks/common.sh exist',
+    );
+  });
+
   it.skipIf(process.platform === 'win32')('rejects symbolic project hooks', () => {
     const externalHook = path.join(tmpDir, 'shared-pre-commit');
     fs.mkdirSync(path.join(tmpDir, '.husky'));
@@ -8712,6 +8723,17 @@ describe('preflightGitHooksSetup hook state', () => {
 
     expect(preflightGitHooksSetup(tmpDir)).toContain(
       'Symbolic Git hook path ".husky/pre-commit" cannot be migrated safely',
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects symbolic hook helper directories', () => {
+    const sharedHooks = path.join(tmpDir, 'shared-hooks');
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.mkdirSync(sharedHooks);
+    fs.symlinkSync(sharedHooks, path.join(tmpDir, '.husky', 'scripts'), 'dir');
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Symbolic Git hook path ".husky/scripts" cannot be migrated safely',
     );
   });
 });
