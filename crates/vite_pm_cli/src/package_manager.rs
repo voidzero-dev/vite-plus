@@ -849,7 +849,8 @@ pub async fn download_package_manager(
 
     // For bun, use platform-specific download flow.
     // The hash from `packageManager` field belongs to the main `bun` npm package,
-    // not the platform-specific binary, so we don't pass it through.
+    // not the platform-specific binary, so we don't pass it through; the
+    // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Bun) {
         return download_bun_package_manager(&version, &home_dir).await;
     }
@@ -992,6 +993,10 @@ async fn download_bun_package_manager(
         return Ok((install_dir, package_name, version.clone()));
     }
 
+    // The declared hash never covers the platform tarball, so verify it
+    // against the registry's `dist.integrity` for the platform package.
+    let platform_hash = fetch_platform_integrity("bun", platform_package_name, version).await?;
+
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
 
@@ -1001,22 +1006,26 @@ async fn download_bun_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
-    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, None).await.map_err(
-        |err| {
-            if let Error::Reqwest(e) = &err
-                && let Some(status) = e.status()
-                && status == reqwest::StatusCode::NOT_FOUND
-            {
-                Error::PackageManagerVersionNotFound {
-                    name: "bun".into(),
-                    version: version.clone(),
-                    url: platform_tgz_url.into(),
-                }
-            } else {
-                err
+    download_and_extract_tgz_with_hash(
+        &platform_tgz_url,
+        &target_dir_tmp,
+        platform_hash.as_deref(),
+    )
+    .await
+    .map_err(|err| {
+        if let Error::Reqwest(e) = &err
+            && let Some(status) = e.status()
+            && status == reqwest::StatusCode::NOT_FOUND
+        {
+            Error::PackageManagerVersionNotFound {
+                name: "bun".into(),
+                version: version.clone(),
+                url: platform_tgz_url.into(),
             }
-        },
-    )?;
+        } else {
+            err
+        }
+    })?;
 
     // Create the expected directory structure: bun/bin/
     let tmp_bun_dir = target_dir_tmp.join("bun");
@@ -1109,6 +1118,39 @@ struct RegistryDist {
     integrity: Option<Str>,
 }
 
+/// Fetch the registry `dist.integrity` (SRI) of a platform package version,
+/// so a platform tarball that no declared hash covers can still be verified.
+/// Returns `None` when the registry omits the field.
+async fn fetch_platform_integrity(
+    bin_name: &str,
+    platform_package_name: &str,
+    version: &Str,
+) -> Result<Option<Str>, Error> {
+    let metadata_url = get_npm_package_version_url(platform_package_name, version);
+    let metadata: RegistryVersionMetadata =
+        HttpClient::new().get_json(&metadata_url).await.map_err(|err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: bin_name.into(),
+                    version: version.clone(),
+                    url: metadata_url.as_str().into(),
+                }
+            } else {
+                err
+            }
+        })?;
+    // SRI allows several space-separated hashes; npm registries serve one.
+    Ok(metadata
+        .dist
+        .integrity
+        .as_deref()
+        .and_then(|sri| sri.split_whitespace().next())
+        .map(Str::from))
+}
+
 /// Download pnpm >= 12 (native binary) via its platform-specific npm package.
 ///
 /// Layout: `$VP_HOME/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
@@ -1142,25 +1184,7 @@ async fn download_pnpm_native_package_manager(
 
     // The declared hash never covers the platform tarball, so verify it
     // against the registry's `dist.integrity` for the platform package.
-    let metadata_url = get_npm_package_version_url(platform_package_name, version);
-    let metadata: RegistryVersionMetadata =
-        HttpClient::new().get_json(&metadata_url).await.map_err(|err| {
-            if let Error::Reqwest(e) = &err
-                && let Some(status) = e.status()
-                && status == reqwest::StatusCode::NOT_FOUND
-            {
-                Error::PackageManagerVersionNotFound {
-                    name: "pnpm".into(),
-                    version: version.clone(),
-                    url: metadata_url.as_str().into(),
-                }
-            } else {
-                err
-            }
-        })?;
-    // SRI allows several space-separated hashes; npm registries serve one.
-    let platform_hash =
-        metadata.dist.integrity.as_deref().and_then(|sri| sri.split_whitespace().next());
+    let platform_hash = fetch_platform_integrity("pnpm", platform_package_name, version).await?;
 
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
@@ -1171,22 +1195,26 @@ async fn download_pnpm_native_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
-    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, platform_hash)
-        .await
-        .map_err(|err| {
-            if let Error::Reqwest(e) = &err
-                && let Some(status) = e.status()
-                && status == reqwest::StatusCode::NOT_FOUND
-            {
-                Error::PackageManagerVersionNotFound {
-                    name: "pnpm".into(),
-                    version: version.clone(),
-                    url: platform_tgz_url.into(),
-                }
-            } else {
-                err
+    download_and_extract_tgz_with_hash(
+        &platform_tgz_url,
+        &target_dir_tmp,
+        platform_hash.as_deref(),
+    )
+    .await
+    .map_err(|err| {
+        if let Error::Reqwest(e) = &err
+            && let Some(status) = e.status()
+            && status == reqwest::StatusCode::NOT_FOUND
+        {
+            Error::PackageManagerVersionNotFound {
+                name: "pnpm".into(),
+                version: version.clone(),
+                url: platform_tgz_url.into(),
             }
-        })?;
+        } else {
+            err
+        }
+    })?;
 
     // Create the expected directory structure: pnpm/bin/
     let tmp_bin_dir = target_dir_tmp.join("pnpm").join("bin");
