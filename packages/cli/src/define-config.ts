@@ -64,9 +64,7 @@ declare module '@voidzero-dev/vite-plus-core' {
      * static read is why the values must stay plain string literals.
      */
      */
-    defaultPackage?:
-      | string
-      | { dev?: string; build?: string; preview?: string; pack?: string };
+    defaultPackage?: string | { dev?: string; build?: string; preview?: string; pack?: string };
 
     run?: RunConfig;
 
