@@ -33,7 +33,7 @@ added 3 packages in <duration>
 should to absolute latest version
 
 ```
-warn: npm doesn't support --latest flag. Updating within semver range only.
+warn: npm does not support --latest.
 
 up to date in <duration>
 ```
@@ -134,7 +134,7 @@ added 1 package in <duration>
 ## `vp update --no-optional --latest -- --no-audit`
 
 ```
-warn: npm doesn't support --latest flag. Updating within semver range only.
+warn: npm does not support --latest.
 npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
 npm warn config `--include=optional` to include them.
 npm warn config

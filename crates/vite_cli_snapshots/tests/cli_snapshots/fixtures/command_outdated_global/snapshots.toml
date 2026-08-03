@@ -3,10 +3,27 @@ name = "command_outdated_global"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "install", "-g", "testnpm2@1.0.0"], comment = "should prepare global outdated package", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "testnpm2@1.0.0"], comment = "should prepare a version-pinned global package", snapshot = false, continue-on-failure = true },
   { argv = ["vp", "outdated", "definitely-not-installed-vite-plus-snap-pkg", "-g", "--format", "json"], comment = "should support empty global json output", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "-g", "--format", "json"], comment = "should report a pinned package without a wanted update", continue-on-failure = true },
+  { argv = ["vp", "outdated", "testnpm2", "-g", "--format", "list"], comment = "should render the newer latest as a hint in list format", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g"], comment = "should not move a pinned package to latest", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "no-such-tag"], comment = "should warn and skip when the recorded version spec no longer resolves", snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g"], continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "null"], comment = "should follow latest again once the recorded version spec is cleared", snapshot = false },
   { argv = ["vp", "outdated", "testnpm2", "-g", "--format", "json"], comment = "should support global json output", continue-on-failure = true },
   { argv = ["vp", "outdated", "testnpm2", "-g", "--format", "list", "--concurrency", "5"], comment = "should support global list output", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "1.0.0"], comment = "should override a recorded version spec with --latest", snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g", "--latest"], continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", "versionSpec"], comment = "should clear the recorded version spec after --latest (grep-file prints missing)", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "1.0.1"], comment = "should clear a recorded version spec with --latest even without a reinstall", snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g", "--latest"], continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", "versionSpec"], comment = "should have removed the pin from the up-to-date package (grep-file prints missing)", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "1.0.0"], comment = "should persist an explicit spec switch without a reinstall", snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2@1.0.1"], continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", 'versionSpec": "1.0.1'], continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2@no-such-tag"], comment = "should not persist an explicit spec that fails to resolve", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", 'versionSpec": "1.0.1'], continue-on-failure = true },
 ]
 after = [
   { argv = ["vp", "remove", "-g", "testnpm2"], continue-on-failure = true },

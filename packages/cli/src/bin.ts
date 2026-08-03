@@ -13,6 +13,7 @@
 import path from 'node:path';
 
 import { ensureBlockingStdio, run } from '../binding/index.js';
+import { maybePrintCommandHelp } from './help.ts';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
 import { doc } from './resolve-doc.ts';
 import { fmt } from './resolve-fmt.ts';
@@ -42,7 +43,8 @@ function getErrorMessage(err: unknown): string {
 }
 
 // Parse command line arguments
-let args = process.argv.slice(2);
+const typedArgs = process.argv.slice(2);
+let args = typedArgs;
 
 // Transform `vp help [command]` into `vp [command] --help`
 if (args[0] === 'help' && args[1]) {
@@ -52,8 +54,9 @@ if (args[0] === 'help' && args[1]) {
 
 const command = args[0];
 
-// Global commands — handled by tsdown-bundled modules in dist/
-if (command === 'create') {
+if (maybePrintCommandHelp(args)) {
+  // Help is rendered by the local CLI so it matches the installed toolchain.
+} else if (command === 'create') {
   await import('./create/bin.js');
 } else if (command === 'migrate') {
   await import('./migration/bin.js');
@@ -87,7 +90,9 @@ if (command === 'create') {
       test,
       doc,
       resolveUniversalViteConfig,
-      args: process.argv.slice(2),
+      // The Rust CLI applies the `help [command]` transform itself, and needs
+      // the untransformed list to tell `vp help fmt` apart from `vp fmt --help`.
+      args: typedArgs,
     });
 
     let finalExitCode = exitCode;

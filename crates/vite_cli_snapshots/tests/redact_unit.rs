@@ -68,6 +68,46 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
 }
 
 #[test]
+fn masks_managed_node_versions_in_environment_output() {
+    let input = concat!(
+        "Node: 24.18.1\n",
+        "\"nodeVersion\": \"24.18.1\"\n",
+        "✓ Default Node.js version set to lts (currently 24.18.1)\n",
+        "just-a-normal-package@0.0.0   24.18.1        just-a-normal-package\n",
+        "fixture pin: 22.18.0\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "Node: <version>\n",
+            "\"nodeVersion\": \"<version>\"\n",
+            "✓ Default Node.js version set to lts (currently <version>)\n",
+            "just-a-normal-package@0.0.0   <version>        just-a-normal-package\n",
+            "fixture pin: 22.18.0\n",
+        )
+    );
+}
+
+#[test]
+fn strips_pnpm_store_location_diagnostics() {
+    let input = concat!(
+        "✓ Lockfile passes supply-chain policies\n",
+        "Packages are cloned from the content-addressable store to the virtual store.\n",
+        "  Content-addressable store is at: /Users/runner/Library/pnpm/store/v11\n",
+        "  Virtual store is at:             node_modules/.pnpm\n",
+        "\n",
+        "devDependencies:\n",
+        " testnpm2 1.0.1\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        "✓ Lockfile passes supply-chain policies\n\ndevDependencies:\n testnpm2 1.0.1\n"
+    );
+}
+
+#[test]
 fn masks_current_vite_plus_version_in_upgrade_check_output() {
     let input = concat!(
         "info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)\n",

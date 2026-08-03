@@ -7,8 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 use vite_js_runtime::{
-    NodeProvider, VersionSource, is_valid_version, normalize_version, read_package_json,
-    resolve_node_version,
+    NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
+    read_package_json, resolve_node_version,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -198,8 +198,9 @@ pub async fn delete_session_version() -> Result<(), Error> {
 /// 2. `.node-version` file in current or parent directories
 /// 3. `package.json#devEngines.runtime` in current or parent directories
 /// 4. `package.json#engines.node` in current or parent directories
-/// 5. User default from config.json
-/// 6. Latest LTS version
+/// 5. `.nvmrc` file in current or parent directories
+/// 6. User default from config.json
+/// 7. Latest LTS version
 pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     // Session override via environment variable (set by `vp env use`)
     if let Some(env_version) = vite_shared::EnvConfig::get().node_version {
@@ -270,10 +271,7 @@ pub(crate) async fn resolve_project_version_source(
 
     // Invalid version from a project source: try lower-priority sources in the same directory.
     // This mirrors the fallback logic in download_runtime_for_project().
-    if !matches!(
-        resolution.source,
-        VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
-    ) {
+    if matches!(resolution.source, VersionSource::NvmrcFile) {
         return Ok(None);
     }
 
@@ -281,13 +279,12 @@ pub(crate) async fn resolve_project_version_source(
         return Ok(None);
     };
     let package_json_path = project_root.join("package.json");
-    let Ok(Some(pkg)) = read_package_json(&package_json_path).await else {
-        return Ok(None);
-    };
+    let pkg = read_package_json(&package_json_path).await.ok().flatten();
 
     if matches!(resolution.source, VersionSource::NodeVersionFile)
         && let Some(version) = pkg
-            .dev_engines_runtime("node")
+            .as_ref()
+            .and_then(|pkg| pkg.dev_engines_runtime("node"))
             .and_then(|r| r.version.clone())
             .and_then(|v| validate_version_spec(&v, "devEngines.runtime", warn_invalid))
     {
@@ -299,9 +296,12 @@ pub(crate) async fn resolve_project_version_source(
         }));
     }
 
-    if let Some(version) = pkg
-        .engines
+    if matches!(
+        resolution.source,
+        VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
+    ) && let Some(version) = pkg
         .as_ref()
+        .and_then(|pkg| pkg.engines.as_ref())
         .and_then(|e| e.node.clone())
         .and_then(|v| validate_version_spec(&v, "engines.node", warn_invalid))
     {
@@ -309,6 +309,18 @@ pub(crate) async fn resolve_project_version_source(
             version,
             source: "engines.node".into(),
             source_path: package_json_path,
+            project_root,
+        }));
+    }
+
+    if let Some(version) = read_nvmrc_file(&project_root)
+        .await
+        .and_then(|v| validate_version_spec(&v, ".nvmrc", warn_invalid))
+    {
+        return Ok(Some(ProjectVersionSource {
+            version,
+            source: ".nvmrc".into(),
+            source_path: project_root.join(".nvmrc"),
             project_root,
         }));
     }
@@ -617,6 +629,59 @@ mod tests {
 
         assert_eq!(&*resolution.version, "20.18.0");
         assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_from_nvmrc() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "22.22.0\n").await.unwrap();
+
+        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source_path, temp_path.join(".nvmrc"));
+    }
+
+    #[tokio::test]
+    async fn test_node_version_takes_priority_over_nvmrc() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(temp_path.join(".node-version"), "24.0.0\n").await.unwrap();
+        tokio::fs::write(temp_path.join(".nvmrc"), "22.22.0\n").await.unwrap();
+
+        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "24.0.0");
+        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source_path, temp_path.join(".node-version"));
+    }
+
+    #[tokio::test]
+    async fn test_project_source_inherits_parent_nvmrc() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let child = parent.join("child");
+        tokio::fs::create_dir(&child).await.unwrap();
+        tokio::fs::write(parent.join(".nvmrc"), "22.22.0\n").await.unwrap();
+
+        let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source_path, parent.join(".nvmrc"));
+    }
+
+    #[tokio::test]
+    async fn test_project_source_falls_back_from_invalid_node_version_to_nvmrc() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "not-a-version\n").await.unwrap();
+        tokio::fs::write(temp_path.join(".nvmrc"), "22.22.0\n").await.unwrap();
+
+        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, ".nvmrc");
     }
 
     #[tokio::test]

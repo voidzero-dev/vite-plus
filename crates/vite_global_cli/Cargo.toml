@@ -1,6 +1,6 @@
 [package]
 name = "vite_global_cli"
-version = "0.2.6"
+version = "0.2.7"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -32,7 +32,6 @@ crossterm = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 vite_error = { workspace = true }
-vite_install = { workspace = true }
 vite_js_runtime = { workspace = true }
 vite_pm_cli = { workspace = true }
 vite_path = { workspace = true }
