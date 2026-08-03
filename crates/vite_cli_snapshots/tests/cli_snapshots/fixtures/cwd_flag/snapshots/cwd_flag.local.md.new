@@ -1,0 +1,59 @@
+# cwd_flag
+
+The global -C flag runs any command as if vp was started in the directory:
+pack and run behave byte-identically to the cd forms, a missing directory
+errors, and the positional keeps upstream tsdown entry semantics
+(rfcs/cwd-flag.md).
+
+## `vp -C packages/hello pack`
+
+-C packs the package from the workspace root
+
+**Exit code:** 2
+
+```
+error: Unexpected argument '-C'
+```
+
+*(skipped 8 step(s) to the next line boundary: step failed)*
+
+## `vp -C packages/missing build`
+
+missing directory errors
+
+**Exit code:** 1
+
+```
+error: directory not found: packages/missing
+```
+
+## `vp pack packages/hello`
+
+positional stays a tsdown entry resolved from the invocation directory
+
+```
+ℹ entry: packages/hello
+ℹ Build start
+ℹ dist/hello.mjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
+✔ Build complete in <duration>
+```
+
+## `vpt list-dir dist`
+
+upstream semantics: output lands at the invocation directory
+
+```
+hello.mjs
+```
+
+## `vp run where:hello`
+
+a script whose command starts with vp -C runs verbatim and honors the directory
+
+**Exit code:** 2
+
+```
+$ vp -C packages/hello run where ⊘ cache disabled
+error: Unexpected argument '-C'
+```

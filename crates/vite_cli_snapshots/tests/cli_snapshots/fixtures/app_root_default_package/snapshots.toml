@@ -1,0 +1,61 @@
+[[case]]
+name = "default_package"
+vp = ["local", "global"]
+comment = """
+defaultPackage in the root config acts as an implicit -C for bare app
+commands, including at a root that is not a JS workspace; vp prints a note
+line and runs in the configured directory (rfcs/cwd-flag.md).
+"""
+steps = [
+  ["vp", "pack"],
+  { argv = ["vpt", "list-dir", "packages/ui/dist"], comment = "output lands in the configured package" },
+]
+
+[[case]]
+name = "default_package_missing"
+vp = ["local", "global"]
+comment = "defaultPackage pointing at a missing directory errors before any workspace lookup."
+steps = [{ argv = ["vp", "build"], cwd = "missing" }]
+
+[[case]]
+name = "unanalyzable_config_ignored"
+vp = ["local", "global"]
+comment = """
+Regression guard for spread/unanalyzable configs: a config that only parses
+as an open map might hide defaultPackage behind the spread, but that must
+not fail the command. Bare vp build falls through and runs in place.
+"""
+# PTY-rendered (not tty = false): non-TTY steps record raw bytes, and the
+# raw Windows byte stream of a vite build differs invisibly from macOS; the
+# grid rendering normalizes that and is what the assertion needs anyway.
+steps = [{ argv = ["vp", "build"], cwd = "spread" }]
+
+[[case]]
+name = "default_package_ts_wrapper"
+vp = ["local", "global"]
+comment = """
+Regression: defaultPackage declared through a TypeScript wrapper
+(`satisfies UserConfig`, `as const`) is still a static string literal and
+must be honored. vp builds ./frontend, not the wrapper root.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "ts_wrapper" }]
+
+[[case]]
+name = "default_package_value_wrapper"
+vp = ["local", "global"]
+comment = """
+Regression: the TypeScript wrapper is on the defaultPackage VALUE
+(`'./frontend' as const`), not the config object. Static extraction must
+unwrap it too, so vp builds ./frontend rather than erroring that
+defaultPackage is not a static string literal.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "value_wrapper" }]
+
+[[case]]
+name = "default_package_define_config_wrapper"
+vp = ["local", "global"]
+comment = """
+defaultPackage inside `defineConfig({ ... } satisfies UserConfig)` is also
+honored: the wrapper on the defineConfig argument is unwrapped too.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "dc_wrapper" }]

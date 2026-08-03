@@ -1,9 +1,6 @@
 //! `vp implode` — completely remove vp and all its data from this system.
 
-use std::{
-    io::{IsTerminal, Write},
-    process::ExitStatus,
-};
+use std::{io::Write, process::ExitStatus};
 
 use directories::BaseDirs;
 use owo_colors::OwoColorize;
@@ -132,7 +129,7 @@ fn confirm_implode(
     home_dir: &AbsolutePathBuf,
     affected_profiles: &[AffectedProfile],
 ) -> Result<bool, Error> {
-    if !std::io::stdin().is_terminal() {
+    if !vite_shared::is_stdin_terminal() {
         return Err(Error::UserMessage(
             "Cannot prompt for confirmation: stdin is not a TTY. Use --yes to skip confirmation."
                 .into(),

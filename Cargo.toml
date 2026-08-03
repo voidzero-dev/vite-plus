@@ -300,6 +300,7 @@ vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
 vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
 vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
+vite_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
 vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
 vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
 vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }

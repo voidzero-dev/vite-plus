@@ -3,7 +3,7 @@
 //! This module provides platform-agnostic utilities for downloading,
 //! verifying, and extracting runtime archives.
 
-use std::{fs::File, io::IsTerminal, time::Duration};
+use std::{fs::File, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use futures_util::StreamExt;
@@ -45,7 +45,7 @@ pub async fn download_file(
     // across retry attempts; its position is reset at the start of every
     // attempt so a retried download doesn't double-count bytes.
     let is_ci = vite_shared::EnvConfig::get().is_ci;
-    let progress = if std::io::stderr().is_terminal() && !is_ci {
+    let progress = if vite_shared::is_stderr_terminal() && !is_ci {
         let pb = ProgressBar::new_spinner();
         pb.set_style(
             ProgressStyle::default_spinner()

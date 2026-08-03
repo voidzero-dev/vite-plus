@@ -302,6 +302,7 @@ impl JsExecutor {
 
         let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        vite_command::sync_child_pwd(&mut cmd, project_path);
 
         Ok(vite_command::execute_with_terminal_guard(cmd).await?)
     }
@@ -351,6 +352,7 @@ impl JsExecutor {
         if let Some(raw_subcommand) = &self.raw_subcommand {
             cmd.env(vite_shared::env_vars::VP_RAW_SUBCOMMAND, raw_subcommand);
         }
+        vite_command::sync_child_pwd(&mut cmd, project_path);
         Ok(cmd)
     }
 
