@@ -171,7 +171,9 @@ export function install(dir = '.vite-hooks'): InstallResult {
   const internal = (x = '') => join(dir, '_', x);
   const rel = prefixResult.stdout.toString().trim().replace(/\/$/, '');
   const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
-  const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
+  // Read the effective value so a worktree-scoped setting cannot silently
+  // override the local value we are about to write.
+  const checkResult = spawnSync('git', ['config', '--get', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
   if (existingHooksPath && existingHooksPath !== target) {
     return {

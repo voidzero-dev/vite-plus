@@ -8765,6 +8765,17 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
+  it('rejects an incompatible worktree-scoped hooks path before migration starts', () => {
+    execFileSync('git', ['config', 'extensions.worktreeConfig', 'true'], { cwd: tmpDir });
+    execFileSync('git', ['config', '--worktree', 'core.hooksPath', '.worktree-hooks'], {
+      cwd: tmpDir,
+    });
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'core.hooksPath is already set to ".worktree-hooks" outside the local repository config',
+    );
+  });
+
   it.each(['.', '../shared-hooks', '/shared-hooks'])(
     'rejects an unsafe hook directory: %s',
     (hooksDir) => {

@@ -123,6 +123,32 @@ describe('install', () => {
   });
 
   it.skipIf(process.platform === 'win32')(
+    'does not claim success over a worktree-scoped hooks path',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-worktree-path-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        execSync('git config extensions.worktreeConfig true', { cwd: tmp });
+        execSync('git config --worktree core.hooksPath .worktree-hooks', { cwd: tmp });
+        process.chdir(tmp);
+
+        expect(install()).toEqual({
+          message: 'core.hooksPath is already set to ".worktree-hooks", skipping',
+          isError: false,
+        });
+        expect(existsSync(join(tmp, '.vite-hooks'))).toBe(false);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.worktree-hooks',
+        );
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
     'does not write through a symbolic dispatcher file',
     () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-symlink-test-'));

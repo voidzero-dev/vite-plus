@@ -354,6 +354,14 @@ export function preflightGitHooksSetup(
   }
   if (gitRoot) {
     const existingHooksPath = getExistingHooksPath(projectPath);
+    const localHooksPath = getLocalHooksPath(projectPath);
+    if (
+      existingHooksPath &&
+      existingHooksPath !== localHooksPath &&
+      existingHooksPath !== `${hooksDir}/_`
+    ) {
+      return `core.hooksPath is already set to "${existingHooksPath}" outside the local repository config, skipping git hooks setup.`;
+    }
     if (!canReplaceHooksPath(existingHooksPath, hooksDir, oldHooksDir)) {
       return `core.hooksPath is already set to "${existingHooksPath}", skipping git hooks setup.`;
     }
@@ -777,7 +785,15 @@ function getDisabledGitHooksEnvironment(): string | undefined {
 }
 
 function getExistingHooksPath(projectPath: string): string {
-  const result = spawn.sync('git', ['config', '--local', 'core.hooksPath'], {
+  const result = spawn.sync('git', ['config', '--get', 'core.hooksPath'], {
+    cwd: projectPath,
+    stdio: 'pipe',
+  });
+  return result.status === 0 ? (result.stdout?.toString().trim() ?? '') : '';
+}
+
+function getLocalHooksPath(projectPath: string): string {
+  const result = spawn.sync('git', ['config', '--local', '--get', 'core.hooksPath'], {
     cwd: projectPath,
     stdio: 'pipe',
   });
