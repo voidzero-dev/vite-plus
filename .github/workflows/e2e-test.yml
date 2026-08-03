@@ -309,8 +309,10 @@ jobs:
           - name: vinext
             node-version: 24
             # The vinext suite is ~7000 tests and needs more than the default
-            # 10-minute job budget on 4-core runners.
-            timeout: 15
+            # 10-minute job budget on 4-core runners; it already ran at ~90%
+            # of a 15-minute budget before the rolldown v1.2.2 bump pushed it
+            # over the line.
+            timeout: 20
             command: |
               # vp migrate's auto-install passes --ignore-scripts on pnpm v11
               # (vinext pins pnpm 11), which skips vinext's approved
