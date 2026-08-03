@@ -509,34 +509,67 @@ async function ensureAnsisImports(
   names: string[],
   distDir: string,
 ): Promise<string> {
-  const importMatch = content.match(/import \{([^}]*)\} from "(\.\/main-[^"]+\.js)";/);
-  if (!importMatch) {
-    throw new Error('ensureAnsisImports: no `main-*.js` import found in branded logger chunk');
+  // Scan every relative chunk import in the branded logger chunk. Which shared
+  // chunk holds the ansis colors depends on rolldown's chunking and has moved
+  // between versions (e.g. `main-*.js` → `ansis-*.js`), so we don't assume a
+  // fixed chunk name: instead we append each missing color to whichever imported
+  // chunk actually re-exports it.
+  const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
+  const imports = [...content.matchAll(importRe)];
+  if (imports.length === 0) {
+    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
   }
-  const [fullImport, bindings, mainSpecifier] = importMatch;
-  const localNames = new Set(
-    bindings.split(',').map((binding) => {
+
+  // Every binding already in scope across all imports (its local name).
+  const localNames = new Set<string>();
+  for (const [, bindings] of imports) {
+    for (const binding of bindings.split(',')) {
       const trimmed = binding.trim();
+      if (!trimmed) {
+        continue;
+      }
       const aliased = trimmed.match(/\bas\s+([A-Za-z0-9_$]+)$/);
-      return aliased ? aliased[1] : trimmed;
-    }),
-  );
+      localNames.add(aliased ? aliased[1] : trimmed);
+    }
+  }
   const missing = names.filter((name) => !localNames.has(name));
   if (missing.length === 0) {
     return content;
   }
-  const mainContent = await readFile(join(distDir, mainSpecifier.slice(2)), 'utf-8');
-  const additions = missing.map((name) => {
-    // main re-exports colors as `<local> as <alias>` (e.g. `bold as l`); the
-    // consumer side imports `<alias> as <local>`, so capture the alias here.
-    const exportAlias = mainContent.match(new RegExp(`\\b${name} as ([A-Za-z0-9_$]+)`));
-    if (!exportAlias) {
-      throw new Error(`ensureAnsisImports: \`${name}\` is not exported from ${mainSpecifier}`);
+
+  // Group missing colors by the imported chunk that re-exports them. Chunks
+  // re-export colors as `<local> as <alias>` (e.g. `bold as i`); the consumer
+  // side imports `<alias> as <local>`, so capture the alias here.
+  const additionsBySpecifier = new Map<string, string[]>();
+  for (const name of missing) {
+    let resolved = false;
+    for (const [, , specifier] of imports) {
+      const chunkContent = await readFile(join(distDir, specifier.slice(2)), 'utf-8');
+      const exportAlias = chunkContent.match(new RegExp(`\\b${name} as ([A-Za-z0-9_$]+)`));
+      if (!exportAlias) {
+        continue;
+      }
+      const additions = additionsBySpecifier.get(specifier) ?? [];
+      additions.push(`${exportAlias[1]} as ${name}`);
+      additionsBySpecifier.set(specifier, additions);
+      resolved = true;
+      break;
     }
-    return `${exportAlias[1]} as ${name}`;
-  });
-  const newImport = `import { ${bindings.trim().replace(/,$/, '')}, ${additions.join(', ')} } from "${mainSpecifier}";`;
-  return content.replace(fullImport, newImport);
+    if (!resolved) {
+      throw new Error(`ensureAnsisImports: \`${name}\` is not re-exported from any imported chunk`);
+    }
+  }
+
+  let result = content;
+  for (const [fullImport, bindings, specifier] of imports) {
+    const additions = additionsBySpecifier.get(specifier);
+    if (!additions) {
+      continue;
+    }
+    const newImport = `import { ${bindings.trim().replace(/,$/, '')}, ${additions.join(', ')} } from "${specifier}";`;
+    result = result.replace(fullImport, newImport);
+  }
+  return result;
 }
 
 async function brandTsdown() {
