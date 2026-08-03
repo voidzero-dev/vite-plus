@@ -8466,6 +8466,7 @@ name = "vite_install"
 version = "0.0.0"
 dependencies = [
  "backon",
+ "base64-simd",
  "crossterm",
  "flate2",
  "futures-util",

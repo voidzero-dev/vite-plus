@@ -30,7 +30,7 @@ Use `--no-hooks` when you want `vp config` to leave existing Git hook setup unch
 `--no-agent` when you want it to skip updates to existing coding agent instruction files. You
 can pass both flags when you want `vp config` to skip both setup steps.
 
-You can also set `VITE_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as
+You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as
 `prepare` or `postinstall`.
 
 ### `vp staged`
@@ -65,13 +65,13 @@ The installed hooks check the environment on every run, so you can disable them 
 
 ### Environment variable
 
-Set `VITE_GIT_HOOKS=0` in the environment of the process that runs `git commit`, and every Vite+ hook exits immediately without running:
+Set `VP_GIT_HOOKS=0` in the environment of the process that runs `git commit`, and every Vite+ hook exits immediately without running:
 
 ```bash
-VITE_GIT_HOOKS=0 git commit -m "content update"
+VP_GIT_HOOKS=0 git commit -m "content update"
 ```
 
-`HUSKY=0` is honored the same way for ecosystem tooling compatibility. Setting `VITE_GIT_HOOKS=0` in an environment also keeps `vp config` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
+`HUSKY=0` is honored the same way for ecosystem tooling compatibility. Setting `VP_GIT_HOOKS=0` in an environment also keeps `vp config` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
 
 ### Init script
 
@@ -83,7 +83,7 @@ Before checking the environment variable, each hook sources an init script if on
 To disable hooks for a whole machine, create the init script and export the variable there:
 
 ```sh [~/.config/vite-plus/hooks-init.sh]
-export VITE_GIT_HOOKS=0
+export VP_GIT_HOOKS=0
 ```
 
 Because the hook itself reads this file, it works even when the committing process does not inherit your shell environment, for example if a daemon or web server is making commits.
