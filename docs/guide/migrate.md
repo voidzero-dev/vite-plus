@@ -172,9 +172,9 @@ After migrating, remove lint-staged from your dependencies and delete any lint-s
 
 ### Git hook tools
 
-The `vp migrate` command can set up Vite+ commit hooks for you, but it doesn't automatically migrate every type of Git hook tool. This automatic migration path is specifically designed to handle Husky v9+ and lint-staged-style setups. Projects using Husky versions older than 9.0.0 are skipped and should upgrade to Husky v9 before using the automatic migration path.
+The `vp migrate` command can set up Vite+ commit hooks for conventional Husky v9+ projects that use the default `.husky` directory and a standard `prepare` command. Projects using a custom Husky directory, dynamic or otherwise nonstandard Husky commands, or Husky versions older than 9.0.0 are skipped before their hook files or dependencies are changed. Configure those projects manually using the [Commit hooks guide](/guide/commit-hooks).
 
-Custom Husky hook scripts are preserved as project-owned Vite+ hooks. When a hook invokes
+Hook scripts inside a supported `.husky` setup are preserved as project-owned Vite+ hooks. When a hook invokes
 lint-staged, Vite+ translates that workflow to `vp staged`; otherwise, it does not add staged-file
 checks to an existing hook policy. The default staged workflow is introduced only when no existing
 hook policy is found.
