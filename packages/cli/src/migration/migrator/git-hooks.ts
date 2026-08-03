@@ -214,7 +214,14 @@ export function preflightGitHooksSetup(
     return huskyReason;
   }
   const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
-  const symbolicHook = findSymbolicProjectHook(projectPath, [oldHooksDir, hooksDir]);
+  const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
+  const unsupportedHooksDir = projectHooksDirs.find(
+    (dir) => !isProjectRelativeHooksDirectory(projectPath, dir),
+  );
+  if (unsupportedHooksDir) {
+    return `Git hooks directory "${unsupportedHooksDir}" must be a project-relative subdirectory — skipping git hooks setup. Use a project-owned directory and re-run migration.`;
+  }
+  const symbolicHook = findSymbolicProjectHook(projectPath, projectHooksDirs);
   if (symbolicHook) {
     return `Symbolic Git hook path "${symbolicHook}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
   }
@@ -464,6 +471,10 @@ function findSymbolicProjectHook(
   dirs: Array<string | undefined>,
 ): string | undefined {
   for (const dir of new Set(dirs.filter((value): value is string => value != null))) {
+    const symbolicDirectory = findSymbolicHooksDirectoryComponent(projectPath, dir);
+    if (symbolicDirectory) {
+      return symbolicDirectory;
+    }
     const hooksPath = path.join(projectPath, dir);
     let hooksStats: fs.Stats;
     try {
@@ -485,6 +496,42 @@ function findSymbolicProjectHook(
     )?.relativePath;
     if (symbolicHook) {
       return path.join(dir, symbolicHook);
+    }
+  }
+  return undefined;
+}
+
+function isProjectRelativeHooksDirectory(projectPath: string, dir: string): boolean {
+  if (path.isAbsolute(dir) || dir.includes('..')) {
+    return false;
+  }
+  const projectRoot = path.resolve(projectPath);
+  const relativePath = path.relative(projectRoot, path.resolve(projectRoot, dir));
+  return (
+    relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
+function findSymbolicHooksDirectoryComponent(projectPath: string, dir: string): string | undefined {
+  const projectRoot = path.resolve(projectPath);
+  const hooksPath = path.resolve(projectRoot, dir);
+  const relativeHooksPath = path.relative(projectRoot, hooksPath);
+  let currentPath = projectRoot;
+
+  for (const component of relativeHooksPath.split(path.sep).filter(Boolean)) {
+    currentPath = path.join(currentPath, component);
+    const stats = lstatIfExists(currentPath);
+    if (!stats) {
+      return undefined;
+    }
+    if (stats.isSymbolicLink()) {
+      return path.relative(projectRoot, currentPath);
+    }
+    if (!stats.isDirectory()) {
+      return undefined;
     }
   }
   return undefined;

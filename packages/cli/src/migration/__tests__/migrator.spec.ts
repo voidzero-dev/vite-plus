@@ -8693,6 +8693,15 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
+  it.each(['.', '../shared-hooks', '/shared-hooks'])(
+    'rejects an unsafe hook directory: %s',
+    (hooksDir) => {
+      expect(preflightGitHooksSetup(tmpDir, undefined, hooksDir)).toContain(
+        `Git hooks directory "${hooksDir}" must be a project-relative subdirectory`,
+      );
+    },
+  );
+
   it.each(['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'])(
     'rejects hooks disabled through %s before migration starts',
     (environmentName) => {
@@ -8791,6 +8800,16 @@ describe('preflightGitHooksSetup hook state', () => {
 
     expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
       'Symbolic Git hook path ".config/husky/common.sh" cannot be migrated safely',
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects symbolic custom hook dir parents', () => {
+    const actualConfigDir = path.join(tmpDir, 'actual-config');
+    fs.mkdirSync(path.join(actualConfigDir, 'husky'), { recursive: true });
+    fs.symlinkSync(actualConfigDir, path.join(tmpDir, '.config'), 'dir');
+
+    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
+      'Symbolic Git hook path ".config" cannot be migrated safely',
     );
   });
 
