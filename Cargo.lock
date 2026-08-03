@@ -8333,7 +8333,6 @@ dependencies = [
  "tracing",
  "vite_command",
  "vite_error",
- "vite_install",
  "vite_migration",
  "vite_path",
  "vite_pm_cli",
@@ -8442,7 +8441,6 @@ dependencies = [
  "uuid",
  "vite_command",
  "vite_error",
- "vite_install",
  "vite_js_runtime",
  "vite_path",
  "vite_pm_cli",
@@ -8462,39 +8460,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_install"
-version = "0.0.0"
-dependencies = [
- "backon",
- "base64-simd",
- "crossterm",
- "flate2",
- "futures-util",
- "hex",
- "httpmock",
- "indoc",
- "node-semver",
- "pathdiff",
- "reqwest",
- "semver 1.0.28",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "test-log",
- "tokio",
- "tracing",
- "vite_command",
- "vite_error",
- "vite_path",
- "vite_shared",
- "vite_str",
- "vite_workspace",
-]
-
-[[package]]
 name = "vite_installer"
 version = "0.0.0"
 dependencies = [
@@ -8502,8 +8467,8 @@ dependencies = [
  "indicatif",
  "owo-colors",
  "tokio",
- "vite_install",
  "vite_path",
+ "vite_pm_cli",
  "vite_setup",
  "vite_shared",
  "which",
@@ -8572,17 +8537,47 @@ dependencies = [
 name = "vite_pm_cli"
 version = "0.0.0"
 dependencies = [
+ "backon",
+ "base64-simd",
  "clap",
+ "cow-utils",
+ "crossterm",
+ "flate2",
+ "futures-util",
+ "hex",
+ "httpmock",
+ "indoc",
+ "node-semver",
+ "pathdiff",
+ "reqwest",
+ "semver 1.0.28",
+ "serde",
  "serde_json",
+ "sha1",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "test-log",
  "thiserror 2.0.19",
  "tokio",
  "tracing",
  "vite_command",
  "vite_error",
- "vite_install",
  "vite_path",
+ "vite_pm_cli_macros",
+ "vite_shared",
  "vite_str",
  "vite_workspace",
+]
+
+[[package]]
+name = "vite_pm_cli_macros"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "semver 1.0.28",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -8621,9 +8616,9 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "tracing",
- "vite_install",
  "vite_js_runtime",
  "vite_path",
+ "vite_pm_cli",
  "vite_shared",
  "vite_str",
 ]

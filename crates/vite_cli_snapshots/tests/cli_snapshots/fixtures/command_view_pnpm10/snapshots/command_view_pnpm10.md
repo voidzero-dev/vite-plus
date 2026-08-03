@@ -14,7 +14,7 @@ View package information from the registry
 Arguments:
   <PACKAGE>               Package name with optional version
   [FIELD]                 Specific field to view
-  [PASS_THROUGH_ARGS]...  Additional arguments
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
   --json      Output in JSON format

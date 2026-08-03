@@ -26,8 +26,8 @@ use std::io::{self, Write};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
-use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
+use vite_pm_cli::HttpClient;
 use vite_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
 
 /// Restrict DLL search to system32 only to prevent DLL hijacking
