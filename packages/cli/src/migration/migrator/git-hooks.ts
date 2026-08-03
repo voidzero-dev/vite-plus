@@ -286,8 +286,15 @@ function getMarkedHuskyCommands(script: string, marker: string): MarkedHuskyComm
     }
     const markerEnd = start + marker.length;
     const firstWord = parseShellWord(script, markerEnd);
+    // `husky init` initializes the default `.husky` directory; `init` is a
+    // subcommand, not a custom directory name. `husky install [dir]` is the
+    // deprecated spelling of `husky [dir]` and still appears in older projects.
     const dirWord =
-      firstWord?.value === 'install' ? parseShellWord(script, firstWord.end) : firstWord;
+      firstWord?.value === 'init'
+        ? undefined
+        : firstWord?.value === 'install'
+          ? parseShellWord(script, firstWord.end)
+          : firstWord;
     const end = dirWord?.end ?? firstWord?.end ?? markerEnd;
     commands.push({ dir: dirWord?.value, rawDir: dirWord?.raw, start, end });
     searchStart = end;

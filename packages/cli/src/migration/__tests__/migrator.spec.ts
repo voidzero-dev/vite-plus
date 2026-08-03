@@ -8663,6 +8663,20 @@ describe('custom Husky directory parsing', () => {
       'echo __vite_plus_migrate_husky_command__ .wrong && vp config --hooks-dir .config/husky',
     );
   });
+
+  it('treats Husky init as default-directory initialization', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky init && npm run build' } }),
+    );
+
+    expect(getOldHooksDir(tmpDir)).toBe('.husky');
+    expect(rewritePrepareScript(tmpDir)).toBe('.husky');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe('vp config && npm run build');
+  });
 });
 
 describe('preflightGitHooksSetup husky catalog resolution', () => {
