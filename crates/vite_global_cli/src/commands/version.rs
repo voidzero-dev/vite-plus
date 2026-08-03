@@ -9,8 +9,8 @@ use std::{
 
 use owo_colors::OwoColorize;
 use serde::Deserialize;
-use vite_install::get_package_manager_type_and_version;
 use vite_path::AbsolutePathBuf;
+use vite_pm_cli::get_package_manager_type_and_version;
 use vite_workspace::find_workspace_root;
 
 use crate::{commands::env::config::resolve_version, error::Error, help};

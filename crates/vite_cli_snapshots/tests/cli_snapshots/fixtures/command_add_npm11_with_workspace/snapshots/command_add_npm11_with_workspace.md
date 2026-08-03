@@ -38,6 +38,7 @@ added 3 packages in <duration>
 should add @vite-plus-test/utils to workspace root
 
 ```
+warn: npm does not support --workspace.
 
 up to date in <duration>
 ```
@@ -114,6 +115,7 @@ added 1 package in <duration>
 should add @vite-plus-test/utils to packages/app
 
 ```
+warn: npm does not support --workspace.
 
 up to date in <duration>
 ```
