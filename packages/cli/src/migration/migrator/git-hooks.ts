@@ -1104,9 +1104,12 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
       const commands = getMarkedHuskyCommands(markedPrepare);
       oldDir = commands.at(-1)?.dir ?? '.husky';
       pkg.scripts.prepare = commands.toReversed().reduce((prepare, command) => {
-        const replacement = command.rawDir
-          ? `vp config --hooks-dir ${command.rawDir}`
-          : 'vp config';
+        // The default Husky directory is migrated to .vite-hooks, so an
+        // explicitly spelled `.husky` must use vp config's default as well.
+        const replacement =
+          command.rawDir && command.dir !== '.husky'
+            ? `vp config --hooks-dir ${command.rawDir}`
+            : 'vp config';
         return `${prepare.slice(0, command.start)}${replacement}${prepare.slice(command.end)}`;
       }, markedPrepare);
     }
