@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -104,6 +105,32 @@ describe('install', () => {
 
         expect(install()).toEqual({
           message: 'symbolic hook path ".vite-hooks/_/h" not allowed',
+          isError: false,
+        });
+        expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'does not write through a hard-linked dispatcher file',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-hardlink-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        const externalFile = join(tmp, 'external-hook-runner');
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(externalFile, 'keep me\n');
+        linkSync(externalFile, join(tmp, '.vite-hooks', '_', 'h'));
+        process.chdir(tmp);
+
+        expect(install()).toEqual({
+          message: 'multiply linked hook path ".vite-hooks/_/h" not allowed',
           isError: false,
         });
         expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');

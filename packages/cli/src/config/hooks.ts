@@ -78,7 +78,7 @@ export interface InstallResult {
 }
 
 export interface UnsafeHookInstallPath {
-  kind: 'symbolic' | 'not-directory' | 'not-file';
+  kind: 'symbolic' | 'linked' | 'not-directory' | 'not-file';
   relativePath: string;
 }
 
@@ -114,6 +114,9 @@ export function findUnsafeHookInstallPath(root: string, dir: string): UnsafeHook
     if (!stats.isFile()) {
       return { kind: 'not-file', relativePath: relative(projectRoot, filePath) };
     }
+    if (stats.nlink > 1) {
+      return { kind: 'linked', relativePath: relative(projectRoot, filePath) };
+    }
   }
   return null;
 }
@@ -121,6 +124,9 @@ export function findUnsafeHookInstallPath(root: string, dir: string): UnsafeHook
 function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): string {
   if (unsafePath.kind === 'symbolic') {
     return `symbolic hook path "${unsafePath.relativePath}" not allowed`;
+  }
+  if (unsafePath.kind === 'linked') {
+    return `multiply linked hook path "${unsafePath.relativePath}" not allowed`;
   }
   if (unsafePath.kind === 'not-directory') {
     return `hook path "${unsafePath.relativePath}" is not a directory`;

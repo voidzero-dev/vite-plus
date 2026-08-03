@@ -257,13 +257,22 @@ export function preflightGitHooksSetup(
   if (unsafeInstallPath?.kind === 'symbolic') {
     return `Symbolic Git hook path "${unsafeInstallPath.relativePath}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
   }
+  if (unsafeInstallPath?.kind === 'linked') {
+    return `Multiply linked Git hook path "${unsafeInstallPath.relativePath}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  }
   if (unsafeInstallPath) {
     const expectedType = unsafeInstallPath.kind === 'not-directory' ? 'directory' : 'file';
     return `Git hook path "${unsafeInstallPath.relativePath}" is not a ${expectedType} — skipping git hooks setup. Replace it with a ${expectedType} and re-run migration.`;
   }
-  const symbolicHook = findSymbolicProjectHook(projectPath, projectHooksDirs);
-  if (symbolicHook) {
-    return `Symbolic Git hook path "${symbolicHook}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  const unsafeProjectHook = findUnsafeProjectHook(projectPath, projectHooksDirs);
+  if (unsafeProjectHook?.kind === 'symbolic') {
+    return `Symbolic Git hook path "${unsafeProjectHook.relativePath}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  }
+  if (unsafeProjectHook?.kind === 'not-file') {
+    return `Git hook path "${unsafeProjectHook.relativePath}" is not a file — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  }
+  if (unsafeProjectHook) {
+    return `Git hook path "${unsafeProjectHook.relativePath}" is not a regular file or directory — skipping git hooks setup. Replace it with a project-owned entry and re-run migration.`;
   }
   const conflictingHook = findHookMigrationConflict(projectPath, oldHooksDir);
   if (conflictingHook) {
@@ -519,10 +528,15 @@ function findHookMigrationConflict(
   })?.relativePath;
 }
 
-function findSymbolicProjectHook(
+interface UnsafeProjectHook {
+  kind: 'symbolic' | 'not-file' | 'unsupported';
+  relativePath: string;
+}
+
+function findUnsafeProjectHook(
   projectPath: string,
   dirs: Array<string | undefined>,
-): string | undefined {
+): UnsafeProjectHook | undefined {
   for (const dir of new Set(dirs.filter((value): value is string => value != null))) {
     const hooksPath = path.join(projectPath, dir);
     let hooksStats: fs.Stats;
@@ -535,23 +549,37 @@ function findSymbolicProjectHook(
       throw error;
     }
     if (hooksStats.isSymbolicLink()) {
-      return dir;
+      return { kind: 'symbolic', relativePath: dir };
     }
     if (!hooksStats.isDirectory()) {
       continue;
     }
-    const symbolicHook = getMigratableHookEntries(hooksPath).find((entry) =>
-      entry.dirent.isSymbolicLink(),
-    )?.relativePath;
-    if (symbolicHook) {
-      return path.join(dir, symbolicHook);
+    for (const entry of getMigratableHookEntries(hooksPath)) {
+      const relativePath = path.join(dir, entry.relativePath);
+      if (entry.dirent.isSymbolicLink()) {
+        return { kind: 'symbolic', relativePath };
+      }
+      const isTopLevelHook =
+        !entry.relativePath.includes('/') && GIT_HOOK_NAME_SET.has(entry.relativePath);
+      if (isTopLevelHook && !entry.dirent.isFile()) {
+        return { kind: 'not-file', relativePath };
+      }
+      if (!entry.dirent.isFile() && !entry.dirent.isDirectory()) {
+        return { kind: 'unsupported', relativePath };
+      }
     }
   }
   return undefined;
 }
 
 function isProjectRelativeHooksDirectory(projectPath: string, dir: string): boolean {
-  if (path.isAbsolute(dir) || dir.includes('..')) {
+  if (
+    path.isAbsolute(dir) ||
+    dir.includes('..') ||
+    dir.startsWith('-') ||
+    /^~(?:[/\\]|$)/.test(dir) ||
+    /[$`*?[\]\r\n]/.test(dir)
+  ) {
     return false;
   }
   const projectRoot = path.resolve(projectPath);

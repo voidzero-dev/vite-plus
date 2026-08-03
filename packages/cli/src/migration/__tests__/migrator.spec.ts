@@ -8747,6 +8747,15 @@ describe('preflightGitHooksSetup hook state', () => {
     },
   );
 
+  it.each(['$HOOKS_DIR', '~/.hooks', '--help', '.hooks/*'])(
+    'rejects a dynamic or option-like hook directory: %s',
+    (hooksDir) => {
+      expect(preflightGitHooksSetup(tmpDir, undefined, hooksDir)).toContain(
+        `Git hooks directory "${hooksDir}" must be a project-relative subdirectory`,
+      );
+    },
+  );
+
   it.each(['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'])(
     'rejects hooks disabled through %s before migration starts',
     (environmentName) => {
@@ -8892,6 +8901,34 @@ describe('preflightGitHooksSetup hook state', () => {
 
     expect(preflightGitHooksSetup(tmpDir)).toContain(
       'Symbolic Git hook path ".vite-hooks/_/h" cannot be migrated safely',
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects hard-linked dispatcher files', () => {
+    const externalDispatcher = path.join(tmpDir, 'shared-dispatcher');
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', '_'), { recursive: true });
+    fs.writeFileSync(externalDispatcher, 'keep me\n');
+    fs.linkSync(externalDispatcher, path.join(tmpDir, '.vite-hooks', '_', 'h'));
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Multiply linked Git hook path ".vite-hooks/_/h" cannot be migrated safely',
+    );
+  });
+
+  it('rejects a directory where a project hook file is expected', () => {
+    fs.mkdirSync(path.join(tmpDir, '.husky', 'pre-commit'), { recursive: true });
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Git hook path ".husky/pre-commit" is not a file',
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects special project hook entries', () => {
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    execFileSync('mkfifo', [path.join(tmpDir, '.husky', 'pre-commit')]);
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Git hook path ".husky/pre-commit" is not a file',
     );
   });
 });
