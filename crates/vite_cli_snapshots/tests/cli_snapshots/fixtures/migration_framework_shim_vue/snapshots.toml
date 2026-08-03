@@ -2,7 +2,6 @@
 name = "migration_framework_shim_vue"
 vp = "global"
 skip-platforms = ["windows"]
-env = { VITE_DISABLE_AUTO_INSTALL = "1" }
 unset-env = ["CI", "VP_SKIP_INSTALL"]
 local-registry = true
 steps = [
