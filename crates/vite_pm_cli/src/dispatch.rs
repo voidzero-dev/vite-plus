@@ -88,6 +88,8 @@ fn pm_manager_policy(command: &PmCommand) -> ManagerPolicy {
     match command {
         PmCommand::ApproveBuilds(_)
         | PmCommand::Prune(_)
+        | PmCommand::Patch(_)
+        | PmCommand::PatchCommit(_)
         | PmCommand::Pack(_)
         | PmCommand::List(_)
         | PmCommand::Version(_)
