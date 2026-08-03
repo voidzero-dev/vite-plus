@@ -11,3 +11,19 @@ steps = [
 after = [
   { tty = false, argv = ["vp", "remove", "-g", "testnpm2"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_update_node_mismatch_install_failure"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["vp", "install", "-g", "--node", "20", "semver@7.7.2"], snapshot = false },
+  { argv = ["vpt", "json-edit", "$VP_HOME/bins/semver.json", "package", "conflicting-package"], snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g", "semver@=7.7.2", "--reinstall-node-mismatch"], comment = "should keep the recorded spec when the reinstall fails", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/semver.json", 'versionSpec": "7.7.2'], comment = "should keep metadata from the successful install", continue-on-failure = true },
+]
+after = [
+  { argv = ["vpt", "json-edit", "$VP_HOME/bins/semver.json", "package", "semver"], continue-on-failure = true },
+  { tty = false, argv = ["vp", "remove", "-g", "semver"], continue-on-failure = true },
+]
