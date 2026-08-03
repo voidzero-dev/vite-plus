@@ -79,12 +79,15 @@ const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 // Packages replaced by vite-plus built-in commands and should be removed from devDependencies
 const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
 
-function removeReplacedHookPackages(packageJsonPath: string): void {
+function removeReplacedHookPackages(packageJsonPath: string, preserveLintStaged = false): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     for (const name of REPLACED_HOOK_PACKAGES) {
+      if (name === 'lint-staged' && preserveLintStaged) {
+        continue;
+      }
       if (pkg.devDependencies?.[name]) {
         delete pkg.devDependencies[name];
       }
@@ -126,12 +129,34 @@ function findGitRoot(startPath: string): string | null {
   }
 }
 
-/**
- * Normalize "husky install [dir]" → "husky [dir]" so downstream regex
- * and ast-grep rules can match a single pattern.
- */
-function collapseHuskyInstall(script: string): string {
-  return script.replace('husky install ', 'husky ').replace('husky install', 'husky');
+const HUSKY_COMMAND_MARKER = '__vite_plus_migrate_husky_command__';
+const MARKED_HUSKY_COMMAND_PATTERN = new RegExp(
+  `${HUSKY_COMMAND_MARKER}(?:\\s+install)?(?:\\s+(?:"(?<doubleQuotedDir>[^"]*)"|'(?<singleQuotedDir>[^']*)'|(?<bareDir>[^\\s;&|()<>]+)))?`,
+  'g',
+);
+
+interface MarkedHuskyCommand {
+  dir: string | undefined;
+}
+
+function markHuskyCommands(script: string): string | undefined {
+  const prepareRules = readPrepareRulesYaml();
+  const markerRules = prepareRules.replace(/^fix: vp config$/m, `fix: ${HUSKY_COMMAND_MARKER}`);
+  if (markerRules === prepareRules) {
+    throw new Error('Could not mark the Husky prepare rule');
+  }
+  const updated = rewriteScripts(JSON.stringify({ prepare: script }), markerRules);
+  return updated ? (JSON.parse(updated).prepare as string) : undefined;
+}
+
+function getMarkedHuskyCommands(script: string): MarkedHuskyCommand[] {
+  return [...script.matchAll(MARKED_HUSKY_COMMAND_PATTERN)].map((match) => {
+    const groups = match.groups as
+      | { doubleQuotedDir?: string; singleQuotedDir?: string; bareDir?: string }
+      | undefined;
+    const dir = groups?.doubleQuotedDir ?? groups?.singleQuotedDir ?? groups?.bareDir;
+    return { dir };
+  });
 }
 
 /**
@@ -165,12 +190,12 @@ export function getOldHooksDir(rootDir: string): string | undefined {
   if (!pkg.scripts?.prepare) {
     return undefined;
   }
-  const prepare = collapseHuskyInstall(pkg.scripts.prepare);
-  const match = prepare.match(/\bhusky(?:\s+([\w./-]+))?/);
-  if (!match) {
+  const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
+  if (!markedPrepare) {
     return undefined;
   }
-  return match[1] ?? '.husky';
+  const commands = getMarkedHuskyCommands(markedPrepare);
+  return commands.at(-1)?.dir ?? '.husky';
 }
 
 /**
@@ -351,7 +376,7 @@ export function setupGitHooks(
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
-    migrateProjectHooks(
+    const preserveLintStaged = migrateProjectHooks(
       projectPath,
       oldHooksDir,
       hooksDir,
@@ -359,8 +384,12 @@ export function setupGitHooks(
       stagedMerged,
       hasExistingHookPolicy,
     );
-    finalizeStagedConfigMigration(packageJsonPath, migratedStandaloneConfigPaths, stagedMerged);
-    removeReplacedHookPackages(packageJsonPath);
+    finalizeStagedConfigMigration(
+      packageJsonPath,
+      migratedStandaloneConfigPaths,
+      stagedMerged && !preserveLintStaged,
+    );
+    removeReplacedHookPackages(packageJsonPath, preserveLintStaged);
     return true;
   }
 
@@ -396,7 +425,7 @@ export function setupGitHooks(
       warnMigration(`Git hooks not configured — ${stdout}`, report);
       return false;
     }
-    migrateProjectHooks(
+    const preserveLintStaged = migrateProjectHooks(
       projectPath,
       oldHooksDir,
       hooksDir,
@@ -404,8 +433,12 @@ export function setupGitHooks(
       stagedMerged,
       hasExistingHookPolicy,
     );
-    finalizeStagedConfigMigration(packageJsonPath, migratedStandaloneConfigPaths, stagedMerged);
-    removeReplacedHookPackages(packageJsonPath);
+    finalizeStagedConfigMigration(
+      packageJsonPath,
+      migratedStandaloneConfigPaths,
+      stagedMerged && !preserveLintStaged,
+    );
+    removeReplacedHookPackages(packageJsonPath, preserveLintStaged);
     if (report) {
       report.gitHooksConfigured = true;
     }
@@ -427,7 +460,7 @@ function migrateProjectHooks(
   isCustomDir: boolean,
   stagedMerged: boolean,
   hasExistingHookPolicy: boolean,
-): void {
+): boolean {
   if (oldHooksDir && !isCustomDir) {
     const oldDir = path.join(projectPath, oldHooksDir);
     if (fs.existsSync(oldDir)) {
@@ -454,13 +487,14 @@ function migrateProjectHooks(
   removeLegacyHuskyBootstrapFromProjectHooks(projectPath, hooksDir);
 
   if (!stagedMerged) {
-    return;
+    return hasLintStagedReferenceInProjectHooks(projectPath, hooksDir);
   }
   if (hasExistingHookPolicy) {
     migrateStagedCommandsInProjectHooks(projectPath, hooksDir);
   } else {
     createPreCommitHook(projectPath, hooksDir);
   }
+  return hasLintStagedReferenceInProjectHooks(projectPath, hooksDir);
 }
 
 function findHookMigrationConflict(
@@ -743,7 +777,7 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 // The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
 // We still detect old lint-staged patterns to migrate existing hooks.
 const STALE_LINT_STAGED_PATTERNS = [
-  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged(?=$|[\s;&|()<>])/,
+  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)(?:\s+(?:--no-install|--yes|--quiet|-y|-q|--))*\s+lint-staged(?=$|[\s;&|()<>])/,
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged(?=$|[\s;&|()<>])/,
 ];
 const VP_STAGED_PATTERN = /^(?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*vp staged(?=$|[\s;&|()<>])/;
@@ -805,6 +839,12 @@ function migrateStagedCommandsInProjectHooks(projectPath: string, dir: string): 
   }
 }
 
+function hasLintStagedReferenceInProjectHooks(projectPath: string, dir: string): boolean {
+  return getProjectHookFilePaths(projectPath, dir).some((hookPath) =>
+    /\blint-staged\b/.test(fs.readFileSync(hookPath, 'utf8')),
+  );
+}
+
 const LEGACY_HUSKY_BOOTSTRAP_PATTERN =
   /^\s*(?:\.|source)\s+["']?\$\(dirname(?:\s+--)?\s+["']?\$0["']?\)\/_\/(?:h|husky\.sh)["']?\s*$/;
 
@@ -842,8 +882,6 @@ export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): v
 
 /**
  * Rewrite only `scripts.prepare` in the root package.json using vite-prepare.yml rules.
- * Collapses "husky install" → "husky" before applying ast-grep so that the
- * replace-husky rule produces "vp config" with any directory argument preserved.
  * Returns the old husky hooks dir (if any) for migration to .vite-hooks.
  * Called only when hooks are being set up (not with --no-hooks).
  */
@@ -860,28 +898,25 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
       return pkg;
     }
 
-    // Collapse "husky install" → "husky" so the ast-grep rule
-    // produces "vp config" with any directory argument preserved.
-    const prepare = collapseHuskyInstall(pkg.scripts.prepare);
-
-    const prepareJson = JSON.stringify({ prepare });
-    const updated = rewriteScripts(prepareJson, readPrepareRulesYaml());
-    if (updated) {
-      let newPrepare: string = JSON.parse(updated).prepare;
-      newPrepare = newPrepare.replace(
-        /\bvp config(?:\s+(?!-)([\w./-]+))?/,
-        (_match: string, dir: string | undefined) => {
-          // Capture the old husky dir for hook migration.
-          // Default husky dir is .husky; custom dirs keep --hooks-dir flag.
-          oldDir = dir ?? '.husky';
-          return dir ? `vp config --hooks-dir ${dir}` : 'vp config';
+    const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
+    if (markedPrepare) {
+      const commands = getMarkedHuskyCommands(markedPrepare);
+      oldDir = commands.at(-1)?.dir ?? '.husky';
+      pkg.scripts.prepare = markedPrepare.replace(
+        MARKED_HUSKY_COMMAND_PATTERN,
+        (...args: unknown[]) => {
+          const groups = args.at(-1) as
+            | { doubleQuotedDir?: string; singleQuotedDir?: string; bareDir?: string }
+            | undefined;
+          const rawDir =
+            groups?.doubleQuotedDir != null
+              ? `"${groups.doubleQuotedDir}"`
+              : groups?.singleQuotedDir != null
+                ? `'${groups.singleQuotedDir}'`
+                : groups?.bareDir;
+          return rawDir ? `vp config --hooks-dir ${rawDir}` : 'vp config';
         },
       );
-      pkg.scripts.prepare = newPrepare;
-    } else if (prepare !== pkg.scripts.prepare) {
-      // Pre-processing changed the script (husky install → husky)
-      // but no rule matched — keep the collapsed form
-      pkg.scripts.prepare = prepare;
     }
     return pkg;
   });

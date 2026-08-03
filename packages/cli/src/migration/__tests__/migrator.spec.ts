@@ -52,7 +52,9 @@ const {
   preflightGitHooksSetup,
   createPreCommitHook,
   detectLegacyGitHooksMigrationCandidate,
+  getOldHooksDir,
   installGitHooks,
+  rewritePrepareScript,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
   pnpmSupportsWorkspaceSettings,
@@ -8578,6 +8580,48 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
 
     expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
   });
+
+  it('does not treat incidental Husky text as a migration candidate', () => {
+    const prepare = 'echo "husky install skipped"';
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare }, devDependencies: { 'vite-plus': 'latest' } }),
+    );
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
+    expect(rewritePrepareScript(tmpDir)).toBeUndefined();
+    expect(
+      (readJson(path.join(tmpDir, 'package.json')).scripts as { prepare: string }).prepare,
+    ).toBe(prepare);
+  });
+});
+
+describe('custom Husky directory parsing', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-dir-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['husky install ".config/husky hooks" && npm run build', '.config/husky hooks', '"'],
+    ["husky './.config/husky hooks' && npm run build", './.config/husky hooks', "'"],
+  ])('preserves a quoted custom directory in %s', (prepare, hooksDir, quote) => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+
+    expect(getOldHooksDir(tmpDir)).toBe(hooksDir);
+    expect(rewritePrepareScript(tmpDir)).toBe(hooksDir);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe(
+      `vp config --hooks-dir ${quote}${hooksDir}${quote} && npm run build`,
+    );
+  });
 });
 
 describe('preflightGitHooksSetup husky catalog resolution', () => {
@@ -8909,6 +8953,38 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
+  it('preserves lint-staged when a project hook invocation cannot be rewritten', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-wrapper-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          scripts: { prepare: 'husky' },
+          devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7' },
+          'lint-staged': { '*': 'eslint --fix' },
+        }),
+      );
+      fs.mkdirSync(path.join(tmpDir, '.husky'));
+      fs.writeFileSync(
+        path.join(tmpDir, '.husky', 'pre-commit'),
+        'custom-runner lint-staged --verbose\n',
+      );
+
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+        'custom-runner lint-staged --verbose\n',
+      );
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        devDependencies: Record<string, string>;
+        'lint-staged': Record<string, string>;
+      };
+      expect(pkg.devDependencies).toEqual({ 'lint-staged': '^16.2.7' });
+      expect(pkg['lint-staged']).toEqual({ '*': 'eslint --fix' });
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')('preserves hook and helper permissions', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-permissions-'));
     try {
@@ -8957,6 +9033,15 @@ describe('createPreCommitHook command matching', () => {
       expect(fs.readFileSync(hookPath, 'utf8')).toBe(`${command}\nvp staged\n`);
     },
   );
+
+  it('rewrites npx runner flags before lint-staged', () => {
+    const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
+    fs.writeFileSync(hookPath, 'npx --no-install lint-staged --verbose\n');
+
+    createPreCommitHook(tmpDir);
+
+    expect(fs.readFileSync(hookPath, 'utf8')).toBe('vp staged --verbose\n');
+  });
 
   it.skipIf(process.platform === 'win32')('does not write through a symbolic hook', () => {
     const externalHook = path.join(tmpDir, 'shared-pre-commit');
