@@ -12,9 +12,9 @@ use crate::{
     resolution::{
         AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, ConfigCommand, DedupeArgs, DeprecateArgs,
         DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs, LoginArgs, LogoutArgs,
-        OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs, PublishArgs,
-        RebuildArgs, RemoveArgs, Resolution, SearchArgs, StageCommand, TokenCommand, UnlinkArgs,
-        UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+        OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs, PatchCommitArgs, PingArgs,
+        PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution, SearchArgs, StageCommand,
+        TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
         resolve_for_manager as resolve_args_for_manager,
     },
 };
@@ -78,6 +78,13 @@ pub enum PmCommand {
 
     /// Remove unnecessary packages
     Prune(PruneArgs),
+
+    /// Prepare a package for local patching
+    Patch(PatchArgs),
+
+    /// Commit a prepared package patch
+    #[command(name = "patch-commit")]
+    PatchCommit(PatchCommitArgs),
 
     /// Create a tarball of the package
     Pack(PackArgs),
@@ -311,6 +318,8 @@ impl PmCommand {
         match self {
             Self::ApproveBuilds(args) => resolve_args_for_manager(manager, args),
             Self::Prune(args) => resolve_args_for_manager(manager, args),
+            Self::Patch(args) => resolve_args_for_manager(manager, args),
+            Self::PatchCommit(args) => resolve_args_for_manager(manager, args),
             Self::Pack(args) => resolve_args_for_manager(manager, args),
             Self::List(args) => resolve_args_for_manager(manager, args),
             Self::View(args) => resolve_args_for_manager(manager, args),

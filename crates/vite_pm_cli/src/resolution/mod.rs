@@ -46,9 +46,9 @@ pub(crate) use commands::SaveDependencyArgs;
 pub use commands::{
     AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, ConfigCommand, DedupeArgs, DeprecateArgs,
     DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs, LoginArgs, LogoutArgs,
-    OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs, PublishArgs,
-    RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs,
-    VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+    OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs, PatchCommitArgs, PingArgs,
+    PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TokenCommand,
+    UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };
 use diagnostics::DiagnosticKind;
 /// Diagnostics emitted while unsupported arguments and fallbacks are resolved.
