@@ -7,6 +7,7 @@
 
 
 ## `vpt write-file .husky/pre-commit '#'\!'/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
 . "$(dirname "$0")/scripts/check.sh"
 '`
 
@@ -30,7 +31,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file .vite-hooks/pre-commit`
 
-keep the project hook
+keep the project hook without the legacy Husky bootstrap
 
 ```
 #!/usr/bin/env sh

@@ -8781,6 +8781,30 @@ describe('preflightGitHooksSetup hook state', () => {
       'Symbolic Git hook path ".husky/scripts" cannot be migrated safely',
     );
   });
+
+  it.skipIf(process.platform === 'win32')('rejects symbolic helpers in custom hook dirs', () => {
+    const customHooksDir = path.join(tmpDir, '.config', 'husky');
+    const externalHelper = path.join(tmpDir, 'shared-hook-helper');
+    fs.mkdirSync(customHooksDir, { recursive: true });
+    fs.writeFileSync(externalHelper, 'npx lint-staged\n');
+    fs.symlinkSync(externalHelper, path.join(customHooksDir, 'common.sh'));
+
+    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
+      'Symbolic Git hook path ".config/husky/common.sh" cannot be migrated safely',
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects symbolic helpers in .vite-hooks', () => {
+    const viteHooksDir = path.join(tmpDir, '.vite-hooks', 'scripts');
+    const externalHelper = path.join(tmpDir, 'shared-hook-helper');
+    fs.mkdirSync(viteHooksDir, { recursive: true });
+    fs.writeFileSync(externalHelper, 'npx lint-staged\n');
+    fs.symlinkSync(externalHelper, path.join(viteHooksDir, 'common.sh'));
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Symbolic Git hook path ".vite-hooks/scripts/common.sh" cannot be migrated safely',
+    );
+  });
 });
 
 describe('createPreCommitHook command matching', () => {

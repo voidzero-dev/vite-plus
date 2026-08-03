@@ -33,10 +33,10 @@ vp = "global"
 steps = [
   { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "mkdir", "-p", ".husky/scripts"], snapshot = false },
-  { argv = ["vpt", "write-file", ".husky/pre-commit", "#!/usr/bin/env sh\n. \"$(dirname \"$0\")/scripts/check.sh\"\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-commit", "#!/usr/bin/env sh\n. \"$(dirname -- \"$0\")/_/husky.sh\"\n. \"$(dirname \"$0\")/scripts/check.sh\"\n"], snapshot = false },
   { argv = ["vpt", "write-file", ".husky/scripts/check.sh", "npx lint-staged\n"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "preserve and migrate a nested hook helper", continue-on-failure = true },
-  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "keep the project hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "keep the project hook without the legacy Husky bootstrap", continue-on-failure = true },
   { argv = ["vpt", "print-file", ".vite-hooks/scripts/check.sh"], comment = "copy and rewrite the nested helper", continue-on-failure = true },
   { argv = ["vpt", "grep-file", "vite.config.ts", "staged:"], snapshot = false },
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "add staged config discovered through the helper", continue-on-failure = true },

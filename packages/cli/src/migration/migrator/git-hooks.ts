@@ -214,11 +214,7 @@ export function preflightGitHooksSetup(
     return huskyReason;
   }
   const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
-  const symbolicHook = findSymbolicProjectHook(
-    projectPath,
-    [oldHooksDir, hooksDir],
-    oldHooksDir === '.husky' ? oldHooksDir : undefined,
-  );
+  const symbolicHook = findSymbolicProjectHook(projectPath, [oldHooksDir, hooksDir]);
   if (symbolicHook) {
     return `Symbolic Git hook path "${symbolicHook}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
   }
@@ -429,6 +425,8 @@ function migrateProjectHooks(
     }
   }
 
+  removeLegacyHuskyBootstrapFromProjectHooks(projectPath, hooksDir);
+
   if (!stagedMerged) {
     return;
   }
@@ -464,7 +462,6 @@ function findHookMigrationConflict(
 function findSymbolicProjectHook(
   projectPath: string,
   dirs: Array<string | undefined>,
-  migrationSourceDir: string | undefined,
 ): string | undefined {
   for (const dir of new Set(dirs.filter((value): value is string => value != null))) {
     const hooksPath = path.join(projectPath, dir);
@@ -483,14 +480,9 @@ function findSymbolicProjectHook(
     if (!hooksStats.isDirectory()) {
       continue;
     }
-    const symbolicHook =
-      fs
-        .readdirSync(hooksPath, { withFileTypes: true })
-        .find((entry) => GIT_HOOK_NAME_SET.has(entry.name) && entry.isSymbolicLink())?.name ??
-      (dir === migrationSourceDir
-        ? getMigratableHookEntries(hooksPath).find((entry) => entry.dirent.isSymbolicLink())
-            ?.relativePath
-        : undefined);
+    const symbolicHook = getMigratableHookEntries(hooksPath).find((entry) =>
+      entry.dirent.isSymbolicLink(),
+    )?.relativePath;
     if (symbolicHook) {
       return path.join(dir, symbolicHook);
     }
@@ -734,6 +726,20 @@ function migrateStagedCommandsInHook(hookPath: string): boolean {
 function migrateStagedCommandsInProjectHooks(projectPath: string, dir: string): void {
   for (const hookPath of getProjectHookFilePaths(projectPath, dir)) {
     migrateStagedCommandsInHook(hookPath);
+  }
+}
+
+const LEGACY_HUSKY_BOOTSTRAP_PATTERN =
+  /^\s*(?:\.|source)\s+["']?\$\(dirname(?:\s+--)?\s+["']?\$0["']?\)\/_\/husky\.sh["']?\s*$/;
+
+function removeLegacyHuskyBootstrapFromProjectHooks(projectPath: string, dir: string): void {
+  for (const hookPath of getProjectHookScriptPaths(projectPath, dir)) {
+    const existing = fs.readFileSync(hookPath, 'utf8');
+    const lines = existing.split('\n');
+    const result = lines.filter((line) => !LEGACY_HUSKY_BOOTSTRAP_PATTERN.test(line));
+    if (result.length !== lines.length) {
+      fs.writeFileSync(hookPath, result.join('\n'));
+    }
   }
 }
 
