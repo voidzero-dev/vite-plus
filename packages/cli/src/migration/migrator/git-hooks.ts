@@ -221,6 +221,13 @@ export function preflightGitHooksSetup(
   if (unsupportedHooksDir) {
     return `Git hooks directory "${unsupportedHooksDir}" must be a project-relative subdirectory — skipping git hooks setup. Use a project-owned directory and re-run migration.`;
   }
+  const unsafeHooksDirectory = findUnsafeHooksDirectoryComponent(projectPath, projectHooksDirs);
+  if (unsafeHooksDirectory?.kind === 'symbolic') {
+    return `Symbolic Git hook path "${unsafeHooksDirectory.relativePath}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  }
+  if (unsafeHooksDirectory) {
+    return `Git hook path "${unsafeHooksDirectory.relativePath}" is not a directory — skipping git hooks setup. Replace it with a directory and re-run migration.`;
+  }
   const symbolicHook = findSymbolicProjectHook(projectPath, projectHooksDirs);
   if (symbolicHook) {
     return `Symbolic Git hook path "${symbolicHook}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
@@ -422,11 +429,15 @@ function migrateProjectHooks(
         const src = path.join(oldDir, entry.relativePath);
         const dest = path.join(targetDir, entry.relativePath);
         if (entry.dirent.isDirectory()) {
+          const destinationExists = fs.existsSync(dest);
           fs.mkdirSync(dest, { recursive: true });
+          if (!destinationExists) {
+            fs.chmodSync(dest, fs.statSync(src).mode & 0o777);
+          }
           continue;
         }
         fs.copyFileSync(src, dest);
-        fs.chmodSync(dest, 0o755);
+        fs.chmodSync(dest, fs.statSync(src).mode & 0o777);
       }
       fs.rmSync(oldDir, { recursive: true, force: true });
     }
@@ -471,10 +482,6 @@ function findSymbolicProjectHook(
   dirs: Array<string | undefined>,
 ): string | undefined {
   for (const dir of new Set(dirs.filter((value): value is string => value != null))) {
-    const symbolicDirectory = findSymbolicHooksDirectoryComponent(projectPath, dir);
-    if (symbolicDirectory) {
-      return symbolicDirectory;
-    }
     const hooksPath = path.join(projectPath, dir);
     let hooksStats: fs.Stats;
     try {
@@ -515,23 +522,34 @@ function isProjectRelativeHooksDirectory(projectPath: string, dir: string): bool
   );
 }
 
-function findSymbolicHooksDirectoryComponent(projectPath: string, dir: string): string | undefined {
-  const projectRoot = path.resolve(projectPath);
-  const hooksPath = path.resolve(projectRoot, dir);
-  const relativeHooksPath = path.relative(projectRoot, hooksPath);
-  let currentPath = projectRoot;
+interface UnsafeHooksDirectoryComponent {
+  kind: 'symbolic' | 'not-directory';
+  relativePath: string;
+}
 
-  for (const component of relativeHooksPath.split(path.sep).filter(Boolean)) {
-    currentPath = path.join(currentPath, component);
-    const stats = lstatIfExists(currentPath);
-    if (!stats) {
-      return undefined;
-    }
-    if (stats.isSymbolicLink()) {
-      return path.relative(projectRoot, currentPath);
-    }
-    if (!stats.isDirectory()) {
-      return undefined;
+function findUnsafeHooksDirectoryComponent(
+  projectPath: string,
+  dirs: string[],
+): UnsafeHooksDirectoryComponent | undefined {
+  const projectRoot = path.resolve(projectPath);
+
+  for (const dir of new Set(dirs)) {
+    const hooksPath = path.resolve(projectRoot, dir);
+    const relativeHooksPath = path.relative(projectRoot, hooksPath);
+    let currentPath = projectRoot;
+
+    for (const component of relativeHooksPath.split(path.sep).filter(Boolean)) {
+      currentPath = path.join(currentPath, component);
+      const stats = lstatIfExists(currentPath);
+      if (!stats) {
+        break;
+      }
+      if (stats.isSymbolicLink()) {
+        return { kind: 'symbolic', relativePath: path.relative(projectRoot, currentPath) };
+      }
+      if (!stats.isDirectory()) {
+        return { kind: 'not-directory', relativePath: path.relative(projectRoot, currentPath) };
+      }
     }
   }
   return undefined;

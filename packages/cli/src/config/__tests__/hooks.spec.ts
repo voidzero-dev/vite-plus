@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -70,6 +70,13 @@ describe('install', () => {
         process.env.VITE_GIT_HOOKS = prev;
       }
     }
+  });
+
+  it('rejects an absolute hooks directory', () => {
+    expect(install(resolve(tmpdir(), 'external-hooks'))).toEqual({
+      message: 'absolute hooks directory not allowed',
+      isError: false,
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 export const SUPPORTED_GIT_HOOK_NAMES = [
   'pre-commit',
@@ -87,6 +87,9 @@ export function install(dir = '.vite-hooks'): InstallResult {
   }
   if (dir.includes('..')) {
     return { message: '.. not allowed', isError: false };
+  }
+  if (isAbsolute(dir)) {
+    return { message: 'absolute hooks directory not allowed', isError: false };
   }
   // Use --show-prefix to get the relative path from git root to cwd.
   // This avoids Windows path normalization issues (MSYS paths, 8.3 short names)

@@ -52,6 +52,7 @@ const {
   preflightGitHooksSetup,
   createPreCommitHook,
   detectLegacyGitHooksMigrationCandidate,
+  installGitHooks,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
   pnpmSupportsWorkspaceSettings,
@@ -8813,6 +8814,20 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
+  it('rejects non-directory custom hook dir parents', () => {
+    fs.writeFileSync(path.join(tmpDir, '.config'), 'not a directory\n');
+
+    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
+      'Git hook path ".config" is not a directory',
+    );
+  });
+
+  it('rejects a non-directory hook path', () => {
+    fs.writeFileSync(path.join(tmpDir, '.husky'), 'not a directory\n');
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Git hook path ".husky" is not a directory');
+  });
+
   it.skipIf(process.platform === 'win32')('rejects symbolic helpers in .vite-hooks', () => {
     const viteHooksDir = path.join(tmpDir, '.vite-hooks', 'scripts');
     const externalHelper = path.join(tmpDir, 'shared-hook-helper');
@@ -8823,6 +8838,32 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toContain(
       'Symbolic Git hook path ".vite-hooks/scripts/common.sh" cannot be migrated safely',
     );
+  });
+});
+
+describe('installGitHooks project hook migration', () => {
+  it.skipIf(process.platform === 'win32')('preserves hook and helper permissions', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-permissions-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: '^9.1.7' } }),
+      );
+      fs.mkdirSync(path.join(tmpDir, '.husky', 'scripts'), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n', { mode: 0o700 });
+      fs.writeFileSync(path.join(tmpDir, '.husky', 'scripts', 'private.env'), 'TOKEN=value\n', {
+        mode: 0o600,
+      });
+
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      expect(fs.statSync(path.join(tmpDir, '.vite-hooks', 'pre-commit')).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(path.join(tmpDir, '.vite-hooks', 'scripts')).mode & 0o777).toBe(0o700);
+      expect(
+        fs.statSync(path.join(tmpDir, '.vite-hooks', 'scripts', 'private.env')).mode & 0o777,
+      ).toBe(0o600);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 
