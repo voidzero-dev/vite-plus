@@ -9096,6 +9096,37 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
+  it('restores both hook trees when moving a project hook fails', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-move-rollback-'));
+    const packageJson = `${JSON.stringify(
+      {
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: '^9.1.7' },
+      },
+      null,
+      2,
+    )}\n`;
+    try {
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+      fs.mkdirSync(path.join(tmpDir, '.husky'));
+      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+      const copyFile = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+        throw new Error('simulated copy failure');
+      });
+
+      expect(installGitHooks(tmpDir, true)).toBe(false);
+
+      copyFile.mockRestore();
+      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+      expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
+      expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it.each(['echo husky', 'echo "vp config"', 'vp configure'])(
     'adds lifecycle hook setup when prepare only contains incidental tool text: %s',
     (prepare) => {

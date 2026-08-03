@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -458,8 +459,6 @@ export function setupGitHooks(
   if (!fs.existsSync(packageJsonPath)) {
     return false;
   }
-  const rollbackProjectFiles = captureGitHooksSetupRollback(projectPath, report);
-
   const gitRoot = findGitRoot(projectPath);
 
   // Custom husky dirs (e.g. .config/husky) stay unchanged;
@@ -467,161 +466,174 @@ export function setupGitHooks(
   const isCustomDir = oldHooksDir != null && !isDefaultHuskyDirectory(oldHooksDir);
   const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
   const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
-  const hasExistingHookPolicy = projectHooksDirs.some((dir) =>
-    hasProjectHookScripts(projectPath, dir),
-  );
-  const hasStagedHookInvocation = projectHooksDirs.some((dir) =>
-    hasStagedCommandInProjectHooks(projectPath, dir),
-  );
+  const transaction = captureGitHooksSetupRollback(projectPath, projectHooksDirs, report);
+  const previousHooksPath = gitRoot ? getExistingHooksPath(projectPath) : '';
 
-  // Custom hooks keep control of their policy.
-  let stagedMerged = hasStagedConfigInViteConfig(projectPath);
-  const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
-  let migratedStandaloneConfigPaths: string[] = [];
-  if (!stagedMerged && hasStandaloneConfig) {
-    migratedStandaloneConfigPaths = rewriteLintStagedConfigFile(projectPath, report, {
-      preserveOriginal: true,
-    });
-    stagedMerged = hasStagedConfigInViteConfig(projectPath);
-    if (!stagedMerged) {
-      rollbackProjectFiles();
-      return false;
-    }
-  }
-  if (!stagedMerged && !hasStandaloneConfig) {
-    const pkgData = readJsonFile(packageJsonPath) as {
-      'lint-staged'?: Record<string, string | string[]>;
-    };
-    const stagedConfig =
-      pkgData?.['lint-staged'] ??
-      (hasStagedHookInvocation || !hasExistingHookPolicy ? DEFAULT_STAGED_CONFIG : undefined);
-    if (stagedConfig) {
-      const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
-      const finalConfig: Record<string, string | string[]> = updated
-        ? JSON.parse(updated)
-        : stagedConfig;
-      stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent, report);
+  try {
+    const hasExistingHookPolicy = projectHooksDirs.some((dir) =>
+      hasProjectHookScripts(projectPath, dir),
+    );
+    const hasStagedHookInvocation = projectHooksDirs.some((dir) =>
+      hasStagedCommandInProjectHooks(projectPath, dir),
+    );
+
+    // Custom hooks keep control of their policy.
+    let stagedMerged = hasStagedConfigInViteConfig(projectPath);
+    const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
+    let migratedStandaloneConfigPaths: string[] = [];
+    if (!stagedMerged && hasStandaloneConfig) {
+      migratedStandaloneConfigPaths = rewriteLintStagedConfigFile(projectPath, report, {
+        preserveOriginal: true,
+      });
+      stagedMerged = hasStagedConfigInViteConfig(projectPath);
       if (!stagedMerged) {
-        rollbackProjectFiles();
+        transaction.rollback();
         return false;
       }
     }
-  }
-
-  editJsonFile<{
-    scripts?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
-  }>(packageJsonPath, (pkg) => {
-    // Husky prepare scripts are rewritten after setup succeeds.
-    if (!pkg.scripts) {
-      pkg.scripts = {};
+    if (!stagedMerged && !hasStandaloneConfig) {
+      const pkgData = readJsonFile(packageJsonPath) as {
+        'lint-staged'?: Record<string, string | string[]>;
+      };
+      const stagedConfig =
+        pkgData?.['lint-staged'] ??
+        (hasStagedHookInvocation || !hasExistingHookPolicy ? DEFAULT_STAGED_CONFIG : undefined);
+      if (stagedConfig) {
+        const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
+        const finalConfig: Record<string, string | string[]> = updated
+          ? JSON.parse(updated)
+          : stagedConfig;
+        stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent, report);
+        if (!stagedMerged) {
+          transaction.rollback();
+          return false;
+        }
+      }
     }
-    if (!pkg.scripts.prepare) {
-      pkg.scripts.prepare = 'vp config';
-    } else if (!hasVpConfigCommand(pkg.scripts.prepare) && oldHooksDir == null) {
-      pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
+
+    editJsonFile<{
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
+    }>(packageJsonPath, (pkg) => {
+      // Husky prepare scripts are rewritten after setup succeeds.
+      if (!pkg.scripts) {
+        pkg.scripts = {};
+      }
+      if (!pkg.scripts.prepare) {
+        pkg.scripts.prepare = 'vp config';
+      } else if (!hasVpConfigCommand(pkg.scripts.prepare) && oldHooksDir == null) {
+        pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
+      }
+
+      return pkg;
+    });
+
+    // vp config requires a git workspace — skip if no .git found
+    if (!gitRoot) {
+      if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
+        transaction.rollback();
+        warnMigration('Failed to rewrite the Husky prepare script', report);
+        return false;
+      }
+      const preserveLintStaged =
+        migrateProjectHooks(
+          projectPath,
+          oldHooksDir,
+          hooksDir,
+          isCustomDir,
+          stagedMerged,
+          hasExistingHookPolicy,
+        ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
+      const preserveHusky =
+        hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
+        hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
+      finalizeStagedConfigMigration(
+        packageJsonPath,
+        migratedStandaloneConfigPaths,
+        stagedMerged && !preserveLintStaged,
+      );
+      removeReplacedHookPackages(packageJsonPath, preserveLintStaged, preserveHusky);
+      transaction.discard();
+      return true;
     }
 
-    return pkg;
-  });
-
-  // vp config requires a git workspace — skip if no .git found
-  if (!gitRoot) {
-    if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
-      rollbackProjectFiles();
-      warnMigration('Failed to rewrite the Husky prepare script', report);
-      return false;
+    if (oldHooksDir) {
+      if (previousHooksPath === `${oldHooksDir}/_` || previousHooksPath === oldHooksDir) {
+        spawn.sync('git', ['config', '--local', '--unset', 'core.hooksPath'], {
+          cwd: projectPath,
+          stdio: 'pipe',
+        });
+      }
     }
-    const preserveLintStaged =
-      migrateProjectHooks(
-        projectPath,
-        oldHooksDir,
-        hooksDir,
-        isCustomDir,
-        stagedMerged,
-        hasExistingHookPolicy,
-      ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
-    const preserveHusky =
-      hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
-      hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
-    finalizeStagedConfigMigration(
-      packageJsonPath,
-      migratedStandaloneConfigPaths,
-      stagedMerged && !preserveLintStaged,
-    );
-    removeReplacedHookPackages(packageJsonPath, preserveLintStaged, preserveHusky);
-    return true;
-  }
 
-  const previousHooksPath = getExistingHooksPath(projectPath);
-  if (oldHooksDir) {
-    if (previousHooksPath === `${oldHooksDir}/_` || previousHooksPath === oldHooksDir) {
-      spawn.sync('git', ['config', '--local', '--unset', 'core.hooksPath'], {
-        cwd: projectPath,
-        stdio: 'pipe',
-      });
+    const vpBin = process.env.VP_CLI_BIN ?? 'vp';
+
+    // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
+    const configArgs = isCustomDir
+      ? ['config', '--no-agent', '--hooks-dir', hooksDir]
+      : ['config', '--no-agent'];
+    const configResult = spawn.sync(vpBin, configArgs, {
+      cwd: projectPath,
+      stdio: 'pipe',
+    });
+    if (configResult.status === 0) {
+      // vp config outputs skip/info messages to stdout via log().
+      // An empty message means hooks were installed successfully;
+      // any non-empty output indicates a skip (HUSKY=0, hooksPath
+      // already set, .git not found, etc.).
+      const stdout = configResult.stdout?.toString().trim() ?? '';
+      if (stdout) {
+        transaction.rollback();
+        restoreHooksPath(projectPath, previousHooksPath);
+        warnMigration(`Git hooks not configured — ${stdout}`, report);
+        return false;
+      }
+      if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
+        transaction.rollback();
+        restoreHooksPath(projectPath, previousHooksPath);
+        warnMigration('Failed to rewrite the Husky prepare script', report);
+        return false;
+      }
+      const preserveLintStaged =
+        migrateProjectHooks(
+          projectPath,
+          oldHooksDir,
+          hooksDir,
+          isCustomDir,
+          stagedMerged,
+          hasExistingHookPolicy,
+        ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
+      const preserveHusky =
+        hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
+        hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
+      finalizeStagedConfigMigration(
+        packageJsonPath,
+        migratedStandaloneConfigPaths,
+        stagedMerged && !preserveLintStaged,
+      );
+      removeReplacedHookPackages(packageJsonPath, preserveLintStaged, preserveHusky);
+      transaction.discard();
+      if (report) {
+        report.gitHooksConfigured = true;
+      }
+      if (!silent) {
+        prompts.log.success('✔ Git hooks configured');
+      }
+      return true;
     }
-  }
-
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-
-  // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
-  const configArgs = isCustomDir
-    ? ['config', '--no-agent', '--hooks-dir', hooksDir]
-    : ['config', '--no-agent'];
-  const configResult = spawn.sync(vpBin, configArgs, {
-    cwd: projectPath,
-    stdio: 'pipe',
-  });
-  if (configResult.status === 0) {
-    // vp config outputs skip/info messages to stdout via log().
-    // An empty message means hooks were installed successfully;
-    // any non-empty output indicates a skip (HUSKY=0, hooksPath
-    // already set, .git not found, etc.).
-    const stdout = configResult.stdout?.toString().trim() ?? '';
-    if (stdout) {
-      rollbackProjectFiles();
+    transaction.rollback();
+    restoreHooksPath(projectPath, previousHooksPath);
+    warnMigration('Failed to install git hooks', report);
+    return false;
+  } catch {
+    transaction.rollback();
+    if (gitRoot) {
       restoreHooksPath(projectPath, previousHooksPath);
-      warnMigration(`Git hooks not configured — ${stdout}`, report);
-      return false;
     }
-    if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
-      rollbackProjectFiles();
-      restoreHooksPath(projectPath, previousHooksPath);
-      warnMigration('Failed to rewrite the Husky prepare script', report);
-      return false;
-    }
-    const preserveLintStaged =
-      migrateProjectHooks(
-        projectPath,
-        oldHooksDir,
-        hooksDir,
-        isCustomDir,
-        stagedMerged,
-        hasExistingHookPolicy,
-      ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
-    const preserveHusky =
-      hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
-      hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
-    finalizeStagedConfigMigration(
-      packageJsonPath,
-      migratedStandaloneConfigPaths,
-      stagedMerged && !preserveLintStaged,
-    );
-    removeReplacedHookPackages(packageJsonPath, preserveLintStaged, preserveHusky);
-    if (report) {
-      report.gitHooksConfigured = true;
-    }
-    if (!silent) {
-      prompts.log.success('✔ Git hooks configured');
-    }
-    return true;
+    warnMigration('Failed to migrate git hooks safely; restored the original hook files', report);
+    return false;
   }
-  rollbackProjectFiles();
-  restoreHooksPath(projectPath, previousHooksPath);
-  warnMigration('Failed to install git hooks', report);
-  return false;
 }
 
 function rewriteDetectedHuskyPrepareScript(
@@ -891,7 +903,11 @@ function canReplaceHooksPath(
   );
 }
 
-function captureGitHooksSetupRollback(projectPath: string, report?: MigrationReport): () => void {
+function captureGitHooksSetupRollback(
+  projectPath: string,
+  hooksDirs: string[],
+  report?: MigrationReport,
+): { rollback: () => void; discard: () => void } {
   const packageJsonPath = path.join(projectPath, 'package.json');
   const packageJsonContent = fs.readFileSync(packageJsonPath);
   const existingConfig = detectConfigs(projectPath).viteConfig;
@@ -906,8 +922,29 @@ function captureGitHooksSetupRollback(projectPath: string, report?: MigrationRep
         mergedStagedConfigCount: report.mergedStagedConfigCount,
       }
     : undefined;
+  const backupRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-plus-hooks-rollback-'));
+  const hookSnapshots = [...new Set(hooksDirs.map((dir) => path.resolve(projectPath, dir)))].map(
+    (hooksPath, index) => {
+      const backupPath = path.join(backupRoot, String(index));
+      const existed = fs.existsSync(hooksPath);
+      if (existed) {
+        fs.cpSync(hooksPath, backupPath, { recursive: true, preserveTimestamps: true });
+      }
+      return { backupPath, existed, hooksPath };
+    },
+  );
+  let finished = false;
 
-  return () => {
+  const discard = () => {
+    if (!finished) {
+      fs.rmSync(backupRoot, { recursive: true, force: true });
+      finished = true;
+    }
+  };
+  const rollback = () => {
+    if (finished) {
+      return;
+    }
     fs.writeFileSync(packageJsonPath, packageJsonContent);
     if (existingConfigPath && existingConfigContent != null) {
       fs.writeFileSync(existingConfigPath, existingConfigContent);
@@ -920,7 +957,18 @@ function captureGitHooksSetupRollback(projectPath: string, report?: MigrationRep
     if (report && reportCounts) {
       Object.assign(report, reportCounts);
     }
+    for (const snapshot of hookSnapshots) {
+      fs.rmSync(snapshot.hooksPath, { recursive: true, force: true });
+      if (snapshot.existed) {
+        fs.cpSync(snapshot.backupPath, snapshot.hooksPath, {
+          recursive: true,
+          preserveTimestamps: true,
+        });
+      }
+    }
+    discard();
   };
+  return { rollback, discard };
 }
 
 function finalizeStagedConfigMigration(
