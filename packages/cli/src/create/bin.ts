@@ -826,7 +826,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: workspace detection > CLI flag > interactive prompt/default
+  // Resolve package manager: existing monorepo > CLI flag > ambient detection > prompt/default
   if (
     options.packageManager &&
     !Object.values(PackageManager).includes(options.packageManager as PackageManager)
@@ -837,16 +837,23 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     );
     cancelAndExit('Invalid --package-manager value', 1);
   }
+  const requestedPackageManager = options.packageManager as PackageManager | undefined;
+  const detectedPackageManager = workspaceInfoOptional.packageManager;
   const packageManager =
-    workspaceInfoOptional.packageManager ??
-    (options.packageManager as PackageManager | undefined) ??
+    (isMonorepo
+      ? (detectedPackageManager ?? requestedPackageManager)
+      : (requestedPackageManager ?? detectedPackageManager)) ??
     (await selectPackageManager(options.interactive, compactOutput));
+  const packageManagerVersion =
+    packageManager === detectedPackageManager
+      ? workspaceInfoOptional.packageManagerVersion
+      : 'latest';
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
     packageManager,
-    workspaceInfoOptional.packageManagerVersion,
+    packageManagerVersion,
     options.interactive,
     shouldSilencePackageManagerInstallLog,
   );
@@ -1291,7 +1298,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // `@oxlint/migrate` can resolve eslint.config.js's plugin imports, then
   // migrate before the vite-plus rewrite so the generated .oxlintrc/.oxfmtrc
   // get merged into vite.config.ts — matching `vp migrate`. Pin the
-  // packageManager field (vite_install hardcodes pnpm in CI/non-TTY when no
+  // packageManager field (vite_pm_cli defaults to pnpm in CI/non-TTY when no
   // signal is present) and force yarn's classic node_modules layout
   // (Plug'n'Play zip entries break @oxlint/migrate's fileURLToPath resolution).
   const installAndMigrate = async (installCwd: string) => {

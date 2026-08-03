@@ -35,6 +35,23 @@ describe('target directory helpers', () => {
     expect(isTargetDirAvailable(targetDir)).toBe(false);
   });
 
+  it.each(['file', 'directory'] as const)(
+    'reports a directory containing only a .git %s as available',
+    (gitEntryType) => {
+      const cwd = makeTempDir();
+      const targetDir = path.join(cwd, 'existing-worktree');
+      fs.mkdirSync(targetDir, { recursive: true });
+      const gitPath = path.join(targetDir, '.git');
+      if (gitEntryType === 'file') {
+        fs.writeFileSync(gitPath, 'gitdir: ../.git/worktrees/existing-worktree');
+      } else {
+        fs.mkdirSync(gitPath);
+      }
+
+      expect(isTargetDirAvailable(targetDir)).toBe(true);
+    },
+  );
+
   it('suggests a different target directory when the default already exists', () => {
     const cwd = makeTempDir();
     fs.mkdirSync(path.join(cwd, 'fate-template'), { recursive: true });

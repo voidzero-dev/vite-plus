@@ -62,6 +62,7 @@ added 1 package in <duration>
 should add packages to dependencies
 
 ```
+warn: npm does not support --allow-build.
 
 added 1 package in <duration>
 ```

@@ -165,3 +165,10 @@ pub(crate) struct CapturedCommandOutput {
     pub(crate) stdout: String,
     pub(crate) stderr: String,
 }
+
+/// Convert a child's exit status to the vite-task `ExitStatus`, preserving
+/// the `128 + signal` mapping. A `From` impl is blocked by the orphan rule:
+/// both types are foreign here.
+pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
+    ExitStatus(vite_shared::exit_code_from_status(status) as u8)
+}

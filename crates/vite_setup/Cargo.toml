@@ -18,8 +18,8 @@ tar = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-vite_install = { workspace = true }
 vite_js_runtime = { workspace = true }
+vite_pm_cli = { workspace = true }
 vite_path = { workspace = true }
 vite_shared = { workspace = true }
 vite_str = { workspace = true }

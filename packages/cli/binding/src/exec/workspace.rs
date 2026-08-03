@@ -112,7 +112,7 @@ pub(super) async fn execute_exec_workspace(
     let base_path_dirs: Vec<std::path::PathBuf> = {
         let mut dirs = Vec::new();
         // Include package manager bin dir
-        if let Ok(pm) = vite_install::PackageManager::builder(&*workspace_root.path).build().await {
+        if let Ok(pm) = vite_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
             dirs.push(pm.get_bin_prefix().as_path().to_path_buf());
         }
         // Include workspace root's node_modules/.bin
@@ -187,7 +187,7 @@ pub(super) async fn execute_exec_workspace(
             use std::io::Write;
             let _ = std::io::stdout().write_all(&output.stdout);
             let _ = std::io::stderr().write_all(&output.stderr);
-            let code = output.status.code().unwrap_or(1) as u8;
+            let code = vite_shared::exit_code_from_status(output.status) as u8;
             if code > worst_exit {
                 worst_exit = code;
             }
@@ -250,7 +250,7 @@ pub(super) async fn execute_exec_workspace(
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
             let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
             let duration = start.elapsed();
-            let code = status.code().unwrap_or(1) as u8;
+            let code = vite_shared::exit_code_from_status(status) as u8;
 
             if args.report_summary {
                 let pkg_status = if code == 0 { "passed" } else { "failed" };

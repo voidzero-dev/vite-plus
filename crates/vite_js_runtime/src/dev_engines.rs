@@ -1,7 +1,7 @@
-//! `.node-version` file reading and writing utilities.
+//! Node.js version file reading and writing utilities.
 //!
-//! This module provides utilities for working with `.node-version` files,
-//! which are used to specify Node.js versions for projects.
+//! This module provides utilities for working with `.node-version` and
+//! `.nvmrc` files, which are used to specify Node.js versions for projects.
 //!
 //! For `PackageJson` types (devEngines, engines), see `vite_shared::package_json`.
 
@@ -55,6 +55,31 @@ pub async fn read_node_version_file(project_path: &AbsolutePath) -> Option<Str> 
     let path = project_path.join(".node-version");
     let content = tokio::fs::read_to_string(&path).await.ok()?;
     parse_node_version_content(&content)
+}
+
+/// Read and parse a `.nvmrc` file from the project root.
+///
+/// `.nvmrc` uses the same version syntax as `.node-version` for the values
+/// Vite+ supports. Blank lines, comments, and reserved key/value pairs are
+/// ignored. The nvm-specific `node` and `stable` aliases resolve to the latest
+/// Node.js release.
+pub async fn read_nvmrc_file(project_path: &AbsolutePath) -> Option<Str> {
+    let path = project_path.join(".nvmrc");
+    let content = tokio::fs::read_to_string(&path).await.ok()?;
+    let mut versions = content.lines().filter_map(|line| {
+        let value = line.split_once('#').map_or(line, |(value, _)| value).trim();
+        (!value.is_empty() && !value.contains('=')).then_some(value)
+    });
+    let version = versions.next()?;
+    if versions.next().is_some() {
+        return None;
+    }
+
+    match version {
+        "iojs" | "system" | "default" => None,
+        "node" | "stable" => Some("latest".into()),
+        _ => parse_node_version_content(version),
+    }
 }
 
 /// Write a version to the `.node-version` file.
@@ -134,6 +159,34 @@ mod tests {
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "22.13.1\n").await.unwrap();
         assert_eq!(read_node_version_file(&temp_path).await, Some("22.13.1".into()));
+    }
+
+    #[tokio::test]
+    async fn test_read_nvmrc_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        assert!(read_nvmrc_file(&temp_path).await.is_none());
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "v22.13.1\n").await.unwrap();
+        assert_eq!(read_nvmrc_file(&temp_path).await, Some("22.13.1".into()));
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "node\n").await.unwrap();
+        assert_eq!(read_nvmrc_file(&temp_path).await, Some("latest".into()));
+
+        tokio::fs::write(
+            temp_path.join(".nvmrc"),
+            "# Use the project version\n\nv22.13.1 # pinned\nNVM_SYMLINK_CURRENT=true\n",
+        )
+        .await
+        .unwrap();
+        assert_eq!(read_nvmrc_file(&temp_path).await, Some("22.13.1".into()));
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "20\n22\n").await.unwrap();
+        assert!(read_nvmrc_file(&temp_path).await.is_none());
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "system\n").await.unwrap();
+        assert!(read_nvmrc_file(&temp_path).await.is_none());
     }
 
     #[tokio::test]

@@ -26,7 +26,7 @@ should report a pinned package without a wanted update
     "wanted": "1.0.0",
     "latest": "1.0.1",
     "dependent": "global",
-    "location": "<home>/.vite-plus/packages/testnpm2#<uuid>/lib/node_modules/testnpm2"
+    "location": "<home>/.vite-plus/packages/testnpm2/<uuid>/lib/node_modules/testnpm2"
   }
 }
 ```
@@ -82,7 +82,7 @@ should support global json output
     "wanted": "1.0.1",
     "latest": "1.0.1",
     "dependent": "global",
-    "location": "<home>/.vite-plus/packages/testnpm2#<uuid>/lib/node_modules/testnpm2"
+    "location": "<home>/.vite-plus/packages/testnpm2/<uuid>/lib/node_modules/testnpm2"
   }
 }
 ```

@@ -7,7 +7,7 @@ use std::{
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use vite_install::commands::outdated::Format;
+use vite_pm_cli::OutdatedFormat;
 
 use super::{latest_package_versions, parse_package_spec};
 use crate::{
@@ -214,7 +214,7 @@ pub async fn get_outdated_packages(
 pub async fn execute(
     packages: &[String],
     long: bool,
-    format: Option<Format>,
+    format: Option<OutdatedFormat>,
     concurrency: usize,
 ) -> Result<ExitStatus, Error> {
     let OutdatedReport { outdated, failures } = match get_outdated_packages(
@@ -227,7 +227,7 @@ pub async fn execute(
     {
         Ok(report) => report,
         Err(error) => {
-            if let Some(Format::Json) = format {
+            if let Some(OutdatedFormat::Json) = format {
                 vite_shared::output::raw("{}");
             } else {
                 vite_shared::output::error(&format!("Could not get outdated packages: {error}"));
@@ -242,7 +242,7 @@ pub async fn execute(
 
     // Exit code 0 means fully checked and up to date; 1 means outdated or incomplete.
     if outdated.is_empty() {
-        if let Some(Format::Json) = format {
+        if let Some(OutdatedFormat::Json) = format {
             vite_shared::output::raw("{}");
         } else if failures.is_empty() {
             vite_shared::output::info("All global packages are up to date.");
@@ -251,8 +251,8 @@ pub async fn execute(
     }
 
     match format {
-        Some(Format::Json) => print_json(&outdated)?,
-        Some(Format::List) => print_list(&outdated, long),
+        Some(OutdatedFormat::Json) => print_json(&outdated)?,
+        Some(OutdatedFormat::List) => print_list(&outdated, long),
         _ => print_table(&outdated, long),
     }
 

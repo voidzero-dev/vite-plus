@@ -28,7 +28,27 @@
 
 use std::{ffi::OsStr, path::Path, sync::OnceLock, time::Duration};
 
+use vite_str::Str;
+
 use crate::{env_vars, error::format_error_chain, output};
+
+/// The process-wide HTTP client could not be built.
+///
+/// Building the client is where TLS and proxy configuration is first resolved,
+/// so every failure here is an environment condition the user can fix: no
+/// system CA bundle, an unusable proxy setting, an unparsable extra CA bundle.
+/// `cause` carries the full `source()` chain, flattened by
+/// [`crate::format_error_chain`] because `reqwest::Error` is not `Clone`.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "could not initialize the HTTP client: {cause}\nCheck that a system CA bundle is installed \
+     (Debian/Ubuntu: `apt-get install -y ca-certificates`, Alpine: `apk add ca-certificates`) — \
+     minimal container images often ship none — and that HTTPS_PROXY / HTTP_PROXY and any bundle \
+     named by SSL_CERT_FILE or NODE_EXTRA_CA_CERTS are valid."
+)]
+pub struct HttpClientError {
+    cause: Str,
+}
 
 /// Per-request total timeout. Long enough for slow tarball downloads on
 /// constrained CI runners, short enough that a single stuck stream doesn't
@@ -45,21 +65,15 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The client is built on first call and reused thereafter. See module docs
 /// for the env vars it honors.
 ///
-/// Panics on the *first* call if reqwest fails to build the client (malformed
-/// `HTTPS_PROXY`, unusable TLS backend, etc.); subsequent calls in the same
-/// process panic with the same message. Panic — not `process::exit` — so
-/// destructors of in-flight work still run (lockfiles released, tempfiles
-/// cleaned) and an embedding Node host (NAPI) keeps the process alive.
-#[must_use]
-pub fn shared_http_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
-    match CLIENT.get_or_init(build_client) {
-        Ok(client) => client,
-        Err(msg) => panic!("failed to initialize HTTP client: {msg}"),
-    }
+/// Returns [`HttpClientError`] if the client cannot be built (no system CA
+/// bundle, unusable `HTTPS_PROXY`, …). The outcome is cached, so later calls
+/// report the same error without retrying.
+pub fn shared_http_client() -> Result<&'static reqwest::Client, HttpClientError> {
+    static CLIENT: OnceLock<Result<reqwest::Client, HttpClientError>> = OnceLock::new();
+    CLIENT.get_or_init(build_client).as_ref().map_err(Clone::clone)
 }
 
-fn build_client() -> Result<reqwest::Client, String> {
+fn build_client() -> Result<reqwest::Client, HttpClientError> {
     crate::ensure_tls_provider();
 
     let mut builder =
@@ -110,7 +124,7 @@ fn build_client() -> Result<reqwest::Client, String> {
         builder = builder.tls_danger_accept_invalid_certs(true);
     }
 
-    builder.build().map_err(|err| format_error_chain(&err))
+    builder.build().map_err(|err| HttpClientError { cause: format_error_chain(&err).into() })
 }
 
 /// Returns `true` only for clearly affirmative env-var values
@@ -135,6 +149,54 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    /// Valid PEM, invalid DER: `from_pem_bundle` accepts it, `build` rejects
+    /// it. Portable way into the build-failure branch, unlike an empty trust
+    /// store.
+    const PEM_WITH_INVALID_DER: &[u8] =
+        b"-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n";
+
+    /// Callers already treat "no HTTP client" as a handled outcome, but a panic
+    /// never reaches them: `[profile.release]` sets `panic = "abort"`, so this
+    /// is a SIGABRT, not a recoverable unwind. Reported in the wild as
+    /// "No CA certificates were loaded from the system" in an image with no CA
+    /// bundle. Unwinds here only because the `test` profile unwinds.
+    #[test]
+    #[serial_test::serial(env)]
+    fn client_build_failure_reaches_the_caller_instead_of_panicking() {
+        let bundle = std::env::temp_dir()
+            .join(vite_str::format!("vp-invalid-ca-{}.pem", std::process::id()).as_str());
+        std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
+        // SAFETY: env access in this module's tests is serialized.
+        unsafe {
+            std::env::set_var(env_vars::SSL_CERT_FILE, &bundle);
+        }
+
+        // Discard the value: only *how* the failure is reported is under test.
+        let outcome = std::panic::catch_unwind(|| {
+            let _ = shared_http_client();
+        });
+
+        unsafe {
+            std::env::remove_var(env_vars::SSL_CERT_FILE);
+        }
+        let _ = std::fs::remove_file(&bundle);
+
+        assert!(
+            outcome.is_ok(),
+            "building the shared HTTP client failed and panicked; a build failure has to be \
+             returned to the caller so it can be reported or handled"
+        );
+    }
+
+    #[test]
+    fn error_reports_the_cause_and_a_remedy() {
+        let cause = "No CA certificates were loaded from the system";
+        let message = HttpClientError { cause: cause.into() }.to_string();
+        assert!(message.contains(cause), "{message}");
+        assert!(message.contains("ca-certificates"), "{message}");
+        assert!(message.contains(env_vars::NODE_EXTRA_CA_CERTS), "{message}");
+    }
 
     #[test]
     fn os_str_is_blank_matches_whitespace_only() {
