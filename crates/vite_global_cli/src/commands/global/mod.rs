@@ -178,6 +178,31 @@ pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>),
     }
 }
 
+/// Return the version part of a registry package spec that update flows
+/// should keep resolving within: a dist-tag (e.g. `nightly` in
+/// `some-pkg@nightly`), a range, or an exact version. The implicit `latest`
+/// tag and non-registry version parts (URLs, aliases) yield `None`.
+pub(crate) fn update_version_spec(spec: &str) -> Option<String> {
+    if is_local_package_spec(spec) {
+        return None;
+    }
+    let (_, version_spec) = parse_package_spec(spec).ok()?;
+    let version_spec = version_spec?;
+    if version_spec.is_empty()
+        || version_spec == "latest"
+        || version_spec.contains(':')
+        || version_spec.contains('/')
+        // npm treats tarball-suffixed spec parts as file installs.
+        || version_spec.ends_with(".tgz")
+        || version_spec.ends_with(".tar.gz")
+        || version_spec.ends_with(".tar")
+    {
+        None
+    } else {
+        Some(version_spec)
+    }
+}
+
 fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
     let path_spec = spec.strip_prefix("file:").unwrap_or(spec);
     let path = std::path::Path::new(path_spec);
@@ -265,7 +290,19 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
     match serde_json::from_str::<serde_json::Value>(trimmed) {
         Ok(serde_json::Value::String(version)) => Ok(version),
         Ok(serde_json::Value::Array(versions)) => {
-            let Some(version) = versions.iter().rev().find_map(|version| version.as_str()) else {
+            // A range query lists matching versions in publish order, so a
+            // backport release can come last (e.g. vite 4.5.14 after 5.0.x);
+            // pick the semver max like installs do, not the last element.
+            let max = versions
+                .iter()
+                .filter_map(|version| version.as_str())
+                .filter_map(|version| {
+                    node_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
+                })
+                .max_by(|(a, _), (b, _)| a.cmp(b))
+                .map(|(_, version)| version)
+                .or_else(|| versions.iter().rev().find_map(|version| version.as_str()));
+            let Some(version) = max else {
                 return Err(Error::Other("npm view returned an empty version list".into()));
             };
             Ok(version.to_string())
@@ -291,6 +328,18 @@ mod tests {
     }
 
     #[test]
+    fn parses_json_array_version_by_semver_not_publish_order() {
+        // A backport released after a higher version lists last in npm's
+        // publish-ordered output; the semver max must win.
+        let version = parse_npm_view_version(br#"["5.0.11","5.0.12","4.5.14"]"#).unwrap();
+        assert_eq!(version, "5.0.12");
+
+        let version =
+            parse_npm_view_version(br#"["2.0.0-beta.2","2.0.0-beta.10","2.0.0-beta.9"]"#).unwrap();
+        assert_eq!(version, "2.0.0-beta.10");
+    }
+
+    #[test]
     fn parses_plain_version() {
         let version = parse_npm_view_version(b"5.0.0").unwrap();
         assert_eq!(version, "5.0.0");
@@ -300,5 +349,42 @@ mod tests {
     fn rejects_empty_output() {
         let error = parse_npm_view_version(b"\n").unwrap_err();
         assert!(error.to_string().contains("empty version"));
+    }
+
+    #[test]
+    fn update_version_spec_keeps_dist_tags() {
+        assert_eq!(update_version_spec("some-pkg@nightly"), Some("nightly".to_string()));
+        assert_eq!(update_version_spec("some-pkg@beta"), Some("beta".to_string()));
+        assert_eq!(update_version_spec("@scope/pkg@canary"), Some("canary".to_string()));
+    }
+
+    #[test]
+    fn update_version_spec_keeps_versions_and_ranges() {
+        assert_eq!(update_version_spec("some-pkg@1.2.3"), Some("1.2.3".to_string()));
+        assert_eq!(
+            update_version_spec("some-pkg@1.2.3-nightly.0"),
+            Some("1.2.3-nightly.0".to_string())
+        );
+        assert_eq!(update_version_spec("some-pkg@^1.0.0"), Some("^1.0.0".to_string()));
+        assert_eq!(update_version_spec("some-pkg@>=2"), Some(">=2".to_string()));
+    }
+
+    #[test]
+    fn update_version_spec_ignores_bare_names_and_latest() {
+        assert_eq!(update_version_spec("some-pkg"), None);
+        assert_eq!(update_version_spec("@scope/pkg"), None);
+        assert_eq!(update_version_spec("some-pkg@latest"), None);
+        assert_eq!(update_version_spec("some-pkg@"), None);
+    }
+
+    #[test]
+    fn update_version_spec_ignores_non_registry_specs() {
+        assert_eq!(update_version_spec("./local-pkg"), None);
+        assert_eq!(update_version_spec("file:../pkg"), None);
+        assert_eq!(update_version_spec("some-pkg@npm:other@1.0.0"), None);
+        assert_eq!(update_version_spec("some-pkg@github:user/repo"), None);
+        assert_eq!(update_version_spec("some-pkg@archive.tgz"), None);
+        assert_eq!(update_version_spec("some-pkg@archive.tar.gz"), None);
+        assert_eq!(update_version_spec("some-pkg@archive.tar"), None);
     }
 }

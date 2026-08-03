@@ -113,7 +113,7 @@ crates/vite_installer/      — standalone installer binary
 ```
 vite_installer (binary, ~3-5 MB)
   ├── vite_setup (shared installation logic)
-  ├── vite_install (HTTP client)
+  ├── vite_pm_cli (HTTP client)
   ├── vite_shared (home dir resolution)
   ├── vite_path (typed path wrappers)
   ├── clap (CLI parsing)
@@ -300,7 +300,7 @@ Each phase maps to `vite_setup` library functions shared with `vp upgrade`:
 | Resolve           | `install::read_current_version()`          | `vite_setup`     |
 | Resolve           | `registry::resolve_version_string()`       | `vite_setup`     |
 | Download & Verify | `registry::resolve_platform_package()`     | `vite_setup`     |
-| Download & Verify | `HttpClient::get_bytes()`                  | `vite_install`   |
+| Download & Verify | `HttpClient::get_bytes()`                  | `vite_pm_cli`    |
 | Download & Verify | `integrity::verify_integrity()`            | `vite_setup`     |
 | Install           | `install::extract_platform_package()`      | `vite_setup`     |
 | Install           | `install::generate_wrapper_package_json()` | `vite_setup`     |
@@ -464,7 +464,8 @@ test-vp-setup-exe:
       # verifies from all three shells after a single install
 ```
 
-The workflow triggers on changes to `crates/vite_installer/**` and `crates/vite_setup/**`.
+The workflow triggers on changes to `crates/vite_installer/**`, `crates/vite_pm_cli/**`, and
+`crates/vite_setup/**`.
 
 ## Code Signing
 

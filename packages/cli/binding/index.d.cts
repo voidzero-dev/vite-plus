@@ -2137,6 +2137,7 @@ export interface BindingDevtoolsOptions {
 }
 
 export interface BindingDevWatchOptions {
+  enabled?: boolean;
   skipWrite?: boolean;
   usePolling?: boolean;
   pollInterval?: number;
@@ -2332,7 +2333,9 @@ export interface BindingEsmExternalRequirePluginConfig {
 export interface BindingExperimentalDevModeOptions {
   host?: string;
   port?: number;
-  implement?: string;
+  implement: string;
+  /** @deprecated Common runtime injection will be disabled by default in the future. */
+  skipCommonRuntimeInjection?: boolean;
   lazy?: boolean;
 }
 
@@ -2388,6 +2391,23 @@ export interface BindingHookJsLoadOutput {
 
 export interface BindingHookJsResolveIdOptions {
   isEntry?: boolean;
+  /**
+   * - `import-statement`: `import { foo } from './lib.js';`
+   * - `dynamic-import`: `import('./lib.js')`
+   * - `require-call`: `require('./lib.js')`
+   * - `import-rule`: `@import 'bg-color.css'`
+   * - `url-token`: `url('./icon.png')`
+   * - `new-url`: `new URL('./worker.js', import.meta.url)`
+   * - `hot-accept`: `import.meta.hot.accept('./lib.js', () => {})`
+   */
+  kind?:
+    | 'import-statement'
+    | 'dynamic-import'
+    | 'require-call'
+    | 'import-rule'
+    | 'url-token'
+    | 'new-url'
+    | 'hot-accept';
   scan?: boolean;
   custom?: BindingVitePluginCustom;
 }
@@ -2412,6 +2432,24 @@ export interface BindingHookRenderChunkOutput {
    * omitting the field, which mirrors Rollup's "possibly broken" semantics).
    */
   map?: BindingSourcemap | null;
+}
+
+export interface BindingHookResolveFileUrlArgs {
+  /** Preliminary filename of the chunk containing the reference. */
+  chunkId: string;
+  /** Filename of the emitted file, relative to the output directory. */
+  fileName: string;
+  format: 'es' | 'cjs' | 'iife' | 'umd';
+  /** Id of the module containing the `import.meta.ROLLDOWN_FILE_URL_*` reference. */
+  moduleId: string;
+  referenceId: string;
+  /** Path from the chunk to the emitted file. */
+  relativePath: string;
+  /**
+   * The `<urlId>` of `import.meta.ROLLDOWN_FILE_URL_<referenceId>_<urlId>`, if present.
+   * Only the rolldown-specific form carries it; the `ROLLUP_FILE_URL_` alias never does.
+   */
+  urlId?: string;
 }
 
 export interface BindingHookResolveIdExtraArgs {
@@ -2459,6 +2497,14 @@ export interface BindingHookTransformOutput {
    */
   map?: BindingSourcemap | null;
   moduleType?: string;
+}
+
+export interface BindingHotUpdateArgs {
+  kind: 'create' | 'update' | 'delete';
+  /** Normalized absolute path of the changed file. */
+  file: string;
+  /** The affected module ids as currently computed (raw module ids). */
+  modules: Array<string>;
 }
 
 export interface BindingIndentOptions {
@@ -2549,6 +2595,13 @@ export interface BindingJsWatchChangeEvent {
 export interface BindingLazyChunkOutput {
   code: string;
   filename: string;
+  /**
+   * The chunk's sourcemap, when `sourcemap` is `File` or `Hidden`. Serve it
+   * under `sourcemapFilename`, which is what the chunk's `sourceMappingURL`
+   * refers to.
+   */
+  sourcemap?: string;
+  sourcemapFilename?: string;
 }
 
 export interface BindingLog {
@@ -2691,6 +2744,8 @@ export interface BindingOutputs {
 
 export interface BindingOverwriteOptions {
   contentOnly?: boolean;
+  /** Stores the replaced content in the generated sourcemap's `names` field. */
+  storeName?: boolean;
 }
 
 export interface BindingPluginContextResolvedId {
@@ -2785,6 +2840,11 @@ export interface BindingPluginOptions {
     chunk: BindingRenderedChunk,
   ) => MaybePromise<void | string>;
   augmentChunkHashMeta?: BindingPluginHookMeta;
+  resolveFileUrl?: (
+    ctx: BindingPluginContext,
+    args: BindingHookResolveFileUrlArgs,
+  ) => MaybePromise<void | string | null>;
+  resolveFileUrlMeta?: BindingPluginHookMeta;
   renderStart?: (ctx: BindingPluginContext, opts: BindingNormalizedOptions) => void;
   renderStartMeta?: BindingPluginHookMeta;
   renderError?: (ctx: BindingPluginContext, error: BindingError[]) => void;
@@ -2810,6 +2870,11 @@ export interface BindingPluginOptions {
     event: string,
   ) => MaybePromise<VoidNullable>;
   watchChangeMeta?: BindingPluginHookMeta;
+  hotUpdate?: (
+    ctx: BindingPluginContext,
+    args: BindingHotUpdateArgs,
+  ) => MaybePromise<VoidNullable<Array<string>>>;
+  hotUpdateMeta?: BindingPluginHookMeta;
   closeWatcher?: (ctx: BindingPluginContext) => MaybePromise<VoidNullable>;
   closeWatcherMeta?: BindingPluginHookMeta;
   banner?: (ctx: BindingPluginContext, chunk: BindingRenderedChunk) => void;
@@ -2982,6 +3047,8 @@ export interface BindingTsconfigResult {
 
 export interface BindingUpdateOptions {
   overwrite?: boolean;
+  /** Stores the replaced content in the generated sourcemap's `names` field. */
+  storeName?: boolean;
 }
 
 export interface BindingViteAliasPluginAlias {
@@ -3241,19 +3308,14 @@ export declare function resolveTsconfig(
 ): BindingTsconfigResult | null;
 
 /**
- * Shutdown the tokio runtime manually.
+ * Release one holder of the tokio runtime, shutting it down once none are left.
  *
  * This is required for the wasm target with `tokio_unstable` cfg.
  * In the wasm runtime, the `park` threads will hang there until the tokio::Runtime is shutdown.
  */
 export declare function shutdownAsyncRuntime(): void;
 
-/**
- * Start the async runtime manually.
- *
- * This is required when the async runtime is shutdown manually.
- * Usually it's used in test.
- */
+/** Acquire one holder of the tokio runtime, starting it if it is not running. */
 export declare function startAsyncRuntime(): void;
 
 export interface ViteImportGlobMeta {
