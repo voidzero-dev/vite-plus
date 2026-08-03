@@ -278,6 +278,7 @@ export function setupGitHooks(
   if (!fs.existsSync(packageJsonPath)) {
     return false;
   }
+  const rollbackProjectFiles = captureGitHooksSetupRollback(projectPath, report);
 
   const gitRoot = findGitRoot(projectPath);
 
@@ -297,15 +298,13 @@ export function setupGitHooks(
   let stagedMerged = hasStagedConfigInViteConfig(projectPath);
   const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
   let migratedStandaloneConfigPaths: string[] = [];
-  let rollbackStagedConfig: (() => void) | undefined;
   if (!stagedMerged && hasStandaloneConfig) {
-    rollbackStagedConfig = captureStagedConfigRollback(projectPath, report);
     migratedStandaloneConfigPaths = rewriteLintStagedConfigFile(projectPath, report, {
       preserveOriginal: true,
     });
     stagedMerged = hasStagedConfigInViteConfig(projectPath);
     if (!stagedMerged) {
-      rollbackStagedConfig = undefined;
+      rollbackProjectFiles();
       return false;
     }
   }
@@ -323,6 +322,7 @@ export function setupGitHooks(
         : stagedConfig;
       stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent, report);
       if (!stagedMerged) {
+        rollbackProjectFiles();
         return false;
       }
     }
@@ -391,7 +391,7 @@ export function setupGitHooks(
     // already set, .git not found, etc.).
     const stdout = configResult.stdout?.toString().trim() ?? '';
     if (stdout) {
-      rollbackStagedConfig?.();
+      rollbackProjectFiles();
       restoreHooksPath(projectPath, previousHooksPath);
       warnMigration(`Git hooks not configured — ${stdout}`, report);
       return false;
@@ -414,7 +414,7 @@ export function setupGitHooks(
     }
     return true;
   }
-  rollbackStagedConfig?.();
+  rollbackProjectFiles();
   restoreHooksPath(projectPath, previousHooksPath);
   warnMigration('Failed to install git hooks', report);
   return false;
@@ -639,7 +639,9 @@ function canReplaceHooksPath(
   );
 }
 
-function captureStagedConfigRollback(projectPath: string, report?: MigrationReport): () => void {
+function captureGitHooksSetupRollback(projectPath: string, report?: MigrationReport): () => void {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  const packageJsonContent = fs.readFileSync(packageJsonPath);
   const existingConfig = detectConfigs(projectPath).viteConfig;
   const existingConfigPath = existingConfig ? path.join(projectPath, existingConfig) : undefined;
   const existingConfigContent = existingConfigPath
@@ -654,6 +656,7 @@ function captureStagedConfigRollback(projectPath: string, report?: MigrationRepo
     : undefined;
 
   return () => {
+    fs.writeFileSync(packageJsonPath, packageJsonContent);
     if (existingConfigPath && existingConfigContent != null) {
       fs.writeFileSync(existingConfigPath, existingConfigContent);
     } else {
@@ -803,7 +806,7 @@ function migrateStagedCommandsInProjectHooks(projectPath: string, dir: string): 
 }
 
 const LEGACY_HUSKY_BOOTSTRAP_PATTERN =
-  /^\s*(?:\.|source)\s+["']?\$\(dirname(?:\s+--)?\s+["']?\$0["']?\)\/_\/husky\.sh["']?\s*$/;
+  /^\s*(?:\.|source)\s+["']?\$\(dirname(?:\s+--)?\s+["']?\$0["']?\)\/_\/(?:h|husky\.sh)["']?\s*$/;
 
 function removeLegacyHuskyBootstrapFromProjectHooks(projectPath: string, dir: string): void {
   for (const hookPath of getProjectHookScriptPaths(projectPath, dir)) {

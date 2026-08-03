@@ -62,5 +62,6 @@ peerDependencyRules:
 check pre-commit hook rewritten to vp staged
 
 ```
+#!/usr/bin/env sh
 vp staged
 ```

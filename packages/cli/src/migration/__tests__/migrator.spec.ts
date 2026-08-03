@@ -8853,6 +8853,62 @@ describe('preflightGitHooksSetup hook state', () => {
 });
 
 describe('installGitHooks project hook migration', () => {
+  it('removes the Husky v9 bootstrap when migrating project hooks', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-bootstrap-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          scripts: { prepare: 'husky' },
+          devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7' },
+          'lint-staged': { '*': 'eslint --fix' },
+        }),
+      );
+      fs.mkdirSync(path.join(tmpDir, '.husky'));
+      fs.writeFileSync(
+        path.join(tmpDir, '.husky', 'pre-commit'),
+        '#!/usr/bin/env sh\n. "$(dirname -- "$0")/_/h"\nnpx lint-staged\n',
+      );
+
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+        '#!/usr/bin/env sh\nvp staged\n',
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rolls back package and staged config edits when hook installation fails', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-rollback-'));
+    const previousVpCliBin = process.env.VP_CLI_BIN;
+    try {
+      const packageJson = `${JSON.stringify(
+        {
+          scripts: { prepare: 'custom-prepare' },
+          devDependencies: { 'lint-staged': '^16.2.7' },
+          'lint-staged': { '*': 'eslint --fix' },
+        },
+        null,
+        2,
+      )}\n`;
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+      execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
+      process.env.VP_CLI_BIN = 'vp-command-that-does-not-exist';
+
+      expect(installGitHooks(tmpDir, true)).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    } finally {
+      if (previousVpCliBin === undefined) {
+        delete process.env.VP_CLI_BIN;
+      } else {
+        process.env.VP_CLI_BIN = previousVpCliBin;
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')('preserves hook and helper permissions', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-permissions-'));
     try {
