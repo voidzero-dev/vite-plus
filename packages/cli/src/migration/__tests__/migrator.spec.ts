@@ -8649,6 +8649,20 @@ describe('custom Husky directory parsing', () => {
     };
     expect(pkg.scripts.prepare).toBe(String.raw`vp config --hooks-dir ".config\husky"`);
   });
+
+  it('does not confuse literal migration marker text with a Husky command', () => {
+    const prepare = 'echo __vite_plus_migrate_husky_command__ .wrong && husky .config/husky';
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+
+    expect(getOldHooksDir(tmpDir)).toBe('.config/husky');
+    expect(rewritePrepareScript(tmpDir)).toBe('.config/husky');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe(
+      'echo __vite_plus_migrate_husky_command__ .wrong && vp config --hooks-dir .config/husky',
+    );
+  });
 });
 
 describe('preflightGitHooksSetup husky catalog resolution', () => {
@@ -9127,30 +9141,32 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
-  it.each(['echo husky', 'echo "vp config"', 'vp configure'])(
-    'adds lifecycle hook setup when prepare only contains incidental tool text: %s',
-    (prepare) => {
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-incidental-'));
-      try {
-        fs.writeFileSync(
-          path.join(tmpDir, 'package.json'),
-          JSON.stringify({
-            scripts: { prepare },
-            devDependencies: { 'lint-staged': '^16.2.7' },
-            'lint-staged': { '*': 'eslint --fix' },
-          }),
-        );
+  it.each([
+    'echo husky',
+    'echo "vp config"',
+    'vp configure',
+    'vp echo && echo "__vite_plus_migrate_vp_command__ config"',
+  ])('adds lifecycle hook setup when prepare only contains incidental tool text: %s', (prepare) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-incidental-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          scripts: { prepare },
+          devDependencies: { 'lint-staged': '^16.2.7' },
+          'lint-staged': { '*': 'eslint --fix' },
+        }),
+      );
 
-        expect(installGitHooks(tmpDir, true)).toBe(true);
-        const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-          scripts: Record<string, string>;
-        };
-        expect(pkg.scripts.prepare).toBe(`vp config && ${prepare}`);
-      } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      }
-    },
-  );
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        scripts: Record<string, string>;
+      };
+      expect(pkg.scripts.prepare).toBe(`vp config && ${prepare}`);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 
   it('does not duplicate an existing vp config prepare command', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-existing-config-'));

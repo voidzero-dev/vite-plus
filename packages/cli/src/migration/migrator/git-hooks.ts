@@ -147,14 +147,11 @@ function findGitRoot(startPath: string): string | null {
 
 const HUSKY_COMMAND_MARKER = '__vite_plus_migrate_husky_command__';
 const VP_COMMAND_MARKER = '__vite_plus_migrate_vp_command__';
-const VP_COMMAND_MARKER_RULE = `---
-id: mark-vp-command
-language: bash
-rule:
-  kind: command_name
-  regex: '^vp$'
-fix: ${VP_COMMAND_MARKER}
-`;
+
+interface MarkedShellScript {
+  marker: string;
+  script: string;
+}
 
 interface MarkedHuskyCommand {
   dir: string | undefined;
@@ -169,33 +166,51 @@ interface ShellWord {
   end: number;
 }
 
-function markHuskyCommands(script: string): string | undefined {
+function getUnusedCommandMarker(script: string, baseMarker: string): string {
+  let marker = baseMarker;
+  while (script.includes(marker)) {
+    marker += '_';
+  }
+  return marker;
+}
+
+function markHuskyCommands(script: string): MarkedShellScript | undefined {
   const prepareRules = readPrepareRulesYaml();
-  const markerRules = prepareRules.replace(/^fix: vp config$/m, `fix: ${HUSKY_COMMAND_MARKER}`);
+  const marker = getUnusedCommandMarker(script, HUSKY_COMMAND_MARKER);
+  const markerRules = prepareRules.replace(/^fix: vp config$/m, `fix: ${marker}`);
   if (markerRules === prepareRules) {
     throw new Error('Could not mark the Husky prepare rule');
   }
   const updated = rewriteScripts(JSON.stringify({ prepare: script }), markerRules);
-  return updated ? (JSON.parse(updated).prepare as string) : undefined;
+  return updated ? { marker, script: JSON.parse(updated).prepare as string } : undefined;
 }
 
 function hasVpConfigCommand(script: string): boolean {
-  const updated = rewriteScripts(JSON.stringify({ prepare: script }), VP_COMMAND_MARKER_RULE);
+  const marker = getUnusedCommandMarker(script, VP_COMMAND_MARKER);
+  const markerRule = `---
+id: mark-vp-command
+language: bash
+rule:
+  kind: command_name
+  regex: '^vp$'
+fix: ${marker}
+`;
+  const updated = rewriteScripts(JSON.stringify({ prepare: script }), markerRule);
   if (!updated) {
     return false;
   }
   const markedPrepare = JSON.parse(updated).prepare as string;
   let searchStart = 0;
   while (true) {
-    const markerStart = markedPrepare.indexOf(VP_COMMAND_MARKER, searchStart);
+    const markerStart = markedPrepare.indexOf(marker, searchStart);
     if (markerStart === -1) {
       return false;
     }
-    const subcommand = parseShellWord(markedPrepare, markerStart + VP_COMMAND_MARKER.length);
+    const subcommand = parseShellWord(markedPrepare, markerStart + marker.length);
     if (subcommand?.value === 'config') {
       return true;
     }
-    searchStart = subcommand?.end ?? markerStart + VP_COMMAND_MARKER.length;
+    searchStart = subcommand?.end ?? markerStart + marker.length;
   }
 }
 
@@ -261,15 +276,15 @@ function parseShellWord(script: string, start: number): ShellWord | undefined {
   return { value, raw: script.slice(wordStart, cursor), end: cursor };
 }
 
-function getMarkedHuskyCommands(script: string): MarkedHuskyCommand[] {
+function getMarkedHuskyCommands(script: string, marker: string): MarkedHuskyCommand[] {
   const commands: MarkedHuskyCommand[] = [];
   let searchStart = 0;
   while (true) {
-    const start = script.indexOf(HUSKY_COMMAND_MARKER, searchStart);
+    const start = script.indexOf(marker, searchStart);
     if (start === -1) {
       return commands;
     }
-    const markerEnd = start + HUSKY_COMMAND_MARKER.length;
+    const markerEnd = start + marker.length;
     const firstWord = parseShellWord(script, markerEnd);
     const dirWord =
       firstWord?.value === 'install' ? parseShellWord(script, firstWord.end) : firstWord;
@@ -310,7 +325,7 @@ export function getOldHooksDir(rootDir: string): string | undefined {
   if (!markedPrepare) {
     return undefined;
   }
-  const commands = getMarkedHuskyCommands(markedPrepare);
+  const commands = getMarkedHuskyCommands(markedPrepare.script, markedPrepare.marker);
   return commands.at(-1)?.dir ?? '.husky';
 }
 
@@ -325,7 +340,9 @@ function getDetectedHuskyDirectories(rootDir: string): string[] {
   }
   const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
   return markedPrepare
-    ? getMarkedHuskyCommands(markedPrepare).map((command) => command.dir ?? '.husky')
+    ? getMarkedHuskyCommands(markedPrepare.script, markedPrepare.marker).map(
+        (command) => command.dir ?? '.husky',
+      )
     : [];
 }
 
@@ -1183,7 +1200,7 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
 
     const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
     if (markedPrepare) {
-      const commands = getMarkedHuskyCommands(markedPrepare);
+      const commands = getMarkedHuskyCommands(markedPrepare.script, markedPrepare.marker);
       oldDir = commands.at(-1)?.dir ?? '.husky';
       pkg.scripts.prepare = commands.toReversed().reduce((prepare, command) => {
         // The default Husky directory is migrated to .vite-hooks, so an
@@ -1193,7 +1210,7 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
             ? `vp config --hooks-dir ${command.rawDir}`
             : 'vp config';
         return `${prepare.slice(0, command.start)}${replacement}${prepare.slice(command.end)}`;
-      }, markedPrepare);
+      }, markedPrepare.script);
     }
     return pkg;
   });
