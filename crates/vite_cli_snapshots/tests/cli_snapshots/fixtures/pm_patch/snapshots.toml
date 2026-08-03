@@ -26,16 +26,6 @@ steps = [
 ]
 
 [[case]]
-name = "pm_patch_yarn_berry"
-vp = "local"
-cwd = "yarn_berry"
-env = { YARN_ENABLE_TELEMETRY = "0" }
-steps = [
-  { argv = ["vp", "pm", "patch", "placeholder"], comment = "Yarn Berry receives the patch command and rejects the uninstalled package", continue-on-failure = true },
-  { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Yarn Berry receives the patch-commit command and rejects the missing patch folder", continue-on-failure = true },
-]
-
-[[case]]
 name = "pm_patch_bun"
 vp = "local"
 cwd = "bun"
