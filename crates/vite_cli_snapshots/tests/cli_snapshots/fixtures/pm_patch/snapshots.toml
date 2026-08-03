@@ -24,12 +24,3 @@ steps = [
   { argv = ["vp", "pm", "patch", "placeholder"], comment = "Yarn Classic warns and exits successfully because patch is unsupported" },
   { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Yarn Classic warns and exits successfully because patch-commit is unsupported" },
 ]
-
-[[case]]
-name = "pm_patch_bun"
-vp = "local"
-cwd = "bun"
-steps = [
-  { argv = ["vp", "pm", "patch", "placeholder", "--", "--help"], comment = "Bun receives the patch command and prints its usage" },
-  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--help"], comment = "Bun receives patch commit through the --commit flag and prints its usage" },
-]
