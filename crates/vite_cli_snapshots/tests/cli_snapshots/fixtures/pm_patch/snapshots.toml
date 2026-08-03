@@ -31,8 +31,8 @@ vp = "local"
 cwd = "yarn_berry"
 env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
-  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "Yarn Berry receives the patch command", continue-on-failure = true },
-  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "Yarn Berry receives the patch-commit command", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch", "placeholder"], comment = "Yarn Berry receives the patch command and rejects the uninstalled package", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Yarn Berry receives the patch-commit command and rejects the missing patch folder", continue-on-failure = true },
 ]
 
 [[case]]
@@ -40,6 +40,6 @@ name = "pm_patch_bun"
 vp = "local"
 cwd = "bun"
 steps = [
-  { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "Bun receives the patch command", continue-on-failure = true },
-  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "Bun receives patch commit through the --commit flag", continue-on-failure = true },
+  { argv = ["vp", "pm", "patch", "placeholder", "--", "--help"], comment = "Bun receives the patch command and prints its usage" },
+  { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--help"], comment = "Bun receives patch commit through the --commit flag and prints its usage" },
 ]
