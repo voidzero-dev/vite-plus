@@ -167,6 +167,7 @@ pub enum ManagedGlobalCommand<'a> {
     /// Update packages in the managed global store.
     Update {
         packages: &'a [String],
+        latest: bool,
         concurrency: Option<usize>,
         reinstall_node_mismatch: bool,
         ignore_node_mismatch: bool,
@@ -244,6 +245,7 @@ impl PackageManagerCommand {
             }),
             Self::Update(args) if args.global => Some(ManagedGlobalCommand::Update {
                 packages: &args.packages,
+                latest: args.latest,
                 concurrency: args.concurrency,
                 reinstall_node_mismatch: args.reinstall_node_mismatch,
                 ignore_node_mismatch: args.ignore_node_mismatch,
@@ -523,11 +525,13 @@ mod tests {
                 if packages == ["tsx"]
         ));
 
-        let update = parse(&["update", "-g", "--reinstall-node-mismatch", "tsx"]).unwrap();
+        let update =
+            parse(&["update", "-g", "--latest", "--reinstall-node-mismatch", "tsx"]).unwrap();
         assert!(matches!(
             update.managed_global_command(),
             Some(ManagedGlobalCommand::Update {
                 packages,
+                latest: true,
                 reinstall_node_mismatch: true,
                 ignore_node_mismatch: false,
                 ..
