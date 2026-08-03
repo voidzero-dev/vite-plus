@@ -84,11 +84,15 @@ function isDefaultHuskyDirectory(dir: string | undefined): boolean {
   if (dir == null) {
     return false;
   }
+  return normalizeHuskyDirectory(dir) === '.husky';
+}
+
+function normalizeHuskyDirectory(dir: string): string {
   let normalized = path.normalize(dir);
   while (normalized.endsWith(path.sep)) {
     normalized = normalized.slice(0, -1);
   }
-  return normalized === '.husky';
+  return normalized;
 }
 
 function removeReplacedHookPackages(
@@ -370,7 +374,9 @@ export function preflightGitHooksSetup(
   if (!fs.existsSync(packageJsonPath)) {
     return null; // silently skip
   }
-  const detectedHuskyDirectories = new Set(getDetectedHuskyDirectories(projectPath));
+  const detectedHuskyDirectories = new Set(
+    getDetectedHuskyDirectories(projectPath).map(normalizeHuskyDirectory),
+  );
   if (detectedHuskyDirectories.size > 1) {
     return `Multiple Husky hook directories were detected in scripts.prepare (${[...detectedHuskyDirectories].join(', ')}) — skipping git hooks setup. Consolidate them and re-run migration.`;
   }
@@ -483,8 +489,15 @@ export function setupGitHooks(
   const isCustomDir = oldHooksDir != null && !isDefaultHuskyDirectory(oldHooksDir);
   const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
   const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
-  const transaction = captureGitHooksSetupRollback(projectPath, projectHooksDirs, report);
+  let transaction: ReturnType<typeof captureGitHooksSetupRollback>;
+  try {
+    transaction = captureGitHooksSetupRollback(projectPath, projectHooksDirs, report);
+  } catch {
+    warnMigration('Failed to snapshot the existing Git hook state; no changes were made', report);
+    return false;
+  }
   const previousHooksPath = gitRoot ? getExistingHooksPath(projectPath) : '';
+  const previousLocalHooksPath = gitRoot ? getLocalHooksPath(projectPath) : '';
 
   try {
     const hasExistingHookPolicy = projectHooksDirs.some((dir) =>
@@ -602,13 +615,13 @@ export function setupGitHooks(
       const stdout = configResult.stdout?.toString().trim() ?? '';
       if (stdout) {
         transaction.rollback();
-        restoreHooksPath(projectPath, previousHooksPath);
+        restoreLocalHooksPath(projectPath, previousLocalHooksPath);
         warnMigration(`Git hooks not configured — ${stdout}`, report);
         return false;
       }
       if (!rewriteDetectedHuskyPrepareScript(projectPath, oldHooksDir)) {
         transaction.rollback();
-        restoreHooksPath(projectPath, previousHooksPath);
+        restoreLocalHooksPath(projectPath, previousLocalHooksPath);
         warnMigration('Failed to rewrite the Husky prepare script', report);
         return false;
       }
@@ -640,13 +653,13 @@ export function setupGitHooks(
       return true;
     }
     transaction.rollback();
-    restoreHooksPath(projectPath, previousHooksPath);
+    restoreLocalHooksPath(projectPath, previousLocalHooksPath);
     warnMigration('Failed to install git hooks', report);
     return false;
   } catch {
     transaction.rollback();
     if (gitRoot) {
-      restoreHooksPath(projectPath, previousHooksPath);
+      restoreLocalHooksPath(projectPath, previousLocalHooksPath);
     }
     warnMigration('Failed to migrate git hooks safely; restored the original hook files', report);
     return false;
@@ -896,7 +909,7 @@ function getLocalHooksPath(projectPath: string): string {
   return result.status === 0 ? (result.stdout?.toString().trim() ?? '') : '';
 }
 
-function restoreHooksPath(projectPath: string, hooksPath: string): void {
+function restoreLocalHooksPath(projectPath: string, hooksPath: string): void {
   const args = hooksPath
     ? ['config', '--local', 'core.hooksPath', hooksPath]
     : ['config', '--local', '--unset', 'core.hooksPath'];
@@ -932,6 +945,13 @@ function captureGitHooksSetupRollback(
   const existingConfigContent = existingConfigPath
     ? fs.readFileSync(existingConfigPath, 'utf8')
     : undefined;
+  const standaloneConfigSnapshots = LINT_STAGED_ALL_CONFIG_FILES.flatMap((filename) => {
+    const configPath = path.join(projectPath, filename);
+    const stats = lstatIfExists(configPath);
+    return stats?.isFile()
+      ? [{ configPath, content: fs.readFileSync(configPath), mode: stats.mode & 0o777 }]
+      : [];
+  });
   const reportCounts = report
     ? {
         createdViteConfigCount: report.createdViteConfigCount,
@@ -940,16 +960,22 @@ function captureGitHooksSetupRollback(
       }
     : undefined;
   const backupRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-plus-hooks-rollback-'));
-  const hookSnapshots = [...new Set(hooksDirs.map((dir) => path.resolve(projectPath, dir)))].map(
-    (hooksPath, index) => {
-      const backupPath = path.join(backupRoot, String(index));
-      const existed = fs.existsSync(hooksPath);
-      if (existed) {
-        fs.cpSync(hooksPath, backupPath, { recursive: true, preserveTimestamps: true });
-      }
-      return { backupPath, existed, hooksPath };
-    },
-  );
+  let hookSnapshots: Array<{ backupPath: string; existed: boolean; hooksPath: string }>;
+  try {
+    hookSnapshots = [...new Set(hooksDirs.map((dir) => path.resolve(projectPath, dir)))].map(
+      (hooksPath, index) => {
+        const backupPath = path.join(backupRoot, String(index));
+        const existed = fs.existsSync(hooksPath);
+        if (existed) {
+          fs.cpSync(hooksPath, backupPath, { recursive: true, preserveTimestamps: true });
+        }
+        return { backupPath, existed, hooksPath };
+      },
+    );
+  } catch (error) {
+    fs.rmSync(backupRoot, { recursive: true, force: true });
+    throw error;
+  }
   let finished = false;
 
   const discard = () => {
@@ -973,6 +999,10 @@ function captureGitHooksSetupRollback(
     }
     if (report && reportCounts) {
       Object.assign(report, reportCounts);
+    }
+    for (const snapshot of standaloneConfigSnapshots) {
+      fs.writeFileSync(snapshot.configPath, snapshot.content);
+      fs.chmodSync(snapshot.configPath, snapshot.mode);
     }
     for (const snapshot of hookSnapshots) {
       fs.rmSync(snapshot.hooksPath, { recursive: true, force: true });

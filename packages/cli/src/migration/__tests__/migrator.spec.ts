@@ -8797,6 +8797,18 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
+  it('allows repeated Husky setup for equivalent directory spellings', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky ./.custom/ && husky install .custom' },
+        devDependencies: { husky: '^9.1.7' },
+      }),
+    );
+
+    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
+  });
+
   it('allows the dispatcher path installed by Vite+', () => {
     execFileSync('git', ['config', '--local', 'core.hooksPath', '.vite-hooks/_'], {
       cwd: tmpDir,
@@ -9110,6 +9122,86 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
+  it('preserves local hooksPath when a worktree override is active and setup fails', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-worktree-rollback-'));
+    const previousVpCliBin = process.env.VP_CLI_BIN;
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { 'lint-staged': '^16.2.7' } }),
+      );
+      execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
+      execFileSync('git', ['config', 'extensions.worktreeConfig', 'true'], { cwd: tmpDir });
+      execFileSync('git', ['config', '--local', 'core.hooksPath', '.local-hooks'], { cwd: tmpDir });
+      execFileSync('git', ['config', '--worktree', 'core.hooksPath', '.vite-hooks/_'], {
+        cwd: tmpDir,
+      });
+      process.env.VP_CLI_BIN = 'vp-command-that-does-not-exist';
+
+      expect(installGitHooks(tmpDir, true)).toBe(false);
+      expect(
+        execFileSync('git', ['config', '--local', '--get', 'core.hooksPath'], {
+          cwd: tmpDir,
+          encoding: 'utf8',
+        }).trim(),
+      ).toBe('.local-hooks');
+      expect(
+        execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+          cwd: tmpDir,
+          encoding: 'utf8',
+        }).trim(),
+      ).toBe('.vite-hooks/_');
+    } finally {
+      if (previousVpCliBin === undefined) {
+        delete process.env.VP_CLI_BIN;
+      } else {
+        process.env.VP_CLI_BIN = previousVpCliBin;
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('restores standalone lint-staged config when final package cleanup fails', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-config-rollback-'));
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    const lintStagedConfigPath = path.join(tmpDir, '.lintstagedrc.json');
+    const packageJson = `${JSON.stringify(
+      {
+        devDependencies: { 'lint-staged': '^16.2.7' },
+      },
+      null,
+      2,
+    )}\n`;
+    const lintStagedConfig = `${JSON.stringify({ '*': 'eslint --fix' }, null, 2)}\n`;
+    try {
+      fs.writeFileSync(packageJsonPath, packageJson);
+      fs.writeFileSync(lintStagedConfigPath, lintStagedConfig);
+      const writeFileSync = fs.writeFileSync.bind(fs);
+      let failed = false;
+      vi.spyOn(fs, 'writeFileSync').mockImplementation((file, data, options) => {
+        if (
+          !failed &&
+          path.resolve(file.toString()) === packageJsonPath &&
+          !fs.existsSync(lintStagedConfigPath)
+        ) {
+          failed = true;
+          throw new Error('simulated package cleanup failure');
+        }
+        return writeFileSync(file, data, options);
+      });
+
+      expect(installGitHooks(tmpDir, true)).toBe(false);
+
+      expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(packageJson);
+      expect(fs.readFileSync(lintStagedConfigPath, 'utf8')).toBe(lintStagedConfig);
+      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+      expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('restores both hook trees when moving a project hook fails', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-move-rollback-'));
     const packageJson = `${JSON.stringify(
@@ -9135,6 +9227,30 @@ describe('installGitHooks project hook migration', () => {
       expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
       expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
       expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips safely when the hook rollback snapshot cannot be created', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-snapshot-failure-'));
+    try {
+      const packageJson = JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: '^9.1.7' },
+      });
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+      fs.mkdirSync(path.join(tmpDir, '.husky'));
+      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+      vi.spyOn(fs, 'cpSync').mockImplementationOnce(() => {
+        throw new Error('simulated snapshot failure');
+      });
+
+      expect(installGitHooks(tmpDir, true)).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+      expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
+      expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
     } finally {
       vi.restoreAllMocks();
       fs.rmSync(tmpDir, { recursive: true, force: true });
