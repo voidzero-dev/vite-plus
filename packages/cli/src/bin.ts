@@ -42,7 +42,8 @@ function getErrorMessage(err: unknown): string {
 }
 
 // Parse command line arguments
-let args = process.argv.slice(2);
+const typedArgs = process.argv.slice(2);
+let args = typedArgs;
 
 // Transform `vp help [command]` into `vp [command] --help`
 if (args[0] === 'help' && args[1]) {
@@ -87,7 +88,9 @@ if (command === 'create') {
       test,
       doc,
       resolveUniversalViteConfig,
-      args: process.argv.slice(2),
+      // The Rust CLI applies the `help [command]` transform itself, and needs
+      // the untransformed list to tell `vp help fmt` apart from `vp fmt --help`.
+      args: typedArgs,
     });
 
     let finalExitCode = exitCode;

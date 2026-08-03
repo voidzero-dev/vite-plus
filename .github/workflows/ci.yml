@@ -952,6 +952,11 @@ jobs:
           "$HOME/.vite-plus/bin/vp" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
 
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
+
       - name: Run PTY snapshot tests
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
@@ -1034,6 +1039,12 @@ jobs:
         run: |
           "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

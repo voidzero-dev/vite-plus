@@ -54,6 +54,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
+import { exitCodeFromClose } from './exit-code.ts';
 import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
 
 interface PackageManifest {
@@ -578,7 +579,7 @@ server.listen(0, '127.0.0.1', () => {
   });
   child.on('exit', (code, signal) => {
     cleanupRegistryEnv(registryEnv);
-    const exitCode = code ?? (signal ? 128 : 0);
+    const exitCode = exitCodeFromClose(code, signal);
     server.close(() => process.exit(exitCode));
   });
 });

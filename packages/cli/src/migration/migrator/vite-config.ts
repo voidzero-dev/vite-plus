@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
 
 import {
@@ -34,6 +35,34 @@ import {
   infoMigration,
   warnMigration,
 } from './shared.ts';
+
+const SVELTE_RUNE_GLOBALS = {
+  $state: 'readonly',
+  $derived: 'readonly',
+  $effect: 'readonly',
+  $props: 'readonly',
+  $bindable: 'readonly',
+  $inspect: 'readonly',
+  $host: 'readonly',
+} satisfies Record<string, 'readonly'>;
+
+// Add Svelte's built-in rune globals to migrated Svelte overrides.
+// https://github.com/oxc-project/oxc/issues/20191
+export function ensureSvelteRuneGlobals(config: OxlintConfig): void {
+  for (const override of config.overrides ?? []) {
+    const targetsSvelte = override.files.some(
+      (file: string) =>
+        !file.startsWith('!') && braceExpand(file).some((pattern) => pattern.includes('.svelte')),
+    );
+    if (!targetsSvelte) {
+      continue;
+    }
+    override.globals = {
+      ...SVELTE_RUNE_GLOBALS,
+      ...override.globals,
+    };
+  }
+}
 
 // Remove the "lint-staged" key from package.json after config has been
 // successfully merged into vite.config.ts.
@@ -231,6 +260,7 @@ export function mergeViteConfigFiles(
       collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
       report,
     );
+    ensureSvelteRuneGlobals(oxlintJson);
     const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
     // writeJsonFile preserves the user file's existing indent/newline (and adds a
     // trailing newline) instead of forcing 2-space + no EOL.
