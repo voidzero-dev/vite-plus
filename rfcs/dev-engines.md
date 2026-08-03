@@ -15,7 +15,7 @@ This RFC implements the plan agreed in [#864](https://github.com/voidzero-dev/vi
 `devEngines` is the cross-tool standard for declaring development environment requirements, already supported by npm (v10.9+), pnpm (`devEngines.runtime` for Node management), and Corepack. Vite+ currently:
 
 - Reads `devEngines.runtime` for Node resolution, but at the lowest project-file priority and without honoring `onFail`.
-- Ignores `devEngines.packageManager` entirely (TODO at `crates/vite_install/src/package_manager.rs:288`). Worse, in a project that intentionally uses `devEngines.packageManager` plus a lockfile, today's auto-pin writes a redundant top-level `packageManager` field into `package.json`, fighting the user's chosen manifest.
+- Ignores `devEngines.packageManager` entirely (TODO at `crates/vite_pm_cli/src/package_manager.rs:288`). Worse, in a project that intentionally uses `devEngines.packageManager` plus a lockfile, today's auto-pin writes a redundant top-level `packageManager` field into `package.json`, fighting the user's chosen manifest.
 - Only ever writes `.node-version` (`vp env pin`) and `packageManager` (auto-pin, `vp create`, `vp migrate`), so users standardizing on `devEngines` get no write-path support.
 
 Community feedback in #864 asks Vite+ to treat `devEngines` as the standard going forward while not breaking existing `.node-version` / `packageManager` workflows.
@@ -61,7 +61,7 @@ Spec semantics that matter for this RFC:
 6. User default (`~/.vite-plus/config.json`)
 7. Latest LTS
 
-**Package manager detection chain** (`crates/vite_install/src/package_manager.rs`; [rfcs/package-manager-detection.md](./package-manager-detection.md) has been updated alongside this RFC and now documents the new chain):
+**Package manager detection chain** (`crates/vite_pm_cli/src/package_manager.rs`; [rfcs/package-manager-detection.md](./package-manager-detection.md) has been updated alongside this RFC and now documents the new chain):
 
 1. `packageManager` field (exact version, optional hash)
 2. Lockfiles (`pnpm-workspace.yaml`, `pnpm-lock.yaml`, `yarn.lock`, ...) at version `latest`
@@ -412,7 +412,7 @@ Both are intentionally separated from this PR: the per-entry fallback threads `o
 
 ### Phase 2: Package manager detection
 
-1. Insert `devEngines.packageManager` into `get_package_manager_type_and_version()` (replacing the TODO at `crates/vite_install/src/package_manager.rs:288`); name validation; array handling; `onFail` handling.
+1. Insert `devEngines.packageManager` into `get_package_manager_type_and_version()` (replacing the TODO at `crates/vite_pm_cli/src/package_manager.rs:288`); name validation; array handling; `onFail` handling.
 2. Range resolution against downloaded versions, with registry fallback via the npm abbreviated metadata document.
 3. Suppress auto-write when the source is `devEngines.packageManager`; retarget auto-pin to `devEngines.packageManager` when neither field exists.
 4. Consistency warning when `packageManager` and `devEngines.packageManager` disagree (warn-now, error-later transition messaging).

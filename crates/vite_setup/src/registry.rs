@@ -4,7 +4,7 @@
 //! with integrity hashes for both the main package and platform-specific package.
 
 use serde::Deserialize;
-use vite_install::{config::npm_registry, request::HttpClient};
+use vite_pm_cli::{HttpClient, npm_registry};
 
 use crate::error::Error;
 

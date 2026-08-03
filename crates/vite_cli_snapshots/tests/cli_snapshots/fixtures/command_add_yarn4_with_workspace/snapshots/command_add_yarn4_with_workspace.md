@@ -46,6 +46,7 @@ should add package to workspace root
 should add @vite-plus-test/utils to workspace root
 
 ```
+warn: yarn does not support --workspace.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -140,6 +141,7 @@ Done in <duration> <duration>
 should add @vite-plus-test/utils to packages/app
 
 ```
+warn: yarn does not support --workspace.
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
 [app]: ➤ YN0000: ┌ Resolution step

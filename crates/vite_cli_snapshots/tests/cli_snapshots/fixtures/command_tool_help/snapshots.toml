@@ -1,0 +1,21 @@
+[[case]]
+name = "command_tool_help"
+vp = "local"
+comment = "Tool-backed command help is rendered by the local vite-plus CLI."
+steps = [
+  ["vp", "dev", "--help"],
+  ["vp", "build", "--help"],
+  ["vp", "preview", "--help"],
+  ["vp", "test", "--help"],
+  ["vp", "pack", "--help"],
+  ["vp", "cache", "--help"],
+]
+
+[[case]]
+name = "command_tool_help_global_delegation"
+vp = "global"
+comment = "Global and task-script help delegate to the local vite-plus CLI."
+steps = [
+  ["vp", "dev", "--help"],
+  ["vpr", "localhelp", "--help"],
+]
