@@ -483,7 +483,7 @@ async function bundleTsdown() {
     plugins: [
       RewriteImportsPlugin,
       dts({
-        oxc: true,
+        generator: 'oxc',
         dtsInput: true,
       }),
     ],
