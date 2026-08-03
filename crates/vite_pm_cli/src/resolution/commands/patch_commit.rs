@@ -43,7 +43,11 @@ impl Resolve<PatchCommitArgs> for Yarn {
             return CommandResolution::Noop;
         }
         let mut cmd = CommandBuilder::new("yarn");
-        cmd.arg("patch-commit").arg(&args.patch_dir).extend(args.pass_through_args.iter());
+        // Without --save, yarn patch-commit only prints the patch to stdout.
+        cmd.arg("patch-commit")
+            .arg("--save")
+            .arg(&args.patch_dir)
+            .extend(args.pass_through_args.iter());
         cmd.into()
     }
 }
@@ -89,7 +93,7 @@ mod tests {
         };
 
         assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["patch-commit", "patches/left-pad"]);
+        assert_eq!(command.args, vec!["patch-commit", "--save", "patches/left-pad"]);
     }
 
     #[test]
