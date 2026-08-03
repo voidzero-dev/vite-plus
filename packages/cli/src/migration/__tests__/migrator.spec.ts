@@ -9009,7 +9009,7 @@ describe('preflightGitHooksSetup hook state', () => {
     fs.mkdirSync(path.join(tmpDir, '.husky', 'pre-commit'), { recursive: true });
 
     expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Git hook path ".husky/pre-commit" is not a file',
+      `Git hook path "${path.join('.husky', 'pre-commit')}" is not a file`,
     );
   });
 
