@@ -141,7 +141,7 @@ Snapshot mismatches fail the run with a unified diff and write `<case>.md.new`; 
 
 ### Submitting changes
 
-Prioritize stacked pull requests: split multi-part work into a stack of small PRs so reviewers can approve and merge each layer on its own. Create stacks with the `gh-stack` CLI extension or on github.com. See the "Submitting Pull Requests" section in `CONTRIBUTING.md`.
+Prioritize stacked pull requests: split multi-part work into a stack of small PRs so reviewers can approve and merge each layer on its own. Create stacks with the `gh-stack` CLI extension or on github.com. Stacks require all branches to be in this repository (GitHub does not support cross-fork stacks), so from a fork submit standalone PRs instead. See the "Submitting Pull Requests" section in `CONTRIBUTING.md`.
 
 ## Code Conventions
 

@@ -165,6 +165,8 @@ GitHub has built-in stacked pull requests ([public preview](https://github.blog/
 gh extension install github/gh-stack
 ```
 
+Stacked pull requests require all branches to be in this repository; GitHub does not support cross-fork stacks ([reference](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)). If you contribute from a fork, split large work into a sequence of standalone PRs instead.
+
 ## Verified Commits
 
 All commits in PR branches should be GitHub-verified so reviewers can confirm commit authenticity.
