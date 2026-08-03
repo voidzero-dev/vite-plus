@@ -1,0 +1,20 @@
+# unanalyzable_config_ignored
+
+Regression guard for spread/unanalyzable configs: a config that only parses
+as an open map might hide defaultPackage behind the spread, but that must
+not fail the command. Bare vp build falls through and runs in place.
+
+## `cd spread && vp build`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vite.config.ts:3:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+✓ 2 modules transformed.
+computing gzip size...
+dist/index.html  <size> kB │ gzip: <size> kB
+
+✓ built in <duration>
+```

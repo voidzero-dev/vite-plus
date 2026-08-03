@@ -1,1 +1,5 @@
-{ "name": "per-command-fallthrough", "private": true }
+{
+  "name": "per-command-fallthrough",
+  "type": "module",
+  "private": true
+}
