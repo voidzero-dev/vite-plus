@@ -8677,6 +8677,40 @@ describe('custom Husky directory parsing', () => {
     };
     expect(pkg.scripts.prepare).toBe('vp config && npm run build');
   });
+
+  it('does not read the next line as a Husky directory', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky\nnpm run build' } }),
+    );
+
+    expect(getOldHooksDir(tmpDir)).toBe('.husky');
+    expect(rewritePrepareScript(tmpDir)).toBe('.husky');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe('vp config\nnpm run build');
+  });
+
+  it('supports a line continuation before a custom Husky directory', () => {
+    const prepare = 'husky \\\n  .config/husky && npm run build';
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+
+    expect(getOldHooksDir(tmpDir)).toBe('.config/husky');
+    expect(rewritePrepareScript(tmpDir)).toBe('.config/husky');
+  });
+
+  it('does not treat a trailing shell comment as a Husky directory', () => {
+    const prepare = 'husky # initialize hooks\nnpm run build';
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+
+    expect(getOldHooksDir(tmpDir)).toBe('.husky');
+    expect(rewritePrepareScript(tmpDir)).toBe('.husky');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: { prepare: string };
+    };
+    expect(pkg.scripts.prepare).toBe('vp config # initialize hooks\nnpm run build');
+  });
 });
 
 describe('preflightGitHooksSetup husky catalog resolution', () => {

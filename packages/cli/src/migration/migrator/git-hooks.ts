@@ -216,8 +216,20 @@ fix: ${marker}
 
 function skipShellWhitespace(script: string, start: number): number {
   let cursor = start;
-  while (/\s/.test(script[cursor] ?? '')) {
-    cursor++;
+  while (cursor < script.length) {
+    if (script[cursor] === ' ' || script[cursor] === '\t') {
+      cursor++;
+      continue;
+    }
+    if (script[cursor] === '\\' && script[cursor + 1] === '\n') {
+      cursor += 2;
+      continue;
+    }
+    if (script[cursor] === '\\' && script[cursor + 1] === '\r' && script[cursor + 2] === '\n') {
+      cursor += 3;
+      continue;
+    }
+    break;
   }
   return cursor;
 }
@@ -226,6 +238,9 @@ function parseShellWord(script: string, start: number): ShellWord | undefined {
   const operator = /[;&|()<>]/;
   let cursor = skipShellWhitespace(script, start);
   const wordStart = cursor;
+  if (script[cursor] === '#') {
+    return undefined;
+  }
   let value = '';
   let quote: 'single' | 'double' | undefined;
 
@@ -259,10 +274,16 @@ function parseShellWord(script: string, start: number): ShellWord | undefined {
       if (escaped == null) {
         return undefined;
       }
+      if (escaped === '\n') {
+        cursor += 2;
+        continue;
+      }
+      if (escaped === '\r' && script[cursor + 2] === '\n') {
+        cursor += 3;
+        continue;
+      }
       value +=
-        quote === 'double' && !['$', '`', '"', '\\', '\n'].includes(escaped)
-          ? `\\${escaped}`
-          : escaped;
+        quote === 'double' && !['$', '`', '"', '\\'].includes(escaped) ? `\\${escaped}` : escaped;
       cursor += 2;
       continue;
     }
