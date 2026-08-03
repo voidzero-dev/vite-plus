@@ -1,5 +1,15 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -77,6 +87,54 @@ describe('install', () => {
       message: 'absolute hooks directory not allowed',
       isError: false,
     });
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'does not write through a symbolic dispatcher file',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-symlink-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        const externalFile = join(tmp, 'external-hook-runner');
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(externalFile, 'keep me\n');
+        symlinkSync(externalFile, join(tmp, '.vite-hooks', '_', 'h'));
+        process.chdir(tmp);
+
+        expect(install()).toEqual({
+          message: 'symbolic hook path ".vite-hooks/_/h" not allowed',
+          isError: false,
+        });
+        expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('restores executable dispatcher permissions', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-mode-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      const internalDir = join(tmp, '.vite-hooks', '_');
+      mkdirSync(internalDir, { recursive: true });
+      writeFileSync(join(internalDir, 'h'), 'stale\n');
+      writeFileSync(join(internalDir, 'pre-commit'), 'stale\n');
+      chmodSync(join(internalDir, 'h'), 0o600);
+      chmodSync(join(internalDir, 'pre-commit'), 0o600);
+      process.chdir(tmp);
+
+      expect(install()).toEqual({ message: '', isError: false });
+      expect(statSync(join(internalDir, 'h')).mode & 0o777).toBe(0o755);
+      expect(statSync(join(internalDir, 'pre-commit')).mode & 0o777).toBe(0o755);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 

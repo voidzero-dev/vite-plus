@@ -8839,6 +8839,17 @@ describe('preflightGitHooksSetup hook state', () => {
       'Symbolic Git hook path ".vite-hooks/scripts/common.sh" cannot be migrated safely',
     );
   });
+
+  it.skipIf(process.platform === 'win32')('rejects symbolic dispatcher files', () => {
+    const externalDispatcher = path.join(tmpDir, 'shared-dispatcher');
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', '_'), { recursive: true });
+    fs.writeFileSync(externalDispatcher, 'keep me\n');
+    fs.symlinkSync(externalDispatcher, path.join(tmpDir, '.vite-hooks', '_', 'h'));
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Symbolic Git hook path ".vite-hooks/_/h" cannot be migrated safely',
+    );
+  });
 });
 
 describe('installGitHooks project hook migration', () => {

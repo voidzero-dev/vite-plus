@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { chmodSync, lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export const SUPPORTED_GIT_HOOK_NAMES = [
   'pre-commit',
@@ -76,6 +76,57 @@ export interface InstallResult {
   isError: boolean;
 }
 
+export interface UnsafeHookInstallPath {
+  kind: 'symbolic' | 'not-directory' | 'not-file';
+  relativePath: string;
+}
+
+export function findUnsafeHookInstallPath(root: string, dir: string): UnsafeHookInstallPath | null {
+  const projectRoot = resolve(root);
+  const internalPath = resolve(projectRoot, dir, '_');
+  const relativeInternalPath = relative(projectRoot, internalPath);
+  let currentPath = projectRoot;
+
+  for (const component of relativeInternalPath.split(sep).filter(Boolean)) {
+    currentPath = join(currentPath, component);
+    const stats = lstatSync(currentPath, { throwIfNoEntry: false });
+    if (!stats) {
+      return null;
+    }
+    if (stats.isSymbolicLink()) {
+      return { kind: 'symbolic', relativePath: relative(projectRoot, currentPath) };
+    }
+    if (!stats.isDirectory()) {
+      return { kind: 'not-directory', relativePath: relative(projectRoot, currentPath) };
+    }
+  }
+
+  for (const filename of ['husky.sh', '.gitignore', 'h', ...SUPPORTED_GIT_HOOK_NAMES]) {
+    const filePath = join(internalPath, filename);
+    const stats = lstatSync(filePath, { throwIfNoEntry: false });
+    if (!stats) {
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      return { kind: 'symbolic', relativePath: relative(projectRoot, filePath) };
+    }
+    if (!stats.isFile()) {
+      return { kind: 'not-file', relativePath: relative(projectRoot, filePath) };
+    }
+  }
+  return null;
+}
+
+function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): string {
+  if (unsafePath.kind === 'symbolic') {
+    return `symbolic hook path "${unsafePath.relativePath}" not allowed`;
+  }
+  if (unsafePath.kind === 'not-directory') {
+    return `hook path "${unsafePath.relativePath}" is not a directory`;
+  }
+  return `hook path "${unsafePath.relativePath}" is not a file`;
+}
+
 export function install(dir = '.vite-hooks'): InstallResult {
   // VP_GIT_HOOKS is the canonical name; VITE_GIT_HOOKS is kept for backwards compatibility.
   if (
@@ -90,6 +141,10 @@ export function install(dir = '.vite-hooks'): InstallResult {
   }
   if (isAbsolute(dir)) {
     return { message: 'absolute hooks directory not allowed', isError: false };
+  }
+  const unsafeInstallPath = findUnsafeHookInstallPath(process.cwd(), dir);
+  if (unsafeInstallPath) {
+    return { message: describeUnsafeHookInstallPath(unsafeInstallPath), isError: false };
   }
   // Use --show-prefix to get the relative path from git root to cwd.
   // This avoids Windows path normalization issues (MSYS paths, 8.3 short names)
@@ -119,20 +174,21 @@ export function install(dir = '.vite-hooks'): InstallResult {
     };
   }
 
+  rmSync(internal('husky.sh'), { force: true });
+  mkdirSync(internal(), { recursive: true });
+  writeFileSync(internal('.gitignore'), '*');
+  writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
+  chmodSync(internal('h'), 0o755);
+  for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
+    writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
+    chmodSync(internal(hook), 0o755);
+  }
   const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', target]);
   if (status == null) {
     return { message: 'git command not found', isError: true };
   }
   if (status) {
     return { message: '' + stderr, isError: true };
-  }
-
-  rmSync(internal('husky.sh'), { force: true });
-  mkdirSync(internal(), { recursive: true });
-  writeFileSync(internal('.gitignore'), '*');
-  writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
-  for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
-    writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
   }
   return { message: '', isError: false };
 }

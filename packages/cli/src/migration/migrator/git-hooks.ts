@@ -6,7 +6,7 @@ import spawn from 'cross-spawn';
 import semver from 'semver';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import { SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
+import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
 import { PackageManager } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
@@ -227,6 +227,14 @@ export function preflightGitHooksSetup(
   }
   if (unsafeHooksDirectory) {
     return `Git hook path "${unsafeHooksDirectory.relativePath}" is not a directory — skipping git hooks setup. Replace it with a directory and re-run migration.`;
+  }
+  const unsafeInstallPath = findUnsafeHookInstallPath(projectPath, hooksDir);
+  if (unsafeInstallPath?.kind === 'symbolic') {
+    return `Symbolic Git hook path "${unsafeInstallPath.relativePath}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
+  }
+  if (unsafeInstallPath) {
+    const expectedType = unsafeInstallPath.kind === 'not-directory' ? 'directory' : 'file';
+    return `Git hook path "${unsafeInstallPath.relativePath}" is not a ${expectedType} — skipping git hooks setup. Replace it with a ${expectedType} and re-run migration.`;
   }
   const symbolicHook = findSymbolicProjectHook(projectPath, projectHooksDirs);
   if (symbolicHook) {
