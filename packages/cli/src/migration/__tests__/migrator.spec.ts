@@ -8693,6 +8693,31 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
+  it.each(['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'])(
+    'rejects hooks disabled through %s before migration starts',
+    (environmentName) => {
+      const environmentNames = ['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'];
+      const previousValues = new Map(environmentNames.map((name) => [name, process.env[name]]));
+      for (const name of environmentNames) {
+        delete process.env[name];
+      }
+      process.env[environmentName] = '0';
+      try {
+        expect(preflightGitHooksSetup(tmpDir)).toContain(
+          `Git hooks are disabled through ${environmentName}=0`,
+        );
+      } finally {
+        for (const [name, value] of previousValues) {
+          if (value === undefined) {
+            delete process.env[name];
+          } else {
+            process.env[name] = value;
+          }
+        }
+      }
+    },
+  );
+
   it('rejects conflicting project-owned hooks', () => {
     fs.mkdirSync(path.join(tmpDir, '.husky'));
     fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
@@ -8713,6 +8738,26 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toContain(
       'Both .husky/common.sh and .vite-hooks/common.sh exist',
     );
+  });
+
+  it('rejects conflicting nested project-owned hook helpers', () => {
+    fs.mkdirSync(path.join(tmpDir, '.husky', 'scripts'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'scripts', 'check.sh'), 'old helper\n');
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'scripts', 'check.sh'), 'project helper\n');
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Both .husky/scripts/check.sh and .vite-hooks/scripts/check.sh exist',
+    );
+  });
+
+  it('allows non-conflicting project-owned hook helper directories to merge', () => {
+    fs.mkdirSync(path.join(tmpDir, '.husky', 'scripts'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'scripts', 'check.sh'), 'old helper\n');
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'scripts', 'notify.sh'), 'project helper\n');
+
+    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
   it.skipIf(process.platform === 'win32')('rejects symbolic project hooks', () => {

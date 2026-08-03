@@ -197,6 +197,10 @@ export function preflightGitHooksSetup(
   if (!fs.existsSync(packageJsonPath)) {
     return null; // silently skip
   }
+  const disabledHooksEnvironment = getDisabledGitHooksEnvironment();
+  if (disabledHooksEnvironment) {
+    return `Git hooks are disabled through ${disabledHooksEnvironment} — skipping git hooks setup.`;
+  }
   const pkgContent = readJsonFile(packageJsonPath);
   const deps = pkgContent.devDependencies as Record<string, string> | undefined;
   const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
@@ -412,8 +416,12 @@ function migrateProjectHooks(
       const targetDir = path.join(projectPath, hooksDir);
       fs.mkdirSync(targetDir, { recursive: true });
       for (const entry of getMigratableHookEntries(oldDir)) {
-        const src = path.join(oldDir, entry.name);
-        const dest = path.join(targetDir, entry.name);
+        const src = path.join(oldDir, entry.relativePath);
+        const dest = path.join(targetDir, entry.relativePath);
+        if (entry.dirent.isDirectory()) {
+          fs.mkdirSync(dest, { recursive: true });
+          continue;
+        }
         fs.copyFileSync(src, dest);
         fs.chmodSync(dest, 0o755);
       }
@@ -442,9 +450,15 @@ function findHookMigrationConflict(
   if (!fs.existsSync(oldDir)) {
     return undefined;
   }
-  return getMigratableHookEntries(oldDir).find((entry) =>
-    pathExistsIncludingSymbolicLink(path.join(projectPath, '.vite-hooks', entry.name)),
-  )?.name;
+  return getMigratableHookEntries(oldDir).find((entry) => {
+    const destinationStats = lstatIfExists(
+      path.join(projectPath, '.vite-hooks', entry.relativePath),
+    );
+    if (!destinationStats) {
+      return false;
+    }
+    return !(entry.dirent.isDirectory() && destinationStats.isDirectory());
+  })?.relativePath;
 }
 
 function findSymbolicProjectHook(
@@ -469,39 +483,63 @@ function findSymbolicProjectHook(
     if (!hooksStats.isDirectory()) {
       continue;
     }
-    const symbolicHook = fs
-      .readdirSync(hooksPath, { withFileTypes: true })
-      .find(
-        (entry) =>
-          entry.isSymbolicLink() &&
-          (GIT_HOOK_NAME_SET.has(entry.name) ||
-            (dir === migrationSourceDir && isMigratableHookEntry(entry))),
-      );
+    const symbolicHook =
+      fs
+        .readdirSync(hooksPath, { withFileTypes: true })
+        .find((entry) => GIT_HOOK_NAME_SET.has(entry.name) && entry.isSymbolicLink())?.name ??
+      (dir === migrationSourceDir
+        ? getMigratableHookEntries(hooksPath).find((entry) => entry.dirent.isSymbolicLink())
+            ?.relativePath
+        : undefined);
     if (symbolicHook) {
-      return path.join(dir, symbolicHook.name);
+      return path.join(dir, symbolicHook);
     }
   }
   return undefined;
 }
 
-function getMigratableHookEntries(hooksPath: string): fs.Dirent[] {
-  return fs.readdirSync(hooksPath, { withFileTypes: true }).filter(isMigratableHookEntry);
+interface MigratableHookEntry {
+  dirent: fs.Dirent;
+  relativePath: string;
 }
 
-function isMigratableHookEntry(entry: fs.Dirent): boolean {
-  return !entry.isDirectory() && !entry.name.startsWith('.');
+function getMigratableHookEntries(hooksPath: string): MigratableHookEntry[] {
+  const result: MigratableHookEntry[] = [];
+
+  function visit(directoryPath: string, relativeDirectory: string): void {
+    for (const dirent of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+      // Husky owns this dispatcher directory. Everything else is project-owned.
+      if (!relativeDirectory && dirent.name === '_') {
+        continue;
+      }
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${dirent.name}` : dirent.name;
+      result.push({ dirent, relativePath });
+      if (dirent.isDirectory()) {
+        visit(path.join(directoryPath, dirent.name), relativePath);
+      }
+    }
+  }
+
+  visit(hooksPath, '');
+  return result;
 }
 
-function pathExistsIncludingSymbolicLink(filePath: string): boolean {
+function lstatIfExists(filePath: string): fs.Stats | undefined {
   try {
-    fs.lstatSync(filePath);
-    return true;
+    return fs.lstatSync(filePath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return false;
+      return undefined;
     }
     throw error;
   }
+}
+
+function getDisabledGitHooksEnvironment(): string | undefined {
+  const name = ['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'].find(
+    (name) => process.env[name] === '0',
+  );
+  return name ? `${name}=0` : undefined;
 }
 
 function getExistingHooksPath(projectPath: string): string {
@@ -602,6 +640,16 @@ function getProjectHookScriptPaths(projectPath: string, dir: string): string[] {
     .map((entry) => path.join(hooksPath, entry.name));
 }
 
+function getProjectHookFilePaths(projectPath: string, dir: string): string[] {
+  const hooksPath = path.join(projectPath, dir);
+  if (!fs.existsSync(hooksPath)) {
+    return [];
+  }
+  return getMigratableHookEntries(hooksPath)
+    .filter((entry) => entry.dirent.isFile())
+    .map((entry) => path.join(hooksPath, entry.relativePath));
+}
+
 /**
  * Check if a standalone lint-staged config exists in a format that can't be
  * auto-migrated to "staged" in vite.config.ts (non-JSON files like .yaml,
@@ -635,7 +683,7 @@ const VP_STAGED_PATTERN = /^(?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*vp staged(?=$|[\s;&
 const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
 
 function hasStagedCommandInProjectHooks(projectPath: string, dir: string): boolean {
-  return getProjectHookScriptPaths(projectPath, dir).some((hookPath) => {
+  return getProjectHookFilePaths(projectPath, dir).some((hookPath) => {
     const lines = fs.readFileSync(hookPath, 'utf8').split('\n');
     return lines.some((line) => {
       const trimmed = line.trim();
@@ -684,7 +732,7 @@ function migrateStagedCommandsInHook(hookPath: string): boolean {
 }
 
 function migrateStagedCommandsInProjectHooks(projectPath: string, dir: string): void {
-  for (const hookPath of getProjectHookScriptPaths(projectPath, dir)) {
+  for (const hookPath of getProjectHookFilePaths(projectPath, dir)) {
     migrateStagedCommandsInHook(hookPath);
   }
 }

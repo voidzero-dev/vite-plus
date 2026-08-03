@@ -28,6 +28,39 @@ steps = [
 ]
 
 [[case]]
+name = "migration_nested_hook_helper"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".husky/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-commit", "#!/usr/bin/env sh\n. \"$(dirname \"$0\")/scripts/check.sh\"\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/scripts/check.sh", "npx lint-staged\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "preserve and migrate a nested hook helper", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "keep the project hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/scripts/check.sh"], comment = "copy and rewrite the nested helper", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "vite.config.ts", "staged:"], snapshot = false },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "add staged config discovered through the helper", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_hooks_disabled_preserves_staged_full"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", ".husky"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/pre-commit", "npx lint-staged\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.lint-staged", "\"^16.2.7\""], snapshot = false },
+  { argv = ["vpt", "write-file", ".lintstagedrc.json", "{\"*.ts\":\"eslint --fix\"}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], envs = [["VITE_GIT_HOOKS", "0"]], comment = "skip hooks before the full config rewrite", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "keep the Husky dispatcher", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "keep the active lint-staged hook", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".lintstagedrc.json"], comment = "keep standalone staged config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "do not add staged config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "keep hook dependencies and prepare script", continue-on-failure = true },
+]
+
+[[case]]
 name = "migration_conflicting_project_hook"
 vp = "global"
 steps = [

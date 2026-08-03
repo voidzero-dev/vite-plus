@@ -1,4 +1,4 @@
-# migration_upgrade_hooks_disabled_preserves_policy
+# migration_hooks_disabled_preserves_staged_full
 
 ## `git init`
 
@@ -10,14 +10,7 @@
 
 
 ## `vpt write-file .husky/pre-commit 'npx lint-staged
-npm test
 '`
-
-
-## `vpt json-edit package.json scripts.prepare '"husky"'`
-
-
-## `vpt json-edit package.json devDependencies.husky '"^9.1.7"'`
 
 
 ## `vpt json-edit package.json devDependencies.lint-staged '"^16.2.7"'`
@@ -29,24 +22,20 @@ npm test
 
 ## `VITE_GIT_HOOKS=0 vp migrate --hooks --no-interactive`
 
-skip disabled dispatcher installation
+skip hooks before the full config rewrite
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
 ⚠ Git hooks are disabled through VITE_GIT_HOOKS=0 — skipping git hooks setup.
-◇ Updated . to Vite+ <version>
+◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• Dependencies:
-    vite-plus  0.1.21 → <version>
-    vite              → <version>
-    vitest     0.1.21 → <version>
-• Package manager settings configured
+• 1 config update applied
 ```
 
 ## `git config --local core.hooksPath`
 
-restore the Husky dispatcher
+keep the Husky dispatcher
 
 ```
 .husky/_
@@ -54,35 +43,31 @@ restore the Husky dispatcher
 
 ## `vpt print-file .husky/pre-commit`
 
-keep the project hook unchanged
+keep the active lint-staged hook
 
 ```
 npx lint-staged
-npm test
-```
-
-## `vpt stat-file .vite-hooks/pre-commit --assert missing`
-
-do not create a Vite+ hook
-
-```
-.vite-hooks/pre-commit: missing
 ```
 
 ## `vpt print-file .lintstagedrc.json`
 
-keep standalone config
+keep standalone staged config
 
 ```
 {"*.ts":"eslint --fix"}
 ```
 
-## `vpt stat-file vite.config.ts --assert missing`
+## `vpt print-file vite.config.ts`
 
-roll back staged config
+do not add staged config
 
 ```
-vite.config.ts: missing
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
+});
 ```
 
 ## `vpt print-file package.json`
@@ -95,19 +80,18 @@ keep hook dependencies and prepare script
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "vite": "catalog:",
-    "vite-plus": "catalog:",
-    "vitest": "catalog:"
+    "vite-plus": "catalog:"
+  },
+  "name": "migration-existing-pre-commit",
+  "scripts": {
+    "prepare": "husky"
   },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "onFail": "download",
-      "version": "10.33.0"
+      "version": "<version>",
+      "onFail": "download"
     }
-  },
-  "name": "migration-upgrade-hooks-flag-pnpm",
-  "scripts": {
-    "prepare": "husky"
   }
 }
 ```
