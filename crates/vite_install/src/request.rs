@@ -6,7 +6,7 @@ use futures_util::stream::StreamExt;
 use reqwest::{Response, StatusCode};
 use serde::de::DeserializeOwned;
 use sha1::Sha1;
-use sha2::{Digest, Sha224, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha384, Sha512};
 use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 use vite_error::Error;
@@ -375,6 +375,7 @@ pub async fn verify_file_hash(
 
     let digest = match algorithm {
         "sha512" => compute_digest::<Sha512>(&content),
+        "sha384" => compute_digest::<Sha384>(&content),
         "sha256" => compute_digest::<Sha256>(&content),
         "sha224" => compute_digest::<Sha224>(&content),
         "sha1" => compute_digest::<Sha1>(&content),
@@ -828,7 +829,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_file_hash_sri() {
-        use sha2::{Digest, Sha512};
+        use sha2::{Digest, Sha384, Sha512};
         use tokio::io::AsyncWriteExt;
 
         let temp_dir = TempDir::new().unwrap();
@@ -838,6 +839,12 @@ mod tests {
         let content = b"Hello, World!";
         let mut file = tokio::fs::File::create(&test_file).await.unwrap();
         file.write_all(content).await.unwrap();
+
+        // SHA-384 is a standard SRI algorithm accepted in registry metadata.
+        let digest = Sha384::digest(content);
+        let expected_sri = format!("sha384-{}", base64_simd::STANDARD.encode_to_string(digest));
+        let result = verify_file_hash(&test_file, &expected_sri).await;
+        assert!(result.is_ok(), "{result:?}");
 
         // Calculate the expected SRI (registry `dist.integrity` format)
         let digest = Sha512::digest(content);
