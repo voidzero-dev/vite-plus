@@ -9,7 +9,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp dlx [OPTIONS] <ARGS>...
 
-Execute a package binary without installing it
+Download and execute a package without installing it globally
 
 Arguments:
   <ARGS>...  Package to execute and arguments
