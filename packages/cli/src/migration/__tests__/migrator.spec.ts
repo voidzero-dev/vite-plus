@@ -8757,6 +8757,32 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
+  it('rejects multiple distinct Husky directories before migration starts', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky .first && husky install .second' },
+        devDependencies: { husky: '^9.1.7' },
+      }),
+    );
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Multiple Husky hook directories were detected in scripts.prepare (.first, .second)',
+    );
+  });
+
+  it('allows repeated Husky setup for the same directory', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky .custom && husky install .custom' },
+        devDependencies: { husky: '^9.1.7' },
+      }),
+    );
+
+    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
+  });
+
   it('allows the dispatcher path installed by Vite+', () => {
     execFileSync('git', ['config', '--local', 'core.hooksPath', '.vite-hooks/_'], {
       cwd: tmpDir,

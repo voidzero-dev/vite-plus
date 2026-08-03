@@ -269,6 +269,21 @@ export function getOldHooksDir(rootDir: string): string | undefined {
   return commands.at(-1)?.dir ?? '.husky';
 }
 
+function getDetectedHuskyDirectories(rootDir: string): string[] {
+  const packageJsonPath = path.join(rootDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return [];
+  }
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: { prepare?: string } };
+  if (!pkg.scripts?.prepare) {
+    return [];
+  }
+  const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
+  return markedPrepare
+    ? getMarkedHuskyCommands(markedPrepare).map((command) => command.dir ?? '.husky')
+    : [];
+}
+
 /**
  * Pre-flight check: verify that git hooks can be set up for this project.
  * Returns `null` if hooks setup can proceed, or a warning reason string
@@ -292,6 +307,10 @@ export function preflightGitHooksSetup(
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return null; // silently skip
+  }
+  const detectedHuskyDirectories = new Set(getDetectedHuskyDirectories(projectPath));
+  if (detectedHuskyDirectories.size > 1) {
+    return `Multiple Husky hook directories were detected in scripts.prepare (${[...detectedHuskyDirectories].join(', ')}) — skipping git hooks setup. Consolidate them and re-run migration.`;
   }
   const disabledHooksEnvironment = getDisabledGitHooksEnvironment();
   if (disabledHooksEnvironment) {
