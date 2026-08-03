@@ -332,6 +332,24 @@ enum Elicitation {
     WorkspaceRoot(vite_workspace::WorkspaceRoot),
 }
 
+/// Applies a `defaultPackage` declaration to one command. A string covers
+/// all four app commands; an object maps commands individually
+/// (`{ dev: './apps/web', pack: './packages/ui' }`), and a command absent
+/// from the object falls through to the picker/listing resolution. Every
+/// other shape (a non-string, a non-static value) passes through for
+/// [`resolve_default_package`] to report.
+fn default_package_for_command(
+    command: &str,
+    value: vite_static_config::FieldValue,
+) -> Option<vite_static_config::FieldValue> {
+    match value {
+        vite_static_config::FieldValue::Json(serde_json::Value::Object(map)) => {
+            map.get(command).cloned().map(vite_static_config::FieldValue::Json)
+        }
+        other => Some(other),
+    }
+}
+
 /// The RFC's resolution order, written once for both entry points: bare app
 /// command, then `defaultPackage` at the invocation root, then the workspace
 /// root itself. `defaultPackage` is a root-pointer concept: it applies where
@@ -356,8 +374,10 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classif
     // Resolved once and reused by `root_looks_runnable` below, so a bare
     // command at a root reads and parses the config a single time.
     let root_config = at_invocation_root.then(|| vite_static_config::resolve_static_config(cwd));
-    if let Some(value) =
-        root_config.as_ref().and_then(|config| config.get_declared("defaultPackage"))
+    if let Some(value) = root_config
+        .as_ref()
+        .and_then(|config| config.get_declared("defaultPackage"))
+        .and_then(|value| default_package_for_command(command, value))
     {
         return Classification::Elicit(command, Elicitation::DefaultPackage(value));
     }

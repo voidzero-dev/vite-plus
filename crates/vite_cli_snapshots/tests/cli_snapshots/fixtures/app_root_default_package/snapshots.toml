@@ -59,3 +59,26 @@ defaultPackage inside `defineConfig({ ... } satisfies UserConfig)` is also
 honored: the wrapper on the defineConfig argument is unwrapped too.
 """
 steps = [{ argv = ["vp", "build"], cwd = "dc_wrapper" }]
+
+[[case]]
+name = "default_package_per_command"
+vp = ["local", "global"]
+comment = """
+The object form maps commands individually: `vp build` targets ./frontend
+while `vp pack` targets ./lib, so one repo can dev an app and pack a
+library (rfcs/cwd-flag.md).
+"""
+steps = [
+  { argv = ["vp", "build"], cwd = "per_command" },
+  { argv = ["vp", "pack"], cwd = "per_command" },
+]
+
+[[case]]
+name = "default_package_per_command_fallthrough"
+vp = ["local", "global"]
+comment = """
+A command absent from the defaultPackage object falls through to the
+normal resolution: the map only declares `pack`, so bare `vp build` runs
+in place at the (runnable) root with no note.
+"""
+steps = [{ argv = ["vp", "build"], cwd = "per_command_fallthrough" }]

@@ -45,4 +45,4 @@ export default {
 };
 ```
 
-vp reads the value without executing the config, so `defaultPackage` also works at repository roots with no vite-plus dependency (for example a Laravel or Rails repo whose Vite app lives in `frontend/`, with vite-plus installed only there). That static read is why the value must stay a plain string literal rather than an expression. An explicit `-C` or positional target always wins over the config.
+vp reads the values without executing the config, so `defaultPackage` also works at repository roots with no vite-plus dependency (for example a Laravel or Rails repo whose Vite app lives in `frontend/`, with vite-plus installed only there). That static read is why the values must stay plain string literals rather than expressions. An explicit `-C` or positional target always wins over the config.

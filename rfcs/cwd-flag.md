@@ -309,7 +309,7 @@ export default defineConfig({
 });
 ```
 
-- Type: `string`, a single directory. A per-command map can come later if real demand appears.
+- Type: `string` (one directory for all four commands) or a per-command object (`{ dev: './apps/web', pack: './packages/ui' }`, added on review demand). A command absent from the object falls through to the picker/listing resolution.
 - Consulted when a bare app command runs in the directory containing the root config: a workspace root, or a non-workspace repo root. The non-workspace shape has no package list, so `defaultPackage` is the only mechanism that covers it. An explicit `-C` always wins.
 - A missing directory errors: `defaultPackage points to a missing directory: ./frontend`.
 - Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.

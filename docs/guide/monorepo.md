@@ -232,6 +232,14 @@ note: vp dev: using ./apps/web (defaultPackage in vite.config.ts)
 
 This is the right choice for framework monorepos that are not JavaScript workspaces, such as a Laravel or Rails app with a `frontend/` directory: there is no package list to resolve, so `defaultPackage` points vp straight at the app. Because vp reads it without executing the config, it works even when `vite-plus` is installed only inside that subdirectory.
 
+An object form maps commands individually, so `vp pack` can target a library while `vp dev` targets an app; a command absent from the object falls through to the resolution above:
+
+```ts [vite.config.ts]
+export default {
+  defaultPackage: { dev: './apps/web', pack: './packages/ui' },
+};
+```
+
 ### Package scripts and workspace-wide tasks
 
 Keep package-specific scripts in each package when the command differs per app:
