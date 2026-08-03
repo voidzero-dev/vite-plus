@@ -54,7 +54,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 
 - make sure `vite.config.ts` contains a `staged` block
 - run `vp config` to install hooks
-- check whether hook installation was skipped intentionally through `VITE_GIT_HOOKS=0`
+- check whether hook installation was skipped intentionally through `VP_GIT_HOOKS=0`
 
 A minimal staged config looks like this:
 
