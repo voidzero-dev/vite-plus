@@ -9036,32 +9036,35 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
-  it('rewrites an explicit default Husky directory to the Vite+ default', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-explicit-husky-default-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: { prepare: 'husky install .husky' },
-          devDependencies: { husky: '^9.1.7' },
-        }),
-      );
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+  it.each(['.husky', './.husky', '.husky/'])(
+    'rewrites an explicit default Husky directory to the Vite+ default: %s',
+    (huskyDir) => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-explicit-husky-default-'));
+      try {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            scripts: { prepare: `husky install ${huskyDir}` },
+            devDependencies: { husky: '^9.1.7' },
+          }),
+        );
+        fs.mkdirSync(path.join(tmpDir, '.husky'));
+        fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
 
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        scripts: Record<string, string>;
-      };
-      expect(pkg.scripts.prepare).toBe('vp config');
-      expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
-        'npm test\n',
-      );
-      expect(fs.existsSync(path.join(tmpDir, '.husky'))).toBe(false);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
+        expect(installGitHooks(tmpDir, true)).toBe(true);
+        const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+          scripts: Record<string, string>;
+        };
+        expect(pkg.scripts.prepare).toBe('vp config');
+        expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+          'npm test\n',
+        );
+        expect(fs.existsSync(path.join(tmpDir, '.husky'))).toBe(false);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('rolls back package and staged config edits when hook installation fails', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-rollback-'));

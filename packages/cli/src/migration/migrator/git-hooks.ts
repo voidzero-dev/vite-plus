@@ -79,6 +79,17 @@ const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 // Packages replaced by vite-plus built-in commands and should be removed from devDependencies
 const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
 
+function isDefaultHuskyDirectory(dir: string | undefined): boolean {
+  if (dir == null) {
+    return false;
+  }
+  let normalized = path.normalize(dir);
+  while (normalized.endsWith(path.sep)) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized === '.husky';
+}
+
 function removeReplacedHookPackages(packageJsonPath: string, preserveLintStaged = false): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
@@ -357,7 +368,8 @@ export function preflightGitHooksSetup(
   if (huskyReason) {
     return huskyReason;
   }
-  const hooksDir = oldHooksDir && oldHooksDir !== '.husky' ? oldHooksDir : '.vite-hooks';
+  const hooksDir =
+    oldHooksDir && !isDefaultHuskyDirectory(oldHooksDir) ? oldHooksDir : '.vite-hooks';
   const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
   const unsupportedHooksDir = projectHooksDirs.find(
     (dir) => !isProjectRelativeHooksDirectory(projectPath, dir),
@@ -448,7 +460,7 @@ export function setupGitHooks(
 
   // Custom husky dirs (e.g. .config/husky) stay unchanged;
   // only the default .husky dir gets migrated to .vite-hooks.
-  const isCustomDir = oldHooksDir != null && oldHooksDir !== '.husky';
+  const isCustomDir = oldHooksDir != null && !isDefaultHuskyDirectory(oldHooksDir);
   const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
   const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
   const hasExistingHookPolicy = projectHooksDirs.some((dir) =>
@@ -664,7 +676,7 @@ function findHookMigrationConflict(
   projectPath: string,
   oldHooksDir: string | undefined,
 ): string | undefined {
-  if (oldHooksDir !== '.husky') {
+  if (oldHooksDir == null || !isDefaultHuskyDirectory(oldHooksDir)) {
     return undefined;
   }
   const oldDir = path.join(projectPath, oldHooksDir);
@@ -1107,7 +1119,7 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
         // The default Husky directory is migrated to .vite-hooks, so an
         // explicitly spelled `.husky` must use vp config's default as well.
         const replacement =
-          command.rawDir && command.dir !== '.husky'
+          command.rawDir && !isDefaultHuskyDirectory(command.dir)
             ? `vp config --hooks-dir ${command.rawDir}`
             : 'vp config';
         return `${prepare.slice(0, command.start)}${replacement}${prepare.slice(command.end)}`;
