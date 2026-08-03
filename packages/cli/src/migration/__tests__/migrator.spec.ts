@@ -9066,6 +9066,53 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
+  it.each(['echo husky', 'echo "vp config"', 'vp configure'])(
+    'adds lifecycle hook setup when prepare only contains incidental tool text: %s',
+    (prepare) => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-incidental-'));
+      try {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            scripts: { prepare },
+            devDependencies: { 'lint-staged': '^16.2.7' },
+            'lint-staged': { '*': 'eslint --fix' },
+          }),
+        );
+
+        expect(installGitHooks(tmpDir, true)).toBe(true);
+        const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+          scripts: Record<string, string>;
+        };
+        expect(pkg.scripts.prepare).toBe(`vp config && ${prepare}`);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('does not duplicate an existing vp config prepare command', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-existing-config-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          scripts: { prepare: 'vp config --no-agent && echo ready' },
+          devDependencies: { 'lint-staged': '^16.2.7' },
+          'lint-staged': { '*': 'eslint --fix' },
+        }),
+      );
+
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        scripts: Record<string, string>;
+      };
+      expect(pkg.scripts.prepare).toBe('vp config --no-agent && echo ready');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('rolls back when the detected Husky directory disagrees with the prepare script', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-prepare-rollback-'));
     try {

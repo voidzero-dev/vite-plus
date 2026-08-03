@@ -130,6 +130,15 @@ function findGitRoot(startPath: string): string | null {
 }
 
 const HUSKY_COMMAND_MARKER = '__vite_plus_migrate_husky_command__';
+const VP_COMMAND_MARKER = '__vite_plus_migrate_vp_command__';
+const VP_COMMAND_MARKER_RULE = `---
+id: mark-vp-command
+language: bash
+rule:
+  kind: command_name
+  regex: '^vp$'
+fix: ${VP_COMMAND_MARKER}
+`;
 
 interface MarkedHuskyCommand {
   dir: string | undefined;
@@ -152,6 +161,26 @@ function markHuskyCommands(script: string): string | undefined {
   }
   const updated = rewriteScripts(JSON.stringify({ prepare: script }), markerRules);
   return updated ? (JSON.parse(updated).prepare as string) : undefined;
+}
+
+function hasVpConfigCommand(script: string): boolean {
+  const updated = rewriteScripts(JSON.stringify({ prepare: script }), VP_COMMAND_MARKER_RULE);
+  if (!updated) {
+    return false;
+  }
+  const markedPrepare = JSON.parse(updated).prepare as string;
+  let searchStart = 0;
+  while (true) {
+    const markerStart = markedPrepare.indexOf(VP_COMMAND_MARKER, searchStart);
+    if (markerStart === -1) {
+      return false;
+    }
+    const subcommand = parseShellWord(markedPrepare, markerStart + VP_COMMAND_MARKER.length);
+    if (subcommand?.value === 'config') {
+      return true;
+    }
+    searchStart = subcommand?.end ?? markerStart + VP_COMMAND_MARKER.length;
+  }
 }
 
 function skipShellWhitespace(script: string, start: number): number {
@@ -474,10 +503,7 @@ export function setupGitHooks(
     }
     if (!pkg.scripts.prepare) {
       pkg.scripts.prepare = 'vp config';
-    } else if (
-      !pkg.scripts.prepare.includes('vp config') &&
-      !/\bhusky\b/.test(pkg.scripts.prepare)
-    ) {
+    } else if (!hasVpConfigCommand(pkg.scripts.prepare) && oldHooksDir == null) {
       pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
     }
 
