@@ -9228,6 +9228,34 @@ describe('installGitHooks project hook migration', () => {
     }
   });
 
+  it('preserves Husky when another package script still invokes it', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-script-wrapper-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          scripts: {
+            prepare: 'husky',
+            'hooks:refresh': 'husky .manual-hooks',
+          },
+          devDependencies: { husky: '^9.1.7' },
+        }),
+      );
+      fs.mkdirSync(path.join(tmpDir, '.husky'));
+      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+
+      expect(installGitHooks(tmpDir, true)).toBe(true);
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        scripts: Record<string, string>;
+        devDependencies: Record<string, string>;
+      };
+      expect(pkg.scripts['hooks:refresh']).toBe('husky .manual-hooks');
+      expect(pkg.devDependencies).toEqual({ husky: '^9.1.7' });
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')('preserves hook and helper permissions', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-permissions-'));
     try {

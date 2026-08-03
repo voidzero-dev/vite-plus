@@ -90,13 +90,17 @@ function isDefaultHuskyDirectory(dir: string | undefined): boolean {
   return normalized === '.husky';
 }
 
-function removeReplacedHookPackages(packageJsonPath: string, preserveLintStaged = false): void {
+function removeReplacedHookPackages(
+  packageJsonPath: string,
+  preserveLintStaged = false,
+  preserveHusky = false,
+): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     for (const name of REPLACED_HOOK_PACKAGES) {
-      if (name === 'lint-staged' && preserveLintStaged) {
+      if ((name === 'lint-staged' && preserveLintStaged) || (name === 'husky' && preserveHusky)) {
         continue;
       }
       if (pkg.devDependencies?.[name]) {
@@ -538,12 +542,15 @@ export function setupGitHooks(
         stagedMerged,
         hasExistingHookPolicy,
       ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
+    const preserveHusky =
+      hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
+      hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
     finalizeStagedConfigMigration(
       packageJsonPath,
       migratedStandaloneConfigPaths,
       stagedMerged && !preserveLintStaged,
     );
-    removeReplacedHookPackages(packageJsonPath, preserveLintStaged);
+    removeReplacedHookPackages(packageJsonPath, preserveLintStaged, preserveHusky);
     return true;
   }
 
@@ -594,12 +601,15 @@ export function setupGitHooks(
         stagedMerged,
         hasExistingHookPolicy,
       ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
+    const preserveHusky =
+      hasToolReferenceInProjectHooks(projectPath, hooksDir, /\bhusky\b/) ||
+      hasToolReferenceInPackageScripts(packageJsonPath, /\bhusky\b/);
     finalizeStagedConfigMigration(
       packageJsonPath,
       migratedStandaloneConfigPaths,
       stagedMerged && !preserveLintStaged,
     );
-    removeReplacedHookPackages(packageJsonPath, preserveLintStaged);
+    removeReplacedHookPackages(packageJsonPath, preserveLintStaged, preserveHusky);
     if (report) {
       report.gitHooksConfigured = true;
     }
@@ -1048,14 +1058,26 @@ function migrateStagedCommandsInProjectHooks(projectPath: string, dir: string): 
 }
 
 function hasLintStagedReferenceInProjectHooks(projectPath: string, dir: string): boolean {
-  return getProjectHookFilePaths(projectPath, dir).some((hookPath) =>
-    /\blint-staged\b/.test(fs.readFileSync(hookPath, 'utf8')),
-  );
+  return hasToolReferenceInProjectHooks(projectPath, dir, /\blint-staged\b/);
 }
 
 function hasLintStagedReferenceInPackageScripts(packageJsonPath: string): boolean {
+  return hasToolReferenceInPackageScripts(packageJsonPath, /\blint-staged\b/);
+}
+
+function hasToolReferenceInProjectHooks(
+  projectPath: string,
+  dir: string,
+  pattern: RegExp,
+): boolean {
+  return getProjectHookFilePaths(projectPath, dir).some((hookPath) =>
+    pattern.test(fs.readFileSync(hookPath, 'utf8')),
+  );
+}
+
+function hasToolReferenceInPackageScripts(packageJsonPath: string, pattern: RegExp): boolean {
   const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
-  return Object.values(pkg.scripts ?? {}).some((script) => /\blint-staged\b/.test(script));
+  return Object.values(pkg.scripts ?? {}).some((script) => pattern.test(script));
 }
 
 const LEGACY_HUSKY_BOOTSTRAP_PATTERN =
