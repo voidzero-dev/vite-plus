@@ -13,10 +13,6 @@ switch (subcommand) {
     const { jsonSort } = await import('./json-sort.ts');
     jsonSort();
     break;
-  case 'merge-peer-deps':
-    const { mergePeerDeps } = await import('./merge-peer-deps.ts');
-    mergePeerDeps();
-    break;
   case 'install-global-cli':
     const { installGlobalCli } = await import('./install-global-cli.ts');
     installGlobalCli();
@@ -41,7 +37,7 @@ switch (subcommand) {
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite, local-npm-registry',
+      'Available subcommands: replace-file-content, sync-remote, json-sort, install-global-cli, brand-vite, local-npm-registry',
     );
     process.exit(1);
 }
