@@ -12,9 +12,9 @@ use crate::{
     resolution::{
         AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, ConfigCommand, DedupeArgs, DeprecateArgs,
         DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs, LoginArgs, LogoutArgs,
-        OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs, PublishArgs,
-        RebuildArgs, RemoveArgs, Resolution, SearchArgs, StageCommand, TokenCommand, UnlinkArgs,
-        UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+        OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs, PatchCommitArgs, PingArgs,
+        PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution, SearchArgs, StageCommand,
+        TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
         resolve_for_manager as resolve_args_for_manager,
     },
 };
@@ -78,6 +78,13 @@ pub enum PmCommand {
 
     /// Remove unnecessary packages
     Prune(PruneArgs),
+
+    /// Prepare a package for local patching
+    Patch(PatchArgs),
+
+    /// Commit a prepared package patch
+    #[command(name = "patch-commit")]
+    PatchCommit(PatchCommitArgs),
 
     /// Create a tarball of the package
     Pack(PackArgs),
@@ -167,6 +174,7 @@ pub enum ManagedGlobalCommand<'a> {
     /// Update packages in the managed global store.
     Update {
         packages: &'a [String],
+        latest: bool,
         concurrency: Option<usize>,
         reinstall_node_mismatch: bool,
         ignore_node_mismatch: bool,
@@ -244,6 +252,7 @@ impl PackageManagerCommand {
             }),
             Self::Update(args) if args.global => Some(ManagedGlobalCommand::Update {
                 packages: &args.packages,
+                latest: args.latest,
                 concurrency: args.concurrency,
                 reinstall_node_mismatch: args.reinstall_node_mismatch,
                 ignore_node_mismatch: args.ignore_node_mismatch,
@@ -309,6 +318,8 @@ impl PmCommand {
         match self {
             Self::ApproveBuilds(args) => resolve_args_for_manager(manager, args),
             Self::Prune(args) => resolve_args_for_manager(manager, args),
+            Self::Patch(args) => resolve_args_for_manager(manager, args),
+            Self::PatchCommit(args) => resolve_args_for_manager(manager, args),
             Self::Pack(args) => resolve_args_for_manager(manager, args),
             Self::List(args) => resolve_args_for_manager(manager, args),
             Self::View(args) => resolve_args_for_manager(manager, args),
@@ -523,11 +534,13 @@ mod tests {
                 if packages == ["tsx"]
         ));
 
-        let update = parse(&["update", "-g", "--reinstall-node-mismatch", "tsx"]).unwrap();
+        let update =
+            parse(&["update", "-g", "--latest", "--reinstall-node-mismatch", "tsx"]).unwrap();
         assert!(matches!(
             update.managed_global_command(),
             Some(ManagedGlobalCommand::Update {
                 packages,
+                latest: true,
                 reinstall_node_mismatch: true,
                 ignore_node_mismatch: false,
                 ..
