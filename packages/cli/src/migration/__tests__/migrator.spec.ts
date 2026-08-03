@@ -8530,6 +8530,19 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
     expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(true);
   });
 
+  it('detects nonstandard Husky setup so migration can report that it was skipped', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky .config/husky' },
+        devDependencies: { husky: '^9.1.7', 'vite-plus': 'latest' },
+      }),
+    );
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(true);
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
+  });
+
   it('does not treat a completed Vite+ project as needing hook migration', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -8597,7 +8610,7 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
   });
 });
 
-describe('custom Husky directory parsing', () => {
+describe('conventional Husky prepare migration', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -8609,99 +8622,13 @@ describe('custom Husky directory parsing', () => {
   });
 
   it.each([
-    ['husky install ".config/husky hooks" && npm run build', '.config/husky hooks', '"'],
-    ["husky './.config/husky hooks' && npm run build", './.config/husky hooks', "'"],
-  ])('preserves a quoted custom directory in %s', (prepare, hooksDir, quote) => {
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
-
-    expect(getOldHooksDir(tmpDir)).toBe(hooksDir);
-    expect(rewritePrepareScript(tmpDir)).toBe(hooksDir);
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe(
-      `vp config --hooks-dir ${quote}${hooksDir}${quote} && npm run build`,
-    );
-  });
-
-  it('preserves an escaped space in a custom directory', () => {
-    const prepare = String.raw`husky install .config/husky\ hooks && npm run build`;
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
-
-    expect(getOldHooksDir(tmpDir)).toBe('.config/husky hooks');
-    expect(rewritePrepareScript(tmpDir)).toBe('.config/husky hooks');
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe(
-      String.raw`vp config --hooks-dir .config/husky\ hooks && npm run build`,
-    );
-  });
-
-  it('preserves a backslash inside a double-quoted custom directory', () => {
-    const prepare = String.raw`husky ".config\husky"`;
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
-
-    expect(getOldHooksDir(tmpDir)).toBe(String.raw`.config\husky`);
-    expect(rewritePrepareScript(tmpDir)).toBe(String.raw`.config\husky`);
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe(String.raw`vp config --hooks-dir ".config\husky"`);
-  });
-
-  it('does not confuse literal migration marker text with a Husky command', () => {
-    const prepare = 'echo __vite_plus_migrate_husky_command__ .wrong && husky .config/husky';
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
-
-    expect(getOldHooksDir(tmpDir)).toBe('.config/husky');
-    expect(rewritePrepareScript(tmpDir)).toBe('.config/husky');
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe(
-      'echo __vite_plus_migrate_husky_command__ .wrong && vp config --hooks-dir .config/husky',
-    );
-  });
-
-  it('treats Husky init as default-directory initialization', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky init && npm run build' } }),
-    );
-
-    expect(getOldHooksDir(tmpDir)).toBe('.husky');
-    expect(rewritePrepareScript(tmpDir)).toBe('.husky');
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe('vp config && npm run build');
-  });
-
-  it('does not read the next line as a Husky directory', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky\nnpm run build' } }),
-    );
-
-    expect(getOldHooksDir(tmpDir)).toBe('.husky');
-    expect(rewritePrepareScript(tmpDir)).toBe('.husky');
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe('vp config\nnpm run build');
-  });
-
-  it('supports a line continuation before a custom Husky directory', () => {
-    const prepare = 'husky \\\n  .config/husky && npm run build';
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
-
-    expect(getOldHooksDir(tmpDir)).toBe('.config/husky');
-    expect(rewritePrepareScript(tmpDir)).toBe('.config/husky');
-  });
-
-  it('does not treat a trailing shell comment as a Husky directory', () => {
-    const prepare = 'husky # initialize hooks\nnpm run build';
+    ['husky', 'vp config'],
+    ['husky install', 'vp config'],
+    ['husky init && npm run build', 'vp config && npm run build'],
+    ['husky .husky', 'vp config'],
+    ['npm run build && husky install ./.husky', 'npm run build && vp config'],
+    ['husky # initialize hooks\nnpm run build', 'vp config # initialize hooks\nnpm run build'],
+  ])('migrates a conventional prepare command: %s', (prepare, expected) => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
 
     expect(getOldHooksDir(tmpDir)).toBe('.husky');
@@ -8709,7 +8636,43 @@ describe('custom Husky directory parsing', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       scripts: { prepare: string };
     };
-    expect(pkg.scripts.prepare).toBe('vp config # initialize hooks\nnpm run build');
+    expect(pkg.scripts.prepare).toBe(expected);
+  });
+
+  it.each([
+    'husky .config/husky',
+    'husky install ".config/husky hooks" && npm run build',
+    String.raw`husky install .config/husky\ hooks`,
+    'husky $HOOKS_DIR',
+    'husky --help',
+    'husky \\\n  .config/husky',
+    'husky && husky .config/husky',
+  ])('leaves a nonstandard prepare command untouched: %s', (prepare) => {
+    const packageJson = JSON.stringify({ scripts: { prepare }, devDependencies: { husky: '^9' } });
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+
+    expect(getOldHooksDir(tmpDir)).toBeUndefined();
+    expect(rewritePrepareScript(tmpDir)).toBeUndefined();
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+  });
+
+  it('preserves custom Husky files and dependencies when setup is requested', () => {
+    const packageJson = JSON.stringify({
+      scripts: { prepare: 'husky .config/husky' },
+      devDependencies: { husky: '^9', 'lint-staged': '^16' },
+      'lint-staged': { '*': 'eslint --fix' },
+    });
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+    fs.mkdirSync(path.join(tmpDir, '.config', 'husky'), { recursive: true });
+    const hookPath = path.join(tmpDir, '.config', 'husky', 'pre-commit');
+    fs.writeFileSync(hookPath, 'npx lint-staged\n');
+
+    expect(installGitHooks(tmpDir, true)).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+    expect(fs.readFileSync(hookPath, 'utf8')).toBe('npx lint-staged\n');
+    expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
   });
 });
 
@@ -8819,7 +8782,7 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
-  it('rejects multiple distinct Husky directories before migration starts', () => {
+  it('rejects nonstandard Husky commands before migration starts', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -8828,16 +8791,14 @@ describe('preflightGitHooksSetup hook state', () => {
       }),
     );
 
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Multiple Husky hook directories were detected in scripts.prepare (.first, .second)',
-    );
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
   });
 
-  it('allows repeated Husky setup for the same directory', () => {
+  it('allows repeated conventional Husky setup', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
-        scripts: { prepare: 'husky .custom && husky install .custom' },
+        scripts: { prepare: 'husky && husky install .husky' },
         devDependencies: { husky: '^9.1.7' },
       }),
     );
@@ -8845,11 +8806,11 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
-  it('allows repeated Husky setup for equivalent directory spellings', () => {
+  it('allows repeated conventional Husky setup with equivalent default spellings', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
-        scripts: { prepare: 'husky ./.custom/ && husky install .custom' },
+        scripts: { prepare: 'husky ./.husky/ && husky install .husky' },
         devDependencies: { husky: '^9.1.7' },
       }),
     );
@@ -8857,7 +8818,7 @@ describe('preflightGitHooksSetup hook state', () => {
     expect(preflightGitHooksSetup(tmpDir)).toBeNull();
   });
 
-  it('allows an equivalent hooksPath spelling for a custom Husky directory', () => {
+  it('rejects custom Husky directories without inspecting their hooksPath', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -8869,7 +8830,7 @@ describe('preflightGitHooksSetup hook state', () => {
       cwd: tmpDir,
     });
 
-    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
   });
 
   it('allows the dispatcher path installed by Vite+', () => {
@@ -8891,23 +8852,11 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
-  it.each(['.', '../shared-hooks', '/shared-hooks'])(
-    'rejects an unsafe hook directory: %s',
-    (hooksDir) => {
-      expect(preflightGitHooksSetup(tmpDir, undefined, hooksDir)).toContain(
-        `Git hooks directory "${hooksDir}" must be a project-relative subdirectory`,
-      );
-    },
-  );
-
-  it.each(['$HOOKS_DIR', '~/.hooks', '--help', '.hooks/*'])(
-    'rejects a dynamic or option-like hook directory: %s',
-    (hooksDir) => {
-      expect(preflightGitHooksSetup(tmpDir, undefined, hooksDir)).toContain(
-        `Git hooks directory "${hooksDir}" must be a project-relative subdirectory`,
-      );
-    },
-  );
+  it('rejects an explicitly supplied custom Husky directory', () => {
+    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
+      'Custom Husky hook directory ".config/husky" detected',
+    );
+  });
 
   it.each(['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'])(
     'rejects hooks disabled through %s before migration starts',
@@ -8998,36 +8947,6 @@ describe('preflightGitHooksSetup hook state', () => {
     );
   });
 
-  it.skipIf(process.platform === 'win32')('rejects symbolic helpers in custom hook dirs', () => {
-    const customHooksDir = path.join(tmpDir, '.config', 'husky');
-    const externalHelper = path.join(tmpDir, 'shared-hook-helper');
-    fs.mkdirSync(customHooksDir, { recursive: true });
-    fs.writeFileSync(externalHelper, 'npx lint-staged\n');
-    fs.symlinkSync(externalHelper, path.join(customHooksDir, 'common.sh'));
-
-    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
-      'Symbolic Git hook path ".config/husky/common.sh" cannot be migrated safely',
-    );
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects symbolic custom hook dir parents', () => {
-    const actualConfigDir = path.join(tmpDir, 'actual-config');
-    fs.mkdirSync(path.join(actualConfigDir, 'husky'), { recursive: true });
-    fs.symlinkSync(actualConfigDir, path.join(tmpDir, '.config'), 'dir');
-
-    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
-      'Symbolic Git hook path ".config" cannot be migrated safely',
-    );
-  });
-
-  it('rejects non-directory custom hook dir parents', () => {
-    fs.writeFileSync(path.join(tmpDir, '.config'), 'not a directory\n');
-
-    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
-      'Git hook path ".config" is not a directory',
-    );
-  });
-
   it('rejects a non-directory hook path', () => {
     fs.writeFileSync(path.join(tmpDir, '.husky'), 'not a directory\n');
 
@@ -9070,12 +8989,12 @@ describe('preflightGitHooksSetup hook state', () => {
 
   it.skipIf(process.platform === 'win32')('rejects hard-linked project hooks', () => {
     const externalHook = path.join(tmpDir, 'shared-pre-commit');
-    fs.mkdirSync(path.join(tmpDir, '.config', 'husky'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.husky'), { recursive: true });
     fs.writeFileSync(externalHook, 'npx lint-staged\n');
-    fs.linkSync(externalHook, path.join(tmpDir, '.config', 'husky', 'pre-commit'));
+    fs.linkSync(externalHook, path.join(tmpDir, '.husky', 'pre-commit'));
 
-    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
-      'Multiply linked Git hook path ".config/husky/pre-commit" cannot be migrated safely',
+    expect(preflightGitHooksSetup(tmpDir)).toContain(
+      'Multiply linked Git hook path ".husky/pre-commit" cannot be migrated safely',
     );
     expect(fs.readFileSync(externalHook, 'utf8')).toBe('npx lint-staged\n');
   });

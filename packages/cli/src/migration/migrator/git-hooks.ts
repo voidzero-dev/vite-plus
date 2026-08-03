@@ -84,13 +84,6 @@ const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 // Packages replaced by vite-plus built-in commands and should be removed from devDependencies
 const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
 
-function isDefaultHuskyDirectory(dir: string | undefined): boolean {
-  if (dir == null) {
-    return false;
-  }
-  return normalizeHooksPath(dir) === '.husky';
-}
-
 function removeReplacedHookPackages(
   packageJsonPath: string,
   preserveLintStaged = false,
@@ -124,7 +117,10 @@ export function detectLegacyGitHooksMigrationCandidate(projectPath: string): boo
     scripts?: Record<string, string>;
     'lint-staged'?: unknown;
   };
-  return getOldHooksDir(projectPath) !== undefined || pkg['lint-staged'] !== undefined;
+  return (
+    (pkg.scripts?.prepare ? hasHuskyCommand(pkg.scripts.prepare) : false) ||
+    pkg['lint-staged'] !== undefined
+  );
 }
 
 /**
@@ -145,181 +141,50 @@ function findGitRoot(startPath: string): string | null {
   }
 }
 
-const HUSKY_COMMAND_MARKER = '__vite_plus_migrate_husky_command__';
-const VP_COMMAND_MARKER = '__vite_plus_migrate_vp_command__';
+const STANDARD_HUSKY_PREPARE_RULE = String.raw`---
+id: replace-standard-husky
+language: bash
+rule:
+  kind: command
+  regex: '^husky(?:[ \t]+(?:init|install(?:[ \t]+(?:\./)?\.husky/?)?|(?:\./)?\.husky/?))?$'
+fix: vp config
+`;
 
-interface MarkedShellScript {
-  marker: string;
-  script: string;
-}
-
-interface MarkedHuskyCommand {
-  dir: string | undefined;
-  rawDir: string | undefined;
-  start: number;
-  end: number;
-}
-
-interface ShellWord {
-  value: string;
-  raw: string;
-  end: number;
-}
-
-function getUnusedCommandMarker(script: string, baseMarker: string): string {
-  let marker = baseMarker;
-  while (script.includes(marker)) {
-    marker += '_';
-  }
-  return marker;
-}
-
-function markHuskyCommands(script: string): MarkedShellScript | undefined {
-  const prepareRules = readPrepareRulesYaml();
-  const marker = getUnusedCommandMarker(script, HUSKY_COMMAND_MARKER);
-  const markerRules = prepareRules.replace(/^fix: vp config$/m, `fix: ${marker}`);
-  if (markerRules === prepareRules) {
-    throw new Error('Could not mark the Husky prepare rule');
-  }
-  const updated = rewriteScripts(JSON.stringify({ prepare: script }), markerRules);
-  return updated ? { marker, script: JSON.parse(updated).prepare as string } : undefined;
-}
-
-function hasVpConfigCommand(script: string): boolean {
-  const marker = getUnusedCommandMarker(script, VP_COMMAND_MARKER);
-  const markerRule = `---
-id: mark-vp-command
+const VP_CONFIG_DETECTION_RULE = String.raw`---
+id: detect-vp-config
 language: bash
 rule:
   kind: command_name
   regex: '^vp$'
-fix: ${marker}
+  inside:
+    kind: command
+    regex: '^vp[ \t]+config(?:$|[ \t])'
+fix: __vite_plus_detect_vp_config__
 `;
-  const updated = rewriteScripts(JSON.stringify({ prepare: script }), markerRule);
+
+type HuskyPrepareAnalysis =
+  | { kind: 'absent' }
+  | { kind: 'standard'; rewritten: string }
+  | { kind: 'unsupported' };
+
+function hasHuskyCommand(script: string): boolean {
+  return Boolean(rewriteScripts(JSON.stringify({ prepare: script }), readPrepareRulesYaml()));
+}
+
+function analyzeHuskyPrepareScript(script: string): HuskyPrepareAnalysis {
+  if (!hasHuskyCommand(script)) {
+    return { kind: 'absent' };
+  }
+  const updated = rewriteScripts(JSON.stringify({ prepare: script }), STANDARD_HUSKY_PREPARE_RULE);
   if (!updated) {
-    return false;
+    return { kind: 'unsupported' };
   }
-  const markedPrepare = JSON.parse(updated).prepare as string;
-  let searchStart = 0;
-  while (true) {
-    const markerStart = markedPrepare.indexOf(marker, searchStart);
-    if (markerStart === -1) {
-      return false;
-    }
-    const subcommand = parseShellWord(markedPrepare, markerStart + marker.length);
-    if (subcommand?.value === 'config') {
-      return true;
-    }
-    searchStart = subcommand?.end ?? markerStart + marker.length;
-  }
+  const rewritten = (JSON.parse(updated) as { prepare: string }).prepare;
+  return hasHuskyCommand(rewritten) ? { kind: 'unsupported' } : { kind: 'standard', rewritten };
 }
 
-function skipShellWhitespace(script: string, start: number): number {
-  let cursor = start;
-  while (cursor < script.length) {
-    if (script[cursor] === ' ' || script[cursor] === '\t') {
-      cursor++;
-      continue;
-    }
-    if (script[cursor] === '\\' && script[cursor + 1] === '\n') {
-      cursor += 2;
-      continue;
-    }
-    if (script[cursor] === '\\' && script[cursor + 1] === '\r' && script[cursor + 2] === '\n') {
-      cursor += 3;
-      continue;
-    }
-    break;
-  }
-  return cursor;
-}
-
-function parseShellWord(script: string, start: number): ShellWord | undefined {
-  const operator = /[;&|()<>]/;
-  let cursor = skipShellWhitespace(script, start);
-  const wordStart = cursor;
-  if (script[cursor] === '#') {
-    return undefined;
-  }
-  let value = '';
-  let quote: 'single' | 'double' | undefined;
-
-  while (cursor < script.length) {
-    const character = script[cursor];
-    if (!quote && (/\s/.test(character) || operator.test(character))) {
-      break;
-    }
-    if (!quote && character === "'") {
-      quote = 'single';
-      cursor++;
-      continue;
-    }
-    if (!quote && character === '"') {
-      quote = 'double';
-      cursor++;
-      continue;
-    }
-    if (quote === 'single' && character === "'") {
-      quote = undefined;
-      cursor++;
-      continue;
-    }
-    if (quote === 'double' && character === '"') {
-      quote = undefined;
-      cursor++;
-      continue;
-    }
-    if (quote !== 'single' && character === '\\') {
-      const escaped = script[cursor + 1];
-      if (escaped == null) {
-        return undefined;
-      }
-      if (escaped === '\n') {
-        cursor += 2;
-        continue;
-      }
-      if (escaped === '\r' && script[cursor + 2] === '\n') {
-        cursor += 3;
-        continue;
-      }
-      value +=
-        quote === 'double' && !['$', '`', '"', '\\'].includes(escaped) ? `\\${escaped}` : escaped;
-      cursor += 2;
-      continue;
-    }
-    value += character;
-    cursor++;
-  }
-
-  if (quote || cursor === wordStart) {
-    return undefined;
-  }
-  return { value, raw: script.slice(wordStart, cursor), end: cursor };
-}
-
-function getMarkedHuskyCommands(script: string, marker: string): MarkedHuskyCommand[] {
-  const commands: MarkedHuskyCommand[] = [];
-  let searchStart = 0;
-  while (true) {
-    const start = script.indexOf(marker, searchStart);
-    if (start === -1) {
-      return commands;
-    }
-    const markerEnd = start + marker.length;
-    const firstWord = parseShellWord(script, markerEnd);
-    // `husky init` initializes the default `.husky` directory; `init` is a
-    // subcommand, not a custom directory name. `husky install [dir]` is the
-    // deprecated spelling of `husky [dir]` and still appears in older projects.
-    const dirWord =
-      firstWord?.value === 'init'
-        ? undefined
-        : firstWord?.value === 'install'
-          ? parseShellWord(script, firstWord.end)
-          : firstWord;
-    const end = dirWord?.end ?? firstWord?.end ?? markerEnd;
-    commands.push({ dir: dirWord?.value, rawDir: dirWord?.raw, start, end });
-    searchStart = end;
-  }
+function hasVpConfigCommand(script: string): boolean {
+  return Boolean(rewriteScripts(JSON.stringify({ prepare: script }), VP_CONFIG_DETECTION_RULE));
 }
 
 /**
@@ -349,29 +214,7 @@ export function getOldHooksDir(rootDir: string): string | undefined {
   if (!pkg.scripts?.prepare) {
     return undefined;
   }
-  const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
-  if (!markedPrepare) {
-    return undefined;
-  }
-  const commands = getMarkedHuskyCommands(markedPrepare.script, markedPrepare.marker);
-  return commands.at(-1)?.dir ?? '.husky';
-}
-
-function getDetectedHuskyDirectories(rootDir: string): string[] {
-  const packageJsonPath = path.join(rootDir, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return [];
-  }
-  const pkg = readJsonFile(packageJsonPath) as { scripts?: { prepare?: string } };
-  if (!pkg.scripts?.prepare) {
-    return [];
-  }
-  const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
-  return markedPrepare
-    ? getMarkedHuskyCommands(markedPrepare.script, markedPrepare.marker).map(
-        (command) => command.dir ?? '.husky',
-      )
-    : [];
+  return analyzeHuskyPrepareScript(pkg.scripts.prepare).kind === 'standard' ? '.husky' : undefined;
 }
 
 /**
@@ -398,17 +241,18 @@ export function preflightGitHooksSetup(
   if (!fs.existsSync(packageJsonPath)) {
     return null; // silently skip
   }
-  const detectedHuskyDirectories = new Set(
-    getDetectedHuskyDirectories(projectPath).map(normalizeHooksPath),
-  );
-  if (detectedHuskyDirectories.size > 1) {
-    return `Multiple Husky hook directories were detected in scripts.prepare (${[...detectedHuskyDirectories].join(', ')}) — skipping git hooks setup. Consolidate them and re-run migration.`;
+  const pkgContent = readJsonFile(packageJsonPath);
+  const prepare = (pkgContent.scripts as Record<string, string> | undefined)?.prepare;
+  if (prepare && analyzeHuskyPrepareScript(prepare).kind === 'unsupported') {
+    return 'Nonstandard Husky command detected in scripts.prepare — skipping git hooks setup. Vite+ only migrates conventional .husky setups; configure hooks manually.';
+  }
+  if (oldHooksDir != null && oldHooksDir !== '.husky') {
+    return `Custom Husky hook directory "${oldHooksDir}" detected — skipping git hooks setup. Vite+ only migrates the conventional .husky directory.`;
   }
   const disabledHooksEnvironment = getDisabledGitHooksEnvironment();
   if (disabledHooksEnvironment) {
     return `Git hooks are disabled through ${disabledHooksEnvironment} — skipping git hooks setup.`;
   }
-  const pkgContent = readJsonFile(packageJsonPath);
   const deps = pkgContent.devDependencies as Record<string, string> | undefined;
   const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
   for (const tool of OTHER_HOOK_TOOLS) {
@@ -420,15 +264,8 @@ export function preflightGitHooksSetup(
   if (huskyReason) {
     return huskyReason;
   }
-  const hooksDir =
-    oldHooksDir && !isDefaultHuskyDirectory(oldHooksDir) ? oldHooksDir : '.vite-hooks';
+  const hooksDir = '.vite-hooks';
   const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
-  const unsupportedHooksDir = projectHooksDirs.find(
-    (dir) => !isProjectRelativeHooksDirectory(projectPath, dir),
-  );
-  if (unsupportedHooksDir) {
-    return `Git hooks directory "${unsupportedHooksDir}" must be a project-relative subdirectory — skipping git hooks setup. Use a project-owned directory and re-run migration.`;
-  }
   const unsafeHooksDirectory = findUnsafeHooksDirectoryComponent(projectPath, projectHooksDirs);
   if (unsafeHooksDirectory?.kind === 'symbolic') {
     return `Symbolic Git hook path "${unsafeHooksDirectory.relativePath}" cannot be migrated safely — skipping git hooks setup. Replace it with a project-owned file and re-run migration.`;
@@ -509,10 +346,7 @@ export function setupGitHooks(
   }
   const gitRoot = findGitRoot(projectPath);
 
-  // Custom husky dirs (e.g. .config/husky) stay unchanged;
-  // only the default .husky dir gets migrated to .vite-hooks.
-  const isCustomDir = oldHooksDir != null && !isDefaultHuskyDirectory(oldHooksDir);
-  const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
+  const hooksDir = '.vite-hooks';
   const projectHooksDirs = [oldHooksDir, hooksDir].filter((dir): dir is string => dir != null);
   let transaction: ReturnType<typeof captureGitHooksSetupRollback>;
   try {
@@ -596,7 +430,6 @@ export function setupGitHooks(
           projectPath,
           oldHooksDir,
           hooksDir,
-          isCustomDir,
           stagedMerged,
           hasExistingHookPolicy,
         ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
@@ -629,9 +462,7 @@ export function setupGitHooks(
     const vpBin = process.env.VP_CLI_BIN ?? 'vp';
 
     // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
-    const configArgs = isCustomDir
-      ? ['config', '--no-agent', '--hooks-dir', hooksDir]
-      : ['config', '--no-agent'];
+    const configArgs = ['config', '--no-agent'];
     const configResult = spawn.sync(vpBin, configArgs, {
       cwd: projectPath,
       stdio: 'pipe',
@@ -659,7 +490,6 @@ export function setupGitHooks(
           projectPath,
           oldHooksDir,
           hooksDir,
-          isCustomDir,
           stagedMerged,
           hasExistingHookPolicy,
         ) || hasLintStagedReferenceInPackageScripts(packageJsonPath);
@@ -713,11 +543,10 @@ function migrateProjectHooks(
   projectPath: string,
   oldHooksDir: string | undefined,
   hooksDir: string,
-  isCustomDir: boolean,
   stagedMerged: boolean,
   hasExistingHookPolicy: boolean,
 ): boolean {
-  if (oldHooksDir && !isCustomDir) {
+  if (oldHooksDir) {
     const oldDir = path.join(projectPath, oldHooksDir);
     if (fs.existsSync(oldDir)) {
       const targetDir = path.join(projectPath, hooksDir);
@@ -757,7 +586,7 @@ function findHookMigrationConflict(
   projectPath: string,
   oldHooksDir: string | undefined,
 ): string | undefined {
-  if (oldHooksDir == null || !isDefaultHuskyDirectory(oldHooksDir)) {
+  if (oldHooksDir == null) {
     return undefined;
   }
   const oldDir = path.join(projectPath, oldHooksDir);
@@ -823,26 +652,6 @@ function findUnsafeProjectHook(
     }
   }
   return undefined;
-}
-
-function isProjectRelativeHooksDirectory(projectPath: string, dir: string): boolean {
-  if (
-    path.isAbsolute(dir) ||
-    dir.includes('..') ||
-    dir.startsWith('-') ||
-    /^~(?:[/\\]|$)/.test(dir) ||
-    /[$`*?[\]\r\n]/.test(dir)
-  ) {
-    return false;
-  }
-  const projectRoot = path.resolve(projectPath);
-  const relativePath = path.relative(projectRoot, path.resolve(projectRoot, dir));
-  return (
-    relativePath !== '' &&
-    relativePath !== '..' &&
-    !relativePath.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relativePath)
-  );
 }
 
 interface UnsafeHooksDirectoryComponent {
@@ -1196,13 +1005,13 @@ function hasLintStagedReferenceInPackageScripts(packageJsonPath: string): boolea
 
 function hasHuskyCommandInProjectHooks(projectPath: string, dir: string): boolean {
   return getProjectHookFilePaths(projectPath, dir).some((hookPath) =>
-    Boolean(markHuskyCommands(fs.readFileSync(hookPath, 'utf8'))),
+    hasHuskyCommand(fs.readFileSync(hookPath, 'utf8')),
   );
 }
 
 function hasHuskyCommandInPackageScripts(packageJsonPath: string): boolean {
   const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
-  return Object.values(pkg.scripts ?? {}).some((script) => Boolean(markHuskyCommands(script)));
+  return Object.values(pkg.scripts ?? {}).some(hasHuskyCommand);
 }
 
 function hasToolReferenceInProjectHooks(
@@ -1273,19 +1082,10 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
       return pkg;
     }
 
-    const markedPrepare = markHuskyCommands(pkg.scripts.prepare);
-    if (markedPrepare) {
-      const commands = getMarkedHuskyCommands(markedPrepare.script, markedPrepare.marker);
-      oldDir = commands.at(-1)?.dir ?? '.husky';
-      pkg.scripts.prepare = commands.toReversed().reduce((prepare, command) => {
-        // The default Husky directory is migrated to .vite-hooks, so an
-        // explicitly spelled `.husky` must use vp config's default as well.
-        const replacement =
-          command.rawDir && !isDefaultHuskyDirectory(command.dir)
-            ? `vp config --hooks-dir ${command.rawDir}`
-            : 'vp config';
-        return `${prepare.slice(0, command.start)}${replacement}${prepare.slice(command.end)}`;
-      }, markedPrepare.script);
+    const analysis = analyzeHuskyPrepareScript(pkg.scripts.prepare);
+    if (analysis.kind === 'standard') {
+      oldDir = '.husky';
+      pkg.scripts.prepare = analysis.rewritten;
     }
     return pkg;
   });
