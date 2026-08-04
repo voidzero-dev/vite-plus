@@ -106,7 +106,7 @@ pub struct EnvConfig {
 
     /// Filter for update task types.
     ///
-    /// Env: `VITE_UPDATE_TASK_TYPES`
+    /// Env: `VP_UPDATE_TASK_TYPES`
     pub update_task_types: Option<String>,
 
     /// Override Node.js version (takes highest priority in version resolution).
@@ -146,7 +146,7 @@ impl EnvConfig {
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             tool_recursion: std::env::var(env_vars::VP_TOOL_RECURSION).ok(),
             js_scripts_dir: std::env::var(env_vars::VP_GLOBAL_CLI_JS_SCRIPTS_DIR).ok(),
-            update_task_types: std::env::var(env_vars::VITE_UPDATE_TASK_TYPES).ok(),
+            update_task_types: std::env::var(env_vars::VP_UPDATE_TASK_TYPES).ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
             user_home: std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
