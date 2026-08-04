@@ -56,9 +56,10 @@ declare module '@voidzero-dev/vite-plus-core' {
     /**
      * Default target directory for `vp dev` / `build` / `preview` / `pack`
      * when invoked bare in the directory containing this config (an implicit
-     * `vp -C <dir>`). Relative to the config file's directory. Must be a
-     * static string literal: vp reads it without executing the config, so it
-     * also works at roots without a vite-plus install.
+     * `vp -C <dir>`). Relative to the config file's directory. vp reads the
+     * value without executing the config, so it also works at roots with no
+     * vite-plus dependency; the static read is why it must stay a plain
+     * string literal.
      */
     defaultPackage?: string;
 
