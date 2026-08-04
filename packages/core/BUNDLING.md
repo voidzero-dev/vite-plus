@@ -144,18 +144,12 @@ Located in `build-support/rewrite-module-specifiers.ts`, this utility rewrites s
 
 During release builds (`RELEASE_BUILD=1`), `bundleRolldown()` rewrites Rolldown's native binding requires through `build-support/rewrite-rolldown-binding.ts`. For every platform in the CLI's `napi.targets` (mapped to napi platform suffixes with `parseTriple`), the loader's `@rolldown/binding-<suffix>` requires become `@voidzero-dev/vite-plus-<suffix>`, and that branch's version guard switches from the Rolldown version to core's version, which is what the Vite+ platform packages are published as.
 
-**Platform-specific binding rewrites** (all eight `napi.targets`):
+**Platform-specific binding rewrites**, one per `napi.targets` entry in `packages/cli/package.json` (see the target table in [CLI Package Bundling](../cli/BUNDLING.md#napi-targets)), for example:
 
-| Original Import                      | Rewritten Import                           |
-| ------------------------------------ | ------------------------------------------ |
-| `@rolldown/binding-darwin-arm64`     | `@voidzero-dev/vite-plus-darwin-arm64`     |
-| `@rolldown/binding-darwin-x64`       | `@voidzero-dev/vite-plus-darwin-x64`       |
-| `@rolldown/binding-linux-arm64-gnu`  | `@voidzero-dev/vite-plus-linux-arm64-gnu`  |
-| `@rolldown/binding-linux-arm64-musl` | `@voidzero-dev/vite-plus-linux-arm64-musl` |
-| `@rolldown/binding-linux-x64-gnu`    | `@voidzero-dev/vite-plus-linux-x64-gnu`    |
-| `@rolldown/binding-linux-x64-musl`   | `@voidzero-dev/vite-plus-linux-x64-musl`   |
-| `@rolldown/binding-win32-arm64-msvc` | `@voidzero-dev/vite-plus-win32-arm64-msvc` |
-| `@rolldown/binding-win32-x64-msvc`   | `@voidzero-dev/vite-plus-win32-x64-msvc`   |
+| Original Import                    | Rewritten Import                         |
+| ---------------------------------- | ---------------------------------------- |
+| `@rolldown/binding-darwin-arm64`   | `@voidzero-dev/vite-plus-darwin-arm64`   |
+| `@rolldown/binding-linux-x64-musl` | `@voidzero-dev/vite-plus-linux-x64-musl` |
 
 Specifiers for platforms Vite+ does not ship (android, freebsd, the `wasm32-wasi` fallback, `darwin-universal`, ...) stay on `@rolldown/binding-*` and keep their upstream version guards. The build fails if the rewritten specifier and guard counts diverge from the napi-rs loader shape, so a loader format change cannot ship a partial rewrite.
 

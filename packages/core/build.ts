@@ -5,7 +5,6 @@ import path from 'node:path';
 import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseTriple } from '@napi-rs/cli';
 import { format } from 'oxfmt';
 
 // Convert native path to POSIX format for glob patterns
@@ -375,11 +374,17 @@ async function bundleRolldown() {
 
   // Platform suffixes Vite+ publishes native packages for, e.g. `darwin-arm64`
   // from `aarch64-apple-darwin`. `@rolldown/binding-*` uses the same napi
-  // suffix convention, so these are the loader branches release builds can
-  // redirect to `@voidzero-dev/vite-plus-<suffix>`.
-  const vitePlusPlatformSuffixes: ReadonlySet<string> = new Set(
-    cliPkgJson.napi.targets.map((target) => parseTriple(target).platformArchABI),
-  );
+  // suffix convention, so these are the loader branches release builds
+  // redirect to `<napi.packageName>-<suffix>`. `@napi-rs/cli` loads lazily
+  // because only release builds need it (it costs ~120ms to import).
+  let vitePlusPlatformSuffixes: ReadonlySet<string> | undefined;
+  if (process.env.RELEASE_BUILD) {
+    const { parseTriple } = await import('@napi-rs/cli');
+    vitePlusPlatformSuffixes = new Set(
+      cliPkgJson.napi.targets.map((target) => parseTriple(target).platformArchABI),
+    );
+  }
+  const rewrittenSuffixes = new Set<string>();
   let bindingSpecifierRewrites = 0;
   let bindingGuardRewrites = 0;
 
@@ -393,12 +398,16 @@ async function bundleRolldown() {
     ) {
       let source = await readFile(file, 'utf-8');
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
-      if (process.env.RELEASE_BUILD) {
+      if (vitePlusPlatformSuffixes) {
         const result = rewriteRolldownBindingRequires(source, {
+          packageName: cliPkgJson.napi.packageName,
           platformSuffixes: vitePlusPlatformSuffixes,
           version: pkgJson.version,
         });
         source = result.source;
+        for (const suffix of result.rewrittenSuffixes) {
+          rewrittenSuffixes.add(suffix);
+        }
         bindingSpecifierRewrites += result.specifierRewrites;
         bindingGuardRewrites += result.guardRewrites;
       }
@@ -407,19 +416,22 @@ async function bundleRolldown() {
     }
   }
 
-  // Each redirected loader branch requires the platform package twice (the
-  // binding itself and its package.json version guard) and carries one guard.
-  // A napi-rs upgrade that reshapes the generated loader breaks this invariant;
-  // fail the release build instead of shipping a partial rewrite.
-  if (
-    process.env.RELEASE_BUILD &&
-    (bindingGuardRewrites === 0 || bindingSpecifierRewrites !== bindingGuardRewrites * 2)
-  ) {
-    throw new Error(
-      `bundleRolldown: unexpected Rolldown binding loader shape ` +
-        `(${bindingSpecifierRewrites} specifier rewrites, ${bindingGuardRewrites} guard rewrites); ` +
-        `update build-support/rewrite-rolldown-binding.ts for the current napi-rs loader format`,
-    );
+  // Every published platform suffix must find its loader branch, and each
+  // redirected branch requires the platform package twice (the binding itself
+  // and its package.json version guard) with one guard. A napi-rs upgrade
+  // that reshapes the generated loader, or a Rolldown loader that drops a
+  // branch, breaks these invariants; fail the release build instead of
+  // shipping a partial rewrite.
+  if (vitePlusPlatformSuffixes) {
+    const missing = [...vitePlusPlatformSuffixes].filter((s) => !rewrittenSuffixes.has(s));
+    if (missing.length > 0 || bindingSpecifierRewrites !== bindingGuardRewrites * 2) {
+      throw new Error(
+        `bundleRolldown: unexpected Rolldown binding loader shape ` +
+          `(${bindingSpecifierRewrites} specifier rewrites, ${bindingGuardRewrites} guard rewrites` +
+          (missing.length > 0 ? `, missing platform branches: ${missing.join(', ')}` : '') +
+          `); update build-support/rewrite-rolldown-binding.ts for the current napi-rs loader format`,
+      );
+    }
   }
 }
 

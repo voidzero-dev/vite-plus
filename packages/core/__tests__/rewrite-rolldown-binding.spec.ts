@@ -4,6 +4,7 @@ import url from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import cliPkgJson from '../../cli/package.json' with { type: 'json' };
 import { rewriteRolldownBindingRequires } from '../build-support/rewrite-rolldown-binding.ts';
 import corePkgJson from '../package.json' with { type: 'json' };
 
@@ -13,6 +14,8 @@ const fixturePath = path.join(
   'rolldown-binding-loader.txt',
 );
 const loaderFixture = fs.readFileSync(fixturePath, 'utf-8');
+
+const PACKAGE_NAME = '@voidzero-dev/vite-plus';
 
 // The suffixes the fixture's supported branches use; must stay a subset of the
 // CLI's napi.targets-derived set the release build passes in.
@@ -31,6 +34,7 @@ const VERSION = '9.9.9';
 
 describe('rewriteRolldownBindingRequires', () => {
   const result = rewriteRolldownBindingRequires(loaderFixture, {
+    packageName: PACKAGE_NAME,
     platformSuffixes,
     version: VERSION,
   });
@@ -45,6 +49,9 @@ describe('rewriteRolldownBindingRequires', () => {
       );
       expect(result.source).not.toContain(`@rolldown/binding-${suffix}`);
     }
+    expect(result.rewrittenSuffixes).toEqual(
+      new Set(['darwin-x64', 'darwin-arm64', 'linux-x64-musl']),
+    );
     expect(result.specifierRewrites).toBe(6);
   });
 
@@ -81,6 +88,7 @@ describe('rewriteRolldownBindingRequires', () => {
     // rewritten branches change.
     const source = `const VERSION = "1.2.1";\nexport { VERSION };\n`;
     const rewritten = rewriteRolldownBindingRequires(source, {
+      packageName: PACKAGE_NAME,
       platformSuffixes,
       version: VERSION,
     });
@@ -91,15 +99,16 @@ describe('rewriteRolldownBindingRequires', () => {
 
   it('handles single-quoted loader output', () => {
     const source = [
-      `const binding = __require('@rolldown/binding-darwin-arm64');`,
-      `const bindingPackageVersion = __require('@rolldown/binding-darwin-arm64/package.json').version;`,
+      `const binding = require('@rolldown/binding-darwin-arm64');`,
+      `const bindingPackageVersion = require('@rolldown/binding-darwin-arm64/package.json').version;`,
       `if (bindingPackageVersion !== '1.2.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') throw new Error(\`Native binding package version mismatch, expected 1.2.1 but got \${bindingPackageVersion}. You can reinstall dependencies to fix this issue.\`);`,
     ].join('\n');
     const rewritten = rewriteRolldownBindingRequires(source, {
+      packageName: PACKAGE_NAME,
       platformSuffixes,
       version: VERSION,
     });
-    expect(rewritten.source).toContain(`__require('@voidzero-dev/vite-plus-darwin-arm64')`);
+    expect(rewritten.source).toContain(`require('@voidzero-dev/vite-plus-darwin-arm64')`);
     expect(rewritten.source).toContain(`bindingPackageVersion !== '9.9.9'`);
     expect(rewritten.source).toContain('expected 9.9.9 but got');
     expect(rewritten.specifierRewrites).toBe(2);
@@ -108,6 +117,7 @@ describe('rewriteRolldownBindingRequires', () => {
 
   it('is stable when applied twice', () => {
     const second = rewriteRolldownBindingRequires(result.source, {
+      packageName: PACKAGE_NAME,
       platformSuffixes,
       version: VERSION,
     });
@@ -117,20 +127,16 @@ describe('rewriteRolldownBindingRequires', () => {
 
   it('covers every CLI napi target with a platform suffix', async () => {
     const { parseTriple } = await import('@napi-rs/cli');
-    const cliPkgJson = JSON.parse(
-      fs.readFileSync(
-        path.join(path.dirname(url.fileURLToPath(import.meta.url)), '../../cli/package.json'),
-        'utf-8',
-      ),
-    );
-    const suffixes = cliPkgJson.napi.targets.map(
-      (target: string) => parseTriple(target).platformArchABI,
-    );
+    expect(cliPkgJson.napi.packageName).toBe(PACKAGE_NAME);
+    const suffixes = cliPkgJson.napi.targets.map((target) => parseTriple(target).platformArchABI);
     expect(new Set(suffixes)).toEqual(platformSuffixes);
-    // Committed core package.json must not carry platform pins; they are
-    // injected at publish time (packages/cli/publish-native-addons.ts).
+  });
+
+  it('keeps the committed core package.json free of platform pins', () => {
+    // Platform pins are injected at publish time
+    // (packages/cli/publish-native-addons.ts), never committed.
     const committedNativePins = Object.keys(corePkgJson.optionalDependencies).filter((name) =>
-      name.startsWith('@voidzero-dev/vite-plus-'),
+      name.startsWith(`${PACKAGE_NAME}-`),
     );
     expect(committedNativePins).toEqual([]);
   });

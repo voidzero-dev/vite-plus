@@ -38,6 +38,7 @@ const collapsedLoader = upstreamLoader.replace(
 );
 
 const rewrittenLoader = rewriteRolldownBindingRequires(upstreamLoader, {
+  packageName: '@voidzero-dev/vite-plus',
   platformSuffixes: new Set([PLATFORM_SUFFIX]),
   version: CORE_VERSION,
 }).source;
@@ -70,7 +71,6 @@ function writeJson(file: string, data: unknown) {
  */
 function buildGlobalVirtualStoreLayout(options: {
   loader: string;
-  coreOptionalDependencies?: Record<string, string>;
   platformPackageVersion?: string;
 }): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-binding-layout-'));
@@ -84,8 +84,10 @@ function buildGlobalVirtualStoreLayout(options: {
     name: '@voidzero-dev/vite-plus-core',
     version: CORE_VERSION,
     main: './dist/rolldown-loader.cjs',
-    ...(options.coreOptionalDependencies
-      ? { optionalDependencies: options.coreOptionalDependencies }
+    // Layout fidelity: a real published core declares the platform package it
+    // loads (injected at publish time, pinned to core's own version).
+    ...(options.platformPackageVersion
+      ? { optionalDependencies: { [PLATFORM_PACKAGE]: CORE_VERSION } }
       : {}),
   });
   write(path.join(storeCoreDir, 'dist/rolldown-loader.cjs'), options.loader);
@@ -149,29 +151,27 @@ function runProject(root: string, env: Record<string, string> = {}) {
 }
 
 describe('binding resolution under the pnpm global virtual store layout', () => {
+  // Shared by the resolution and enforcement-pass tests below.
+  const matchingRoot = buildGlobalVirtualStoreLayout({
+    loader: rewrittenLoader,
+    platformPackageVersion: CORE_VERSION,
+  });
+
   it('reproduces #2054: the collapsed vite-plus/binding rewrite cannot resolve', () => {
     const root = buildGlobalVirtualStoreLayout({ loader: collapsedLoader });
-    const result = runProject(root);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.stderr).toContain("Cannot find module 'vite-plus/binding'");
-    }
+    expect(runProject(root)).toMatchObject({
+      ok: false,
+      stderr: expect.stringContaining("Cannot find module 'vite-plus/binding'"),
+    });
   });
 
   it('resolves through the declared platform package after the rewrite', () => {
-    const root = buildGlobalVirtualStoreLayout({
-      loader: rewrittenLoader,
-      coreOptionalDependencies: { [PLATFORM_PACKAGE]: CORE_VERSION },
-      platformPackageVersion: CORE_VERSION,
-    });
-    const result = runProject(root);
-    expect(result).toEqual({ ok: true, stdout: 'native\n' });
+    expect(runProject(matchingRoot)).toEqual({ ok: true, stdout: 'native\n' });
   });
 
   it('re-arms the version guard: enforcement rejects a mismatched platform package', () => {
     const root = buildGlobalVirtualStoreLayout({
       loader: rewrittenLoader,
-      coreOptionalDependencies: { [PLATFORM_PACKAGE]: CORE_VERSION },
       platformPackageVersion: '0.0.0-stale',
     });
     expect(runProject(root, { NAPI_RS_ENFORCE_VERSION_CHECK: '1' })).toMatchObject({
@@ -181,12 +181,7 @@ describe('binding resolution under the pnpm global virtual store layout', () => 
       ),
     });
     // Matching versions pass with enforcement on.
-    const matching = buildGlobalVirtualStoreLayout({
-      loader: rewrittenLoader,
-      coreOptionalDependencies: { [PLATFORM_PACKAGE]: CORE_VERSION },
-      platformPackageVersion: CORE_VERSION,
-    });
-    expect(runProject(matching, { NAPI_RS_ENFORCE_VERSION_CHECK: '1' })).toEqual({
+    expect(runProject(matchingRoot, { NAPI_RS_ENFORCE_VERSION_CHECK: '1' })).toEqual({
       ok: true,
       stdout: 'native\n',
     });
