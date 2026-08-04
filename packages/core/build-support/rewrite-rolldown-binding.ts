@@ -36,8 +36,10 @@ const SPECIFIER_RE = /@rolldown\/binding-([a-z0-9-]+)/g;
 // Anchoring on the rewritten specifier scopes the version replacement to
 // branches this build actually redirects; guards of platforms left on
 // `@rolldown/binding-*` keep comparing against the Rolldown version.
+// Rolldown's bundled chunks call `__require(...)`; a raw CJS loader calls
+// `require(...)`; both anchor the same guard.
 const GUARD_RE =
-  /(__require\((["'])@voidzero-dev\/vite-plus-[a-z0-9-]+\/package\.json\2\)\.version;\s*if \(bindingPackageVersion !== )(["'])[^"']+\3([\s\S]{0,400}?expected )\S+( but got)/g;
+  /((?:__require|require)\((["'])@voidzero-dev\/vite-plus-[a-z0-9-]+\/package\.json\2\)\.version;\s*if \(bindingPackageVersion !== )(["'])[^"']+\3([\s\S]{0,400}?expected )\S+( but got)/g;
 
 export function rewriteRolldownBindingRequires(
   source: string,

@@ -50,7 +50,7 @@ All changes apply to release artifacts; dev builds keep `@rolldown/binding-*` an
 2. **Guard rewrite scoped to rewritten branches**: each loader branch pairs its require with a version guard (`bindingPackageVersion !== "<rolldown version>"`, enforced under `NAPI_RS_ENFORCE_VERSION_CHECK`). The transform rewrites the guard's expected version to core's version in one pattern anchored on the rewritten specifier, so untouched branches keep upstream guards and Rolldown's public `VERSION` export stays the Rolldown version. Platform packages publish lockstep with core, making the guard a real check again. The build fails if specifier and guard rewrite counts diverge, so a napi-rs loader format change cannot ship a partial rewrite.
 3. **Publish-time optionalDependencies injection** (`packages/cli/publish-native-addons.ts`): after napi-rs `prePublish` injects the CLI's platform pins, mirror the identical entries into `packages/core/package.json`, failing if any target is missing. The script runs in both flows before core is packed: release (`--mode npm`, platform packages publish first so pins resolve) and registry-bridge preview (`--mode pkg-pr-new`, pins match the bridge-served versions). Nothing version-pinned lands in committed files.
 4. **Stamp core's version in release builds** (`reusable-release-build.yml`): stamp `packages/core/package.json` to `VERSION` next to the existing CLI stamp so baked guard versions match the published platform packages. A no-op for releases, a fix for previews.
-5. **Compatibility**: `vite-plus/binding` stays exported for direct consumers; core itself no longer requires anything from `vite-plus` at runtime.
+5. **Export removal**: the `vite-plus/binding` export existed only for the collapsed rewrite. Nothing imports the specifier (the CLI loads its binding relatively; no repo, dist, or ecosystem references), so the export is removed. Old published cores that require it always pair with an old `vite-plus` through the exact version pin, so removal cannot strand them.
 
 Unchanged: dev builds, local registry and e2e (they install dev-built core), `prepare_release.yml`, `mergePackageJson()`, the repo lockfile.
 
@@ -65,7 +65,8 @@ Unchanged: dev builds, local registry and e2e (they install dev-built core), `pr
 
 1. Unit tests for the transform against a captured loader excerpt: supported branches rewritten (specifier plus guard), unsupported and WASI branches untouched, stable on a second pass.
 2. The publish script fails when the injected pins do not cover every `napi.target`.
-3. Layout regression: install packed release artifacts into a project with `enable-global-virtual-store=true` and bundle through `@voidzero-dev/vite-plus-core/rolldown`. Meaningful only for `RELEASE_BUILD` artifacts, so it belongs in the preview pipeline. The repro from #2054 is the acceptance test.
+3. Layout resolution spec (`binding-resolution-layout.spec.ts`): rebuilds the global-virtual-store shape with stub packages and asserts the collapsed rewrite fails with `Cannot find module 'vite-plus/binding'` while the transform output resolves and its guard rejects a mismatched platform package. A PTY snapshot case cannot cover this: snapshot installs use dev-built core, which embeds the `.node` in dist and never takes the rewritten path.
+4. Full-stack regression: install packed release artifacts into a project with `enable-global-virtual-store=true` and bundle through `@voidzero-dev/vite-plus-core/rolldown`. Meaningful only for `RELEASE_BUILD` artifacts, so it belongs in the preview pipeline. The repro from #2054 is the acceptance test.
 
 Ships in a normal release; no consumer action.
 
