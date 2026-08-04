@@ -18,12 +18,12 @@ echo custom dispatcher
 
 ## `vp migrate --no-interactive`
 
-migration should skip the nonstandard Husky setup
+migration should skip the custom Husky setup
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Nonstandard Husky command detected in scripts.prepare — skipping git hooks setup. Vite+ only migrates conventional .husky setups; configure hooks manually.
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
@@ -31,7 +31,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file package.json`
 
-prepare and the Husky dependency should be preserved
+prepare and the Husky dependency should remain
 
 ```
 {
@@ -87,4 +87,12 @@ custom dispatcher should be unchanged
 ```
 #!/usr/bin/env sh
 echo custom dispatcher
+```
+
+## `vpt stat-file .vite-hooks --assert-not dir`
+
+no Vite+ hook tree should be created
+
+```
+.vite-hooks: missing
 ```

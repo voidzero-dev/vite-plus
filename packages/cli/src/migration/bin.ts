@@ -51,6 +51,7 @@ import {
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
+  hasExistingViteHooksPolicy,
   hasFrameworkShim,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
@@ -915,10 +916,10 @@ async function executeMigrationPlan(
     }
   }
 
-  // 6. Skip staged migration when hooks are disabled (--no-hooks or preflight failed).
-  // Without hooks, lint-staged config must stay in package.json so existing
-  // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
-  const skipStagedMigration = !plan.shouldSetupHooks;
+  // Existing project-owned hooks remain authoritative. Preserve lint-staged
+  // alongside them instead of assuming that `vp staged` is their policy.
+  const skipStagedMigration =
+    !plan.shouldSetupHooks || hasExistingViteHooksPolicy(workspaceInfo.rootDir);
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');

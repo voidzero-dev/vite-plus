@@ -12,6 +12,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
+• Git hooks configured
 ! Warnings:
   - Failed to merge staged config into vite.config.ts
 → Manual follow-up:
@@ -36,6 +37,9 @@ check package.json
       "version": "<version>",
       "onFail": "download"
     }
+  },
+  "scripts": {
+    "prepare": "vp config"
   }
 }
 ```

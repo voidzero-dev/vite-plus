@@ -78,13 +78,8 @@ export function removeLintStagedFromPackageJson(packageJsonPath: string): void {
 
 // Migrate standalone lint-staged config files into staged in vite.config.ts.
 // JSON-parseable files are inlined automatically; non-JSON files get a warning.
-export function rewriteLintStagedConfigFile(
-  projectPath: string,
-  report?: MigrationReport,
-  options: { preserveOriginal?: boolean } = {},
-): string[] {
+export function rewriteLintStagedConfigFile(projectPath: string, report?: MigrationReport): void {
   let hasUnsupported = false;
-  const migratedConfigPaths: string[] = [];
 
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
     const configPath = path.join(projectPath, filename);
@@ -99,17 +94,17 @@ export function rewriteLintStagedConfigFile(
       hasUnsupported = true;
       continue;
     }
+    // Merge the JSON config into vite.config.ts as "staged" and delete the file.
+    // Skip if staged already exists in vite.config.ts (already migrated by rewritePackageJson).
     if (!hasStagedConfigInViteConfig(projectPath)) {
       const config = readJsonFile(configPath);
       const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
       const finalConfig = updated ? JSON.parse(updated) : config;
       if (!mergeStagedConfigToViteConfig(projectPath, finalConfig, true, report)) {
+        // Merge failed — preserve the original config file so the user doesn't lose their rules
         continue;
       }
-      migratedConfigPaths.push(configPath);
-      if (!options.preserveOriginal) {
-        fs.unlinkSync(configPath);
-      }
+      fs.unlinkSync(configPath);
       if (report) {
         report.inlinedLintStagedConfigCount++;
       }
@@ -138,7 +133,6 @@ export function rewriteLintStagedConfigFile(
       report,
     );
   }
-  return migratedConfigPaths;
 }
 
 /**

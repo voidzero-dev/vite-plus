@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -49,13 +48,10 @@ const {
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
   detectIncompatibleEslintIntegration,
-  preflightGitHooksSetup,
-  createPreCommitHook,
-  detectLegacyGitHooksMigrationCandidate,
-  getOldHooksDir,
+  hasExistingViteHooksPolicy,
   installGitHooks,
-  rewritePrepareScript,
-  setupGitHooks,
+  preflightGitHooksSetup,
+  detectLegacyGitHooksMigrationCandidate,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
   pnpmSupportsWorkspaceSettings,
@@ -8517,30 +8513,16 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('detects leftover husky and lint-staged in an existing Vite+ project', () => {
+  it('detects leftover lint-staged config in an existing Vite+ project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
-        scripts: { prepare: 'husky' },
-        devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7', 'vite-plus': 'latest' },
+        devDependencies: { 'lint-staged': '^16.2.7', 'vite-plus': 'latest' },
         'lint-staged': { '*': 'vp check --fix' },
       }),
     );
 
     expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(true);
-  });
-
-  it('detects nonstandard Husky setup so migration can report that it was skipped', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        scripts: { prepare: 'husky .config/husky' },
-        devDependencies: { husky: '^9.1.7', 'vite-plus': 'latest' },
-      }),
-    );
-
-    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(true);
-    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
   });
 
   it('does not treat a completed Vite+ project as needing hook migration', () => {
@@ -8594,27 +8576,13 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
 
     expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
   });
-
-  it('does not treat incidental Husky text as a migration candidate', () => {
-    const prepare = 'echo "husky install skipped"';
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare }, devDependencies: { 'vite-plus': 'latest' } }),
-    );
-
-    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
-    expect(rewritePrepareScript(tmpDir)).toBeUndefined();
-    expect(
-      (readJson(path.join(tmpDir, 'package.json')).scripts as { prepare: string }).prepare,
-    ).toBe(prepare);
-  });
 });
 
-describe('conventional Husky prepare migration', () => {
+describe('Git hook setup policy', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-dir-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-policy-'));
   });
 
   afterEach(() => {
@@ -8622,852 +8590,73 @@ describe('conventional Husky prepare migration', () => {
   });
 
   it.each([
-    ['husky', 'vp config'],
-    ['husky install', 'vp config'],
-    ['husky .husky', 'vp config'],
-    ['npm run build && husky install ./.husky', 'npm run build && vp config'],
-    ['husky # initialize hooks\nnpm run build', 'vp config # initialize hooks\nnpm run build'],
-  ])('migrates a conventional prepare command: %s', (prepare, expected) => {
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ scripts: { prepare } }));
+    ['prepare command', { scripts: { prepare: 'husky' } }],
+    ['dependency', { devDependencies: { husky: '^9.1.7' } }],
+  ])('preserves Husky detected from a %s', (_source, pkg) => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
 
-    expect(getOldHooksDir(tmpDir)).toBe('.husky');
-    expect(rewritePrepareScript(tmpDir)).toBe('.husky');
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      scripts: { prepare: string };
-    };
-    expect(pkg.scripts.prepare).toBe(expected);
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Detected Husky');
   });
 
-  it.each([
-    'husky .config/husky',
-    'husky init',
-    'husky install ".config/husky hooks" && npm run build',
-    String.raw`husky install .config/husky\ hooks`,
-    'husky $HOOKS_DIR',
-    'husky --help',
-    'husky \\\n  .config/husky',
-    'husky && husky .config/husky',
-  ])('leaves a nonstandard prepare command untouched: %s', (prepare) => {
-    const packageJson = JSON.stringify({ scripts: { prepare }, devDependencies: { husky: '^9' } });
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+  it('preserves a Husky directory even without package metadata', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
 
-    expect(getOldHooksDir(tmpDir)).toBeUndefined();
-    expect(rewritePrepareScript(tmpDir)).toBeUndefined();
-    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
-    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Detected Husky');
   });
 
-  it('preserves custom Husky files and dependencies when setup is requested', () => {
+  it('does not mutate a detected Husky setup', () => {
     const packageJson = JSON.stringify({
-      scripts: { prepare: 'husky .config/husky' },
-      devDependencies: { husky: '^9', 'lint-staged': '^16' },
-      'lint-staged': { '*': 'eslint --fix' },
+      scripts: { prepare: 'husky' },
+      devDependencies: { husky: '^9.1.7' },
     });
     fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
-    fs.mkdirSync(path.join(tmpDir, '.config', 'husky'), { recursive: true });
-    const hookPath = path.join(tmpDir, '.config', 'husky', 'pre-commit');
-    fs.writeFileSync(hookPath, 'npx lint-staged\n');
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
 
     expect(installGitHooks(tmpDir, true)).toBe(false);
     expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
-    expect(fs.readFileSync(hookPath, 'utf8')).toBe('npx lint-staged\n');
+    expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
     expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
-    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
-  });
-});
-
-describe('preflightGitHooksSetup husky catalog resolution', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-catalog-'));
-    // A `.git` dir at the project root so the subdirectory check passes.
-    fs.mkdirSync(path.join(tmpDir, '.git'));
   });
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('resolves a `catalog:` husky version from the pnpm catalog and allows hooks', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
-    );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
-
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
-  });
-
-  it('resolves the explicit `catalog:default` alias from the top-level catalog', () => {
-    // pnpm reserves `default` for the top-level `catalog:` map, so `catalog:default`
-    // must resolve there rather than a named `catalogs.default` entry.
+  it('preserves existing project-owned Vite+ hooks and staged tooling', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
-        scripts: { prepare: 'husky' },
-        devDependencies: { husky: 'catalog:default' },
-      }),
-    );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
-
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
-  });
-
-  it('flags a `catalog:` husky version that resolves to <9 in the pnpm catalog', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
-    );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
-
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toContain('husky <9.0.0');
-  });
-
-  it('does not read a foreign catalog: a yarn project ignores a leftover pnpm-workspace.yaml', () => {
-    // A `catalog:` spec is only meaningful to the active package manager, so a
-    // stray pnpm-workspace.yaml in a yarn repo must not satisfy husky's version.
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
-    );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
-
-    // Yarn's catalog source (.yarnrc.yml) is absent, so husky stays unresolved
-    // and the preflight warns instead of trusting the pnpm catalog.
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toContain(
-      'Could not determine husky version from "catalog:"',
-    );
-  });
-
-  it('uses the active package manager catalog over a foreign one', () => {
-    // Discriminating case: yarn's own catalog pins a compatible husky while a
-    // leftover pnpm-workspace.yaml pins an incompatible one. Reading yarn's
-    // catalog returns null (allowed); wrongly reading pnpm's would warn about
-    // husky <9, and broken resolution would warn "Could not determine".
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
-    );
-    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'catalog:\n  husky: ^9.1.7\n');
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
-
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
-  });
-});
-
-describe('preflightGitHooksSetup hook state', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-state-'));
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: '^9.1.7' } }),
-    );
-    execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('rejects an incompatible core.hooksPath before migration starts', () => {
-    execFileSync('git', ['config', '--local', 'core.hooksPath', '.custom-hooks'], {
-      cwd: tmpDir,
-    });
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'core.hooksPath is already set to ".custom-hooks"',
-    );
-  });
-
-  it('rejects nonstandard Husky commands before migration starts', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        scripts: { prepare: 'husky .first && husky install .second' },
-        devDependencies: { husky: '^9.1.7' },
-      }),
-    );
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
-  });
-
-  it('allows repeated conventional Husky setup', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        scripts: { prepare: 'husky && husky install .husky' },
-        devDependencies: { husky: '^9.1.7' },
-      }),
-    );
-
-    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
-  });
-
-  it('allows repeated conventional Husky setup with equivalent default spellings', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        scripts: { prepare: 'husky ./.husky/ && husky install .husky' },
-        devDependencies: { husky: '^9.1.7' },
-      }),
-    );
-
-    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
-  });
-
-  it('rejects custom Husky directories without inspecting their hooksPath', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        scripts: { prepare: 'husky ./.custom-hooks' },
-        devDependencies: { husky: '^9.1.7' },
-      }),
-    );
-    execFileSync('git', ['config', '--local', 'core.hooksPath', '.custom-hooks/_'], {
-      cwd: tmpDir,
-    });
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain('Nonstandard Husky command detected');
-  });
-
-  it('allows the dispatcher path installed by Vite+', () => {
-    execFileSync('git', ['config', '--local', 'core.hooksPath', '.vite-hooks/_'], {
-      cwd: tmpDir,
-    });
-
-    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
-  });
-
-  it('rejects an incompatible worktree-scoped hooks path before migration starts', () => {
-    execFileSync('git', ['config', 'extensions.worktreeConfig', 'true'], { cwd: tmpDir });
-    execFileSync('git', ['config', '--worktree', 'core.hooksPath', '.worktree-hooks'], {
-      cwd: tmpDir,
-    });
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'core.hooksPath is already set to ".worktree-hooks" outside the local repository config',
-    );
-  });
-
-  it('rejects an explicitly supplied custom Husky directory', () => {
-    expect(preflightGitHooksSetup(tmpDir, undefined, '.config/husky')).toContain(
-      'Custom Husky hook directory ".config/husky" detected',
-    );
-  });
-
-  it.each(['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'])(
-    'rejects hooks disabled through %s before migration starts',
-    (environmentName) => {
-      const environmentNames = ['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'];
-      const previousValues = new Map(environmentNames.map((name) => [name, process.env[name]]));
-      for (const name of environmentNames) {
-        delete process.env[name];
-      }
-      process.env[environmentName] = '0';
-      try {
-        expect(preflightGitHooksSetup(tmpDir)).toContain(
-          `Git hooks are disabled through ${environmentName}=0`,
-        );
-      } finally {
-        for (const [name, value] of previousValues) {
-          if (value === undefined) {
-            delete process.env[name];
-          } else {
-            process.env[name] = value;
-          }
-        }
-      }
-    },
-  );
-
-  it('rejects conflicting project-owned hooks', () => {
-    fs.mkdirSync(path.join(tmpDir, '.husky'));
-    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
-    fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
-    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'vp run lint\n');
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Both .husky/pre-commit and .vite-hooks/pre-commit exist',
-    );
-  });
-
-  it('rejects conflicting project-owned hook helpers', () => {
-    fs.mkdirSync(path.join(tmpDir, '.husky'));
-    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
-    fs.writeFileSync(path.join(tmpDir, '.husky', 'common.sh'), 'old helper\n');
-    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'common.sh'), 'project helper\n');
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Both .husky/common.sh and .vite-hooks/common.sh exist',
-    );
-  });
-
-  it('rejects conflicting nested project-owned hook helpers', () => {
-    fs.mkdirSync(path.join(tmpDir, '.husky', 'scripts'), { recursive: true });
-    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', 'scripts'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.husky', 'scripts', 'check.sh'), 'old helper\n');
-    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'scripts', 'check.sh'), 'project helper\n');
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Both .husky/scripts/check.sh and .vite-hooks/scripts/check.sh exist',
-    );
-  });
-
-  it('allows non-conflicting project-owned hook helper directories to merge', () => {
-    fs.mkdirSync(path.join(tmpDir, '.husky', 'scripts'), { recursive: true });
-    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', 'scripts'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.husky', 'scripts', 'check.sh'), 'old helper\n');
-    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'scripts', 'notify.sh'), 'project helper\n');
-
-    expect(preflightGitHooksSetup(tmpDir)).toBeNull();
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects symbolic project hooks', () => {
-    const externalHook = path.join(tmpDir, 'shared-pre-commit');
-    fs.mkdirSync(path.join(tmpDir, '.husky'));
-    fs.writeFileSync(externalHook, 'npx lint-staged\n');
-    fs.symlinkSync(externalHook, path.join(tmpDir, '.husky', 'pre-commit'));
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Symbolic Git hook path ".husky/pre-commit" cannot be migrated safely',
-    );
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects symbolic hook helper directories', () => {
-    const sharedHooks = path.join(tmpDir, 'shared-hooks');
-    fs.mkdirSync(path.join(tmpDir, '.husky'));
-    fs.mkdirSync(sharedHooks);
-    fs.symlinkSync(sharedHooks, path.join(tmpDir, '.husky', 'scripts'), 'dir');
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Symbolic Git hook path ".husky/scripts" cannot be migrated safely',
-    );
-  });
-
-  it('rejects a non-directory hook path', () => {
-    fs.writeFileSync(path.join(tmpDir, '.husky'), 'not a directory\n');
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain('Git hook path ".husky" is not a directory');
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects symbolic helpers in .vite-hooks', () => {
-    const viteHooksDir = path.join(tmpDir, '.vite-hooks', 'scripts');
-    const externalHelper = path.join(tmpDir, 'shared-hook-helper');
-    fs.mkdirSync(viteHooksDir, { recursive: true });
-    fs.writeFileSync(externalHelper, 'npx lint-staged\n');
-    fs.symlinkSync(externalHelper, path.join(viteHooksDir, 'common.sh'));
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Symbolic Git hook path ".vite-hooks/scripts/common.sh" cannot be migrated safely',
-    );
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects symbolic dispatcher files', () => {
-    const externalDispatcher = path.join(tmpDir, 'shared-dispatcher');
-    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', '_'), { recursive: true });
-    fs.writeFileSync(externalDispatcher, 'keep me\n');
-    fs.symlinkSync(externalDispatcher, path.join(tmpDir, '.vite-hooks', '_', 'h'));
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Symbolic Git hook path ".vite-hooks/_/h" cannot be migrated safely',
-    );
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects hard-linked dispatcher files', () => {
-    const externalDispatcher = path.join(tmpDir, 'shared-dispatcher');
-    fs.mkdirSync(path.join(tmpDir, '.vite-hooks', '_'), { recursive: true });
-    fs.writeFileSync(externalDispatcher, 'keep me\n');
-    fs.linkSync(externalDispatcher, path.join(tmpDir, '.vite-hooks', '_', 'h'));
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Multiply linked Git hook path ".vite-hooks/_/h" cannot be migrated safely',
-    );
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects hard-linked project hooks', () => {
-    const externalHook = path.join(tmpDir, 'shared-pre-commit');
-    fs.mkdirSync(path.join(tmpDir, '.husky'), { recursive: true });
-    fs.writeFileSync(externalHook, 'npx lint-staged\n');
-    fs.linkSync(externalHook, path.join(tmpDir, '.husky', 'pre-commit'));
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Multiply linked Git hook path ".husky/pre-commit" cannot be migrated safely',
-    );
-    expect(fs.readFileSync(externalHook, 'utf8')).toBe('npx lint-staged\n');
-  });
-
-  it('rejects a directory where a project hook file is expected', () => {
-    fs.mkdirSync(path.join(tmpDir, '.husky', 'pre-commit'), { recursive: true });
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      `Git hook path "${path.join('.husky', 'pre-commit')}" is not a file`,
-    );
-  });
-
-  it.skipIf(process.platform === 'win32')('rejects special project hook entries', () => {
-    fs.mkdirSync(path.join(tmpDir, '.husky'));
-    execFileSync('mkfifo', [path.join(tmpDir, '.husky', 'pre-commit')]);
-
-    expect(preflightGitHooksSetup(tmpDir)).toContain(
-      'Git hook path ".husky/pre-commit" is not a file',
-    );
-  });
-});
-
-describe('installGitHooks project hook migration', () => {
-  it('removes the Husky v9 bootstrap when migrating project hooks', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-bootstrap-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: { prepare: 'husky' },
-          devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7' },
-          'lint-staged': { '*': 'eslint --fix' },
-        }),
-      );
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(
-        path.join(tmpDir, '.husky', 'pre-commit'),
-        '#!/usr/bin/env sh\n. "$(dirname -- "$0")/_/h"\nnpx lint-staged\n',
-      );
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
-        '#!/usr/bin/env sh\nvp staged\n',
-      );
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it.each(['.husky', './.husky', '.husky/'])(
-    'rewrites an explicit default Husky directory to the Vite+ default: %s',
-    (huskyDir) => {
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-explicit-husky-default-'));
-      try {
-        fs.writeFileSync(
-          path.join(tmpDir, 'package.json'),
-          JSON.stringify({
-            scripts: { prepare: `husky install ${huskyDir}` },
-            devDependencies: { husky: '^9.1.7' },
-          }),
-        );
-        fs.mkdirSync(path.join(tmpDir, '.husky'));
-        fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
-
-        expect(installGitHooks(tmpDir, true)).toBe(true);
-        const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-          scripts: Record<string, string>;
-        };
-        expect(pkg.scripts.prepare).toBe('vp config');
-        expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
-          'npm test\n',
-        );
-        expect(fs.existsSync(path.join(tmpDir, '.husky'))).toBe(false);
-      } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      }
-    },
-  );
-
-  it('rolls back package and staged config edits when hook installation fails', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-rollback-'));
-    const previousVpCliBin = process.env.VP_CLI_BIN;
-    try {
-      const packageJson = `${JSON.stringify(
-        {
-          scripts: { prepare: 'custom-prepare' },
-          devDependencies: { 'lint-staged': '^16.2.7' },
-          'lint-staged': { '*': 'eslint --fix' },
-        },
-        null,
-        2,
-      )}\n`;
-      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
-      execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
-      process.env.VP_CLI_BIN = 'vp-command-that-does-not-exist';
-
-      expect(installGitHooks(tmpDir, true)).toBe(false);
-      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
-      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
-    } finally {
-      if (previousVpCliBin === undefined) {
-        delete process.env.VP_CLI_BIN;
-      } else {
-        process.env.VP_CLI_BIN = previousVpCliBin;
-      }
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('preserves local hooksPath when a worktree override is active and setup fails', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-worktree-rollback-'));
-    const previousVpCliBin = process.env.VP_CLI_BIN;
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({ devDependencies: { 'lint-staged': '^16.2.7' } }),
-      );
-      execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
-      execFileSync('git', ['config', 'extensions.worktreeConfig', 'true'], { cwd: tmpDir });
-      execFileSync('git', ['config', '--local', 'core.hooksPath', '.local-hooks'], { cwd: tmpDir });
-      execFileSync('git', ['config', '--worktree', 'core.hooksPath', '.vite-hooks/_'], {
-        cwd: tmpDir,
-      });
-      process.env.VP_CLI_BIN = 'vp-command-that-does-not-exist';
-
-      expect(installGitHooks(tmpDir, true)).toBe(false);
-      expect(
-        execFileSync('git', ['config', '--local', '--get', 'core.hooksPath'], {
-          cwd: tmpDir,
-          encoding: 'utf8',
-        }).trim(),
-      ).toBe('.local-hooks');
-      expect(
-        execFileSync('git', ['config', '--get', 'core.hooksPath'], {
-          cwd: tmpDir,
-          encoding: 'utf8',
-        }).trim(),
-      ).toBe('.vite-hooks/_');
-    } finally {
-      if (previousVpCliBin === undefined) {
-        delete process.env.VP_CLI_BIN;
-      } else {
-        process.env.VP_CLI_BIN = previousVpCliBin;
-      }
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('restores standalone lint-staged config when final package cleanup fails', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-config-rollback-'));
-    const packageJsonPath = path.join(tmpDir, 'package.json');
-    const lintStagedConfigPath = path.join(tmpDir, '.lintstagedrc.json');
-    const packageJson = `${JSON.stringify(
-      {
         devDependencies: { 'lint-staged': '^16.2.7' },
-      },
-      null,
-      2,
-    )}\n`;
-    const lintStagedConfig = `${JSON.stringify({ '*': 'eslint --fix' }, null, 2)}\n`;
-    try {
-      fs.writeFileSync(packageJsonPath, packageJson);
-      fs.writeFileSync(lintStagedConfigPath, lintStagedConfig);
-      const writeFileSync = fs.writeFileSync.bind(fs);
-      let failed = false;
-      vi.spyOn(fs, 'writeFileSync').mockImplementation((file, data, options) => {
-        if (
-          !failed &&
-          path.resolve(file.toString()) === packageJsonPath &&
-          !fs.existsSync(lintStagedConfigPath)
-        ) {
-          failed = true;
-          throw new Error('simulated package cleanup failure');
-        }
-        return writeFileSync(file, data, options);
-      });
-
-      expect(installGitHooks(tmpDir, true)).toBe(false);
-
-      expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(packageJson);
-      expect(fs.readFileSync(lintStagedConfigPath, 'utf8')).toBe(lintStagedConfig);
-      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
-    } finally {
-      vi.restoreAllMocks();
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('restores both hook trees when moving a project hook fails', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-move-rollback-'));
-    const packageJson = `${JSON.stringify(
-      {
-        scripts: { prepare: 'husky' },
-        devDependencies: { husky: '^9.1.7' },
-      },
-      null,
-      2,
-    )}\n`;
-    try {
-      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
-      const copyFile = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
-        throw new Error('simulated copy failure');
-      });
-
-      expect(installGitHooks(tmpDir, true)).toBe(false);
-
-      copyFile.mockRestore();
-      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
-      expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
-      expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
-    } finally {
-      vi.restoreAllMocks();
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('skips safely when the hook rollback snapshot cannot be created', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-snapshot-failure-'));
-    try {
-      const packageJson = JSON.stringify({
-        scripts: { prepare: 'husky' },
-        devDependencies: { husky: '^9.1.7' },
-      });
-      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
-      vi.spyOn(fs, 'cpSync').mockImplementationOnce(() => {
-        throw new Error('simulated snapshot failure');
-      });
-
-      expect(installGitHooks(tmpDir, true)).toBe(false);
-      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
-      expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
-      expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
-    } finally {
-      vi.restoreAllMocks();
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it.each([
-    'echo husky',
-    'echo "vp config"',
-    'vp configure',
-    'vp echo && echo "__vite_plus_migrate_vp_command__ config"',
-  ])('adds lifecycle hook setup when prepare only contains incidental tool text: %s', (prepare) => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-incidental-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: { prepare },
-          devDependencies: { 'lint-staged': '^16.2.7' },
-          'lint-staged': { '*': 'eslint --fix' },
-        }),
-      );
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        scripts: Record<string, string>;
-      };
-      expect(pkg.scripts.prepare).toBe(`vp config && ${prepare}`);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('does not duplicate an existing vp config prepare command', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-existing-config-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: { prepare: 'vp config --no-agent && echo ready' },
-          devDependencies: { 'lint-staged': '^16.2.7' },
-          'lint-staged': { '*': 'eslint --fix' },
-        }),
-      );
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        scripts: Record<string, string>;
-      };
-      expect(pkg.scripts.prepare).toBe('vp config --no-agent && echo ready');
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('rolls back when the detected Husky directory disagrees with the prepare script', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-prepare-rollback-'));
-    try {
-      const packageJson = `${JSON.stringify(
-        {
-          scripts: { prepare: 'husky' },
-          devDependencies: { husky: '^9.1.7' },
-        },
-        null,
-        2,
-      )}\n`;
-      fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
-
-      expect(setupGitHooks(tmpDir, '.config/husky', true)).toBe(false);
-      expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
-      expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, '.config', 'husky'))).toBe(false);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('preserves lint-staged when a project hook invocation cannot be rewritten', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-wrapper-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: { prepare: 'husky' },
-          devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7' },
-          'lint-staged': { '*': 'eslint --fix' },
-        }),
-      );
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(
-        path.join(tmpDir, '.husky', 'pre-commit'),
-        'custom-runner lint-staged --verbose\n',
-      );
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
-        'custom-runner lint-staged --verbose\n',
-      );
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        devDependencies: Record<string, string>;
-        'lint-staged': Record<string, string>;
-      };
-      expect(pkg.devDependencies).toEqual({ 'lint-staged': '^16.2.7' });
-      expect(pkg['lint-staged']).toEqual({ '*': 'eslint --fix' });
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('preserves lint-staged when a package script still invokes it', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-script-wrapper-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: {
-            prepare: 'husky',
-            'lint:staged': 'npx --no-install lint-staged',
-          },
-          devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7' },
-          'lint-staged': { '*': 'eslint --fix' },
-        }),
-      );
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        scripts: Record<string, string>;
-        devDependencies: Record<string, string>;
-        'lint-staged': Record<string, string>;
-      };
-      expect(pkg.scripts['lint:staged']).toBe('npx --no-install lint-staged');
-      expect(pkg.devDependencies).toEqual({ 'lint-staged': '^16.2.7' });
-      expect(pkg['lint-staged']).toEqual({ '*': 'eslint --fix' });
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it('preserves Husky when another package script still invokes it', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-script-wrapper-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          scripts: {
-            prepare: 'husky',
-            'hooks:refresh': 'husky .manual-hooks',
-          },
-          devDependencies: { husky: '^9.1.7' },
-        }),
-      );
-      fs.mkdirSync(path.join(tmpDir, '.husky'));
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        scripts: Record<string, string>;
-        devDependencies: Record<string, string>;
-      };
-      expect(pkg.scripts['hooks:refresh']).toBe('husky .manual-hooks');
-      expect(pkg.devDependencies).toEqual({ husky: '^9.1.7' });
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it.skipIf(process.platform === 'win32')('preserves hook and helper permissions', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-permissions-'));
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: '^9.1.7' } }),
-      );
-      fs.mkdirSync(path.join(tmpDir, '.husky', 'scripts'), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n', { mode: 0o700 });
-      fs.writeFileSync(path.join(tmpDir, '.husky', 'scripts', 'private.env'), 'TOKEN=value\n', {
-        mode: 0o600,
-      });
-
-      expect(installGitHooks(tmpDir, true)).toBe(true);
-      expect(fs.statSync(path.join(tmpDir, '.vite-hooks', 'pre-commit')).mode & 0o777).toBe(0o700);
-      expect(fs.statSync(path.join(tmpDir, '.vite-hooks', 'scripts')).mode & 0o777).toBe(0o700);
-      expect(
-        fs.statSync(path.join(tmpDir, '.vite-hooks', 'scripts', 'private.env')).mode & 0o777,
-      ).toBe(0o600);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe('createPreCommitHook command matching', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-create-pre-commit-'));
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
     fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'npm test\n');
+
+    expect(hasExistingViteHooksPolicy(tmpDir)).toBe(true);
+    expect(installGitHooks(tmpDir, true)).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+      'npm test\n',
+    );
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.scripts.prepare).toBe('vp config');
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
   });
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  it('creates the default staged workflow only when no hook policy exists', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
 
-  it.each(['npm run lint-staged-check', 'npx lint-staged-extra'])(
-    'does not rewrite a longer command name: %s',
-    (command) => {
-      const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
-      fs.writeFileSync(hookPath, `${command}\n`);
-
-      createPreCommitHook(tmpDir);
-
-      expect(fs.readFileSync(hookPath, 'utf8')).toBe(`${command}\nvp staged\n`);
-    },
-  );
-
-  it('rewrites npx runner flags before lint-staged', () => {
-    const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
-    fs.writeFileSync(hookPath, 'npx --no-install lint-staged --verbose\n');
-
-    createPreCommitHook(tmpDir);
-
-    expect(fs.readFileSync(hookPath, 'utf8')).toBe('vp staged --verbose\n');
-  });
-
-  it.skipIf(process.platform === 'win32')('does not write through a symbolic hook', () => {
-    const externalHook = path.join(tmpDir, 'shared-pre-commit');
-    const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
-    fs.writeFileSync(externalHook, 'npx lint-staged\n');
-    fs.symlinkSync(externalHook, hookPath);
-
-    createPreCommitHook(tmpDir);
-
-    expect(fs.readFileSync(externalHook, 'utf8')).toBe('npx lint-staged\n');
+    expect(installGitHooks(tmpDir, true)).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+      'vp staged\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      '"*": "vp check --fix"',
+    );
   });
 });
 
