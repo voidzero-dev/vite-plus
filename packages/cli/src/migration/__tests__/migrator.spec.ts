@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8740,6 +8741,43 @@ describe('Git hook setup policy', () => {
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).not.toContain('staged:');
   });
 
+  it('migrates staged config after create establishes a nested Git root', () => {
+    const projectPath = path.join(tmpDir, 'nested-project');
+    fs.mkdirSync(projectPath);
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7', vite: '^7.0.0' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(projectPath, '.lintstagedrc.json'),
+      JSON.stringify({ '*.ts': 'eslint --fix' }),
+    );
+    execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
+
+    expect(shouldSkipStagedMigrationForHooks(projectPath, true, PackageManager.pnpm)).toBe(true);
+
+    execFileSync('git', ['init'], { cwd: projectPath, stdio: 'ignore' });
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      projectPath,
+      true,
+      PackageManager.pnpm,
+    );
+    rewriteStandaloneProject(
+      projectPath,
+      makeWorkspaceInfo(projectPath, PackageManager.pnpm),
+      skipStagedMigration,
+      true,
+    );
+
+    expect(skipStagedMigration).toBe(false);
+    expect(fs.existsSync(path.join(projectPath, '.lintstagedrc.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(projectPath, 'vite.config.ts'), 'utf8')).toContain(
+      '"*.ts": "eslint --fix"',
+    );
+  });
+
   it('preserves staged config before a create-style monorepo rewrite with a Vite+ hook', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -8782,6 +8820,83 @@ describe('Git hook setup policy', () => {
       'npx lint-staged\n',
     );
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).not.toContain('staged:');
+  });
+
+  it('preserves staged config when a workspace package owns Husky hooks', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(path.join(appDir, '.husky'), { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        scripts: { prepare: 'husky' },
+        devDependencies: {
+          husky: '^9.1.7',
+          'lint-staged': '^16.2.7',
+          vite: '^7.0.0',
+        },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    fs.writeFileSync(path.join(appDir, '.husky', 'pre-commit'), 'npx lint-staged\n');
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['packages/*'];
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
+
+    expect(
+      preflightGitHooksSetup(tmpDir, workspaceInfo.packageManager, workspaceInfo.packages),
+    ).toContain('Husky in workspace package "packages/app"');
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      true,
+      workspaceInfo.packageManager,
+      workspaceInfo.packages,
+    );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies.husky).toBe('^9.1.7');
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.readFileSync(path.join(appDir, '.husky', 'pre-commit'), 'utf8')).toBe(
+      'npx lint-staged\n',
+    );
+    expect(
+      installGitHooks(
+        tmpDir,
+        true,
+        undefined,
+        workspaceInfo.packageManager,
+        workspaceInfo.packages,
+      ),
+    ).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+  });
+
+  it('disables migration-time hook setup when a workspace package owns hooks', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(path.join(appDir, '.husky'), { recursive: true });
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }));
+
+    const plan = await collectMigrationSetupPlan(
+      tmpDir,
+      PackageManager.pnpm,
+      { interactive: false, hooks: true, agent: false, editor: false },
+      [{ name: 'app', path: 'packages/app' }],
+      false,
+    );
+
+    expect(plan.shouldSetupHooks).toBe(false);
   });
 
   it('preserves staged config for a package created inside an existing monorepo', () => {

@@ -6,7 +6,7 @@ import spawn from 'cross-spawn';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
-import type { PackageManager } from '../../types/index.ts';
+import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
   hasStagedConfigInViteConfig,
@@ -113,6 +113,43 @@ function findGitRoot(startPath: string): string | null {
   }
 }
 
+function findWorkspacePackageHookPolicy(
+  workspaceRoot: string,
+  packages: readonly WorkspacePackage[],
+): string | null {
+  for (const pkg of packages) {
+    const packagePath = path.join(workspaceRoot, pkg.path);
+    if (hasExistingViteHooksPolicy(packagePath)) {
+      return `Detected project-owned Vite+ hooks in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
+    }
+
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    const pkgContent = fs.existsSync(packageJsonPath) ? readJsonFile(packageJsonPath) : {};
+    if (hasHuskySetup(packagePath, pkgContent)) {
+      return `Detected Husky in workspace package "${pkg.path}" — leaving its hooks, configuration, and dependencies unchanged.`;
+    }
+    const deps = pkgContent.devDependencies as Record<string, string> | undefined;
+    const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+    for (const tool of OTHER_HOOK_TOOLS) {
+      if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
+        return `Detected ${tool} in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
+      }
+    }
+
+    // A nested repository can have a package-local hooksPath even when it has
+    // no hook-tool dependency or conventional hook directory to detect.
+    const gitRoot = findGitRoot(packagePath);
+    if (gitRoot && path.resolve(packagePath) === path.resolve(gitRoot)) {
+      const configuredHooksPath = getConfiguredHooksPath(packagePath);
+      const normalizedHooksPath = normalizeGitHooksPath(configuredHooksPath);
+      if (configuredHooksPath && normalizedHooksPath !== '.vite-hooks/_') {
+        return `core.hooksPath is already set to "${configuredHooksPath}" in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
+      }
+    }
+  }
+  return null;
+}
+
 function getConfiguredHooksPath(projectPath: string): string {
   const result = spawn.sync('git', ['config', '--get', 'core.hooksPath'], {
     cwd: projectPath,
@@ -134,8 +171,9 @@ export function installGitHooks(
   silent = false,
   report?: MigrationReport,
   packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): boolean {
-  return setupGitHooks(projectPath, silent, report, packageManager);
+  return setupGitHooks(projectPath, silent, report, packageManager, packages);
 }
 
 /**
@@ -151,6 +189,7 @@ export function installGitHooks(
 export function preflightGitHooksSetup(
   projectPath: string,
   _packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): string | null {
   const gitRoot = findGitRoot(projectPath);
   if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
@@ -176,6 +215,10 @@ export function preflightGitHooksSetup(
     if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
       return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools`;
     }
+  }
+  const workspacePackageReason = findWorkspacePackageHookPolicy(projectPath, packages);
+  if (workspacePackageReason) {
+    return workspacePackageReason;
   }
   const disabledHooksEnvironment = ['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'].find(
     (name) => process.env[name] === '0',
@@ -209,11 +252,12 @@ export function shouldSkipStagedMigrationForHooks(
   projectPath: string,
   shouldSetupHooks: boolean,
   packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): boolean {
   return (
     !shouldSetupHooks ||
     hasExistingViteHooksPolicy(projectPath) ||
-    preflightGitHooksSetup(projectPath, packageManager) !== null
+    preflightGitHooksSetup(projectPath, packageManager, packages) !== null
   );
 }
 
@@ -227,8 +271,9 @@ export function setupGitHooks(
   silent = false,
   report?: MigrationReport,
   packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): boolean {
-  const reason = preflightGitHooksSetup(projectPath, packageManager);
+  const reason = preflightGitHooksSetup(projectPath, packageManager, packages);
   if (reason) {
     warnMigration(reason, report);
     return false;

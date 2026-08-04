@@ -922,6 +922,7 @@ async function executeMigrationPlan(
     workspaceInfo.rootDir,
     plan.shouldSetupHooks,
     plan.packageManager,
+    workspaceInfo.packages,
   );
 
   // 7. Rewrite configs
@@ -941,7 +942,13 @@ async function executeMigrationPlan(
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
-    installGitHooks(workspaceInfo.rootDir, true, report, plan.packageManager);
+    installGitHooks(
+      workspaceInfo.rootDir,
+      true,
+      report,
+      plan.packageManager,
+      workspaceInfo.packages,
+    );
   }
 
   // 9. Write agent instructions (using pre-resolved decisions)
@@ -1402,7 +1409,15 @@ async function main() {
     if (plan.shouldSetupHooks) {
       await ensureExistingPackageManager();
       updateMigrationProgress('Configuring git hooks');
-      if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
+      if (
+        installGitHooks(
+          workspaceInfoOptional.rootDir,
+          true,
+          report,
+          packageManager,
+          workspaceInfoOptional.packages,
+        )
+      ) {
         didMigrate = true;
         needsInstall = true;
       }
