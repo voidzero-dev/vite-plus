@@ -1,5 +1,7 @@
 # tools for internal development use
 
+- json-edit: A CLI tool to edit JSON files such as package.json, used by the release workflow to stamp build versions
+
 Run subcommands with `tool <name>`:
 
 - sync-remote: Sync upstream dependency sources and catalog versions from `.upstream-versions.json`

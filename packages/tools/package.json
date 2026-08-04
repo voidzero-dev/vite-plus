@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "bin": {
+    "json-edit": "./src/json-edit.ts",
     "tool": "./src/bin.js"
   },
   "type": "module",
