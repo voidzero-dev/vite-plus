@@ -23,6 +23,7 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 - **`vp build`:** Build applications for production with Vite + Rolldown
 - **`vp run`:** Run `package.json` scripts and monorepo tasks with caching and dependency-aware scheduling
 - **`vp pack`:** Build libraries for npm publishing or standalone app binaries
+- **`vp toolchain`:** Inspect the exact Vite+, Vite, Rolldown, Oxc, and other tool versions in use
 - **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
 
 All of this is configured from your project root and works across Vite's framework ecosystem.
@@ -145,6 +146,7 @@ Vite+ automatically wraps your package manager (pnpm, npm, Yarn, or Bun) based o
 
 #### Maintain
 
+- **toolchain** - Show Vite+ tool versions and their relationships
 - **upgrade** - Update `vp` itself to the latest version
 - **implode** - Remove `vp` and all related data
 
@@ -195,7 +197,7 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 npm install -D vite-plus @voidzero-dev/vite-plus-core@latest
 ```
 
-You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version reported by `vp toolchain vitest` so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
 
 ```json
 "overrides": {

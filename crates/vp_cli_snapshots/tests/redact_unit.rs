@@ -289,6 +289,28 @@ fn replaces_paths_with_labels() {
 }
 
 #[test]
+fn masks_toolchain_build_time_in_human_and_json_output() {
+    let input = concat!(
+        "vite-task (built 2026-08-06T09:30:00Z, revision ebe5837)\n",
+        "      \"builtAt\": \"2026-08-06T09:30:00Z\",\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "vite-task (built <build-time>, revision ebe5837)\n",
+            "      \"builtAt\": \"<build-time>\",\n",
+        )
+    );
+}
+
+#[test]
+fn keeps_unrelated_build_times_visible() {
+    let input = "plugin built 2026-08-06T09:30:00Z\n".to_owned();
+    assert_eq!(redact_output(input.clone(), &[], true), input);
+}
+
+#[test]
 fn redacts_forward_slash_windows_path_variants() {
     // Windows children also print file:// and stack-frame forms with forward
     // slashes; those must redact even though the pair is backslash-form.

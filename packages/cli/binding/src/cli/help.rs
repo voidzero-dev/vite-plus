@@ -203,6 +203,7 @@ pub(super) fn print_help() {
   {bold}cache{reset}          Manage the task cache
   {bold}config{reset}         Configure hooks and agent integration
   {bold}staged{reset}         Run linters on staged files
+  {bold}toolchain{reset}      Show versions and relationships in the Vite+ toolchain
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided

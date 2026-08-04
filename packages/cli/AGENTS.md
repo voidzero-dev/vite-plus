@@ -10,6 +10,13 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 `vp <name>` runs a built-in command. `vp run <name>` runs a `package.json` script or a `vite.config.ts` task. Scripts cannot overwrite built-ins, so `vp dev` and `vp run dev` may do different things. Check `package.json` and `vite.config.ts` first, and run `vp run <name>` when the project defines a script or task with that name.
 
+## Inspecting Tool Versions
+
+Run `vp toolchain` to inspect the versions and relationships in the active
+Vite+ release. Add a tool name such as `vp toolchain vite` to filter the graph,
+or pass `--global` to ignore the project's local `vite-plus` package. Use
+`vp why <package>` for the package manager's installed dependency graph.
+
 ## Review Checklist
 
 - [ ] Run `vp install` after pulling remote changes and before getting started.

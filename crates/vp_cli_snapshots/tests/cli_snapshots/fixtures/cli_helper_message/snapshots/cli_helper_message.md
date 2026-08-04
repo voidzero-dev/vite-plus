@@ -50,6 +50,9 @@ Manage Dependencies:
   rebuild                    Rebuild native modules
   pm                         Forward a command to the package manager
 
+Inspect:
+  toolchain  Show versions and relationships in the active Vite+ toolchain
+
 Maintain:
   upgrade  Update vp itself to the latest version
   implode  Remove vp and all related data

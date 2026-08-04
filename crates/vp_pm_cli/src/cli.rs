@@ -314,6 +314,17 @@ impl PackageManagerCommand {
             _ => None,
         }
     }
+
+    /// Package names eligible for the Vite+ toolchain discovery hint.
+    ///
+    /// Machine-readable `why` output must remain package-manager output only.
+    #[must_use]
+    pub fn why_hint_packages(&self) -> Option<&[String]> {
+        match self {
+            Self::Why(args) if !args.json && !args.parseable => Some(&args.packages),
+            _ => None,
+        }
+    }
 }
 
 impl PmCommand {
@@ -607,6 +618,15 @@ mod tests {
             assert!(parse(args).unwrap().is_quiet_or_machine_readable(), "{args:?}");
         }
         assert!(!parse(&["install"]).unwrap().is_quiet_or_machine_readable());
+    }
+
+    #[test]
+    fn why_hint_packages_excludes_machine_readable_output() {
+        let human = parse(&["why", "vite"]).unwrap();
+        assert_eq!(human.why_hint_packages(), Some(["vite".to_string()].as_slice()));
+
+        assert_eq!(parse(&["why", "vite", "--json"]).unwrap().why_hint_packages(), None);
+        assert_eq!(parse(&["why", "vite", "--parseable"]).unwrap().why_hint_packages(), None);
     }
 
     #[test]

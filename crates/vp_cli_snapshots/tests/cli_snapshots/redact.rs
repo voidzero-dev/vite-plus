@@ -279,6 +279,15 @@ static START_AT_TIME_RE: LazyLock<regex::Regex> =
 // published-at timestamps in `vp view`) stay verbatim.
 static INSTALLED_DATE_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Installed:\s+)\d{4}-\d{2}-\d{2}").unwrap());
+// The toolchain manifest records the package build time for compiled tools
+// whose Cargo version is only a placeholder. Builds produce a fresh timestamp,
+// so mask it while preserving both the human `built` label and JSON field.
+static TOOLCHAIN_BUILD_TIME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"((?:vite-task \(built |"builtAt":\s*"))\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"#,
+    )
+    .unwrap()
+});
 
 #[expect(
     clippy::disallowed_types,
@@ -532,6 +541,9 @@ pub fn redact_output(
 
     // Mask the calendar-dependent install date in `vp env which` output
     output = INSTALLED_DATE_RE.replace_all(&output, "${1}<date>").into_owned();
+
+    // Mask the generated toolchain build timestamp.
+    output = TOOLCHAIN_BUILD_TIME_RE.replace_all(&output, "${1}<build-time>").into_owned();
 
     // Remove ^C echo that Unix terminal drivers emit when ETX (0x03) is written
     // to the PTY. Windows ConPTY does not echo it.

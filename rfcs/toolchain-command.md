@@ -167,7 +167,7 @@ vite-plus@0.2.4
 |-- depends on oxlint@1.72.0
 |-- depends on oxlint-tsgolint@0.24.0
 |-- depends on oxfmt@0.57.0
-`-- compiles vite-task@<version> (<revision>)
+`-- compiles vite-task (built 2026-08-06T09:30:00Z, revision <revision>)
 ```
 
 These versions reflect the repository at the time of writing. They do not form
@@ -312,15 +312,16 @@ one JSON object:
 
 Node fields:
 
-| Field      | Meaning                                                   |
-| ---------- | --------------------------------------------------------- |
-| `id`       | Stable identifier referenced by edges and filters         |
-| `name`     | Canonical package, tool, or engine name                   |
-| `version`  | Exact resolved version                                    |
-| `revision` | Optional exact source revision for git-sourced components |
-| `kind`     | `package`, `tool`, or `engine`                            |
-| `delivery` | One or more of `dependency`, `bundled`, or `compiled`     |
-| `aliases`  | Additional accepted filter names                          |
+| Field      | Meaning                                                               |
+| ---------- | --------------------------------------------------------------------- |
+| `id`       | Stable identifier referenced by edges and filters                     |
+| `name`     | Canonical package, tool, or engine name                               |
+| `version`  | Optional exact resolved version                                       |
+| `revision` | Optional exact source revision for git-sourced components             |
+| `builtAt`  | Optional UTC native build time for components without useful versions |
+| `kind`     | `package`, `tool`, or `engine`                                        |
+| `delivery` | One or more of `dependency`, `bundled`, or `compiled`                 |
+| `aliases`  | Additional accepted filter names                                      |
 
 Schema version 1 defines these edge relationships:
 
@@ -367,22 +368,25 @@ then share one version list.
 
 The build resolves versions from:
 
-| Component type                | Source                                                        |
-| ----------------------------- | ------------------------------------------------------------- |
-| `vite-plus` and core packages | Their generated `package.json` files                          |
-| Bundled JS tools              | Core `bundledVersions` generated during the core build        |
-| Managed npm tools             | Resolved dependency `package.json` files                      |
-| Compiled Rust tools/engines   | `cargo metadata --locked --format-version 1` and `Cargo.lock` |
-| Git-sourced Rust components   | Cargo package version plus the exact resolved revision        |
+| Component type                | Source                                                           |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `vite-plus` and core packages | Their generated `package.json` files                             |
+| Bundled JS tools              | Core `bundledVersions` generated during the core build           |
+| Managed npm tools             | Resolved dependency `package.json` files                         |
+| Compiled Rust tools/engines   | `cargo metadata --locked --format-version 1` and `Cargo.lock`    |
+| Git-sourced Rust components   | Exact revision and, after native compilation, its UTC build time |
 
 Maintainers define graph topology and aliases in a small source-controlled
-descriptor. The generator fills version and revision fields from the sources
-above.
+descriptor. The native build records its completion time, and the manifest
+generator combines that timestamp with versions and revisions from the sources
+above. TypeScript-only builds reuse an existing native timestamp and otherwise
+report the revision alone. `SOURCE_DATE_EPOCH` controls the timestamp in
+reproducible builds.
 
 Release builds fail when:
 
 - the generator cannot resolve a required node,
-- a required node has no exact version,
+- a required node has no exact version, revision, or build time,
 - an edge references an unknown node,
 - node IDs or aliases conflict, or
 - the generated flat `versions` export disagrees with the graph.

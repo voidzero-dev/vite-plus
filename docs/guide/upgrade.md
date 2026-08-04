@@ -11,6 +11,30 @@ There are two parts to upgrading Vite+:
 
 You can upgrade both of them independently.
 
+## Inspect the Toolchain
+
+Run `vp toolchain` to see the exact components selected for the current
+directory:
+
+```bash
+vp toolchain
+vp toolchain vite
+vp toolchain vite rolldown oxc
+vp toolchain --json
+```
+
+The command uses the local `vite-plus` package when the project has one. Pass
+`--global` to inspect the release paired with the global `vp` command:
+
+```bash
+vp toolchain --global
+```
+
+`vp why <package>` still reports the package manager's installed dependency
+graph. It cannot report code bundled into `@voidzero-dev/vite-plus-core` or
+engines compiled into Vite+, so use `vp toolchain` for those versions and
+relationships.
+
 ## Global `vp`
 
 ```bash
@@ -53,7 +77,7 @@ A Vite+ release can bump the bundled Vitest. Because that pin also applies to `v
 After upgrading `vite-plus`, re-pin `vitest` to the version Vite+ now bundles. Check that version with:
 
 ```bash
-vp --version
+vp toolchain vitest
 ```
 
 Then set the `vitest` override to that exact version, or rerun `vp migrate` to update the pin for you.
@@ -86,7 +110,7 @@ irm https://vite.plus/ps1 | iex
 Remove-Item Env:\VP_PR_VERSION
 ```
 
-The installer resolves the ref to its `0.0.0-commit.<sha>` build through the registry bridge and installs it like any other version. Run `vp --version` afterward to confirm which build and bundled tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
+The installer resolves the ref to its `0.0.0-commit.<sha>` build through the registry bridge and installs it like any other version. Run `vp toolchain --global` afterward to confirm which build and tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
 
 ### Local `vite-plus` Preview
 
@@ -98,4 +122,4 @@ vp migrate
 
 Migrate points the project at the bridge registry (writing it to `.npmrc`, or `.yarnrc.yml` for Yarn Berry) and pins `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias to the matching `0.0.0-commit.<sha>` version. That registry line is what lets the same versions resolve in the project's own CI, so commit it if you want CI to test the preview too.
 
-After installing, check the bundled versions with `vp --version`. When testing is complete, restore the published release: set `vite-plus` back to `latest`, remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`), and reinstall with `vp install`.
+After installing, check the selected versions with `vp toolchain`. When testing is complete, restore the published release: set `vite-plus` back to `latest`, remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`), and reinstall with `vp install`.

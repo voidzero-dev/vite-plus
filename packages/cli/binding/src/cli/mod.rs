@@ -21,7 +21,7 @@ pub use resolver::SubcommandResolver;
 use rustc_hash::FxHashMap;
 pub(crate) use types::CapturedCommandOutput;
 pub use types::{
-    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand,
+    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
     ViteConfigResolverFn,
 };
 use vp_error::Error;
@@ -275,6 +275,59 @@ async fn execute_vite_task_command(
     Ok(status)
 }
 
+fn execute_toolchain_command(
+    args: ToolchainArgs,
+    options: Option<&CliOptions>,
+) -> Result<ExitStatus, Error> {
+    if args.global {
+        vp_shared::output::error("`--global` is only supported by the globally installed `vp` CLI");
+        return Ok(ExitStatus(1));
+    }
+
+    let options = options.ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("toolchain metadata is unavailable in this CLI"))
+    })?;
+    let manifest_path = vt_path::AbsolutePathBuf::new(
+        options.toolchain_manifest_path.clone().into(),
+    )
+    .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("toolchain manifest path must be absolute")))?;
+    let manifest = vp_toolchain::load_manifest(&manifest_path)
+        .map_err(|error| Error::Anyhow(anyhow::Error::new(error)))?;
+    let version = vp_toolchain::root_version(&manifest).ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("toolchain manifest does not contain vite-plus"))
+    })?;
+    let source = vp_toolchain::Source {
+        scope: vp_toolchain::Scope::Local,
+        path: options.vite_plus_package_path.clone().into(),
+        vite_plus_version: version.into(),
+    };
+    let report = match vp_toolchain::build_report(&manifest, &args.tools, source) {
+        Ok(report) => report,
+        Err(vp_toolchain::ToolchainError::UnknownFilter(filter)) => {
+            let message = format!("`{filter}` is not part of the Vite+ toolchain manifest");
+            if args.json {
+                vp_shared::output::raw_stderr(&format!("error: {message}"));
+            } else {
+                vp_shared::output::error(&message);
+                vp_shared::output::raw_stderr(&format!(
+                    "hint: run `vp why {filter}` to inspect project dependencies"
+                ));
+            }
+            return Ok(ExitStatus(1));
+        }
+        Err(error) => return Err(Error::Anyhow(anyhow::Error::new(error))),
+    };
+
+    let rendered = if args.json {
+        vp_toolchain::render_json(&report)
+            .map_err(|error| Error::Anyhow(anyhow::Error::new(error)))?
+    } else {
+        vp_toolchain::render_human(&report)
+    };
+    vp_shared::output::raw_inline(&rendered);
+    Ok(ExitStatus::SUCCESS)
+}
+
 /// Main entry point for vite-plus CLI.
 ///
 /// # Arguments
@@ -317,8 +370,9 @@ pub async fn main(
             execute_direct_subcommand(subcmd, &cwd, options).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
-        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd).await,
+        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
         CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
+        CLIArgs::Toolchain(args) => execute_toolchain_command(args, options.as_ref()),
     }
 }
 
@@ -327,6 +381,7 @@ pub async fn main(
 async fn execute_pm_command(
     command: vp_pm_cli::PackageManagerCommand,
     cwd: &AbsolutePath,
+    options: Option<&CliOptions>,
 ) -> Result<ExitStatus, Error> {
     // Commands projected into the vite-plus-managed package store only work
     // in the global CLI. The local CLI has no such store, so refuse rather
@@ -337,6 +392,7 @@ async fn execute_pm_command(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
         )));
     }
+    let why_hint_packages = command.why_hint_packages().map(<[String]>::to_vec);
     let status = match vp_pm_cli::dispatch(cwd, command).await {
         Ok(status) => status,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
@@ -348,6 +404,17 @@ async fn execute_pm_command(
         }
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
     };
+    if status.success()
+        && let Some(packages) = why_hint_packages
+        && let Some(options) = options
+        && let Some(manifest_path) =
+            vt_path::AbsolutePathBuf::new(options.toolchain_manifest_path.clone().into())
+        && let Ok(manifest) = vp_toolchain::load_manifest(&manifest_path)
+        && let Some(hint) = vp_toolchain::why_hint(&manifest, &packages)
+    {
+        vp_shared::output::raw_stderr("");
+        vp_shared::output::raw_stderr(&hint);
+    }
     Ok(types::exit_status_from(status))
 }
 
