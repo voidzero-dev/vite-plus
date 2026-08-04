@@ -372,6 +372,8 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@emnapi/core": "catalog:",
+    "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
     "@types/cross-spawn": "catalog:",
