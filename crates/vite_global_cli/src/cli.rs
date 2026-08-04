@@ -101,7 +101,7 @@ pub enum Commands {
     },
 
     // =========================================================================
-    // Category C: Local CLI Delegation (stubs for now)
+    // Category C: Local CLI Delegation (forwarded to the local vite-plus CLI)
     // =========================================================================
     /// Run the development server
     #[command(disable_help_flag = true)]
@@ -955,7 +955,7 @@ pub async fn run_command_with_options(
 
         Commands::Staged { args } => commands::staged::execute(cwd, &args, raw_subcommand).await,
 
-        // Category C: Local CLI Delegation (stubs)
+        // Category C: Local CLI Delegation (forwarded to the local vite-plus CLI)
         Commands::Dev { args } => {
             maybe_print_runtime_header("dev", &args, render_options.show_header);
             commands::delegate::execute(cwd, "dev", &args, raw_subcommand).await
