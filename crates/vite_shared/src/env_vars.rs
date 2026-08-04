@@ -47,7 +47,7 @@ pub const VP_SHELL: &str = "VP_SHELL";
 pub const VITE_UPDATE_TASK_TYPES: &str = "VITE_UPDATE_TASK_TYPES";
 
 /// Override directory for global CLI JS scripts.
-pub const VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VITE_GLOBAL_CLI_JS_SCRIPTS_DIR";
+pub const VP_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VP_GLOBAL_CLI_JS_SCRIPTS_DIR";
 
 // ── Runtime: set/removed during shim dispatch for child processes ────────
 

@@ -101,7 +101,7 @@ pub struct EnvConfig {
 
     /// Override directory for global CLI JS scripts.
     ///
-    /// Env: `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR`
+    /// Env: `VP_GLOBAL_CLI_JS_SCRIPTS_DIR`
     pub js_scripts_dir: Option<String>,
 
     /// Filter for update task types.
@@ -145,7 +145,7 @@ impl EnvConfig {
             debug_shim: std::env::var(env_vars::VP_DEBUG_SHIM).is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             tool_recursion: std::env::var(env_vars::VP_TOOL_RECURSION).ok(),
-            js_scripts_dir: std::env::var(env_vars::VITE_GLOBAL_CLI_JS_SCRIPTS_DIR).ok(),
+            js_scripts_dir: std::env::var(env_vars::VP_GLOBAL_CLI_JS_SCRIPTS_DIR).ok(),
             update_task_types: std::env::var(env_vars::VITE_UPDATE_TASK_TYPES).ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
             user_home: std::env::var("HOME")
