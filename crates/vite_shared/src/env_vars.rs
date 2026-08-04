@@ -16,7 +16,7 @@
 pub const VP_HOME: &str = "VP_HOME";
 
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vite_task=trace"`).
-pub const VITE_LOG: &str = "VITE_LOG";
+pub const VP_LOG: &str = "VP_LOG";
 
 /// NPM registry URL (lowercase form, highest priority).
 pub const NPM_CONFIG_REGISTRY: &str = "npm_config_registry";

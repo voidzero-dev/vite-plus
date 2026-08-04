@@ -159,7 +159,7 @@ async fn resolve_shasums_content(
 /// that publishes only `SHASUMS256.txt`).
 ///
 /// This is an expected, non-actionable condition for those sources, so it is a
-/// debug log (visible via `VITE_LOG`) rather than a user-facing warning.
+/// debug log (visible via `VP_LOG`) rather than a user-facing warning.
 fn log_checksum_only(archive_filename: &str) {
     tracing::debug!(
         "no PGP signature available for {archive_filename}; verifying SHA-256 checksum only"

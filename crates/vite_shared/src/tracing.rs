@@ -9,21 +9,21 @@ use tracing_subscriber::{
 
 use crate::env_vars;
 
-/// Initialize tracing with `VITE_LOG` environment variable.
+/// Initialize tracing with `VP_LOG` environment variable.
 ///
 /// Uses `OnceLock` to ensure tracing is only initialized once,
 /// even if called multiple times.
 ///
-/// Only sets the global default subscriber when `VITE_LOG` is set.
+/// Only sets the global default subscriber when `VP_LOG` is set.
 /// When unset, the global default slot is left free so that other
 /// subscribers (e.g., rolldown devtools) can claim it without panicking.
 ///
 /// # Environment Variables
-/// - `VITE_LOG`: Controls log filtering (e.g., "debug", "`vite_task=trace`")
+/// - `VP_LOG`: Controls log filtering (e.g., "debug", "`vite_task=trace`")
 pub fn init_tracing() {
     static TRACING: OnceLock<()> = OnceLock::new();
     TRACING.get_or_init(|| {
-        let Ok(env_var) = std::env::var(env_vars::VITE_LOG) else {
+        let Ok(env_var) = std::env::var(env_vars::VP_LOG) else {
             return;
         };
 

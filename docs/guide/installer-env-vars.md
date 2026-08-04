@@ -147,14 +147,14 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 
 ## Logging and Debugging
 
-### `VITE_LOG`
+### `VP_LOG`
 
 - **Purpose**: Log filter string for `tracing_subscriber`
 - **Default**: None
 - **Example**:
   ```bash
-  VITE_LOG=debug vp dev
-  VITE_LOG=vite_task=trace vp build
+  VP_LOG=debug vp dev
+  VP_LOG=vite_task=trace vp build
   ```
 
 ### `VP_DEBUG_SHIM`
