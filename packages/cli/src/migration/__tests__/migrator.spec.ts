@@ -8647,6 +8647,65 @@ describe('Git hook setup policy', () => {
     expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
   });
 
+  it.each([
+    ['a .gitkeep file', '.gitkeep', 'file'],
+    ['a README file', 'README.md', 'file'],
+    ['an unrelated helper directory', 'helpers', 'directory'],
+  ])('does not treat %s as an existing hook policy', (_description, entryName, entryType) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    const hooksDir = path.join(tmpDir, '.vite-hooks');
+    fs.mkdirSync(hooksDir);
+    const entryPath = path.join(hooksDir, entryName);
+    if (entryType === 'directory') {
+      fs.mkdirSync(entryPath);
+    } else {
+      fs.writeFileSync(entryPath, 'placeholder\n');
+    }
+
+    expect(hasExistingViteHooksPolicy(tmpDir)).toBe(false);
+    expect(installGitHooks(tmpDir, true)).toBe(true);
+    expect(fs.readFileSync(path.join(hooksDir, 'pre-commit'), 'utf8')).toBe('vp staged\n');
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      '"*.ts": "eslint --fix"',
+    );
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged'?: Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBeUndefined();
+    expect(pkg['lint-staged']).toBeUndefined();
+  });
+
+  it('does not classify a hook-named directory as policy or overwrite it', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
+    fs.mkdirSync(hookPath, { recursive: true });
+
+    expect(hasExistingViteHooksPolicy(tmpDir)).toBe(false);
+    expect(preflightGitHooksSetup(tmpDir)).toContain('is not a regular file');
+    expect(installGitHooks(tmpDir, true)).toBe(false);
+    expect(fs.statSync(hookPath).isDirectory()).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+  });
+
   it('creates the default staged workflow only when no hook policy exists', () => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
 

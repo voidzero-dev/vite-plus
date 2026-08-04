@@ -5,7 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import { findUnsafeHookInstallPath } from '../../config/hooks.ts';
+import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
 import type { PackageManager } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
@@ -22,6 +22,7 @@ import {
 } from './shared.ts';
 
 const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
+const SUPPORTED_GIT_HOOK_NAME_SET = new Set<string>(SUPPORTED_GIT_HOOK_NAMES);
 
 function removeReplacedStagedPackage(packageJsonPath: string): void {
   editJsonFile<{
@@ -75,13 +76,23 @@ function hasHuskySetup(
 export function hasExistingViteHooksPolicy(projectPath: string): boolean {
   const hooksDir = path.join(projectPath, '.vite-hooks');
   const stats = fs.lstatSync(hooksDir, { throwIfNoEntry: false });
-  if (!stats) {
+  if (!stats?.isDirectory()) {
     return false;
   }
-  if (!stats.isDirectory()) {
-    return true;
+  return fs
+    .readdirSync(hooksDir, { withFileTypes: true })
+    .some((entry) => entry.isFile() && SUPPORTED_GIT_HOOK_NAME_SET.has(entry.name));
+}
+
+function findNonRegularViteHookPath(projectPath: string): string | null {
+  for (const hookName of SUPPORTED_GIT_HOOK_NAMES) {
+    const hookPath = path.join(projectPath, '.vite-hooks', hookName);
+    const stats = fs.lstatSync(hookPath, { throwIfNoEntry: false });
+    if (stats && !stats.isFile()) {
+      return path.join('.vite-hooks', hookName);
+    }
   }
-  return fs.readdirSync(hooksDir, { withFileTypes: true }).some((entry) => entry.name !== '_');
+  return null;
 }
 
 /**
@@ -178,6 +189,10 @@ export function preflightGitHooksSetup(
   const unsafeInstallPath = findUnsafeHookInstallPath(projectPath, '.vite-hooks');
   if (unsafeInstallPath) {
     return `Git hook dispatcher path "${unsafeInstallPath.relativePath}" is unsafe — leaving the existing hook setup unchanged.`;
+  }
+  const nonRegularHookPath = findNonRegularViteHookPath(projectPath);
+  if (nonRegularHookPath) {
+    return `Git hook path "${nonRegularHookPath}" is not a regular file — leaving the existing hook setup unchanged.`;
   }
   if (hasUnsupportedLintStagedConfig(projectPath)) {
     return 'Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.';
