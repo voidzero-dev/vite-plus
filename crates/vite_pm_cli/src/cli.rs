@@ -10,12 +10,12 @@ use clap::Subcommand;
 use crate::{
     Error, PackageManager,
     resolution::{
-        AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, ConfigCommand, DedupeArgs, DeprecateArgs,
-        DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs, LoginArgs, LogoutArgs,
-        OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs, PatchCommitArgs, PingArgs,
-        PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution, SearchArgs, StageCommand,
-        TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
-        resolve_for_manager as resolve_args_for_manager,
+        AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, CiArgs, ConfigCommand, DedupeArgs,
+        DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs,
+        LoginArgs, LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs,
+        PatchCommitArgs, PingArgs, PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution,
+        SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs,
+        WhoamiArgs, WhyArgs, resolve_for_manager as resolve_args_for_manager,
     },
 };
 
@@ -72,6 +72,9 @@ pub enum PackageManagerCommand {
 /// Commands nested below `vp pm`.
 #[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
 pub enum PmCommand {
+    /// Clean install dependencies for CI environments
+    Ci(CiArgs),
+
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     #[command(name = "approve-builds")]
     ApproveBuilds(ApproveBuildsArgs),
@@ -316,6 +319,7 @@ impl PackageManagerCommand {
 impl PmCommand {
     fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
         match self {
+            Self::Ci(args) => resolve_args_for_manager(manager, args),
             Self::ApproveBuilds(args) => resolve_args_for_manager(manager, args),
             Self::Prune(args) => resolve_args_for_manager(manager, args),
             Self::Patch(args) => resolve_args_for_manager(manager, args),
@@ -453,6 +457,21 @@ mod tests {
             parse(&["pm", "stage", "ls"]).unwrap(),
             PackageManagerCommand::Pm(PmCommand::Stage(StageCommand::List { .. }))
         ));
+    }
+
+    #[test]
+    fn ci_parses_and_captures_pass_through_args() {
+        assert!(matches!(
+            parse(&["pm", "ci"]).unwrap(),
+            PackageManagerCommand::Pm(PmCommand::Ci(_))
+        ));
+
+        let PackageManagerCommand::Pm(PmCommand::Ci(args)) =
+            parse(&["pm", "ci", "--", "--ignore-scripts"]).unwrap()
+        else {
+            panic!("expected ci command");
+        };
+        assert_eq!(args.pass_through_args, vec!["--ignore-scripts".to_string()]);
     }
 
     #[test]

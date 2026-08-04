@@ -26,7 +26,7 @@ pub struct JsExecutor {
     cli_runtime: Option<JsRuntime>,
     /// Cached runtime for project delegation (Category C)
     project_runtime: Option<JsRuntime>,
-    /// Directory containing JS scripts (from `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR`)
+    /// Directory containing JS scripts (from `VP_GLOBAL_CLI_JS_SCRIPTS_DIR`)
     scripts_dir: Option<AbsolutePathBuf>,
     /// Subcommand as the user wrote it, forwarded to the CLI this one runs
     raw_subcommand: Option<String>,
@@ -56,7 +56,7 @@ impl JsExecutor {
     ///
     /// Resolution order:
     /// 1. Explicitly provided `scripts_dir`
-    /// 2. `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
+    /// 2. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
     /// 3. Auto-detect from binary location (../dist relative to binary)
     pub fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
         // 1. Use explicitly provided scripts_dir
@@ -65,7 +65,7 @@ impl JsExecutor {
         }
 
         // 2. Check environment variable
-        if let Ok(dir) = std::env::var(env_vars::VITE_GLOBAL_CLI_JS_SCRIPTS_DIR) {
+        if let Ok(dir) = std::env::var(env_vars::VP_GLOBAL_CLI_JS_SCRIPTS_DIR) {
             return AbsolutePathBuf::new(dir.into()).ok_or(Error::JsScriptsDirNotFound);
         }
 

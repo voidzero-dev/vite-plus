@@ -18,7 +18,7 @@ pub enum Error {
     CommandExecution(#[from] io::Error),
 
     #[error(
-        "JS scripts directory not found. Set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR or ensure scripts are bundled."
+        "JS scripts directory not found. Set VP_GLOBAL_CLI_JS_SCRIPTS_DIR or ensure scripts are bundled."
     )]
     JsScriptsDirNotFound,
 

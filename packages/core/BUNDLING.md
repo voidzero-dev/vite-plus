@@ -43,7 +43,7 @@ await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginu
 
 - `@rolldown/pluginutils` → `@voidzero-dev/vite-plus-core/rolldown/pluginutils`
 - `rolldown/*` → `@voidzero-dev/vite-plus-core/rolldown/*`
-- In release builds: `@rolldown/binding-*` → `vite-plus/binding`
+- In release builds: supported `@rolldown/binding-*` → `@voidzero-dev/vite-plus-*`
 
 **Input**: `rolldown/packages/rolldown/dist/`
 **Output**: `dist/rolldown/`
@@ -142,45 +142,34 @@ Located in `build-support/rewrite-module-specifiers.ts`, this utility rewrites s
 
 ### Release Build: Native Binding Rewriting
 
-During release builds (`RELEASE_BUILD=1`), an additional critical transformation occurs for Rolldown's native bindings:
+During release builds (`RELEASE_BUILD=1`), `bundleRolldown()` rewrites Rolldown's native binding requires through `build-support/rewrite-rolldown-binding.ts`. For every platform in the CLI's `napi.targets` (mapped to napi platform suffixes with `parseTriple`), the loader's `@rolldown/binding-<suffix>` requires become `@voidzero-dev/vite-plus-<suffix>`, and that branch's version guard switches from the Rolldown version to core's version, which is what the Vite+ platform packages are published as.
 
-```typescript
-// In bundleRolldown()
-if (process.env.RELEASE_BUILD) {
-  // @rolldown/binding-darwin-arm64 → vite-plus/binding
-  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
-  // Sync version strings
-  source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
-}
-```
+**Platform-specific binding rewrites**, one per `napi.targets` entry in `packages/cli/package.json` (see the target table in [CLI Package Bundling](../cli/BUNDLING.md#napi-targets)), for example:
 
-**Platform-specific binding rewrites**:
+| Original Import                    | Rewritten Import                         |
+| ---------------------------------- | ---------------------------------------- |
+| `@rolldown/binding-darwin-arm64`   | `@voidzero-dev/vite-plus-darwin-arm64`   |
+| `@rolldown/binding-linux-x64-musl` | `@voidzero-dev/vite-plus-linux-x64-musl` |
 
-| Original Import                     | Rewritten Import    |
-| ----------------------------------- | ------------------- |
-| `@rolldown/binding-darwin-arm64`    | `vite-plus/binding` |
-| `@rolldown/binding-darwin-x64`      | `vite-plus/binding` |
-| `@rolldown/binding-linux-arm64-gnu` | `vite-plus/binding` |
-| `@rolldown/binding-linux-x64-gnu`   | `vite-plus/binding` |
-| `@rolldown/binding-win32-x64-msvc`  | `vite-plus/binding` |
+Specifiers for platforms Vite+ does not ship (android, freebsd, the `wasm32-wasi` fallback, `darwin-universal`, ...) stay on `@rolldown/binding-*` and keep their upstream version guards. The build fails if the rewritten specifier and guard counts diverge from the napi-rs loader shape, so a loader format change cannot ship a partial rewrite.
 
 **Why this matters**:
 
 1. **Self-contained distribution** - Users don't need to install separate `@rolldown/binding-*` packages
-2. **Version alignment** - The rolldown binding version is synced to the vite-plus version
-3. **Single native module** - The `vite-plus/binding` export points to the CLI's compiled `.node` file which includes `rolldown_binding` when built with `RELEASE_BUILD=1`
+2. **Declared dependency graph** - Core resolves the binding through its own `optionalDependencies` (injected during publish by `packages/cli/publish-native-addons.ts`), so pnpm's global virtual store and Yarn PnP work without hidden hoisting, and core no longer requires back into `vite-plus`
+3. **Version alignment** - Each rewritten branch's guard checks the platform package version against core's version; both are published lockstep
 
 **Resolution chain**:
 
 ```
 User code imports '@voidzero-dev/vite-plus-core/rolldown'
   → dist/rolldown/index.mjs
-    → imports 'vite-plus/binding' (rewritten from @rolldown/binding-*)
-      → vite-plus CLI package ./binding export
-        → binding/vite-plus.darwin-arm64.node (contains rolldown_binding)
+    → requires '@voidzero-dev/vite-plus-<platform>'
+      (rewritten from '@rolldown/binding-<platform>')
+      → vite-plus.<platform>.node (contains rolldown_binding)
 ```
 
-See [CLI Package Bundling](../cli/BUNDLING.md#rolldown-native-binding-integration) for details on how the CLI compiles rolldown bindings.
+See [CLI Package Bundling](../cli/BUNDLING.md#rolldown-native-binding-integration) for details on how the CLI compiles and publishes the platform packages, and `rfcs/core-binding-resolution.md` for the design.
 
 ---
 
@@ -350,7 +339,7 @@ dist/
 # Build the core package
 pnpm -C packages/core build
 
-# Release build (rewrites @rolldown/binding-* to vite-plus/binding)
+# Release build (rewrites supported @rolldown/binding-* to @voidzero-dev/vite-plus-*)
 RELEASE_BUILD=1 pnpm -C packages/core build
 ```
 

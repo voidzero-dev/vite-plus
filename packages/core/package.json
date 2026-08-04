@@ -116,6 +116,7 @@
     "@babel/generator": "^7.28.5",
     "@babel/parser": "^7.28.5",
     "@babel/types": "^7.28.5",
+    "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@tsdown/css": "catalog:",

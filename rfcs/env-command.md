@@ -2189,7 +2189,7 @@ $ vp env --current --json
 | ------------------------ | ----------------------------------------------------------------------------------------------- | -------------- |
 | `VP_HOME`                | Base directory for bin and config                                                               | `~/.vite-plus` |
 | `VP_NODE_VERSION`        | Session override for Node.js version (set by `vp env use`)                                      | unset          |
-| `VITE_LOG`               | Log level: debug, info, warn, error                                                             | `warn`         |
+| `VP_LOG`                 | Log level: debug, info, warn, error                                                             | `warn`         |
 | `VP_DEBUG_SHIM`          | Enable extra shim diagnostics                                                                   | unset          |
 | `VP_BYPASS`              | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
 | `VP_TOOL_RECURSION`      | **Internal**: Prevents shim recursion                                                           | unset          |

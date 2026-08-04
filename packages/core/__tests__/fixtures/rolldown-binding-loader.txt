@@ -1,0 +1,124 @@
+// Captured excerpts from rolldown/packages/rolldown/dist/shared/binding-*.mjs
+// (Rolldown 1.2.1, napi-rs generated loader). Input fixture for
+// rewrite-rolldown-binding.spec.ts; stored as .txt because the stitched
+// excerpts are not standalone-parseable JS and the code never executes.
+
+// #region webcontainer fallback
+//#region src/webcontainer-fallback.cjs
+var require_webcontainer_fallback = /* @__PURE__ */ __commonJSMin(((exports, module) => {
+	const fs = __require("node:fs");
+	const childProcess = __require("node:child_process");
+	const version = JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version;
+	const baseDir = `/tmp/rolldown-${version}`;
+	const bindingEntry = `${baseDir}/node_modules/@rolldown/binding-wasm32-wasi/rolldown-binding.wasi.cjs`;
+	if (!fs.existsSync(bindingEntry)) {
+		const bindingPkg = `@rolldown/binding-wasm32-wasi@${version}`;
+		fs.rmSync(baseDir, {
+			recursive: true,
+			force: true
+		});
+		fs.mkdirSync(baseDir, { recursive: true });
+		console.log(`[rolldown] Downloading ${bindingPkg} on WebContainer...`);
+		childProcess.execFileSync("pnpm", ["i", bindingPkg], {
+			cwd: baseDir,
+			stdio: "inherit"
+		});
+	}
+	module.exports = __require(bindingEntry);
+}));
+// #endregion
+
+// #region darwin-x64 and darwin-arm64 branches (supported platforms)
+			if (process.arch === "x64") {
+				try {
+					return __require("./rolldown-binding.darwin-x64.node");
+				} catch (e) {
+					loadErrors.push(e);
+				}
+				try {
+					const binding = __require("@rolldown/binding-darwin-x64");
+					const bindingPackageVersion = __require("@rolldown/binding-darwin-x64/package.json").version;
+					if (bindingPackageVersion !== "1.2.1" && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") throw new Error(`Native binding package version mismatch, expected 1.2.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`);
+					return binding;
+				} catch (e) {
+					loadErrors.push(e);
+				}
+			} else if (process.arch === "arm64") {
+				try {
+					return __require("../rolldown-binding.darwin-arm64.node");
+				} catch (e) {
+					loadErrors.push(e);
+				}
+				try {
+					const binding = __require("@rolldown/binding-darwin-arm64");
+					const bindingPackageVersion = __require("@rolldown/binding-darwin-arm64/package.json").version;
+					if (bindingPackageVersion !== "1.2.1" && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") throw new Error(`Native binding package version mismatch, expected 1.2.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`);
+					return binding;
+				} catch (e) {
+					loadErrors.push(e);
+				}
+			} else loadErrors.push(/* @__PURE__ */ new Error(`Unsupported architecture on macOS: ${process.arch}`));
+		} else if (process.platform === "freebsd") if (process.arch === "x64") {
+			try {
+				return __require("./rolldown-binding.freebsd-x64.node");
+			} catch (e) {
+				loadErrors.push(e);
+			}
+// #endregion
+
+// #region freebsd-x64 branch (unsupported platform)
+			try {
+				const binding = __require("@rolldown/binding-freebsd-x64");
+				const bindingPackageVersion = __require("@rolldown/binding-freebsd-x64/package.json").version;
+				if (bindingPackageVersion !== "1.2.1" && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") throw new Error(`Native binding package version mismatch, expected 1.2.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`);
+				return binding;
+			} catch (e) {
+				loadErrors.push(e);
+			}
+		} else if (process.arch === "arm64") {
+			try {
+				return __require("./rolldown-binding.freebsd-arm64.node");
+			} catch (e) {
+				loadErrors.push(e);
+			}
+// #endregion
+
+// #region linux-x64-musl branch (supported platform)
+		else if (process.platform === "linux") if (process.arch === "x64") if (isMusl()) {
+			try {
+				return __require("./rolldown-binding.linux-x64-musl.node");
+			} catch (e) {
+				loadErrors.push(e);
+			}
+			try {
+				const binding = __require("@rolldown/binding-linux-x64-musl");
+				const bindingPackageVersion = __require("@rolldown/binding-linux-x64-musl/package.json").version;
+				if (bindingPackageVersion !== "1.2.1" && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") throw new Error(`Native binding package version mismatch, expected 1.2.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`);
+				return binding;
+			} catch (e) {
+				loadErrors.push(e);
+			}
+		} else {
+// #endregion
+
+// #region wasi package fallback
+		if (!wasiBindingLoaded && (!__napiWasiFlavorRequested || __napiWasiFlavor === "wasm32-wasi")) {
+			let candidateError = null;
+			let candidateFailed = false;
+			try {
+				candidateError = __napiWasiResolveCandidate("@rolldown/binding-wasm32-wasi", true, void 0);
+				candidateFailed = candidateError !== null;
+				if (!candidateFailed) {
+					if (process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") {
+						const bindingPackageVersion = __require("@rolldown/binding-wasm32-wasi/package.json").version;
+						if (bindingPackageVersion !== "1.2.1") throw new Error(`WASI binding package version mismatch, expected 1.2.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`);
+					}
+					wasiBinding = __require("@rolldown/binding-wasm32-wasi");
+					nativeBinding = wasiBinding;
+					wasiBindingLoaded = true;
+				}
+			} catch (err) {
+				candidateError = err;
+				candidateFailed = true;
+			}
+// #endregion
