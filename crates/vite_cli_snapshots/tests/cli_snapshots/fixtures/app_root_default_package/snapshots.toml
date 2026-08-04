@@ -79,6 +79,10 @@ vp = ["local", "global"]
 comment = """
 A command absent from the defaultPackage object falls through to the
 normal resolution: the map only declares `pack`, so bare `vp build` at
-this workspace root runs in place at the (runnable) root with no note.
+this workspace root runs in place at the (runnable) root with no note,
+while `vp pack` still routes to the declared ./packages/ui.
 """
-steps = [{ argv = ["vp", "build"], cwd = "per_command_fallthrough" }]
+steps = [
+  { argv = ["vp", "build"], cwd = "per_command_fallthrough" },
+  { argv = ["vp", "pack"], cwd = "per_command_fallthrough" },
+]
