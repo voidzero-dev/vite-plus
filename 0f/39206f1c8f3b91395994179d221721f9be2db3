@@ -1,0 +1,45 @@
+crates/vite_migration/src/import_rewriter.rs
+  s_09c28b62987691::t_d15d7e7f68f0be 219,1570-1776,1823-1827,2169-2175,2195,2316-2319,2525-2529,2611-2622,3936-4038,4149-4154,4176-4181,4204-4209,4218-4223,4226-4231,4271-4272,4282,4286-4330,5111-5116,5582-5587,5603-5608,5624-5629,5645-5650
+docs/guide/lint.md
+  s_09c28b62987691::t_b2032a1c114a9e 51-102
+docs/guide/migrate-rules.md
+  s_09c28b62987691::t_f62225081b7508 199-226
+packages/cli/package.json
+  s_2bd13baa8199ca::t_67cd79275be6ce 73-80
+packages/cli/src/__tests__/exports-map.spec.ts
+  s_09c28b62987691::t_6f11ff1a4667c6 96-129
+packages/cli/src/__tests__/oxlint-plugin.spec.ts
+  s_09c28b62987691::t_b613e89aa5cb70 105-112,123-136,216-243
+packages/cli/src/lint-plugins.ts
+  s_09c28b62987691::t_72ce093c3c5391 1-20
+packages/cli/src/lint-rule-tester.ts
+  s_09c28b62987691::t_67e8d25e4075c3 1-10
+packages/cli/src/oxlint-plugin.ts
+  s_09c28b62987691::t_bf2146675b024c 47-76,145-157,161-183,248-261,284-301,327
+packages/cli/tsdown.config.ts
+  s_09c28b62987691::t_e311e85a216233 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0f39206f1c8f3b91395994179d221721f9be2db3",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    },
+    "s_2bd13baa8199ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e58e992-7909-4e0f-8306-0782d1a04c0e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
