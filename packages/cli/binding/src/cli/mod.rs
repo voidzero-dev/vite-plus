@@ -464,17 +464,9 @@ mod tests {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
         let run_config_path = PathBuf::from(manifest_dir).join("../src/run-config.ts");
 
-        if std::env::var("VITE_UPDATE_TASK_TYPES").as_deref() == Ok("1") {
-            std::fs::write(&run_config_path, &ts_type).expect("Failed to write run-config.ts");
-        } else {
-            let current = std::fs::read_to_string(&run_config_path)
-                .expect("Failed to read run-config.ts")
-                .replace('\r', "");
-            pretty_assertions::assert_eq!(
-                current,
-                ts_type,
-                "run-config.ts is out of sync. Run `VITE_UPDATE_TASK_TYPES=1 cargo test -p vite-plus-cli run_config_types_in_sync` to update."
-            );
-        }
+        let current = std::fs::read_to_string(&run_config_path)
+            .expect("Failed to read run-config.ts")
+            .replace('\r', "");
+        pretty_assertions::assert_eq!(current, ts_type, "run-config.ts is out of sync.");
     }
 }

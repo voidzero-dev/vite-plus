@@ -43,9 +43,6 @@ pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 /// Explicitly specify the current shell.
 pub const VP_SHELL: &str = "VP_SHELL";
 
-/// Filter for update task types.
-pub const VITE_UPDATE_TASK_TYPES: &str = "VITE_UPDATE_TASK_TYPES";
-
 /// Override directory for global CLI JS scripts.
 pub const VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VITE_GLOBAL_CLI_JS_SCRIPTS_DIR";
 
