@@ -23,6 +23,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
