@@ -1,3 +1,3 @@
 export default {
-  defaultPackage: { pack: './lib' },
+  defaultPackage: { pack: './packages/ui' },
 };

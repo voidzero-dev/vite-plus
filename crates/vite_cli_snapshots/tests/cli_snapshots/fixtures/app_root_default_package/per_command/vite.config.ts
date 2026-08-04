@@ -1,3 +1,3 @@
 export default {
-  defaultPackage: { build: './frontend', pack: './lib' },
+  defaultPackage: { build: './apps/web', pack: './packages/ui' },
 };
