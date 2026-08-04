@@ -58,32 +58,33 @@ husky/lint-staged and prepare are left untouched
 
 ## `vp migrate --hooks --no-interactive`
 
---hooks opts into migrating legacy husky/lint-staged
+--hooks still preserves a detected Husky setup
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-◇ Updated . to Vite+ <version>
-• Node <version>  pnpm <version>
-• Dependencies:
-    vite   → <version>
-• 2 config updates applied
-• Git hooks configured
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
+This project is already using Vite+! Happy coding!
 ```
 
 ## `vpt print-file package.json`
 
-husky/lint-staged should be removed, prepare should be vp config
+Husky and lint-staged metadata should remain
 
 ```
 {
   "name": "migration-already-vite-plus-with-husky-lint-staged",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "devEngines": {
     "packageManager": {
@@ -95,18 +96,18 @@ husky/lint-staged should be removed, prepare should be vp config
 }
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt print-file .husky/pre-commit`
 
-pre-commit hook should be rewritten
-
-```
-vp staged
-```
-
-## `vpt stat-file .husky --assert-not dir`
-
-.husky should be removed
+the Husky hook should remain unchanged
 
 ```
-.husky: missing
+npx lint-staged
+```
+
+## `vpt stat-file .husky --assert dir`
+
+.husky should remain
+
+```
+.husky: dir
 ```

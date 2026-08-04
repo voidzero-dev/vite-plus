@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,7 +49,10 @@ const {
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
   detectIncompatibleEslintIntegration,
+  hasExistingViteHooksPolicy,
+  installGitHooks,
   preflightGitHooksSetup,
+  shouldSkipStagedMigrationForHooks,
   detectLegacyGitHooksMigrationCandidate,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
@@ -8511,12 +8515,11 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('detects leftover husky and lint-staged in an existing Vite+ project', () => {
+  it('detects leftover lint-staged config in an existing Vite+ project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
-        scripts: { prepare: 'husky' },
-        devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7', 'vite-plus': 'latest' },
+        devDependencies: { 'lint-staged': '^16.2.7', 'vite-plus': 'latest' },
         'lint-staged': { '*': 'vp check --fix' },
       }),
     );
@@ -8577,83 +8580,362 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
   });
 });
 
-describe('preflightGitHooksSetup husky catalog resolution', () => {
+describe('Git hook setup policy', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-catalog-'));
-    // A `.git` dir at the project root so the subdirectory check passes.
-    fs.mkdirSync(path.join(tmpDir, '.git'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-hook-policy-'));
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('resolves a `catalog:` husky version from the pnpm catalog and allows hooks', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
-    );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+  it.each([
+    ['prepare command', { scripts: { prepare: 'husky' } }],
+    ['dependency', { devDependencies: { husky: '^9.1.7' } }],
+  ])('preserves Husky detected from a %s', (_source, pkg) => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
 
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Detected Husky');
   });
 
-  it('resolves the explicit `catalog:default` alias from the top-level catalog', () => {
-    // pnpm reserves `default` for the top-level `catalog:` map, so `catalog:default`
-    // must resolve there rather than a named `catalogs.default` entry.
+  it('preserves a Husky directory even without package metadata', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+
+    expect(preflightGitHooksSetup(tmpDir)).toContain('Detected Husky');
+  });
+
+  it('does not mutate a detected Husky setup', () => {
+    const packageJson = JSON.stringify({
+      scripts: { prepare: 'husky' },
+      devDependencies: { husky: '^9.1.7' },
+    });
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), packageJson);
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npm test\n');
+
+    expect(installGitHooks(tmpDir, true)).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(packageJson);
+    expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
+    expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+  });
+
+  it('preserves existing project-owned Vite+ hooks and staged tooling', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'npm test\n');
+
+    expect(hasExistingViteHooksPolicy(tmpDir)).toBe(true);
+    expect(installGitHooks(tmpDir, true)).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+      'npm test\n',
+    );
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.scripts.prepare).toBe('vp config');
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+  });
+
+  it.each([
+    ['a .gitkeep file', '.gitkeep', 'file'],
+    ['a README file', 'README.md', 'file'],
+    ['an unrelated helper directory', 'helpers', 'directory'],
+  ])('does not treat %s as an existing hook policy', (_description, entryName, entryType) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    const hooksDir = path.join(tmpDir, '.vite-hooks');
+    fs.mkdirSync(hooksDir);
+    const entryPath = path.join(hooksDir, entryName);
+    if (entryType === 'directory') {
+      fs.mkdirSync(entryPath);
+    } else {
+      fs.writeFileSync(entryPath, 'placeholder\n');
+    }
+
+    expect(hasExistingViteHooksPolicy(tmpDir)).toBe(false);
+    expect(installGitHooks(tmpDir, true)).toBe(true);
+    expect(fs.readFileSync(path.join(hooksDir, 'pre-commit'), 'utf8')).toBe('vp staged\n');
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      '"*.ts": "eslint --fix"',
+    );
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged'?: Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBeUndefined();
+    expect(pkg['lint-staged']).toBeUndefined();
+  });
+
+  it('does not classify a hook-named directory as policy or overwrite it', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    const hookPath = path.join(tmpDir, '.vite-hooks', 'pre-commit');
+    fs.mkdirSync(hookPath, { recursive: true });
+
+    expect(hasExistingViteHooksPolicy(tmpDir)).toBe(false);
+    expect(preflightGitHooksSetup(tmpDir)).toContain('is not a regular file');
+    expect(installGitHooks(tmpDir, true)).toBe(false);
+    expect(fs.statSync(hookPath).isDirectory()).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+  });
+
+  it('preserves staged config before a create-style standalone rewrite with Husky', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         scripts: { prepare: 'husky' },
-        devDependencies: { husky: 'catalog:default' },
+        devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7', vite: '^7.0.0' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
       }),
     );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npx lint-staged\n');
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
 
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      true,
+      workspaceInfo.packageManager,
+    );
+    rewriteStandaloneProject(tmpDir, workspaceInfo, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe(
+      'npx lint-staged\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).not.toContain('staged:');
   });
 
-  it('flags a `catalog:` husky version that resolves to <9 in the pnpm catalog', () => {
+  it('migrates staged config after create establishes a nested Git root', () => {
+    const projectPath = path.join(tmpDir, 'nested-project');
+    fs.mkdirSync(projectPath);
     fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'lint-staged': '^16.2.7', vite: '^7.0.0' },
+      }),
     );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
+    fs.writeFileSync(
+      path.join(projectPath, '.lintstagedrc.json'),
+      JSON.stringify({ '*.ts': 'eslint --fix' }),
+    );
+    execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'ignore' });
 
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toContain('husky <9.0.0');
+    expect(shouldSkipStagedMigrationForHooks(projectPath, true, PackageManager.pnpm)).toBe(true);
+
+    execFileSync('git', ['init'], { cwd: projectPath, stdio: 'ignore' });
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      projectPath,
+      true,
+      PackageManager.pnpm,
+    );
+    rewriteStandaloneProject(
+      projectPath,
+      makeWorkspaceInfo(projectPath, PackageManager.pnpm),
+      skipStagedMigration,
+      true,
+    );
+
+    expect(skipStagedMigration).toBe(false);
+    expect(fs.existsSync(path.join(projectPath, '.lintstagedrc.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(projectPath, 'vite.config.ts'), 'utf8')).toContain(
+      '"*.ts": "eslint --fix"',
+    );
   });
 
-  it('does not read a foreign catalog: a yarn project ignores a leftover pnpm-workspace.yaml', () => {
-    // A `catalog:` spec is only meaningful to the active package manager, so a
-    // stray pnpm-workspace.yaml in a yarn repo must not satisfy husky's version.
+  it('preserves staged config before a create-style monorepo rewrite with a Vite+ hook', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
     );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'npx lint-staged\n');
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['packages/*'];
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
 
-    // Yarn's catalog source (.yarnrc.yml) is absent, so husky stays unresolved
-    // and the preflight warns instead of trusting the pnpm catalog.
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toContain(
-      'Could not determine husky version from "catalog:"',
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      true,
+      workspaceInfo.packageManager,
     );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+      'npx lint-staged\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).not.toContain('staged:');
   });
 
-  it('uses the active package manager catalog over a foreign one', () => {
-    // Discriminating case: yarn's own catalog pins a compatible husky while a
-    // leftover pnpm-workspace.yaml pins an incompatible one. Reading yarn's
-    // catalog returns null (allowed); wrongly reading pnpm's would warn about
-    // husky <9, and broken resolution would warn "Could not determine".
+  it('preserves staged config when a workspace package owns Husky hooks', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
-      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
     );
-    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'catalog:\n  husky: ^9.1.7\n');
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(path.join(appDir, '.husky'), { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        scripts: { prepare: 'husky' },
+        devDependencies: {
+          husky: '^9.1.7',
+          'lint-staged': '^16.2.7',
+          vite: '^7.0.0',
+        },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    fs.writeFileSync(path.join(appDir, '.husky', 'pre-commit'), 'npx lint-staged\n');
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['packages/*'];
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
 
-    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
+    expect(
+      preflightGitHooksSetup(tmpDir, workspaceInfo.packageManager, workspaceInfo.packages),
+    ).toContain('Husky in workspace package "packages/app"');
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      true,
+      workspaceInfo.packageManager,
+      workspaceInfo.packages,
+    );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies.husky).toBe('^9.1.7');
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.readFileSync(path.join(appDir, '.husky', 'pre-commit'), 'utf8')).toBe(
+      'npx lint-staged\n',
+    );
+    expect(
+      installGitHooks(
+        tmpDir,
+        true,
+        undefined,
+        workspaceInfo.packageManager,
+        workspaceInfo.packages,
+      ),
+    ).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+  });
+
+  it('disables migration-time hook setup when a workspace package owns hooks', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(path.join(appDir, '.husky'), { recursive: true });
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }));
+
+    const plan = await collectMigrationSetupPlan(
+      tmpDir,
+      PackageManager.pnpm,
+      { interactive: false, hooks: true, agent: false, editor: false },
+      [{ name: 'app', path: 'packages/app' }],
+      false,
+    );
+
+    expect(plan.shouldSetupHooks).toBe(false);
+  });
+
+  it('preserves staged config for a package created inside an existing monorepo', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: { 'lint-staged': '^16.2.7', vite: '^7.0.0' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      false,
+      PackageManager.pnpm,
+    );
+    rewriteMonorepoProject(tmpDir, PackageManager.pnpm, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
+  });
+
+  it('creates the default staged workflow only when no hook policy exists', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+
+    expect(installGitHooks(tmpDir, true)).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+      'vp staged\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      '"*": "vp check --fix"',
+    );
   });
 });
 

@@ -1,15 +1,8 @@
-// Unified `vp config` command — hooks setup + agent instruction updates.
-//
-// Hooks: interactive mode prompts on first run; non-interactive installs by default.
-// Agent instructions: silently updates existing files with Vite+ markers.
-// Never creates new agent files. Same behavior for prepare and manual runs.
-
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import mri from 'mri';
 
-import { ensurePreCommitHook, hasStagedConfigInViteConfig } from '../migration/migrator.ts';
 import { updateExistingAgentInstructions } from '../utils/agent.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
@@ -26,7 +19,7 @@ async function main() {
   if (args.help) {
     const helpMessage = renderCliDoc({
       usage: 'vp config [OPTIONS]',
-      summary: 'Configure Vite+ for the current project (hooks + agent integration).',
+      summary: 'Configure Vite+ for the current project (hook dispatcher + agent integration).',
       documentationUrl: 'https://viteplus.dev/guide/commit-hooks',
       sections: [
         {
@@ -36,14 +29,14 @@ async function main() {
               label: '--hooks-dir <path>',
               description: 'Custom hooks directory (default: .vite-hooks)',
             },
-            { label: '--no-hooks', description: 'Skip hook installation' },
+            { label: '--no-hooks', description: 'Skip hook dispatcher installation' },
             { label: '--no-agent', description: 'Skip updating coding agent instructions' },
             { label: '-h, --help', description: 'Show this help message' },
           ],
         },
         {
           title: 'Environment',
-          rows: [{ label: 'VP_GIT_HOOKS=0', description: 'Skip hook installation' }],
+          rows: [{ label: 'VP_GIT_HOOKS=0', description: 'Skip hook dispatcher installation' }],
         },
       ],
     });
@@ -65,18 +58,12 @@ async function main() {
   const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
 
   let shouldSetupHooks = !skipHooks;
-  if (
-    shouldSetupHooks &&
-    interactive &&
-    isFirstHooksRun &&
-    !dir &&
-    !isLifecycleScript &&
-    !hasStagedConfigInViteConfig(root)
-  ) {
-    // --hooks-dir implies agreement; only prompt when using default dir on first run
-    // lifecycle script (prepare/postinstall) implies the project opted into hooks — install automatically
-    // existing staged config in vite.config.ts implies the project already opted in
-    shouldSetupHooks = await promptGitHooks({ interactive });
+  if (shouldSetupHooks && interactive && isFirstHooksRun && !dir && !isLifecycleScript) {
+    // Explicit directories and lifecycle scripts already opt in.
+    shouldSetupHooks = await promptGitHooks({
+      interactive,
+      message: 'Install the Git hook dispatcher for this project?',
+    });
   }
 
   if (shouldSetupHooks) {
@@ -86,12 +73,6 @@ async function main() {
       if (isError) {
         process.exit(1);
       }
-    }
-
-    // Only create pre-commit hook when install() succeeded (empty message).
-    // Skip when hooks were disabled or git is unavailable.
-    if (!message) {
-      ensurePreCommitHook(root, hooksDir);
     }
   }
 

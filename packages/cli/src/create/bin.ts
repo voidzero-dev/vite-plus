@@ -21,6 +21,7 @@ import {
   rewriteMonorepoProject,
   rewriteStandaloneProject,
   setPackageManager,
+  shouldSkipStagedMigrationForHooks,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -1074,6 +1075,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     // rewrite monorepo to add vite-plus dependencies
     const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+    const scaffoldedWorkspace = await detectWorkspace(fullPath);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = scaffoldedWorkspace.workspacePatterns;
+    workspaceInfo.parentDirs = scaffoldedWorkspace.parentDirs;
+    workspaceInfo.packages = scaffoldedWorkspace.packages;
     if (shouldInitGit) {
       const gitResult = spawn.sync('git', ['init'], { stdio: 'pipe', cwd: fullPath });
       if (gitResult.status === 0) {
@@ -1115,7 +1121,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
-    rewriteMonorepo(workspaceInfo, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+      workspaceInfo.packages,
+    );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, compactOutput);
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
       if (await initGitRepository(fullPath)) {
@@ -1132,7 +1144,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       injectCreateDefaultTemplate(fullPath, bundled.scope, compactOutput);
     }
     if (shouldSetupHooks) {
-      installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
+      installGitHooks(
+        fullPath,
+        compactOutput,
+        undefined,
+        workspaceInfo.packageManager,
+        workspaceInfo.packages,
+      );
     }
     updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
@@ -1405,7 +1423,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(workspaceInfo.rootDir);
     }
     updateCreateProgress('Integrating into monorepo');
-    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteMonorepoProject(
+      fullPath,
+      workspaceInfo.packageManager,
+      skipStagedMigration,
+      compactOutput,
+    );
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
@@ -1431,20 +1459,28 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // No git setup here: `resolveGitInit` always returns false inside an
     // existing monorepo (the package shares the monorepo's repository).
   } else {
-    if (shouldMigrateLintFmtTools) {
-      await installAndMigrate(fullPath);
-    }
-    updateCreateProgress('Applying Vite+ project setup');
-    rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
-    for (const framework of detectFramework(fullPath)) {
-      if (!hasFrameworkShim(fullPath, framework)) {
-        addFrameworkShim(fullPath, framework);
-      }
-    }
+    // Establish the destination's intended Git root before hook preflight.
+    // Otherwise a project scaffolded inside another repository is mistaken
+    // for a subdirectory project and its staged workflow is left half-set-up.
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
       if (await initGitRepository(fullPath)) {
         ensureDefaultGitignoreEntries(fullPath);
+      }
+    }
+    if (shouldMigrateLintFmtTools) {
+      await installAndMigrate(fullPath);
+    }
+    updateCreateProgress('Applying Vite+ project setup');
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    for (const framework of detectFramework(fullPath)) {
+      if (!hasFrameworkShim(fullPath, framework)) {
+        addFrameworkShim(fullPath, framework);
       }
     }
     if (shouldSetupHooks) {

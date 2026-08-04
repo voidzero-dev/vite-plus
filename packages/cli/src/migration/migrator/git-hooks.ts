@@ -3,17 +3,14 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
-import semver from 'semver';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import { PackageManager } from '../../types/index.ts';
+import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
+import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
-import { detectPackageMetadata } from '../../utils/package.ts';
 import {
-  createCatalogDependencyResolver,
   hasStagedConfigInViteConfig,
   mergeStagedConfigToViteConfig,
-  readPrepareRulesYaml,
   readRulesYaml,
   removeLintStagedFromPackageJson,
 } from '../migrator.ts';
@@ -24,70 +21,19 @@ import {
   warnMigration,
 } from './shared.ts';
 
-/**
- * Check if the project has an unsupported husky version (<9.0.0).
- * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
- * When the specifier is a catalog reference (e.g. `"catalog:"`), resolves
- * it from the active package manager's catalog first — a `catalog:` spec is
- * only meaningful to the manager that owns the workspace, so we never read a
- * leftover/foreign catalog file. When it is still not coercible (e.g.
- * `"latest"`), falls back to the installed version in node_modules via
- * `detectPackageMetadata`.
- * Returns a reason string if hooks migration should be skipped, or null
- * if husky is absent or compatible.
- */
-function checkUnsupportedHuskyVersion(
-  projectPath: string,
-  deps: Record<string, string> | undefined,
-  prodDeps: Record<string, string> | undefined,
-  packageManager: PackageManager | undefined,
-): string | null {
-  const huskyVersion = deps?.husky ?? prodDeps?.husky;
-  if (!huskyVersion) {
-    return null;
-  }
-  let coerced = semver.coerce(huskyVersion);
-  if (coerced == null && packageManager != null && huskyVersion.startsWith('catalog:')) {
-    const resolved = createCatalogDependencyResolver(projectPath, packageManager)?.(
-      huskyVersion,
-      'husky',
-    );
-    if (resolved) {
-      coerced = semver.coerce(resolved);
-    }
-  }
-  if (coerced == null) {
-    const installed = detectPackageMetadata(projectPath, 'husky');
-    if (installed) {
-      coerced = semver.coerce(installed.version);
-    }
-    if (coerced == null) {
-      return `Could not determine husky version from "${huskyVersion}" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.`;
-    }
-  }
-  if (semver.satisfies(coerced, '<9.0.0')) {
-    return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
-  }
-  return null;
-}
-
 const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
+const SUPPORTED_GIT_HOOK_NAME_SET = new Set<string>(SUPPORTED_GIT_HOOK_NAMES);
 
-// Packages replaced by vite-plus built-in commands and should be removed from devDependencies
-const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
-
-function removeReplacedHookPackages(packageJsonPath: string): void {
+function removeReplacedStagedPackage(packageJsonPath: string): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    for (const name of REPLACED_HOOK_PACKAGES) {
-      if (pkg.devDependencies?.[name]) {
-        delete pkg.devDependencies[name];
-      }
-      if (pkg.dependencies?.[name]) {
-        delete pkg.dependencies[name];
-      }
+    if (pkg.devDependencies?.['lint-staged']) {
+      delete pkg.devDependencies['lint-staged'];
+    }
+    if (pkg.dependencies?.['lint-staged']) {
+      delete pkg.dependencies['lint-staged'];
     }
     return pkg;
   });
@@ -102,7 +48,51 @@ export function detectLegacyGitHooksMigrationCandidate(projectPath: string): boo
     scripts?: Record<string, string>;
     'lint-staged'?: unknown;
   };
-  return getOldHooksDir(projectPath) !== undefined || pkg['lint-staged'] !== undefined;
+  return pkg['lint-staged'] !== undefined;
+}
+
+function hasHuskySetup(
+  projectPath: string,
+  pkg: {
+    scripts?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    husky?: unknown;
+  },
+): boolean {
+  return (
+    pkg.devDependencies?.husky !== undefined ||
+    pkg.dependencies?.husky !== undefined ||
+    pkg.optionalDependencies?.husky !== undefined ||
+    pkg.peerDependencies?.husky !== undefined ||
+    pkg.husky !== undefined ||
+    (pkg.scripts?.prepare ? /\bhusky\b/.test(pkg.scripts.prepare) : false) ||
+    fs.existsSync(path.join(projectPath, '.husky'))
+  );
+}
+
+export function hasExistingViteHooksPolicy(projectPath: string): boolean {
+  const hooksDir = path.join(projectPath, '.vite-hooks');
+  const stats = fs.lstatSync(hooksDir, { throwIfNoEntry: false });
+  if (!stats?.isDirectory()) {
+    return false;
+  }
+  return fs
+    .readdirSync(hooksDir, { withFileTypes: true })
+    .some((entry) => entry.isFile() && SUPPORTED_GIT_HOOK_NAME_SET.has(entry.name));
+}
+
+function findNonRegularViteHookPath(projectPath: string): string | null {
+  for (const hookName of SUPPORTED_GIT_HOOK_NAMES) {
+    const hookPath = path.join(projectPath, '.vite-hooks', hookName);
+    const stats = fs.lstatSync(hookPath, { throwIfNoEntry: false });
+    if (stats && !stats.isFile()) {
+      return path.join('.vite-hooks', hookName);
+    }
+  }
+  return null;
 }
 
 /**
@@ -123,51 +113,67 @@ function findGitRoot(startPath: string): string | null {
   }
 }
 
-/**
- * Normalize "husky install [dir]" → "husky [dir]" so downstream regex
- * and ast-grep rules can match a single pattern.
- */
-function collapseHuskyInstall(script: string): string {
-  return script.replace('husky install ', 'husky ').replace('husky install', 'husky');
+function findWorkspacePackageHookPolicy(
+  workspaceRoot: string,
+  packages: readonly WorkspacePackage[],
+): string | null {
+  for (const pkg of packages) {
+    const packagePath = path.join(workspaceRoot, pkg.path);
+    if (hasExistingViteHooksPolicy(packagePath)) {
+      return `Detected project-owned Vite+ hooks in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
+    }
+
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    const pkgContent = fs.existsSync(packageJsonPath) ? readJsonFile(packageJsonPath) : {};
+    if (hasHuskySetup(packagePath, pkgContent)) {
+      return `Detected Husky in workspace package "${pkg.path}" — leaving its hooks, configuration, and dependencies unchanged.`;
+    }
+    const deps = pkgContent.devDependencies as Record<string, string> | undefined;
+    const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+    for (const tool of OTHER_HOOK_TOOLS) {
+      if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
+        return `Detected ${tool} in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
+      }
+    }
+
+    // A nested repository can have a package-local hooksPath even when it has
+    // no hook-tool dependency or conventional hook directory to detect.
+    const gitRoot = findGitRoot(packagePath);
+    if (gitRoot && path.resolve(packagePath) === path.resolve(gitRoot)) {
+      const configuredHooksPath = getConfiguredHooksPath(packagePath);
+      const normalizedHooksPath = normalizeGitHooksPath(configuredHooksPath);
+      if (configuredHooksPath && normalizedHooksPath !== '.vite-hooks/_') {
+        return `core.hooksPath is already set to "${configuredHooksPath}" in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
+      }
+    }
+  }
+  return null;
+}
+
+function getConfiguredHooksPath(projectPath: string): string {
+  const result = spawn.sync('git', ['config', '--get', 'core.hooksPath'], {
+    cwd: projectPath,
+    stdio: 'pipe',
+  });
+  return result.status === 0 ? (result.stdout?.toString().trim() ?? '') : '';
+}
+
+function normalizeGitHooksPath(hooksPath: string): string {
+  return path.posix.normalize(hooksPath.replaceAll('\\', '/')).replace(/\/$/, '');
 }
 
 /**
- * High-level helper: detect old hooks dir, set up git hooks, and rewrite
- * the prepare script.  Returns true if hooks were successfully installed.
+ * High-level helper that sets up Vite+ hooks when no other hook tool owns the
+ * project. Husky setups are deliberately preserved for a dedicated migration.
  */
 export function installGitHooks(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
   packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): boolean {
-  const oldHooksDir = getOldHooksDir(projectPath);
-  if (setupGitHooks(projectPath, oldHooksDir, silent, report, packageManager)) {
-    rewritePrepareScript(projectPath);
-    return true;
-  }
-  return false;
-}
-
-/**
- * Read-only probe: extract the old husky hooks directory from `scripts.prepare`
- * without modifying package.json. Returns undefined when no husky reference is found.
- */
-export function getOldHooksDir(rootDir: string): string | undefined {
-  const packageJsonPath = path.join(rootDir, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return undefined;
-  }
-  const pkg = readJsonFile(packageJsonPath) as { scripts?: { prepare?: string } };
-  if (!pkg.scripts?.prepare) {
-    return undefined;
-  }
-  const prepare = collapseHuskyInstall(pkg.scripts.prepare);
-  const match = prepare.match(/\bhusky(?:\s+([\w./-]+))?/);
-  if (!match) {
-    return undefined;
-  }
-  return match[1] ?? '.husky';
+  return setupGitHooks(projectPath, silent, report, packageManager, packages);
 }
 
 /**
@@ -178,12 +184,12 @@ export function getOldHooksDir(rootDir: string): string | undefined {
  * These checks are deterministic and read-only — they do not modify
  * the project in any way, making them safe to call before migration.
  *
- * `packageManager` is the project's detected manager; it scopes `catalog:`
- * resolution to that manager's catalog so a foreign catalog file is ignored.
+ * The package manager argument remains for API compatibility with callers.
  */
 export function preflightGitHooksSetup(
   projectPath: string,
-  packageManager?: PackageManager,
+  _packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): string | null {
   const gitRoot = findGitRoot(projectPath);
   if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
@@ -196,19 +202,63 @@ export function preflightGitHooksSetup(
   const pkgContent = readJsonFile(packageJsonPath);
   const deps = pkgContent.devDependencies as Record<string, string> | undefined;
   const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+  const configuredHooksPath = gitRoot ? getConfiguredHooksPath(projectPath) : '';
+  const normalizedHooksPath = normalizeGitHooksPath(configuredHooksPath);
+  if (
+    hasHuskySetup(projectPath, pkgContent) ||
+    normalizedHooksPath === '.husky' ||
+    normalizedHooksPath.startsWith('.husky/')
+  ) {
+    return 'Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.';
+  }
   for (const tool of OTHER_HOOK_TOOLS) {
     if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
       return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools`;
     }
   }
-  const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps, packageManager);
-  if (huskyReason) {
-    return huskyReason;
+  const workspacePackageReason = findWorkspacePackageHookPolicy(projectPath, packages);
+  if (workspacePackageReason) {
+    return workspacePackageReason;
+  }
+  const disabledHooksEnvironment = ['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'].find(
+    (name) => process.env[name] === '0',
+  );
+  if (disabledHooksEnvironment) {
+    return `Git hooks are disabled through ${disabledHooksEnvironment}=0 — skipping git hooks setup.`;
+  }
+  if (configuredHooksPath && normalizedHooksPath !== '.vite-hooks/_') {
+    return `core.hooksPath is already set to "${configuredHooksPath}" — leaving the existing hook setup unchanged.`;
+  }
+  const unsafeInstallPath = findUnsafeHookInstallPath(projectPath, '.vite-hooks');
+  if (unsafeInstallPath) {
+    return `Git hook dispatcher path "${unsafeInstallPath.relativePath}" is unsafe — leaving the existing hook setup unchanged.`;
+  }
+  const nonRegularHookPath = findNonRegularViteHookPath(projectPath);
+  if (nonRegularHookPath) {
+    return `Git hook path "${nonRegularHookPath}" is not a regular file — leaving the existing hook setup unchanged.`;
   }
   if (hasUnsupportedLintStagedConfig(projectPath)) {
     return 'Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.';
   }
   return null;
+}
+
+/**
+ * Decide whether config rewriting must leave lint-staged configuration in
+ * place. Call this after scaffolding but before rewriting the project so an
+ * existing hook owner never observes a partially migrated configuration.
+ */
+export function shouldSkipStagedMigrationForHooks(
+  projectPath: string,
+  shouldSetupHooks: boolean,
+  packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
+): boolean {
+  return (
+    !shouldSetupHooks ||
+    hasExistingViteHooksPolicy(projectPath) ||
+    preflightGitHooksSetup(projectPath, packageManager, packages) !== null
+  );
 }
 
 /**
@@ -218,12 +268,12 @@ export function preflightGitHooksSetup(
  */
 export function setupGitHooks(
   projectPath: string,
-  oldHooksDir?: string,
   silent = false,
   report?: MigrationReport,
   packageManager?: PackageManager,
+  packages: readonly WorkspacePackage[] = [],
 ): boolean {
-  const reason = preflightGitHooksSetup(projectPath, packageManager);
+  const reason = preflightGitHooksSetup(projectPath, packageManager, packages);
   if (reason) {
     warnMigration(reason, report);
     return false;
@@ -236,28 +286,21 @@ export function setupGitHooks(
 
   const gitRoot = findGitRoot(projectPath);
 
-  // Custom husky dirs (e.g. .config/husky) stay unchanged;
-  // only the default .husky dir gets migrated to .vite-hooks.
-  const isCustomDir = oldHooksDir != null && oldHooksDir !== '.husky';
-  const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
+  const hooksDir = '.vite-hooks';
+  const hasExistingHookPolicy = hasExistingViteHooksPolicy(projectPath);
 
   editJsonFile<{
     scripts?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // Ensure vp config is present for projects that didn't have husky.
-    // Skip when prepare contains "husky" — rewritePrepareScript (called after
-    // setupGitHooks succeeds) will transform husky → vp config.
+    // Ensure the generated dispatcher is refreshed after dependency installs.
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
     if (!pkg.scripts.prepare) {
       pkg.scripts.prepare = 'vp config';
-    } else if (
-      !pkg.scripts.prepare.includes('vp config') &&
-      !/\bhusky\b/.test(pkg.scripts.prepare)
-    ) {
+    } else if (!pkg.scripts.prepare.includes('vp config')) {
       pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
     }
 
@@ -267,7 +310,7 @@ export function setupGitHooks(
   // Add staged config to vite.config.ts if not present
   let stagedMerged = hasStagedConfigInViteConfig(projectPath);
   const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
-  if (!stagedMerged && !hasStandaloneConfig) {
+  if (!hasExistingHookPolicy && !stagedMerged && !hasStandaloneConfig) {
     // Use lint-staged config from package.json if available, otherwise use default
     const pkgData = readJsonFile(packageJsonPath) as {
       'lint-staged'?: Record<string, string | string[]>;
@@ -282,67 +325,29 @@ export function setupGitHooks(
 
   // Only remove lint-staged key from package.json after staged config is
   // confirmed in vite.config.ts — prevents losing config on merge failure
-  if (stagedMerged) {
+  if (!hasExistingHookPolicy && stagedMerged) {
     removeLintStagedFromPackageJson(packageJsonPath);
-  }
-
-  // Copy default .husky/ hooks to .vite-hooks/ before creating pre-commit hook.
-  // Custom dirs (e.g. .config/husky) are kept in-place — no copy needed.
-  if (oldHooksDir && !isCustomDir) {
-    const oldDir = path.join(projectPath, oldHooksDir);
-    if (fs.existsSync(oldDir)) {
-      const targetDir = path.join(projectPath, hooksDir);
-      fs.mkdirSync(targetDir, { recursive: true });
-      for (const entry of fs.readdirSync(oldDir, { withFileTypes: true })) {
-        if (entry.isDirectory() || entry.name.startsWith('.')) {
-          continue;
-        }
-        const src = path.join(oldDir, entry.name);
-        const dest = path.join(targetDir, entry.name);
-        fs.copyFileSync(src, dest);
-        fs.chmodSync(dest, 0o755);
-      }
-      // Remove old .husky/ directory after copying hooks to .vite-hooks/
-      fs.rmSync(oldDir, { recursive: true, force: true });
-    }
   }
 
   // Only create pre-commit hook if staged config was merged into vite.config.ts.
   // Standalone lint-staged config files are NOT sufficient — `vp staged` only
   // reads from vite.config.ts, so a hook without merged config would fail.
-  if (stagedMerged) {
+  if (!hasExistingHookPolicy && stagedMerged) {
     createPreCommitHook(projectPath, hooksDir);
   }
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
-    removeReplacedHookPackages(packageJsonPath);
-    return true;
-  }
-
-  // Clear husky's core.hooksPath so vp config can set the new one.
-  // Only clear if it matches the old husky directory — preserve genuinely custom paths.
-  if (oldHooksDir) {
-    const checkResult = spawn.sync('git', ['config', '--local', 'core.hooksPath'], {
-      cwd: projectPath,
-      stdio: 'pipe',
-    });
-    const existingPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
-    if (existingPath === `${oldHooksDir}/_` || existingPath === oldHooksDir) {
-      spawn.sync('git', ['config', '--local', '--unset', 'core.hooksPath'], {
-        cwd: projectPath,
-        stdio: 'pipe',
-      });
+    if (!hasExistingHookPolicy && stagedMerged) {
+      removeReplacedStagedPackage(packageJsonPath);
     }
+    return true;
   }
 
   const vpBin = process.env.VP_CLI_BIN ?? 'vp';
 
   // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
-  const configArgs = isCustomDir
-    ? ['config', '--no-agent', '--hooks-dir', hooksDir]
-    : ['config', '--no-agent'];
-  const configResult = spawn.sync(vpBin, configArgs, {
+  const configResult = spawn.sync(vpBin, ['config', '--no-agent'], {
     cwd: projectPath,
     stdio: 'pipe',
   });
@@ -356,7 +361,9 @@ export function setupGitHooks(
       warnMigration(`Git hooks not configured — ${stdout}`, report);
       return false;
     }
-    removeReplacedHookPackages(packageJsonPath);
+    if (!hasExistingHookPolicy && stagedMerged) {
+      removeReplacedStagedPackage(packageJsonPath);
+    }
     if (report) {
       report.gitHooksConfigured = true;
     }
@@ -394,124 +401,15 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
   return false;
 }
 
-/**
- * Create pre-commit hook file in the hooks directory.
- */
-// Lint-staged invocation patterns — replaced in-place with `vp staged`.
-// The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
-// We still detect old lint-staged patterns to migrate existing hooks.
-const STALE_LINT_STAGED_PATTERNS = [
-  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
-  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
-];
-
 const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
-
-/**
- * Ensure the pre-commit hook exists with `vp staged`, and that
- * vite.config.ts contains a `staged` block (using the default config
- * if none is present). Called by `vp config` after hook installation.
- */
-export function ensurePreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
-  if (!hasStagedConfigInViteConfig(projectPath)) {
-    mergeStagedConfigToViteConfig(projectPath, DEFAULT_STAGED_CONFIG, true);
-  }
-  createPreCommitHook(projectPath, dir);
-}
 
 export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
   const huskyDir = path.join(projectPath, dir);
   fs.mkdirSync(huskyDir, { recursive: true });
   const hookPath = path.join(huskyDir, 'pre-commit');
   if (fs.existsSync(hookPath)) {
-    const existing = fs.readFileSync(hookPath, 'utf8');
-    if (existing.includes('vp staged')) {
-      return; // already has vp staged
-    }
-    // Replace old lint-staged invocations in-place, preserve everything else
-    const lines = existing.split('\n');
-    let replaced = false;
-    const result: string[] = [];
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!replaced) {
-        let matched = false;
-        for (const pattern of STALE_LINT_STAGED_PATTERNS) {
-          const match = pattern.exec(trimmed);
-          if (match) {
-            // Preserve env var prefix (capture group 1) and flags/chained commands after lint-staged
-            const envPrefix = match[1]?.trim() ?? '';
-            const rest = trimmed.slice(match[0].length).trim();
-            const parts = [envPrefix, 'vp staged', rest].filter(Boolean);
-            result.push(parts.join(' '));
-            replaced = true;
-            matched = true;
-            break;
-          }
-        }
-        if (matched) {
-          continue;
-        }
-      }
-      result.push(line);
-    }
-    if (!replaced) {
-      // No lint-staged line found — append after existing content
-      fs.writeFileSync(hookPath, `${result.join('\n').trimEnd()}\nvp staged\n`);
-    } else {
-      fs.writeFileSync(hookPath, result.join('\n'));
-    }
-  } else {
-    fs.writeFileSync(hookPath, 'vp staged\n');
-    fs.chmodSync(hookPath, 0o755);
+    return;
   }
-}
-
-/**
- * Rewrite only `scripts.prepare` in the root package.json using vite-prepare.yml rules.
- * Collapses "husky install" → "husky" before applying ast-grep so that the
- * replace-husky rule produces "vp config" with any directory argument preserved.
- * Returns the old husky hooks dir (if any) for migration to .vite-hooks.
- * Called only when hooks are being set up (not with --no-hooks).
- */
-export function rewritePrepareScript(rootDir: string): string | undefined {
-  const packageJsonPath = path.join(rootDir, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return undefined;
-  }
-
-  let oldDir: string | undefined;
-
-  editJsonFile<{ scripts?: Record<string, string> }>(packageJsonPath, (pkg) => {
-    if (!pkg.scripts?.prepare) {
-      return pkg;
-    }
-
-    // Collapse "husky install" → "husky" so the ast-grep rule
-    // produces "vp config" with any directory argument preserved.
-    const prepare = collapseHuskyInstall(pkg.scripts.prepare);
-
-    const prepareJson = JSON.stringify({ prepare });
-    const updated = rewriteScripts(prepareJson, readPrepareRulesYaml());
-    if (updated) {
-      let newPrepare: string = JSON.parse(updated).prepare;
-      newPrepare = newPrepare.replace(
-        /\bvp config(?:\s+(?!-)([\w./-]+))?/,
-        (_match: string, dir: string | undefined) => {
-          // Capture the old husky dir for hook migration.
-          // Default husky dir is .husky; custom dirs keep --hooks-dir flag.
-          oldDir = dir ?? '.husky';
-          return dir ? `vp config --hooks-dir ${dir}` : 'vp config';
-        },
-      );
-      pkg.scripts.prepare = newPrepare;
-    } else if (prepare !== pkg.scripts.prepare) {
-      // Pre-processing changed the script (husky install → husky)
-      // but no rule matched — keep the collapsed form
-      pkg.scripts.prepare = prepare;
-    }
-    return pkg;
-  });
-
-  return oldDir;
+  fs.writeFileSync(hookPath, 'vp staged\n');
+  fs.chmodSync(hookPath, 0o755);
 }

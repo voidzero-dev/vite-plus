@@ -5,7 +5,7 @@
 
 ## `vp config`
 
-should install hooks automatically without prompting
+should install the dispatcher automatically without prompting
 
 ```
 ```
@@ -18,27 +18,28 @@ should be .vite-hooks/_
 .vite-hooks/_
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt stat-file .vite-hooks/_/pre-commit --assert file`
 
-should have vp staged
-
-```
-vp staged
-```
-
-## `vpt print-file vite.config.ts`
-
-should have staged config
+generated dispatcher shim should exist
 
 ```
-import { defineConfig } from 'vite-plus';
+.vite-hooks/_/pre-commit: file
+```
 
-export default defineConfig({
-  staged: {
-    "*": "vp check --fix"
-  },
+## `vpt stat-file .vite-hooks/pre-commit --assert missing`
 
-});
+project hook should not be created
+
+```
+.vite-hooks/pre-commit: missing
+```
+
+## `vpt stat-file vite.config.ts --assert missing`
+
+vite config should not be created
+
+```
+vite.config.ts: missing
 ```
 
 ## `vp config`
@@ -48,25 +49,18 @@ run again to ensure idempotent
 ```
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt stat-file .vite-hooks/pre-commit --assert missing`
 
-should remain unchanged
-
-```
-vp staged
-```
-
-## `vpt print-file vite.config.ts`
-
-should remain unchanged
+project hook should still be absent
 
 ```
-import { defineConfig } from 'vite-plus';
+.vite-hooks/pre-commit: missing
+```
 
-export default defineConfig({
-  staged: {
-    "*": "vp check --fix"
-  },
+## `vpt stat-file vite.config.ts --assert missing`
 
-});
+vite config should still be absent
+
+```
+vite.config.ts: missing
 ```

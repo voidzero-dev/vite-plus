@@ -5,30 +5,35 @@
 
 ## `vp migrate --no-interactive`
 
-should resolve husky v9 from node_modules, no warning
+an installed Husky version should still be preserved
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-husky and lint-staged should be removed
+Husky metadata should remain
 
 ```
 {
   "name": "migration-husky-latest-dist-tag-v9-installed",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "latest",
+    "lint-staged": "^16.2.6",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
   },
   "devEngines": {
     "packageManager": {

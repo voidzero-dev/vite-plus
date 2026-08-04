@@ -27,24 +27,31 @@ secret-scan
 
 ## `vp migrate --no-interactive`
 
-migration should preserve existing pre-commit contents
+migration should leave an existing Husky hook untouched
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt print-file .husky/pre-commit`
 
-check pre-commit hook preserves existing commands
+the original hook path and commands should remain
 
 ```
 #!/usr/bin/env sh
 npm test
 secret-scan
-vp staged
+```
+
+## `vpt stat-file .vite-hooks --assert-not dir`
+
+no Vite+ hook tree should be created
+
+```
+.vite-hooks: missing
 ```

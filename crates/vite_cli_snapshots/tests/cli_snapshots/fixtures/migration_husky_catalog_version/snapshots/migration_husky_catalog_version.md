@@ -5,32 +5,35 @@
 
 ## `vp migrate --no-interactive`
 
-should resolve husky version from catalog and configure hooks without warning
+catalog dependencies should still be recognized as a Husky setup
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• Git hooks configured
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-husky and lint-staged should be removed, prepare rewritten to vp config
+Husky and lint-staged metadata should remain
 
 ```
 {
   "name": "migration-husky-catalog-version",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
   },
   "devEngines": {
     "packageManager": {
@@ -66,7 +69,7 @@ peerDependencyRules:
 
 ## `vpt print-file vite.config.ts`
 
-check staged config migrated to vite.config.ts
+no staged config should be introduced
 
 ```
 import { defineConfig } from 'vite-plus';
@@ -74,16 +77,13 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
-  staged: {
-    "*.js": "vp lint --fix"
-  },
 });
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt print-file .husky/pre-commit`
 
-check pre-commit hook rewritten
+the Husky hook should remain unchanged
 
 ```
-vp staged
+npx lint-staged
 ```

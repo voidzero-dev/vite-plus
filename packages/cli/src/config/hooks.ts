@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmodSync, lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 
-const HOOKS = [
+export const SUPPORTED_GIT_HOOK_NAMES = [
   'pre-commit',
   'pre-merge-commit',
   'prepare-commit-msg',
@@ -32,8 +32,10 @@ function nestedDirname(depth: number): string {
 // `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
 export function hookScript(dir: string): string {
   // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
-  // Filter out empty strings and '.' to handle paths like "./.config/husky"
-  const segments = dir.split('/').filter((s) => s !== '' && s !== '.').length;
+  // Git accepts forward slashes on every platform; Windows also accepts its
+  // native backslash. On POSIX, a backslash is a literal filename character.
+  const separators = process.platform === 'win32' ? /[\\/]/ : /\//;
+  const segments = dir.split(separators).filter((s) => s !== '' && s !== '.').length;
   const depth = segments + 2; // +2 for _ subdir and hook filename
   const rootExpr = nestedDirname(depth);
   return `#!/usr/bin/env sh
@@ -76,6 +78,71 @@ export interface InstallResult {
   isError: boolean;
 }
 
+export interface UnsafeHookInstallPath {
+  kind: 'symbolic' | 'linked' | 'not-directory' | 'not-file';
+  relativePath: string;
+}
+
+export function normalizeHooksPath(hooksPath: string): string {
+  let normalized = normalize(hooksPath);
+  while (normalized.endsWith(sep)) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
+export function findUnsafeHookInstallPath(root: string, dir: string): UnsafeHookInstallPath | null {
+  const projectRoot = resolve(root);
+  const internalPath = resolve(projectRoot, dir, '_');
+  const relativeInternalPath = relative(projectRoot, internalPath);
+  let currentPath = projectRoot;
+
+  for (const component of relativeInternalPath.split(sep).filter(Boolean)) {
+    currentPath = join(currentPath, component);
+    const stats = lstatSync(currentPath, { throwIfNoEntry: false });
+    if (!stats) {
+      return null;
+    }
+    if (stats.isSymbolicLink()) {
+      return { kind: 'symbolic', relativePath: relative(projectRoot, currentPath) };
+    }
+    if (!stats.isDirectory()) {
+      return { kind: 'not-directory', relativePath: relative(projectRoot, currentPath) };
+    }
+  }
+
+  for (const filename of ['husky.sh', '.gitignore', 'h', ...SUPPORTED_GIT_HOOK_NAMES]) {
+    const filePath = join(internalPath, filename);
+    const stats = lstatSync(filePath, { throwIfNoEntry: false });
+    if (!stats) {
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      return { kind: 'symbolic', relativePath: relative(projectRoot, filePath) };
+    }
+    if (!stats.isFile()) {
+      return { kind: 'not-file', relativePath: relative(projectRoot, filePath) };
+    }
+    if (stats.nlink > 1) {
+      return { kind: 'linked', relativePath: relative(projectRoot, filePath) };
+    }
+  }
+  return null;
+}
+
+function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): string {
+  if (unsafePath.kind === 'symbolic') {
+    return `symbolic hook path "${unsafePath.relativePath}" not allowed`;
+  }
+  if (unsafePath.kind === 'linked') {
+    return `multiply linked hook path "${unsafePath.relativePath}" not allowed`;
+  }
+  if (unsafePath.kind === 'not-directory') {
+    return `hook path "${unsafePath.relativePath}" is not a directory`;
+  }
+  return `hook path "${unsafePath.relativePath}" is not a file`;
+}
+
 export function install(dir = '.vite-hooks'): InstallResult {
   // VP_GIT_HOOKS is the canonical name; VITE_GIT_HOOKS is kept for backwards compatibility.
   if (
@@ -87,6 +154,16 @@ export function install(dir = '.vite-hooks'): InstallResult {
   }
   if (dir.includes('..')) {
     return { message: '.. not allowed', isError: false };
+  }
+  if (isAbsolute(dir)) {
+    return { message: 'absolute hooks directory not allowed', isError: false };
+  }
+  if (relative(process.cwd(), resolve(process.cwd(), dir)) === '') {
+    return { message: 'hooks directory must be a project subdirectory', isError: false };
+  }
+  const unsafeInstallPath = findUnsafeHookInstallPath(process.cwd(), dir);
+  if (unsafeInstallPath) {
+    return { message: describeUnsafeHookInstallPath(unsafeInstallPath), isError: false };
   }
   // Use --show-prefix to get the relative path from git root to cwd.
   // This avoids Windows path normalization issues (MSYS paths, 8.3 short names)
@@ -102,34 +179,32 @@ export function install(dir = '.vite-hooks'): InstallResult {
   const internal = (x = '') => join(dir, '_', x);
   const rel = prefixResult.stdout.toString().trim().replace(/\/$/, '');
   const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
-  const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
+  // Read the effective value so a worktree-scoped setting cannot silently
+  // override the local value we are about to write.
+  const checkResult = spawnSync('git', ['config', '--get', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
-  if (
-    existingHooksPath &&
-    existingHooksPath !== target &&
-    existingHooksPath !== '.husky' &&
-    !existingHooksPath.startsWith('.husky/')
-  ) {
+  if (existingHooksPath && normalizeHooksPath(existingHooksPath) !== normalizeHooksPath(target)) {
     return {
       message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
       isError: false,
     };
   }
 
+  rmSync(internal('husky.sh'), { force: true });
+  mkdirSync(internal(), { recursive: true });
+  writeFileSync(internal('.gitignore'), '*');
+  writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
+  chmodSync(internal('h'), 0o755);
+  for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
+    writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
+    chmodSync(internal(hook), 0o755);
+  }
   const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', target]);
   if (status == null) {
     return { message: 'git command not found', isError: true };
   }
   if (status) {
     return { message: '' + stderr, isError: true };
-  }
-
-  rmSync(internal('husky.sh'), { force: true });
-  mkdirSync(internal(), { recursive: true });
-  writeFileSync(internal('.gitignore'), '*');
-  writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
-  for (const hook of HOOKS) {
-    writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
   }
   return { message: '', isError: false };
 }

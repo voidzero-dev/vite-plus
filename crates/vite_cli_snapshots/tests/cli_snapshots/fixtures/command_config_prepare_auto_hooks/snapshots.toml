@@ -4,11 +4,12 @@ vp = "global"
 env = { npm_lifecycle_event = "prepare" }
 steps = [
   { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
-  { argv = ["vp", "config"], comment = "should install hooks automatically without prompting", continue-on-failure = true },
+  { argv = ["vp", "config"], comment = "should install the dispatcher automatically without prompting", continue-on-failure = true },
   { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
-  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "should have vp staged", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "should have staged config", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/_/pre-commit", "--assert", "file"], comment = "generated dispatcher shim should exist", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert", "missing"], comment = "project hook should not be created", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite.config.ts", "--assert", "missing"], comment = "vite config should not be created", continue-on-failure = true },
   { argv = ["vp", "config"], comment = "run again to ensure idempotent", continue-on-failure = true },
-  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "should remain unchanged", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "should remain unchanged", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert", "missing"], comment = "project hook should still be absent", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite.config.ts", "--assert", "missing"], comment = "vite config should still be absent", continue-on-failure = true },
 ]

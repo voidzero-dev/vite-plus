@@ -3,30 +3,44 @@
 ## `git init`
 
 
+## `vpt mkdir -p .config/husky/_`
+
+
+## `vpt write-file .config/husky/pre-commit '#'\!'/usr/bin/env sh
+npx lint-staged
+'`
+
+
+## `vpt write-file .config/husky/_/h '#'\!'/usr/bin/env sh
+echo custom dispatcher
+'`
+
+
 ## `vp migrate --no-interactive`
 
-migration should preserve custom husky dir in composed prepare
+migration should skip the custom Husky setup
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-prepare should be 'vp config --hooks-dir .config/husky && npm run build'
+prepare and the Husky dependency should remain
 
 ```
 {
   "name": "migration-composed-husky-custom-dir",
   "scripts": {
-    "prepare": "npm run build && vp config --hooks-dir .config/husky"
+    "prepare": "npm run build && husky install .config/husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
@@ -59,48 +73,26 @@ peerDependencyRules:
 
 ## `vpt print-file .config/husky/pre-commit`
 
-pre-commit hook should be in custom dir
+custom hook should be unchanged
 
 ```
-vp staged
+#!/usr/bin/env sh
+npx lint-staged
 ```
 
 ## `vpt print-file .config/husky/_/h`
 
-hook dispatcher should resolve repo root correctly for nested dirs
+custom dispatcher should be unchanged
 
 ```
 #!/usr/bin/env sh
-{ [ "$HUSKY" = "2" ] || [ "$VP_GIT_HOOKS" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
-n=$(basename "$0")
-s=$(dirname "$(dirname "$0")")/$n
+echo custom dispatcher
+```
 
-[ ! -f "$s" ] && exit 0
+## `vpt stat-file .vite-hooks --assert-not dir`
 
-i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
-[ ! -f "$i" ] && i="${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
-[ -f "$i" ] && . "$i"
+no Vite+ hook tree should be created
 
-{ [ "${HUSKY-}" = "0" ] || [ "${VP_GIT_HOOKS-}" = "0" ] || [ "${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
-
-d="$(dirname "$(dirname "$(dirname "$(dirname "$0")")")")"
-__vp_shell=/bin/sh
-[ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
-
-if [ -n "${VP_HOME-}" ]; then
-  __vp_bin="$VP_HOME/bin"
-elif [ -n "${HOME-}" ]; then
-  __vp_bin="$HOME/.vite-plus/bin"
-else
-  __vp_bin=""
-fi
-[ -n "$__vp_bin" ] && [ -d "$__vp_bin" ] && export PATH="$PATH:$__vp_bin"
-
-export PATH="$d/node_modules/.bin:$PATH"
-"$__vp_shell" -e "$s" "$@"
-c=$?
-
-[ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
-[ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
-exit $c
+```
+.vite-hooks: missing
 ```

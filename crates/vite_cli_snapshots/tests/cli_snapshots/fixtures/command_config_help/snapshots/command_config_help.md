@@ -7,16 +7,16 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp config [OPTIONS]
 
-Configure Vite+ for the current project (hooks + agent integration).
+Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
-  --no-hooks          Skip hook installation
+  --no-hooks          Skip hook dispatcher installation
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
 
 Environment:
-  VP_GIT_HOOKS=0  Skip hook installation
+  VP_GIT_HOOKS=0  Skip hook dispatcher installation
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```
@@ -28,16 +28,16 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp config [OPTIONS]
 
-Configure Vite+ for the current project (hooks + agent integration).
+Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
-  --no-hooks          Skip hook installation
+  --no-hooks          Skip hook dispatcher installation
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
 
 Environment:
-  VP_GIT_HOOKS=0  Skip hook installation
+  VP_GIT_HOOKS=0  Skip hook dispatcher installation
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```
@@ -49,16 +49,16 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp config [OPTIONS]
 
-Configure Vite+ for the current project (hooks + agent integration).
+Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
-  --no-hooks          Skip hook installation
+  --no-hooks          Skip hook dispatcher installation
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
 
 Environment:
-  VP_GIT_HOOKS=0  Skip hook installation
+  VP_GIT_HOOKS=0  Skip hook dispatcher installation
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```

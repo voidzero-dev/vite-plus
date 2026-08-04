@@ -1,7 +1,18 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -71,6 +82,161 @@ describe('install', () => {
       }
     }
   });
+
+  it('rejects an absolute hooks directory', () => {
+    expect(install(resolve(tmpdir(), 'external-hooks'))).toEqual({
+      message: 'absolute hooks directory not allowed',
+      isError: false,
+    });
+  });
+
+  it.each(['', '.', './'])('rejects the project root as hooks directory: %j', (hooksDir) => {
+    expect(install(hooksDir)).toEqual({
+      message: 'hooks directory must be a project subdirectory',
+      isError: false,
+    });
+  });
+
+  it.skipIf(process.platform === 'win32')('does not replace an existing Husky hooks path', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-path-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      execSync('git config core.hooksPath .husky/_', { cwd: tmp });
+      mkdirSync(join(tmp, '.husky'));
+      writeFileSync(join(tmp, '.husky', 'pre-commit'), 'npm test\n');
+      process.chdir(tmp);
+
+      expect(install()).toEqual({
+        message: 'core.hooksPath is already set to ".husky/_", skipping',
+        isError: false,
+      });
+      expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+        '.husky/_',
+      );
+      expect(readFileSync(join(tmp, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
+      expect(existsSync(join(tmp, '.vite-hooks'))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('refreshes an equivalent hooks path spelling', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-equivalent-path-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      execSync('git config core.hooksPath .custom-hooks/_', { cwd: tmp });
+      process.chdir(tmp);
+
+      expect(install('./.custom-hooks')).toEqual({ message: '', isError: false });
+      expect(existsSync(join(tmp, '.custom-hooks', '_', 'pre-commit'))).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'does not claim success over a worktree-scoped hooks path',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-worktree-path-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        execSync('git config extensions.worktreeConfig true', { cwd: tmp });
+        execSync('git config --worktree core.hooksPath .worktree-hooks', { cwd: tmp });
+        process.chdir(tmp);
+
+        expect(install()).toEqual({
+          message: 'core.hooksPath is already set to ".worktree-hooks", skipping',
+          isError: false,
+        });
+        expect(existsSync(join(tmp, '.vite-hooks'))).toBe(false);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.worktree-hooks',
+        );
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'does not write through a symbolic dispatcher file',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-symlink-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        const externalFile = join(tmp, 'external-hook-runner');
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(externalFile, 'keep me\n');
+        symlinkSync(externalFile, join(tmp, '.vite-hooks', '_', 'h'));
+        process.chdir(tmp);
+
+        expect(install()).toEqual({
+          message: 'symbolic hook path ".vite-hooks/_/h" not allowed',
+          isError: false,
+        });
+        expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'does not write through a hard-linked dispatcher file',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-hardlink-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        const externalFile = join(tmp, 'external-hook-runner');
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(externalFile, 'keep me\n');
+        linkSync(externalFile, join(tmp, '.vite-hooks', '_', 'h'));
+        process.chdir(tmp);
+
+        expect(install()).toEqual({
+          message: 'multiply linked hook path ".vite-hooks/_/h" not allowed',
+          isError: false,
+        });
+        expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('restores executable dispatcher permissions', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-mode-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      const internalDir = join(tmp, '.vite-hooks', '_');
+      mkdirSync(internalDir, { recursive: true });
+      writeFileSync(join(internalDir, 'h'), 'stale\n');
+      writeFileSync(join(internalDir, 'pre-commit'), 'stale\n');
+      chmodSync(join(internalDir, 'h'), 0o600);
+      chmodSync(join(internalDir, 'pre-commit'), 0o600);
+      process.chdir(tmp);
+
+      expect(install()).toEqual({ message: '', isError: false });
+      expect(statSync(join(internalDir, 'h')).mode & 0o777).toBe(0o755);
+      expect(statSync(join(internalDir, 'pre-commit')).mode & 0o777).toBe(0o755);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('hookScript env gates', () => {
@@ -112,6 +278,17 @@ describe('hookScript', () => {
     const withoutDot = hookScript('custom-hooks');
     expect(countDirnameCalls(withDot)).toBe(countDirnameCalls(withoutDot));
     expect(countDirnameCalls(withDot)).toBe(3);
+  });
+
+  it.skipIf(process.platform !== 'win32')('should handle Windows separators in nested dirs', () => {
+    const withWindowsSeparators = hookScript('.config\\husky');
+    const withPosixSeparators = hookScript('.config/husky');
+    expect(countDirnameCalls(withWindowsSeparators)).toBe(countDirnameCalls(withPosixSeparators));
+    expect(countDirnameCalls(withWindowsSeparators)).toBe(4);
+  });
+
+  it.skipIf(process.platform === 'win32')('treats a backslash as a literal POSIX filename', () => {
+    expect(countDirnameCalls(hookScript('.config\\husky'))).toBe(3);
   });
 
   it.skipIf(process.platform === 'win32')(

@@ -7,8 +7,8 @@ steps = [
   { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false, continue-on-failure = true },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "a version-update defers legacy husky hooks to --full", continue-on-failure = true },
   { argv = ["git", "config", "--local", "core.hooksPath"], comment = "still husky's .husky/_ (not overridden)", continue-on-failure = true },
-  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "--hooks overrides husky's core.hooksPath and migrates hooks", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "package.json"], comment = "husky/lint-staged should be removed, prepare should be vp config", continue-on-failure = true },
-  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "pre-commit hook should be rewritten", continue-on-failure = true },
-  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "--hooks still preserves a detected Husky setup", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "Husky and lint-staged metadata should remain", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "the Husky hook should remain unchanged", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "Husky's hooksPath should remain", continue-on-failure = true },
 ]

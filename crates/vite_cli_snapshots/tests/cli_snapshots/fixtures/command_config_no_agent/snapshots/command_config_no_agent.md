@@ -5,7 +5,7 @@
 
 ## `vp config --no-agent`
 
-should install hooks but skip agent instruction updates
+should install the hook dispatcher but skip agent instruction updates
 
 ```
 ```
