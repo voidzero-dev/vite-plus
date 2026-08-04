@@ -63,7 +63,6 @@ declare module '@voidzero-dev/vite-plus-core' {
      * config, so this also works at roots with no vite-plus dependency; the
      * static read is why the values must stay plain string literals.
      */
-     */
     defaultPackage?: string | { dev?: string; build?: string; preview?: string; pack?: string };
 
     run?: RunConfig;
