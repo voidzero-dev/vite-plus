@@ -74,6 +74,12 @@ jobs:
           # `vp migrate` pins the build-time release placeholder instead of the
           # test build, and skips the registry-bridge .npmrc.
           pnpm exec json-edit packages/cli/package.json '_.version = process.env.VERSION'
+          # Stamp packages/core/package.json so the release build bakes ${VERSION}
+          # into bundled Rolldown's binding version guards, matching the
+          # @voidzero-dev/vite-plus-<platform> packages published as ${VERSION}.
+          # A release checkout already carries ${VERSION}; this only changes
+          # preview builds.
+          pnpm exec json-edit packages/core/package.json '_.version = process.env.VERSION'
 
       - name: Verify version replacement
         shell: bash
@@ -84,9 +90,11 @@ jobs:
               echo "ERROR: version stamp failed for $f"; head -5 "$f"; exit 1
             fi
           done
-          if [ "$(node -p "require('./packages/cli/package.json').version")" != "${VERSION}" ]; then
-            echo "ERROR: version stamp failed for packages/cli/package.json"; exit 1
-          fi
+          for f in packages/cli/package.json packages/core/package.json; do
+            if [ "$(node -p "require('./$f').version")" != "${VERSION}" ]; then
+              echo "ERROR: version stamp failed for $f"; exit 1
+            fi
+          done
           echo "Version stamp verified: ${VERSION}"
 
       - name: Build

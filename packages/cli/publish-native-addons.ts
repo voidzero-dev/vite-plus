@@ -94,6 +94,40 @@ for (const dir of platformDirs) {
   }));
 }
 
+// napi-rs prePublish injects the platform packages into this package's
+// `optionalDependencies`. Release builds of core rewrite bundled Rolldown's
+// binding requires to the same platform packages (see
+// packages/core/build-support/rewrite-rolldown-binding.ts), so core must
+// declare them too; napi-rs manages a single package, so mirror the injected
+// entries into core with identical pins. Like the CLI's entries, these live
+// only in the publish working tree, never in the committed package.json.
+const cliOptionalDependencies = (
+  JSON.parse(readFileSync(join(currentDir, 'package.json'), 'utf-8')) as {
+    optionalDependencies?: Record<string, string>;
+  }
+).optionalDependencies;
+const nativePlatformPins: Record<string, string> = {};
+for (const target of pkg.napi.targets) {
+  const packageName = `@voidzero-dev/vite-plus-${parseTriple(target).platformArchABI}`;
+  const pin = cliOptionalDependencies?.[packageName];
+  if (!pin) {
+    console.error(
+      `napi prePublish did not inject ${packageName} into packages/cli/package.json optionalDependencies`,
+    );
+    process.exit(1);
+  }
+  nativePlatformPins[packageName] = pin;
+}
+editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) => ({
+  ...corePkgJson,
+  optionalDependencies: Object.fromEntries(
+    Object.entries({
+      ...(corePkgJson.optionalDependencies as Record<string, string> | undefined),
+      ...nativePlatformPins,
+    }).toSorted(([a], [b]) => a.localeCompare(b)),
+  ),
+}));
+
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
 if (!skipNpmPublish) {
