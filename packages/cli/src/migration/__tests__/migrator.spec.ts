@@ -51,6 +51,7 @@ const {
   hasExistingViteHooksPolicy,
   installGitHooks,
   preflightGitHooksSetup,
+  shouldSkipStagedMigrationForHooks,
   detectLegacyGitHooksMigrationCandidate,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
@@ -8704,6 +8705,110 @@ describe('Git hook setup policy', () => {
     };
     expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
     expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+  });
+
+  it('preserves staged config before a create-style standalone rewrite with Husky', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7', vite: '^7.0.0' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+    fs.writeFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'npx lint-staged\n');
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      true,
+      workspaceInfo.packageManager,
+    );
+    rewriteStandaloneProject(tmpDir, workspaceInfo, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.readFileSync(path.join(tmpDir, '.husky', 'pre-commit'), 'utf8')).toBe(
+      'npx lint-staged\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).not.toContain('staged:');
+  });
+
+  it('preserves staged config before a create-style monorepo rewrite with a Vite+ hook', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: { 'lint-staged': '^16.2.7' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+    fs.writeFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'npx lint-staged\n');
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['packages/*'];
+    workspaceInfo.packages = [{ name: 'app', path: 'packages/app' }];
+
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      true,
+      workspaceInfo.packageManager,
+    );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.readFileSync(path.join(tmpDir, '.vite-hooks', 'pre-commit'), 'utf8')).toBe(
+      'npx lint-staged\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).not.toContain('staged:');
+  });
+
+  it('preserves staged config for a package created inside an existing monorepo', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: { 'lint-staged': '^16.2.7', vite: '^7.0.0' },
+        'lint-staged': { '*.ts': 'eslint --fix' },
+      }),
+    );
+
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      tmpDir,
+      false,
+      PackageManager.pnpm,
+    );
+    rewriteMonorepoProject(tmpDir, PackageManager.pnpm, skipStagedMigration, true);
+
+    expect(skipStagedMigration).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      'lint-staged': Record<string, string>;
+    };
+    expect(pkg.devDependencies['lint-staged']).toBe('^16.2.7');
+    expect(pkg['lint-staged']).toEqual({ '*.ts': 'eslint --fix' });
+    expect(fs.existsSync(path.join(tmpDir, 'vite.config.ts'))).toBe(false);
   });
 
   it('creates the default staged workflow only when no hook policy exists', () => {

@@ -51,7 +51,6 @@ import {
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
-  hasExistingViteHooksPolicy,
   hasFrameworkShim,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
@@ -63,6 +62,7 @@ import {
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   type Framework,
   type NodeVersionManagerDetection,
@@ -916,10 +916,13 @@ async function executeMigrationPlan(
     }
   }
 
-  // Existing project-owned hooks remain authoritative. Preserve lint-staged
-  // alongside them instead of assuming that `vp staged` is their policy.
-  const skipStagedMigration =
-    !plan.shouldSetupHooks || hasExistingViteHooksPolicy(workspaceInfo.rootDir);
+  // Preserve lint-staged whenever hook setup is disabled/unsafe or existing
+  // project-owned hooks remain authoritative.
+  const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+    workspaceInfo.rootDir,
+    plan.shouldSetupHooks,
+    plan.packageManager,
+  );
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');

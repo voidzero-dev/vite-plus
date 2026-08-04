@@ -21,6 +21,7 @@ import {
   rewriteMonorepoProject,
   rewriteStandaloneProject,
   setPackageManager,
+  shouldSkipStagedMigrationForHooks,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -1115,7 +1116,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
-    rewriteMonorepo(workspaceInfo, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, compactOutput);
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
       if (await initGitRepository(fullPath)) {
@@ -1405,7 +1411,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(workspaceInfo.rootDir);
     }
     updateCreateProgress('Integrating into monorepo');
-    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteMonorepoProject(
+      fullPath,
+      workspaceInfo.packageManager,
+      skipStagedMigration,
+      compactOutput,
+    );
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
@@ -1435,7 +1451,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(fullPath);
     }
     updateCreateProgress('Applying Vite+ project setup');
-    rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);

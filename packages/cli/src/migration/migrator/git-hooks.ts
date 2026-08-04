@@ -201,6 +201,23 @@ export function preflightGitHooksSetup(
 }
 
 /**
+ * Decide whether config rewriting must leave lint-staged configuration in
+ * place. Call this after scaffolding but before rewriting the project so an
+ * existing hook owner never observes a partially migrated configuration.
+ */
+export function shouldSkipStagedMigrationForHooks(
+  projectPath: string,
+  shouldSetupHooks: boolean,
+  packageManager?: PackageManager,
+): boolean {
+  return (
+    !shouldSetupHooks ||
+    hasExistingViteHooksPolicy(projectPath) ||
+    preflightGitHooksSetup(projectPath, packageManager) !== null
+  );
+}
+
+/**
  * Set up git hooks with husky + lint-staged via vp commands.
  * Skips if another hook tool is detected (warns user).
  * Returns true if hooks were successfully set up, false if skipped.
