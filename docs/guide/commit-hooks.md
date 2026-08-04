@@ -71,8 +71,8 @@ export default defineConfig({
 
 This is the default Vite+ approach and should replace separate `lint-staged` configuration in most
 projects. When you opt into hooks during `vp create`, Vite+ scaffolds both this configuration and
-the corresponding pre-commit hook. During `vp migrate`, existing hook policy is preserved or
-translated, and the default is introduced only when no existing hook policy is found. Because
+the corresponding pre-commit hook. During `vp migrate`, existing hook policy is preserved, and
+the default is introduced only when no existing hook policy is found. Because
 `vp staged` reads from `vite.config.ts`, your staged-file checks stay in the same place as your
 lint, format, test, build, and task-runner config.
 

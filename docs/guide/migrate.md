@@ -168,16 +168,19 @@ export default defineConfig({
 });
 ```
 
-After migrating, remove lint-staged from your dependencies and delete any lint-staged config files. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules
+and remove the old configuration and dependency. If an existing hook tool is preserved, keep
+lint-staged in place until you convert that hook policy manually. See the
+[Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
 
 ### Git hook tools
 
-The `vp migrate` command can set up Vite+ commit hooks for conventional Husky v9+ projects that use the default `.husky` directory and a standard `prepare` command. Projects using a custom Husky directory, dynamic or otherwise nonstandard Husky commands, or Husky versions older than 9.0.0 are skipped before their hook files or dependencies are changed. Configure those projects manually using the [Commit hooks guide](/guide/commit-hooks).
+The `vp migrate` command does not automatically convert Husky setups. When Husky is detected,
+Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a
+warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
 
-Hook scripts inside a supported `.husky` setup are preserved as project-owned Vite+ hooks. When a hook invokes
-lint-staged, Vite+ translates that workflow to `vp staged`; otherwise, it does not add staged-file
-checks to an existing hook policy. The default staged workflow is introduced only when no existing
-hook policy is found.
+Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced
+only when no existing hook policy is found.
 
 If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp migrate` will leave your existing configuration alone and show a warning. This happens even if you choose to set up hooks during the prompt or include the `--hooks` flag.
 
