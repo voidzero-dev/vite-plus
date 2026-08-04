@@ -1,0 +1,49 @@
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/lint/plugin.js
+  s_09c28b62987691::t_847bd9973f349b 1-21
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/package.json
+  s_09c28b62987691::t_36e1c7902b1413 1-5
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/snapshots.toml
+  s_09c28b62987691::t_ce24f53b17e9e9 1-37
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/snapshots/lint_oxlint_plugin_api.md
+  s_09c28b62987691::t_fbd6b44d5c0672 1-92
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/src/config-surface.ts
+  s_09c28b62987691::t_8de21fab8c44a8 1-6
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/src/legacy-imports.ts
+  s_09c28b62987691::t_b6436d78810fda 1-5
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/src/uses-foo.ts
+  s_09c28b62987691::t_fe554c53556629 1-2
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/vite.config.ts
+  s_09c28b62987691::t_89bce290ca02ad 1-14
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/.oxlintrc.json
+  s_09c28b62987691::t_c35cd43d5acdd8 1-6
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/no-foo.js
+  s_09c28b62987691::t_5bf7bf068c605c 1-14
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/no-foo.test.ts
+  s_09c28b62987691::t_35bd068310451d 1-11
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/plugin.js
+  s_09c28b62987691::t_0436cd4858ef82 1-8
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/shared-config.ts
+  s_09c28b62987691::t_bd74f0072e914a 1-9
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/package.json
+  s_09c28b62987691::t_fc6c1ee782d1c1 1-11
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/snapshots.toml
+  s_09c28b62987691::t_0b14077e384755 1-40
+crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/snapshots/migration_oxlint_js_plugin_imports.md
+  s_09c28b62987691::t_631e3e8c1946d8 1-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5a10b7ab60858d22600668fbb2cee5ccdb6e72d5",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
