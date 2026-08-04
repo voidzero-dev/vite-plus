@@ -197,7 +197,7 @@ jobs:
               done
               vp env doctor
 
-              export VITE_LOG=trace
+              export VP_LOG=trace
               vp env run --node 24 -- node -p \"process.versions\"
 
               # Verify upgrade
@@ -307,7 +307,7 @@ jobs:
               done
               vp env doctor
 
-              export VITE_LOG=trace
+              export VP_LOG=trace
               vp env run --node 24 -- node -p \"process.versions\"
 
               # FIXME: QEMU doesn't support all syscalls needed by rolldown/tsdown
@@ -693,7 +693,7 @@ jobs:
           echo "PATH: $env:Path"
           vp --version
           vp --help
-          # $env:VITE_LOG = "trace"
+          # $env:VP_LOG = "trace"
           # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build && vp --version

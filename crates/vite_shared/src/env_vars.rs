@@ -16,7 +16,7 @@
 pub const VP_HOME: &str = "VP_HOME";
 
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vite_task=trace"`).
-pub const VITE_LOG: &str = "VITE_LOG";
+pub const VP_LOG: &str = "VP_LOG";
 
 /// NPM registry URL (lowercase form, highest priority).
 pub const NPM_CONFIG_REGISTRY: &str = "npm_config_registry";
@@ -44,10 +44,10 @@ pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 pub const VP_SHELL: &str = "VP_SHELL";
 
 /// Filter for update task types.
-pub const VITE_UPDATE_TASK_TYPES: &str = "VITE_UPDATE_TASK_TYPES";
+pub const VP_UPDATE_TASK_TYPES: &str = "VP_UPDATE_TASK_TYPES";
 
 /// Override directory for global CLI JS scripts.
-pub const VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VITE_GLOBAL_CLI_JS_SCRIPTS_DIR";
+pub const VP_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VP_GLOBAL_CLI_JS_SCRIPTS_DIR";
 
 // ── Runtime: set/removed during shim dispatch for child processes ────────
 
