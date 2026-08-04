@@ -1,9 +1,9 @@
 use std::{borrow::Cow, ffi::OsStr, process::Stdio, sync::Arc};
 
 use rustc_hash::FxHashMap;
-use vite_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
+use vp_error::Error;
 
 use super::{
     resolver::SubcommandResolver,
@@ -36,14 +36,14 @@ async fn resolve_and_build_command(
             };
             if is_path { Some(v.as_ref().to_os_string()) } else { None }
         });
-        vite_command::resolve_bin(
+        vp_command::resolve_bin(
             resolved.program.as_ref().to_str().unwrap_or_default(),
             paths.as_deref(),
             cwd,
         )?
     };
 
-    let mut cmd = vite_command::build_command(&program_path, cwd);
+    let mut cmd = vp_command::build_command(&program_path, cwd);
     cmd.args(resolved.args.iter().map(|s| s.as_str()))
         .env_clear()
         .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())));
@@ -68,7 +68,7 @@ pub(super) async fn resolve_and_execute(
 
     // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
     let status = if is_interactive {
-        vite_command::execute_with_terminal_guard(cmd).await?
+        vp_command::execute_with_terminal_guard(cmd).await?
     } else {
         let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
         child.wait().await.map_err(|e| Error::Anyhow(e.into()))?
@@ -129,7 +129,7 @@ pub(crate) async fn resolve_and_capture_output(
         resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    if force_color_if_terminal && vite_shared::is_stdout_terminal() {
+    if force_color_if_terminal && vp_shared::is_stdout_terminal() {
         cmd.env("FORCE_COLOR", "1");
     }
 

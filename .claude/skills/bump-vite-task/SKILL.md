@@ -37,10 +37,10 @@ Update the vite-task git dependency in `Cargo.toml` to the latest commit on the 
 
 ### 5. Run tests
 
-- Run `cargo test -p vite_command -p vite_error -p vite_pm_cli -p vite_js_runtime -p vite_migration -p vite_shared -p vite_static_config -p vite-plus-cli -p vite_global_cli` to run the vite-plus crate tests.
-- Note: Some tests require network access (e.g., `vite_pm_cli::package_manager` tests, `vite_global_cli::commands::env` tests). These may fail in sandboxed environments. Verify they also fail on the main branch before dismissing them.
+- Run `cargo test -p vp_command -p vp_error -p vp_pm_cli -p vp_js_runtime -p vp_migration -p vp_shared -p vp_static_config -p vite-plus-cli -p vp_global_cli` to run the vite-plus crate tests.
+- Note: Some tests require network access (e.g., `vp_pm_cli::package_manager` tests, `vp_global_cli::commands::env` tests). These may fail in sandboxed environments. Verify they also fail on the main branch before dismissing them.
 - Note: `cargo test -p vite_task` will NOT work because vite_task is a git dependency, not a workspace member.
-- The PTY snapshot suite (`crates/vite_cli_snapshots`) is excluded from `just test`; it is covered in step 6.
+- The PTY snapshot suite (`crates/vp_cli_snapshots`) is excluded from `just test`; it is covered in step 6.
 
 ### 6. Update snapshot tests
 
@@ -51,12 +51,12 @@ vite-task changes often affect CLI output, which means snapshot tests need updat
 - **Cache behavior messages**: e.g., new summary lines about cache status
 - **Task output formatting**: e.g., step numbering, separator lines
 
-**PTY snapshot suite (`crates/vite_cli_snapshots`):**
+**PTY snapshot suite (`crates/vp_cli_snapshots`):**
 
 - A bump can break it two ways: runner compilation (it consumes vite-task's `pty_terminal_test`, `pty_terminal_test_client`, and `snapshot_test` crates directly, so their API changes surface here; fix in the runner) and recorded CLI output.
 - Update output locally with real assertions: `UPDATE_SNAPSHOTS=1 just snapshot-test`, then review the `.md` diffs like code. Without a built `packages/cli/dist`, run the global flavor only: `VP_SNAP_SKIP_FLAVORS=local UPDATE_SNAPSHOTS=1 just snapshot-test`.
 - Windows runs in the `CLI snapshot test (Windows)` CI job via a cross-compiled nextest archive; snapshots are OS-shared, so a Windows-only diff there means a redaction gap, not a re-record.
-- Reference: `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`.
+- Reference: `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`.
 
 ### 7. Review changelog and update docs
 

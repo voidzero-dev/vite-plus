@@ -369,7 +369,7 @@ pub enum Commands {
 ```rust
 use std::{collections::HashMap, process::ExitStatus};
 
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
@@ -632,7 +632,7 @@ pub mod outdated;  // Add this line
 **File**: `crates/vite_task/src/outdated.rs` (new file)
 
 ```rust
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_package_manager::{
     PackageManager,

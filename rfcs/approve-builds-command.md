@@ -233,9 +233,9 @@ pub enum PmCommands {
 ```rust
 use std::process::ExitStatus;
 
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePath;
-use vite_shared::output::{note, warn};
+use vp_shared::output::{note, warn};
 
 use crate::package_manager::{PackageManager, PackageManagerType};
 
@@ -353,7 +353,7 @@ pub mod approve_builds;  // <- add this
 **File**: `crates/vite_task/src/approve_builds.rs` (new file)
 
 ```rust
-use vite_error::Error;
+use vp_error::Error;
 use vite_package_manager::{
     PackageManager,
     commands::approve_builds::ApproveBuildsOptions,

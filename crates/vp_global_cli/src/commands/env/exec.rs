@@ -1,0 +1,282 @@
+//! Exec command for executing commands with a specific Node.js version.
+//!
+//! Handles two modes:
+//! 1. Explicit version: `vp env exec --node <version> [--npm <version>] <command>`
+//! 2. Shim mode: `vp env exec <tool> [args...]` where tool is node/npm/npx or a global package binary
+//!
+//! The shim mode uses the same dispatch logic as Unix symlinks, ensuring identical behavior
+//! across platforms (used by Windows .cmd wrappers and Git Bash shell scripts).
+
+use std::process::ExitStatus;
+
+use vp_js_runtime::NodeProvider;
+use vp_shared::{env_vars, format_path_prepended};
+
+use crate::{
+    cli::exit_status,
+    error::Error,
+    shim::{dispatch as shim_dispatch, is_shim_tool},
+};
+
+/// Execute the exec command.
+///
+/// When `--node` is provided, runs a command with the specified Node.js version.
+/// When `--node` is not provided and the command is a shim tool (node/npm/npx or global package),
+/// uses the same shim dispatch logic as Unix symlinks.
+pub async fn execute(
+    node_version: Option<&str>,
+    npm_version: Option<&str>,
+    command: &[String],
+) -> Result<ExitStatus, Error> {
+    let command = normalize_wrapper_command(command);
+
+    if command.is_empty() {
+        eprintln!("vp env exec: missing command to execute");
+        eprintln!("Usage: vp env exec [--node <version>] <command> [args...]");
+        return Ok(exit_status(1));
+    }
+
+    // If --node is provided, use explicit version mode (existing behavior)
+    if let Some(version) = node_version {
+        return execute_with_version(version, npm_version, &command).await;
+    }
+
+    // No --node provided - check if first command is a shim tool
+    // This includes:
+    // - Core tools (node, npm, npx)
+    // - Globally installed package binaries (tsc, eslint, etc.)
+    let tool = &command[0];
+    if is_shim_tool(tool) {
+        // Clear recursion env var to force fresh version resolution.
+        // This is needed because `vp env exec` may be invoked from within a context
+        // where VP_TOOL_RECURSION is already set (e.g., when pnpm runs through
+        // the vite-plus shim). Without clearing it, shim_dispatch would passthrough
+        // to the system node instead of resolving the version.
+        // SAFETY: This is safe because we're about to spawn a child process and we want
+        // fresh version resolution, not passthrough behavior.
+        unsafe {
+            std::env::remove_var(env_vars::VP_TOOL_RECURSION);
+        }
+
+        // Use the SAME shim dispatch as Unix symlinks - this ensures:
+        // - Core tools: Version resolved from .node-version/package.json/default
+        // - Package binaries: Uses Node.js version from package metadata
+        // - Automatic Node.js download if needed
+        // - Recursion prevention via VP_TOOL_RECURSION
+        // - Shim mode checking (managed vs system-first)
+        let args: Vec<String> = command[1..].to_vec();
+        // stdout belongs to the dispatched tool; route vp's own output to stderr.
+        vp_shared::output::route_user_output_to_stderr();
+        let exit_code = shim_dispatch(tool, &args).await;
+        return Ok(exit_status(exit_code));
+    }
+
+    // Not a shim tool and no --node - error
+    eprintln!("vp env exec: --node is required when running non-shim commands");
+    eprintln!("Usage: vp env exec --node <version> <command> [args...]");
+    eprintln!();
+    eprintln!("For shim tools, --node is optional (version resolved automatically):");
+    eprintln!("  vp env exec node script.js    # Core tool");
+    eprintln!("  vp env exec npm install       # Core tool");
+    eprintln!("  vp env exec tsc --version     # Global package");
+    Ok(exit_status(1))
+}
+
+/// Normalize arguments when invoked via Windows shim wrappers.
+///
+/// Wrappers insert `--` after the tool name so flags like `--help` aren't
+/// consumed by clap while parsing `vp env exec`. Remove only that inserted
+/// separator before forwarding args to the target tool.
+fn normalize_wrapper_command(command: &[String]) -> Vec<String> {
+    let from_wrapper = std::env::var_os(env_vars::VP_SHIM_WRAPPER).is_some();
+    let normalized = normalize_wrapper_command_inner(command, from_wrapper);
+
+    if from_wrapper {
+        // SAFETY: We're in a short-lived CLI process and clearing a wrapper-only
+        // marker before tool execution avoids leaking it to child processes.
+        unsafe {
+            std::env::remove_var(env_vars::VP_SHIM_WRAPPER);
+        }
+    }
+
+    normalized
+}
+
+fn normalize_wrapper_command_inner(command: &[String], from_wrapper: bool) -> Vec<String> {
+    let mut normalized = command.to_vec();
+    if from_wrapper && normalized.len() >= 2 && normalized[1] == "--" {
+        normalized.remove(1);
+    }
+    normalized
+}
+
+/// Execute a command with an explicitly specified Node.js version.
+async fn execute_with_version(
+    node_version: &str,
+    npm_version: Option<&str>,
+    command: &[String],
+) -> Result<ExitStatus, Error> {
+    // Warn about unsupported --npm flag
+    if npm_version.is_some() {
+        eprintln!("Warning: --npm flag is not yet implemented, using bundled npm");
+    }
+
+    // 1. Resolve version
+    let provider = NodeProvider::new();
+    let resolved_version = resolve_version(node_version, &provider).await?;
+
+    // 2. Ensure installed (download if needed)
+    let runtime =
+        vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &resolved_version)
+            .await?;
+
+    // 3. Clear recursion env var to force re-evaluation in child processes
+    // SAFETY: This is safe because we're about to spawn a child process and we want
+    // to ensure the env var is not inherited. We're not reading this env var in other
+    // threads at this point.
+    unsafe {
+        std::env::remove_var(env_vars::VP_TOOL_RECURSION);
+    }
+
+    // 4. Build PATH with node bin dir first (uses platform-specific separator)
+    // Always prepend to ensure the requested Node version is first in PATH
+    let node_bin_dir = runtime.get_bin_prefix();
+    let new_path = format_path_prepended(node_bin_dir.as_path());
+
+    // 5. Execute command
+    let (cmd, args) = command.split_first().unwrap();
+
+    let mut child = tokio::process::Command::new(cmd);
+    child.args(args).env("PATH", new_path);
+    // The child runs in the inherited cwd, which a leading `-C <dir>` changes
+    // without touching our own environment; align its `PWD` accordingly.
+    if let Ok(cwd) = vite_path::current_dir() {
+        vp_command::sync_child_pwd(&mut child, &cwd);
+    }
+    let status = child.status().await?;
+
+    Ok(status)
+}
+
+/// Resolve version to an exact version.
+///
+/// Handles aliases (lts, latest) and version ranges.
+async fn resolve_version(version: &str, provider: &NodeProvider) -> Result<String, Error> {
+    match classify_version(version) {
+        VersionSelector::LatestLts => {
+            let resolved = provider.resolve_latest_version().await?;
+            Ok(resolved.to_string())
+        }
+        VersionSelector::AbsoluteLatest => {
+            let resolved = provider.resolve_absolute_latest_version().await?;
+            Ok(resolved.to_string())
+        }
+        VersionSelector::Exact(version) => Ok(version.to_string()),
+        VersionSelector::Range(version) => {
+            let resolved = provider.resolve_version(version).await?;
+            Ok(resolved.to_string())
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum VersionSelector<'a> {
+    LatestLts,
+    AbsoluteLatest,
+    Exact(&'a str),
+    Range(&'a str),
+}
+
+fn classify_version(version: &str) -> VersionSelector<'_> {
+    if version.eq_ignore_ascii_case("lts") {
+        VersionSelector::LatestLts
+    } else if version.eq_ignore_ascii_case("latest") {
+        VersionSelector::AbsoluteLatest
+    } else if NodeProvider::is_exact_version(version) {
+        VersionSelector::Exact(version.strip_prefix('v').unwrap_or(version))
+    } else {
+        VersionSelector::Range(version)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_execute_missing_command() {
+        let result = execute(Some("20.18.0"), None, &[]).await;
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(!status.success());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_execute_node_version() {
+        // Run 'node --version' with a specific Node.js version
+        let command = vec!["node".to_string(), "--version".to_string()];
+        let result = execute(Some("20.18.0"), None, &command).await;
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(status.success());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_exact() {
+        let provider = NodeProvider::new();
+        let version = resolve_version("20.18.0", &provider).await.unwrap();
+        assert_eq!(version, "20.18.0");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_with_v_prefix() {
+        let provider = NodeProvider::new();
+        let version = resolve_version("v20.18.0", &provider).await.unwrap();
+        assert_eq!(version, "20.18.0");
+    }
+
+    #[test]
+    fn test_classify_version_partial() {
+        assert_eq!(classify_version("20"), VersionSelector::Range("20"));
+    }
+
+    #[test]
+    fn test_classify_version_range() {
+        assert_eq!(classify_version("^20.0.0"), VersionSelector::Range("^20.0.0"));
+    }
+
+    #[test]
+    fn test_classify_version_aliases() {
+        assert_eq!(classify_version("lts"), VersionSelector::LatestLts);
+        assert_eq!(classify_version("LTS"), VersionSelector::LatestLts);
+        assert_eq!(classify_version("latest"), VersionSelector::AbsoluteLatest);
+    }
+
+    #[tokio::test]
+    async fn test_shim_mode_error_for_non_shim_command() {
+        // Running a non-shim command without --node should error
+        let command = vec!["python".to_string(), "--version".to_string()];
+        let result = execute(None, None, &command).await;
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        // Should fail because python is not a shim tool and --node was not provided
+        assert!(!status.success(), "Non-shim command without --node should fail");
+    }
+
+    #[test]
+    fn test_normalize_wrapper_command_strips_only_wrapper_separator() {
+        let command = vec!["node".to_string(), "--".to_string(), "--version".to_string()];
+        let normalized = normalize_wrapper_command_inner(&command, true);
+        assert_eq!(normalized, vec!["node", "--version"]);
+    }
+
+    #[test]
+    fn test_normalize_wrapper_command_no_wrapper_keeps_separator() {
+        let command = vec!["node".to_string(), "--".to_string(), "--version".to_string()];
+        let normalized = normalize_wrapper_command_inner(&command, false);
+        assert_eq!(normalized, command);
+    }
+}

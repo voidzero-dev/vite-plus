@@ -289,15 +289,15 @@ typedmap = "0.6.0"
 url = "2.5.4"
 uuid = "1.17.0"
 vfs = "0.13.0"
-vite_command = { path = "crates/vite_command" }
-vite_error = { path = "crates/vite_error" }
-vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_migration = { path = "crates/vite_migration" }
-vite_pm_cli = { path = "crates/vite_pm_cli" }
-vite_pm_cli_macros = { path = "crates/vite_pm_cli_macros" }
-vite_setup = { path = "crates/vite_setup" }
-vite_shared = { path = "crates/vite_shared" }
-vite_static_config = { path = "crates/vite_static_config" }
+vp_command = { path = "crates/vp_command" }
+vp_error = { path = "crates/vp_error" }
+vp_js_runtime = { path = "crates/vp_js_runtime" }
+vp_migration = { path = "crates/vp_migration" }
+vp_pm_cli = { path = "crates/vp_pm_cli" }
+vp_pm_cli_macros = { path = "crates/vp_pm_cli_macros" }
+vp_setup = { path = "crates/vp_setup" }
+vp_shared = { path = "crates/vp_shared" }
+vp_static_config = { path = "crates/vp_static_config" }
 vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
 vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
 vite_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
@@ -430,9 +430,9 @@ panic = "abort" # Let it crash and force ourselves to write safe Rust.
 
 # The trampoline binary is copied per shim tool (~5-10 copies), so optimize for
 # size instead of speed. This reduces it from ~200KB to ~100KB on Windows.
-[profile.release.package.vite_trampoline]
+[profile.release.package.vp_trampoline]
 opt-level = "z"
 
 # The installer binary is downloaded by users, so optimize for size.
-[profile.release.package.vite_installer]
+[profile.release.package.vp_installer]
 opt-level = "z"

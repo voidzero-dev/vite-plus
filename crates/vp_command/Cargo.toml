@@ -1,0 +1,32 @@
+[package]
+name = "vp_command"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+fspy = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+vp_error = { workspace = true }
+vite_path = { workspace = true }
+vite_powershell = { workspace = true }
+vp_shared = { workspace = true }
+which = { workspace = true, features = ["tracing"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+nix = { workspace = true, features = ["signal", "term"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "test-util"] }
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false

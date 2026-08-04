@@ -290,7 +290,7 @@ Used only for ranking and single-candidate auto-select, never to hide a package:
 | `dev` / `build` / `preview` | its directory directly contains one of Vite's config file names (`vite.config.{js,mjs,ts,cjs,mts,cts}`, the exact list Vite probes), **or** an `index.html` at the package root (Vite's default app entry)                                   |
 | `pack`                      | its `vite.config.*` explicitly declares a `pack` block (read via static extraction; neither a config without `pack` nor one that merely might contain it behind a spread counts), **or** `src/index.ts` exists (tsdown's only default entry) |
 
-Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vite_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
+Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vp_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
 
 "Exactly one likely-runnable package" means: after sorting rows runnable-first, the first row is runnable and the second is not. Auto-select additionally requires an interactive terminal.
 
@@ -312,7 +312,7 @@ export default defineConfig({
 - Type: `string` (one directory for all four commands) or a per-command object (`{ dev: './apps/web', pack: './packages/ui' }`, added on review demand). A command absent from the object falls through to the picker/listing resolution.
 - Consulted when a bare app command runs in the directory containing the root config: a workspace root, or a non-workspace repo root. The non-workspace shape has no package list, so `defaultPackage` is the only mechanism that covers it. An explicit `-C` always wins.
 - A missing directory errors: `defaultPackage points to a missing directory: ./frontend`.
-- Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.
+- Read via static extraction (`vp_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.
 - Only an explicitly declared `defaultPackage` changes behavior. A declared but non-static value (e.g. `process.env.DIR`) errors; a config that is unanalyzable or hides fields behind a spread is treated as not declaring the key and falls through to the picker or current-dir resolution, so an exotic config can never break unrelated bare commands.
 - Consulted only at the invocation root (a workspace root, a standalone package root, or a directory with no `package.json` ancestry). Below a workspace root the current directory already identifies the target, so a member package's own config never redirects.
 
@@ -338,7 +338,7 @@ Below the root the cwd already identifies the project, so prompting would be noi
 
 All changes live in the Rust layers; no upstream Vite or tsdown changes are required.
 
-- `crates/vite_global_cli/src/cli.rs`: parse the global `-C <dir>`; resolve the local install from `<dir>` and delegate with `<dir>` as the effective cwd.
+- `crates/vp_global_cli/src/cli.rs`: parse the global `-C <dir>`; resolve the local install from `<dir>` and delegate with `<dir>` as the effective cwd.
 - `packages/cli/binding/src/cli/types.rs` / `mod.rs`: parse `-C` on the local bin path; in `execute_direct_subcommand`, add the bare-invocation resolution order (workspace-root detection already happens here).
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
 - Picker: reuse `vite_select` and `vite_workspace`, both already dependencies via the `vite_task` crates.

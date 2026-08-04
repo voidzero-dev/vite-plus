@@ -7,8 +7,8 @@
 
 use owo_colors::OwoColorize;
 use vite_path::AbsolutePath;
-use vite_shared::output;
 use vite_task::MARKER_ENV_NAME;
+use vp_shared::output;
 
 const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 

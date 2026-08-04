@@ -12,8 +12,8 @@ disallowed-methods = [
   { path = "str::replace", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replace` instead." },
   { path = "str::replacen", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
   { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vite_path::current_dir` instead." },
-  { path = "std::process::ExitStatus::code", reason = "Returns None for signal-terminated processes on Unix. Use `vite_shared::exit_code_from_status` instead." },
-  { path = "std::io::IsTerminal::is_terminal", reason = "Use `vite_powershell::is_stdin_terminal` for stdin, or `vite_shared::is_stdout_terminal` / `vite_shared::is_stderr_terminal`, which memoize the lookup." },
+  { path = "std::process::ExitStatus::code", reason = "Returns None for signal-terminated processes on Unix. Use `vp_shared::exit_code_from_status` instead." },
+  { path = "std::io::IsTerminal::is_terminal", reason = "Use `vite_powershell::is_stdin_terminal` for stdin, or `vp_shared::is_stdout_terminal` / `vp_shared::is_stderr_terminal`, which memoize the lookup." },
 ]
 
 disallowed-types = [
@@ -26,10 +26,10 @@ disallowed-types = [
 
 disallowed-macros = [
   { path = "std::format", reason = "Use `vite_str::format` for small strings." },
-  { path = "std::println", reason = "Use `vite_shared::output` functions (`info`, `note`, `success`) instead." },
-  { path = "std::print", reason = "Use `vite_shared::output` functions (`info`, `note`, `success`) instead." },
-  { path = "std::eprintln", reason = "Use `vite_shared::output` functions (`warn`, `error`) instead." },
-  { path = "std::eprint", reason = "Use `vite_shared::output` functions (`warn`, `error`) instead." },
+  { path = "std::println", reason = "Use `vp_shared::output` functions (`info`, `note`, `success`) instead." },
+  { path = "std::print", reason = "Use `vp_shared::output` functions (`info`, `note`, `success`) instead." },
+  { path = "std::eprintln", reason = "Use `vp_shared::output` functions (`warn`, `error`) instead." },
+  { path = "std::eprint", reason = "Use `vp_shared::output` functions (`warn`, `error`) instead." },
 ]
 
 ### await-holding-invalid-types

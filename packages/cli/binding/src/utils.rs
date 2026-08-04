@@ -3,8 +3,8 @@ use std::{collections::HashMap, path::PathBuf};
 use fspy::AccessMode;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
-use vite_command::run_command_with_fspy;
 use vite_path::AbsolutePathBuf;
+use vp_command::run_command_with_fspy;
 
 /// Input parameters for running a command with fspy tracking.
 ///
@@ -54,7 +54,7 @@ pub struct RunCommandResult {
 
 /// Run a command with fspy tracking, callable from JavaScript.
 ///
-/// This function wraps `vite_command::run_command_with_fspy` to provide
+/// This function wraps `vp_command::run_command_with_fspy` to provide
 /// a JavaScript-friendly interface for executing commands and tracking
 /// their file system accesses.
 ///
@@ -113,7 +113,7 @@ pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult>
         );
     }
 
-    let exit_code = vite_shared::exit_code_from_status(result.status);
+    let exit_code = vp_shared::exit_code_from_status(result.status);
 
     Ok(RunCommandResult { exit_code, path_accesses })
 }

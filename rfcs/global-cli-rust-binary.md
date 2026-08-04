@@ -23,7 +23,7 @@ This architecture requires users to have Node.js pre-installed before they can u
 
 ### Opportunity
 
-The `vite_js_runtime` crate already provides robust Node.js download and management capabilities:
+The `vp_js_runtime` crate already provides robust Node.js download and management capabilities:
 
 - Automatic Node.js version resolution and download
 - Multi-platform support (Linux, macOS, Windows; x64, arm64)
@@ -43,7 +43,7 @@ The core innovation is enhancing JS runtime management, not eliminating Node.js 
 ## Goals
 
 1. **Remove Node.js installation prerequisite**: Create a standalone Rust binary that users can download and run immediately, without needing to pre-install Node.js on their system
-2. **Enhanced JS Runtime Management**: Use `vite_js_runtime` to automatically download, cache, and manage Node.js versions, enabling:
+2. **Enhanced JS Runtime Management**: Use `vp_js_runtime` to automatically download, cache, and manage Node.js versions, enabling:
    - Automatic Node.js provisioning for package manager and CLI operations
    - Per-project runtime version control via `devEngines.runtime` in package.json
    - Consistent runtime versions across development environments
@@ -106,13 +106,13 @@ vp create --template create-vite my-app
 
 ## Technical Design
 
-### New Crate: `vite_global_cli`
+### New Crate: `vp_global_cli`
 
-Create a new crate at `crates/vite_global_cli` that compiles to a standalone binary.
+Create a new crate at `crates/vp_global_cli` that compiles to a standalone binary.
 
 ```
 crates/
-├── vite_global_cli/         # New crate
+├── vp_global_cli/         # New crate
 │   ├── Cargo.toml
 │   └── src/
 │       ├── main.rs          # Entry point
@@ -123,9 +123,9 @@ crates/
 │       │   ├── new.rs       # Project scaffolding
 │       │   ├── migrate.rs   # Migration command
 │       │   └── ...
-│       ├── js_executor.rs   # JS execution via vite_js_runtime
+│       ├── js_executor.rs   # JS execution via vp_js_runtime
 │       └── workspace.rs     # Workspace detection (reuse from vite_task)
-├── vite_js_runtime/         # Existing - Node.js management
+├── vp_js_runtime/         # Existing - Node.js management
 ├── vite_task/               # Existing - Task execution
 └── ...
 ```
@@ -153,7 +153,7 @@ These commands wrap existing package managers (pnpm/npm/yarn), which are Node.js
 | `dlx <package>`       | Execute package      | Rust CLI → Managed Node.js → pnpm/npm dlx  |
 | `pm <subcommand>`     | Forward to PM        | Rust CLI → Managed Node.js → pnpm/npm/yarn |
 
-**Note:** Since pnpm, npm, and yarn are all Node.js programs, these commands require Node.js to execute. The global CLI will use `vite_js_runtime` to download and manage Node.js automatically when running any PM command.
+**Note:** Since pnpm, npm, and yarn are all Node.js programs, these commands require Node.js to execute. The global CLI will use `vp_js_runtime` to download and manage Node.js automatically when running any PM command.
 
 #### Category B: JS Script Commands (Rust CLI + Managed Node.js + JS Scripts)
 
@@ -173,7 +173,7 @@ These commands delegate to the local `vite-plus` package through the JS entry po
 | ---------------------------------------------------------------- | -------------------------------------------------------- |
 | `dev`, `build`, `test`, `lint`, `fmt`, `run`, `preview`, `cache` | Rust CLI → Managed Node.js → `dist/index.js` → local CLI |
 
-**Note:** The global CLI uses `vite_js_runtime` to ensure Node.js is available, resolving the version from the project's `devEngines.runtime` configuration. The JS entry point handles detecting if vite-plus is installed locally and delegating to the local CLI's `dist/bin.js`.
+**Note:** The global CLI uses `vp_js_runtime` to ensure Node.js is available, resolving the version from the project's `devEngines.runtime` configuration. The JS entry point handles detecting if vite-plus is installed locally and delegating to the local CLI's `dist/bin.js`.
 
 #### Category D: Pure Rust Commands (No Node.js Required)
 
@@ -189,7 +189,7 @@ Only these commands can run without any Node.js:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                        vite_global_cli (Rust Binary)                         │
+│                        vp_global_cli (Rust Binary)                         │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐   │
@@ -222,7 +222,7 @@ Only these commands can run without any Node.js:
 │    cli_package_json_dir             │    │    project_dir                 │
 │  )                                  │    │  )                             │
 │                                     │    │                                │
-│  vite_js_runtime reads:             │    │  vite_js_runtime reads:        │
+│  vp_js_runtime reads:             │    │  vp_js_runtime reads:        │
 │  packages/global/package.json       │    │  <project>/package.json        │
 │  └─> devEngines.runtime: "22.22.0"  │    │  └─> devEngines.runtime        │
 │                                     │    │                                │
@@ -230,7 +230,7 @@ Only these commands can run without any Node.js:
               │                                          │
               ▼                                          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          vite_js_runtime crate                              │
+│                          vp_js_runtime crate                              │
 │                                                                             │
 │  Built-in logic (same for both flows):                                      │
 │  1. Read package.json from provided path                                    │
@@ -256,7 +256,7 @@ Only these commands can run without any Node.js:
 
 Legend:
 - Both flows use download_runtime_for_project(), just with different directory paths
-- vite_js_runtime handles all devEngines.runtime logic internally
+- vp_js_runtime handles all devEngines.runtime logic internally
 - Category C delegates through dist/index.js which handles local CLI detection
 - Category D: No Node.js required (pure Rust)
 ```
@@ -266,9 +266,9 @@ Legend:
 When JavaScript execution is needed, the executor uses `download_runtime_for_project()` with different directory paths:
 
 ```rust
-// crates/vite_global_cli/src/js_executor.rs
+// crates/vp_global_cli/src/js_executor.rs
 
-use vite_js_runtime::download_runtime_for_project;
+use vp_js_runtime::download_runtime_for_project;
 use std::process::Command;
 
 pub struct JsExecutor {
@@ -372,7 +372,7 @@ impl JsExecutor {
 **Key points:**
 
 - Both flows use `download_runtime_for_project()` - the only difference is the directory path
-- `vite_js_runtime` handles all `devEngines.runtime` logic internally (reading package.json, resolving versions, caching)
+- `vp_js_runtime` handles all `devEngines.runtime` logic internally (reading package.json, resolving versions, caching)
 - CLI commands use CLI's package.json directory (e.g., `packages/global/`)
 - Project delegation uses project's directory and passes commands through `dist/index.js`
 - The JS entry point handles local CLI detection and delegation
@@ -383,7 +383,7 @@ impl JsExecutor {
 
 **Scope:**
 
-- Set up `vite_global_cli` crate structure
+- Set up `vp_global_cli` crate structure
 - Implement CLI parsing with clap
 - Implement workspace detection (reuse from `vite_task`)
 - Implement package manager detection and wrapping
@@ -403,18 +403,18 @@ impl JsExecutor {
 
 **Files to create:**
 
-- `crates/vite_global_cli/Cargo.toml`
-- `crates/vite_global_cli/src/main.rs`
-- `crates/vite_global_cli/src/cli.rs` # Top-level clap parser; flattens `vite_pm_cli::PackageManagerCommand` for all PM subcommands and intercepts `--global` for managed installs
-- `crates/vite_global_cli/src/commands/mod.rs`
-- `crates/vite_global_cli/src/commands/new.rs` # Project scaffolding
-- `crates/vite_global_cli/src/commands/migrate.rs` # Migration command
-- `crates/vite_global_cli/src/commands/delegate.rs` # Local CLI delegation
-- `crates/vite_global_cli/src/commands/version.rs` # Version display
-- `crates/vite_global_cli/src/js_executor.rs`
-- `crates/vite_global_cli/src/error.rs`
+- `crates/vp_global_cli/Cargo.toml`
+- `crates/vp_global_cli/src/main.rs`
+- `crates/vp_global_cli/src/cli.rs` # Top-level clap parser; flattens `vp_pm_cli::PackageManagerCommand` for all PM subcommands and intercepts `--global` for managed installs
+- `crates/vp_global_cli/src/commands/mod.rs`
+- `crates/vp_global_cli/src/commands/new.rs` # Project scaffolding
+- `crates/vp_global_cli/src/commands/migrate.rs` # Migration command
+- `crates/vp_global_cli/src/commands/delegate.rs` # Local CLI delegation
+- `crates/vp_global_cli/src/commands/version.rs` # Version display
+- `crates/vp_global_cli/src/js_executor.rs`
+- `crates/vp_global_cli/src/error.rs`
 
-> **Note:** PM command clap definitions and dispatch (`add`, `install`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>`) live in the shared `crates/vite_pm_cli/` crate so they can be reused by both `vite_global_cli` and the local CLI's NAPI binding (`packages/cli/binding/`). The earlier per-command modules under `crates/vite_global_cli/src/commands/` (`add.rs`, `install.rs`, `remove.rs`, …) have been removed in favour of `vite_pm_cli::dispatch`.
+> **Note:** PM command clap definitions and dispatch (`add`, `install`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>`) live in the shared `crates/vp_pm_cli/` crate so they can be reused by both `vp_global_cli` and the local CLI's NAPI binding (`packages/cli/binding/`). The earlier per-command modules under `crates/vp_global_cli/src/commands/` (`add.rs`, `install.rs`, `remove.rs`, …) have been removed in favour of `vp_pm_cli::dispatch`.
 
 **Success Criteria:**
 
@@ -432,7 +432,7 @@ impl JsExecutor {
 
 - Implement `new` command for built-in templates (vite:monorepo, etc.)
 - Implement JS executor for remote templates
-- Integrate with `vite_js_runtime` for Node.js download
+- Integrate with `vp_js_runtime` for Node.js download
 
 **Success Criteria:**
 
@@ -470,12 +470,12 @@ impl JsExecutor {
 
 ### Dependency Changes
 
-**New dependencies for `vite_global_cli`:**
+**New dependencies for `vp_global_cli`:**
 
 ```toml
 [dependencies]
-vite_js_runtime = { path = "../vite_js_runtime" }
-vite_shared = { path = "../vite_shared" }  # For cache dir, etc.
+vp_js_runtime = { path = "../vp_js_runtime" }
+vp_shared = { path = "../vp_shared" }  # For cache dir, etc.
 vite_path = { path = "../vite_path" }
 
 clap = { version = "4", features = ["derive"] }
@@ -490,7 +490,7 @@ thiserror = "1"
 
 The global CLI will use the same configuration locations as the current CLI:
 
-- **Home directory**: `~/.vite-plus/` (via `vite_shared::get_vite_plus_home`)
+- **Home directory**: `~/.vite-plus/` (via `vp_shared::get_vite_plus_home`)
 - **Node.js runtime**: `~/.vite-plus/js_runtime/node/{version}/`
 - **Package manager**: Auto-detected from lockfile or package.json
 
@@ -565,7 +565,7 @@ For commands delegated to local `vite-plus` (`dev`, `build`, `test`, `lint`, etc
 - **No system conflicts**: Different projects can use different Node.js versions
 - **Automatic provisioning**: Runtime is downloaded automatically if not cached
 
-This integrates with the existing `vite_js_runtime` crate's capabilities (see [js-runtime RFC](./js-runtime.md)).
+This integrates with the existing `vp_js_runtime` crate's capabilities (see [js-runtime RFC](./js-runtime.md)).
 
 ### Packaging & Distribution Strategy
 
@@ -861,7 +861,7 @@ When the Rust binary needs to execute JS (for `new`, `migrate`, `--version`, or 
 
 1. Check `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable (optional)
 2. If not set, auto-detect by looking for `dist/index.js` relative to the binary
-3. Download Node.js via `vite_js_runtime` if not cached (version from `package.json` devEngines.runtime)
+3. Download Node.js via `vp_js_runtime` if not cached (version from `package.json` devEngines.runtime)
 4. Execute the JS entry point with managed Node.js, passing command and arguments
 
 **Auto-detection logic:**
@@ -975,7 +975,7 @@ The existing CI workflow builds NAPI bindings for all platforms. We add a step t
 ```yaml
 # In existing CI workflow
 - name: Build Rust CLI
-  run: cargo build --release --target ${{ matrix.target }} -p vite_global_cli
+  run: cargo build --release --target ${{ matrix.target }} -p vp_global_cli
 ```
 
 ### Error Handling
@@ -987,7 +987,7 @@ pub enum Error {
     NoPackageManager,
 
     #[error("Failed to download Node.js runtime: {0}")]
-    RuntimeDownload(#[from] vite_js_runtime::Error),
+    RuntimeDownload(#[from] vp_js_runtime::Error),
 
     #[error("Command execution failed: {0}")]
     CommandExecution(std::io::Error),
@@ -1020,7 +1020,7 @@ packages/global/
 
 **Development workflow:**
 
-1. Build the Rust binary: `cargo build -p vite_global_cli`
+1. Build the Rust binary: `cargo build -p vp_global_cli`
 2. Build JS: `pnpm -F vite-plus-cli build`
 3. Run install script: `pnpm bootstrap-cli` (which internally runs `install-global-cli.ts`)
 4. The script copies the binary to `packages/global/bin/vp`
@@ -1102,7 +1102,7 @@ Bundling Node.js would significantly increase binary size (~100MB+). Instead, do
 
 - Keeps initial download small (~20MB)
 - Allows version flexibility
-- Leverages existing `vite_js_runtime` caching
+- Leverages existing `vp_js_runtime` caching
 
 ### 3. Why Wrap Package Managers Instead of Reimplementing?
 
@@ -1187,7 +1187,7 @@ Rewriting these in Rust would be significant effort with limited benefit. Instea
 
 ## References
 
-- [vite_js_runtime RFC](./js-runtime.md)
+- [vp_js_runtime RFC](./js-runtime.md)
 - [split-global-cli RFC](./split-global-cli.md)
 - [install-command RFC](./install-command.md)
 - [Node.js Releases](https://nodejs.org/en/about/releases/)

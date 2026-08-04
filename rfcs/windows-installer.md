@@ -62,18 +62,18 @@ rustup uses one binary for everything — `rustup-init.exe` copies itself to `~/
 
 - `vp.exe` is downloaded from the npm registry as a platform-specific package
 - The installer cannot copy itself as `vp.exe` — they are fundamentally different binaries
-- `vp.exe` links `vite_js_runtime`, `vite_workspace`, `oxc_resolver` (~15-20 MB) — the installer needs none of these
+- `vp.exe` links `vp_js_runtime`, `vite_workspace`, `oxc_resolver` (~15-20 MB) — the installer needs none of these
 
 ### Option B: Separate Crate with Shared Library (recommended)
 
 Create two new crates:
 
 ```
-crates/vite_setup/     — shared installation logic (library)
-crates/vite_installer/      — standalone installer binary
+crates/vp_setup/     — shared installation logic (library)
+crates/vp_installer/      — standalone installer binary
 ```
 
-`vite_setup` extracts the reusable installation logic currently in `vite_global_cli/src/commands/upgrade/`. Both `vp upgrade` and `vp-setup.exe` call into `vite_setup`.
+`vp_setup` extracts the reusable installation logic currently in `vp_global_cli/src/commands/upgrade/`. Both `vp upgrade` and `vp-setup.exe` call into `vp_setup`.
 
 **Benefits:**
 
@@ -81,25 +81,25 @@ crates/vite_installer/      — standalone installer binary
 - `vp upgrade` and `vp-setup.exe` share identical installation logic — no drift
 - Clear separation of concerns
 
-## Code Sharing: The `vite_setup` Library
+## Code Sharing: The `vp_setup` Library
 
 ### What Gets Extracted
 
-| Original location in `upgrade/` | Extracted to `vite_setup::` | Purpose                                                                                                                              |
+| Original location in `upgrade/` | Extracted to `vp_setup::` | Purpose                                                                                                                              |
 | ------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `platform.rs`                   | `platform`                  | OS/arch detection                                                                                                                    |
 | `registry.rs`                   | `registry`                  | npm registry queries                                                                                                                 |
 | `integrity.rs`                  | `integrity`                 | SHA-512 verification                                                                                                                 |
 | `install.rs` (all functions)    | `install`                   | Tarball extraction, package.json generation, .npmrc overrides, dep install, symlink/junction swap, version cleanup, rollback support |
 
-### What Stays in `vite_global_cli`
+### What Stays in `vp_global_cli`
 
 - CLI argument parsing for `vp upgrade`
 - Version comparison (current vs available)
 - Rollback logic
 - Output formatting specific to upgrade UX
 
-### What's New in `vite_installer`
+### What's New in `vp_installer`
 
 - Interactive installation prompts (numbered menu)
 - Windows User PATH modification via registry
@@ -111,18 +111,18 @@ crates/vite_installer/      — standalone installer binary
 ### Dependency Graph
 
 ```
-vite_installer (binary, ~3-5 MB)
-  ├── vite_setup (shared installation logic)
-  ├── vite_pm_cli (HTTP client)
-  ├── vite_shared (home dir resolution)
+vp_installer (binary, ~3-5 MB)
+  ├── vp_setup (shared installation logic)
+  ├── vp_pm_cli (HTTP client)
+  ├── vp_shared (home dir resolution)
   ├── vite_path (typed path wrappers)
   ├── clap (CLI parsing)
   ├── tokio (async runtime)
   ├── indicatif (progress bars)
   └── owo-colors (terminal colors)
 
-vite_global_cli (existing)
-  ├── vite_setup (replaces inline upgrade code)
+vp_global_cli (existing)
+  ├── vp_setup (replaces inline upgrade code)
   └── ... (all existing deps)
 ```
 
@@ -206,7 +206,7 @@ CLI flags take precedence over environment variables.
 
 ## Installation Flow
 
-The installer replicates the same result as `install.ps1`, implemented in Rust via `vite_setup`.
+The installer replicates the same result as `install.ps1`, implemented in Rust via `vp_setup`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -292,25 +292,25 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
                         ✔ Print success
 ```
 
-Each phase maps to `vite_setup` library functions shared with `vp upgrade`:
+Each phase maps to `vp_setup` library functions shared with `vp upgrade`:
 
 | Phase             | Key function                               | Crate            |
 | ----------------- | ------------------------------------------ | ---------------- |
-| Resolve           | `platform::detect_platform_suffix()`       | `vite_setup`     |
-| Resolve           | `install::read_current_version()`          | `vite_setup`     |
-| Resolve           | `registry::resolve_version_string()`       | `vite_setup`     |
-| Download & Verify | `registry::resolve_platform_package()`     | `vite_setup`     |
-| Download & Verify | `HttpClient::get_bytes()`                  | `vite_pm_cli`    |
-| Download & Verify | `integrity::verify_integrity()`            | `vite_setup`     |
-| Install           | `install::extract_platform_package()`      | `vite_setup`     |
-| Install           | `install::generate_wrapper_package_json()` | `vite_setup`     |
-| Install           | `install::write_release_age_overrides()`   | `vite_setup`     |
-| Install           | `install::install_production_deps()`       | `vite_setup`     |
-| Activate          | `install::save_previous_version()`         | `vite_setup`     |
-| Activate          | `install::swap_current_link()`             | `vite_setup`     |
-| Activate          | `install::cleanup_old_versions()`          | `vite_setup`     |
-| Configure         | `install::refresh_shims()`                 | `vite_setup`     |
-| Configure         | `windows_path::add_to_user_path()`         | `vite_installer` |
+| Resolve           | `platform::detect_platform_suffix()`       | `vp_setup`     |
+| Resolve           | `install::read_current_version()`          | `vp_setup`     |
+| Resolve           | `registry::resolve_version_string()`       | `vp_setup`     |
+| Download & Verify | `registry::resolve_platform_package()`     | `vp_setup`     |
+| Download & Verify | `HttpClient::get_bytes()`                  | `vp_pm_cli`    |
+| Download & Verify | `integrity::verify_integrity()`            | `vp_setup`     |
+| Install           | `install::extract_platform_package()`      | `vp_setup`     |
+| Install           | `install::generate_wrapper_package_json()` | `vp_setup`     |
+| Install           | `install::write_release_age_overrides()`   | `vp_setup`     |
+| Install           | `install::install_production_deps()`       | `vp_setup`     |
+| Activate          | `install::save_previous_version()`         | `vp_setup`     |
+| Activate          | `install::swap_current_link()`             | `vp_setup`     |
+| Activate          | `install::cleanup_old_versions()`          | `vp_setup`     |
+| Configure         | `install::refresh_shims()`                 | `vp_setup`     |
+| Configure         | `windows_path::add_to_user_path()`         | `vp_installer` |
 
 **Same-version repair**: When the resolved version matches the installed version, the DOWNLOAD/INSTALL/ACTIVATE phases are skipped entirely (saving 1 HTTP request + all I/O). The CONFIGURE phase always runs to repair shims, env files, and PATH if needed.
 
@@ -350,7 +350,7 @@ let current: String = env.get_value("Path").unwrap_or_default();
 // ... broadcast WM_SETTINGCHANGE via SendMessageTimeoutW (raw FFI, single call)
 ```
 
-See `crates/vite_installer/src/windows_path.rs` for the full implementation.
+See `crates/vp_installer/src/windows_path.rs` for the full implementation.
 
 ### DLL Security (for download-folder execution)
 
@@ -428,7 +428,7 @@ In `build-upstream/action.yml`, the installer binary is built and cached alongsi
 ```yaml
 - name: Build installer binary (Windows only)
   if: contains(inputs.target, 'windows')
-  run: cargo build --release --target ${{ inputs.target }} -p vite_installer
+  run: cargo build --release --target ${{ inputs.target }} -p vp_installer
 ```
 
 In `release.yml`, installer artifacts are uploaded per-target, renamed with the target triple, and attached to the GitHub Release:
@@ -454,7 +454,7 @@ test-vp-setup-exe:
     - uses: actions/checkout@v4
     - uses: oxc-project/setup-rust@v1
     - name: Build vp-setup.exe
-      run: cargo build --release -p vite_installer
+      run: cargo build --release -p vp_installer
     - name: Install via vp-setup.exe (silent)
       shell: pwsh
       run: ./target/release/vp-setup.exe
@@ -464,8 +464,8 @@ test-vp-setup-exe:
       # verifies from all three shells after a single install
 ```
 
-The workflow triggers on changes to `crates/vite_installer/**`, `crates/vite_pm_cli/**`, and
-`crates/vite_setup/**`.
+The workflow triggers on changes to `crates/vp_installer/**`, `crates/vp_pm_cli/**`, and
+`crates/vp_setup/**`.
 
 ## Code Signing
 
@@ -523,22 +523,22 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 - `winreg` crate: Higher-level safe API, ~50-100 KB after LTO, significantly less code (~80 lines vs ~225 lines)
 - Raw Win32 FFI: Zero dependencies but 225 lines of unsafe code with manual UTF-16 encoding and registry choreography
 - PowerShell subprocess: Proven in `install.ps1` but adds process spawn overhead and PowerShell dependency
-- Decision: Use `winreg` for registry access — the zero-dependency pattern makes sense for `vite_trampoline` (copied 5-10 times as shims) but not for a single downloadable installer where readability matters more. `WM_SETTINGCHANGE` broadcast still uses a single raw FFI call since `winreg` doesn't wrap it.
+- Decision: Use `winreg` for registry access — the zero-dependency pattern makes sense for `vp_trampoline` (copied 5-10 times as shims) but not for a single downloadable installer where readability matters more. `WM_SETTINGCHANGE` broadcast still uses a single raw FFI call since `winreg` doesn't wrap it.
 
 ## Implementation Phases
 
-### Phase 1: Extract `vite_setup` Library (done)
+### Phase 1: Extract `vp_setup` Library (done)
 
-- Created `crates/vite_setup/` with `platform`, `registry`, `integrity`, `install` modules
-- Moved shared code from `vite_global_cli/src/commands/upgrade/` into `vite_setup`
-- Updated `vite_global_cli` to import from `vite_setup`
+- Created `crates/vp_setup/` with `platform`, `registry`, `integrity`, `install` modules
+- Moved shared code from `vp_global_cli/src/commands/upgrade/` into `vp_setup`
+- Updated `vp_global_cli` to import from `vp_setup`
 - All 353 existing tests pass
 
-### Phase 2: Create `vite_installer` Binary (done)
+### Phase 2: Create `vp_installer` Binary (done)
 
-- Created `crates/vite_installer/` with `[[bin]] name = "vp-setup"`
+- Created `crates/vp_installer/` with `[[bin]] name = "vp-setup"`
 - Implemented CLI argument parsing (clap) with env var merging
-- Implemented installation flow calling `vite_setup` with same-version repair path
+- Implemented installation flow calling `vp_setup` with same-version repair path
 - Implemented Windows PATH modification via `winreg` crate
 - Implemented interactive prompts with customization submenu
 - Implemented Node.js manager auto-detection (pre-computed, no mid-install prompts)

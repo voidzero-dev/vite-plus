@@ -3672,7 +3672,7 @@ export declare function run(options: CliOptions): Promise<number>;
 /**
  * Run a command with fspy tracking, callable from JavaScript.
  *
- * This function wraps `vite_command::run_command_with_fspy` to provide
+ * This function wraps `vp_command::run_command_with_fspy` to provide
  * a JavaScript-friendly interface for executing commands and tracking
  * their file system accesses.
  *
@@ -3742,7 +3742,7 @@ export interface RunCommandResult {
 /**
  * Whether the Vite+ banner should be emitted in the current environment.
  *
- * Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+ * Mirrors `vp_shared::header::should_print_header` so both CLIs apply
  * the same TTY + git-hook gating without duplicating the rules in JS.
  */
 export declare function shouldPrintVitePlusHeader(): boolean;

@@ -2,10 +2,10 @@ use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
 use owo_colors::OwoColorize;
 use petgraph::prelude::DiGraphMap;
-use vite_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
 use vite_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
+use vp_error::Error;
 
 use super::args::ExecArgs;
 
@@ -32,7 +32,7 @@ pub(super) async fn execute_exec_workspace(
     let (query, is_cwd_only) = match args.packages.into_package_query(None, &cwd_arc) {
         Ok(result) => result,
         Err(e) => {
-            vite_shared::output::error(&vite_str::format!("{e}"));
+            vp_shared::output::error(&vite_str::format!("{e}"));
             return Ok(ExitStatus(1));
         }
     };
@@ -41,7 +41,7 @@ pub(super) async fn execute_exec_workspace(
     let resolution = match indexed.resolve_query(&query) {
         Ok(result) => result,
         Err(e) => {
-            vite_shared::output::error(&vite_str::format!("{e}"));
+            vp_shared::output::error(&vite_str::format!("{e}"));
             return Ok(ExitStatus(1));
         }
     };
@@ -53,7 +53,7 @@ pub(super) async fn execute_exec_workspace(
             .map(vite_str::Str::as_str)
             .collect::<Vec<_>>()
             .join(", ");
-        vite_shared::output::error(&vite_str::format!(
+        vp_shared::output::error(&vite_str::format!(
             "No packages matched the filter: {unmatched_selectors}"
         ));
         return Ok(ExitStatus(1));
@@ -61,7 +61,7 @@ pub(super) async fn execute_exec_workspace(
 
     // Warn about unmatched selectors
     for selector in &resolution.unmatched_selectors {
-        vite_shared::output::warn(&vite_str::format!(
+        vp_shared::output::warn(&vite_str::format!(
             "No packages matched the filter '{}'",
             selector
         ));
@@ -86,7 +86,7 @@ pub(super) async fn execute_exec_workspace(
         {
             selected = selected[pos..].to_vec();
         } else {
-            vite_shared::output::error(&vite_str::format!(
+            vp_shared::output::error(&vite_str::format!(
                 "Package '{}' not found in selected packages",
                 resume_pkg
             ));
@@ -95,7 +95,7 @@ pub(super) async fn execute_exec_workspace(
     }
 
     if selected.is_empty() {
-        vite_shared::output::warn("No packages matched the filter(s)");
+        vp_shared::output::warn("No packages matched the filter(s)");
         return Ok(ExitStatus::SUCCESS);
     }
 
@@ -112,7 +112,7 @@ pub(super) async fn execute_exec_workspace(
     let base_path_dirs: Vec<std::path::PathBuf> = {
         let mut dirs = Vec::new();
         // Include package manager bin dir
-        if let Ok(pm) = vite_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
+        if let Ok(pm) = vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
             dirs.push(pm.get_bin_prefix().as_path().to_path_buf());
         }
         // Include workspace root's node_modules/.bin
@@ -182,12 +182,12 @@ pub(super) async fn execute_exec_workspace(
         let mut worst_exit = 0u8;
         for (name, output, duration) in &results {
             if show_prefix {
-                vite_shared::output::raw(&vite_str::format!("{name}$ {cmd_display}"));
+                vp_shared::output::raw(&vite_str::format!("{name}$ {cmd_display}"));
             }
             use std::io::Write;
             let _ = std::io::stdout().write_all(&output.stdout);
             let _ = std::io::stderr().write_all(&output.stderr);
-            let code = vite_shared::exit_code_from_status(output.status) as u8;
+            let code = vp_shared::exit_code_from_status(output.status) as u8;
             if code > worst_exit {
                 worst_exit = code;
             }
@@ -215,7 +215,7 @@ pub(super) async fn execute_exec_workspace(
             let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
 
             if show_prefix {
-                vite_shared::output::raw(&vite_str::format!("{pkg_name}$ {cmd_display}"));
+                vp_shared::output::raw(&vite_str::format!("{pkg_name}$ {cmd_display}"));
             }
 
             let start = std::time::Instant::now();
@@ -234,7 +234,7 @@ pub(super) async fn execute_exec_workspace(
                     let command = args.command[0].bright_blue().to_string();
                     let vp_install = "`vp install`".bright_blue().to_string();
                     let vpx = "`vpx`".bright_blue().to_string();
-                    vite_shared::output::error(&vite_str::format!(
+                    vp_shared::output::error(&vite_str::format!(
                         "Command '{}' not found in node_modules/.bin\n\n\
                          Run {} to install dependencies, or use {} for invoking remote commands.",
                         command,
@@ -250,7 +250,7 @@ pub(super) async fn execute_exec_workspace(
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
             let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
             let duration = start.elapsed();
-            let code = vite_shared::exit_code_from_status(status) as u8;
+            let code = vp_shared::exit_code_from_status(status) as u8;
 
             if args.report_summary {
                 let pkg_status = if code == 0 { "passed" } else { "failed" };
@@ -279,7 +279,7 @@ pub(super) async fn execute_exec_workspace(
         if let Err(e) =
             std::fs::write(report_path.as_path(), serde_json::to_string_pretty(&report).unwrap())
         {
-            vite_shared::output::error(&vite_str::format!(
+            vp_shared::output::error(&vite_str::format!(
                 "Failed to write vp-exec-summary.json: {}",
                 e
             ));
@@ -315,10 +315,10 @@ fn build_exec_command(
     pkg_path: &vite_path::AbsolutePath,
 ) -> Result<tokio::process::Command, Error> {
     if shell_mode {
-        Ok(vite_command::build_shell_command(cmd_display, pkg_path))
+        Ok(vp_command::build_shell_command(cmd_display, pkg_path))
     } else {
-        let bin_path = vite_command::resolve_bin(&command[0], Some(path_env), pkg_path)?;
-        let mut cmd = vite_command::build_command(&bin_path, pkg_path);
+        let bin_path = vp_command::resolve_bin(&command[0], Some(path_env), pkg_path)?;
+        let mut cmd = vp_command::build_command(&bin_path, pkg_path);
         if command.len() > 1 {
             cmd.args(&command[1..]);
         }

@@ -8356,21 +8356,21 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "vite_command",
- "vite_error",
- "vite_migration",
+ "vp_command",
+ "vp_error",
+ "vp_migration",
  "vite_path",
- "vite_pm_cli",
+ "vp_pm_cli",
  "vite_select",
- "vite_shared",
- "vite_static_config",
+ "vp_shared",
+ "vp_static_config",
  "vite_str",
  "vite_task",
  "vite_workspace",
 ]
 
 [[package]]
-name = "vite_cli_snapshots"
+name = "vp_cli_snapshots"
 version = "0.0.0"
 dependencies = [
  "cow-utils",
@@ -8393,7 +8393,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_command"
+name = "vp_command"
 version = "0.0.0"
 dependencies = [
  "fspy",
@@ -8402,15 +8402,15 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "vite_error",
+ "vp_error",
  "vite_path",
  "vite_powershell",
- "vite_shared",
+ "vp_shared",
  "which",
 ]
 
 [[package]]
-name = "vite_error"
+name = "vp_error"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -8424,7 +8424,7 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "vite_path",
- "vite_shared",
+ "vp_shared",
  "vite_str",
  "vite_workspace",
 ]
@@ -8440,7 +8440,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_global_cli"
+name = "vp_global_cli"
 version = "0.2.8"
 dependencies = [
  "chrono",
@@ -8465,13 +8465,13 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "vite_command",
- "vite_error",
- "vite_js_runtime",
+ "vp_command",
+ "vp_error",
+ "vp_js_runtime",
  "vite_path",
- "vite_pm_cli",
- "vite_setup",
- "vite_shared",
+ "vp_pm_cli",
+ "vp_setup",
+ "vp_shared",
  "vite_str",
  "vite_workspace",
 ]
@@ -8486,7 +8486,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_installer"
+name = "vp_installer"
 version = "0.0.0"
 dependencies = [
  "clap",
@@ -8494,15 +8494,15 @@ dependencies = [
  "owo-colors",
  "tokio",
  "vite_path",
- "vite_pm_cli",
- "vite_setup",
- "vite_shared",
+ "vp_pm_cli",
+ "vp_setup",
+ "vp_shared",
  "which",
  "winreg 0.56.0",
 ]
 
 [[package]]
-name = "vite_js_runtime"
+name = "vp_js_runtime"
 version = "0.0.0"
 dependencies = [
  "async-trait",
@@ -8523,13 +8523,13 @@ dependencies = [
  "tokio",
  "tracing",
  "vite_path",
- "vite_shared",
+ "vp_shared",
  "vite_str",
  "zip",
 ]
 
 [[package]]
-name = "vite_migration"
+name = "vp_migration"
 version = "0.0.0"
 dependencies = [
  "ast-grep-config",
@@ -8541,7 +8541,7 @@ dependencies = [
  "regex",
  "serde_json",
  "tempfile",
- "vite_error",
+ "vp_error",
 ]
 
 [[package]]
@@ -8560,7 +8560,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_pm_cli"
+name = "vp_pm_cli"
 version = "0.0.0"
 dependencies = [
  "backon",
@@ -8587,17 +8587,17 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "tracing",
- "vite_command",
- "vite_error",
+ "vp_command",
+ "vp_error",
  "vite_path",
- "vite_pm_cli_macros",
- "vite_shared",
+ "vp_pm_cli_macros",
+ "vp_shared",
  "vite_str",
  "vite_workspace",
 ]
 
 [[package]]
-name = "vite_pm_cli_macros"
+name = "vp_pm_cli_macros"
 version = "0.0.0"
 dependencies = [
  "proc-macro2",
@@ -8627,7 +8627,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_setup"
+name = "vp_setup"
 version = "0.0.0"
 dependencies = [
  "base64-simd",
@@ -8642,15 +8642,15 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "tracing",
- "vite_js_runtime",
+ "vp_js_runtime",
  "vite_path",
- "vite_pm_cli",
- "vite_shared",
+ "vp_pm_cli",
+ "vp_shared",
  "vite_str",
 ]
 
 [[package]]
-name = "vite_shared"
+name = "vp_shared"
 version = "0.0.0"
 dependencies = [
  "directories",
@@ -8685,7 +8685,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_static_config"
+name = "vp_static_config"
 version = "0.0.0"
 dependencies = [
  "oxc_allocator",
@@ -8864,7 +8864,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_trampoline"
+name = "vp_trampoline"
 version = "0.0.0"
 
 [[package]]

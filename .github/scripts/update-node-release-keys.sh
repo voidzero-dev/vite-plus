@@ -2,7 +2,7 @@
 # Regenerate the vendored Node.js release signing keyring from the canonical
 # nodejs/release-keys repository.
 #
-# The keyring is the trust anchor used by `vite_js_runtime` to verify the PGP
+# The keyring is the trust anchor used by `vp_js_runtime` to verify the PGP
 # signature on Node.js `SHASUMS256.txt` (see rfcs/verify-node-shasums-signature.md).
 # Run from the repository root:
 #
@@ -16,7 +16,7 @@
 # merging, since it alters which keys are trusted.
 set -euo pipefail
 
-DEST="crates/vite_js_runtime/src/assets/node-release-keys.asc"
+DEST="crates/vp_js_runtime/src/assets/node-release-keys.asc"
 SUMMARY_FILE="${KEYRING_SUMMARY_FILE:-}"
 
 if [[ ! -f "$DEST" ]]; then
@@ -81,7 +81,7 @@ PREAMBLE = (
     "This keyring is the trust anchor used to verify the PGP signature on "
     "Node.js `SHASUMS256.txt` (see `rfcs/verify-node-shasums-signature.md`).\n\n"
     "**Review the key changes below before merging.** PR CI runs the "
-    "`vite_js_runtime` tests, which confirm every vendored key still parses; a "
+    "`vp_js_runtime` tests, which confirm every vendored key still parses; a "
     "new key that fails to parse will surface as a failing test.\n"
 )
 

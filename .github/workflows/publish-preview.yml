@@ -128,7 +128,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: rust-cli-artifacts
-          pattern: vite-global-cli-*
+          pattern: vp-global-cli-*
 
       # Stops short of `npm publish` and leaves packages/cli/{npm,cli-npm}/*
       # on disk for the bridge action to pack.

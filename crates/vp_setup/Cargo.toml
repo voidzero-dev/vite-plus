@@ -1,0 +1,37 @@
+[package]
+name = "vp_setup"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+base64-simd = { workspace = true }
+flate2 = { workspace = true }
+node-semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+vp_js_runtime = { workspace = true }
+vp_pm_cli = { workspace = true }
+vite_path = { workspace = true }
+vp_shared = { workspace = true }
+vite_str = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+junction = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

@@ -148,7 +148,7 @@ runs:
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       shell: bash
       run: |
-        pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --release -p vite_global_cli
+        pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --release -p vp_global_cli
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
@@ -159,7 +159,7 @@ runs:
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: |
-        pnpm exec napi build -x --target ${INPUTS_TARGET} --release -p vite_global_cli
+        pnpm exec napi build -x --target ${INPUTS_TARGET} --release -p vp_global_cli
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
@@ -169,21 +169,21 @@ runs:
     - name: Build Rust CLI binary (non-Linux targets)
       if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
       shell: bash
-      run: cargo build --release --target ${INPUTS_TARGET} -p vite_global_cli
+      run: cargo build --release --target ${INPUTS_TARGET} -p vp_global_cli
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build trampoline shim binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: cargo build --release --target ${INPUTS_TARGET} -p vite_trampoline
+      run: cargo build --release --target ${INPUTS_TARGET} -p vp_trampoline
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build installer binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: cargo build --release --target ${INPUTS_TARGET} -p vite_installer
+      run: cargo build --release --target ${INPUTS_TARGET} -p vp_installer
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 

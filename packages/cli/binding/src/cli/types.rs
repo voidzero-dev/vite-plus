@@ -111,7 +111,7 @@ pub(super) enum CLIArgs {
 
     /// Package manager commands (install, add, remove, update, dedupe, …)
     #[command(flatten)]
-    PackageManager(vite_pm_cli::PackageManagerCommand),
+    PackageManager(vp_pm_cli::PackageManagerCommand),
 
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),
@@ -170,5 +170,5 @@ pub(crate) struct CapturedCommandOutput {
 /// the `128 + signal` mapping. A `From` impl is blocked by the orphan rule:
 /// both types are foreign here.
 pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
-    ExitStatus(vite_shared::exit_code_from_status(status) as u8)
+    ExitStatus(vp_shared::exit_code_from_status(status) as u8)
 }

@@ -144,7 +144,7 @@ vp dlx typescript tsc --version --help
 
 ### 1. Command Structure
 
-**File**: `crates/vite_command/src/lib.rs`
+**File**: `crates/vp_command/src/lib.rs`
 
 Add new command:
 
@@ -183,7 +183,7 @@ pub enum Commands {
 ```rust
 use std::{collections::HashMap, process::ExitStatus};
 
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
@@ -437,7 +437,7 @@ fn extract_command_from_spec(spec: &str) -> String {
 **File**: `crates/vite_task/src/dlx.rs` (new file)
 
 ```rust
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_install::commands::dlx::DlxCommandOptions;
 use vite_install::PackageManager;
@@ -480,7 +480,7 @@ impl DlxCommand {
 
         let exit_status = package_manager.run_dlx_command(&options, &self.cwd).await?;
 
-        Ok(vite_shared::exit_code_from_status(exit_status))
+        Ok(vp_shared::exit_code_from_status(exit_status))
     }
 }
 ```
@@ -728,7 +728,7 @@ Error: yarn@1.22.19 does not support dlx command
 
 ### Phase 1: Core Infrastructure
 
-1. Add `Dlx` variant to `Commands` enum in `vite_command`
+1. Add `Dlx` variant to `Commands` enum in `vp_command`
 2. Create `DlxCommandOptions` struct
 3. Implement `resolve_dlx_command` for each package manager
 4. Add `run_dlx_command` execution method

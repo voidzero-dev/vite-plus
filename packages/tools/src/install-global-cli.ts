@@ -91,7 +91,7 @@ export function installGlobalCli() {
     const binaryPath = findVpBinary(binaryName);
     if (!binaryPath) {
       console.error(`Error: vp binary not found in ${getTargetDirs().join(', ')}`);
-      console.error('Run "cargo build -p vite_global_cli --release" first.');
+      console.error('Run "cargo build -p vp_global_cli --release" first.');
       process.exit(1);
     }
 
@@ -101,7 +101,7 @@ export function installGlobalCli() {
       const shimPath = path.join(path.dirname(binaryPath), 'vp-shim.exe');
       if (!existsSync(shimPath)) {
         console.error(`Error: vp-shim.exe not found at ${shimPath}`);
-        console.error('Build it with: cargo build -p vite_trampoline --release');
+        console.error('Build it with: cargo build -p vp_trampoline --release');
         process.exit(1);
       }
     }

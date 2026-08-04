@@ -24,12 +24,12 @@ pub use types::{
     BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand,
     ViteConfigResolverFn,
 };
-use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-pub use vite_shared::init_tracing;
-use vite_shared::{PrependOptions, env_vars, prepend_to_path_env};
 use vite_str::Str;
 use vite_task::{ExitStatus, Session, SessionConfig};
+use vp_error::Error;
+pub use vp_shared::init_tracing;
+use vp_shared::{PrependOptions, env_vars, prepend_to_path_env};
 
 use self::{
     execution::{FilterStream, resolve_and_execute, resolve_and_execute_with_filter},
@@ -196,7 +196,7 @@ async fn envs_with_explicit_package_manager_path(
     cwd: &AbsolutePath,
     envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
 ) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
-    let Some(resolution) = (match vite_pm_cli::resolve_package_manager_from_package_json(cwd) {
+    let Some(resolution) = (match vp_pm_cli::resolve_package_manager_from_package_json(cwd) {
         Ok(resolution) => resolution,
         Err(error) => {
             tracing::debug!(
@@ -209,7 +209,7 @@ async fn envs_with_explicit_package_manager_path(
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vite_pm_cli::download_package_manager(
+    let (install_dir, _, _) = match vp_pm_cli::download_package_manager(
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
@@ -257,7 +257,7 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    if let Ok(pm) = vite_pm_cli::PackageManager::builder(&cwd).build().await {
+    if let Ok(pm) = vp_pm_cli::PackageManager::builder(&cwd).build().await {
         let bin_prefix = pm.get_bin_prefix();
         let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
     }
@@ -322,10 +322,10 @@ pub async fn main(
     }
 }
 
-/// Execute a package-manager command directly through `vite_pm_cli`,
+/// Execute a package-manager command directly through `vp_pm_cli`,
 /// bypassing the vite-task scheduler — PM operations don't need caching.
 async fn execute_pm_command(
-    command: vite_pm_cli::PackageManagerCommand,
+    command: vp_pm_cli::PackageManagerCommand,
     cwd: &AbsolutePath,
 ) -> Result<ExitStatus, Error> {
     // Commands projected into the vite-plus-managed package store only work
@@ -337,13 +337,13 @@ async fn execute_pm_command(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
         )));
     }
-    let status = match vite_pm_cli::dispatch(cwd, command).await {
+    let status = match vp_pm_cli::dispatch(cwd, command).await {
         Ok(status) => status,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
         // matches the global CLI's `is_user_message()` branch in main.rs so the
         // friendly version-gate / usage errors look the same on both surfaces.
-        Err(vite_pm_cli::Error::UserMessage(msg)) => {
-            vite_shared::output::raw_stderr(&msg);
+        Err(vp_pm_cli::Error::UserMessage(msg)) => {
+            vp_shared::output::raw_stderr(&msg);
             return Ok(ExitStatus(1));
         }
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),

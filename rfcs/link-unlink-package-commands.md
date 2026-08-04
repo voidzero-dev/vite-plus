@@ -284,7 +284,7 @@ pub enum Commands {
 ```rust
 use std::{collections::HashMap, process::ExitStatus};
 
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
@@ -352,7 +352,7 @@ impl PackageManager {
 ```rust
 use std::{collections::HashMap, process::ExitStatus};
 
-use vite_error::Error;
+use vp_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{

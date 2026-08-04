@@ -1,8 +1,8 @@
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use owo_colors::OwoColorize;
-use vite_error::Error;
-use vite_shared::output;
 use vite_task::ExitStatus;
+use vp_error::Error;
+use vp_shared::output;
 
 use super::types::SynthesizableSubcommand;
 
@@ -106,7 +106,7 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Op
     let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
         Some(ContextValue::String(value)) => Some(value.to_owned()),
         Some(ContextValue::Strings(values)) => {
-            vite_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
+            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
         }
         _ => None,
     };
@@ -176,8 +176,8 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 }
 
 pub(super) fn print_help() {
-    let header = if vite_shared::header::should_print_header() {
-        format!("{}\n\n", vite_shared::header::vite_plus_header())
+    let header = if vp_shared::header::should_print_header() {
+        format!("{}\n\n", vp_shared::header::vite_plus_header())
     } else {
         String::new()
     };

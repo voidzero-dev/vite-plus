@@ -1,4 +1,4 @@
-# RFC: JavaScript Runtime Management (`vite_js_runtime`)
+# RFC: JavaScript Runtime Management (`vp_js_runtime`)
 
 ## Background
 
@@ -9,7 +9,7 @@ Currently, vite-plus relies on the user's system-installed Node.js runtime. This
 3. **No runtime pinning**: Projects cannot specify and enforce a specific Node.js version
 4. **Future extensibility**: As alternatives like Bun and Deno mature, projects may want to use different runtimes
 
-The PackageManager implementation in `vite_pm_cli` successfully handles automatic downloading and caching of package managers (pnpm, yarn, npm). We can apply the same pattern to JavaScript runtimes.
+The PackageManager implementation in `vp_pm_cli` successfully handles automatic downloading and caching of package managers (pnpm, yarn, npm). We can apply the same pattern to JavaScript runtimes.
 
 ## Goals
 
@@ -53,7 +53,7 @@ Both exact versions and semver ranges are supported:
 ### Crate Structure
 
 ```
-crates/vite_js_runtime/
+crates/vp_js_runtime/
 ├── Cargo.toml
 └── src/
     ├── lib.rs              # Public API exports
@@ -204,7 +204,7 @@ impl NodeProvider {
 **Direct version download:**
 
 ```rust
-use vite_js_runtime::{JsRuntimeType, download_runtime};
+use vp_js_runtime::{JsRuntimeType, download_runtime};
 
 let runtime = download_runtime(JsRuntimeType::Node, "22.13.1").await?;
 println!("Node.js installed at: {}", runtime.get_binary_path());
@@ -214,7 +214,7 @@ println!("Version: {}", runtime.version()); // "22.13.1"
 **Project-based download (reads from .node-version, devEngines.runtime, or engines.node):**
 
 ```rust
-use vite_js_runtime::download_runtime_for_project;
+use vp_js_runtime::download_runtime_for_project;
 use vite_path::AbsolutePathBuf;
 
 let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
@@ -526,16 +526,16 @@ Same pattern as PackageManager:
 - File-based locking to prevent race conditions
 - Check cache after acquiring lock (another process may have completed)
 
-## Integration with vite_pm_cli
+## Integration with vp_pm_cli
 
-The `vite_pm_cli` crate can use `vite_js_runtime` to:
+The `vp_pm_cli` crate can use `vp_js_runtime` to:
 
 1. Ensure the correct Node.js version before running package manager commands
 2. Use the managed Node.js to execute package manager binaries
 
 ```rust
-// Example integration in vite_pm_cli
-use vite_js_runtime::{JsRuntimeType, download_runtime};
+// Example integration in vp_pm_cli
+use vp_js_runtime::{JsRuntimeType, download_runtime};
 
 async fn run_with_managed_node(
     node_version: &str,
@@ -559,7 +559,7 @@ async fn run_with_managed_node(
 
 ## Error Handling
 
-Error variants in `vite_js_runtime::Error`:
+Error variants in `vp_js_runtime::Error`:
 
 ```rust
 pub enum Error {
@@ -638,9 +638,9 @@ pub enum Error {
 - Easier to test in isolation
 - Clear single responsibility: download and cache runtimes
 
-### 2. Separate Crate vs. Extending vite_pm_cli
+### 2. Separate Crate vs. Extending vp_pm_cli
 
-**Decision**: Create a new `vite_js_runtime` crate.
+**Decision**: Create a new `vp_js_runtime` crate.
 
 **Rationale**:
 

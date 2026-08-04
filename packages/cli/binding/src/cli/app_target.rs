@@ -7,11 +7,11 @@
 //! invocation directory, then the interactive package picker (a package
 //! listing plus exit 1 when the terminal is not interactive).
 
-use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{env_vars, output};
 use vite_task::ExitStatus;
 use vite_workspace::WorkspaceFile;
+use vp_error::Error;
+use vp_shared::{env_vars, output};
 
 use super::types::SynthesizableSubcommand;
 
@@ -169,7 +169,7 @@ fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
 /// app, for which the signal is a root `index.html`. A shared root config
 /// for lint/fmt/tasks declares neither, so it never makes the root a target.
 fn root_looks_runnable(
-    config: &vite_static_config::FieldMap,
+    config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
 ) -> bool {
@@ -196,9 +196,9 @@ fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
     match command {
         "pack" => {
             dir.as_path().join("src/index.ts").is_file()
-                || vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
+                || vp_static_config::resolve_static_config(dir).get_declared("pack").is_some()
         }
-        _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
+        _ => vp_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
 
@@ -209,14 +209,14 @@ fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
 fn resolve_default_package(
     command: &str,
     cwd: &AbsolutePath,
-    value: vite_static_config::FieldValue,
+    value: vp_static_config::FieldValue,
 ) -> AppTarget {
     let fail = |msg: &str| {
         output::error(msg);
         AppTarget::Exit(ExitStatus(1))
     };
     match value {
-        vite_static_config::FieldValue::Json(serde_json::Value::String(dir)) => {
+        vp_static_config::FieldValue::Json(serde_json::Value::String(dir)) => {
             let target = cwd.join(&dir).clean();
             if !target.as_path().is_dir() {
                 return fail(&format!("defaultPackage points to a missing directory: {dir}"));
@@ -224,10 +224,10 @@ fn resolve_default_package(
             output::note(&format!("vp {command}: using {dir} (defaultPackage in vite.config.ts)"));
             AppTarget::Dir(target)
         }
-        vite_static_config::FieldValue::Json(other) => {
+        vp_static_config::FieldValue::Json(other) => {
             fail(&format!("defaultPackage must be a string of a directory, got: {other}"))
         }
-        vite_static_config::FieldValue::NonStatic => fail(
+        vp_static_config::FieldValue::NonStatic => fail(
             "defaultPackage in vite.config.ts must be a static string literal so vp can read it without executing the config",
         ),
     }
@@ -327,7 +327,7 @@ enum Classification {
 enum Elicitation {
     /// The invocation root's config explicitly declares `defaultPackage`
     /// (with this value — possibly invalid, which the resolver reports).
-    DefaultPackage(vite_static_config::FieldValue),
+    DefaultPackage(vp_static_config::FieldValue),
     /// Bare app command at a real workspace root: picker/listing territory.
     WorkspaceRoot(vite_workspace::WorkspaceRoot),
 }
@@ -340,11 +340,11 @@ enum Elicitation {
 /// [`resolve_default_package`] to report.
 fn default_package_for_command(
     command: &str,
-    value: vite_static_config::FieldValue,
-) -> Option<vite_static_config::FieldValue> {
+    value: vp_static_config::FieldValue,
+) -> Option<vp_static_config::FieldValue> {
     match value {
-        vite_static_config::FieldValue::Json(serde_json::Value::Object(map)) => {
-            map.get(command).cloned().map(vite_static_config::FieldValue::Json)
+        vp_static_config::FieldValue::Json(serde_json::Value::Object(map)) => {
+            map.get(command).cloned().map(vp_static_config::FieldValue::Json)
         }
         other => Some(other),
     }
@@ -373,7 +373,7 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classif
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
     // Resolved once and reused by `root_looks_runnable` below, so a bare
     // command at a root reads and parses the config a single time.
-    let root_config = at_invocation_root.then(|| vite_static_config::resolve_static_config(cwd));
+    let root_config = at_invocation_root.then(|| vp_static_config::resolve_static_config(cwd));
     if let Some(value) = root_config
         .as_ref()
         .and_then(|config| config.get_declared("defaultPackage"))
@@ -481,7 +481,7 @@ pub(super) fn resolve_app_target(
     // In an interactive terminal, pick the target: exactly one likely-runnable
     // package (rows are sorted runnable first) auto-selects without a menu;
     // otherwise the fuzzy picker runs.
-    if vite_shared::is_interactive_terminal() {
+    if vp_shared::is_interactive_terminal() {
         let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
         let picked = if single_runnable { Some(0) } else { run_package_picker(command, &rows)? };
         let Some(index) = picked else {
