@@ -179,6 +179,17 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // above the trace is the assertion, so drop the frames.
 static STACK_FRAME_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?m)^\s+at .*file://.*\n?").unwrap());
+// Vite's build banner ("vite v8.1.5 building client environment for
+// production...") races the Rust vite-reporter's same-line progress
+// rewrites: the banner goes through Node's buffered stdout while the
+// reporter writes erase sequences straight to the fd, so on a slow machine
+// the erase lands on the banner's line and the final grid drops it (CI),
+// while a fast machine keeps it (local). Drop the line everywhere; the
+// reporter's transformed/size lines still assert the build ran.
+static VITE_BUILD_BANNER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^vite (?:v\d[^ ]*|<version>) building .* environment for .*\n?")
+        .unwrap()
+});
 // The npm 404 line echoes the upstream registry's message tail, which differs
 // between registries (npmjs vs a mirror behind the local-registry proxy).
 static NPM_404_TAIL_RE: LazyLock<regex::Regex> =
@@ -486,6 +497,7 @@ pub fn redact_output(
     // Drop build-dependent stack frames, normalize the upstream-dependent npm
     // 404 tail, and strip yarn1's console-dependent sparkles prefix
     output = STACK_FRAME_RE.replace_all(&output, "").into_owned();
+    output = VITE_BUILD_BANNER_RE.replace_all(&output, "").into_owned();
     output = NPM_404_TAIL_RE.replace_all(&output, "${1}<message>").into_owned();
     output = YARN_SPARKLE_RE.replace_all(&output, "").into_owned();
 

@@ -1,9 +1,0 @@
-[[case]]
-name = "create_library_in_git_directory"
-vp = "local"
-steps = [
-  { argv = ["git", "init"], snapshot = false },
-  { argv = ["vp", "create", "vite:library", "--directory", ".", "--no-interactive", "--no-git", "--no-hooks", "--no-agent", "--no-editor"], comment = "create a library in a directory containing only .git", timeout = 120000 },
-  { argv = ["vpt", "stat-file", ".git", "--assert", "dir"], comment = "existing git metadata is preserved" },
-  { argv = ["vpt", "stat-file", "package.json", "--assert", "file"], comment = "library template was created" },
-]

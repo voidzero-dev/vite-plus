@@ -5,7 +5,7 @@
 
 use std::{
     env,
-    io::{Cursor, IsTerminal, Read as _, Write as _},
+    io::{Cursor, Read as _, Write as _},
     path::Path,
     process::{self, Output},
     time::{SystemTime, UNIX_EPOCH},
@@ -132,7 +132,7 @@ fn is_affirmative_response(input: &str) -> bool {
 }
 
 fn should_prompt_release_age_override(silent: bool) -> bool {
-    !silent && std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+    !silent && vite_shared::is_stdin_terminal() && vite_shared::is_stderr_terminal()
 }
 
 fn prompt_release_age_override(version: &str) -> bool {

@@ -1,0 +1,14 @@
+[[case]]
+name = "pack_default_entry"
+vp = ["local", "global"]
+comment = """
+Bare vp pack at the root auto-selects the only pack-runnable package: the
+library whose sole signal is tsdown's default src/index.ts entry. The app's
+vite.config.ts has no pack block, so it does not count as pack-runnable
+(rfcs/cwd-flag.md, "The likely-runnable heuristic"); tsdown then packs via
+its default entry with no pack config at all.
+"""
+steps = [
+  ["vp", "pack"],
+  { argv = ["vpt", "list-dir", "packages/lib/dist"], comment = "output lands in the auto-selected library" },
+]

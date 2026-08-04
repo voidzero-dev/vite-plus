@@ -43,8 +43,56 @@ function getErrorMessage(err: unknown): string {
 }
 
 // Parse command line arguments
-const typedArgs = process.argv.slice(2);
-let args = typedArgs;
+let args = process.argv.slice(2);
+
+// Global `-C <dir>` flag: run as if vp was started in <dir>. The global Rust
+// CLI parses this itself and spawns bin.js with the target cwd already set;
+// this branch covers direct local-bin invocations (`pnpm exec vp -C <dir> ...`).
+// Accepts `-C dir`, `-Cdir`, and `-C=dir`, matching the clap grammar.
+if (args[0]?.startsWith('-C')) {
+  const inline = args[0].length > 2;
+  const dir = inline ? args[0].slice(args[0][2] === '=' ? 3 : 2) : args[1];
+  if (!dir) {
+    errorMsg('-C requires a directory argument');
+    process.exit(1);
+  }
+  const target = path.resolve(dir);
+  // chdir is the single validation point: a pre-check stat can itself throw
+  // (EACCES on a parent, ELOOP), while chdir reports every failure mode
+  // through one catchable path.
+  try {
+    process.chdir(target);
+  } catch (err) {
+    const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      errorMsg(`directory not found: ${dir}`);
+    } else {
+      errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+    }
+    process.exit(1);
+  }
+  if (process.platform !== 'win32') {
+    // Keep the POSIX PWD in sync, like a real `cd`.
+    process.env.PWD = target;
+  }
+  args = args.slice(inline ? 1 : 2);
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
+
+// `vpr` is shorthand for `vp run`: the bin/vpr shim imports this file
+// unchanged (argv0 tells them apart, like the Rust shim dispatch), and the
+// rewrite happens here, after -C consumption, so `vpr -C <dir> <task>`
+// orders itself correctly by construction.
+if (path.basename(process.argv[1] ?? '') === 'vpr') {
+  args = ['run', ...args];
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
+
+// The list the Rust CLI parses: after the -C and vpr rewrites above (both
+// are consumed/settled here), before the help transform below (the Rust CLI
+// applies `help [command]` itself and needs the untransformed list to tell
+// `vp help fmt` apart from `vp fmt --help`).
+const rustCliArgs = args;
 
 // Transform `vp help [command]` into `vp [command] --help`
 if (args[0] === 'help' && args[1]) {
@@ -90,9 +138,7 @@ if (maybePrintCommandHelp(args)) {
       test,
       doc,
       resolveUniversalViteConfig,
-      // The Rust CLI applies the `help [command]` transform itself, and needs
-      // the untransformed list to tell `vp help fmt` apart from `vp fmt --help`.
-      args: typedArgs,
+      args: rustCliArgs,
     });
 
     let finalExitCode = exitCode;
