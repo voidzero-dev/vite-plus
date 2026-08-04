@@ -79,35 +79,10 @@ pub struct EnvConfig {
     /// Env: `CI`
     pub is_ci: bool,
 
-    /// Bypass the vite-plus shim and use the system tool directly.
-    ///
-    /// Env: `VP_BYPASS`
-    pub bypass_shim: bool,
-
-    /// Enable debug output for shim dispatch.
-    ///
-    /// Env: `VP_DEBUG_SHIM`
-    pub debug_shim: bool,
-
     /// Enable eval mode for `vp env use`.
     ///
     /// Env: `VP_ENV_USE_EVAL_ENABLE`
     pub env_use_eval_enable: bool,
-
-    /// Recursion guard for `vp env exec`.
-    ///
-    /// Env: `VP_TOOL_RECURSION`
-    pub tool_recursion: Option<String>,
-
-    /// Override directory for global CLI JS scripts.
-    ///
-    /// Env: `VP_GLOBAL_CLI_JS_SCRIPTS_DIR`
-    pub js_scripts_dir: Option<String>,
-
-    /// Filter for update task types.
-    ///
-    /// Env: `VP_UPDATE_TASK_TYPES`
-    pub update_task_types: Option<String>,
 
     /// Override Node.js version (takes highest priority in version resolution).
     ///
@@ -141,12 +116,7 @@ impl EnvConfig {
             node_skip_signature_verify: std::env::var(env_vars::VP_NODE_SKIP_SIGNATURE_VERIFY)
                 .is_ok(),
             is_ci: std::env::var("CI").is_ok(),
-            bypass_shim: std::env::var(env_vars::VP_BYPASS).is_ok(),
-            debug_shim: std::env::var(env_vars::VP_DEBUG_SHIM).is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
-            tool_recursion: std::env::var(env_vars::VP_TOOL_RECURSION).ok(),
-            js_scripts_dir: std::env::var(env_vars::VP_GLOBAL_CLI_JS_SCRIPTS_DIR).ok(),
-            update_task_types: std::env::var(env_vars::VP_UPDATE_TASK_TYPES).ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
             user_home: std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
@@ -228,12 +198,7 @@ impl EnvConfig {
             node_dist_mirror: None,
             node_skip_signature_verify: false,
             is_ci: false,
-            bypass_shim: false,
-            debug_shim: false,
             env_use_eval_enable: false,
-            tool_recursion: None,
-            js_scripts_dir: None,
-            update_task_types: None,
             node_version: None,
             user_home: None,
             vp_shell: None,
@@ -277,7 +242,6 @@ mod tests {
         assert!(config.vite_plus_home.is_none());
         assert_eq!(config.npm_registry, "https://registry.npmjs.org");
         assert!(!config.is_ci);
-        assert!(!config.bypass_shim);
         assert!(!config.node_skip_signature_verify);
     }
 
