@@ -23,6 +23,8 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@emnapi/core": "catalog:",
+    "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
     "@types/node": "catalog:",
