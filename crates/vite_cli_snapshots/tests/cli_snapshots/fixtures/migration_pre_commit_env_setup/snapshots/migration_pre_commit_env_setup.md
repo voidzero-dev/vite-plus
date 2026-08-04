@@ -29,24 +29,24 @@ npm test
 
 ## `vp migrate --no-interactive`
 
-migration should replace lint-staged in-place
+migration should preserve the existing Husky hook
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt print-file .husky/pre-commit`
 
-check vp staged replaced npx lint-staged in-place
+check the Husky hook is unchanged
 
 ```
 #!/usr/bin/env sh
 export NODE_OPTIONS="--max-old-space-size=4096"
-vp staged
+npx lint-staged
 npm test
 ```

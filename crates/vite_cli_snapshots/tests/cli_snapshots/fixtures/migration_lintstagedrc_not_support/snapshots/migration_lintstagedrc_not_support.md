@@ -5,12 +5,12 @@
 
 ## `vp migrate --no-interactive`
 
-migration should not support non-json format lintstagedrc
+migration should preserve Husky before inspecting lint-staged config formats
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
@@ -48,7 +48,7 @@ export default {
 
 ## `vpt print-file package.json`
 
-check hooks setup skipped but husky/lint-staged removed from devDependencies
+check Husky prepare and dependencies are preserved
 
 ```
 {
