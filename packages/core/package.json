@@ -118,7 +118,6 @@
     "@babel/types": "^7.28.5",
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
-    "@oxc-node/core": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
     "@vitejs/devtools": "^0.4.10",

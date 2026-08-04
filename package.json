@@ -25,7 +25,6 @@
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
-    "@oxc-node/core": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",

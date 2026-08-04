@@ -8,7 +8,6 @@
   },
   "type": "module",
   "devDependencies": {
-    "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/semver": "catalog:",
     "semver": "catalog:",
