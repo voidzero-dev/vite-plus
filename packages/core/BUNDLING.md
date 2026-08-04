@@ -164,7 +164,6 @@ Specifiers for platforms Vite+ does not ship (android, freebsd, the `wasm32-wasi
 1. **Self-contained distribution** - Users don't need to install separate `@rolldown/binding-*` packages
 2. **Declared dependency graph** - Core resolves the binding through its own `optionalDependencies` (injected during publish by `packages/cli/publish-native-addons.ts`), so pnpm's global virtual store and Yarn PnP work without hidden hoisting, and core no longer requires back into `vite-plus`
 3. **Version alignment** - Each rewritten branch's guard checks the platform package version against core's version; both are published lockstep
-4. **Compatibility** - The CLI's `vite-plus/binding` export stays available for direct consumers
 
 **Resolution chain**:
 

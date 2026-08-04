@@ -237,7 +237,6 @@ This means:
 1. The bundled rolldown code in `@voidzero-dev/vite-plus-core/rolldown` resolves native bindings through core's own declared optional dependencies (injected at publish time by `publish-native-addons.ts`)
 2. Users don't need to install separate `@rolldown/binding-*` platform packages
 3. The platform `.node` file contains both vite-plus task runner and rolldown bindings
-4. The `vite-plus/binding` export remains available for direct consumers
 
 ### Native Binding Contents
 
