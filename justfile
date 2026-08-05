@@ -107,6 +107,7 @@ lint:
     -A clippy::byte_char_slices \
     -A clippy::manual_assert_eq \
     -A clippy::needless_return_with_question_mark \
+    -A clippy::redundant_else \
     -A clippy::unused_async_trait_impl \
     -A clippy::useless_borrows_in_formatting
 

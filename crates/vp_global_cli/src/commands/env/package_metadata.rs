@@ -16,9 +16,7 @@ const INSTALL_ID_LENGTH: usize = 36;
 
 pub(crate) fn is_nested_install_id(value: &str) -> bool {
     value.len() == INSTALL_ID_LENGTH
-        && Uuid::parse_str(value)
-            .ok()
-            .is_some_and(|uuid| uuid.get_version() == Some(Version::Random))
+        && Uuid::parse_str(value).is_ok_and(|uuid| uuid.get_version() == Some(Version::Random))
 }
 
 pub(crate) fn is_legacy_install_id(value: &str) -> bool {

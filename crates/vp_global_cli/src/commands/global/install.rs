@@ -43,8 +43,10 @@ struct InstalledPackage {
     install_dir: AbsolutePathBuf,
 }
 
-fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
-    (Some(package_name.to_string()), error.into())
+type InstallError = (Option<String>, Box<Error>);
+
+fn package_error(package_name: &str, error: impl Into<Error>) -> InstallError {
+    (Some(package_name.to_string()), Box::new(error.into()))
 }
 
 /// Symlink target used for package shims on Unix (relative to the bin dir).
@@ -106,7 +108,7 @@ pub struct InstallOptions<'a> {
 pub async fn install(
     package_specs: &[String],
     options: InstallOptions<'_>,
-) -> Result<(), (Option<String>, Error)> {
+) -> Result<(), InstallError> {
     let InstallOptions { node_version, force, concurrency, update, only_bins } = options;
     if package_specs.is_empty() {
         return Ok(());
@@ -120,17 +122,17 @@ pub async fn install(
         let provider = NodeProvider::new();
         match resolve_version_alias(v, &provider).await {
             Ok(version) => version,
-            Err(error) => return Err((None, error)),
+            Err(error) => return Err((None, Box::new(error))),
         }
     } else {
         // Resolve from current directory
         let cwd = match current_dir() {
             Ok(cwd) => cwd,
-            Err(error) => return Err((None, error.into())),
+            Err(error) => return Err((None, Box::new(error.into()))),
         };
         let resolution = match resolve_version(&cwd).await {
             Ok(resolution) => resolution,
-            Err(error) => return Err((None, error)),
+            Err(error) => return Err((None, Box::new(error))),
         };
         resolution.version
     };
@@ -143,7 +145,7 @@ pub async fn install(
             Ok(runtime) => runtime,
             Err(error) => {
                 let error = Error::RuntimeDownload(error);
-                return Err((None, error));
+                return Err((None, Box::new(error)));
             }
         };
 
@@ -158,7 +160,7 @@ pub async fn install(
 
         let (package_name, _version_spec) = match parse_package_spec(package_spec) {
             Ok(result) => result,
-            Err(error) => return Err((Some(package_spec.clone()), error)),
+            Err(error) => return Err((Some(package_spec.clone()), Box::new(error))),
         };
         packages.insert(package_name, Package { spec: package_spec, install: None });
     }
@@ -219,7 +221,7 @@ pub async fn install(
             Some((package_name, Err(error))) => {
                 stop_scheduling = true;
                 if first_error.is_none() {
-                    first_error = Some((Some(package_name), error));
+                    first_error = Some((Some(package_name), Box::new(error)));
                 }
             }
             None => break,
@@ -367,11 +369,11 @@ pub async fn install(
                 if first_error.is_none() {
                     first_error = Some((
                         Some(package_name.clone()),
-                        Error::BinaryConflict {
+                        Box::new(Error::BinaryConflict {
                             bin_name: conflicts[0].0.clone(),
                             existing_package: conflicts[0].1.clone(),
                             new_package: package_name.clone(),
-                        },
+                        }),
                     ));
                 }
                 continue;

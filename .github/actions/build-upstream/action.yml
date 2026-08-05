@@ -101,7 +101,7 @@ runs:
       with:
         version: 0.15.2
 
-    # Rust nightly-2026-06-10 passes --fix-cortex-a53-843419 to the linker for
+    # Rust nightly-2026-08-02 passes --fix-cortex-a53-843419 to the linker for
     # aarch64-linux targets, which zig cc rejects. The filter for this arg
     # (rust-cross/cargo-zigbuild#452) is merged but unreleased, so install from
     # the pinned git commit. TODO: revert to taiki-e/install-action once

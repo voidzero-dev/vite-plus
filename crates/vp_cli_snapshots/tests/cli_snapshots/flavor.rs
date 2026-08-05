@@ -48,14 +48,28 @@ pub fn repo_root() -> PathBuf {
     manifest_dir().parent().unwrap().parent().unwrap().to_path_buf()
 }
 
-/// Searches for `name` next to the test executable (`target/<profile>/deps/`)
-/// and one directory up (`target/<profile>/`), where cargo puts bin targets
-/// and where nextest extracts archived binaries.
+/// Searches for `name` next to the test executable and one directory up,
+/// where Cargo puts bin targets and nextest extracts archived binaries. Also
+/// handles the custom-test layout used by newer Cargo nightlies:
+/// `target/<profile>/build/<package>/<hash>/out/`.
 fn find_beside_test_exe(name: &str) -> Result<Option<PathBuf>, String> {
     let exe = std::env::current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
-    let deps_dir = exe.parent().ok_or("test executable has no parent dir")?;
-    for dir in [deps_dir, deps_dir.parent().unwrap_or(deps_dir)] {
+    let exe_dir = exe.parent().ok_or("test executable has no parent dir")?;
+    for dir in [exe_dir, exe_dir.parent().unwrap_or(exe_dir)] {
         let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Ok(Some(candidate));
+        }
+    }
+
+    let profile_dir = exe_dir
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .filter(|dir| dir.file_name().is_some_and(|name| name == "build"))
+        .and_then(Path::parent);
+    if let Some(profile_dir) = profile_dir {
+        let candidate = profile_dir.join(name);
         if candidate.is_file() {
             return Ok(Some(candidate));
         }
@@ -63,11 +77,9 @@ fn find_beside_test_exe(name: &str) -> Result<Option<PathBuf>, String> {
     Ok(None)
 }
 
-/// Locates the freshly built global `vp` binary next to this test executable
-/// (test binaries run from `target/<profile>/deps/`, the product binaries sit
-/// one directory up). Build ordering is the entry-point recipe's job, so a
-/// missing binary fails fast with that instruction instead of silently
-/// testing a stale build.
+/// Locates the freshly built global `vp` binary near this test executable.
+/// Build ordering is the entry-point recipe's job, so a missing binary fails
+/// fast with that instruction instead of silently testing a stale build.
 fn global_vp_path() -> Result<PathBuf, String> {
     // `VP_SNAP_GLOBAL_VP` points at an already-built binary (CI uses the
     // release binary that `bootstrap-cli` installed), skipping the cargo
@@ -81,7 +93,7 @@ fn global_vp_path() -> Result<PathBuf, String> {
     }
     let name = format!("vp{}", std::env::consts::EXE_SUFFIX);
     find_beside_test_exe(&name)?.ok_or_else(|| {
-        "global `vp` binary not found next to the test executable; run \
+        "global `vp` binary not found near the test executable; run \
          `just snapshot-test` (or `cargo build -p vp_global_cli`) first"
             .to_owned()
     })
@@ -172,7 +184,7 @@ fn vpt_path() -> Result<PathBuf, String> {
     let name = format!("vpt{}", std::env::consts::EXE_SUFFIX);
     find_beside_test_exe(&name)?.ok_or_else(|| {
         "`vpt` binary not found (checked CARGO_BIN_EXE_vpt, the compile-time \
-         path, and next to the test executable)"
+         path, and near the test executable)"
             .to_owned()
     })
 }
