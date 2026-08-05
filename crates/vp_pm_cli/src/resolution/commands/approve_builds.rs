@@ -5,7 +5,9 @@ use crate::resolution::{
     PackageManagerDialect, Pnpm, Resolve, Yarn,
 };
 
-const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. Enforcement is planned for a future npm release.";
+const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. npm 12 enforces the policy.";
+
+const NPM_ENFORCED_NOTE: &str = "npm records the approval in the `allowScripts` field of package.json but does not run scripts a previous install skipped. Run `vp pm rebuild <package>` to execute them.";
 
 #[pm_args]
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
@@ -150,7 +152,18 @@ impl Resolve<ApproveBuildsArgs> for Npm {
             }
         }
         if writes_policy {
-            diag.note(DiagnosticKind::BehaviorChange, NPM_ADVISORY_NOTE);
+            // npm 12 enforces allowScripts (skipped scripts stay skipped until a
+            // rebuild); 11.16 - 11.x only warn. An unknown version is treated as
+            // current, matching the version-gate default above.
+            if self.version().is_none_or(|version| version_satisfies(version, ">=12.0.0")) {
+                // An approval takes effect on the next rebuild; a denial keeps
+                // the enforced default and needs no follow-up.
+                if !has_denies {
+                    diag.note(DiagnosticKind::BehaviorChange, NPM_ENFORCED_NOTE);
+                }
+            } else {
+                diag.note(DiagnosticKind::BehaviorChange, NPM_ADVISORY_NOTE);
+            }
         }
         cmd.extend(args.pass_through_args.iter());
         cmd.into()
@@ -572,6 +585,56 @@ mod tests {
 
         assert_eq!(command.args, vec!["deny-scripts", "core-js"]);
         assert_eq!(resolution.diagnostics[0].message, NPM_ADVISORY_NOTE);
+    }
+
+    #[test]
+    fn npm_v12_approve_notes_rebuild() {
+        let resolution = resolve(
+            &npm("12.0.2"),
+            ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
+        );
+        let CommandResolution::Run(command) = resolution.outcome else {
+            panic!("expected command resolution");
+        };
+
+        assert_eq!(command.args, vec!["approve-scripts", "esbuild"]);
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
+    }
+
+    #[test]
+    fn npm_v12_all_notes_rebuild() {
+        let resolution =
+            resolve(&npm("12.0.2"), ApproveBuildsArgs { all: true, ..Default::default() });
+        let CommandResolution::Run(command) = resolution.outcome else {
+            panic!("expected command resolution");
+        };
+
+        assert_eq!(command.args, vec!["approve-scripts", "--all"]);
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
+    }
+
+    #[test]
+    fn npm_v12_deny_has_no_note() {
+        let resolution = resolve(
+            &npm("12.0.2"),
+            ApproveBuildsArgs { packages: vec!["!core-js".to_string()], ..Default::default() },
+        );
+        let CommandResolution::Run(command) = resolution.outcome else {
+            panic!("expected command resolution");
+        };
+
+        assert_eq!(command.args, vec!["deny-scripts", "core-js"]);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn npm_unknown_version_notes_rebuild() {
+        let resolution = resolve(
+            &Npm::unknown_version(),
+            ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
+        );
+
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
     }
 
     #[test]

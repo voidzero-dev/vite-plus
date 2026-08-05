@@ -62,13 +62,13 @@ See the [Commit hooks guide](/guide/commit-hooks).
 
 ### Dependency build scripts
 
-For security, pnpm, bun, and yarn (Berry) do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
+For security, pnpm, bun, yarn (Berry), and npm (v12+) do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
 
 - Interactive: you are asked which of those dependencies to approve and build (nothing is selected by default).
 - Non-interactive: a note lists them and points at `vp pm approve-builds`.
 - `--approve-builds`: approves and builds them automatically, so non-interactive runs (CI) can produce a ready-to-use project.
 
-Approval is recorded the way each package manager expects: pnpm's `allowBuilds`, bun's `trustedDependencies`, or yarn's `dependenciesMeta.<pkg>.built` (in the workspace root manifest). Transitive build scripts you did not choose (e.g. `esbuild` pulled in by Vite) are left at the package manager's defaults and are not surfaced. npm runs build scripts by default, so there is nothing to approve there.
+Approval is recorded the way each package manager expects: pnpm's `allowBuilds`, bun's `trustedDependencies`, npm's `allowScripts`, or yarn's `dependenciesMeta.<pkg>.built` (in the workspace root manifest). Transitive build scripts you did not choose (e.g. `esbuild` pulled in by Vite) are left at the package manager's defaults and are not surfaced. npm 11 and older run build scripts during install, so there is nothing to approve there.
 
 ## Template Options
 
