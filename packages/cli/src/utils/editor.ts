@@ -181,7 +181,9 @@ const JETBRAINS_OXFMT_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
 </project>
 `;
 
-const JETBRAINS_GITIGNORE_ADDITION = `!externalDependencies.xml`
+const JETBRAINS_GITIGNORE_ADDITION = `**
+!externalDependencies.xml
+`;
 
 type EditorConfigValue = Record<string, unknown> | string;
 
