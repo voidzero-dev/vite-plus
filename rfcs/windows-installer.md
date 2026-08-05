@@ -86,11 +86,11 @@ crates/vp_installer/      — standalone installer binary
 ### What Gets Extracted
 
 | Original location in `upgrade/` | Extracted to `vp_setup::` | Purpose                                                                                                                              |
-| ------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `platform.rs`                   | `platform`                  | OS/arch detection                                                                                                                    |
-| `registry.rs`                   | `registry`                  | npm registry queries                                                                                                                 |
-| `integrity.rs`                  | `integrity`                 | SHA-512 verification                                                                                                                 |
-| `install.rs` (all functions)    | `install`                   | Tarball extraction, package.json generation, .npmrc overrides, dep install, symlink/junction swap, version cleanup, rollback support |
+| ------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `platform.rs`                   | `platform`                | OS/arch detection                                                                                                                    |
+| `registry.rs`                   | `registry`                | npm registry queries                                                                                                                 |
+| `integrity.rs`                  | `integrity`               | SHA-512 verification                                                                                                                 |
+| `install.rs` (all functions)    | `install`                 | Tarball extraction, package.json generation, .npmrc overrides, dep install, symlink/junction swap, version cleanup, rollback support |
 
 ### What Stays in `vp_global_cli`
 
@@ -294,8 +294,8 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 
 Each phase maps to `vp_setup` library functions shared with `vp upgrade`:
 
-| Phase             | Key function                               | Crate            |
-| ----------------- | ------------------------------------------ | ---------------- |
+| Phase             | Key function                               | Crate          |
+| ----------------- | ------------------------------------------ | -------------- |
 | Resolve           | `platform::detect_platform_suffix()`       | `vp_setup`     |
 | Resolve           | `install::read_current_version()`          | `vp_setup`     |
 | Resolve           | `registry::resolve_version_string()`       | `vp_setup`     |
