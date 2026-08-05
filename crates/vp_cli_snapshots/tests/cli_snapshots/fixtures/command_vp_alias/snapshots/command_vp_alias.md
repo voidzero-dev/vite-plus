@@ -24,6 +24,7 @@ Core Commands:
   preview        Preview production build
   cache          Manage the task cache
   config         Configure hooks and agent integration
+  hooks          Manage the Git hook dispatcher
   staged         Run linters on staged files
 
 Package Manager Commands:

@@ -97,6 +97,13 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Manage the Vite+ Git hook dispatcher
+    #[command(disable_help_flag = true)]
+    Hooks {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Run vite-staged on Git staged files
     #[command(disable_help_flag = true, name = "staged")]
     Staged {
@@ -966,6 +973,8 @@ pub async fn run_command_with_options(
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
         Commands::Config { args } => commands::config::execute(cwd, &args, raw_subcommand).await,
+
+        Commands::Hooks { args } => commands::hooks::execute(cwd, &args, raw_subcommand).await,
 
         Commands::Staged { args } => commands::staged::execute(cwd, &args, raw_subcommand).await,
 
