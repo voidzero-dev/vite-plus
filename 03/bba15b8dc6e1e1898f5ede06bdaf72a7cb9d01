@@ -1,0 +1,19 @@
+.claude/skills/release-manager/SKILL.md
+  s_2bd13baa8199ca::t_ccf5e6f204352b 33,185-195,419
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "03bba15b8dc6e1e1898f5ede06bdaf72a7cb9d01",
+  "prompts": {},
+  "sessions": {
+    "s_2bd13baa8199ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e58e992-7909-4e0f-8306-0782d1a04c0e",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
