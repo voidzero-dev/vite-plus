@@ -5,7 +5,7 @@
 
 ## `vp config`
 
-should install hooks automatically without prompting (staged config exists)
+prepare should install the dispatcher without changing project hook policy
 
 ```
 ```
@@ -20,10 +20,11 @@ should be .vite-hooks/_
 
 ## `vpt print-file .vite-hooks/pre-commit`
 
-should have vp staged
+project-owned hook should remain unchanged
 
 ```
-vp staged
+vp run lint
+vp exec tsc --noEmit
 ```
 
 ## `vpt print-file vite.config.ts`
@@ -33,9 +34,5 @@ should remain unchanged
 ```
 import { defineConfig } from 'vite-plus';
 
-export default defineConfig({
-  staged: {
-    '*': 'vp check --fix',
-  },
-});
+export default defineConfig({});
 ```

@@ -1,0 +1,9 @@
+{
+  "name": "per-command-config",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

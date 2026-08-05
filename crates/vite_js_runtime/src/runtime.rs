@@ -8,7 +8,7 @@ use vite_str::Str;
 
 use crate::{
     Error, Platform,
-    dev_engines::{PackageJson, read_node_version_file},
+    dev_engines::{PackageJson, read_node_version_file, read_nvmrc_file},
     download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
     provider::{HashVerification, JsRuntimeProvider, ShasumsSignature},
     providers::NodeProvider,
@@ -159,7 +159,7 @@ async fn resolve_shasums_content(
 /// that publishes only `SHASUMS256.txt`).
 ///
 /// This is an expected, non-actionable condition for those sources, so it is a
-/// debug log (visible via `VITE_LOG`) rather than a user-facing warning.
+/// debug log (visible via `VP_LOG`) rather than a user-facing warning.
 fn log_checksum_only(archive_filename: &str) {
     tracing::debug!(
         "no PGP signature available for {archive_filename}; verifying SHA-256 checksum only"
@@ -203,14 +203,6 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
             binary_relative_path,
             bin_dir_relative_path,
         });
-    }
-
-    // If install_dir exists but binary doesn't, it's an incomplete installation - clean it up
-    if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
-        tracing::warn!(
-            "Incomplete installation detected at {install_dir:?}, removing before re-download"
-        );
-        tokio::fs::remove_dir_all(&install_dir).await?;
     }
 
     let download_message = format!("Downloading {} v{version}...", provider.name());
@@ -272,7 +264,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     .await?;
 
     // Move extracted directory to cache location
-    move_to_cache(&extracted_path, &install_dir, version).await?;
+    move_to_cache(&extracted_path, &install_dir, &binary_path, version).await?;
 
     tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
 
@@ -304,8 +296,10 @@ pub enum VersionSource {
     NodeVersionFile,
     /// Version from `devEngines.runtime` in package.json
     DevEnginesRuntime,
-    /// Version from `engines.node` in package.json (lowest priority)
+    /// Version from `engines.node` in package.json
     EnginesNode,
+    /// Version from `.nvmrc` file
+    NvmrcFile,
 }
 
 impl std::fmt::Display for VersionSource {
@@ -314,6 +308,7 @@ impl std::fmt::Display for VersionSource {
             Self::NodeVersionFile => write!(f, ".node-version"),
             Self::EnginesNode => write!(f, "engines.node"),
             Self::DevEnginesRuntime => write!(f, "devEngines.runtime"),
+            Self::NvmrcFile => write!(f, ".nvmrc"),
         }
     }
 }
@@ -339,6 +334,7 @@ pub struct VersionResolution {
 /// 1. `.node-version` file
 /// 2. `package.json#devEngines.runtime[name="node"]`
 /// 3. `package.json#engines.node`
+/// 4. `.nvmrc` file
 ///
 /// If `walk_up` is true, walks up the directory tree checking each level until
 /// a version is found or the root is reached.
@@ -407,6 +403,17 @@ pub async fn resolve_node_version(
             }
         }
 
+        // 4. Check .nvmrc after the native Vite+ and package.json sources
+        if let Some(version) = read_nvmrc_file(current).await {
+            let nvmrc_path = current.join(".nvmrc");
+            return Ok(Some(VersionResolution {
+                version,
+                source: VersionSource::NvmrcFile,
+                source_path: Some(nvmrc_path),
+                project_root: Some(current.to_absolute_path_buf()),
+            }));
+        }
+
         // Move to parent directory if walk_up is enabled
         if !walk_up {
             break;
@@ -427,7 +434,8 @@ pub async fn resolve_node_version(
 /// Reads Node.js version from multiple sources with the following priority:
 /// 1. `.node-version` file (highest)
 /// 2. `devEngines.runtime` in package.json
-/// 3. `engines.node` in package.json (lowest)
+/// 3. `engines.node` in package.json
+/// 4. `.nvmrc` file
 ///
 /// If no version source is found, uses the latest installed version from cache,
 /// or falls back to the latest LTS version from the network.
@@ -473,6 +481,14 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
         .and_then(|r| r.version.clone())
         .and_then(|v| normalize_version(&v, "devEngines.runtime"));
 
+    let nvmrc = if version_req.is_none() {
+        let root =
+            resolution.as_ref().and_then(|r| r.project_root.as_deref()).unwrap_or(project_path);
+        read_nvmrc_file(root).await.and_then(|v| normalize_version(&v, ".nvmrc"))
+    } else {
+        None
+    };
+
     // Determine the actual version requirement to use
     let (version_req, source) = if let Some(ref v) = version_req {
         (v.clone(), resolution.as_ref().map(|r| r.source))
@@ -481,6 +497,8 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
         (v.clone(), Some(VersionSource::DevEnginesRuntime))
     } else if let Some(ref v) = engines_node {
         (v.clone(), Some(VersionSource::EnginesNode))
+    } else if let Some(ref v) = nvmrc {
+        (v.clone(), Some(VersionSource::NvmrcFile))
     } else {
         (Str::default(), None)
     };
@@ -768,6 +786,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_no_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -800,6 +822,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_does_not_write_back_when_no_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -881,6 +907,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_no_package_json() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1184,6 +1214,7 @@ mod tests {
         assert_eq!(VersionSource::NodeVersionFile.to_string(), ".node-version");
         assert_eq!(VersionSource::EnginesNode.to_string(), "engines.node");
         assert_eq!(VersionSource::DevEnginesRuntime.to_string(), "devEngines.runtime");
+        assert_eq!(VersionSource::NvmrcFile.to_string(), ".nvmrc");
     }
 
     // ==========================================
@@ -1191,6 +1222,10 @@ mod tests {
     // ==========================================
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_invalid_node_version_file_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1213,6 +1248,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_invalid_engines_node_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1232,6 +1271,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_invalid_dev_engines_runtime_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1430,6 +1473,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        target_env = "musl",
+        ignore = "latest can outrun the unofficial-builds musl channel"
+    )]
     async fn test_download_runtime_for_project_with_lts_latest_alias() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1554,6 +1601,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_resolve_node_version_from_nvmrc() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "v20.18.0\n").await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::NvmrcFile);
+        assert_eq!(resolution.source_path, Some(temp_path.join(".nvmrc")));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_nvmrc_has_lowest_priority() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(temp_path.join(".nvmrc"), "20.18.0\n").await.unwrap();
+        tokio::fs::write(temp_path.join("package.json"), r#"{"engines":{"node":"22.22.0"}}"#)
+            .await
+            .unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "22.22.0");
+        assert_eq!(resolution.source, VersionSource::EnginesNode);
+    }
+
+    #[tokio::test]
     async fn test_resolve_node_version_priority() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1672,5 +1747,20 @@ mod tests {
             "Should use child's package.json (20.18.0), not parent's .node-version (22.0.0)"
         );
         assert_eq!(resolution.source, VersionSource::EnginesNode);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_child_nvmrc_over_parent_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(parent_path.join(".node-version"), "22.0.0\n").await.unwrap();
+
+        let child_path = parent_path.join("child");
+        tokio::fs::create_dir(&child_path).await.unwrap();
+        tokio::fs::write(child_path.join(".nvmrc"), "20.18.0\n").await.unwrap();
+
+        let resolution = resolve_node_version(&child_path, true).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::NvmrcFile);
     }
 }

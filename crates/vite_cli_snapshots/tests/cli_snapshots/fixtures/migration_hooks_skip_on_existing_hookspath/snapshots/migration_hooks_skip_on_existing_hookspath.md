@@ -13,25 +13,20 @@ should skip hooks because core.hooksPath is already set
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ core.hooksPath is already set to ".custom-hooks" — leaving the existing hook setup unchanged.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-! Warnings:
-  - Git hooks not configured — core.hooksPath is already set to ".custom-hooks", skipping
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-prepare should stay 'husky' and husky must remain in devDependencies
+the package should not gain hook policy or lifecycle changes
 
 ```
 {
   "name": "migration-hooks-skip-on-existing-hookspath",
-  "scripts": {
-    "prepare": "husky"
-  },
   "devDependencies": {
-    "husky": "^9.1.7",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },

@@ -6,10 +6,7 @@
 use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
-use vite_js_runtime::{
-    JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, is_valid_version,
-    read_package_json, resolve_node_version,
-};
+use vite_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
@@ -29,8 +26,10 @@ pub struct JsExecutor {
     cli_runtime: Option<JsRuntime>,
     /// Cached runtime for project delegation (Category C)
     project_runtime: Option<JsRuntime>,
-    /// Directory containing JS scripts (from `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR`)
+    /// Directory containing JS scripts (from `VP_GLOBAL_CLI_JS_SCRIPTS_DIR`)
     scripts_dir: Option<AbsolutePathBuf>,
+    /// Subcommand as the user wrote it, forwarded to the CLI this one runs
+    raw_subcommand: Option<String>,
 }
 
 impl JsExecutor {
@@ -41,14 +40,23 @@ impl JsExecutor {
     ///   If not provided, will be auto-detected from the binary location.
     #[must_use]
     pub const fn new(scripts_dir: Option<AbsolutePathBuf>) -> Self {
-        Self { cli_runtime: None, project_runtime: None, scripts_dir }
+        Self { cli_runtime: None, project_runtime: None, scripts_dir, raw_subcommand: None }
+    }
+
+    /// Forward the subcommand as the user wrote it to the CLI this one runs.
+    ///
+    /// A command runs under its canonical name, so the spelling the user used is
+    /// otherwise lost on the way down.
+    pub fn with_raw_subcommand(mut self, raw_subcommand: Option<&str>) -> Self {
+        self.raw_subcommand = raw_subcommand.map(ToOwned::to_owned);
+        self
     }
 
     /// Get the JS scripts directory.
     ///
     /// Resolution order:
     /// 1. Explicitly provided `scripts_dir`
-    /// 2. `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
+    /// 2. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
     /// 3. Auto-detect from binary location (../dist relative to binary)
     pub fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
         // 1. Use explicitly provided scripts_dir
@@ -57,7 +65,7 @@ impl JsExecutor {
         }
 
         // 2. Check environment variable
-        if let Ok(dir) = std::env::var(env_vars::VITE_GLOBAL_CLI_JS_SCRIPTS_DIR) {
+        if let Ok(dir) = std::env::var(env_vars::VP_GLOBAL_CLI_JS_SCRIPTS_DIR) {
             return AbsolutePathBuf::new(dir.into()).ok_or(Error::JsScriptsDirNotFound);
         }
 
@@ -151,7 +159,7 @@ impl JsExecutor {
     /// Resolution order:
     /// 1. Session override (env var from `vp env use`)
     /// 2. Session override (file from `vp env use`)
-    /// 3. Project sources (.node-version, engines.node, devEngines.runtime) —
+    /// 3. Project sources (.node-version, devEngines.runtime, engines.node, .nvmrc) —
     ///    delegates to `download_runtime_for_project()` for cache-aware resolution
     /// 4. User default from config.json
     /// 5. Latest LTS
@@ -294,6 +302,7 @@ impl JsExecutor {
 
         let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        vite_command::sync_child_pwd(&mut cmd, project_path);
 
         Ok(vite_command::execute_with_terminal_guard(cmd).await?)
     }
@@ -340,6 +349,10 @@ impl JsExecutor {
 
         let mut cmd = Self::create_js_command(node_binary, bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        if let Some(raw_subcommand) = &self.raw_subcommand {
+            cmd.env(vite_shared::env_vars::VP_RAW_SUBCOMMAND, raw_subcommand);
+        }
+        vite_command::sync_child_pwd(&mut cmd, project_path);
         Ok(cmd)
     }
 
@@ -452,35 +465,8 @@ fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
 ///
 /// Returns `false` when all sources are missing or invalid, so the caller
 /// can fall through to the user's configured default instead of LTS.
-async fn has_valid_version_source(
-    project_path: &AbsolutePath,
-) -> Result<bool, vite_js_runtime::Error> {
-    let resolution = resolve_node_version(project_path, true).await?;
-    let Some(ref r) = resolution else {
-        return Ok(false);
-    };
-
-    // Primary source is a valid version?
-    if is_valid_version(&r.version) {
-        return Ok(true);
-    }
-
-    // Primary source invalid — check package.json for valid fallbacks
-    let pkg_path = project_path.join("package.json");
-    let Ok(Some(pkg)) = read_package_json(&pkg_path).await else {
-        return Ok(false);
-    };
-
-    let engines_valid =
-        pkg.engines.as_ref().and_then(|e| e.node.as_ref()).is_some_and(|v| is_valid_version(v));
-
-    let dev_engines_valid = !engines_valid
-        && pkg
-            .dev_engines_runtime("node")
-            .and_then(|r| r.version.as_ref())
-            .is_some_and(|v| is_valid_version(v));
-
-    Ok(engines_valid || dev_engines_valid)
+async fn has_valid_version_source(project_path: &AbsolutePath) -> Result<bool, Error> {
+    Ok(config::resolve_project_version_source(project_path, false).await?.is_some())
 }
 
 /// Try to find system Node.js when in system-first mode (`vp env off`).
@@ -604,6 +590,10 @@ mod tests {
         // Create a temporary directory for the scripts (used as fallback global dir)
         let temp_dir = TempDir::new().unwrap();
         let scripts_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Keep this delegation test independent of the moving latest-LTS alias.
+        // The unofficial musl index can advertise a release before its archive exists.
+        tokio::fs::write(temp_dir.path().join(".node-version"), "22.13.1\n").await.unwrap();
 
         // Create a bin.js that prints process.version
         let script_path = temp_dir.path().join("bin.js");

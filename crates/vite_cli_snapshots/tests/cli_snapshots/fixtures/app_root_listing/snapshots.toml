@@ -1,0 +1,61 @@
+[[case]]
+name = "listing"
+vp = ["local", "global"]
+comment = """
+A bare app command at a workspace root without an interactive terminal prints
+the ranked package listing with -C hints and exits 1 instead of building the
+root (rfcs/cwd-flag.md).
+"""
+steps = [
+  { argv = ["vp", "build"], tty = false, continue-on-failure = true },
+  { argv = ["vp", "dev"], tty = false, comment = "dev at the root no longer starts a server against the root" },
+]
+
+[[case]]
+name = "picker_select"
+vp = ["local", "global"]
+comment = """
+A bare app command at a workspace root with several candidates opens the
+fuzzy package picker (the vp run selector component); typing filters, Enter
+runs the selection as an implicit -C (rfcs/cwd-flag.md).
+"""
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "web" },
+    { "expect-milestone" = "package-select:web:0" },
+    { "write-key" = "enter" },
+  ] },
+]
+
+[[case]]
+name = "picker_cancel"
+vp = ["local", "global"]
+comment = "Ctrl+C in the package picker cancels with exit 130 and runs nothing."
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
+
+[[case]]
+name = "positional_is_vite_root"
+vp = ["local", "global"]
+comment = """
+A positional path is forwarded to Vite as [root] (upstream semantics), not
+treated as a package to elicit: vp build <dir> at the workspace root skips
+the picker/listing and builds that dir as the Vite root, with no Selected/Tip
+elicitation lines (rfcs/cwd-flag.md).
+"""
+steps = [{ argv = ["vp", "build", "apps/web"] }]
+
+[[case]]
+name = "script_at_root_elicits"
+vp = ["local", "global"]
+comment = """
+A root package script "build": "vp build" run through vp run gets the same
+target elicitation as a direct bare invocation: the spawned vp prints the
+listing and the task fails instead of silently building the root.
+"""
+steps = [{ argv = ["vp", "run", "build"], tty = false }]

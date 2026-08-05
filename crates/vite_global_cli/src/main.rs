@@ -24,20 +24,61 @@ mod upgrade_check;
 
 use std::{
     env,
-    io::{IsTerminal, Write},
+    io::Write,
     process::{ExitCode, ExitStatus},
 };
 
 use clap::error::{ContextKind, ContextValue};
 use clap_complete::env::CompleteEnv;
 use owo_colors::OwoColorize;
-use vite_shared::output;
+use vite_shared::{exit_code_from_status, output};
 
 pub use crate::cli::try_parse_args_from;
 use crate::cli::{
-    RenderOptions, command_with_help, run_command, run_command_with_options,
+    RenderOptions, command_with_help, raw_subcommand, run_command, run_command_with_options,
     try_parse_args_from_with_options,
 };
+
+/// Parse a leading `-C <dir>` / `-C=<dir>` / `-C<dir>` at the start of the
+/// user arguments (argv without the binary name), mirroring clap's
+/// short-option grammar (and bin.ts on the local path). Returns the
+/// directory and how many tokens it consumed.
+pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize)> {
+    let first = user_args.first()?;
+    if first == "-C" {
+        return user_args.get(1).map(|dir| (dir.clone(), 2));
+    }
+    if let Some(rest) = first.strip_prefix("-C") {
+        let dir = rest.strip_prefix('=').unwrap_or(rest);
+        if !dir.is_empty() {
+            return Some((dir.to_string(), 1));
+        }
+    }
+    None
+}
+
+/// Apply `-C <dir>`: resolve against `cwd`, validate, and change the process
+/// cwd. Returns the resolved cwd, or the user-facing error message (not
+/// printed here: the completion peek must stay silent, and clap-path callers
+/// wrap it in their error type).
+///
+/// This changes only the process cwd, never `PWD`. Mutating the environment is
+/// unsound once the Tokio runtime has spawned threads, and it is unnecessary:
+/// delegated children that read `process.env.PWD` get it set explicitly from
+/// the resolved cwd at spawn time (see `js_executor` and the NAPI dispatch).
+pub(crate) fn apply_chdir(
+    cwd: &vite_path::AbsolutePath,
+    dir: &str,
+) -> Result<vite_path::AbsolutePathBuf, String> {
+    let target = cwd.join(dir).clean();
+    if !target.as_path().is_dir() {
+        return Err(format!("directory not found: {dir}"));
+    }
+    if let Err(e) = std::env::set_current_dir(target.as_path()) {
+        return Err(format!("Failed to change directory to {dir}: {e}"));
+    }
+    Ok(target)
+}
 
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
@@ -165,7 +206,7 @@ fn is_affirmative_response(input: &str) -> bool {
 }
 
 fn should_prompt_for_correction() -> bool {
-    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+    vite_shared::is_stdin_terminal() && vite_shared::is_stderr_terminal()
 }
 
 fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
@@ -209,12 +250,9 @@ fn replace_top_level_typoed_subcommand(
 }
 
 fn exit_status_to_exit_code(exit_status: ExitStatus) -> ExitCode {
-    if exit_status.success() {
-        ExitCode::SUCCESS
-    } else {
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        exit_status.code().map_or(ExitCode::FAILURE, |c| ExitCode::from(c as u8))
-    }
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let code = exit_code_from_status(exit_status) as u8;
+    ExitCode::from(code)
 }
 
 fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
@@ -224,9 +262,11 @@ fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
 
 async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
     let render_options = RenderOptions { show_header: false };
-    let args_with_program = std::iter::once("vp".to_string()).chain(raw_args.iter().cloned());
-    let normalized_args = normalize_args(args_with_program.collect());
-
+    let args_with_program: Vec<String> =
+        std::iter::once("vp".to_string()).chain(raw_args.iter().cloned()).collect();
+    // The subcommand as written, taken before `normalize_args` can rewrite it.
+    let raw_subcommand = raw_subcommand(&args_with_program).map(str::to_owned);
+    let normalized_args = normalize_args(args_with_program);
     let parsed = match try_parse_args_from_with_options(normalized_args, render_options) {
         Ok(args) => args,
         Err(e) => {
@@ -235,7 +275,9 @@ async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String
         }
     };
 
-    match run_command_with_options(cwd.clone(), parsed, render_options).await {
+    match run_command_with_options(cwd.clone(), parsed, render_options, raw_subcommand.as_deref())
+        .await
+    {
         Ok(exit_status) => exit_status_to_exit_code(exit_status),
         Err(e) => {
             if e.is_user_message() {
@@ -310,6 +352,16 @@ async fn main() -> ExitCode {
     }
 
     // Handle shell completion
+    // `complete()` exits before the normal `-C` handling below runs, so apply
+    // the target directory here too: cwd-sensitive completers (run tasks)
+    // should suggest from <dir>, where the completed command will run.
+    if env::var_os("VP_COMPLETE").is_some()
+        && let Some((dir, _)) = parse_leading_chdir(&args[1..])
+        && let Ok(current) = vite_path::current_dir()
+    {
+        // Best-effort and silent: mid-typing values are often not (yet) dirs.
+        let _ = apply_chdir(&current, &dir);
+    }
     CompleteEnv::with_factory(command_with_help).var("VP_COMPLETE").complete();
 
     // Check for shim mode (invoked as node, npm, or npx)
@@ -325,13 +377,29 @@ async fn main() -> ExitCode {
     }
 
     // Normal CLI mode - get current working directory
-    let cwd = match vite_path::current_dir() {
+    let mut cwd = match vite_path::current_dir() {
         Ok(path) => path,
         Err(e) => {
             output::error(&format!("Failed to get current directory: {e}"));
             return ExitCode::FAILURE;
         }
     };
+
+    // Consume a leading `-C <dir>` here, before anything inspects args or cwd,
+    // so alias normalization, the command picker, and in-process helpers all
+    // behave exactly as if vp had been started in <dir>. Setting the process
+    // cwd (before any command logic runs) keeps `vite_path::current_dir()`
+    // callers deep inside command implementations equivalent to the cd form.
+    if let Some((dir, consumed)) = parse_leading_chdir(&args[1..]) {
+        cwd = match apply_chdir(&cwd, &dir) {
+            Ok(target) => target,
+            Err(message) => {
+                output::raw_stderr(&message);
+                return ExitCode::FAILURE;
+            }
+        };
+        args.drain(1..=consumed);
+    }
 
     if args.len() == 1 {
         match command_picker::pick_top_level_command_if_interactive(&cwd) {
@@ -353,6 +421,8 @@ async fn main() -> ExitCode {
 
     // Capture user args (excluding argv0) before normalization.
     let raw_args = args[1..].to_vec();
+    // The subcommand as written, taken before `normalize_args` can rewrite it.
+    let raw_subcommand = raw_subcommand(&args).map(str::to_owned);
 
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
@@ -427,7 +497,7 @@ async fn main() -> ExitCode {
                 clap_error_to_exit_code(&e)
             }
         }
-        Ok(args) => match run_command(cwd.clone(), args).await {
+        Ok(args) => match run_command(cwd.clone(), args, raw_subcommand.as_deref()).await {
             Ok(exit_status) => exit_status_to_exit_code(exit_status),
             Err(e) => {
                 if e.is_user_message() {
@@ -457,7 +527,8 @@ mod tests {
 
     use super::{
         extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        normalize_args, replace_top_level_typoed_subcommand, try_parse_args_from,
+        normalize_args, parse_leading_chdir, replace_top_level_typoed_subcommand,
+        try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
@@ -469,6 +540,23 @@ mod tests {
         let input = s(&["vp", "node", "script.js", "foo", "--flag"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "env", "exec", "node", "script.js", "foo", "--flag"]));
+    }
+
+    #[test]
+    fn parse_leading_chdir_accepts_all_clap_short_forms() {
+        // `main` consumes these before alias normalization and the picker, so
+        // `vp -C dir node --version` normalizes like `cd dir && vp node ...`.
+        assert_eq!(parse_leading_chdir(&s(&["-C", "apps/web", "dev"])), some_dir(2));
+        assert_eq!(parse_leading_chdir(&s(&["-Capps/web", "dev"])), some_dir(1));
+        assert_eq!(parse_leading_chdir(&s(&["-C=apps/web", "dev"])), some_dir(1));
+        // Missing or empty value falls through to clap's own error.
+        assert_eq!(parse_leading_chdir(&s(&["-C"])), None);
+        assert_eq!(parse_leading_chdir(&s(&["-C="])), None);
+        assert_eq!(parse_leading_chdir(&s(&["dev"])), None);
+    }
+
+    fn some_dir(consumed: usize) -> Option<(String, usize)> {
+        Some(("apps/web".to_string(), consumed))
     }
 
     #[test]

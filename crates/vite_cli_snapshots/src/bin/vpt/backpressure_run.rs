@@ -69,7 +69,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     replay("stdout", &stdout, options.digest);
     replay("stderr", &stderr, options.digest);
 
-    std::process::exit(status.code().unwrap_or(1));
+    std::process::exit(crate::exit_code::exit_code_from_status(status));
 }
 
 fn parse_options(args: &[String]) -> Result<Options, Box<dyn std::error::Error>> {

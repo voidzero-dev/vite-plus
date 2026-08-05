@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
-import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { dirname, join, parse, resolve, relative } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { format } from 'oxfmt';
@@ -18,6 +18,7 @@ import { glob } from 'tinyglobby';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
+import cliPkgJson from '../cli/package.json' with { type: 'json' };
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
@@ -27,6 +28,7 @@ import {
   rewriteModuleSpecifiers,
   type ReplacementRule,
 } from './build-support/rewrite-module-specifiers.js';
+import { rewriteRolldownBindingRequires } from './build-support/rewrite-rolldown-binding.js';
 import pkgJson from './package.json' with { type: 'json' };
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
@@ -56,7 +58,6 @@ await buildVite();
 await bundleTsdown();
 await brandTsdown();
 await wireBundledTsdownExtensions();
-await bundleVitepress();
 generateLicenseFile({
   title: 'Vite-Plus core license',
   packageName: 'Vite-Plus',
@@ -83,9 +84,6 @@ generateLicenseFile({
     },
     {
       packageDir: tsdownSourceDir,
-    },
-    {
-      packageDir: join(projectDir, '..', '..', 'node_modules', 'vitepress'),
     },
   ],
 });
@@ -370,6 +368,22 @@ async function bundleRolldown() {
     },
   });
 
+  // Platform suffixes Vite+ publishes native packages for, e.g. `darwin-arm64`
+  // from `aarch64-apple-darwin`. `@rolldown/binding-*` uses the same napi
+  // suffix convention, so these are the loader branches release builds
+  // redirect to `<napi.packageName>-<suffix>`. `@napi-rs/cli` loads lazily
+  // because only release builds need it (it costs ~120ms to import).
+  let vitePlusPlatformSuffixes: ReadonlySet<string> | undefined;
+  if (process.env.RELEASE_BUILD) {
+    const { parseTriple } = await import('@napi-rs/cli');
+    vitePlusPlatformSuffixes = new Set(
+      cliPkgJson.napi.targets.map((target) => parseTriple(target).platformArchABI),
+    );
+  }
+  const rewrittenSuffixes = new Set<string>();
+  let bindingSpecifierRewrites = 0;
+  let bindingGuardRewrites = 0;
+
   // Rewrite @rolldown/pluginutils imports in JS and type declaration files
   for (const file of rolldownFiles) {
     if (
@@ -380,18 +394,39 @@ async function bundleRolldown() {
     ) {
       let source = await readFile(file, 'utf-8');
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
-      if (process.env.RELEASE_BUILD) {
-        const rolldownBindingVersion = (
-          await import(toPosixPath(relative(projectDir, join(rolldownSourceDir, 'package.json'))), {
-            with: { type: 'json' },
-          })
-        ).default.version;
-        // @rolldown/binding-darwin-arm64 → @voidzero-dev/vite-plus-darwin-arm64/binding
-        source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
-        source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
+      if (vitePlusPlatformSuffixes) {
+        const result = rewriteRolldownBindingRequires(source, {
+          packageName: cliPkgJson.napi.packageName,
+          platformSuffixes: vitePlusPlatformSuffixes,
+          version: pkgJson.version,
+        });
+        source = result.source;
+        for (const suffix of result.rewrittenSuffixes) {
+          rewrittenSuffixes.add(suffix);
+        }
+        bindingSpecifierRewrites += result.specifierRewrites;
+        bindingGuardRewrites += result.guardRewrites;
       }
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
+    }
+  }
+
+  // Every published platform suffix must find its loader branch, and each
+  // redirected branch requires the platform package twice (the binding itself
+  // and its package.json version guard) with one guard. A napi-rs upgrade
+  // that reshapes the generated loader, or a Rolldown loader that drops a
+  // branch, breaks these invariants; fail the release build instead of
+  // shipping a partial rewrite.
+  if (vitePlusPlatformSuffixes) {
+    const missing = [...vitePlusPlatformSuffixes].filter((s) => !rewrittenSuffixes.has(s));
+    if (missing.length > 0 || bindingSpecifierRewrites !== bindingGuardRewrites * 2) {
+      throw new Error(
+        `bundleRolldown: unexpected Rolldown binding loader shape ` +
+          `(${bindingSpecifierRewrites} specifier rewrites, ${bindingGuardRewrites} guard rewrites` +
+          (missing.length > 0 ? `, missing platform branches: ${missing.join(', ')}` : '') +
+          `); update build-support/rewrite-rolldown-binding.ts for the current napi-rs loader format`,
+      );
     }
   }
 }
@@ -483,7 +518,7 @@ async function bundleTsdown() {
     plugins: [
       RewriteImportsPlugin,
       dts({
-        oxc: true,
+        generator: 'oxc',
         dtsInput: true,
       }),
     ],
@@ -497,6 +532,79 @@ async function bundleTsdown() {
   // Copy client.d.ts to dist/tsdown/ to expose it as the vite-plus/pack/client entry point,
   // equivalent to tsdown/client for registering bundler type features with TypeScript.
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
+}
+
+// Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
+// `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
+// import every color the Vite+ branding uses, so after the logger patches we
+// add any missing ones, resolving their (minified) export aliases from main's
+// own `export { ... }` map so the fix survives rolldown renaming them.
+async function ensureAnsisImports(
+  content: string,
+  names: string[],
+  distDir: string,
+): Promise<string> {
+  // Scan every relative chunk import in the branded logger chunk. Which shared
+  // chunk holds the ansis colors depends on rolldown's chunking and has moved
+  // between versions (e.g. `main-*.js` → `ansis-*.js`), so we don't assume a
+  // fixed chunk name: instead we append each missing color to whichever imported
+  // chunk actually re-exports it.
+  const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
+  const imports = [...content.matchAll(importRe)];
+  if (imports.length === 0) {
+    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
+  }
+
+  // Every binding already in scope across all imports (its local name).
+  const localNames = new Set<string>();
+  for (const [, bindings] of imports) {
+    for (const binding of bindings.split(',')) {
+      const trimmed = binding.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const aliased = trimmed.match(/\bas\s+([A-Za-z0-9_$]+)$/);
+      localNames.add(aliased ? aliased[1] : trimmed);
+    }
+  }
+  const missing = names.filter((name) => !localNames.has(name));
+  if (missing.length === 0) {
+    return content;
+  }
+
+  // Group missing colors by the imported chunk that re-exports them. Chunks
+  // re-export colors as `<local> as <alias>` (e.g. `bold as i`); the consumer
+  // side imports `<alias> as <local>`, so capture the alias here.
+  const additionsBySpecifier = new Map<string, string[]>();
+  for (const name of missing) {
+    let resolved = false;
+    for (const [, , specifier] of imports) {
+      const chunkContent = await readFile(join(distDir, specifier.slice(2)), 'utf-8');
+      const exportAlias = chunkContent.match(new RegExp(`\\b${name} as ([A-Za-z0-9_$]+)`));
+      if (!exportAlias) {
+        continue;
+      }
+      const additions = additionsBySpecifier.get(specifier) ?? [];
+      additions.push(`${exportAlias[1]} as ${name}`);
+      additionsBySpecifier.set(specifier, additions);
+      resolved = true;
+      break;
+    }
+    if (!resolved) {
+      throw new Error(`ensureAnsisImports: \`${name}\` is not re-exported from any imported chunk`);
+    }
+  }
+
+  let result = content;
+  for (const [fullImport, bindings, specifier] of imports) {
+    const additions = additionsBySpecifier.get(specifier);
+    if (!additions) {
+      continue;
+    }
+    const newImport = `import { ${bindings.trim().replace(/,$/, '')}, ${additions.join(', ')} } from "${specifier}";`;
+    result = result.replace(fullImport, newImport);
+  }
+  return result;
 }
 
 async function brandTsdown() {
@@ -601,6 +709,13 @@ async function brandTsdown() {
     if (!changed) {
       continue;
     }
+    // The branded logger output uses `bold(...)` and `red` (see loggerPatches),
+    // but tsdown's logger module only imports the other ansis colors it needs
+    // (`bgRed`, `bgYellow`, `yellow`, ...). Those identifiers only happened to be
+    // in scope when rolldown co-located them in this chunk; newer chunking splits
+    // them out, leaving `bold`/`red` undefined at runtime. Ensure the branded
+    // chunk imports them from the same shared chunk it already pulls colors from.
+    content = await ensureAnsisImports(content, ['bold', 'red'], tsdownDistDir);
     await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
@@ -636,6 +751,13 @@ async function wireBundledTsdownExtensions() {
   // entry by rolldown; track whether the bundled load ends up referenced either
   // way so a silent miss (no rewrite and no dedup) fails the build.
   let cssLoadWired = false;
+  // Newer rolldown neither leaves `import("@tsdown/css")` as a literal nor dedupes
+  // it to the `tsdown-css` entry: it splits `@tsdown/css` into its own generated
+  // chunk (`import("./dist-<hash>.js")`), leaving a redundant duplicate of the
+  // `tsdown-css.js` bundle. Collect those generated chunks (keyed off the stable
+  // `{ CssPlugin }` destructure, not the hashed name) so they can be dropped once
+  // the call site is repointed at the stable entry.
+  const redundantCssChunks = new Set<string>();
   for (const chunkFile of chunkFiles) {
     let content = await readFile(chunkFile, 'utf-8');
     let changed = false;
@@ -653,12 +775,25 @@ async function wireBundledTsdownExtensions() {
       content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
       changed = true;
     }
+    const cssChunkImport = content.match(/const \{ CssPlugin \} = await import\("(\.\/[^"]+)"\)/);
+    if (cssChunkImport && cssChunkImport[1] !== './tsdown-css.js') {
+      content = content.replaceAll(
+        cssChunkImport[0],
+        'const { CssPlugin } = await import("./tsdown-css.js")',
+      );
+      redundantCssChunks.add(cssChunkImport[1].slice(2));
+      changed = true;
+    }
     if (content.includes('import("./tsdown-css.js")')) {
       cssLoadWired = true;
     }
     if (changed) {
       await writeFile(chunkFile, content);
     }
+  }
+  // Drop the now-orphaned duplicate `@tsdown/css` chunks emitted by rolldown.
+  for (const chunk of redundantCssChunks) {
+    await rm(join(tsdownDistDir, chunk), { force: true });
   }
   if (!exeWired) {
     throw new Error('wireBundledTsdownExtensions: `importWithError("@tsdown/exe")` not found');
@@ -668,89 +803,6 @@ async function wireBundledTsdownExtensions() {
   }
   if (!cssLoadWired) {
     throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
-  }
-}
-
-// Actually do nothing now, we will polish it in the future when `vitepress` is ready
-async function bundleVitepress() {
-  const vitepressSourceDir = resolve(projectDir, 'node_modules/vitepress');
-  const vitepressDestDir = join(projectDir, 'dist/vitepress');
-
-  await mkdir(vitepressDestDir, { recursive: true });
-
-  // Copy dist directory
-  // Normalize glob pattern to use forward slashes on Windows
-  const vitepressDistFiles = await glob(toPosixPath(join(vitepressSourceDir, 'dist', '**/*')), {
-    absolute: true,
-  });
-
-  for (const file of vitepressDistFiles) {
-    const stats = await stat(file);
-    if (!stats.isFile()) {
-      continue;
-    }
-
-    // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = toPosixPath(file).replace(
-      toPosixPath(join(vitepressSourceDir, 'dist')),
-      '',
-    );
-    const destPath = join(vitepressDestDir, relativePath);
-
-    await mkdir(parse(destPath).dir, { recursive: true });
-
-    // Rewrite vite imports in .js and .mjs files
-    if (
-      file.endsWith('.js') ||
-      file.endsWith('.mjs') ||
-      file.endsWith('.d.mts') ||
-      file.endsWith('.d.ts')
-    ) {
-      const content = await readFile(file, 'utf-8');
-      // Note: For vitepress, 'vite' -> 'pkgJson.name/vite' (vite subpath)
-      const rewrittenContent = rewriteModuleSpecifiers(content, file, {
-        rules: [{ from: 'vite', to: `${pkgJson.name}/vite` }],
-      });
-      await writeFile(destPath, rewrittenContent, 'utf-8');
-    } else {
-      await copyFile(file, destPath);
-    }
-  }
-
-  // Copy top-level .d.ts files
-  const vitepressTypeFiles = ['client.d.ts', 'theme.d.ts', 'theme-without-fonts.d.ts'];
-  for (const typeFile of vitepressTypeFiles) {
-    const sourcePath = join(vitepressSourceDir, typeFile);
-    const destPath = join(vitepressDestDir, typeFile);
-    try {
-      await copyFile(sourcePath, destPath);
-    } catch {
-      // File might not exist, skip
-    }
-  }
-
-  // Copy types directory
-  const vitepressTypesDir = join(vitepressSourceDir, 'types');
-  const vitepressTypesDestDir = join(vitepressDestDir, 'types');
-  await mkdir(vitepressTypesDestDir, { recursive: true });
-
-  // Normalize glob pattern to use forward slashes on Windows
-  const vitepressTypesFiles = await glob(toPosixPath(join(vitepressTypesDir, '**/*')), {
-    absolute: true,
-  });
-
-  for (const file of vitepressTypesFiles) {
-    const stats = await stat(file);
-    if (!stats.isFile()) {
-      continue;
-    }
-
-    // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = toPosixPath(file).replace(toPosixPath(vitepressTypesDir), '');
-    const destPath = join(vitepressTypesDestDir, relativePath);
-
-    await mkdir(parse(destPath).dir, { recursive: true });
-    await copyFile(file, destPath);
   }
 }
 

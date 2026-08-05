@@ -14,6 +14,8 @@
 #![expect(clippy::disallowed_macros, reason = "standalone test runner uses std macros")]
 #![expect(clippy::disallowed_methods, reason = "standalone test runner uses std methods")]
 
+#[path = "../../src/bin/vpt/exit_code.rs"]
+mod exit_code;
 mod flavor;
 mod redact;
 
@@ -768,7 +770,9 @@ fn run_step_piped(
     let mut output = stdout_thread.join().unwrap();
     output.push_str(&stderr_thread.join().unwrap());
     match status {
-        Some(status) => (TerminationState::Exited(i64::from(status.code().unwrap_or(-1))), output),
+        Some(status) => {
+            (TerminationState::Exited(i64::from(exit_code::exit_code_from_status(status))), output)
+        }
         None => (TerminationState::TimedOut, output),
     }
 }
