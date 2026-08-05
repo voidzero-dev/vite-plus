@@ -27,7 +27,7 @@ vite-plus/
 │   ├── src/resolve-test.ts    # Resolves upstream Vitest for `vp test`
 │   ├── src/utils/agent.ts     # Generated agent-file marker/update logic
 │   └── binding/               # Rust NAPI binding used by the local CLI
-├── packages/core/             # @voidzero-dev/vite-plus-core bundled Vite/Rolldown/tsdown/VitePress surfaces
+├── packages/core/             # @voidzero-dev/vite-plus-core bundled Vite/Rolldown/tsdown surfaces
 ├── packages/prompts/          # Prompt UI/helpers package, including snapshot milestones
 ├── packages/tools/            # Repo tooling and local npm registry
 ├── crates/vite_cli_snapshots/ # PTY snapshot test runner + vpt helper (CLI tests)
