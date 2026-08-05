@@ -268,6 +268,7 @@ Across the full catalog most failures are not regressions, and reporting them as
   ```
 
   Reset the project (`git reset --hard`, `git clean -fd`, delete lockfile and `node_modules`) before the control run so it starts from the same state as the real run.
+
 - **Project-side and infra failures.** Dependency conflicts between the project's own packages, missing fork secrets, third-party GitHub Apps not installed on the fork, network timeouts. Retry once before classifying anything as a network failure; they pass on retry.
 - **Harness artifacts.** Failures your own test setup caused, such as a lockfile the harness deleted and the install never regenerated. Fix these and re-run rather than reporting them.
 
@@ -300,7 +301,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
 1. `check`: compares the local version against `unpkg.com/vite-plus@latest`; everything below is skipped unless it changed.
 2. `build-rust`: full multi-platform build.
-3. `request-approval`: posts an approval request to the releases Discord channel, and the `Release` job waits on the `release` GitHub environment. **A person with environment approval rights must approve the run in the Actions UI.** The environment sets `prevent_self_review: true`, so whoever merged the release PR triggered the run and cannot approve it: a *different* reviewer must. Check who can, and tell the release manager rather than leaving them waiting on themselves:
+3. `request-approval`: posts an approval request to the releases Discord channel, and the `Release` job waits on the `release` GitHub environment. **A person with environment approval rights must approve the run in the Actions UI.** The environment sets `prevent_self_review: true`, so whoever merged the release PR triggered the run and cannot approve it: a _different_ reviewer must. Check who can, and tell the release manager rather than leaving them waiting on themselves:
 
    ```bash
    gh api repos/voidzero-dev/vite-plus/actions/runs/<run-id>/pending_deployments \
