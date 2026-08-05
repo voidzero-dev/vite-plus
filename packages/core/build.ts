@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { format } from 'oxfmt';
@@ -58,7 +58,6 @@ await buildVite();
 await bundleTsdown();
 await brandTsdown();
 await wireBundledTsdownExtensions();
-await bundleVitepress();
 generateLicenseFile({
   title: 'Vite-Plus core license',
   packageName: 'Vite-Plus',
@@ -85,9 +84,6 @@ generateLicenseFile({
     },
     {
       packageDir: tsdownSourceDir,
-    },
-    {
-      packageDir: join(projectDir, '..', '..', 'node_modules', 'vitepress'),
     },
   ],
 });
@@ -807,89 +803,6 @@ async function wireBundledTsdownExtensions() {
   }
   if (!cssLoadWired) {
     throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
-  }
-}
-
-// Actually do nothing now, we will polish it in the future when `vitepress` is ready
-async function bundleVitepress() {
-  const vitepressSourceDir = resolve(projectDir, 'node_modules/vitepress');
-  const vitepressDestDir = join(projectDir, 'dist/vitepress');
-
-  await mkdir(vitepressDestDir, { recursive: true });
-
-  // Copy dist directory
-  // Normalize glob pattern to use forward slashes on Windows
-  const vitepressDistFiles = await glob(toPosixPath(join(vitepressSourceDir, 'dist', '**/*')), {
-    absolute: true,
-  });
-
-  for (const file of vitepressDistFiles) {
-    const stats = await stat(file);
-    if (!stats.isFile()) {
-      continue;
-    }
-
-    // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = toPosixPath(file).replace(
-      toPosixPath(join(vitepressSourceDir, 'dist')),
-      '',
-    );
-    const destPath = join(vitepressDestDir, relativePath);
-
-    await mkdir(parse(destPath).dir, { recursive: true });
-
-    // Rewrite vite imports in .js and .mjs files
-    if (
-      file.endsWith('.js') ||
-      file.endsWith('.mjs') ||
-      file.endsWith('.d.mts') ||
-      file.endsWith('.d.ts')
-    ) {
-      const content = await readFile(file, 'utf-8');
-      // Note: For vitepress, 'vite' -> 'pkgJson.name/vite' (vite subpath)
-      const rewrittenContent = rewriteModuleSpecifiers(content, file, {
-        rules: [{ from: 'vite', to: `${pkgJson.name}/vite` }],
-      });
-      await writeFile(destPath, rewrittenContent, 'utf-8');
-    } else {
-      await copyFile(file, destPath);
-    }
-  }
-
-  // Copy top-level .d.ts files
-  const vitepressTypeFiles = ['client.d.ts', 'theme.d.ts', 'theme-without-fonts.d.ts'];
-  for (const typeFile of vitepressTypeFiles) {
-    const sourcePath = join(vitepressSourceDir, typeFile);
-    const destPath = join(vitepressDestDir, typeFile);
-    try {
-      await copyFile(sourcePath, destPath);
-    } catch {
-      // File might not exist, skip
-    }
-  }
-
-  // Copy types directory
-  const vitepressTypesDir = join(vitepressSourceDir, 'types');
-  const vitepressTypesDestDir = join(vitepressDestDir, 'types');
-  await mkdir(vitepressTypesDestDir, { recursive: true });
-
-  // Normalize glob pattern to use forward slashes on Windows
-  const vitepressTypesFiles = await glob(toPosixPath(join(vitepressTypesDir, '**/*')), {
-    absolute: true,
-  });
-
-  for (const file of vitepressTypesFiles) {
-    const stats = await stat(file);
-    if (!stats.isFile()) {
-      continue;
-    }
-
-    // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = toPosixPath(file).replace(toPosixPath(vitepressTypesDir), '');
-    const destPath = join(vitepressTypesDestDir, relativePath);
-
-    await mkdir(parse(destPath).dir, { recursive: true });
-    await copyFile(file, destPath);
   }
 }
 
