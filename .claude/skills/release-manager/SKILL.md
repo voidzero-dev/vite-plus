@@ -30,7 +30,7 @@ Report the detected state before making changes, so the previous release manager
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
-2. Release manager: sync `binding/index.cjs`, write the changelog PR description, offer the preview-build smoke test (recommended by default past ~10 commits), get CI green.
+2. Release manager: sync `binding/index.cjs`, write the changelog PR description, offer the preview-build smoke test (recommend it when the release has more than 10 commits since the previous tag), get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
@@ -182,7 +182,17 @@ Diff the body's PR numbers against `generate-notes` rather than only counting th
 
 ## 4. Preview build smoke test (before merging)
 
-This step runs **after the changelog (step 3) is complete and before merging (step 6)**. **Always ask the release manager whether to run it, and ask about both levels explicitly** (the local `vp migrate` sweep, and the fork-PR CI validation below); never silently skip either, and do not add the label on your own. Default your recommendation to yes when the release has **more than 10 commits since the previous tag** (`git rev-list --count v<prev>..origin/main`) or carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes); a small, narrow release is the only case where recommending a skip is reasonable. When you offer the choice, say roughly what it costs, since the full catalog takes hours. If the release manager approves, **read and follow [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md) first**, then validate against the **full ecosystem-ci catalog** (every runnable fork), not a single project.
+This step runs **after the changelog (step 3) is complete and before merging (step 6)**. **Always ask the release manager whether to run it, and ask about both levels explicitly** (the local `vp migrate` sweep, and the fork-PR CI validation below); never silently skip either, and do not add the label on your own.
+
+Decide what to recommend before you ask, by counting the commits the release actually contains:
+
+```bash
+git rev-list --count v<prev>..origin/main
+```
+
+**Recommend running the smoke test when that count is above 10**, or when the release touches migrate/create behavior, package-manager or install-path handling, or the native bindings, whatever the count. Recommend skipping only for a release that is both small (10 commits or fewer) and clear of those areas. State the count and your recommendation in the question so the release manager can overrule it, and say roughly what it costs, since the full catalog runs for hours.
+
+If the release manager approves, **read and follow [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md) first**, then validate against the **full ecosystem-ci catalog** (every runnable fork), not a single project.
 
 If the release manager says yes:
 
@@ -406,7 +416,7 @@ After the release ships and the Discord announcement draft is approved, review t
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
 - [ ] PR description written from the head branch data; every PR exactly once except deliberately omitted bot-noise PRs; breaking changes in their own section above Highlights; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
-- [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), recommended by default past ~10 commits; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
+- [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), with the commit count stated and a recommendation to run it when that count is above 10; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
