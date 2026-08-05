@@ -16,7 +16,16 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { hookScript, install } from '../hooks.js';
+import {
+  disable,
+  enable,
+  hookScript,
+  install,
+  isHooksUserDisabled,
+  resolveHooksDir,
+  setup,
+  status,
+} from '../hooks.js';
 
 function countDirnameCalls(script: string): number {
   // Count nested dirname calls in the `d=...` line
@@ -86,14 +95,14 @@ describe('install', () => {
   it('rejects an absolute hooks directory', () => {
     expect(install(resolve(tmpdir(), 'external-hooks'))).toEqual({
       message: 'absolute hooks directory not allowed',
-      isError: false,
+      isError: true,
     });
   });
 
   it.each(['', '.', './'])('rejects the project root as hooks directory: %j', (hooksDir) => {
     expect(install(hooksDir)).toEqual({
       message: 'hooks directory must be a project subdirectory',
-      isError: false,
+      isError: true,
     });
   });
 
@@ -237,6 +246,239 @@ describe('install', () => {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+});
+
+describe('setup / disable / enable / status', () => {
+  it.skipIf(process.platform === 'win32')(
+    'setup installs dispatcher; disable tears down and persists preference; enable restores',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-lifecycle-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+
+        const hooksDir = '.vite-hooks';
+        mkdirSync(hooksDir, { recursive: true });
+        writeFileSync(join(hooksDir, 'pre-commit'), 'vp staged\n');
+
+        expect(setup(hooksDir).isError).toBe(false);
+        expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.vite-hooks/_',
+        );
+        expect(isHooksUserDisabled()).toBe(false);
+
+        const disabled = disable(hooksDir);
+        expect(disabled.isError).toBe(false);
+        expect(disabled.message).toContain('Git hooks disabled');
+        expect(existsSync(join(tmp, hooksDir, '_'))).toBe(false);
+        expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(true);
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(isHooksUserDisabled()).toBe(true);
+
+        // install (as vp config would) respects the preference
+        expect(install(hooksDir)).toEqual({
+          message: 'skip install (hooks disabled; run `vp hooks enable` to re-enable)',
+          isError: false,
+        });
+        expect(existsSync(join(tmp, hooksDir, '_'))).toBe(false);
+
+        expect(enable(hooksDir).isError).toBe(false);
+        expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
+        expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(true);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.vite-hooks/_',
+        );
+        expect(isHooksUserDisabled()).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'disable leaves a foreign core.hooksPath alone but still records preference',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-foreign-disable-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        execSync('git config core.hooksPath .husky/_', { cwd: tmp });
+        mkdirSync(join(tmp, '.husky', '_'), { recursive: true });
+        writeFileSync(join(tmp, '.husky', 'pre-commit'), 'npm test\n');
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(join(tmp, '.vite-hooks', '_', 'h'), 'stale\n');
+        process.chdir(tmp);
+
+        const result = disable();
+        expect(result.isError).toBe(false);
+        expect(result.message).toContain('left unchanged');
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.husky/_',
+        );
+        expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+        expect(existsSync(join(tmp, '.husky', 'pre-commit'))).toBe(true);
+        expect(isHooksUserDisabled()).toBe(true);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('status reports preference and dispatcher state', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-status-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+
+      mkdirSync('.vite-hooks', { recursive: true });
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'vp staged\n');
+
+      const unset = status();
+      expect(unset.isError).toBe(false);
+      expect(unset.message).toContain('Preference:     not set');
+
+      expect(setup().isError).toBe(false);
+      const active = status();
+      expect(active.isError).toBe(false);
+      expect(active.status?.userDisabled).toBe(false);
+      expect(active.status?.dispatcherInstalled).toBe(true);
+      expect(active.status?.ownsHooksPath).toBe(true);
+      expect(active.status?.projectHooks).toEqual(['pre-commit']);
+      expect(active.message).toContain('Preference:     enabled');
+
+      expect(disable().isError).toBe(false);
+      const inactive = status();
+      expect(inactive.status?.userDisabled).toBe(true);
+      expect(inactive.status?.dispatcherInstalled).toBe(false);
+      expect(inactive.message).toContain('Preference:     disabled (local)');
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'remembers custom hooks dir across disable/enable/status without an explicit dir',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-stored-dir-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+
+        const customDir = '.custom-hooks';
+        mkdirSync(customDir, { recursive: true });
+        writeFileSync(join(tmp, customDir, 'pre-commit'), 'vp staged\n');
+
+        expect(setup(customDir).isError).toBe(false);
+        expect(resolveHooksDir()).toBe(customDir);
+        expect(existsSync(join(tmp, customDir, '_', 'pre-commit'))).toBe(true);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          `${customDir}/_`,
+        );
+
+        // Callers that only have resolveHooksDir() (CLI without --hooks-dir) must hit the custom tree.
+        const disabled = disable(resolveHooksDir());
+        expect(disabled.isError).toBe(false);
+        expect(existsSync(join(tmp, customDir, '_'))).toBe(false);
+        expect(existsSync(join(tmp, customDir, 'pre-commit'))).toBe(true);
+        expect(existsSync(join(tmp, '.vite-hooks'))).toBe(false);
+        expect(isHooksUserDisabled()).toBe(true);
+
+        const inactive = status();
+        expect(inactive.status?.hooksDir).toBe(customDir);
+        expect(inactive.message).toContain('Preference:     disabled (local)');
+        expect(inactive.message).toContain(`Hooks dir:      ${customDir}`);
+
+        expect(enable(resolveHooksDir()).isError).toBe(false);
+        expect(existsSync(join(tmp, customDir, '_', 'pre-commit'))).toBe(true);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          `${customDir}/_`,
+        );
+        expect(isHooksUserDisabled()).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('rejects an absolute hooks directory for disable', () => {
+    expect(disable(resolve(tmpdir(), 'external-hooks'))).toEqual({
+      message: 'absolute hooks directory not allowed',
+      isError: true,
+    });
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'disable unsets only the worktree Vite+ path and leaves a foreign local path',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-worktree-disable-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        execSync('git config extensions.worktreeConfig true', { cwd: tmp });
+        execSync('git config --local core.hooksPath .husky/_', { cwd: tmp });
+        execSync('git config --worktree core.hooksPath .vite-hooks/_', { cwd: tmp });
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(join(tmp, '.vite-hooks', '_', 'h'), 'stale\n');
+        process.chdir(tmp);
+
+        const result = disable();
+        expect(result.isError).toBe(false);
+        expect(isHooksUserDisabled()).toBe(true);
+        expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+        // Local foreign value must remain; effective path should fall back to it.
+        expect(
+          execSync('git config --local --get core.hooksPath', { cwd: tmp }).toString().trim(),
+        ).toBe('.husky/_');
+        expect(() =>
+          execSync('git config --worktree --get core.hooksPath', { cwd: tmp }),
+        ).toThrow();
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.husky/_',
+        );
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'disable refuses an unsafe dispatcher tree before mutating hooksPath or preference',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-unsafe-disable-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        const externalFile = join(tmp, 'external-hook-runner');
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(externalFile, 'keep me\n');
+        symlinkSync(externalFile, join(tmp, '.vite-hooks', '_', 'h'));
+        execSync('git config core.hooksPath .vite-hooks/_', { cwd: tmp });
+        process.chdir(tmp);
+
+        expect(disable()).toEqual({
+          message: 'symbolic hook path ".vite-hooks/_/h" not allowed',
+          isError: false,
+        });
+        expect(isHooksUserDisabled()).toBe(false);
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.vite-hooks/_',
+        );
+        expect(existsSync(join(tmp, '.vite-hooks', '_', 'h'))).toBe(true);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe('hookScript env gates', () => {

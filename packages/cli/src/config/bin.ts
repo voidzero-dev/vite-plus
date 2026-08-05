@@ -7,7 +7,7 @@ import { updateExistingAgentInstructions } from '../utils/agent.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
 import { log, printHeader } from '../utils/terminal.ts';
-import { install } from './hooks.ts';
+import { install, isHooksUserDisabled, resolveHooksDir } from './hooks.ts';
 
 async function main() {
   const args = mri(process.argv.slice(3), {
@@ -27,7 +27,8 @@ async function main() {
           rows: [
             {
               label: '--hooks-dir <path>',
-              description: 'Custom hooks directory (default: .vite-hooks)',
+              description:
+                'Custom hooks directory (default: .vite-hooks, or last used in this clone)',
             },
             { label: '--no-hooks', description: 'Skip hook dispatcher installation' },
             { label: '--no-agent', description: 'Skip updating coding agent instructions' },
@@ -54,11 +55,16 @@ async function main() {
   const root = process.cwd();
 
   // --- Step 1: Hooks setup ---
-  const hooksDir = dir ?? '.vite-hooks';
+  // Prefer CLI flag, then last-used dir from local git config, then default.
+  const hooksDir = resolveHooksDir(dir);
   const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
 
   let shouldSetupHooks = !skipHooks;
-  if (shouldSetupHooks && interactive && isFirstHooksRun && !dir && !isLifecycleScript) {
+  if (shouldSetupHooks && isHooksUserDisabled()) {
+    // Honor `vp hooks disable` without re-prompting (option A).
+    log('skip install (hooks disabled; run `vp hooks enable` to re-enable)');
+    shouldSetupHooks = false;
+  } else if (shouldSetupHooks && interactive && isFirstHooksRun && !dir && !isLifecycleScript) {
     // Explicit directories and lifecycle scripts already opt in.
     shouldSetupHooks = await promptGitHooks({
       interactive,
@@ -67,7 +73,7 @@ async function main() {
   }
 
   if (shouldSetupHooks) {
-    const { message, isError } = install(dir);
+    const { message, isError } = install(hooksDir);
     if (message) {
       log(message);
       if (isError) {
