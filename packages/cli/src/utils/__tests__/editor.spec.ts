@@ -95,7 +95,7 @@ describe('detectExistingEditors', () => {
   it('detects existing jetbrains editor config files', () => {
     const projectRoot = createTempDir();
     fs.mkdirSync(path.join(projectRoot, '.idea'), { recursive: true });
-    fs.writeFileSync(path.join(projectRoot, '.idea', 'externalDependencies.xml'), '<project />');
+    fs.writeFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), '<project />');
 
     expect(detectExistingEditors(projectRoot)).toEqual(['jetbrains']);
   });
@@ -548,7 +548,7 @@ describe('writeEditorConfigs', () => {
     expect(zedSettings.lsp).toBeDefined();
   });
 
-  it('writes jetbrains config as XML based on file extension', async () => {
+  it('writes all jetbrains editor config files', async () => {
     const projectRoot = createTempDir();
 
     await writeEditorConfigs({
@@ -558,12 +558,39 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const xml = fs.readFileSync(path.join(projectRoot, '.idea', 'externalDependencies.xml'), 'utf8');
-    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-    expect(xml).toContain('<component name="ExternalDependencies" />');
+    const externalDependenciesXml = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'externalDependencies.xml'),
+      'utf8',
+    );
+    expect(externalDependenciesXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(externalDependenciesXml).toContain(
+      '<plugin id="com.github.oxc.project.oxcintellijplugin" />',
+    );
+    expect(externalDependenciesXml).toContain('<plugin id="intellij.vitejs" />');
+
+    const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
+    expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(workspaceXml).toContain('"javascript.preferred.runtime.type.id": "node"');
+    expect(workspaceXml).toContain(
+      `"nodejs_interpreter_path": "${os.homedir()}/.vite-plus/bin/node"`,
+    );
+    expect(workspaceXml).toContain('"nodejs_package_manager_path": "pnpm"');
+
+    const oxfmtSettingsXml = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'OxfmtSettings.xml'),
+      'utf8',
+    );
+    expect(oxfmtSettingsXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(oxfmtSettingsXml).toContain('<component name="OxfmtSettings">');
+    expect(oxfmtSettingsXml).toContain(
+      '<option name="preferOxfmtCodeStyleSettings" value="true" />',
+    );
+
+    const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
+    expect(gitignore).toBe('!externalDependencies.xml');
   });
 
-  it('does not overwrite existing non-JSON editor config in non-interactive mode', async () => {
+  it('does not overwrite existing non-JSON jetbrains file in non-interactive mode', async () => {
     const projectRoot = createTempDir();
     const xmlPath = path.join(projectRoot, '.idea', 'externalDependencies.xml');
     fs.mkdirSync(path.dirname(xmlPath), { recursive: true });
@@ -578,5 +605,17 @@ describe('writeEditorConfigs', () => {
 
     const xml = fs.readFileSync(xmlPath, 'utf8');
     expect(xml).toBe('<project version="4"><component name="Custom"/></project>');
+
+    const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
+    expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+
+    const oxfmtSettingsXml = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'OxfmtSettings.xml'),
+      'utf8',
+    );
+    expect(oxfmtSettingsXml).toContain('<component name="OxfmtSettings">');
+
+    const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
+    expect(gitignore).toBe('!externalDependencies.xml');
   });
 });

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
@@ -159,6 +160,30 @@ const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 </project>
 `;
 
+const JETBRAINS_WORKSPACE_CONFIG = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PropertiesComponent">
+    <![CDATA[{
+      "keyToString": {
+        "javascript.preferred.runtime.type.id": "node",
+        "nodejs_interpreter_path": "${os.homedir()}/.vite-plus/bin/node",
+        "nodejs_package_manager_path": "pnpm",
+      }
+    }]]>
+  </component>
+</project>
+`;
+
+const JETBRAINS_OXFMT_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="OxfmtSettings">
+    <option name="preferOxfmtCodeStyleSettings" value="true" />
+  </component>
+</project>
+`;
+
+const JETBRAINS_GITIGNORE_ADDITION = `!externalDependencies.xml`
+
 type EditorConfigValue = Record<string, unknown> | string;
 
 export const EDITORS = [
@@ -185,6 +210,9 @@ export const EDITORS = [
     targetDir: '.idea',
     files: {
       'externalDependencies.xml': JETBRAINS_EXTERNAL_DEPENDENCIES,
+      'workspace.xml': JETBRAINS_WORKSPACE_CONFIG,
+      'OxfmtSettings.xml': JETBRAINS_OXFMT_SETTINGS,
+      '.gitignore': JETBRAINS_GITIGNORE_ADDITION,
     },
   },
 ] as const;
@@ -451,7 +479,9 @@ async function writeEditorConfig({
       if (conflictAction === 'merge') {
         if (jsonFormat) {
           if (!isPlainObject(incoming)) {
-            throw new Error(`Cannot merge editor config: ${displayPath} incoming value is not JSON`);
+            throw new Error(
+              `Cannot merge editor config: ${displayPath} incoming value is not JSON`,
+            );
           }
           mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
         } else {
@@ -467,7 +497,9 @@ async function writeEditorConfig({
 
     if (jsonFormat) {
       if (!isPlainObject(incoming)) {
-        throw new Error(`Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`);
+        throw new Error(
+          `Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`,
+        );
       }
       writeJsonFile(filePath, incoming);
     } else {

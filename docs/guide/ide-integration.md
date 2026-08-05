@@ -108,7 +108,7 @@ When you create or migrate a project, Vite+ prompts you to choose whether you wa
 
 ::: tip Vite+ does not merge with existing config files
 Due to some complexities with merging XML files, Vite+ currently does not merge your current files if the files already exist.
-You'll be given the opportunity to replace your files, instead of merging.
+You'll be given the opportunity to replace any existing files, instead of merging.
 :::
 
 You can also manually set up the IDE configuration to match your Vite+ setup:
@@ -134,7 +134,7 @@ You can also manually set up the IDE configuration to match your Vite+ setup:
         "javascript.nodejs.core.library.configured.version": "24.18.0", // Replace with your selected Node.js version
         "javascript.nodejs.core.library.typings.version": "24.13.3", // Replace with the version of @types/node that corresponds to your runtime (or omit if you don't want it)
         "javascript.preferred.runtime.type.id": "node",
-        "nodejs_interpreter_path": "~/.vite-plus/bin/node", // Replace ~ with the path to your home directory, IntelliJ/WebStorm don't understand ~
+        "nodejs_interpreter_path": "~/.vite-plus/bin/node", // Replace ~ with the path to your home directory, IntelliJ/WebStorm doesn't understand ~
         "nodejs_package_manager_path": "pnpm", // Replace with your package manager of choice
       }
     }]]>
