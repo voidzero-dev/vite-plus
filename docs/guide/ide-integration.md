@@ -150,6 +150,8 @@ You can also manually set up the IDE configuration to match your Vite+ setup:
 </project>
 ```
 
+Often, `.idea` folders are gitignored in a project, even the `externalDependencies.xml` file. Adding the `.idea/.gitignore` file with the following content will help ensure that it is present:
+
 ```gitignore [.idea/.gitignore]
 !externalDependencies.xml
 ```
