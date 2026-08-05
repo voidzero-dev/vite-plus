@@ -119,13 +119,17 @@ static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
-// `vp env which` prints the resolving runtime as a labelled `Node:` field, and
-// the npm shim records the node it ran under into a BinConfig's
-// `"nodeVersion"` value. Both track the environment's managed default (not a
-// fixture pin), so they churn with runtime upgrades; mask by label/key context
-// so fixture-pinned versions elsewhere stay assertable.
+// Environment-management output prints the resolving runtime as a labelled
+// `Node:` field, an installed-package table column, or the current `lts`
+// target. The npm shim also records the node it ran under into a BinConfig's
+// `"nodeVersion"` value. All track the environment's managed default (not a
+// fixture pin), so they churn with runtime upgrades; mask by context so
+// fixture-pinned versions elsewhere stay assertable.
 static WHICH_NODE_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(Node:\s+|"nodeVersion":\s*")\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#).unwrap()
+    regex::Regex::new(
+        r#"(?m)(Node:\s+|"nodeVersion":\s*"|Default Node\.js version set to [^()\n]+ \(currently |^\S+@\S+\s{2,})\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+    )
+    .unwrap()
 });
 // Output bytes differ across OSes (line endings, embedded paths), so byte
 // sizes and content-derived asset hashes can never be part of a shared
@@ -160,12 +164,32 @@ static SPINNER_FRAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static PNPM_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)^(Progress: resolved .*|Packages: \+\d+|\++)\n?").unwrap()
 });
+// pnpm conditionally explains whether packages were cloned or hard-linked and
+// prints platform-specific store paths. The block depends on store state and
+// filesystem capabilities rather than fixture behavior, so strip it.
+static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^Packages are (?:cloned|copied|hard linked) from the content-addressable store to the virtual store\.\n  Content-addressable store is at: .*\n  Virtual store is at:\s+.*\n?",
+    )
+    .unwrap()
+});
 // Stack frames under file:// URLs carry line:column offsets of the bundled
 // chunk that produced them, which shift with every build of the bundle (and
 // the chunk hash in the frame path shifts with content); the error message
 // above the trace is the assertion, so drop the frames.
 static STACK_FRAME_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?m)^\s+at .*file://.*\n?").unwrap());
+// Vite's build banner ("vite v8.1.5 building client environment for
+// production...") races the Rust vite-reporter's same-line progress
+// rewrites: the banner goes through Node's buffered stdout while the
+// reporter writes erase sequences straight to the fd, so on a slow machine
+// the erase lands on the banner's line and the final grid drops it (CI),
+// while a fast machine keeps it (local). Drop the line everywhere; the
+// reporter's transformed/size lines still assert the build ran.
+static VITE_BUILD_BANNER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^vite (?:v\d[^ ]*|<version>) building .* environment for .*\n?")
+        .unwrap()
+});
 // The npm 404 line echoes the upstream registry's message tail, which differs
 // between registries (npmjs vs a mirror behind the local-registry proxy).
 static NPM_404_TAIL_RE: LazyLock<regex::Regex> =
@@ -473,6 +497,7 @@ pub fn redact_output(
     // Drop build-dependent stack frames, normalize the upstream-dependent npm
     // 404 tail, and strip yarn1's console-dependent sparkles prefix
     output = STACK_FRAME_RE.replace_all(&output, "").into_owned();
+    output = VITE_BUILD_BANNER_RE.replace_all(&output, "").into_owned();
     output = NPM_404_TAIL_RE.replace_all(&output, "${1}<message>").into_owned();
     output = YARN_SPARKLE_RE.replace_all(&output, "").into_owned();
 
@@ -488,6 +513,7 @@ pub fn redact_output(
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
+    output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
 
     // Pin racy blank-line layout last, after every rule above that strips
     // whole lines (banner box, stack frames, progress rows) has run, so the

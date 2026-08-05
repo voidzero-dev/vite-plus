@@ -5,30 +5,35 @@
 
 ## `vp migrate --no-interactive`
 
-migration should strip husky from semicolon-composed prepare script
+migration should preserve a semicolon-composed Husky prepare script
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-check husky removed from prepare script, not left as broken command
+the prepare script and Husky dependency should remain
 
 ```
 {
   "name": "migration-husky-semicolon-prepare",
   "scripts": {
-    "prepare": "npm run build; vp config"
+    "prepare": "npm run build; husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
   },
   "devEngines": {
     "packageManager": {

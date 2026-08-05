@@ -10,11 +10,11 @@ use std::process::ExitStatus;
 
 use chrono::Local;
 use owo_colors::OwoColorize;
-use vite_install::package_manager::{
+use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{
@@ -22,7 +22,7 @@ use super::{
     config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
-use crate::error::Error;
+use crate::{cli::exit_status, error::Error};
 
 /// Core tools (node, npm, npx, corepack)
 const CORE_TOOLS: &[&str] = &["node", "npm", "npx", "corepack"];
@@ -350,18 +350,4 @@ fn locate_package_binary(
     };
 
     Ok(binary_path)
-}
-
-/// Create an exit status with the given code.
-fn exit_status(code: i32) -> ExitStatus {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        ExitStatus::from_raw(code << 8)
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::ExitStatusExt;
-        ExitStatus::from_raw(code as u32)
-    }
 }

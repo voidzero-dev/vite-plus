@@ -13,7 +13,7 @@ Stage a package for publishing (npm staged publishing workflow)
 
 Commands:
   publish   Stage a package for publishing (no 2FA required)
-  list, ls  List staged versions
+  list      List staged versions [alias: ls]
   view      Show details about a staged version
   download  Download the staged tarball for inspection
   approve   Promote a staged version to the live registry (2FA required)

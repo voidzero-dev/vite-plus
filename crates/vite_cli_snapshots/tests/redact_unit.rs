@@ -48,6 +48,15 @@ fn masks_size_numbers_keeping_units_and_spares_plain_stems() {
 }
 
 #[test]
+fn drops_the_vite_build_banner_line() {
+    // The banner races the Rust reporter's same-line erase writes, so its
+    // presence in a PTY grid depends on machine speed; the rule drops it in
+    // both its raw and version-masked spellings.
+    let input = "vite v8.1.5 building client environment for production...\n\u{2713} 2 modules transformed.\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "\u{2713} 2 modules transformed.\n");
+}
+
+#[test]
 fn masks_only_v_prefixed_versions() {
     let input =
         "vite v7.3.2 building; wrote app-1.0.0.tgz with \"vitest\": \"4.0.13\"\n".to_owned();
@@ -64,6 +73,46 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
     assert_eq!(
         redact_output(input, &[], true),
         "Node <version>  pnpm <version> (agents npm/<version> vp/<version>)\n"
+    );
+}
+
+#[test]
+fn masks_managed_node_versions_in_environment_output() {
+    let input = concat!(
+        "Node: 24.18.1\n",
+        "\"nodeVersion\": \"24.18.1\"\n",
+        "✓ Default Node.js version set to lts (currently 24.18.1)\n",
+        "just-a-normal-package@0.0.0   24.18.1        just-a-normal-package\n",
+        "fixture pin: 22.18.0\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "Node: <version>\n",
+            "\"nodeVersion\": \"<version>\"\n",
+            "✓ Default Node.js version set to lts (currently <version>)\n",
+            "just-a-normal-package@0.0.0   <version>        just-a-normal-package\n",
+            "fixture pin: 22.18.0\n",
+        )
+    );
+}
+
+#[test]
+fn strips_pnpm_store_location_diagnostics() {
+    let input = concat!(
+        "✓ Lockfile passes supply-chain policies\n",
+        "Packages are cloned from the content-addressable store to the virtual store.\n",
+        "  Content-addressable store is at: /Users/runner/Library/pnpm/store/v11\n",
+        "  Virtual store is at:             node_modules/.pnpm\n",
+        "\n",
+        "devDependencies:\n",
+        " testnpm2 1.0.1\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        "✓ Lockfile passes supply-chain policies\n\ndevDependencies:\n testnpm2 1.0.1\n"
     );
 }
 

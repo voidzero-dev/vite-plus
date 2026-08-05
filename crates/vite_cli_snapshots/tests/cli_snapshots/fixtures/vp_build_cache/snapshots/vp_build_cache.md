@@ -33,6 +33,7 @@ direct vp build should not be cached
 direct vp build has no cache
 
 ```
+note: You are running `vp build` as a Vite+ built-in command. If you meant to run the build npm script, use `vpr build` instead.
 ✓ 4 modules transformed.
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB

@@ -10,7 +10,7 @@ should warn about husky v8 and skip hooks setup
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied

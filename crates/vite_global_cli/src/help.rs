@@ -1,83 +1,51 @@
 //! Unified help rendering for the global CLI.
 
-use std::{fmt::Write as _, io::IsTerminal};
+use std::{borrow::Cow, fmt::Write as _};
 
 use clap::{CommandFactory, error::ErrorKind};
 use owo_colors::OwoColorize;
 
 #[derive(Clone, Debug)]
 pub struct HelpDoc {
-    pub usage: &'static str,
-    pub summary: Vec<&'static str>,
+    pub usage: Cow<'static, str>,
+    pub summary: Vec<Cow<'static, str>>,
     pub sections: Vec<HelpSection>,
-    pub documentation_url: Option<&'static str>,
+    pub documentation_url: Option<Cow<'static, str>>,
 }
 
 #[derive(Clone, Debug)]
 pub enum HelpSection {
-    Rows { title: &'static str, rows: Vec<HelpRow> },
-    Lines { title: &'static str, lines: Vec<&'static str> },
+    Rows { title: Cow<'static, str>, rows: Vec<HelpRow> },
+    Lines { title: Cow<'static, str>, lines: Vec<Cow<'static, str>> },
 }
 
 #[derive(Clone, Debug)]
 pub struct HelpRow {
-    pub label: &'static str,
-    pub description: Vec<&'static str>,
-}
-
-#[derive(Clone, Debug)]
-struct OwnedHelpDoc {
-    usage: String,
-    summary: Vec<String>,
-    sections: Vec<OwnedHelpSection>,
-    documentation_url: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-enum OwnedHelpSection {
-    Rows { title: String, rows: Vec<OwnedHelpRow> },
-    Lines { title: String, lines: Vec<String> },
-}
-
-#[derive(Clone, Debug)]
-struct OwnedHelpRow {
-    label: String,
-    description: Vec<String>,
+    pub label: Cow<'static, str>,
+    pub description: Vec<Cow<'static, str>>,
 }
 
 fn row(label: &'static str, description: &'static str) -> HelpRow {
-    HelpRow { label, description: vec![description] }
+    HelpRow { label: label.into(), description: vec![description.into()] }
 }
 
 fn section_rows(title: &'static str, rows: Vec<HelpRow>) -> HelpSection {
-    HelpSection::Rows { title, rows }
+    HelpSection::Rows { title: title.into(), rows }
 }
 
 fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
-    HelpSection::Lines { title, lines }
+    HelpSection::Lines { title: title.into(), lines: lines.into_iter().map(Into::into).collect() }
 }
 
 fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static str> {
     match command_path {
         [] => Some("https://viteplus.dev/guide/"),
-        ["create"] => Some("https://viteplus.dev/guide/create"),
-        ["migrate"] => Some("https://viteplus.dev/guide/migrate"),
-        ["config"] | ["staged"] => Some("https://viteplus.dev/guide/commit-hooks"),
         [
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
             | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
         ] => Some("https://viteplus.dev/guide/install"),
-        ["dev"] => Some("https://viteplus.dev/guide/dev"),
-        ["check"] => Some("https://viteplus.dev/guide/check"),
-        ["lint"] => Some("https://viteplus.dev/guide/lint"),
-        ["fmt"] => Some("https://viteplus.dev/guide/fmt"),
-        ["test"] => Some("https://viteplus.dev/guide/test"),
-        ["run"] => Some("https://viteplus.dev/guide/run"),
-        ["exec" | "dlx"] => Some("https://viteplus.dev/guide/vpx"),
-        ["cache"] => Some("https://viteplus.dev/guide/cache"),
-        ["build" | "preview"] => Some("https://viteplus.dev/guide/build"),
-        ["pack"] => Some("https://viteplus.dev/guide/pack"),
+        ["dlx"] => Some("https://viteplus.dev/guide/vpx"),
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
         ["implode"] => Some("https://viteplus.dev/guide/implode"),
@@ -112,36 +80,13 @@ fn write_documentation_footer(output: &mut String, documentation_url: &str) {
 }
 
 pub fn should_style_help() -> bool {
-    std::io::stdout().is_terminal()
+    vite_shared::is_stdout_terminal()
         && std::env::var_os("NO_COLOR").is_none()
         && std::env::var("CLICOLOR").map_or(true, |value| value != "0")
         && std::env::var("TERM").map_or(true, |term| term != "dumb")
 }
 
 fn render_rows(rows: &[HelpRow]) -> Vec<String> {
-    if rows.is_empty() {
-        return vec![];
-    }
-
-    let label_width = rows.iter().map(|row| row.label.len()).max().unwrap_or(0);
-    let mut output = Vec::new();
-
-    for row in rows {
-        let mut description_iter = row.description.iter();
-        if let Some(first) = description_iter.next() {
-            output.push(format!("  {:label_width$}  {}", row.label, first));
-            for line in description_iter {
-                output.push(format!("  {:label_width$}  {}", "", line));
-            }
-        } else {
-            output.push(format!("  {}", row.label));
-        }
-    }
-
-    output
-}
-
-fn render_owned_rows(rows: &[OwnedHelpRow]) -> Vec<String> {
     if rows.is_empty() {
         return vec![];
     }
@@ -183,7 +128,7 @@ fn render_muted_comment_suffix(line: &str) -> String {
 pub fn render_help_doc(doc: &HelpDoc) -> String {
     let mut output = String::new();
 
-    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(doc.usage));
+    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(&doc.usage));
 
     if !doc.summary.is_empty() {
         let _ = writeln!(output);
@@ -210,44 +155,7 @@ pub fn render_help_doc(doc: &HelpDoc) -> String {
         }
     }
 
-    if let Some(documentation_url) = doc.documentation_url {
-        write_documentation_footer(&mut output, documentation_url);
-    }
-
-    output
-}
-
-fn render_owned_help_doc(doc: &OwnedHelpDoc) -> String {
-    let mut output = String::new();
-
-    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(&doc.usage));
-
-    if !doc.summary.is_empty() {
-        let _ = writeln!(output);
-        for line in &doc.summary {
-            let _ = writeln!(output, "{line}");
-        }
-    }
-
-    for section in &doc.sections {
-        let _ = writeln!(output);
-        match section {
-            OwnedHelpSection::Rows { title, rows } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in render_owned_rows(rows) {
-                    let _ = writeln!(output, "{line}");
-                }
-            }
-            OwnedHelpSection::Lines { title, lines } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in lines {
-                    let _ = writeln!(output, "{}", render_muted_comment_suffix(line));
-                }
-            }
-        }
-    }
-
-    if let Some(documentation_url) = &doc.documentation_url {
+    if let Some(documentation_url) = doc.documentation_url.as_deref() {
         write_documentation_footer(&mut output, documentation_url);
     }
 
@@ -305,18 +213,18 @@ fn split_label_and_description(content: &str) -> Option<(String, String)> {
     None
 }
 
-fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+fn parse_rows(lines: &[String]) -> Vec<HelpRow> {
     parse_rows_with_alias_normalization(lines, false)
 }
 
-fn parse_command_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+fn parse_command_rows(lines: &[String]) -> Vec<HelpRow> {
     parse_rows_with_alias_normalization(lines, true)
 }
 
 fn parse_rows_with_alias_normalization(
     lines: &[String],
     normalize_alias_suffixes: bool,
-) -> Vec<OwnedHelpRow> {
+) -> Vec<HelpRow> {
     let mut rows = Vec::new();
 
     for line in lines {
@@ -336,23 +244,23 @@ fn parse_rows_with_alias_normalization(
             } else {
                 (label, description)
             };
-            rows.push(OwnedHelpRow { label, description: vec![description] });
+            rows.push(HelpRow { label: label.into(), description: vec![description.into()] });
             continue;
         }
 
         if leading >= 4 && content.starts_with('-') {
-            rows.push(OwnedHelpRow { label: content.to_string(), description: vec![] });
+            rows.push(HelpRow { label: content.to_string().into(), description: vec![] });
             continue;
         }
 
         if leading >= 4 {
             if let Some(last) = rows.last_mut() {
-                last.description.push(content.to_string());
+                last.description.push(content.to_string().into());
                 continue;
             }
         }
 
-        rows.push(OwnedHelpRow { label: content.to_string(), description: vec![] });
+        rows.push(HelpRow { label: content.to_string().into(), description: vec![] });
     }
 
     rows
@@ -396,7 +304,7 @@ fn strip_ansi(value: &str) -> String {
     output
 }
 
-fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
+fn parse_clap_help_to_doc(raw_help: &str) -> Option<HelpDoc> {
     let normalized = raw_help.replace("\r\n", "\n");
     let lines: Vec<String> = normalized.lines().map(strip_ansi).collect();
     let usage_index = lines.iter().position(|line| line.starts_with("Usage: "))?;
@@ -449,19 +357,28 @@ fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
             } else {
                 parse_rows(&body)
             };
-            sections.push(OwnedHelpSection::Rows { title, rows });
+            sections.push(HelpSection::Rows { title: title.into(), rows });
         } else {
-            let lines = body.into_iter().filter(|line| !line.trim().is_empty()).collect::<Vec<_>>();
-            sections.push(OwnedHelpSection::Lines { title, lines });
+            let lines = body
+                .into_iter()
+                .filter(|line| !line.trim().is_empty())
+                .map(Into::into)
+                .collect::<Vec<_>>();
+            sections.push(HelpSection::Lines { title: title.into(), lines });
         }
     }
 
-    Some(OwnedHelpDoc { usage, summary, sections, documentation_url: None })
+    Some(HelpDoc {
+        usage: usage.into(),
+        summary: summary.into_iter().map(Into::into).collect(),
+        sections,
+        documentation_url: None,
+    })
 }
 
 pub fn top_level_help_doc() -> HelpDoc {
     HelpDoc {
-        usage: "vp [COMMAND]",
+        usage: "vp [COMMAND]".into(),
         summary: Vec::new(),
         sections: vec![
             section_rows(
@@ -531,14 +448,14 @@ pub fn top_level_help_doc() -> HelpDoc {
                 ],
             ),
         ],
-        documentation_url: documentation_url_for_command_path(&[]),
+        documentation_url: documentation_url_for_command_path(&[]).map(Into::into),
     }
 }
 
 fn env_help_doc() -> HelpDoc {
     HelpDoc {
-        usage: "vp env [COMMAND]",
-        summary: vec!["Manage Node.js versions"],
+        usage: "vp env [COMMAND]".into(),
+        summary: vec!["Manage Node.js versions".into()],
         sections: vec![
             section_rows(
                 "Setup",
@@ -591,7 +508,7 @@ fn env_help_doc() -> HelpDoc {
                     "",
                     "  Manage:",
                     "    vp env pin lts                # Pin to latest LTS version",
-                    "    vp env install                # Install version from .node-version / package.json",
+                    "    vp env install                # Install version from .node-version / package.json / .nvmrc",
                     "    vp env use 20                 # Use Node.js 20 for this shell session",
                     "    vp env use --unset            # Remove session override",
                     "    vp env clean                  # Remove unused managed caches",
@@ -619,364 +536,7 @@ fn env_help_doc() -> HelpDoc {
                 ],
             ),
         ],
-        documentation_url: documentation_url_for_command_path(&["env"]),
-    }
-}
-
-fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
-    match command {
-        "dev" => Some(HelpDoc {
-            usage: "vp dev [ROOT] [OPTIONS]",
-            summary: vec!["Run the development server.", "Options are forwarded to Vite."],
-            sections: vec![
-                section_rows(
-                    "Arguments",
-                    vec![row("[ROOT]", "Project root directory (default: current directory)")],
-                ),
-                section_rows(
-                    "Options",
-                    vec![
-                        row("--host [HOST]", "Specify hostname"),
-                        row("--port <PORT>", "Specify port"),
-                        row("--open [PATH]", "Open browser on startup"),
-                        row("--strictPort", "Exit if specified port is already in use"),
-                        row("-c, --config <FILE>", "Use specified config file"),
-                        row("--base <PATH>", "Public base path"),
-                        row("-m, --mode <MODE>", "Set env mode"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec!["  vp dev", "  vp dev --open", "  vp dev --host localhost --port 5173"],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["dev"]),
-        }),
-        "build" => Some(HelpDoc {
-            usage: "vp build [ROOT] [OPTIONS]",
-            summary: vec!["Build for production.", "Options are forwarded to Vite."],
-            sections: vec![
-                section_rows(
-                    "Arguments",
-                    vec![row("[ROOT]", "Project root directory (default: current directory)")],
-                ),
-                section_rows(
-                    "Options",
-                    vec![
-                        row("--target <TARGET>", "Transpile target"),
-                        row("--outDir <DIR>", "Output directory"),
-                        row("--sourcemap [MODE]", "Output source maps"),
-                        row("--minify [MINIFIER]", "Enable/disable minification"),
-                        row("-w, --watch", "Rebuild when files change"),
-                        row("-c, --config <FILE>", "Use specified config file"),
-                        row("-m, --mode <MODE>", "Set env mode"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec!["  vp build", "  vp build --watch", "  vp build --sourcemap"],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["build"]),
-        }),
-        "preview" => Some(HelpDoc {
-            usage: "vp preview [ROOT] [OPTIONS]",
-            summary: vec!["Preview production build.", "Options are forwarded to Vite."],
-            sections: vec![
-                section_rows(
-                    "Arguments",
-                    vec![row("[ROOT]", "Project root directory (default: current directory)")],
-                ),
-                section_rows(
-                    "Options",
-                    vec![
-                        row("--host [HOST]", "Specify hostname"),
-                        row("--port <PORT>", "Specify port"),
-                        row("--strictPort", "Exit if specified port is already in use"),
-                        row("--open [PATH]", "Open browser on startup"),
-                        row("--outDir <DIR>", "Output directory to preview"),
-                        row("-c, --config <FILE>", "Use specified config file"),
-                        row("-m, --mode <MODE>", "Set env mode"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines("Examples", vec!["  vp preview", "  vp preview --port 4173"]),
-            ],
-            documentation_url: documentation_url_for_command_path(&["preview"]),
-        }),
-        "test" => Some(HelpDoc {
-            usage: "vp test [COMMAND] [FILTERS] [OPTIONS]",
-            summary: vec!["Run tests.", "Options are forwarded to Vitest."],
-            sections: vec![
-                section_rows(
-                    "Commands",
-                    vec![
-                        row("run", "Run tests once"),
-                        row("watch", "Run tests in watch mode"),
-                        row("dev", "Run tests in development mode"),
-                        row("related", "Run tests related to changed files"),
-                        row("bench", "Run benchmarks"),
-                        row("init", "Initialize Vitest config"),
-                        row("list", "List matching tests"),
-                    ],
-                ),
-                section_rows(
-                    "Options",
-                    vec![
-                        row("-c, --config <PATH>", "Path to config file"),
-                        row("-w, --watch", "Enable watch mode"),
-                        row("-t, --testNamePattern <PATTERN>", "Run tests matching regexp"),
-                        row("--ui", "Enable UI"),
-                        row("--coverage", "Enable coverage"),
-                        row("--reporter <NAME>", "Specify reporter"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec![
-                        "  vp test",
-                        "  vp test run src/foo.test.ts",
-                        "  vp test watch --coverage",
-                    ],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["test"]),
-        }),
-        "lint" => Some(HelpDoc {
-            usage: "vp lint [PATH]... [OPTIONS]",
-            summary: vec!["Lint code.", "Options are forwarded to Oxlint."],
-            sections: vec![
-                section_rows(
-                    "Options",
-                    vec![
-                        row("--tsconfig <PATH>", "TypeScript tsconfig path"),
-                        row("--fix", "Fix issues when possible"),
-                        row("--type-aware", "Enable rules requiring type information"),
-                        row("--import-plugin", "Enable import plugin"),
-                        row("--rules", "List registered rules"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec![
-                        "  vp lint",
-                        "  vp lint src --fix",
-                        "  vp lint --type-aware --tsconfig ./tsconfig.json",
-                    ],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["lint"]),
-        }),
-        "fmt" => Some(HelpDoc {
-            usage: "vp fmt [PATH]... [OPTIONS]",
-            summary: vec!["Format code.", "Options are forwarded to Oxfmt."],
-            sections: vec![
-                section_rows(
-                    "Options",
-                    vec![
-                        row("--write", "Format and write files in place"),
-                        row("--check", "Check if files are formatted"),
-                        row("--list-different", "List files that would be changed"),
-                        row("--ignore-path <PATH>", "Path to ignore file(s)"),
-                        row("--threads <INT>", "Number of threads to use"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec!["  vp fmt", "  vp fmt src --check", "  vp fmt . --write"],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["fmt"]),
-        }),
-        "check" => Some(HelpDoc {
-            usage: "vp check [OPTIONS] [PATHS]...",
-            summary: vec!["Run format, lint, and type checks."],
-            sections: vec![
-                section_rows(
-                    "Options",
-                    vec![
-                        row("--fix", "Auto-fix format and lint issues"),
-                        row("--no-fmt", "Skip format check"),
-                        row(
-                            "--no-lint",
-                            "Skip lint rules; type-check still runs when `lint.options.typeCheck` is true",
-                        ),
-                        row(
-                            "--no-error-on-unmatched-pattern",
-                            "Do not exit with error when pattern is unmatched",
-                        ),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec!["  vp check", "  vp check --fix", "  vp check --no-lint src/index.ts"],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["check"]),
-        }),
-        "pack" => Some(HelpDoc {
-            usage: "vp pack [...FILES] [OPTIONS]",
-            summary: vec!["Build library.", "Options are forwarded to tsdown."],
-            sections: vec![
-                section_rows(
-                    "Options",
-                    vec![
-                        row("-f, --format <FORMAT>", "Bundle format: esm, cjs, iife, umd"),
-                        row("-d, --out-dir <DIR>", "Output directory"),
-                        row("--sourcemap", "Generate source map"),
-                        row("--dts", "Generate dts files"),
-                        row("--minify", "Minify output"),
-                        row("-w, --watch [PATH]", "Watch mode"),
-                        row("-h, --help", "Print help"),
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec!["  vp pack", "  vp pack src/index.ts --dts", "  vp pack --watch"],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["pack"]),
-        }),
-        "run" => Some(HelpDoc {
-            usage: "vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...",
-            summary: vec!["Run tasks."],
-            sections: vec![
-                section_rows(
-                    "Arguments",
-                    vec![
-                        row(
-                            "[TASK_SPECIFIER]",
-                            "`packageName#taskName` or `taskName`. If omitted, lists all available tasks",
-                        ),
-                        row("[ADDITIONAL_ARGS]...", "Additional arguments to pass to the tasks"),
-                    ],
-                ),
-                section_rows(
-                    "Options",
-                    vec![
-                        row("-r, --recursive", "Select all packages in the workspace"),
-                        row(
-                            "-t, --transitive",
-                            "Select the current package and its transitive dependencies",
-                        ),
-                        row("-w, --workspace-root", "Select the workspace root package"),
-                        row(
-                            "-F, --filter <FILTERS>",
-                            "Match packages by name, directory, or glob pattern",
-                        ),
-                        row(
-                            "--fail-if-no-match",
-                            "Exit with a non-zero status if a filter matches no packages",
-                        ),
-                        row(
-                            "--ignore-depends-on",
-                            "Do not run dependencies specified in `dependsOn` fields",
-                        ),
-                        row("-v, --verbose", "Show full detailed summary after execution"),
-                        row("--cache", "Force caching on for all tasks and scripts"),
-                        row("--no-cache", "Force caching off for all tasks and scripts"),
-                        row("--log <MODE>", "Set output mode: interleaved, labeled, or grouped"),
-                        row(
-                            "--concurrency-limit <N>",
-                            "Maximum number of tasks to run concurrently (default: 4)",
-                        ),
-                        row(
-                            "--parallel",
-                            "Run tasks without dependency ordering (unlimited concurrency by default)",
-                        ),
-                        row("--last-details", "Display the detailed summary of the last run"),
-                        row("-h, --help", "Print help (see more with '--help')"),
-                    ],
-                ),
-                section_lines(
-                    "Filter Patterns",
-                    vec![
-                        "  --filter <pattern>        Select by package name (e.g. foo, @scope/*)",
-                        "  --filter ./<dir>          Select packages under a directory",
-                        "  --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes",
-                        "  --filter <pattern>...     Select package and its dependencies",
-                        "  --filter ...<pattern>     Select package and its dependents",
-                        "  --filter <pattern>^...    Select only the dependencies (exclude the package itself)",
-                        "  --filter !<pattern>       Exclude packages matching the pattern",
-                    ],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["run"]),
-        }),
-        "exec" => Some(HelpDoc {
-            usage: "vp exec [OPTIONS] [COMMAND]...",
-            summary: vec!["Execute a command from local node_modules/.bin."],
-            sections: vec![
-                section_rows(
-                    "Arguments",
-                    vec![row("[COMMAND]...", "Command and arguments to execute")],
-                ),
-                section_rows(
-                    "Options",
-                    vec![
-                        row("-r, --recursive", "Select all packages in the workspace"),
-                        row(
-                            "-t, --transitive",
-                            "Select the current package and its transitive dependencies",
-                        ),
-                        row("-w, --workspace-root", "Select the workspace root package"),
-                        row(
-                            "-F, --filter <FILTERS>",
-                            "Match packages by name, directory, or glob pattern",
-                        ),
-                        row(
-                            "--fail-if-no-match",
-                            "Exit with a non-zero status if a filter matches no packages",
-                        ),
-                        row("-c, --shell-mode", "Execute the command within a shell environment"),
-                        row("--parallel", "Run concurrently without topological ordering"),
-                        row("--reverse", "Reverse execution order"),
-                        row("--resume-from <RESUME_FROM>", "Resume from a specific package"),
-                        row("--report-summary", "Save results to vp-exec-summary.json"),
-                        row("-h, --help", "Print help (see more with '--help')"),
-                    ],
-                ),
-                section_lines(
-                    "Filter Patterns",
-                    vec![
-                        "  --filter <pattern>        Select by package name (e.g. foo, @scope/*)",
-                        "  --filter ./<dir>          Select packages under a directory",
-                        "  --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes",
-                        "  --filter <pattern>...     Select package and its dependencies",
-                        "  --filter ...<pattern>     Select package and its dependents",
-                        "  --filter <pattern>^...    Select only the dependencies (exclude the package itself)",
-                        "  --filter !<pattern>       Exclude packages matching the pattern",
-                    ],
-                ),
-                section_lines(
-                    "Examples",
-                    vec![
-                        "  vp exec node --version                             # Run local node",
-                        "  vp exec tsc --noEmit                               # Run local TypeScript compiler",
-                        "  vp exec -c 'tsc --noEmit && prettier --check .'    # Shell mode",
-                        "  vp exec -r -- tsc --noEmit                         # Run in all workspace packages",
-                        "  vp exec --filter 'app...' -- tsc                   # Run in filtered packages",
-                    ],
-                ),
-            ],
-            documentation_url: documentation_url_for_command_path(&["exec"]),
-        }),
-        "cache" => Some(HelpDoc {
-            usage: "vp cache <COMMAND>",
-            summary: vec!["Manage the task cache."],
-            sections: vec![
-                section_rows("Commands", vec![row("clean", "Clean up all the cache")]),
-                section_rows("Options", vec![row("-h, --help", "Print help")]),
-            ],
-            documentation_url: documentation_url_for_command_path(&["cache"]),
-        }),
-        _ => None,
+        documentation_url: documentation_url_for_command_path(&["env"]).map(Into::into),
     }
 }
 
@@ -993,6 +553,8 @@ fn skip_clap_unified_help(command: &str) -> bool {
         command,
         "create"
             | "migrate"
+            | "config"
+            | "staged"
             | "dev"
             | "build"
             | "preview"
@@ -1087,30 +649,6 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     print_unified_clap_help_for_path(&command_path_refs)
 }
 
-pub fn should_print_unified_delegate_help(args: &[String]) -> bool {
-    matches!(args, [arg] if is_help_flag(arg))
-}
-
-pub fn maybe_print_unified_delegate_help(
-    command: &str,
-    args: &[String],
-    show_header: bool,
-) -> bool {
-    if !should_print_unified_delegate_help(args) {
-        return false;
-    }
-
-    let Some(doc) = delegated_help_doc(command) else {
-        return false;
-    };
-
-    if show_header {
-        vite_shared::header::print_header();
-    }
-    println!("{}", render_help_doc(&doc));
-    true
-}
-
 pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     if command_path == ["env"] {
         vite_shared::header::print_header();
@@ -1130,14 +668,13 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     let Some(doc) = parse_clap_help_to_doc(&raw_help) else {
         return false;
     };
-    let doc = OwnedHelpDoc {
-        documentation_url: documentation_url_for_command_path(command_path)
-            .map(ToString::to_string),
+    let doc = HelpDoc {
+        documentation_url: documentation_url_for_command_path(command_path).map(Into::into),
         ..doc
     };
 
     vite_shared::header::print_header();
-    println!("{}", render_owned_help_doc(&doc));
+    println!("{}", render_help_doc(&doc));
     true
 }
 
@@ -1337,10 +874,6 @@ Options:
             Some("https://viteplus.dev/guide/env")
         );
         assert_eq!(
-            documentation_url_for_command_path(&["config"]),
-            Some("https://viteplus.dev/guide/commit-hooks")
-        );
-        assert_eq!(
             documentation_url_for_command_path(&["implode"]),
             Some("https://viteplus.dev/guide/implode")
         );
@@ -1349,10 +882,10 @@ Options:
     #[test]
     fn render_help_doc_appends_documentation_footer() {
         let output = render_help_doc(&HelpDoc {
-            usage: "vp demo",
+            usage: "vp demo".into(),
             summary: vec![],
             sections: vec![],
-            documentation_url: Some("https://viteplus.dev/guide/demo"),
+            documentation_url: Some("https://viteplus.dev/guide/demo".into()),
         });
 
         assert!(strip_ansi(&output).contains("Documentation: https://viteplus.dev/guide/demo"));

@@ -15,9 +15,11 @@ serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }
 supports-color = "3"
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
+vite_powershell = { workspace = true }
 vite_str = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -26,6 +28,7 @@ reqwest = { workspace = true, features = ["native-tls-vendored", "stream", "json
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 reqwest = { workspace = true, features = ["rustls-no-provider", "stream", "json", "system-proxy"] }
 rustls = { workspace = true }
+webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }

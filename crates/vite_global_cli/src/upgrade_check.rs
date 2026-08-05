@@ -4,10 +4,7 @@
 //! result to `~/.vite-plus/.upgrade-check.json`. Displays a one-line notice on
 //! stderr when a newer version is available, at most once per 24 hours.
 
-use std::{
-    io::IsTerminal,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
@@ -143,7 +140,7 @@ pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
 /// Returns `false` for commands excluded by design, quiet modes, and
 /// machine-readable output flags (--silent, -s, --json, --parseable, --format json).
 pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
-    if !cfg!(test) && !std::io::stderr().is_terminal() {
+    if !cfg!(test) && !vite_shared::is_stderr_terminal() {
         return false;
     }
 

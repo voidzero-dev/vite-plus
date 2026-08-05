@@ -92,7 +92,7 @@ node_modules/test-vite-plus-package
 should warn that --long not supported by npm
 
 ```
-warn: --long not supported by npm
+warn: npm does not support --long.
 testnpm2@1.0.1
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
@@ -103,7 +103,7 @@ node_modules/testnpm2
 should warn that --parseable not supported by npm
 
 ```
-warn: --parseable not supported by npm
+warn: npm does not support --parseable.
 testnpm2@1.0.1
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
@@ -114,7 +114,7 @@ node_modules/testnpm2
 should warn that --prod not supported by npm
 
 ```
-warn: --prod/--dev not supported by npm
+warn: npm does not support --prod.
 testnpm2@1.0.1
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
@@ -125,7 +125,7 @@ node_modules/testnpm2
 should warn that --find-by not supported by npm
 
 ```
-warn: --find-by not supported by npm
+warn: npm does not support --find-by.
 testnpm2@1.0.1
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project

@@ -58,6 +58,7 @@ Documentation: https://viteplus.dev/guide/
 
 Options:
   -V, --version  Print version
+  -C <DIR>       Run as if vp was started in <DIR> instead of the current working directory
   -h, --help     Print help
 ```
 
@@ -396,18 +397,21 @@ Usage: vp pm <COMMAND>
 Forward a command to the package manager
 
 Commands:
+  ci                Clean install dependencies for CI environments
   approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
   prune             Remove unnecessary packages
+  patch             Prepare a package for local patching
+  patch-commit      Commit a prepared package patch
   pack              Create a tarball of the package
-  list, ls          List installed packages
+  list              List installed packages [alias: ls]
   view, info, show  View package information from the registry
   version           Forward the native package version command
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
-  owner, author     Manage package owners
+  owner             Manage package owners [alias: author]
   cache             Manage package cache
-  config, c         Manage package manager configuration
-  login, adduser    Log in to a registry
+  config            Manage package manager configuration [alias: c]
+  login             Log in to a registry [alias: adduser]
   logout            Log out from a registry
   whoami            Show the current logged-in user
   token             Manage authentication tokens
@@ -415,9 +419,29 @@ Commands:
   dist-tag          Manage distribution tags
   deprecate         Deprecate a package version
   search            Search for packages in the registry
-  rebuild, rb       Rebuild native modules
+  rebuild           Rebuild native modules [alias: rb]
   fund              Show funding information for installed packages
   ping              Ping the registry
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+```
+
+## `vp pm ci -h`
+
+show pm ci help message
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm ci [-- <PASS_THROUGH_ARGS>...]
+
+Clean install dependencies for CI environments
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
   -h, --help  Print help
@@ -467,7 +491,7 @@ Examples:
 
   Manage:
     vp env pin lts                # Pin to latest LTS version
-    vp env install                # Install version from .node-version / package.json
+    vp env install                # Install version from .node-version / package.json / .nvmrc
     vp env use 20                 # Use Node.js 20 for this shell session
     vp env use --unset            # Remove session override
     vp env clean                  # Remove unused managed caches

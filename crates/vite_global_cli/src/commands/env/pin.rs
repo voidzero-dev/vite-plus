@@ -7,10 +7,7 @@
 //! directory has no package.json. An explicit `--target` flag overrides the selection.
 //! An existing `engines.node` is never deleted or modified.
 
-use std::{
-    io::{IsTerminal, Write},
-    process::ExitStatus,
-};
+use std::{io::Write, process::ExitStatus};
 
 use vite_js_runtime::NodeProvider;
 use vite_path::AbsolutePathBuf;
@@ -290,7 +287,7 @@ async fn pin_node_version_file(
 
     // If a devEngines.runtime range is declared and no longer satisfied, offer to
     // sync it in interactive terminals and warn otherwise (rfcs/dev-engines.md)
-    check_dev_engines_sync(cwd, resolved_version, force, std::io::stdin().is_terminal()).await?;
+    check_dev_engines_sync(cwd, resolved_version, force, vite_shared::is_stdin_terminal()).await?;
 
     Ok(true)
 }

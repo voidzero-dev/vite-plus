@@ -1,13 +1,5 @@
 import { execSync } from 'node:child_process';
-import {
-  copyFileSync,
-  existsSync,
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { copyFileSync, existsSync, chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
 import pkg from './package.json' with { type: 'json' };
-import { editJsonFile } from './src/utils/json.ts';
+import { editJsonFile, readJsonFile } from './src/utils/json.ts';
 
 const cli = new NapiCli();
 
@@ -94,6 +86,41 @@ for (const dir of platformDirs) {
   }));
 }
 
+// Fresh read: napi-rs prePublish rewrote this package.json on disk, so the
+// top-level `pkg` import is stale for injected fields.
+const cliPackageJson = readJsonFile(join(currentDir, 'package.json')) as {
+  version: string;
+  repository?: unknown;
+  optionalDependencies?: Record<string, string>;
+};
+
+// napi-rs prePublish injects the platform packages into this package's
+// `optionalDependencies`. Release builds of core rewrite bundled Rolldown's
+// binding requires to the same platform packages (see
+// packages/core/build-support/rewrite-rolldown-binding.ts), so core must
+// declare them too; napi-rs manages a single package, so mirror the injected
+// entries into core with identical pins. Like the CLI's entries, these live
+// only in the publish working tree, never in the committed package.json.
+const nativePlatformPins: Record<string, string> = {};
+for (const target of pkg.napi.targets) {
+  const packageName = `${pkg.napi.packageName}-${parseTriple(target).platformArchABI}`;
+  const pin = cliPackageJson.optionalDependencies?.[packageName];
+  if (!pin) {
+    console.error(
+      `napi prePublish did not inject ${packageName} into packages/cli/package.json optionalDependencies`,
+    );
+    process.exit(1);
+  }
+  nativePlatformPins[packageName] = pin;
+}
+editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) => ({
+  ...corePkgJson,
+  optionalDependencies: {
+    ...(corePkgJson.optionalDependencies as Record<string, string> | undefined),
+    ...nativePlatformPins,
+  },
+}));
+
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
 if (!skipNpmPublish) {
@@ -121,8 +148,7 @@ if (!skipNpmPublish) {
   }
 }
 
-// Read version from packages/cli/package.json for lockstep versioning
-const cliPackageJson = JSON.parse(readFileSync(join(currentDir, 'package.json'), 'utf-8'));
+// Lockstep versioning: the CLI platform packages publish at the same version.
 const cliVersion = cliPackageJson.version;
 
 // Create and publish separate @voidzero-dev/vite-plus-cli-{platform} packages

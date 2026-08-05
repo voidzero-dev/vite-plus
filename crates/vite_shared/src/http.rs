@@ -21,6 +21,13 @@
 //!   (including `0`, `false`, `no`, `off`, empty string) leaves verification
 //!   enabled.
 //!
+//! If the client cannot be built because the trust store is empty (Debian
+//! slim and distroless images ship no `ca-certificates` package), the build
+//! is retried once with the Mozilla root store compiled into vp, the same
+//! list Node ships. Like Node, the fallback is silent apart from a
+//! debug-level trace. A populated system store is used as-is; the bundled
+//! roots are never merged over it.
+//!
 //! Note: env vars are read exactly once at the first HTTP call. In long-lived
 //! processes (e.g. the NAPI binding embedded in Node), later
 //! `process.env.SSL_CERT_FILE = ...` mutations do *not* re-configure the
@@ -28,7 +35,26 @@
 
 use std::{ffi::OsStr, path::Path, sync::OnceLock, time::Duration};
 
+use vite_str::Str;
+
 use crate::{env_vars, error::format_error_chain, output};
+
+/// The process-wide HTTP client could not be built.
+///
+/// Building the client is where TLS and proxy configuration is first resolved,
+/// so every failure here is an environment condition the user can fix: an
+/// unusable proxy setting or an unparsable extra CA bundle. An empty system
+/// CA store no longer reaches this error; the bundled-roots fallback handles
+/// it. `cause` carries the full `source()` chain, flattened by
+/// [`crate::format_error_chain`] because `reqwest::Error` is not `Clone`.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "could not initialize the HTTP client: {cause}\nCheck that HTTPS_PROXY / HTTP_PROXY and any \
+     bundle named by SSL_CERT_FILE or NODE_EXTRA_CA_CERTS are valid."
+)]
+pub struct HttpClientError {
+    cause: Str,
+}
 
 /// Per-request total timeout. Long enough for slow tarball downloads on
 /// constrained CI runners, short enough that a single stuck stream doesn't
@@ -45,26 +71,38 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The client is built on first call and reused thereafter. See module docs
 /// for the env vars it honors.
 ///
-/// Panics on the *first* call if reqwest fails to build the client (malformed
-/// `HTTPS_PROXY`, unusable TLS backend, etc.); subsequent calls in the same
-/// process panic with the same message. Panic — not `process::exit` — so
-/// destructors of in-flight work still run (lockfiles released, tempfiles
-/// cleaned) and an embedding Node host (NAPI) keeps the process alive.
-#[must_use]
-pub fn shared_http_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
-    match CLIENT.get_or_init(build_client) {
-        Ok(client) => client,
-        Err(msg) => panic!("failed to initialize HTTP client: {msg}"),
+/// Returns [`HttpClientError`] if the client cannot be built (unusable
+/// `HTTPS_PROXY`, bad `SSL_CERT_FILE`, …). The outcome is cached, so later
+/// calls report the same error without retrying.
+pub fn shared_http_client() -> Result<&'static reqwest::Client, HttpClientError> {
+    static CLIENT: OnceLock<Result<reqwest::Client, HttpClientError>> = OnceLock::new();
+    CLIENT.get_or_init(build_client).as_ref().map_err(Clone::clone)
+}
+
+fn build_client() -> Result<reqwest::Client, HttpClientError> {
+    crate::ensure_tls_provider();
+
+    let extra_certs = extra_certs_from_env();
+
+    let insecure = is_env_truthy(env_vars::VP_INSECURE_TLS);
+    if insecure {
+        output::warn(
+            "VP_INSECURE_TLS is set — TLS certificate verification is disabled. \
+             Do not use this in production.",
+        );
+    }
+
+    match build_with(extra_certs.clone(), insecure) {
+        Ok(client) => Ok(client),
+        Err(err) => build_with_bundled_roots(extra_certs, insecure)
+            .ok_or_else(|| HttpClientError { cause: format_error_chain(&err).into() }),
     }
 }
 
-fn build_client() -> Result<reqwest::Client, String> {
-    crate::ensure_tls_provider();
-
-    let mut builder =
-        reqwest::Client::builder().timeout(REQUEST_TIMEOUT).connect_timeout(CONNECT_TIMEOUT);
-
+/// Extra root certs named by `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS`.
+/// An unreadable or unparsable bundle warns and is skipped.
+fn extra_certs_from_env() -> Vec<reqwest::Certificate> {
+    let mut extra_certs = Vec::new();
     for var in [env_vars::SSL_CERT_FILE, env_vars::NODE_EXTRA_CA_CERTS] {
         let Some(value) = std::env::var_os(var) else { continue };
         if value.is_empty() || os_str_is_blank(&value) {
@@ -89,9 +127,8 @@ fn build_client() -> Result<reqwest::Client, String> {
                 ));
             }
             Ok(certs) => {
-                let n = certs.len();
-                builder = builder.tls_certs_merge(certs);
-                tracing::debug!("added {n} extra root certs from {var}");
+                tracing::debug!("added {} extra root certs from {var}", certs.len());
+                extra_certs.extend(certs);
             }
             Err(err) => {
                 output::warn(&vite_str::format!(
@@ -101,16 +138,60 @@ fn build_client() -> Result<reqwest::Client, String> {
             }
         }
     }
+    extra_certs
+}
 
-    if is_env_truthy(env_vars::VP_INSECURE_TLS) {
-        output::warn(
-            "VP_INSECURE_TLS is set — TLS certificate verification is disabled. \
-             Do not use this in production.",
-        );
+fn build_with(
+    extra_certs: Vec<reqwest::Certificate>,
+    insecure: bool,
+) -> Result<reqwest::Client, reqwest::Error> {
+    let mut builder =
+        reqwest::Client::builder().timeout(REQUEST_TIMEOUT).connect_timeout(CONNECT_TIMEOUT);
+    if !extra_certs.is_empty() {
+        builder = builder.tls_certs_merge(extra_certs);
+    }
+    if insecure {
         builder = builder.tls_danger_accept_invalid_certs(true);
     }
+    builder.build()
+}
 
-    builder.build().map_err(|err| format_error_chain(&err))
+/// Retry the build with the Mozilla root store compiled into vp merged in.
+///
+/// Succeeds exactly when the first build failed only because the trust store
+/// is empty: rustls-platform-verifier tolerates an empty system store once
+/// extra roots are present. Any other failure (malformed proxy, bad
+/// `SSL_CERT_FILE`) is still present on the retry, so the caller reports the
+/// original error.
+#[cfg(not(target_os = "windows"))]
+fn build_with_bundled_roots(
+    mut extra_certs: Vec<reqwest::Certificate>,
+    insecure: bool,
+) -> Option<reqwest::Client> {
+    extra_certs.extend(bundled_root_certs());
+    let client = build_with(extra_certs, insecure).ok()?;
+    tracing::debug!(
+        "system CA store is empty; using the bundled Mozilla root certificates for TLS \
+         verification"
+    );
+    Some(client)
+}
+
+/// Windows uses native-tls over SChannel, whose store is never empty; the
+/// bundled roots stay out of the binary there.
+#[cfg(target_os = "windows")]
+fn build_with_bundled_roots(
+    _extra_certs: Vec<reqwest::Certificate>,
+    _insecure: bool,
+) -> Option<reqwest::Client> {
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn bundled_root_certs() -> impl Iterator<Item = reqwest::Certificate> {
+    webpki_root_certs::TLS_SERVER_ROOT_CERTS
+        .iter()
+        .filter_map(|der| reqwest::Certificate::from_der(der.as_ref()).ok())
 }
 
 /// Returns `true` only for clearly affirmative env-var values
@@ -135,6 +216,92 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    /// Valid PEM, invalid DER: `from_pem_bundle` accepts it, `build` rejects
+    /// it. Portable way into the build-failure branch, unlike an empty trust
+    /// store.
+    const PEM_WITH_INVALID_DER: &[u8] =
+        b"-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n";
+
+    /// Writes the invalid-DER fixture, points `SSL_CERT_FILE` at it around
+    /// `f`, and cleans up. Callers must hold the `serial(env)` lock.
+    fn with_invalid_ssl_cert_file<T>(tag: &str, f: impl FnOnce() -> T) -> T {
+        let bundle = std::env::temp_dir()
+            .join(vite_str::format!("vp-invalid-ca-{tag}-{}.pem", std::process::id()).as_str());
+        std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
+        // SAFETY: env access in this module's tests is serialized.
+        unsafe {
+            std::env::set_var(env_vars::SSL_CERT_FILE, &bundle);
+        }
+        let result = f();
+        unsafe {
+            std::env::remove_var(env_vars::SSL_CERT_FILE);
+        }
+        let _ = std::fs::remove_file(&bundle);
+        result
+    }
+
+    /// Callers already treat "no HTTP client" as a handled outcome, but a panic
+    /// never reaches them: `[profile.release]` sets `panic = "abort"`, so this
+    /// is a SIGABRT, not a recoverable unwind. Reported in the wild as
+    /// "No CA certificates were loaded from the system" in an image with no CA
+    /// bundle. Unwinds here only because the `test` profile unwinds.
+    #[test]
+    #[serial_test::serial(env)]
+    fn client_build_failure_reaches_the_caller_instead_of_panicking() {
+        // Discard the value: only *how* the failure is reported is under test.
+        let outcome = with_invalid_ssl_cert_file("panic", || {
+            std::panic::catch_unwind(|| {
+                let _ = shared_http_client();
+            })
+        });
+
+        assert!(
+            outcome.is_ok(),
+            "building the shared HTTP client failed and panicked; a build failure has to be \
+             returned to the caller so it can be reported or handled"
+        );
+    }
+
+    /// Every bundled root has to survive the DER conversion, or the fallback
+    /// silently ships a smaller trust store than intended.
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn bundled_roots_all_convert_to_reqwest_certificates() {
+        let total = webpki_root_certs::TLS_SERVER_ROOT_CERTS.len();
+        assert!(total > 0);
+        assert_eq!(bundled_root_certs().count(), total);
+    }
+
+    /// The bundled-roots retry must not paper over failures the bundle cannot
+    /// fix: a bad `SSL_CERT_FILE` poisons the retry as well, and the original
+    /// error surfaces. Exercises `build_client` directly because
+    /// `shared_http_client` caches its first outcome process-wide.
+    ///
+    /// Non-Windows only, like the fallback itself: native-tls rejects the bad
+    /// PEM at parse time (skipped with a warning), so the build succeeds and
+    /// there is no failure for a retry to mask.
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    #[serial_test::serial(env)]
+    fn bundled_roots_fallback_does_not_mask_other_build_failures() {
+        let result = with_invalid_ssl_cert_file("fallback", build_client);
+
+        assert!(
+            result.is_err(),
+            "a bad extra CA bundle has to fail the build even with the bundled-roots retry in \
+             place"
+        );
+    }
+
+    #[test]
+    fn error_reports_the_cause_and_a_remedy() {
+        let cause = "builder error: proxy scheme is not supported";
+        let message = HttpClientError { cause: cause.into() }.to_string();
+        assert!(message.contains(cause), "{message}");
+        assert!(message.contains("HTTPS_PROXY"), "{message}");
+        assert!(message.contains(env_vars::NODE_EXTRA_CA_CERTS), "{message}");
+    }
 
     #[test]
     fn os_str_is_blank_matches_whitespace_only() {

@@ -13,6 +13,7 @@ use vite_js_runtime::NodeProvider;
 use vite_shared::{env_vars, format_path_prepended};
 
 use crate::{
+    cli::exit_status,
     error::Error,
     shim::{dispatch as shim_dispatch, is_shim_tool},
 };
@@ -145,8 +146,14 @@ async fn execute_with_version(
     // 5. Execute command
     let (cmd, args) = command.split_first().unwrap();
 
-    let status =
-        tokio::process::Command::new(cmd).args(args).env("PATH", new_path).status().await?;
+    let mut child = tokio::process::Command::new(cmd);
+    child.args(args).env("PATH", new_path);
+    // The child runs in the inherited cwd, which a leading `-C <dir>` changes
+    // without touching our own environment; align its `PWD` accordingly.
+    if let Ok(cwd) = vite_path::current_dir() {
+        vite_command::sync_child_pwd(&mut child, &cwd);
+    }
+    let status = child.status().await?;
 
     Ok(status)
 }
@@ -189,20 +196,6 @@ fn classify_version(version: &str) -> VersionSelector<'_> {
         VersionSelector::Exact(version.strip_prefix('v').unwrap_or(version))
     } else {
         VersionSelector::Range(version)
-    }
-}
-
-/// Create an exit status with the given code.
-fn exit_status(code: i32) -> ExitStatus {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        ExitStatus::from_raw(code << 8)
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::ExitStatusExt;
-        ExitStatus::from_raw(code as u32)
     }
 }
 

@@ -60,94 +60,36 @@ const ZED_SETTINGS = {
       },
     },
   },
-  languages: {
-    CSS: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    GraphQL: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    Handlebars: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    HTML: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JavaScript: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-      code_action: 'source.fixAll.oxc',
-    },
-    JSX: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JSON: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JSON5: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JSONC: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    Less: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    Markdown: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    MDX: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    SCSS: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    TypeScript: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    TSX: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    'Vue.js': {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    YAML: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-  },
+  languages: Object.fromEntries(
+    [
+      'CSS',
+      'GraphQL',
+      'Handlebars',
+      'HTML',
+      'JavaScript',
+      'JSX',
+      'JSON',
+      'JSON5',
+      'JSONC',
+      'Less',
+      'Markdown',
+      'MDX',
+      'SCSS',
+      'TypeScript',
+      'TSX',
+      'Vue.js',
+      'YAML',
+    ].map((language) => [
+      language,
+      {
+        format_on_save: 'on',
+        prettier: { allowed: false },
+        formatter: [{ language_server: { name: 'oxfmt' } }],
+        // Only the JavaScript entry runs the oxc fix-all code action on save
+        ...(language === 'JavaScript' ? { code_action: 'source.fixAll.oxc' } : {}),
+      },
+    ]),
+  ),
 } as const;
 
 export const EDITORS = [

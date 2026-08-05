@@ -5,7 +5,7 @@
 
 use std::{
     env,
-    io::{Cursor, IsTerminal, Read as _, Write as _},
+    io::{Cursor, Read as _, Write as _},
     path::Path,
     process::{self, Output},
     time::{SystemTime, UNIX_EPOCH},
@@ -13,9 +13,9 @@ use std::{
 
 use flate2::read::GzDecoder;
 use tar::Archive;
-use vite_install::{PackageManagerType, download_package_manager};
 use vite_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_pm_cli::{PackageManagerType, download_package_manager};
 
 use crate::error::Error;
 
@@ -132,7 +132,7 @@ fn is_affirmative_response(input: &str) -> bool {
 }
 
 fn should_prompt_release_age_override(silent: bool) -> bool {
-    !silent && std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+    !silent && vite_shared::is_stdin_terminal() && vite_shared::is_stderr_terminal()
 }
 
 fn prompt_release_age_override(version: &str) -> bool {
@@ -293,7 +293,7 @@ pub async fn install_production_deps(
         if !release_age_blocked {
             return Err(Error::Setup(
                 format_install_failure_message(
-                    output.status.code().unwrap_or(-1),
+                    vite_shared::exit_code_from_status(output.status),
                     log_path.as_ref(),
                     false,
                 )
@@ -305,7 +305,7 @@ pub async fn install_production_deps(
         {
             return Err(Error::Setup(
                 format_install_failure_message(
-                    output.status.code().unwrap_or(-1),
+                    vite_shared::exit_code_from_status(output.status),
                     log_path.as_ref(),
                     true,
                 )
@@ -323,7 +323,7 @@ pub async fn install_production_deps(
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
             return Err(Error::Setup(
                 format_install_failure_message(
-                    retry_output.status.code().unwrap_or(-1),
+                    vite_shared::exit_code_from_status(retry_output.status),
                     retry_log_path.as_ref(),
                     false,
                 )
@@ -469,7 +469,7 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
             "Shim refresh exited with code {}, continuing anyway\n{}",
-            output.status.code().unwrap_or(-1),
+            vite_shared::exit_code_from_status(output.status),
             stderr.trim()
         );
     }
@@ -612,7 +612,7 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
             "env setup --env-only exited with code {}, continuing anyway\n{}",
-            output.status.code().unwrap_or(-1),
+            vite_shared::exit_code_from_status(output.status),
             stderr.trim()
         );
     }

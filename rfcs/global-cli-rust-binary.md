@@ -193,7 +193,7 @@ Only these commands can run without any Node.js:
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐   │
-│  │   CLI Parser     │  │ Workspace Detect │  │   VITE_GLOBAL_CLI_JS_SCRIPTS_DIR│   │
+│  │   CLI Parser     │  │ Workspace Detect │  │   VP_GLOBAL_CLI_JS_SCRIPTS_DIR  │   │
 │  │   (clap)         │  │ (from vite_task) │  │   (bundled scripts path) │   │
 │  └────────┬─────────┘  └────────┬─────────┘  └────────────┬─────────────┘   │
 │           │                     │                         │                 │
@@ -274,7 +274,7 @@ use std::process::Command;
 pub struct JsExecutor {
     cli_runtime: Option<JsRuntime>,      // Cached runtime for CLI commands
     project_runtime: Option<JsRuntime>,  // Cached runtime for project delegation
-    scripts_dir: PathBuf,                // From VITE_GLOBAL_CLI_JS_SCRIPTS_DIR
+    scripts_dir: PathBuf,                // From VP_GLOBAL_CLI_JS_SCRIPTS_DIR
 }
 
 impl JsExecutor {
@@ -687,14 +687,14 @@ function getBinaryPath() {
 }
 
 const binaryPath = getBinaryPath();
-// Set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR to point to dist/index.js location
+// Set VP_GLOBAL_CLI_JS_SCRIPTS_DIR to point to dist/index.js location
 const jsScriptsDir = join(__dirname, '..');
 
 execFileSync(binaryPath, process.argv.slice(2), {
   stdio: 'inherit',
   env: {
     ...process.env,
-    VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: jsScriptsDir,
+    VP_GLOBAL_CLI_JS_SCRIPTS_DIR: jsScriptsDir,
   },
 });
 ```
@@ -702,9 +702,9 @@ execFileSync(binaryPath, process.argv.slice(2), {
 **How it works:**
 
 1. `bin/vite` finds the Rust binary (`vp`) from the platform-specific optional dependency
-2. Sets `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` pointing to the package root (where `dist/index.js` is)
+2. Sets `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` pointing to the package root (where `dist/index.js` is)
 3. Executes the Rust binary with all arguments
-4. The Rust binary uses the JS entry point at `$VITE_GLOBAL_CLI_JS_SCRIPTS_DIR/dist/index.js`
+4. The Rust binary uses the JS entry point at `$VP_GLOBAL_CLI_JS_SCRIPTS_DIR/dist/index.js`
 
 This ensures npm installation works the same way as standalone installation.
 
@@ -859,7 +859,7 @@ The installer supports multiple versions with symlinks, allowing version switchi
 
 When the Rust binary needs to execute JS (for `new`, `migrate`, `--version`, or PM commands):
 
-1. Check `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable (optional)
+1. Check `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable (optional)
 2. If not set, auto-detect by looking for `dist/index.js` relative to the binary
 3. Download Node.js via `vite_js_runtime` if not cached (version from `package.json` devEngines.runtime)
 4. Execute the JS entry point with managed Node.js, passing command and arguments
@@ -881,7 +881,7 @@ When the Rust binary needs to execute JS (for `new`, `migrate`, `--version`, or 
 // In the Rust binary
 fn get_js_scripts_dir() -> Result<PathBuf, Error> {
     // 1. Check environment variable first
-    if let Ok(dir) = std::env::var("VITE_GLOBAL_CLI_JS_SCRIPTS_DIR") {
+    if let Ok(dir) = std::env::var("VP_GLOBAL_CLI_JS_SCRIPTS_DIR") {
         return Ok(PathBuf::from(dir));
     }
 

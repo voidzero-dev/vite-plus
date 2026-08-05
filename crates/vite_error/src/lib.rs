@@ -98,6 +98,11 @@ pub enum Error {
     #[error("{}", vite_shared::format_error_chain(.0))]
     Reqwest(#[from] reqwest::Error),
 
+    // The shared HTTP client could not be built at all, so no request was
+    // attempted. Its own message already names the cause and the remedy.
+    #[error(transparent)]
+    HttpClient(#[from] vite_shared::HttpClientError),
+
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
 

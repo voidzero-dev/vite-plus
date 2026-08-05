@@ -69,11 +69,23 @@ jobs:
           for f in crates/vite_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
           done
-          # Stamp packages/cli/package.json too so the bundled JS dist inlines
-          # ${VERSION} as cliPkg.version (VITE_PLUS_VERSION). Without this a preview
-          # `vp migrate` pins the build-time release placeholder instead of the
-          # test build, and skips the registry-bridge .npmrc.
-          pnpm exec json-edit packages/cli/package.json '_.version = process.env.VERSION'
+          # Stamp the package.json files too:
+          # - packages/cli: the bundled JS dist inlines ${VERSION} as
+          #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview
+          #   `vp migrate` pins the build-time release placeholder instead of
+          #   the test build, and skips the registry-bridge .npmrc.
+          # - packages/core: the release build bakes ${VERSION} into bundled
+          #   Rolldown's binding version guards, matching the
+          #   @voidzero-dev/vite-plus-<platform> packages published as
+          #   ${VERSION}. A release checkout already carries ${VERSION}; this
+          #   only changes preview builds.
+          # The list feeds the verify step below, so a stamped file cannot
+          # silently drop out of verification.
+          PKG_JSON_STAMP_FILES="packages/cli/package.json packages/core/package.json"
+          for f in $PKG_JSON_STAMP_FILES; do
+            pnpm exec json-edit "$f" '_.version = process.env.VERSION'
+          done
+          echo "PKG_JSON_STAMP_FILES=$PKG_JSON_STAMP_FILES" >> "$GITHUB_ENV"
 
       - name: Verify version replacement
         shell: bash
@@ -84,9 +96,11 @@ jobs:
               echo "ERROR: version stamp failed for $f"; head -5 "$f"; exit 1
             fi
           done
-          if [ "$(node -p "require('./packages/cli/package.json').version")" != "${VERSION}" ]; then
-            echo "ERROR: version stamp failed for packages/cli/package.json"; exit 1
-          fi
+          for f in ${PKG_JSON_STAMP_FILES}; do
+            if [ "$(node -p "require('./$f').version")" != "${VERSION}" ]; then
+              echo "ERROR: version stamp failed for $f"; exit 1
+            fi
+          done
           echo "Version stamp verified: ${VERSION}"
 
       - name: Build

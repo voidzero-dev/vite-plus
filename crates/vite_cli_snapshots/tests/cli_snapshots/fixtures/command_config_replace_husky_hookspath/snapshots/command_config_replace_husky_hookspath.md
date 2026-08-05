@@ -8,15 +8,16 @@
 
 ## `vp config --no-agent`
 
-should replace .husky/_ with .vite-hooks/_
+should preserve the existing Husky hooks path
 
 ```
+core.hooksPath is already set to ".husky/_", skipping
 ```
 
 ## `git config --local core.hooksPath`
 
-should be .vite-hooks/_
+should remain .husky/_
 
 ```
-.vite-hooks/_
+.husky/_
 ```

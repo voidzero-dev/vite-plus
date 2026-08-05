@@ -1,7 +1,7 @@
 //! Interactive top-level command picker for `vp`.
 
 use std::{
-    io::{self, IsTerminal, Write},
+    io::{self, Write},
     ops::ControlFlow,
 };
 
@@ -114,24 +114,10 @@ const COMMANDS: &[CommandEntry] = &[
     },
 ];
 
-const CI_ENV_VARS: &[&str] = &[
-    "CI",
-    "CONTINUOUS_INTEGRATION",
-    "GITHUB_ACTIONS",
-    "GITLAB_CI",
-    "CIRCLECI",
-    "TRAVIS",
-    "JENKINS_URL",
-    "BUILDKITE",
-    "DRONE",
-    "CODEBUILD_BUILD_ID",
-    "TF_BUILD",
-];
-
 pub fn pick_top_level_command_if_interactive(
     cwd: &AbsolutePath,
 ) -> io::Result<TopLevelCommandPick> {
-    if !should_enable_picker() {
+    if !vite_shared::is_interactive_terminal() {
         return Ok(TopLevelCommandPick::Skipped);
     }
 
@@ -141,17 +127,6 @@ pub fn pick_top_level_command_if_interactive(
         Some(selection) => TopLevelCommandPick::Selected(selection),
         None => TopLevelCommandPick::Cancelled,
     })
-}
-
-fn should_enable_picker() -> bool {
-    std::io::stdin().is_terminal()
-        && std::io::stdout().is_terminal()
-        && std::env::var("TERM").map_or(true, |term| term != "dumb")
-        && !is_ci_environment()
-}
-
-fn is_ci_environment() -> bool {
-    CI_ENV_VARS.iter().any(|key| std::env::var_os(key).is_some())
 }
 
 fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {

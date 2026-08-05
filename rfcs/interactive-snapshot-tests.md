@@ -125,7 +125,7 @@ local-registry = false                      # optional; serve checkout packages 
 seed-runtime = true                         # default; symlink a provisioned managed JS
                                             #   runtime into the case VP_HOME (false for
                                             #   runtime-provisioning tests)
-env = { VITE_DISABLE_AUTO_INSTALL = "1" }   # optional; case-wide env additions
+env = { CUSTOM_ENV = "value" }             # optional; case-wide env additions
 unset-env = ["GITHUB_ACTIONS"]              # optional; remove from the baseline env
 steps = [ ... ]
 after = [ ... ]                             # optional cleanup steps, never snapshotted
@@ -212,7 +212,7 @@ The snapshot then contains the rendered picker at cursor position 0, at cursor p
 
 ### Global (`vp = "global"`)
 
-The runner runs the freshly built Rust binary, resolved from the target directory next to the test executable (see Design overview), linked into the per-case bin dir under the names `vp`, `vpr`, and `vpx`. `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` points at the checkout's `packages/cli/dist`, as today.
+The runner runs the freshly built Rust binary, resolved from the target directory next to the test executable (see Design overview), linked into the per-case bin dir under the names `vp`, `vpr`, and `vpx`. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` points at the checkout's `packages/cli/dist`, as today.
 
 This removes two standing costs of the current global runner:
 

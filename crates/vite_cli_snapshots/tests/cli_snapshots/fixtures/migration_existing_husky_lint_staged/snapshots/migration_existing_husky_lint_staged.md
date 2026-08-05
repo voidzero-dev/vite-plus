@@ -5,30 +5,35 @@
 
 ## `vp migrate --no-interactive`
 
-migration should rewrite husky and lint-staged
+migration should preserve Husky and lint-staged
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-check prepare rewritten, lint-staged removed, both removed from devDeps
+prepare, dependencies, and lint-staged config should remain
 
 ```
 {
   "name": "migration-existing-husky-lint-staged",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
   },
   "devEngines": {
     "packageManager": {
@@ -59,7 +64,7 @@ peerDependencyRules:
 
 ## `vpt print-file vite.config.ts`
 
-check staged config migrated to vite.config.ts
+no staged config should be introduced
 
 ```
 import { defineConfig } from 'vite-plus';
@@ -67,16 +72,13 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
-  staged: {
-    "*.js": "vp lint --fix"
-  },
 });
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt print-file .husky/pre-commit`
 
-check pre-commit hook rewritten
+the Husky hook should remain unchanged
 
 ```
-vp staged
+npx lint-staged
 ```

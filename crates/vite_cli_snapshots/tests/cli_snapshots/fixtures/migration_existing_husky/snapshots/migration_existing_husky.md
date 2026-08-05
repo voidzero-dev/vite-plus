@@ -5,28 +5,29 @@
 
 ## `vp migrate --no-interactive`
 
-migration should rewrite husky to vp config
+migration should preserve the Husky setup
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
-• Git hooks configured
+• 1 config update applied
 ```
 
 ## `vpt print-file package.json`
 
-check prepare script rewritten and husky removed from devDeps
+prepare and the Husky dependency should remain
 
 ```
 {
   "name": "migration-existing-husky",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
@@ -57,10 +58,18 @@ peerDependencyRules:
     vite: '*'
 ```
 
-## `vpt print-file .vite-hooks/pre-commit`
+## `vpt print-file .husky/pre-commit`
 
-check pre-commit hook rewritten to vp staged
+the Husky hook should remain unchanged
 
 ```
-vp staged
+pnpm lint-staged
+```
+
+## `vpt stat-file .vite-hooks --assert-not dir`
+
+Vite+ hooks should not be installed alongside Husky
+
+```
+.vite-hooks: missing
 ```
