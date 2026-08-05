@@ -9,11 +9,19 @@
 //! wins):
 //!
 //! 0. **Executable self-location** — the canonicalized `current_exe` path
-//!    matches `<root>/current/bin/vp[.exe]` → legacy `Home(root)`. Covers
-//!    custom-location installs and launches without `PATH` context (IDEs,
-//!    the Windows trampoline).
-//! 1. **Legacy `PATH` inference** — a `<root>/bin` entry on `PATH` with the
-//!    legacy layout (`bin/vp` plus `current/bin/vp`) → `Home(root)`.
+//!    matches `<X>/current/bin/vp[.exe]`. If `<X>/bin/vp[.exe]` also exists
+//!    → legacy `Home(X)`; otherwise `X` is the data dir of a split install
+//!    → `Custom` with the data category pinned to `X` (other categories
+//!    resolve through their normal chains). Covers custom-location installs
+//!    and launches without `PATH` context (IDEs, the Windows trampoline).
+//! 1. **`PATH` inference** — for a `PATH` entry containing a `vp`
+//!    executable: first the cheap legacy sibling check (`<root>/bin` entry
+//!    with `bin/vp` plus `current/bin/vp` → `Home(root)`; needed on
+//!    Windows, where `bin/vp.exe` is a trampoline copy, not a symlink);
+//!    otherwise the entry's `vp` is canonicalized and, when it resolves
+//!    into `<X>/current/bin/vp`, the same legacy-vs-split rule as rule 0
+//!    applies (on Unix the legacy `bin/vp` is a symlink into `current/bin`,
+//!    so canonicalization finds legacy installs too).
 //! 2. **Existing legacy root** — `<home>/.vite-plus` exists on disk →
 //!    `Home`, so existing installs keep working untouched.
 //! 3. **Split XDG/platform layout** (`Custom`) — fresh installs. Each
@@ -214,14 +222,24 @@ fn absolute(value: &Option<PathBuf>) -> Option<AbsolutePathBuf> {
     value.as_deref().and_then(AbsolutePath::new).map(AbsolutePath::to_absolute_path_buf)
 }
 
-/// Detect a legacy install root from the running executable's own location:
-/// a canonicalized `<root>/current/bin/vp[.exe]` means `<root>` is a legacy
-/// monolithic install. This covers custom-location installs (previously
-/// located via `VP_HOME`) and launches without `PATH` context (IDEs, the
-/// Windows trampoline). Cheap suffix check on the path components; any
-/// failure falls through to the next rule.
-fn self_located_legacy_root() -> Option<AbsolutePathBuf> {
-    let exe = AbsolutePathBuf::new(env::current_exe().ok()?.canonicalize().ok()?)?;
+/// Layout detected from the host environment (rules 0–1), consumed by
+/// [`resolve`].
+#[derive(Debug, Clone)]
+enum DetectedLayout {
+    /// Legacy monolithic install root (`<root>/bin/vp[.exe]` exists
+    /// alongside `<root>/current/bin/vp[.exe]`).
+    Legacy(AbsolutePathBuf),
+    /// Data dir of a split install: `<data>/current/bin/vp[.exe]` with no
+    /// legacy `<data>/bin/vp[.exe]` sibling (shims live in the separate bin
+    /// dir, e.g. `~/.local/bin`).
+    SplitData(AbsolutePathBuf),
+}
+
+/// If `exe` has the `<X>/current/bin/vp[.exe]` install shape, return `X`.
+///
+/// Pure suffix check on the path components; shared by executable
+/// self-location and `PATH` canonicalization.
+fn current_bin_install_parent(exe: &AbsolutePath) -> Option<AbsolutePathBuf> {
     if exe.as_path().file_name() != Some(OsStr::new(VP_BINARY_NAME)) {
         return None;
     }
@@ -236,17 +254,45 @@ fn self_located_legacy_root() -> Option<AbsolutePathBuf> {
     current_dir.parent().map(AbsolutePath::to_absolute_path_buf)
 }
 
-/// Infer a legacy install root from a `<root>/bin` entry on `PATH`.
+/// Disambiguate the parent `X` of the `<X>/current/bin/vp[.exe]` shape: a
+/// `<X>/bin/vp[.exe]` sibling means the legacy monolithic layout (`X` is the
+/// install root); otherwise `X` is the data dir of a split install whose
+/// shims live in the separate bin dir.
+fn classify_install_parent(parent: AbsolutePathBuf) -> DetectedLayout {
+    if parent.join("bin").join(VP_BINARY_NAME).as_path().is_file() {
+        DetectedLayout::Legacy(parent)
+    } else {
+        DetectedLayout::SplitData(parent)
+    }
+}
+
+/// Detect the install layout from the running executable's own location: a
+/// canonicalized `<X>/current/bin/vp[.exe]` classifies `X` as a legacy root
+/// or a split data dir. This covers custom-location installs (previously
+/// located via `VP_HOME`) and launches without `PATH` context (IDEs, the
+/// Windows trampoline). Any failure falls through to the next rule.
+fn self_located_layout() -> Option<DetectedLayout> {
+    let exe = AbsolutePathBuf::new(env::current_exe().ok()?.canonicalize().ok()?)?;
+    current_bin_install_parent(&exe).map(classify_install_parent)
+}
+
+/// Infer the install layout from a `vp` executable on `PATH`.
 ///
 /// Pure: takes the `PATH` value and the current directory as parameters, so
-/// tests need no environment mutation (and no serialization). Only
-/// recognizes the monolithic legacy layout (`<root>/bin/vp` plus
-/// `<root>/current/bin/vp`). Inference for the split XDG layout is
-/// intentionally not implemented; it lands with the installer cutover.
-fn infer_legacy_home_from_path(
-    path_env: Option<&OsStr>,
-    cwd: &AbsolutePath,
-) -> Option<AbsolutePathBuf> {
+/// tests need no environment mutation (and no serialization). Two
+/// mechanisms per `PATH` entry, first match wins:
+///
+/// 1. Cheap legacy sibling check — a `<root>/bin` entry with the legacy
+///    layout (`bin/vp` plus `current/bin/vp`) → legacy `Home(root)`.
+///    Needed on Windows, where `bin/vp.exe` is a trampoline copy rather
+///    than a symlink, and avoids canonicalize syscalls for the common
+///    legacy case.
+/// 2. Canonicalize `<entry>/vp[.exe]`; if it resolves into
+///    `<X>/current/bin/vp[.exe]`, classify `X` as legacy or split-data (the
+///    same rule as self-location). On Unix the legacy `bin/vp` is a symlink
+///    into `current/bin`, so canonicalization alone would find legacy
+///    installs too.
+fn infer_layout_from_path(path_env: Option<&OsStr>, cwd: &AbsolutePath) -> Option<DetectedLayout> {
     for path_entry in env::split_paths(path_env?) {
         if path_entry.as_os_str().is_empty() {
             continue;
@@ -257,14 +303,25 @@ fn infer_legacy_home_from_path(
         } else {
             cwd.join(path_entry)
         };
-        if bin_dir.as_path().file_name().is_none_or(|name| name != "bin") {
-            continue;
+
+        // 1. Cheap legacy sibling-layout check (no canonicalization).
+        if bin_dir.as_path().file_name().is_some_and(|name| name == "bin")
+            && let Some(home) = bin_dir.parent()
+            && is_vp_home_layout(&bin_dir, home)
+        {
+            return Some(DetectedLayout::Legacy(home.to_absolute_path_buf()));
         }
-        let Some(home) = bin_dir.parent() else {
+
+        // 2. Canonicalize `<entry>/vp[.exe]` and classify the shape it
+        //    resolves into.
+        let Ok(canonical) = bin_dir.join(VP_BINARY_NAME).as_path().canonicalize() else {
             continue;
         };
-        if is_vp_home_layout(&bin_dir, home) {
-            return Some(home.to_absolute_path_buf());
+        let Some(canonical) = AbsolutePathBuf::new(canonical) else {
+            continue;
+        };
+        if let Some(parent) = current_bin_install_parent(&canonical) {
+            return Some(classify_install_parent(parent));
         }
     }
 
@@ -278,8 +335,8 @@ fn is_vp_home_layout(bin_dir: &AbsolutePath, home: &AbsolutePath) -> bool {
 
 /// Platform-neutral resolution core, injectable for tests.
 ///
-/// `detected_legacy_root` is the result of the host-environment legacy
-/// detection (executable self-location, then `PATH` inference; rules 0–1).
+/// `detected` is the result of the host-environment layout detection
+/// (executable self-location, then `PATH` inference; rules 0–1).
 /// `legacy_exists` reports whether the legacy `~/.vite-plus` root exists on
 /// disk (rule 2); injected so tests exercise the grandfathering branch
 /// without touching host state (or against real tempdirs).
@@ -288,13 +345,20 @@ fn resolve(
     home_dir: &AbsolutePath,
     xdg: &XdgDirs,
     defaults: &PlatformDefaults,
-    detected_legacy_root: Option<AbsolutePathBuf>,
+    detected: Option<DetectedLayout>,
     legacy_exists: impl Fn(&AbsolutePath) -> bool,
 ) -> Dirs {
-    // 0/1. A legacy root detected from the executable location or `PATH`
-    //    always selects the monolithic legacy layout.
-    if let Some(root) = detected_legacy_root {
-        return Dirs::home(root);
+    // 0/1. A layout detected from the executable location or `PATH` always
+    //    wins: a legacy root selects the monolithic legacy layout; a split
+    //    data dir selects the split layout with the data category pinned to
+    //    it (the running binary's versions live there, so `VP_DATA_DIR` and
+    //    the XDG chain must not redirect data elsewhere).
+    match detected {
+        Some(DetectedLayout::Legacy(root)) => return Dirs::home(root),
+        Some(DetectedLayout::SplitData(data)) => {
+            return resolve_custom(config, xdg, defaults, Some(data));
+        }
+        None => {}
     }
 
     // 2. Grandfathered installs: an existing `~/.vite-plus` keeps working
@@ -306,6 +370,18 @@ fn resolve(
 
     // 3. Fresh installs: per-category `VP_*_DIR` override → XDG →
     //    platform-default chains, first match per category.
+    resolve_custom(config, xdg, defaults, None)
+}
+
+/// Resolve the split (`Custom`) layout: per-category `VP_*_DIR` override →
+/// XDG → platform-default chains, first match per category. `data_override`
+/// pins the data category (split self-location), bypassing its chain.
+fn resolve_custom(
+    config: &EnvConfig,
+    xdg: &XdgDirs,
+    defaults: &PlatformDefaults,
+    data_override: Option<AbsolutePathBuf>,
+) -> Dirs {
     let bin = absolute(&config.vp_bin_dir)
         .or_else(|| absolute(&xdg.bin))
         .or_else(|| {
@@ -316,7 +392,8 @@ fn resolve(
     let config_dir = absolute(&xdg.config)
         .map(|dir| dir.join(APP_DIR_NAME))
         .unwrap_or_else(|| defaults.config.clone());
-    let data = absolute(&config.vp_data_dir)
+    let data = data_override
+        .or_else(|| absolute(&config.vp_data_dir))
         .or_else(|| absolute(&xdg.data).map(|dir| dir.join(APP_DIR_NAME)))
         .unwrap_or_else(|| defaults.data.clone());
     let state = absolute(&xdg.state)
@@ -361,13 +438,13 @@ impl Dirs {
         // have a real legacy install on `PATH`).
         let under_test_override = EnvConfig::is_test_override_active();
 
-        let detected_legacy_root = if under_test_override {
+        let detected = if under_test_override {
             None
         } else {
-            self_located_legacy_root().or_else(|| {
-                vt_path::current_dir().ok().and_then(|cwd| {
-                    infer_legacy_home_from_path(env::var_os("PATH").as_deref(), &cwd)
-                })
+            self_located_layout().or_else(|| {
+                vt_path::current_dir()
+                    .ok()
+                    .and_then(|cwd| infer_layout_from_path(env::var_os("PATH").as_deref(), &cwd))
             })
         };
 
@@ -381,7 +458,7 @@ impl Dirs {
         let Some(home_dir) = home_dir else {
             // No home directory: preserve the historic fallback of a legacy
             // root at `$CWD/.vite-plus`.
-            if let Some(root) = detected_legacy_root {
+            if let Some(DetectedLayout::Legacy(root)) = detected {
                 return Self::home(root);
             }
             let cwd = vt_path::current_dir()
@@ -400,7 +477,7 @@ impl Dirs {
             &home_dir,
             &xdg,
             &PlatformDefaults::detect(&home_dir, defaults_base_dirs),
-            detected_legacy_root,
+            detected,
             |path| path.as_path().exists(),
         )
     }
@@ -657,7 +734,7 @@ mod tests {
     #[test]
     fn detected_legacy_root_selects_home_layout_with_legacy_mapping() {
         let config = EnvConfig::for_test();
-        let detected = Some(AbsolutePathBuf::new(abs("/vp-home")).unwrap());
+        let detected = Some(DetectedLayout::Legacy(AbsolutePathBuf::new(abs("/vp-home")).unwrap()));
         let dirs =
             resolve(&config, &test_home(), &no_xdg(), &unix_defaults(), detected, never_exists);
 
@@ -715,11 +792,67 @@ mod tests {
     #[test]
     fn detected_legacy_root_wins_over_existing_legacy_root() {
         let config = EnvConfig::for_test();
-        let detected = Some(AbsolutePathBuf::new(abs("/vp-home")).unwrap());
+        let detected = Some(DetectedLayout::Legacy(AbsolutePathBuf::new(abs("/vp-home")).unwrap()));
         let dirs = resolve(&config, &test_home(), &no_xdg(), &unix_defaults(), detected, |_| true);
 
         assert!(dirs.is_legacy_layout());
         assert_eq!(dirs.data_dir().as_path(), abs("/vp-home").as_path());
+    }
+
+    #[test]
+    fn detected_split_data_dir_pins_data_category() {
+        let config = EnvConfig {
+            vp_bin_dir: Some(abs("/ov/bin")),
+            vp_data_dir: Some(abs("/ov/data")),
+            ..EnvConfig::for_test()
+        };
+        let detected =
+            Some(DetectedLayout::SplitData(AbsolutePathBuf::new(abs("/split-data")).unwrap()));
+        let dirs = resolve(&config, &test_home(), &no_xdg(), &unix_defaults(), detected, |_| true);
+
+        assert!(!dirs.is_legacy_layout());
+        // Data is pinned to the detected dir, ignoring VP_DATA_DIR and the
+        // grandfathered legacy root.
+        assert_eq!(dirs.data_dir().as_path(), abs("/split-data").as_path());
+        assert_eq!(dirs.current_dir().as_path(), abs("/split-data/current").as_path());
+        // Other categories resolve through their normal chains.
+        assert_eq!(dirs.bin_dir().as_path(), abs("/ov/bin").as_path());
+        let home = test_home();
+        assert_eq!(dirs.config_dir(), home.join(".config").join(APP_DIR_NAME));
+        assert_eq!(dirs.state_dir(), home.join(".local/state").join(APP_DIR_NAME));
+        assert_eq!(dirs.cache_dir(), home.join(".cache").join(APP_DIR_NAME));
+    }
+
+    #[test]
+    fn current_bin_install_parent_matches_install_shape() {
+        let shaped = AbsolutePathBuf::new(abs("/x/current/bin").join(VP_BINARY_NAME)).unwrap();
+        assert_eq!(current_bin_install_parent(&shaped).unwrap().as_path(), abs("/x").as_path());
+
+        // Not under `current/bin`.
+        let plain_bin = AbsolutePathBuf::new(abs("/x/bin").join(VP_BINARY_NAME)).unwrap();
+        assert!(current_bin_install_parent(&plain_bin).is_none());
+
+        // Right shape, wrong file name.
+        let other = AbsolutePathBuf::new(abs("/x/current/bin/other")).unwrap();
+        assert!(current_bin_install_parent(&other).is_none());
+    }
+
+    #[test]
+    fn classify_install_parent_distinguishes_legacy_from_split() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("vp-dirs-test-classify-{}", std::process::id()));
+        let legacy = temp_dir.join("legacy");
+        let split = temp_dir.join("split");
+        std::fs::create_dir_all(legacy.join("bin")).unwrap();
+        std::fs::create_dir_all(&split).unwrap();
+        write_executable(&legacy.join("bin").join(VP_BINARY_NAME));
+
+        let legacy = AbsolutePathBuf::new(legacy).unwrap();
+        let split = AbsolutePathBuf::new(split).unwrap();
+        assert!(matches!(classify_install_parent(legacy), DetectedLayout::Legacy(_)));
+        assert!(matches!(classify_install_parent(split), DetectedLayout::SplitData(_)));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[test]
@@ -933,8 +1066,72 @@ mod tests {
 
         let path = env::join_paths([bin_dir.as_os_str()]).unwrap();
         let cwd = AbsolutePathBuf::new(temp_dir.clone()).unwrap();
-        let inferred = infer_legacy_home_from_path(Some(&path), &cwd);
-        assert_eq!(inferred.unwrap().as_path(), legacy_home.as_path());
+        let inferred = infer_layout_from_path(Some(&path), &cwd);
+        assert!(
+            matches!(&inferred, Some(DetectedLayout::Legacy(root)) if root.as_path() == legacy_home.as_path())
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn infers_split_data_dir_from_path_symlink() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("vp-test-split-path-{}", std::process::id()));
+        // Split layout: real binary at `<data>/current/bin/vp`, no legacy
+        // `<data>/bin/vp` sibling; the PATH entry is a separate bin dir
+        // whose `vp` symlinks into the data dir.
+        let data_dir = temp_dir.join("data");
+        let current_bin_dir = data_dir.join("current").join("bin");
+        let shims_dir = temp_dir.join("shims");
+        std::fs::create_dir_all(&current_bin_dir).unwrap();
+        std::fs::create_dir_all(&shims_dir).unwrap();
+        write_executable(&current_bin_dir.join(VP_BINARY_NAME));
+        std::os::unix::fs::symlink(
+            current_bin_dir.join(VP_BINARY_NAME),
+            shims_dir.join(VP_BINARY_NAME),
+        )
+        .unwrap();
+
+        let path = env::join_paths([shims_dir.as_os_str()]).unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.clone()).unwrap();
+        let inferred = infer_layout_from_path(Some(&path), &cwd);
+        assert!(
+            matches!(&inferred, Some(DetectedLayout::SplitData(data)) if data.as_path() == data_dir.canonicalize().unwrap().as_path())
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn infers_legacy_home_from_path_symlink_into_current_bin() {
+        // On Unix the legacy `bin/vp` is a symlink into `current/bin`; even
+        // without the sibling-check fast path (a non-`bin` entry name),
+        // canonicalization finds the legacy root.
+        let temp_dir =
+            std::env::temp_dir().join(format!("vp-test-legacy-link-{}", std::process::id()));
+        let legacy_home = temp_dir.join(LEGACY_HOME_DIR);
+        let current_bin_dir = legacy_home.join("current").join("bin");
+        let shims_dir = temp_dir.join("shims");
+        std::fs::create_dir_all(legacy_home.join("bin")).unwrap();
+        std::fs::create_dir_all(&current_bin_dir).unwrap();
+        std::fs::create_dir_all(&shims_dir).unwrap();
+        write_executable(&legacy_home.join("bin").join(VP_BINARY_NAME));
+        write_executable(&current_bin_dir.join(VP_BINARY_NAME));
+        std::os::unix::fs::symlink(
+            current_bin_dir.join(VP_BINARY_NAME),
+            shims_dir.join(VP_BINARY_NAME),
+        )
+        .unwrap();
+
+        let path = env::join_paths([shims_dir.as_os_str()]).unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.clone()).unwrap();
+        let inferred = infer_layout_from_path(Some(&path), &cwd);
+        assert!(
+            matches!(&inferred, Some(DetectedLayout::Legacy(root)) if root.as_path() == legacy_home.canonicalize().unwrap().as_path())
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
@@ -951,21 +1148,21 @@ mod tests {
         // `tools/bin` has a `vp` but no `current/bin/vp` sibling layout.
         let path = env::join_paths([std::path::Path::new("tools/bin")]).unwrap();
         let cwd = AbsolutePathBuf::new(project_dir.clone()).unwrap();
-        assert!(infer_legacy_home_from_path(Some(&path), &cwd).is_none());
+        assert!(infer_layout_from_path(Some(&path), &cwd).is_none());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[test]
     fn inference_returns_none_without_path() {
-        assert!(infer_legacy_home_from_path(None, &test_home()).is_none());
+        assert!(infer_layout_from_path(None, &test_home()).is_none());
     }
 
     #[test]
     fn self_location_does_not_fire_for_test_binary() {
         // The test binary is `<target>/debug/deps/<name>-<hash>`, never
-        // `<root>/current/bin/vp`.
-        assert!(self_located_legacy_root().is_none());
+        // `<X>/current/bin/vp`.
+        assert!(self_located_layout().is_none());
     }
 
     #[test]

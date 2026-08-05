@@ -21,12 +21,9 @@ const VITE_PLUS_COMMENT: &str = "# Vite+ bin";
 
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let dirs = vp_shared::Dirs::get();
-    // Under the legacy layout this is the whole `~/.vite-plus` root; under the
-    // split layout only the data dir is removed for now (full split-layout
-    // removal is follow-up scope).
-    let home_dir = dirs.data_dir();
+    let plan = RemovalPlan::new(&dirs);
 
-    if !home_dir.as_path().exists() {
+    if !plan.anything_to_remove() {
         output::info("vite-plus is not installed (directory does not exist)");
         return Ok(exit_status(0));
     }
@@ -36,13 +33,13 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         .ok_or_else(|| Error::Other("Could not determine user home directory".into()))?;
     let user_home = AbsolutePathBuf::new(base_dirs.home_dir().to_path_buf()).unwrap();
 
-    let source_matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
+    let source_matcher = VitePlusSourceMatcher::new(&plan.profile_roots, &user_home);
 
     // Collect shell profiles that contain Vite+ lines (content cached for cleaning)
     let affected_profiles = collect_affected_profiles(&user_home, &source_matcher);
 
     // Confirmation
-    if !yes && !confirm_implode(&home_dir, &affected_profiles)? {
+    if !yes && !confirm_implode(&plan, &affected_profiles)? {
         return Ok(exit_status(0));
     }
 
@@ -60,14 +57,172 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         }
     }
 
-    // Remove the directory
-    remove_vite_plus_dir(&home_dir)?;
+    plan.remove()?;
 
     output::raw("");
     output::success("vite-plus has been removed from your system.");
     output::note("Restart your terminal to apply shell changes.");
 
     Ok(exit_status(0))
+}
+
+/// What `vp implode` removes, derived from the resolved [`vp_shared::Dirs`]
+/// layout.
+struct RemovalPlan {
+    /// Directories removed wholesale. Legacy layout: just the install root.
+    /// Split layout: data, config, state, and cache dirs (deduplicated —
+    /// category overrides can make them coincide).
+    dirs: Vec<AbsolutePathBuf>,
+    /// Bin directory to clean of vp-owned shims (split layout only; under
+    /// the legacy layout it lives inside the removed root). The directory
+    /// itself is removed only when vp-dedicated; a shared dir like
+    /// `~/.local/bin` is never removed.
+    bin_dir: Option<AbsolutePathBuf>,
+    /// Directories shell-profile sourcing lines may reference. Legacy: the
+    /// install root (env scripts live there). Split: the env-scripts dir
+    /// (e.g. `. "$HOME/.config/vite-plus/env"`).
+    profile_roots: Vec<AbsolutePathBuf>,
+}
+
+impl RemovalPlan {
+    fn new(dirs: &vp_shared::Dirs) -> Self {
+        if dirs.is_legacy_layout() {
+            let root = dirs.data_dir();
+            return Self { dirs: vec![root.clone()], bin_dir: None, profile_roots: vec![root] };
+        }
+
+        let mut category_dirs =
+            vec![dirs.data_dir(), dirs.config_dir(), dirs.state_dir(), dirs.cache_dir()];
+        category_dirs.dedup();
+        Self {
+            dirs: category_dirs,
+            bin_dir: Some(dirs.bin_dir()),
+            profile_roots: vec![dirs.env_scripts_dir()],
+        }
+    }
+
+    fn anything_to_remove(&self) -> bool {
+        self.dirs.iter().any(|dir| dir.as_path().exists())
+            || self.bin_dir.as_ref().is_some_and(|bin_dir| {
+                std::fs::read_dir(bin_dir)
+                    .map(|entries| {
+                        entries.filter_map(Result::ok).any(|entry| {
+                            entry.file_name().to_str().is_some_and(is_vp_owned_bin_name)
+                        })
+                    })
+                    .unwrap_or(false)
+            })
+    }
+
+    fn remove(&self) -> Result<(), Error> {
+        let mut failed = false;
+        for dir in &self.dirs {
+            if !dir.as_path().exists() {
+                continue;
+            }
+            if remove_vite_plus_dir(dir).is_err() {
+                failed = true;
+            }
+        }
+        if let Some(bin_dir) = &self.bin_dir {
+            clean_bin_dir(bin_dir);
+        }
+        if failed {
+            Err(Error::Other("Failed to remove all vite-plus directories".into()))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// Names vp owns in the bin directory, in both Unix and Windows spellings:
+/// the `vp` wrapper, the tool shims, and the cmd.exe `vp env use` wrapper.
+const VP_OWNED_BIN_NAMES: &[&str] = &[
+    "vp",
+    "node",
+    "npm",
+    "npx",
+    "corepack",
+    "vpx",
+    "vpr",
+    "vp.exe",
+    "node.exe",
+    "npm.exe",
+    "npx.exe",
+    "corepack.exe",
+    "vpx.exe",
+    "vpr.exe",
+    "vp.cmd",
+    "node.cmd",
+    "npm.cmd",
+    "npx.cmd",
+    "corepack.cmd",
+    "vpx.cmd",
+    "vpr.cmd",
+    "vp-use.cmd",
+];
+
+/// Whether vp owns the bin-dir entry `name`: an exact shim name, or a
+/// `<name>.<timestamp>.old` leftover from Windows rename-before-copy.
+fn is_vp_owned_bin_name(name: &str) -> bool {
+    if VP_OWNED_BIN_NAMES.contains(&name) {
+        return true;
+    }
+    if let Some(stem) = name.strip_suffix(".old")
+        && let Some((base, timestamp)) = stem.rsplit_once('.')
+    {
+        // Rename-before-copy leftovers are `<name>.<unix-seconds>.old`.
+        return timestamp.bytes().all(|b| b.is_ascii_digit()) && VP_OWNED_BIN_NAMES.contains(&base);
+    }
+    false
+}
+
+/// Remove vp's shims from `bin_dir` (split layout). The directory itself is
+/// removed only when it is vp-dedicated (contains nothing but vp-owned
+/// files); otherwise only the known shim names are deleted and a shared bin
+/// dir like `~/.local/bin` is left in place.
+fn clean_bin_dir(bin_dir: &AbsolutePathBuf) {
+    let Ok(entries) = std::fs::read_dir(bin_dir) else {
+        return;
+    };
+    let names: Vec<Str> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok().map(Str::from))
+        .collect();
+    if names.is_empty() {
+        return;
+    }
+
+    if names.iter().all(|name| is_vp_owned_bin_name(name)) {
+        // vp-dedicated bin dir: remove it wholesale.
+        match std::fs::remove_dir_all(bin_dir) {
+            Ok(()) => output::success(&vt_str::format!("Removed {}", bin_dir.as_path().display())),
+            Err(e) => {
+                output::warn(&vt_str::format!(
+                    "Failed to remove {}: {e}",
+                    bin_dir.as_path().display()
+                ));
+            }
+        }
+        return;
+    }
+
+    // Shared bin dir: delete only the files vp owns.
+    for name in names.iter().filter(|name| is_vp_owned_bin_name(name)) {
+        let path = bin_dir.join(name.as_str());
+        match std::fs::remove_file(&path) {
+            Ok(()) => {
+                output::success(&vt_str::format!("Removed {}", path.as_path().display()));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                output::warn(&vt_str::format!(
+                    "Failed to remove {}: {e}",
+                    path.as_path().display()
+                ));
+            }
+        }
+    }
 }
 
 /// A shell profile that contains Vite+ sourcing lines.
@@ -127,7 +282,7 @@ fn collect_affected_profiles(
 /// Show confirmation prompt and require the user to type "uninstall".
 /// Returns `Ok(true)` if confirmed, `Ok(false)` if aborted.
 fn confirm_implode(
-    home_dir: &AbsolutePathBuf,
+    plan: &RemovalPlan,
     affected_profiles: &[AffectedProfile],
 ) -> Result<bool, Error> {
     if !vp_shared::is_stdin_terminal() {
@@ -139,7 +294,19 @@ fn confirm_implode(
 
     output::warn("This will completely remove vite-plus from your system!");
     output::raw("");
-    output::raw(&vt_str::format!("  Directory: {}", home_dir.as_path().display()));
+    if plan.dirs.len() == 1 {
+        output::raw(&vt_str::format!("  Directory: {}", plan.dirs[0].as_path().display()));
+    } else {
+        output::raw("  Directories:");
+        for dir in &plan.dirs {
+            output::raw(&vt_str::format!("    - {}", dir.as_path().display()));
+        }
+    }
+    if let Some(bin_dir) = &plan.bin_dir
+        && bin_dir.as_path().exists()
+    {
+        output::raw(&vt_str::format!("  Shims to remove from: {}", bin_dir.as_path().display()));
+    }
     if !affected_profiles.is_empty() {
         output::raw("  Shell profiles to clean:");
         for profile in affected_profiles {
@@ -273,29 +440,37 @@ fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::p
 /// Matches shell-profile `source` lines that reference *this* install's env
 /// files, so a second Vite+ install's lines are left untouched.
 ///
+/// Under the legacy layout the only reference dir is the install root
+/// (`. "$HOME/.vite-plus/env"`); under the split layout it is the
+/// env-scripts dir (`. "$HOME/.config/vite-plus/env"`).
+///
 /// The recognized home spellings must mirror what the writers emit:
 /// `install.sh`/`install.ps1` (shell PATH setup) and `render_env_content` in
 /// `env/setup.rs`. `env/doctor.rs::check_profile_files` derives the same
 /// variants for its profile scan; keep them in sync.
 struct VitePlusSourceMatcher {
-    /// Home-dir spellings with forward-slash separators: the absolute path,
-    /// plus `$HOME`- and `~`-relative forms when the home is under `$HOME`.
+    /// Reference-dir spellings with forward-slash separators: the absolute
+    /// path, plus `$HOME`- and `~`-relative forms when under `$HOME`.
     roots: Vec<Str>,
 }
 
 impl VitePlusSourceMatcher {
-    fn new(home_dir: &AbsolutePathBuf, user_home: &AbsolutePathBuf) -> Self {
-        let mut roots = vec![normalize_path_separators(&home_dir.as_path().display().to_string())];
+    fn new(reference_dirs: &[AbsolutePathBuf], user_home: &AbsolutePathBuf) -> Self {
+        let mut roots = Vec::new();
 
-        if let Ok(Some(suffix)) = home_dir.strip_prefix(user_home) {
-            // `RelativePathBuf` guarantees forward-slash separators.
-            let suffix = vt_str::format!("{suffix}");
-            if suffix.is_empty() {
-                roots.push(Str::from("$HOME"));
-                roots.push(Str::from("~"));
-            } else {
-                roots.push(vt_str::format!("$HOME/{suffix}"));
-                roots.push(vt_str::format!("~/{suffix}"));
+        for dir in reference_dirs {
+            roots.push(normalize_path_separators(&dir.as_path().display().to_string()));
+
+            if let Ok(Some(suffix)) = dir.strip_prefix(user_home) {
+                // `RelativePathBuf` guarantees forward-slash separators.
+                let suffix = vt_str::format!("{suffix}");
+                if suffix.is_empty() {
+                    roots.push(Str::from("$HOME"));
+                    roots.push(Str::from("~"));
+                } else {
+                    roots.push(vt_str::format!("$HOME/{suffix}"));
+                    roots.push(vt_str::format!("~/{suffix}"));
+                }
             }
         }
 
@@ -429,7 +604,7 @@ mod tests {
     fn default_source_matcher() -> VitePlusSourceMatcher {
         let user_home = default_user_home();
         let home_dir = user_home.join(".vite-plus");
-        VitePlusSourceMatcher::new(&home_dir, &user_home)
+        VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &user_home)
     }
 
     #[test]
@@ -452,7 +627,7 @@ mod tests {
     fn test_remove_vite_plus_lines_absolute_path() {
         let user_home = default_user_home();
         let home_dir = user_home.join(".vite-plus");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &user_home);
         let env_path = shell_path(&home_dir.join("env"));
         let content = vt_str::format!("# existing\n. \"{env_path}\"\n");
         let result = remove_vite_plus_lines(&content, &matcher, "env");
@@ -463,7 +638,7 @@ mod tests {
     fn test_remove_vite_plus_lines_custom_absolute_path() {
         let user_home = custom_user_home();
         let home_dir = user_home.join("tools").join("vp");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &user_home);
         let env_path = shell_path(&home_dir.join("env"));
         let content = vt_str::format!("# existing\n. \"{env_path}\"\n");
         let result = remove_vite_plus_lines(&content, &matcher, "env");
@@ -474,7 +649,7 @@ mod tests {
     fn test_remove_vite_plus_lines_custom_home_relative_path() {
         let user_home = custom_user_home();
         let home_dir = user_home.join("tools").join("vp");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &user_home);
         let content = "# existing\n. \"$HOME/tools/vp/env\"\n";
         let result = remove_vite_plus_lines(content, &matcher, "env");
         assert_eq!(&*result, "# existing\n");
@@ -484,7 +659,7 @@ mod tests {
     fn test_remove_vite_plus_lines_custom_tilde_path() {
         let user_home = custom_user_home();
         let home_dir = user_home.join("tools").join("vp");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &user_home);
         let content = "# existing\nsource '~/tools/vp/env.nu'\n";
         let result = remove_vite_plus_lines(content, &matcher, "env.nu");
         assert_eq!(&*result, "# existing\n");
@@ -543,7 +718,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let home_dir = temp_path.join(".vite-plus");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &temp_path);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &temp_path);
         let profile_path = temp_path.join(".zshrc");
         let original = "# my config\nexport FOO=bar\n\n# Vite+ bin (https://viteplus.dev)\n. \"$HOME/.vite-plus/env\"\n";
         std::fs::write(&profile_path, original).unwrap();
@@ -613,7 +788,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let home_dir = home.join(".vite-plus");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &home);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &home);
 
         // Clear env overrides so the test environment doesn't affect results
         let _guard = ProfileEnvGuard::new(None, None, None);
@@ -640,7 +815,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let home_dir = home.join("tools/vp");
-        let matcher = VitePlusSourceMatcher::new(&home_dir, &home);
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&home_dir), &home);
 
         let _guard = ProfileEnvGuard::new(None, None, None);
 
@@ -726,7 +901,7 @@ mod tests {
         std::fs::write(zdotdir.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
 
         let _guard = ProfileEnvGuard::new(Some(&zdotdir), None, None);
-        let matcher = VitePlusSourceMatcher::new(&home.join(".vite-plus"), &home);
+        let matcher = VitePlusSourceMatcher::new(&[home.join(".vite-plus")], &home);
 
         let profiles = collect_affected_profiles(&home, &matcher);
         let zdotdir_profiles: Vec<_> =
@@ -750,7 +925,7 @@ mod tests {
             .unwrap();
 
         let _guard = ProfileEnvGuard::new(None, Some(&xdg_config), None);
-        let matcher = VitePlusSourceMatcher::new(&home.join(".vite-plus"), &home);
+        let matcher = VitePlusSourceMatcher::new(&[home.join(".vite-plus")], &home);
 
         let profiles = collect_affected_profiles(&home, &matcher);
         let xdg_profiles: Vec<_> =
@@ -773,13 +948,91 @@ mod tests {
         std::fs::write(nushell_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n").unwrap();
 
         let _guard = ProfileEnvGuard::new(None, None, Some(&xdg_data));
-        let matcher = VitePlusSourceMatcher::new(&home.join(".vite-plus"), &home);
+        let matcher = VitePlusSourceMatcher::new(&[home.join(".vite-plus")], &home);
 
         let profiles = collect_affected_profiles(&home, &matcher);
         let xdg_profiles: Vec<_> =
             profiles.iter().filter(|p| p.path.as_path().starts_with(&xdg_data)).collect();
         assert_eq!(xdg_profiles.len(), 1);
         assert!(matches!(&xdg_profiles[0].kind, AffectedProfileKind::Snippet));
+    }
+
+    #[test]
+    fn test_remove_vite_plus_lines_split_env_scripts_dir() {
+        // Split layout: profile lines reference the env-scripts dir
+        // (`. "$HOME/.config/vite-plus/env"`), not the data dir.
+        let user_home = default_user_home();
+        let env_dir = user_home.join(".config").join("vite-plus");
+        let data_dir = user_home.join(".local/share").join("vite-plus");
+        let matcher = VitePlusSourceMatcher::new(std::slice::from_ref(&env_dir), &user_home);
+        let content =
+            "# existing\n\n# Vite+ bin (https://viteplus.dev)\n. \"$HOME/.config/vite-plus/env\"\n";
+        let result = remove_vite_plus_lines(content, &matcher, "env");
+        assert_eq!(&*result, "# existing\n");
+
+        // Lines referencing the data dir are not env-script sourcing lines
+        // and stay untouched.
+        let env_path = shell_path(&data_dir.join("env"));
+        let content = vt_str::format!("# existing\n. \"{env_path}\"\n");
+        let result = remove_vite_plus_lines(&content, &matcher, "env");
+        assert_eq!(&*result, &*content);
+    }
+
+    #[test]
+    fn test_is_vp_owned_bin_name() {
+        for owned in [
+            "vp",
+            "node",
+            "npm",
+            "npx",
+            "corepack",
+            "vpx",
+            "vpr",
+            "vp.exe",
+            "npm.cmd",
+            "vp-use.cmd",
+        ] {
+            assert!(is_vp_owned_bin_name(owned), "{owned} should be vp-owned");
+        }
+        // Windows rename-before-copy leftovers.
+        assert!(is_vp_owned_bin_name("vp.exe.1700000000.old"));
+        // Not vp-owned: other tools, lookalikes, and bare .old files.
+        for foreign in ["git", "node.exe.old", "vpn", "vp.json", "vp.exe.old.bak"] {
+            assert!(!is_vp_owned_bin_name(foreign), "{foreign} should not be vp-owned");
+        }
+    }
+
+    #[test]
+    fn test_clean_bin_dir_removes_dedicated_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().join("bin")).unwrap();
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        for name in ["vp", "node", "npm", "vp-use.cmd", "vp.exe.1700000000.old"] {
+            std::fs::write(bin_dir.join(name), b"shim").unwrap();
+        }
+
+        clean_bin_dir(&bin_dir);
+
+        assert!(!bin_dir.as_path().exists(), "vp-dedicated bin dir should be removed wholesale");
+    }
+
+    #[test]
+    fn test_clean_bin_dir_keeps_shared_dir_and_foreign_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().join("bin")).unwrap();
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        for name in ["vp", "node", "vpr"] {
+            std::fs::write(bin_dir.join(name), b"shim").unwrap();
+        }
+        std::fs::write(bin_dir.join("git"), b"foreign").unwrap();
+
+        clean_bin_dir(&bin_dir);
+
+        assert!(bin_dir.as_path().exists(), "shared bin dir must not be removed");
+        assert!(bin_dir.join("git").as_path().exists(), "foreign files must stay");
+        for name in ["vp", "node", "vpr"] {
+            assert!(!bin_dir.join(name).as_path().exists(), "{name} should be removed");
+        }
     }
 
     #[test]
