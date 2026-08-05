@@ -14,9 +14,9 @@ export interface CommandRunSummary {
   exitCode?: number;
   status: 'installed' | 'formatted' | 'failed' | 'skipped';
   /**
-   * pnpm packages whose build (install/postinstall) scripts were gated during
-   * the install. Only populated when `runViteInstall` is called with
-   * `detectIgnoredBuilds`. See {@link runViteInstall}.
+   * Packages whose build (install/postinstall) scripts the package manager
+   * gated during the install. Only populated when `runViteInstall` is called
+   * with `detectIgnoredBuilds`. See {@link runViteInstall}.
    */
   pendingBuilds?: string[];
 }
@@ -100,11 +100,12 @@ export async function runViteInstall(
     packageManager?: PackageManager;
     packageManagerVersion?: string;
     /**
-     * Surface pnpm's gated build scripts instead of suppressing them. When set,
-     * the auto `--ignore-scripts` workaround is skipped (so pnpm records which
-     * packages need approval), a pnpm >= 11 `ERR_PNPM_IGNORED_BUILDS` exit is
-     * treated as a successful install (deps are on disk), and the gated package
-     * names are returned in `pendingBuilds`.
+     * Surface the package manager's gated build scripts instead of suppressing
+     * them. When set, the auto `--ignore-scripts` workaround is skipped (so
+     * pnpm records which packages need approval), a pnpm >= 11
+     * `ERR_PNPM_IGNORED_BUILDS` exit is treated as a successful install (deps
+     * are on disk), and the gated package names (pnpm, yarn, npm >= 12) are
+     * returned in `pendingBuilds`.
      */
     detectIgnoredBuilds?: boolean;
   },
