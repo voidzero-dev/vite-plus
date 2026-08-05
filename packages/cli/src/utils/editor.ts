@@ -510,7 +510,7 @@ async function writeEditorConfig({
   }
 }
 
-function isJsonLikeFile(fileName: string): boolean {
+export function isJsonLikeFile(fileName: string): boolean {
   const ext = path.extname(fileName).toLowerCase();
   return ext === '.json' || ext === '.jsonc';
 }
