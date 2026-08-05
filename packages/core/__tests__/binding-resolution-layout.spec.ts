@@ -140,7 +140,13 @@ function buildGlobalVirtualStoreLayout(options: {
 function runProject(root: string, env: Record<string, string> = {}) {
   try {
     const stdout = execFileSync(process.execPath, [path.join(root, 'project/main.cjs')], {
-      env: { ...process.env, NAPI_RS_ENFORCE_VERSION_CHECK: '', ...env },
+      // Isolate resolution to the synthetic realpath walk-up. The test runner
+      // (vitest) sets NODE_PATH to include the repo's `.pnpm/node_modules`,
+      // where the real `vite-plus` package is a resolvable sibling; forwarding
+      // it would let the child resolve that package instead of reproducing the
+      // pnpm global virtual store, where the project's node_modules is off the
+      // walk-up path.
+      env: { ...process.env, NODE_PATH: '', NAPI_RS_ENFORCE_VERSION_CHECK: '', ...env },
       encoding: 'utf-8',
       timeout: 30_000,
     });
