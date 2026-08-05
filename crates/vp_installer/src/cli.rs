@@ -22,7 +22,9 @@ pub struct Options {
     #[arg(long = "tag", default_value = "latest")]
     pub tag: String,
 
-    /// Custom installation directory (default: ~/.vite-plus)
+    /// Custom installation directory: selects the legacy monolithic layout
+    /// rooted at this directory (default: split platform layout, or the
+    /// legacy root when `~/.vite-plus` already exists)
     #[arg(long = "install-dir")]
     pub install_dir: Option<String>,
 
@@ -49,9 +51,9 @@ pub fn parse() -> Options {
         opts.version = std::env::var("VP_VERSION").ok();
     }
     if opts.install_dir.is_none() {
-        // Pre-cutover contract: the installer still honors `VP_HOME` as the
-        // install dir (install.sh/install.ps1 pass it through); the vp CLI
-        // itself no longer reads it.
+        // The installers still honor `VP_HOME` as the install dir
+        // (install.sh/install.ps1 pass it through), selecting the legacy
+        // monolithic layout; the vp CLI itself never reads it.
         opts.install_dir = std::env::var("VP_HOME").ok();
     }
     if opts.registry.is_none() {

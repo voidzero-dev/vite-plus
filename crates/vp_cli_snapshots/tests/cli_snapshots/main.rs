@@ -627,9 +627,9 @@ impl CaseHome {
         env.insert("NODE_NO_WARNINGS".into(), "1".into());
         // The CLI no longer reads VP_HOME (the provisioned
         // `<home>/.vite-plus/current/bin/vp` self-locates, and the on-disk
-        // `<home>/.vite-plus` selects the legacy layout). Kept for the
-        // generated env scripts and fixture steps that reference it; removal
-        // is installer-cutover follow-up.
+        // `<home>/.vite-plus` selects the legacy layout). Kept because
+        // fixture steps reference `$VP_HOME/...` in `vpt` argv (expanded
+        // from this env by vpt's `expand_env_arg`).
         env.insert("VP_HOME".into(), self.vp_home().into_os_string());
         if cfg!(windows) {
             env.insert("USERPROFILE".into(), self.home.clone().into_os_string());

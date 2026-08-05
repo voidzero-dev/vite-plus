@@ -491,8 +491,8 @@ struct InstallLayout {
 /// Resolve the install layout from the CLI options and [`vp_shared::Dirs`].
 ///
 /// An explicit `--install-dir`/`VP_HOME` override selects the legacy
-/// monolithic layout rooted at that directory (the compat story for
-/// pre-cutover install scripts). Otherwise the resolved `Dirs` decide: the
+/// monolithic layout rooted at that directory (the compat story for custom
+/// install locations). Otherwise the resolved `Dirs` decide: the
 /// legacy root under the `Home` layout, the split XDG dirs for fresh
 /// installs.
 fn resolve_layout(opts: &cli::Options) -> Result<InstallLayout, Box<dyn std::error::Error>> {

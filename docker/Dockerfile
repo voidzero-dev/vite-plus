@@ -60,8 +60,10 @@ RUN apt-get update \
 # root work those phases occasionally need.
 USER vp
 
-ENV VP_HOME=/home/vp/.vite-plus \
-    PATH=/home/vp/.vite-plus/bin:$PATH
+# The installer defaults to the split XDG layout for fresh installs: the `vp`
+# symlink and shims land in ~/.local/bin, versions + `current` in
+# ~/.local/share/vite-plus. PATH carries the bin dir; no VP_HOME override.
+ENV PATH=/home/vp/.local/bin:$PATH
 
 # Install the vp global CLI. The installer downloads the platform package from
 # npm (or from the registry bridge when VP_PR_VERSION is set). Node.js itself is
@@ -74,6 +76,6 @@ ENV VP_HOME=/home/vp/.vite-plus \
 # first use.
 RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" bash \
  && vp --version \
- && rm -rf "$VP_HOME/js_runtime"
+ && rm -rf /home/vp/.local/share/vite-plus/js_runtime
 
 WORKDIR /app

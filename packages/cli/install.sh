@@ -7,7 +7,14 @@
 #
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
-#   VP_HOME - Installation directory (default: ~/.vite-plus)
+#   VP_HOME - Installer-only override: install with the legacy monolithic
+#             layout rooted at this directory (the vp CLI itself never reads
+#             VP_HOME). Default: split XDG layout for fresh installs, or
+#             ~/.vite-plus when it already exists (grandfathered installs).
+#   VP_DATA_DIR / VP_BIN_DIR - Split-layout overrides for the data dir (CLI
+#             versions + `current`) and the bin dir (vp symlink + shims).
+#   XDG_CONFIG_HOME / XDG_DATA_HOME / XDG_BIN_HOME - XDG base directories
+#             honored by the split layout (relative values are treated as unset).
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -19,14 +26,73 @@
 set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
-INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
-# Use $HOME-relative path for shell config references (portable across sessions)
-if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
-  INSTALL_DIR_REF_POSIX="\$HOME${INSTALL_DIR#"$HOME"}"
-  INSTALL_DIR_REF_NU="~${INSTALL_DIR#"$HOME"}"
+
+# Install layout. An explicit VP_HOME selects the legacy monolithic layout
+# rooted at that directory (compat path), as does an existing ~/.vite-plus —
+# grandfathered installs stay put, matching the CLI's directory resolution
+# (vp_shared::Dirs). Fresh installs use the split XDG layout:
+#   data   ${VP_DATA_DIR:-${XDG_DATA_HOME:-~/.local/share}/vite-plus}
+#          (CLI versions + `current`; the INSTALL_DIR variable below)
+#   bin    ${VP_BIN_DIR:-${XDG_BIN_HOME:-${XDG_DATA_HOME:+$XDG_DATA_HOME/../bin}}}
+#          default ~/.local/bin (vp symlink + tool shims)
+#   config ${XDG_CONFIG_HOME:-~/.config}/vite-plus (generated env scripts)
+# The CLI resolves the same chains, so these must mirror vp_shared::Dirs.
+LEGACY_LAYOUT="false"
+if [ -n "${VP_HOME:-}" ]; then
+  INSTALL_DIR="$VP_HOME"
+  LEGACY_LAYOUT="true"
+elif [ -d "$HOME/.vite-plus" ]; then
+  INSTALL_DIR="$HOME/.vite-plus"
+  LEGACY_LAYOUT="true"
 else
-  INSTALL_DIR_REF_POSIX="$INSTALL_DIR"
-  INSTALL_DIR_REF_NU="$INSTALL_DIR"
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+      # Git Bash/MSYS keeps the legacy root: install.ps1 owns the split
+      # Windows layout (%LOCALAPPDATA%/%APPDATA%), which has no clean MSYS
+      # mapping.
+      INSTALL_DIR="$HOME/.vite-plus"
+      LEGACY_LAYOUT="true"
+      ;;
+  esac
+fi
+
+if [ "$LEGACY_LAYOUT" = "false" ]; then
+  # Relative VP_*_DIR/XDG_* values are treated as unset, per the XDG Base
+  # Directory Specification.
+  for dir_var in VP_BIN_DIR VP_DATA_DIR XDG_BIN_HOME XDG_CONFIG_HOME XDG_DATA_HOME; do
+    eval "dir_val=\${$dir_var:-}"
+    case "$dir_val" in
+      '' | /*) ;;
+      *) unset "$dir_var" ;;
+    esac
+  done
+  unset dir_var dir_val
+
+  INSTALL_DIR="${VP_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/vite-plus}"
+  if [ -n "${VP_BIN_DIR:-}" ]; then
+    SHIM_BIN_DIR="$VP_BIN_DIR"
+  elif [ -n "${XDG_BIN_HOME:-}" ]; then
+    SHIM_BIN_DIR="$XDG_BIN_HOME"
+  elif [ -n "${XDG_DATA_HOME:-}" ] && [ "$XDG_DATA_HOME" != "/" ]; then
+    # uv's chain: $XDG_DATA_HOME/../bin (trailing slashes stripped so
+    # dirname resolves the same parent the CLI does)
+    SHIM_BIN_DIR="$(dirname "${XDG_DATA_HOME%/}")/bin"
+  else
+    SHIM_BIN_DIR="$HOME/.local/bin"
+  fi
+  ENV_SCRIPTS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus"
+else
+  SHIM_BIN_DIR="$INSTALL_DIR/bin"
+  ENV_SCRIPTS_DIR="$INSTALL_DIR"
+fi
+
+# Use $HOME-relative paths for shell config references (portable across sessions)
+if case "$ENV_SCRIPTS_DIR" in "$HOME"/*) true;; *) false;; esac; then
+  ENV_DIR_REF_POSIX="\$HOME${ENV_SCRIPTS_DIR#"$HOME"}"
+  ENV_DIR_REF_NU="~${ENV_SCRIPTS_DIR#"$HOME"}"
+else
+  ENV_DIR_REF_POSIX="$ENV_SCRIPTS_DIR"
+  ENV_DIR_REF_NU="$ENV_SCRIPTS_DIR"
 fi
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
@@ -688,7 +754,7 @@ configure_zsh_path() {
   fi
 
   result=0
-  append_source_to_file "$zshenv" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+  append_source_to_file "$zshenv" ". \"$ENV_DIR_REF_POSIX/env\"" "$ENV_SCRIPTS_DIR/env" "$ENV_DIR_REF_POSIX/env" || result=$?
   case "$result" in
     0) updated+=("$(abbreviate_path "$zshenv")") ;;
     2) already+=("$(abbreviate_path "$zshenv")") ;;
@@ -697,7 +763,7 @@ configure_zsh_path() {
 
   if [ -f "$zshrc" ]; then
     result=0
-    append_source_to_file "$zshrc" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    append_source_to_file "$zshrc" ". \"$ENV_DIR_REF_POSIX/env\"" "$ENV_SCRIPTS_DIR/env" "$ENV_DIR_REF_POSIX/env" || result=$?
     case "$result" in
       0) updated+=("$(abbreviate_path "$zshrc")") ;;
       2) already+=("$(abbreviate_path "$zshrc")") ;;
@@ -741,7 +807,7 @@ configure_bash_path() {
     fi
     existing=1
     result=0
-    append_source_to_file "$file" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    append_source_to_file "$file" ". \"$ENV_DIR_REF_POSIX/env\"" "$ENV_SCRIPTS_DIR/env" "$ENV_DIR_REF_POSIX/env" || result=$?
     case "$result" in
       0) updated+=("$(abbreviate_path "$file")") ;;
       2) already+=("$(abbreviate_path "$file")") ;;
@@ -776,7 +842,7 @@ configure_bash_path() {
 configure_fish_path() {
   local fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish"
   local fish_content="# Vite+ bin (https://viteplus.dev)
-source \"$INSTALL_DIR_REF_POSIX/env.fish\"
+source \"$ENV_DIR_REF_POSIX/env.fish\"
 "
 
   local result=0
@@ -811,7 +877,7 @@ configure_nushell_path() {
 
   local nushell_autoload="$nushell_dir/vite-plus.nu"
   local nushell_content="# Vite+ bin (https://viteplus.dev)
-source '$INSTALL_DIR_REF_NU/env.nu'
+source '$ENV_DIR_REF_NU/env.nu'
 "
 
   local result=0
@@ -883,7 +949,7 @@ refresh_shims() {
 # Arguments: bin_dir - path to the version's bin directory containing vp
 setup_node_manager() {
   local bin_dir="$1"
-  local bin_path="$INSTALL_DIR/bin"
+  local bin_path="$SHIM_BIN_DIR"
   NODE_MANAGER_ENABLED="false"
 
   # Resolve vp binary name (vp on Unix, vp.exe on Windows)
@@ -937,7 +1003,7 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$INSTALL_DIR")/bin/ and automatically uses the right version."
+    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_BIN_DIR")/ and automatically uses the right version."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
@@ -1028,7 +1094,7 @@ main() {
     # Registry bridge mode: resolve the requested PR/SHA to the bridge's
     # immutable commit version (0.0.0-commit.<sha>), the clearly-defined test
     # version we install. The directory label stays non-semver so it keeps out
-    # of cleanup_old_versions and makes the PR build obvious in `~/.vite-plus/`.
+    # of cleanup_old_versions and makes the PR build obvious in the data dir.
     # `|| true` keeps `set -e` from aborting this assignment when resolution
     # fails (unregistered ref / transient bridge error), so the actionable
     # error below is reachable instead of the installer exiting silently.
@@ -1173,15 +1239,19 @@ WRAPPER_EOF
   ln -sfn "$VP_VERSION" "$CURRENT_LINK"
 
   # Create bin directory and vp entrypoint (always done)
-  mkdir -p "$INSTALL_DIR/bin"
+  mkdir -p "$SHIM_BIN_DIR"
   if [[ "$platform" == win32* ]]; then
     # Windows: copy trampoline as vp.exe (matching install.ps1)
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
-      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$INSTALL_DIR/bin/vp.exe"
+      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_BIN_DIR/vp.exe"
     fi
+  elif [ "$LEGACY_LAYOUT" = "true" ]; then
+    # Legacy layout: keep the relative symlink target (portable root).
+    ln -sf "../current/bin/vp" "$SHIM_BIN_DIR/vp"
   else
-    # Unix: symlink to current/bin/vp
-    ln -sf "../current/bin/vp" "$INSTALL_DIR/bin/vp"
+    # Split layout: the bin dir lives outside the data dir, so link
+    # absolutely to <data>/current/bin/vp.
+    ln -sf "$INSTALL_DIR/current/bin/vp" "$SHIM_BIN_DIR/vp"
   fi
 
   # Cleanup old versions
@@ -1204,9 +1274,9 @@ WRAPPER_EOF
   # Configure shell PATH after the install is otherwise complete.
   configure_shell_path
 
-  # Use ~ shorthand if install dir is under HOME, otherwise show full path
-  local display_dir="${INSTALL_DIR/#$HOME/~}"
-  local display_location="${display_dir}/bin"
+  # Use ~ shorthand for the bin dir when it is under HOME
+  local display_location
+  display_location="$(abbreviate_path "$SHIM_BIN_DIR")"
 
   # Print success message
   echo ""
@@ -1251,11 +1321,11 @@ WRAPPER_EOF
     echo ""
     echo "  Manual setup instructions:"
     echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
-    echo "        . \"$INSTALL_DIR_REF_POSIX/env\""
+    echo "        . \"$ENV_DIR_REF_POSIX/env\""
     echo "    - Fish: create ${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish with:"
-    echo "        source \"$INSTALL_DIR_REF_POSIX/env.fish\""
+    echo "        source \"$ENV_DIR_REF_POSIX/env.fish\""
     echo "    - Nushell: create a vendor autoload file with:"
-    echo "        source '$INSTALL_DIR_REF_NU/env.nu'"
+    echo "        source '$ENV_DIR_REF_NU/env.nu'"
     echo ""
     echo "  Or run vp directly:"
     echo ""

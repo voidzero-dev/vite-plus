@@ -25,10 +25,10 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_HOME`
 
-- **Purpose**: Installation directory
-- **Default**: `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows)
+- **Purpose**: Installer-only override that selects the legacy monolithic layout, rooted at the given directory
+- **Default**: None — fresh installs use the [split layout](#directory-layout-and-xdg-variables); `~/.vite-plus` is used only when it already exists (grandfathered installs) or when `VP_HOME`/`--install-dir` is set
 - **CLI equivalent**: `--install-dir`
-- **Details**: The installer scripts still accept `VP_HOME` (until the installer cutover lands), but the installed CLI no longer reads it. At runtime the CLI locates a custom install root from the `vp` binary's own path (`<root>/current/bin/vp`), so installs at a custom `VP_HOME` keep working without any variable set. See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
+- **Details**: Only the installers (`install.sh`, `install.ps1`, `vp-setup.exe`) read `VP_HOME`; the installed `vp` CLI never does. At runtime the CLI locates a custom install root from the `vp` binary's own path (`<root>/current/bin/vp`), so installs at a custom `VP_HOME` keep working without any variable set. See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
 - **Example**:
 
   ```bash
@@ -203,7 +203,7 @@ Vite+ also respects these standard environment variables:
 ### `HOME` / `USERPROFILE`
 
 - **Purpose**: User home directory
-- **Effect**: Base for the default `~/.vite-plus` path and the Unix platform defaults (`~/.local/bin`, `~/.config`, ...)
+- **Effect**: Base for the legacy `~/.vite-plus` root and the Unix platform defaults (`~/.local/bin`, `~/.config`, ...)
 
 ### `XDG_BIN_HOME` / `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_STATE_HOME` / `XDG_CACHE_HOME`
 
@@ -214,9 +214,9 @@ Vite+ also respects these standard environment variables:
 
 The installed CLI resolves where its files live by picking one of two layouts; the first match wins:
 
-1. **Executable self-location** — the running `vp` binary's own (canonicalized) path is `<root>/current/bin/vp`: `<root>` is a legacy monolithic install. This covers custom-location installs (previously located via `VP_HOME`) and launches without `PATH` context (IDEs, the Windows shim trampoline).
-2. **`PATH` inference** — a `<root>/bin` entry on `PATH` that contains the legacy layout (`bin/vp` plus `current/bin/vp`) marks `<root>` as a legacy install.
-3. **`~/.vite-plus` exists** — the same legacy layout, grandfathered: existing installs keep working untouched and nothing is moved.
+1. **Executable self-location** — the running `vp` binary's own (canonicalized) path matches `<X>/current/bin/vp`: when `<X>/bin/vp` also exists, `<X>` is a legacy monolithic install root; otherwise `<X>` is the data dir of a split install, and the data category is pinned to it (the other categories resolve through their normal chains). This covers custom-location installs (previously located via `VP_HOME`) and launches without `PATH` context (IDEs, the Windows shim trampoline).
+2. **`PATH` inference** — for a `PATH` entry containing a `vp` executable: a `<root>/bin` entry with the legacy layout (`bin/vp` plus `current/bin/vp`) marks `<root>` as a legacy install; otherwise the entry's `vp` is canonicalized and, when it resolves into `<X>/current/bin/vp`, the same legacy-vs-split rule as rule 1 applies.
+3. **`~/.vite-plus` exists** — the legacy monolithic layout, grandfathered: existing installs keep working untouched and nothing is moved.
 4. **Otherwise (fresh installs)** — a split layout where each category resolves independently through its own override → XDG → platform-default chain:
 
 | Category | Contents | Resolution (first match wins) | Unix default | Windows default |
@@ -231,8 +231,8 @@ Notes:
 
 - Relative values in the `VP_*_DIR` and `XDG_*` variables are ignored, per the XDG Base Directory specification.
 - `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` only apply in the split layout; the legacy layout is all-or-nothing.
-- The CLI no longer reads `VP_HOME`; rules 1–2 replace it. The installer scripts and the generated `env*` shell scripts still reference `VP_HOME` until the installer cutover lands — those references are harmless (the CLI ignores the variable).
-- The installer scripts currently still default to installing under `~/.vite-plus`, so fresh installs today land in the legacy layout (rule 3). The split layout becomes effective for fresh installs once the installer defaults are updated.
+- The CLI never reads `VP_HOME`; rules 1–2 replace it. `VP_HOME` remains an installer-only override that selects the legacy monolithic layout at install time.
+- The installers (`install.sh`, `install.ps1`, `vp-setup.exe`) default to the split layout for fresh installs; an existing `~/.vite-plus` keeps the legacy layout.
 
 ## Precedence
 

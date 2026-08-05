@@ -21,7 +21,7 @@ latest LTS.
 
 When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
-By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. The CLI no longer reads the `VP_HOME` variable — the installer scripts still accept it as the install directory until the installer cutover lands, and at runtime the CLI locates the install root from the `vp` binary's own path (the generated `env*` shell scripts also still set `VP_HOME`; the CLI ignores it). The CLI also supports a split XDG-style layout — resolved per category from `VP_BIN_DIR`/`VP_DATA_DIR`/`VP_CACHE_DIR`, the `XDG_*` base directories, and platform defaults — for environments without an existing `~/.vite-plus` directory; existing installs are grandfathered and nothing is moved. See [Directory Layout and XDG Variables](/guide/installer-env-vars#directory-layout-and-xdg-variables). References to `VP_HOME` paths below use the legacy layout, which is what most users see today; under the split layout, substitute the corresponding bin/config/data/state directory.
+Fresh installs store the managed runtime and related files in a split XDG-style layout — resolved per category from `VP_BIN_DIR`/`VP_DATA_DIR`/`VP_CACHE_DIR`, the `XDG_*` base directories, and platform defaults. Installs that already have `~/.vite-plus` keep the legacy monolithic layout (grandfathered; nothing is moved). The CLI never reads the `VP_HOME` variable — the installers accept it as an override selecting the legacy layout, and at runtime the CLI locates the install root from the `vp` binary's own path. See [Directory Layout and XDG Variables](/guide/installer-env-vars#directory-layout-and-xdg-variables). References to `VP_HOME` paths below use the legacy layout; under the split layout, substitute the corresponding bin/config/data/state directory.
 
 If you want to keep that behavior, run:
 
@@ -51,6 +51,9 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
 
 ```powershell
+# Split layout (fresh installs)
+. "$env:APPDATA\vite-plus\env.ps1"
+# Legacy layout (existing ~/.vite-plus installs)
 . "$env:USERPROFILE\.vite-plus\env.ps1"
 ```
 
