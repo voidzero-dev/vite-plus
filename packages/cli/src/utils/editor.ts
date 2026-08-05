@@ -14,6 +14,7 @@ import {
   parse as parseJsonc,
 } from 'jsonc-parser';
 
+import { PackageManager } from '../types/package.ts';
 import { detectFormattingOptions, writeJsonFile } from './json.ts';
 
 // Language-specific overrides because user-level [lang] settings beat the workspace default
@@ -159,19 +160,21 @@ const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 </project>
 `;
 
-const JETBRAINS_WORKSPACE_CONFIG = `<?xml version="1.0" encoding="UTF-8"?>
+function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="PropertiesComponent">
     <![CDATA[{
       "keyToString": {
         "javascript.preferred.runtime.type.id": "node",
         "nodejs_interpreter_path": "${os.homedir()}/.vite-plus/bin/node",
-        "nodejs_package_manager_path": "pnpm",
+        "nodejs_package_manager_path": "${packageManager}",
       }
     }]]>
   </component>
 </project>
 `;
+}
 
 const JETBRAINS_OXFMT_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
@@ -211,7 +214,8 @@ export const EDITORS = [
     targetDir: '.idea',
     files: {
       'externalDependencies.xml': JETBRAINS_EXTERNAL_DEPENDENCIES,
-      'workspace.xml': JETBRAINS_WORKSPACE_CONFIG,
+      // Placeholder; writeEditorConfig() regenerates this with the resolved package manager.
+      'workspace.xml': jetbrainsWorkspaceConfig(PackageManager.pnpm),
       'OxfmtSettings.xml': JETBRAINS_OXFMT_SETTINGS,
       '.gitignore': JETBRAINS_GITIGNORE_ADDITION,
     },
@@ -381,6 +385,7 @@ export async function writeEditorConfigs({
   conflictDecisions,
   silent = false,
   extraVsCodeSettings,
+  packageManager = PackageManager.pnpm,
 }: {
   projectRoot: string;
   editorId: EditorSelection;
@@ -388,6 +393,7 @@ export async function writeEditorConfigs({
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
   extraVsCodeSettings?: Record<string, string>;
+  packageManager?: PackageManager;
 }) {
   const editorIds = normalizeEditorSelection(editorId);
   if (editorIds.length === 0) {
@@ -402,6 +408,7 @@ export async function writeEditorConfigs({
       conflictDecisions,
       silent,
       extraVsCodeSettings,
+      packageManager,
     });
   }
 }
@@ -413,6 +420,7 @@ async function writeEditorConfig({
   conflictDecisions,
   silent,
   extraVsCodeSettings,
+  packageManager,
 }: {
   projectRoot: string;
   editorId: EditorId;
@@ -420,6 +428,7 @@ async function writeEditorConfig({
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent: boolean;
   extraVsCodeSettings?: Record<string, string>;
+  packageManager: PackageManager;
 }) {
   const editorConfig = EDITORS.find((e) => e.id === editorId);
   if (!editorConfig) {
@@ -433,7 +442,9 @@ async function writeEditorConfig({
     const incoming: EditorConfigValue =
       editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
         ? { ...extraVsCodeSettings, ...baseIncoming }
-        : baseIncoming;
+        : editorId === 'jetbrains' && fileName === 'workspace.xml'
+          ? jetbrainsWorkspaceConfig(packageManager)
+          : baseIncoming;
     const filePath = path.join(targetDir, fileName);
     const jsonFormat = isJsonLikeFile(fileName);
 

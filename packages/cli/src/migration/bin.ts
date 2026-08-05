@@ -958,6 +958,7 @@ async function executeMigrationPlan(
     interactive,
     conflictDecisions: plan.editorConflictDecisions,
     silent: true,
+    packageManager: plan.packageManager,
   });
 
   // 11. Add framework shims if requested
@@ -1472,6 +1473,7 @@ async function main() {
         interactive: options.interactive,
         conflictDecisions: plan.editorConflictDecisions,
         silent: true,
+        packageManager,
       });
       didMigrate = true;
     }

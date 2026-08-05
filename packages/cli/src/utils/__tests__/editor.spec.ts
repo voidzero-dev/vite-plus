@@ -586,7 +586,22 @@ describe('writeEditorConfigs', () => {
     );
 
     const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
-    expect(gitignore).toBe('!externalDependencies.xml');
+    expect(gitignore).toBe('**\n!externalDependencies.xml\n');
+  });
+
+  it('writes workspace.xml with the resolved package manager', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+      packageManager: 'yarn',
+    });
+
+    const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
+    expect(workspaceXml).toContain('"nodejs_package_manager_path": "yarn"');
   });
 
   it('does not overwrite existing non-JSON jetbrains file in non-interactive mode', async () => {
@@ -615,6 +630,6 @@ describe('writeEditorConfigs', () => {
     expect(oxfmtSettingsXml).toContain('<component name="OxfmtSettings">');
 
     const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
-    expect(gitignore).toBe('!externalDependencies.xml');
+    expect(gitignore).toBe('**\n!externalDependencies.xml\n');
   });
 });
