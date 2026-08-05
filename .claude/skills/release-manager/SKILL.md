@@ -30,7 +30,7 @@ Report the detected state before making changes, so the previous release manager
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
-2. Release manager: sync `binding/index.cjs`, write the changelog PR description, optionally smoke-test via a preview build, get CI green.
+2. Release manager: sync `binding/index.cjs`, write the changelog PR description, offer the preview-build smoke test (recommended by default past ~10 commits), get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
@@ -180,9 +180,9 @@ echo "$BODY" | tail -1                                                          
 
 Diff the body's PR numbers against `generate-notes` rather than only counting them: a count alone hides one missing entry offsetting one extra. Every number in the missing list must be a bot PR you chose to omit.
 
-## 4. Optional: preview build smoke test (before merging)
+## 4. Preview build smoke test (before merging)
 
-This step is optional and runs **after the changelog (step 3) is complete and before merging (step 6)**. **Ask the release manager whether to run it**; do not add the label or skip the step on your own. Suggest running it when the release carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes). If the release manager approves, **read and follow [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md) first**, then validate against the **full ecosystem-ci catalog** (every runnable fork), not a single project.
+This step runs **after the changelog (step 3) is complete and before merging (step 6)**. **Always ask the release manager whether to run it, and ask about both levels explicitly** (the local `vp migrate` sweep, and the fork-PR CI validation below); never silently skip either, and do not add the label on your own. Default your recommendation to yes when the release has **more than 10 commits since the previous tag** (`git rev-list --count v<prev>..origin/main`) or carries risky changes (migrate/create behavior, package-manager or install-path changes, native binding changes); a small, narrow release is the only case where recommending a skip is reasonable. When you offer the choice, say roughly what it costs, since the full catalog takes hours. If the release manager approves, **read and follow [`vite-plus-ecosystem-ci/.github/TESTING.md`](https://github.com/vite-plus-ecosystem-ci/.github/blob/main/TESTING.md) first**, then validate against the **full ecosystem-ci catalog** (every runnable fork), not a single project.
 
 If the release manager says yes:
 
@@ -211,7 +211,17 @@ git -C ~/git/github.com/vite-plus-ecosystem-ci/$repo checkout "$branch"
 
 The `.github` repo also ships `scripts/setup-local.sh <repo>` (or `--all`), which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step.
 
-**Validate in the project's own CI (optional, deeper).** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
+**Sync every fork to upstream before you test anything.** The forks drift, often by hundreds of commits, so a checkout straight from `origin` validates stale code and any PR you open against it carries all that drift instead of just the upgrade. For each fork, fetch `source` and fast-forward the tracked branch, skipping any fork whose branch has commits upstream does not have rather than clobbering it:
+
+```bash
+git -C "$dir" fetch source
+git -C "$dir" rev-list --left-right --count "origin/$branch...source/$branch"   # left must be 0 to fast-forward
+git -C "$dir" push --no-verify origin "source/$branch:refs/heads/$branch"
+```
+
+Do this before both the local sweep and the fork PRs. If PRs were already opened against a stale base, GitHub will not recompute their merge base when the base branch moves; close and reopen each one to force it (a reopened draft stays a draft). TESTING.md carries the full procedure.
+
+**Validate in the project's own CI.** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Offer this alongside the local sweep rather than treating it as an afterthought; it is the only level that exercises each project's own build and tests. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
 
 The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
 
@@ -395,7 +405,7 @@ After the release ships and the Discord announcement draft is approved, review t
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
 - [ ] PR description written from the head branch data; every PR exactly once except deliberately omitted bot-noise PRs; breaking changes in their own section above Highlights; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
-- [ ] Smoke test offered to the release manager; if accepted, preview build published and verified across the full ecosystem-ci catalog via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
+- [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), recommended by default past ~10 commits; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
