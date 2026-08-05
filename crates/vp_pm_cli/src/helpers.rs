@@ -1,6 +1,6 @@
 //! Shared helpers used by every PM handler.
 
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::{PackageManager, PackageManagerType, error::Error};
 
@@ -9,7 +9,7 @@ use crate::{PackageManager, PackageManagerType, error::Error};
 pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
     match PackageManager::builder(cwd).build_with_default().await {
         Ok(pm) => Ok(pm),
-        Err(vp_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_))) => {
+        Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
             Err(Error::UserMessage("No package.json found.".into()))
         }
         Err(e) => Err(Error::Install(e)),
@@ -28,7 +28,7 @@ pub async fn build_package_manager_or_npm_default(
 ) -> Result<PackageManager, Error> {
     match PackageManager::builder(cwd).build().await {
         Ok(pm) => Ok(pm),
-        Err(vp_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_)))
+        Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_)))
         | Err(vp_error::Error::UnrecognizedPackageManager) => Ok(default_npm_package_manager(cwd)),
         Err(e) => Err(Error::Install(e)),
     }

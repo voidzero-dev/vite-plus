@@ -7,8 +7,8 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use tar::Archive;
 use tokio::process::Command;
-use vite_path::{AbsolutePathBuf, current_dir};
 use vp_shared::format_path_prepended;
+use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::{commands::env::config::resolve_version, error::Error};
 

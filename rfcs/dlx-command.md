@@ -184,7 +184,7 @@ pub enum Commands {
 use std::{collections::HashMap, process::ExitStatus};
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -434,11 +434,11 @@ fn extract_command_from_spec(spec: &str) -> String {
 
 ### 3. Command Handler
 
-**File**: `crates/vite_task/src/dlx.rs` (new file)
+**File**: `crates/vt/src/dlx.rs` (new file)
 
 ```rust
 use vp_error::Error;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 use vite_install::commands::dlx::DlxCommandOptions;
 use vite_install::PackageManager;
 

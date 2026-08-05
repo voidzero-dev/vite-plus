@@ -16,7 +16,7 @@ path = "src/main.rs"
 # declared inline to avoid pulling in the heavy `windows`/`windows-core` crates.
 
 # Override workspace lints: this is a standalone minimal binary that intentionally
-# avoids dependencies on vp_shared, vite_path, vite_str, etc. to keep binary
+# avoids dependencies on vp_shared, vt_path, vt_str, etc. to keep binary
 # size small. It uses std types and macros directly.
 [lints.clippy]
 disallowed_macros = "allow"

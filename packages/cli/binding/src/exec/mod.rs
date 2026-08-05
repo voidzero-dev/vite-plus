@@ -2,9 +2,9 @@ mod args;
 mod workspace;
 
 pub(crate) use args::ExecArgs;
-use vite_path::AbsolutePathBuf;
-use vite_task::ExitStatus;
 use vp_error::Error;
+use vt::ExitStatus;
+use vt_path::AbsolutePathBuf;
 
 use self::workspace::execute_exec_workspace;
 

@@ -24,9 +24,9 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-vite_path = { workspace = true }
+vt_path = { workspace = true }
 vp_shared = { workspace = true }
-vite_str = { workspace = true }
+vt_str = { workspace = true }
 zip = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

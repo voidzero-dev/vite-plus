@@ -1,5 +1,5 @@
 // This is a standalone test utility binary that deliberately uses std types
-// rather than the project's custom types (vite_str, vite_path, etc.). Its
+// rather than the project's custom types (vt_str, vt_path, etc.). Its
 // subcommand names and semantics follow vite-task's `vtt` multitool verbatim
 // wherever they overlap, so fixtures and habits transfer between the repos;
 // `chmod`, `json-edit`, and `probe` are vite-plus additions.

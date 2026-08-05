@@ -12,7 +12,7 @@
 //! of other fields (see rfcs/dev-engines.md).
 
 use serde::{Deserialize, Deserializer};
-use vite_str::Str;
+use vt_str::Str;
 
 /// `onFail` behavior for a devEngines entry, per the devEngines spec.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

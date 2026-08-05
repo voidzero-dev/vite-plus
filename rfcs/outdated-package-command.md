@@ -291,7 +291,7 @@ Interactive terminal UI showing:
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add new command variant:
 
@@ -370,7 +370,7 @@ pub enum Commands {
 use std::{collections::HashMap, process::ExitStatus};
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -629,16 +629,16 @@ pub mod outdated;  // Add this line
 
 #### 3. Outdated Command Implementation
 
-**File**: `crates/vite_task/src/outdated.rs` (new file)
+**File**: `crates/vt/src/outdated.rs` (new file)
 
 ```rust
 use vp_error::Error;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 use vite_package_manager::{
     PackageManager,
     commands::outdated::OutdatedCommandOptions,
 };
-use vite_workspace::Workspace;
+use vt_workspace::Workspace;
 
 pub struct OutdatedCommand {
     workspace_root: AbsolutePathBuf,

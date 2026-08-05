@@ -2,7 +2,7 @@
 
 use std::process::{ExitStatus, Output};
 
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use crate::{error::Error, js_executor::JsExecutor};
 

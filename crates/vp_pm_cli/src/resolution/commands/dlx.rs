@@ -51,10 +51,10 @@ impl Resolve<DlxArgs> for Npm {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("exec");
         for package in &args.package {
-            cmd.arg(vite_str::format!("--package={package}"));
+            cmd.arg(vt_str::format!("--package={package}"));
         }
         if !args.shell_mode && (!args.package.is_empty() || package_spec.contains('@')) {
-            cmd.arg(vite_str::format!("--package={package_spec}"));
+            cmd.arg(vt_str::format!("--package={package_spec}"));
         }
         cmd.arg("--yes");
         if args.silent {

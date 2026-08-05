@@ -5,8 +5,8 @@
 
 use std::{path::Path, process::ExitStatus};
 
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vp_shared::{env_vars, output};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{config, list::list_installed_versions};
 use crate::error::Error;

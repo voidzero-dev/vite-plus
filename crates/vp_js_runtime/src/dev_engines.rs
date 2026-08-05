@@ -5,10 +5,10 @@
 //!
 //! For `PackageJson` types (devEngines, engines), see `vp_shared::package_json`.
 
-use vite_path::AbsolutePath;
-use vite_str::Str;
 // Re-export shared types for internal use
 pub use vp_shared::PackageJson;
+use vt_path::AbsolutePath;
+use vt_str::Str;
 
 use crate::Error;
 
@@ -105,7 +105,7 @@ pub async fn write_node_version_file(
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

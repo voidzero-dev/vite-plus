@@ -238,7 +238,7 @@ vp unlink -r
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add new command variants:
 
@@ -285,7 +285,7 @@ pub enum Commands {
 use std::{collections::HashMap, process::ExitStatus};
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -353,7 +353,7 @@ impl PackageManager {
 use std::{collections::HashMap, process::ExitStatus};
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -430,7 +430,7 @@ impl PackageManager {
 
 #### 3. Link Command Implementation
 
-**File**: `crates/vite_task/src/link.rs` (new file)
+**File**: `crates/vt/src/link.rs` (new file)
 
 ```rust
 pub struct LinkCommand {
@@ -483,7 +483,7 @@ impl LinkCommand {
 
 #### 4. Unlink Command Implementation
 
-**File**: `crates/vite_task/src/unlink.rs` (new file)
+**File**: `crates/vt/src/unlink.rs` (new file)
 
 ```rust
 pub struct UnlinkCommand {

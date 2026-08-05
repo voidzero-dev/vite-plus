@@ -4,7 +4,7 @@
 //! must implement, along with types for describing download information.
 
 use async_trait::async_trait;
-use vite_str::Str;
+use vt_str::Str;
 
 use crate::{Error, Platform};
 

@@ -2,7 +2,7 @@
 
 use std::io;
 
-use vite_str::Str;
+use vt_str::Str;
 
 /// Error type for the global CLI.
 #[derive(Debug, thiserror::Error)]
@@ -26,7 +26,7 @@ pub enum Error {
     CliBinaryNotFound,
 
     #[error("Workspace error: {0}")]
-    Workspace(#[from] vite_workspace::Error),
+    Workspace(#[from] vt_workspace::Error),
 
     #[error("Install error: {0}")]
     Install(#[from] vp_error::Error),

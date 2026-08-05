@@ -3,10 +3,10 @@ mod analysis;
 use std::{ffi::OsStr, sync::Arc, time::Instant};
 
 use rustc_hash::FxHashMap;
-use vite_path::AbsolutePathBuf;
-use vite_task::ExitStatus;
 use vp_error::Error;
 use vp_shared::output;
+use vt::ExitStatus;
+use vt_path::AbsolutePathBuf;
 
 use self::analysis::{
     LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count, format_elapsed,

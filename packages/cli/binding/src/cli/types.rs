@@ -3,10 +3,8 @@ use std::{ffi::OsStr, future::Future, pin::Pin, sync::Arc};
 use clap::{Parser, Subcommand};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use vite_str::Str;
-use vite_task::{
-    Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest,
-};
+use vt::{Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
+use vt_str::Str;
 
 /// Resolved configuration from vite.config.ts
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -3,8 +3,8 @@
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
-use vite_path::{AbsolutePathBuf, current_dir};
 use vp_shared::{env_vars, output};
+use vt_path::{AbsolutePathBuf, current_dir};
 
 use super::config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version};
 use crate::{
@@ -396,7 +396,7 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
 }
 
 /// Print PATH fix instructions for shell setup.
-fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
+fn print_path_fix(bin_dir: &vt_path::AbsolutePath) {
     #[cfg(not(windows))]
     {
         // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
@@ -469,7 +469,7 @@ fn check_profile_files(vite_plus_home: &str, profile_files: &[ShellProfile]) -> 
 }
 
 /// Print IDE setup guidance for GUI applications.
-fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
+fn print_ide_setup_guidance(bin_dir: &vt_path::AbsolutePath) {
     // Derive vite_plus_home display path from bin_dir.parent(), using $HOME prefix
     let home_path = bin_dir
         .parent()
@@ -524,7 +524,7 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
 /// alone is ambiguous; name which field the version came from (matching
 /// `vp env pin`'s output). Other sources (`.node-version`, session, default) are
 /// already unambiguous from the path or label, so the bare path/label is shown.
-fn format_version_source(source: &str, source_path: Option<&vite_path::AbsolutePath>) -> String {
+fn format_version_source(source: &str, source_path: Option<&vt_path::AbsolutePath>) -> String {
     let names_pkg_field = matches!(source, "devEngines.runtime" | "engines.node");
     match source_path {
         Some(path) if names_pkg_field => format!("{} ({source})", path.as_path().display()),
@@ -605,7 +605,7 @@ async fn check_current_resolution(
 }
 
 /// Get the version string from a Node.js binary.
-async fn get_node_version(node_path: &vite_path::AbsolutePath) -> String {
+async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
     match tokio::process::Command::new(node_path.as_path()).arg("--version").output().await {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).trim().to_string()
@@ -651,7 +651,7 @@ async fn find_nearest_package_json(cwd: &AbsolutePathBuf) -> Option<(AbsolutePat
 
 /// Find the nearest `devEngines.runtime` node declaration walking up from `cwd`
 /// (the declaration may live in an ancestor manifest, e.g. a monorepo root).
-async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<vite_str::Str> {
+async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<vt_str::Str> {
     let mut current = cwd.clone();
     loop {
         if let Ok(content) = tokio::fs::read_to_string(current.join("package.json")).await
@@ -699,7 +699,7 @@ async fn read_workspace_root_doc(
     cwd: &AbsolutePathBuf,
     nearest_pkg_path: &AbsolutePathBuf,
 ) -> Option<(serde_json::Value, vp_shared::PackageJson)> {
-    let (workspace_root, _) = vite_workspace::find_workspace_root(cwd).ok()?;
+    let (workspace_root, _) = vt_workspace::find_workspace_root(cwd).ok()?;
     let root_pkg_path = workspace_root.path.join("package.json");
     if &root_pkg_path == nearest_pkg_path {
         return None;

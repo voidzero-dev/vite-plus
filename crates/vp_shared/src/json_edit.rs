@@ -5,7 +5,7 @@
 //! style (2 spaces, 4 spaces, tabs), and keep the trailing-newline style.
 
 use serde::Serialize;
-use vite_str::Str;
+use vt_str::Str;
 
 /// Detected formatting style of a JSON document.
 #[derive(Debug, Clone, PartialEq, Eq)]

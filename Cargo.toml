@@ -186,7 +186,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -243,8 +243,8 @@ pretty_assertions = "1.4.1"
 phf = "0.14.0"
 prettyplease = "0.2.32"
 proc-macro2 = "1"
-pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
-pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
+pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
+pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
 quote = "1"
 rayon = "1.10.0"
 regex = "1.11.1"
@@ -267,7 +267,7 @@ sha2 = "0.10.9"
 shell-escape = "0.1.5"
 simdutf8 = "0.1.5"
 smallvec = { version = "1.15.1", features = ["union"] }
-snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
+snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
 string_cache = "0.9.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
@@ -298,12 +298,12 @@ vp_pm_cli_macros = { path = "crates/vp_pm_cli_macros" }
 vp_setup = { path = "crates/vp_setup" }
 vp_shared = { path = "crates/vp_shared" }
 vp_static_config = { path = "crates/vp_static_config" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
-vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
-vite_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5c1d02c750ac21c6f4cf0528062590a145e87fd1" }
+vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
+vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
+vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
+vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
+vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
+vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
 walkdir = "2.5.0"
 webpki-root-certs = "1.0.9"
 which = "8.0.0"
@@ -407,11 +407,12 @@ string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"]
 # pty_terminal_test = { path = "../vite-task/crates/pty_terminal_test" }
 # pty_terminal_test_client = { path = "../vite-task/crates/pty_terminal_test_client" }
 # snapshot_test = { path = "../vite-task/crates/snapshot_test" }
-# vite_path = { path = "../vite-task/crates/vite_path" }
-# vite_powershell = { path = "../vite-task/crates/vite_powershell" }
-# vite_str = { path = "../vite-task/crates/vite_str" }
-# vite_task = { path = "../vite-task/crates/vite_task" }
-# vite_workspace = { path = "../vite-task/crates/vite_workspace" }
+# vt = { path = "../vite-task/crates/vt" }
+# vt_path = { path = "../vite-task/crates/vt_path" }
+# vt_powershell = { path = "../vite-task/crates/vt_powershell" }
+# vt_select = { path = "../vite-task/crates/vt_select" }
+# vt_str = { path = "../vite-task/crates/vt_str" }
+# vt_workspace = { path = "../vite-task/crates/vt_workspace" }
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,

@@ -16,8 +16,8 @@ use std::{
 use fspy::AccessMode;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
-use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 use vp_error::Error;
+use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 mod ps1_shim;
 
@@ -391,7 +391,7 @@ impl Drop for TerminalStateGuard {
 #[cfg(test)]
 mod tests {
     use tempfile::{TempDir, tempdir};
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

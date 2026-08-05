@@ -45,7 +45,7 @@ impl Resolve<VersionArgs> for Yarn {
             if self.is_berry() {
                 cmd.arg(new_version);
             } else if is_yarn_classic_increment(new_version) {
-                cmd.arg(vite_str::format!("--{new_version}"));
+                cmd.arg(vt_str::format!("--{new_version}"));
             } else {
                 cmd.arg("--new-version").arg(new_version);
             }
@@ -63,7 +63,7 @@ impl Resolve<VersionArgs> for Bun {
         if self.version().is_some_and(|version| !bun_supports_version_command(version)) {
             diag.warn(
                 DiagnosticKind::BehaviorChange,
-                vite_str::format!(
+                vt_str::format!(
                     "bun {} does not support `bun pm version` (requires bun >= 1.2.18); forwarding anyway",
                     self.version().expect("bun dialect always has a version")
                 ),
@@ -93,7 +93,7 @@ fn append_common_args(cmd: &mut CommandBuilder, args: &VersionArgs) {
 
 fn unsupported_json(manager: &str) -> CommandResolution {
     CommandResolution::InvalidArgument(
-        vite_str::format!("Invalid argument: `--json` is not supported by {manager} `version`.")
+        vt_str::format!("Invalid argument: `--json` is not supported by {manager} `version`.")
             .to_string(),
     )
 }
@@ -208,7 +208,7 @@ mod tests {
             };
             assert_eq!(
                 message,
-                vite_str::format!(
+                vt_str::format!(
                     "Invalid argument: `--json` is not supported by {manager} `version`."
                 )
                 .to_string()

@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use crate::error::Error;
 

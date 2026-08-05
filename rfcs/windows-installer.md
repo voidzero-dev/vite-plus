@@ -62,7 +62,7 @@ rustup uses one binary for everything — `rustup-init.exe` copies itself to `~/
 
 - `vp.exe` is downloaded from the npm registry as a platform-specific package
 - The installer cannot copy itself as `vp.exe` — they are fundamentally different binaries
-- `vp.exe` links `vp_js_runtime`, `vite_workspace`, `oxc_resolver` (~15-20 MB) — the installer needs none of these
+- `vp.exe` links `vp_js_runtime`, `vt_workspace`, `oxc_resolver` (~15-20 MB) — the installer needs none of these
 
 ### Option B: Separate Crate with Shared Library (recommended)
 
@@ -115,7 +115,7 @@ vp_installer (binary, ~3-5 MB)
   ├── vp_setup (shared installation logic)
   ├── vp_pm_cli (HTTP client)
   ├── vp_shared (home dir resolution)
-  ├── vite_path (typed path wrappers)
+  ├── vt_path (typed path wrappers)
   ├── clap (CLI parsing)
   ├── tokio (async runtime)
   ├── indicatif (progress bars)

@@ -9,9 +9,9 @@
 
 use std::{io::Write, process::ExitStatus};
 
-use vite_path::AbsolutePathBuf;
 use vp_js_runtime::NodeProvider;
 use vp_shared::output;
+use vt_path::AbsolutePathBuf;
 
 use super::config::{get_config_path, load_config};
 use crate::{cli::PinTarget, error::Error};
@@ -585,7 +585,7 @@ pub async fn do_unpin(
 mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

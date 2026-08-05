@@ -24,12 +24,12 @@ pub use types::{
     BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand,
     ViteConfigResolverFn,
 };
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_str::Str;
-use vite_task::{ExitStatus, Session, SessionConfig};
 use vp_error::Error;
 pub use vp_shared::init_tracing;
 use vp_shared::{PrependOptions, env_vars, prepend_to_path_env};
+use vt::{ExitStatus, Session, SessionConfig};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
 
 use self::{
     execution::{FilterStream, resolve_and_execute, resolve_and_execute_with_filter},
@@ -64,7 +64,7 @@ async fn execute_direct_subcommand(
     // retarget), so it matches a fresh lookup here and saves the second walk.
     let workspace_root = match workspace_root_hint {
         Some(root) => root,
-        None => vite_workspace::find_workspace_root(cwd)?.0,
+        None => vt_workspace::find_workspace_root(cwd)?.0,
     };
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
@@ -231,11 +231,11 @@ async fn envs_with_explicit_package_manager_path(
 
 /// Execute a vite-task command (run, cache) through Session.
 async fn execute_vite_task_command(
-    command: vite_task::Command,
+    command: vt::Command,
     cwd: AbsolutePathBuf,
     options: Option<CliOptions>,
 ) -> Result<ExitStatus, Error> {
-    let (workspace_root, _) = vite_workspace::find_workspace_root(&cwd)?;
+    let (workspace_root, _) = vt_workspace::find_workspace_root(&cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
     let resolve_vite_config_fn = options
@@ -362,8 +362,8 @@ mod tests {
     };
 
     use rustc_hash::FxHashMap;
-    use vite_path::AbsolutePathBuf;
-    use vite_task::config::UserRunConfig;
+    use vt::config::UserRunConfig;
+    use vt_path::AbsolutePathBuf;
 
     use super::{envs_with_explicit_package_manager_path, prepend_to_env_path};
 

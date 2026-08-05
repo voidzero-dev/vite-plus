@@ -9,7 +9,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 /// Cache format version for upgrade compatibility
 /// v2: Added `is_range` field to track range vs exact version for cache expiry

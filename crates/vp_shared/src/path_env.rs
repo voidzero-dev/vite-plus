@@ -5,7 +5,7 @@
 
 use std::{env, ffi::OsString, path::Path};
 
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 /// Options for deduplication behavior when prepending to PATH.
 #[derive(Debug, Clone, Copy, Default)]

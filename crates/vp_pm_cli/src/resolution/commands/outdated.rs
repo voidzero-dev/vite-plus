@@ -33,10 +33,8 @@ impl FromStr for OutdatedFormat {
             "table" => Ok(Self::Table),
             "list" => Ok(Self::List),
             "json" => Ok(Self::Json),
-            _ => {
-                Err(vite_str::format!("Invalid format '{value}'. Valid formats: table, list, json")
-                    .to_string())
-            }
+            _ => Err(vt_str::format!("Invalid format '{value}'. Valid formats: table, list, json")
+                .to_string()),
         }
     }
 }

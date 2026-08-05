@@ -1,8 +1,8 @@
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use owo_colors::OwoColorize;
-use vite_task::ExitStatus;
 use vp_error::Error;
 use vp_shared::output;
+use vt::ExitStatus;
 
 use super::types::SynthesizableSubcommand;
 
@@ -216,7 +216,7 @@ Options:
 #[cfg(test)]
 mod tests {
     use clap::Parser;
-    use vite_task::Command;
+    use vt::Command;
 
     use super::{super::types::CLIArgs, *};
 
@@ -232,7 +232,7 @@ mod tests {
         // After trailing_var_arg change, unknown flags like --yolo are
         // accepted as task arguments instead of producing a parse error.
         let args = CLIArgs::try_parse_from(["vp", "run", "--yolo"]).unwrap();
-        let debug = vite_str::format!("{args:?}");
+        let debug = vt_str::format!("{args:?}");
         assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}");
         assert!(matches!(args, CLIArgs::ViteTask(Command::Run(_))));
     }

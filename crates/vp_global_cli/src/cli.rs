@@ -10,9 +10,9 @@ use clap_complete::ArgValueCompleter;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
-use vite_path::AbsolutePathBuf;
 use vp_pm_cli::{ManagedGlobalCommand, PackageManagerCommand};
 use vp_shared::output;
+use vt_path::AbsolutePathBuf;
 
 use crate::{
     commands::{
@@ -523,7 +523,7 @@ fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
 /// which returns a list of available tasks in the format "task_name: description".
 fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
-    let Ok(cwd) = vite_path::current_dir() else {
+    let Ok(cwd) = vt_path::current_dir() else {
         return vec![];
     };
 
@@ -840,7 +840,7 @@ async fn managed_update(
 }
 
 async fn get_current_node_version() -> Result<String, Error> {
-    let cwd = vite_path::current_dir()?;
+    let cwd = vt_path::current_dir()?;
     Ok(resolve_version(&cwd).await?.version)
 }
 

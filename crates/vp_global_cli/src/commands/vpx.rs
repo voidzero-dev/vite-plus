@@ -7,8 +7,8 @@
 //! 3. System PATH (excluding vite-plus bin directory)
 //! 4. Remote download via `vp dlx`
 
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vp_shared::{PrependOptions, exit_code_from_status, output, prepend_to_path_env};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{commands::env::config, shim::dispatch};
 
@@ -200,7 +200,7 @@ fn find_on_path(cmd: &str) -> Option<AbsolutePathBuf> {
         .collect();
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
-    let cwd = vite_path::current_dir().ok()?;
+    let cwd = vt_path::current_dir().ok()?;
     vp_command::resolve_bin(cmd, Some(&filtered_path), &cwd).ok()
 }
 

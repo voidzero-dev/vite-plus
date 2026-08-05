@@ -69,7 +69,7 @@ impl Resolve<ApproveBuildsArgs> for Bun {
                 .collect::<Vec<_>>();
             diag.warn(
                 DiagnosticKind::UnsupportedOptionDropped,
-                vite_str::format!(
+                vt_str::format!(
                     "bun does not support denylisting build scripts. Packages outside `trustedDependencies` in package.json are already denied by default. Skipping: {}",
                     names.join(", ")
                 ),
@@ -204,7 +204,7 @@ fn warn_dropped_pass_through(extras: &[String], diag: &mut Diagnostics) {
     if !extras.is_empty() {
         diag.warn(
             DiagnosticKind::UnsupportedOptionDropped,
-            vite_str::format!(
+            vt_str::format!(
                 "Ignoring pass-through args ({}): this package manager has no native approve-builds command to forward them to.",
                 extras.join(" ")
             ),

@@ -8,24 +8,24 @@ pub fn npm_registry() -> String {
 
 /// Get the tgz url of a npm package
 #[must_use]
-pub(crate) fn get_npm_package_tgz_url(name: &str, version: &str) -> vite_str::Str {
+pub(crate) fn get_npm_package_tgz_url(name: &str, version: &str) -> vt_str::Str {
     let registry = npm_registry();
     // convert `@scope/name` to `name`
     let filename = name.split('/').next_back().unwrap_or(name);
-    vite_str::format!("{registry}/{name}/-/{filename}-{version}.tgz")
+    vt_str::format!("{registry}/{name}/-/{filename}-{version}.tgz")
 }
 
 #[must_use]
-pub(crate) fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> vite_str::Str {
+pub(crate) fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> vt_str::Str {
     let registry = npm_registry();
-    vite_str::format!("{registry}/{name}/{version_or_tag}")
+    vt_str::format!("{registry}/{name}/{version_or_tag}")
 }
 
 /// Get the metadata url of a npm package (lists all published versions)
 #[must_use]
-pub(crate) fn get_npm_package_metadata_url(name: &str) -> vite_str::Str {
+pub(crate) fn get_npm_package_metadata_url(name: &str) -> vt_str::Str {
     let registry = npm_registry();
-    vite_str::format!("{registry}/{name}")
+    vt_str::format!("{registry}/{name}")
 }
 
 #[cfg(test)]

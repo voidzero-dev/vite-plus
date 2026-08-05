@@ -71,7 +71,7 @@ fn resolve_cache(program: &str, command_args: &[&str], args: &CacheArgs) -> Comm
 fn unsupported(command: &str, subcommand: &str, diag: &mut Diagnostics) -> CommandResolution {
     diag.warn(
         DiagnosticKind::UnsupportedCommandNoop,
-        vite_str::format!("{command} subcommand '{subcommand}' not supported"),
+        vt_str::format!("{command} subcommand '{subcommand}' not supported"),
     );
     CommandResolution::Noop
 }

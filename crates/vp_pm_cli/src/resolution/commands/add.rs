@@ -139,12 +139,12 @@ impl Resolve<AddArgs> for Pnpm {
             if name.is_empty() {
                 cmd.arg("--save-catalog");
             } else {
-                cmd.arg(vite_str::format!("--save-catalog-name={name}"));
+                cmd.arg(vt_str::format!("--save-catalog-name={name}"));
             }
         }
         cmd.arg_if("--save-catalog", args.save_catalog);
         if let Some(allow_build) = &args.allow_build {
-            cmd.arg(vite_str::format!("--allow-build={allow_build}"));
+            cmd.arg(vt_str::format!("--allow-build={allow_build}"));
         }
         cmd.extend(args.pass_through_args.iter()).extend(args.packages.iter());
         cmd.into()

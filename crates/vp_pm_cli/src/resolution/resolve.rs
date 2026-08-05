@@ -79,7 +79,7 @@ mod tests {
     use crate::resolution::ApproveBuildsArgs;
 
     fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
-        let workspace_root = vite_path::current_dir().unwrap();
+        let workspace_root = vt_path::current_dir().unwrap();
         PackageManager {
             client,
             version: version.into(),

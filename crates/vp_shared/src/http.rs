@@ -35,7 +35,7 @@
 
 use std::{ffi::OsStr, path::Path, sync::OnceLock, time::Duration};
 
-use vite_str::Str;
+use vt_str::Str;
 
 use crate::{env_vars, error::format_error_chain, output};
 
@@ -112,7 +112,7 @@ fn extra_certs_from_env() -> Vec<reqwest::Certificate> {
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(err) => {
-                output::warn(&vite_str::format!(
+                output::warn(&vt_str::format!(
                     "failed to read CA bundle from {var}={}: {err}",
                     path.display()
                 ));
@@ -121,7 +121,7 @@ fn extra_certs_from_env() -> Vec<reqwest::Certificate> {
         };
         match reqwest::Certificate::from_pem_bundle(&bytes) {
             Ok(certs) if certs.is_empty() => {
-                output::warn(&vite_str::format!(
+                output::warn(&vt_str::format!(
                     "no PEM certificate blocks found in {var}={}",
                     path.display()
                 ));
@@ -131,7 +131,7 @@ fn extra_certs_from_env() -> Vec<reqwest::Certificate> {
                 extra_certs.extend(certs);
             }
             Err(err) => {
-                output::warn(&vite_str::format!(
+                output::warn(&vt_str::format!(
                     "failed to parse CA bundle from {var}={}: {err}",
                     path.display()
                 ));
@@ -227,7 +227,7 @@ mod tests {
     /// `f`, and cleans up. Callers must hold the `serial(env)` lock.
     fn with_invalid_ssl_cert_file<T>(tag: &str, f: impl FnOnce() -> T) -> T {
         let bundle = std::env::temp_dir()
-            .join(vite_str::format!("vp-invalid-ca-{tag}-{}.pem", std::process::id()).as_str());
+            .join(vt_str::format!("vp-invalid-ca-{tag}-{}.pem", std::process::id()).as_str());
         std::fs::write(&bundle, PEM_WITH_INVALID_DER).expect("write CA bundle fixture");
         // SAFETY: env access in this module's tests is serialized.
         unsafe {

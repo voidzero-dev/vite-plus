@@ -14,9 +14,9 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use tokio::process::Command;
 use uuid::Uuid;
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vp_js_runtime::NodeProvider;
 use vp_shared::{format_path_prepended, output};
+use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use crate::{
     commands::{
@@ -59,7 +59,7 @@ pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
 #[cfg(unix)]
 pub(crate) fn is_vp_shim_target(
     target: &std::path::Path,
-    shim_path: &vite_path::AbsolutePath,
+    shim_path: &vt_path::AbsolutePath,
 ) -> bool {
     target == std::path::Path::new(PACKAGE_SHIM_TARGET)
         || (target.file_name().is_some_and(|file_name| file_name == "vp")
@@ -1098,7 +1098,7 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
 /// On Unix: Creates a symlink to ../current/bin/vp
 /// On Windows: Creates a trampoline .exe that forwards to vp.exe
 pub(crate) async fn create_package_shim(
-    bin_dir: &vite_path::AbsolutePath,
+    bin_dir: &vt_path::AbsolutePath,
     bin_name: &str,
     package_name: &str,
 ) -> Result<(), Error> {
@@ -1164,10 +1164,7 @@ pub(crate) async fn create_package_shim(
 }
 
 /// Remove a shim for a package binary.
-async fn remove_package_shim(
-    bin_dir: &vite_path::AbsolutePath,
-    bin_name: &str,
-) -> Result<(), Error> {
+async fn remove_package_shim(bin_dir: &vt_path::AbsolutePath, bin_name: &str) -> Result<(), Error> {
     // Don't remove protected shims (e.g., `vp remove -g corepack` must keep
     // the default corepack shim so it falls back to the Node-bundled or
     // auto-installed corepack).
@@ -1236,7 +1233,7 @@ mod tests {
     #[cfg_attr(windows, serial_test::serial)]
     async fn test_create_package_shim_creates_bin_dir() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         // Create a temp directory but don't create the bin subdirectory
         let temp_dir = TempDir::new().unwrap();
@@ -1274,7 +1271,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_package_shim_skips_core_shims() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1318,7 +1315,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_package_shim_skips_corepack_bin_for_other_packages() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1336,7 +1333,7 @@ mod tests {
     #[cfg_attr(windows, serial_test::serial)]
     async fn test_remove_package_shim_removes_shim() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         #[cfg(windows)]
@@ -1381,7 +1378,7 @@ mod tests {
     #[tokio::test]
     async fn test_remove_package_shim_handles_missing_shim() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1394,7 +1391,7 @@ mod tests {
     #[cfg_attr(windows, serial_test::serial)]
     async fn test_uninstall_removes_shims_from_metadata() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
@@ -1530,7 +1527,7 @@ mod tests {
     #[cfg_attr(windows, serial_test::serial)]
     async fn test_restore_previous_install_state_removes_partial_new_bins() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
@@ -1692,7 +1689,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_with_js_extension() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let js_file = temp_dir.path().join("cli.js");
@@ -1705,7 +1702,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_with_mjs_extension() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let mjs_file = temp_dir.path().join("cli.mjs");
@@ -1718,7 +1715,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_with_cjs_extension() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let cjs_file = temp_dir.path().join("cli.cjs");
@@ -1731,7 +1728,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_with_node_shebang() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let cli_file = temp_dir.path().join("cli");
@@ -1744,7 +1741,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_with_direct_node_shebang() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let cli_file = temp_dir.path().join("cli");
@@ -1757,7 +1754,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_native_executable() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         // Simulate a native binary (ELF header)
@@ -1771,7 +1768,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_shell_script() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let shell_file = temp_dir.path().join("script.sh");
@@ -1784,7 +1781,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_python_script() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let python_file = temp_dir.path().join("script.py");
@@ -1797,7 +1794,7 @@ mod tests {
     #[test]
     fn test_is_javascript_binary_empty_file() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let empty_file = temp_dir.path().join("empty");

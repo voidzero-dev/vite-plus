@@ -18,13 +18,13 @@ use crossterm::{
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_dir_all;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_str::Str;
-#[cfg(test)]
-use vite_workspace::find_package_root;
-use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 use vp_error::Error;
 use vp_shared::OnFail;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
+#[cfg(test)]
+use vt_workspace::find_package_root;
+use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::{get_npm_package_metadata_url, get_npm_package_tgz_url, get_npm_package_version_url},
@@ -334,7 +334,7 @@ pub fn resolve_package_manager_from_package_json(
 ) -> Result<Option<PackageManagerResolution>, Error> {
     let (workspace_root, _) = match find_workspace_root(cwd.as_ref()) {
         Ok(result) => result,
-        Err(vite_workspace::Error::PackageJsonNotFound(_)) => return Ok(None),
+        Err(vt_workspace::Error::PackageJsonNotFound(_)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     if let Some(resolution) = get_package_manager_from_package_json(&workspace_root)? {
@@ -1930,7 +1930,7 @@ mod tests {
         fs::create_dir_all(&root_dir).unwrap();
         let found = find_package_root(&root_dir);
         let err = found.unwrap_err();
-        assert!(matches!(err, vite_workspace::Error::PackageJsonNotFound(_)));
+        assert!(matches!(err, vt_workspace::Error::PackageJsonNotFound(_)));
     }
 
     #[test]
@@ -1997,7 +1997,7 @@ mod tests {
         // Should return PackageJsonNotFound error if no package.json found
         let found = find_workspace_root(&nested_dir);
         let err = found.unwrap_err();
-        assert!(matches!(err, vite_workspace::Error::PackageJsonNotFound(_)));
+        assert!(matches!(err, vt_workspace::Error::PackageJsonNotFound(_)));
     }
 
     #[test]

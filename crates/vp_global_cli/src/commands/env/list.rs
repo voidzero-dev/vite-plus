@@ -6,7 +6,7 @@ use std::{cmp::Ordering, process::ExitStatus};
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use super::config;
 use crate::error::Error;

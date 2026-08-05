@@ -3,8 +3,8 @@
 use std::str::FromStr;
 
 use directories::BaseDirs;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_str::Str;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
 
 /// Detected shell type for output formatting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -218,7 +218,7 @@ pub enum ShellProfileKind {
 /// Abbreviate a path for display: replace `$HOME` prefix with `~`.
 pub(crate) fn abbreviate_home_path(path: &AbsolutePath, user_home: &AbsolutePath) -> Str {
     match path.strip_prefix(user_home) {
-        Ok(Some(suffix)) => vite_str::format!("~/{suffix}"),
+        Ok(Some(suffix)) => vt_str::format!("~/{suffix}"),
         _ => Str::from(path.to_string()),
     }
 }

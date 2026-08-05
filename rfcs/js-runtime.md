@@ -215,7 +215,7 @@ println!("Version: {}", runtime.version()); // "22.13.1"
 
 ```rust
 use vp_js_runtime::download_runtime_for_project;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
 let runtime = download_runtime_for_project(&project_path).await?;

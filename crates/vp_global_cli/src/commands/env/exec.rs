@@ -150,7 +150,7 @@ async fn execute_with_version(
     child.args(args).env("PATH", new_path);
     // The child runs in the inherited cwd, which a leading `-C <dir>` changes
     // without touching our own environment; align its `PWD` accordingly.
-    if let Ok(cwd) = vite_path::current_dir() {
+    if let Ok(cwd) = vt_path::current_dir() {
         vp_command::sync_child_pwd(&mut child, &cwd);
     }
     let status = child.status().await?;

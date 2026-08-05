@@ -3,8 +3,8 @@
 use std::{ffi::OsString, path::Path, sync::Arc};
 
 use thiserror::Error;
-use vite_path::{AbsolutePath, AbsolutePathBuf, relative::FromPathError};
-use vite_str::Str;
+use vt_path::{AbsolutePath, AbsolutePathBuf, relative::FromPathError};
+use vt_str::Str;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -43,7 +43,7 @@ pub enum Error {
     IgnoreError(#[from] ignore::Error),
 
     #[error(transparent)]
-    WorkspaceError(#[from] vite_workspace::Error),
+    WorkspaceError(#[from] vt_workspace::Error),
 
     #[error("Lint failed, reason: {reason}")]
     LintFailed { status: Str, reason: Str },

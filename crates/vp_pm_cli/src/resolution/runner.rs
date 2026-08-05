@@ -1,6 +1,6 @@
 use std::{collections::HashMap, process::ExitStatus};
 
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::{
     Error,
@@ -51,7 +51,7 @@ async fn run_pre_run_actions(cwd: &AbsolutePath, actions: Vec<PreRunAction>) -> 
 
 #[cfg(test)]
 mod tests {
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
     use crate::resolution::{Diagnostics, command::ResolvedCommand};
@@ -62,7 +62,7 @@ mod tests {
 
     #[tokio::test]
     async fn noop_returns_success() {
-        let cwd = vite_path::current_dir().unwrap();
+        let cwd = vt_path::current_dir().unwrap();
 
         let status = run_resolution(&cwd, resolution(CommandResolution::Noop), true).await.unwrap();
 
@@ -71,7 +71,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_argument_becomes_user_message() {
-        let cwd = vite_path::current_dir().unwrap();
+        let cwd = vt_path::current_dir().unwrap();
 
         let error = run_resolution(
             &cwd,

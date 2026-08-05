@@ -1,7 +1,7 @@
 use std::env;
 
 use directories::BaseDirs;
-use vite_path::{AbsolutePathBuf, current_dir};
+use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::EnvConfig;
 
@@ -72,7 +72,7 @@ fn infer_vp_home_from_path() -> std::io::Result<Option<AbsolutePathBuf>> {
     Ok(None)
 }
 
-fn is_vp_home_layout(bin_dir: &vite_path::AbsolutePath, home: &vite_path::AbsolutePath) -> bool {
+fn is_vp_home_layout(bin_dir: &vt_path::AbsolutePath, home: &vt_path::AbsolutePath) -> bool {
     bin_dir.join(VP_BINARY_NAME).as_path().is_file()
         && home.join("current").join("bin").join(VP_BINARY_NAME).as_path().is_file()
 }

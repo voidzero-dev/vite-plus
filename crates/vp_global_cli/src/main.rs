@@ -67,9 +67,9 @@ pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize
 /// delegated children that read `process.env.PWD` get it set explicitly from
 /// the resolved cwd at spawn time (see `js_executor` and the NAPI dispatch).
 pub(crate) fn apply_chdir(
-    cwd: &vite_path::AbsolutePath,
+    cwd: &vt_path::AbsolutePath,
     dir: &str,
-) -> Result<vite_path::AbsolutePathBuf, String> {
+) -> Result<vt_path::AbsolutePathBuf, String> {
     let target = cwd.join(dir).clean();
     if !target.as_path().is_dir() {
         return Err(format!("directory not found: {dir}"));
@@ -260,7 +260,7 @@ fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
     ExitCode::from(e.exit_code() as u8)
 }
 
-async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
+async fn run_corrected_args(cwd: &vt_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
     let render_options = RenderOptions { show_header: false };
     let args_with_program: Vec<String> =
         std::iter::once("vp".to_string()).chain(raw_args.iter().cloned()).collect();
@@ -357,7 +357,7 @@ async fn main() -> ExitCode {
     // should suggest from <dir>, where the completed command will run.
     if env::var_os("VP_COMPLETE").is_some()
         && let Some((dir, _)) = parse_leading_chdir(&args[1..])
-        && let Ok(current) = vite_path::current_dir()
+        && let Ok(current) = vt_path::current_dir()
     {
         // Best-effort and silent: mid-typing values are often not (yet) dirs.
         let _ = apply_chdir(&current, &dir);
@@ -377,7 +377,7 @@ async fn main() -> ExitCode {
     }
 
     // Normal CLI mode - get current working directory
-    let mut cwd = match vite_path::current_dir() {
+    let mut cwd = match vt_path::current_dir() {
         Ok(path) => path,
         Err(e) => {
             output::error(&format!("Failed to get current directory: {e}"));
@@ -388,7 +388,7 @@ async fn main() -> ExitCode {
     // Consume a leading `-C <dir>` here, before anything inspects args or cwd,
     // so alias normalization, the command picker, and in-process helpers all
     // behave exactly as if vp had been started in <dir>. Setting the process
-    // cwd (before any command logic runs) keeps `vite_path::current_dir()`
+    // cwd (before any command logic runs) keeps `vt_path::current_dir()`
     // callers deep inside command implementations equivalent to the cd form.
     if let Some((dir, consumed)) = parse_leading_chdir(&args[1..]) {
         cwd = match apply_chdir(&cwd, &dir) {

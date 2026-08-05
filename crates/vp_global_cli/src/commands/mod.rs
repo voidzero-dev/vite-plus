@@ -18,8 +18,8 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vite_path::AbsolutePath;
 use vp_shared::{PrependOptions, prepend_to_path_env};
+use vt_path::AbsolutePath;
 
 use crate::{error::Error, js_executor::JsExecutor};
 
@@ -112,7 +112,7 @@ pub mod delegate;
 
 #[cfg(test)]
 mod tests {
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

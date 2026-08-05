@@ -299,10 +299,10 @@ mod tests {
 
         assert_eq!(detect_shim_tool(tool), Some(tool.to_string()));
         assert_eq!(
-            detect_shim_tool(&vite_str::format!("/home/user/.vite-plus/bin/{tool}")),
+            detect_shim_tool(&vt_str::format!("/home/user/.vite-plus/bin/{tool}")),
             Some(tool.to_string()),
         );
-        assert_eq!(detect_shim_tool(&vite_str::format!("{tool}.exe")), Some(tool.to_string()),);
+        assert_eq!(detect_shim_tool(&vt_str::format!("{tool}.exe")), Some(tool.to_string()),);
     }
 
     #[test]

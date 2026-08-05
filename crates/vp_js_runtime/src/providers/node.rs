@@ -5,8 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use node_semver::{Range, Version};
 use serde::{Deserialize, Serialize};
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_str::Str;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
 
 // Only referenced on non-musl builds, where official releases are signed.
 #[cfg(not(target_env = "musl"))]
@@ -235,7 +235,7 @@ impl NodeProvider {
         cache_path: &AbsolutePathBuf,
     ) -> Result<Vec<NodeVersionEntry>, Error> {
         let base_url = get_dist_url();
-        let index_url = vite_str::format!("{base_url}/index.json");
+        let index_url = vt_str::format!("{base_url}/index.json");
 
         let response =
             fetch_json_with_cache_headers::<Vec<NodeVersionEntry>>(&index_url, Some(etag)).await?;
@@ -273,7 +273,7 @@ impl NodeProvider {
         cache_path: &AbsolutePathBuf,
     ) -> Result<Vec<NodeVersionEntry>, Error> {
         let base_url = get_dist_url();
-        let index_url = vite_str::format!("{base_url}/index.json");
+        let index_url = vt_str::format!("{base_url}/index.json");
 
         tracing::debug!("Fetching version index from {index_url}");
         let response =
@@ -610,9 +610,9 @@ impl JsRuntimeProvider for NodeProvider {
         // e.g. "linux-x64-musl" instead of "linux-x64"
         #[cfg(target_env = "musl")]
         if platform.os == Os::Linux {
-            return vite_str::format!("{os}-{arch}-musl");
+            return vt_str::format!("{os}-{arch}-musl");
         }
-        vite_str::format!("{os}-{arch}")
+        vt_str::format!("{os}-{arch}")
     }
 
     fn get_download_info(&self, version: &str, platform: Platform) -> DownloadInfo {
@@ -621,10 +621,10 @@ impl JsRuntimeProvider for NodeProvider {
         let format = Self::archive_format(platform);
         let ext = format.extension();
 
-        let archive_filename: Str = vite_str::format!("node-v{version}-{platform_str}.{ext}");
-        let archive_url = vite_str::format!("{base_url}/v{version}/{archive_filename}");
-        let shasums_url = vite_str::format!("{base_url}/v{version}/SHASUMS256.txt");
-        let extracted_dir_name = vite_str::format!("node-v{version}-{platform_str}");
+        let archive_filename: Str = vt_str::format!("node-v{version}-{platform_str}.{ext}");
+        let archive_url = vt_str::format!("{base_url}/v{version}/{archive_filename}");
+        let shasums_url = vt_str::format!("{base_url}/v{version}/SHASUMS256.txt");
+        let extracted_dir_name = vt_str::format!("node-v{version}-{platform_str}");
 
         // Official nodejs.org releases publish a clearsigned SHASUMS256.txt.asc
         // signed by a Node.js releaser; verify it. The unofficial musl builds
@@ -632,7 +632,7 @@ impl JsRuntimeProvider for NodeProvider {
         // the plain SHASUMS256.txt there.
         #[cfg(not(target_env = "musl"))]
         let signature = Some(ShasumsSignature {
-            url: vite_str::format!("{base_url}/v{version}/SHASUMS256.txt.asc"),
+            url: vt_str::format!("{base_url}/v{version}/SHASUMS256.txt.asc"),
             // Require the signature based on the resolved host: official
             // nodejs.org always ships it (including when VP_NODE_DIST_MIRROR
             // points back at nodejs.org). A custom mirror (e.g. an internal
@@ -1219,7 +1219,7 @@ fedcba987654  node-v22.13.1-win-x64.zip";
     #[tokio::test]
     async fn test_find_cached_version() {
         use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+        use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let cache_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

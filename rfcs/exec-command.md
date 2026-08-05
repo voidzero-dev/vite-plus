@@ -223,7 +223,7 @@ packages/cli/binding/src/exec/
 
 There is a single code path for both single-package and multi-package execution. `mod.rs` validates the command is non-empty and delegates to `execute_exec_workspace()`. When no workspace flags (`--recursive`, `--filter`, etc.) are given, `PackageQueryArgs::into_package_query()` returns a `ContainingPackage(cwd)` selector that resolves to just the current package — so the workspace path naturally handles the single-package case.
 
-Package filtering is delegated to `vite_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct, embedded via `#[clap(flatten)]`) → `PackageQuery` (via `into_package_query()`) → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). This follows the same pattern used by `vp run` via `RunFlags`.
+Package filtering is delegated to `vt_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct, embedded via `#[clap(flatten)]`) → `PackageQuery` (via `into_package_query()`) → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). This follows the same pattern used by `vp run` via `RunFlags`.
 
 The local CLI has full workspace awareness and can handle:
 
@@ -242,17 +242,17 @@ When only a single package is selected (whether by default or via `--filter`), t
 
 The following existing code is reused:
 
-| Module           | Function                           | Purpose                                           |
-| ---------------- | ---------------------------------- | ------------------------------------------------- |
-| `vp_command`     | `resolve_bin()`                    | Resolve binary path via PATH lookup               |
-| `vp_command`     | `build_command()`                  | Build a `tokio::process::Command` for a binary    |
-| `vp_command`     | `build_shell_command()`            | Build a shell command for `-c` mode               |
-| `vp_pm_cli`      | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
-| `vite_workspace` | `find_workspace_root()`            | Locate workspace root from cwd                    |
-| `vite_workspace` | `load_package_graph()`             | Load workspace packages and dependency graph      |
-| `vite_workspace` | `PackageQueryArgs`                 | CLI args struct for package selection             |
-| `vite_workspace` | `IndexedPackageGraph`              | Indexed graph with `resolve_query()`              |
-| `vite_workspace` | `FilterResolution`                 | Resolution result: subgraph + unmatched selectors |
+| Module         | Function                           | Purpose                                           |
+| -------------- | ---------------------------------- | ------------------------------------------------- |
+| `vp_command`   | `resolve_bin()`                    | Resolve binary path via PATH lookup               |
+| `vp_command`   | `build_command()`                  | Build a `tokio::process::Command` for a binary    |
+| `vp_command`   | `build_shell_command()`            | Build a shell command for `-c` mode               |
+| `vp_pm_cli`    | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
+| `vt_workspace` | `find_workspace_root()`            | Locate workspace root from cwd                    |
+| `vt_workspace` | `load_package_graph()`             | Load workspace packages and dependency graph      |
+| `vt_workspace` | `PackageQueryArgs`                 | CLI args struct for package selection             |
+| `vt_workspace` | `IndexedPackageGraph`              | Indexed graph with `resolve_query()`              |
+| `vt_workspace` | `FilterResolution`                 | Resolution result: subgraph + unmatched selectors |
 
 ## Design Decisions
 

@@ -2,7 +2,7 @@
 
 use std::io;
 
-use vite_str::Str;
+use vt_str::Str;
 
 /// Error type for setup operations.
 #[derive(Debug, thiserror::Error)]

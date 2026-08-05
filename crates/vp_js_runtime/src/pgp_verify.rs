@@ -41,7 +41,7 @@ use pgp::{
     composed::{CleartextSignedMessage, Deserializable, SignedPublicKey, SignedPublicSubKey},
     packet::SignatureType,
 };
-use vite_str::Str;
+use vt_str::Str;
 
 use crate::Error;
 

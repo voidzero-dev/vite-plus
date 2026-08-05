@@ -13,8 +13,8 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 vp_error = { workspace = true }
-vite_path = { workspace = true }
-vite_powershell = { workspace = true }
+vt_path = { workspace = true }
+vt_powershell = { workspace = true }
 vp_shared = { workspace = true }
 which = { workspace = true, features = ["tracing"] }
 

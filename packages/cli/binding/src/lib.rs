@@ -32,7 +32,7 @@ use std::{collections::HashMap, error::Error as StdError, ffi::OsStr, fmt::Write
 
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-use vite_path::current_dir;
+use vt_path::current_dir;
 
 use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
@@ -154,7 +154,7 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This is an async function that spawns a new thread for the non-Send async code
-/// from vite_task, while allowing the NAPI async context to continue running
+/// from vt, while allowing the NAPI async context to continue running
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {

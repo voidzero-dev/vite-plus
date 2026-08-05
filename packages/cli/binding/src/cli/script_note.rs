@@ -6,9 +6,9 @@
 //! uses points at `vpr`.
 
 use owo_colors::OwoColorize;
-use vite_path::AbsolutePath;
-use vite_task::MARKER_ENV_NAME;
 use vp_shared::output;
+use vt::MARKER_ENV_NAME;
+use vt_path::AbsolutePath;
 
 const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 
@@ -47,7 +47,7 @@ pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
 /// subdirectory. It stops there rather than climbing to a package that happens
 /// to define the script: `vpr <name>` would not reach that one either.
 fn has_package_json_script(cwd: &AbsolutePath, name: &str) -> bool {
-    let Ok(package) = vite_workspace::find_package_root(cwd) else { return false };
+    let Ok(package) = vt_workspace::find_package_root(cwd) else { return false };
     serde_json::from_slice::<serde_json::Value>(package.package_json.content()).is_ok_and(
         |manifest| {
             manifest

@@ -205,7 +205,7 @@ impl HttpClient {
         {
             return Err(Error::Io(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
-                vite_str::format!(
+                vt_str::format!(
                     "incomplete download: expected {expected_len} bytes, got {bytes_written}"
                 )
                 .to_string(),
@@ -389,7 +389,7 @@ pub(crate) async fn verify_file_hash(
     if actual != expected {
         return Err(Error::HashMismatch {
             expected: expected_hash.into(),
-            actual: vite_str::format!("{algorithm}{separator}{actual}").into(),
+            actual: vt_str::format!("{algorithm}{separator}{actual}").into(),
         });
     }
 
@@ -593,7 +593,7 @@ mod tests {
         });
 
         let client = HttpClient::new();
-        let url = vite_str::format!("{}/api/package.json", server.base_url());
+        let url = vt_str::format!("{}/api/package.json", server.base_url());
 
         let result: Result<PackageInfo, _> = client.get_json(&url).await;
         assert!(result.is_ok());
@@ -618,7 +618,7 @@ mod tests {
         });
 
         let client = HttpClient::new();
-        let url = vite_str::format!("{}/file.txt", server.base_url());
+        let url = vt_str::format!("{}/file.txt", server.base_url());
 
         let result = client.download_file(&url, &target_file).await;
         assert!(result.is_ok(), "Failed to download file: {result:?}");
@@ -642,7 +642,7 @@ mod tests {
         });
 
         let client = HttpClient::with_config(2, 50); // 2 retries with 50ms base interval
-        let url = vite_str::format!("{}/server_error", server.base_url());
+        let url = vt_str::format!("{}/server_error", server.base_url());
 
         // Should fail after retries
         let result = client.download_file(&url, &target_file).await;
@@ -664,7 +664,7 @@ mod tests {
             then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
         });
 
-        let url = vite_str::format!("{}/test-package.tgz", server.base_url());
+        let url = vt_str::format!("{}/test-package.tgz", server.base_url());
         let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
@@ -695,7 +695,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let target_dir = temp_dir.path().join("extracted");
-        let url = vite_str::format!("{}/corrupt.tgz", server.base_url());
+        let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
         let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
         assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
@@ -720,7 +720,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let target_dir = temp_dir.path().join("extracted");
-        let url = vite_str::format!("{}/mismatch.tgz", server.base_url());
+        let url = vt_str::format!("{}/mismatch.tgz", server.base_url());
         let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
              0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -765,7 +765,7 @@ mod tests {
                 let mut scratch = [0u8; 1024];
                 let _ = socket.read(&mut scratch).await;
 
-                let head = vite_str::format!("HTTP/1.1 200 OK\r\nContent-Length: {len}\r\n\r\n");
+                let head = vt_str::format!("HTTP/1.1 200 OK\r\nContent-Length: {len}\r\n\r\n");
                 socket.write_all(head.as_bytes()).await.unwrap();
                 if attempt == 0 {
                     // First attempt: send half the body, then drop the connection.
@@ -779,7 +779,7 @@ mod tests {
         });
 
         let client = HttpClient::with_config(3, 10);
-        let url = vite_str::format!("http://{addr}/");
+        let url = vt_str::format!("http://{addr}/");
         let result = client.get_bytes(&url).await;
 
         server.abort();
@@ -814,7 +814,7 @@ mod tests {
         // Calculate expected SHA1
         let mut hasher = Sha1::new();
         hasher.update(content);
-        let expected_hash = vite_str::format!("sha1.{:x}", hasher.finalize());
+        let expected_hash = vt_str::format!("sha1.{:x}", hasher.finalize());
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
@@ -842,7 +842,7 @@ mod tests {
         // Calculate the expected SRI (registry `dist.integrity` format)
         let digest = Sha512::digest(content);
         let expected_sri =
-            vite_str::format!("sha512-{}", base64_simd::STANDARD.encode_to_string(digest));
+            vt_str::format!("sha512-{}", base64_simd::STANDARD.encode_to_string(digest));
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_sri).await;
@@ -850,7 +850,7 @@ mod tests {
 
         // Test failed verification
         let wrong_sri =
-            vite_str::format!("sha512-{}", base64_simd::STANDARD.encode_to_string([0u8; 64]));
+            vt_str::format!("sha512-{}", base64_simd::STANDARD.encode_to_string([0u8; 64]));
         let result = verify_file_hash(&test_file, &wrong_sri).await;
         assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
     }
@@ -872,7 +872,7 @@ mod tests {
         // Calculate expected SHA224
         let mut hasher = Sha224::new();
         hasher.update(content);
-        let expected_hash = vite_str::format!("sha224.{:x}", hasher.finalize());
+        let expected_hash = vt_str::format!("sha224.{:x}", hasher.finalize());
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
@@ -897,7 +897,7 @@ mod tests {
         });
 
         let client = HttpClient::new();
-        let url = vite_str::format!("{}/nonexistent", server.base_url());
+        let url = vt_str::format!("{}/nonexistent", server.base_url());
 
         // Should fail with 404
         let result = client.download_file(&url, &target_file).await;
@@ -923,7 +923,7 @@ mod tests {
         });
 
         let client = HttpClient::with_config(2, 1);
-        let url = vite_str::format!("{}/invalid.json", server.base_url());
+        let url = vt_str::format!("{}/invalid.json", server.base_url());
 
         let result: Result<TestData, _> = client.get_json(&url).await;
         assert!(result.is_err(), "Expected JSON parsing to fail");

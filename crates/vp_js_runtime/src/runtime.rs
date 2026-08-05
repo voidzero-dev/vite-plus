@@ -3,8 +3,8 @@ use std::time::Duration;
 use backon::{ExponentialBuilder, Retryable};
 use node_semver::{Range, Version};
 use tempfile::TempDir;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_str::Str;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
 
 use crate::{
     Error, Platform,
@@ -77,7 +77,7 @@ impl JsRuntime {
     pub fn from_system(runtime_type: JsRuntimeType, binary_path: AbsolutePathBuf) -> Self {
         let install_dir = binary_path
             .parent()
-            .map_or_else(|| binary_path.clone(), vite_path::AbsolutePath::to_absolute_path_buf);
+            .map_or_else(|| binary_path.clone(), vt_path::AbsolutePath::to_absolute_path_buf);
         let binary_filename: Str = Str::from(
             binary_path.as_path().file_name().unwrap_or_default().to_string_lossy().as_ref(),
         );

@@ -15,7 +15,7 @@
 /// Override for the vite-plus home directory (default: `~/.vite-plus`).
 pub const VP_HOME: &str = "VP_HOME";
 
-/// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vite_task=trace"`).
+/// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vt=trace"`).
 pub const VP_LOG: &str = "VP_LOG";
 
 /// NPM registry URL (lowercase form, highest priority).

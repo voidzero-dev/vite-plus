@@ -4,7 +4,7 @@
 
 use std::process::ExitStatus;
 
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use super::config::{get_config_path, load_config, save_config};
 use crate::error::Error;

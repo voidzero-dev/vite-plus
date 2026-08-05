@@ -6,11 +6,11 @@ use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use vite_path::AbsolutePathBuf;
 use vp_pm_cli::{
     PackageManagerResolution, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
+use vt_path::AbsolutePathBuf;
 
 use super::config::resolve_version;
 use crate::{error::Error, help};

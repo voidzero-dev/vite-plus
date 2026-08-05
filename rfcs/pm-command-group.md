@@ -1341,7 +1341,7 @@ Bun provides several `bun pm` subcommands that may not have direct equivalents i
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add new command group:
 
@@ -1585,7 +1585,7 @@ pub enum OwnerCommands {
 use std::{collections::HashMap, process::ExitStatus};
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -1794,13 +1794,13 @@ pub mod pm;  // Add this line
 
 #### 3. PM Command Implementation
 
-**File**: `crates/vite_task/src/pm.rs` (new file)
+**File**: `crates/vt/src/pm.rs` (new file)
 
 ```rust
 use vp_error::Error;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 use vite_package_manager::PackageManager;
-use vite_workspace::Workspace;
+use vt_workspace::Workspace;
 
 pub struct PmCommand {
     workspace_root: AbsolutePathBuf,

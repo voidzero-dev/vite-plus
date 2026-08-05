@@ -12,7 +12,7 @@ use crossterm::{
     style::{Attribute, Print, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{self, ClearType},
 };
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::commands::has_vite_plus_dependency;
 

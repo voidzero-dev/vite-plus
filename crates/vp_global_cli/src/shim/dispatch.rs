@@ -5,12 +5,12 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core tools and package binaries)
 
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vp_pm_cli::{
     PackageManagerType, download_package_manager, package_manager_bin_path,
     package_manager_install_dir, resolve_package_manager_from_package_json,
 };
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
+use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use super::{
     cache::{self, ResolveCache, ResolveCacheEntry},
@@ -271,7 +271,7 @@ fn check_npm_global_install_result(
                     } else {
                         ""
                     };
-                    output::note(&vite_str::format!(
+                    output::note(&vt_str::format!(
                         "'{bin_name}' is a Vite+ default shim; the npm-installed copy is not \
                          linked.{hint}"
                     ));
@@ -286,7 +286,7 @@ fn check_npm_global_install_result(
             let shim_exists = std::fs::symlink_metadata(shim_path.as_path()).is_ok() || {
                 #[cfg(windows)]
                 {
-                    let exe_path = bin_dir.join(vite_str::format!("{bin_name}.exe"));
+                    let exe_path = bin_dir.join(vt_str::format!("{bin_name}.exe"));
                     std::fs::symlink_metadata(exe_path.as_path()).is_ok()
                 }
                 #[cfg(not(windows))]
@@ -304,7 +304,7 @@ fn check_npm_global_install_result(
                         #[cfg(unix)]
                         let source_path = npm_bin_dir.join(&bin_name);
                         #[cfg(windows)]
-                        let source_path = npm_bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+                        let source_path = npm_bin_dir.join(vt_str::format!("{bin_name}.cmd"));
 
                         if source_path.as_path().exists() {
                             let _ = std::fs::remove_file(shim_path.as_path());
@@ -348,7 +348,7 @@ fn check_npm_global_install_result(
 
     if !managed_conflicts.is_empty() {
         for (bin_name, pkg) in &managed_conflicts {
-            output::raw(&vite_str::format!(
+            output::raw(&vt_str::format!(
                 "Skipped '{bin_name}': managed by `vp install -g {pkg}`. Run `vp uninstall -g {pkg}` to remove it first."
             ));
         }
@@ -363,7 +363,7 @@ fn check_npm_global_install_result(
         let bin_list: Vec<&str> = missing_bins.iter().map(|(name, _, _)| name.as_str()).collect();
         let bin_display = bin_list.join(", ");
 
-        output::raw(&vite_str::format!("'{bin_display}' is not available on your PATH."));
+        output::raw(&vt_str::format!("'{bin_display}' is not available on your PATH."));
         output::raw_inline("Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
         let _ = std::io::Write::flush(&mut std::io::stdout());
 
@@ -441,13 +441,13 @@ pub(crate) fn create_bin_link(
     {
         let link_path = bin_dir.join(bin_name);
         if std::os::unix::fs::symlink(source_path.as_path(), link_path.as_path()).is_ok() {
-            output::raw(&vite_str::format!(
+            output::raw(&vt_str::format!(
                 "Linked '{bin_name}' to {}",
                 link_path.as_path().display()
             ));
             linked = true;
         } else {
-            output::error(&vite_str::format!("Failed to create link for '{bin_name}'"));
+            output::error(&vt_str::format!("Failed to create link for '{bin_name}'"));
         }
     }
 
@@ -456,19 +456,19 @@ pub(crate) fn create_bin_link(
         // npm-installed packages use .cmd wrappers pointing to npm's generated script.
         // Unlike vp-installed packages, these don't have PackageMetadata, so the
         // trampoline approach won't work (dispatch_package_binary would fail).
-        let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
-        let wrapper_content = vite_str::format!(
+        let cmd_path = bin_dir.join(vt_str::format!("{bin_name}.cmd"));
+        let wrapper_content = vt_str::format!(
             "@echo off\r\n\"{source}\" %*\r\nexit /b %ERRORLEVEL%\r\n",
             source = source_path.as_path().display()
         );
         if std::fs::write(cmd_path.as_path(), &*wrapper_content).is_ok() {
-            output::raw(&vite_str::format!(
+            output::raw(&vt_str::format!(
                 "Linked '{bin_name}' to {}",
                 cmd_path.as_path().display()
             ));
             linked = true;
         } else {
-            output::error(&vite_str::format!("Failed to create link for '{bin_name}'"));
+            output::error(&vt_str::format!("Failed to create link for '{bin_name}'"));
         }
 
         // Also create shell script for Git Bash
@@ -538,7 +538,7 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
             let link_path = bin_dir.join(bin_name);
             if std::fs::symlink_metadata(link_path.as_path()).is_ok() {
                 if std::fs::remove_file(link_path.as_path()).is_ok() {
-                    output::raw(&vite_str::format!(
+                    output::raw(&vt_str::format!(
                         "Removed link '{bin_name}' from {}",
                         link_path.as_path().display()
                     ));
@@ -551,9 +551,9 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
             // Also remove .cmd and .exe on Windows
             #[cfg(windows)]
             {
-                let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+                let cmd_path = bin_dir.join(vt_str::format!("{bin_name}.cmd"));
                 let _ = std::fs::remove_file(cmd_path.as_path());
-                let exe_path = bin_dir.join(vite_str::format!("{bin_name}.exe"));
+                let exe_path = bin_dir.join(vt_str::format!("{bin_name}.exe"));
                 let _ = std::fs::remove_file(exe_path.as_path());
             }
         } else {
@@ -590,7 +590,7 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
                 let _ = std::fs::remove_file(link_path.as_path());
                 #[cfg(windows)]
                 {
-                    let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+                    let cmd_path = bin_dir.join(vt_str::format!("{bin_name}.cmd"));
                     let _ = std::fs::remove_file(cmd_path.as_path());
                 }
                 create_bin_link(

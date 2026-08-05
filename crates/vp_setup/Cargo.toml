@@ -20,9 +20,9 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vp_js_runtime = { workspace = true }
 vp_pm_cli = { workspace = true }
-vite_path = { workspace = true }
+vt_path = { workspace = true }
 vp_shared = { workspace = true }
-vite_str = { workspace = true }
+vt_str = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 junction = { workspace = true }

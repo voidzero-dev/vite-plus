@@ -49,14 +49,14 @@ impl Diagnostics {
         rule: &crate::resolution::PmSupportRule,
     ) {
         let message = if let Some(version) = rule.version_rule() {
-            vite_str::format!(
+            vt_str::format!(
                 "{} {}{} does not support {option}.",
                 rule.manager_name(),
                 version.operator(),
                 version.original(),
             )
         } else {
-            vite_str::format!("{} does not support {option}.", rule.manager_name())
+            vt_str::format!("{} does not support {option}.", rule.manager_name())
         };
         self.warn(DiagnosticKind::UnsupportedOptionDropped, message);
     }

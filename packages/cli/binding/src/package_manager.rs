@@ -1,9 +1,9 @@
 use napi::{Error, anyhow, bindgen_prelude::*};
 use napi_derive::napi;
-use vite_path::AbsolutePathBuf;
-use vite_workspace::{Error::PackageJsonNotFound, WorkspaceFile, find_workspace_root};
 use vp_error::Error::{UnrecognizedPackageManager, UnsupportedPackageManager};
 use vp_pm_cli::{PackageManagerType, get_package_manager_type_and_version};
+use vt_path::AbsolutePathBuf;
+use vt_workspace::{Error::PackageJsonNotFound, WorkspaceFile, find_workspace_root};
 
 #[napi(object)]
 #[derive(Debug)]

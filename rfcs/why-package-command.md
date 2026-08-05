@@ -278,7 +278,7 @@ info Reasons this module exists
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add new command variant:
 
@@ -360,7 +360,7 @@ pub enum Commands {
 use std::{collections::HashMap, process::ExitStatus};
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -578,16 +578,16 @@ pub mod why;  // Add this line
 
 #### 3. Why Command Implementation
 
-**File**: `crates/vite_task/src/why.rs` (new file)
+**File**: `crates/vt/src/why.rs` (new file)
 
 ```rust
 use vp_error::Error;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 use vite_package_manager::{
     PackageManager,
     commands::why::WhyCommandOptions,
 };
-use vite_workspace::Workspace;
+use vt_workspace::Workspace;
 
 pub struct WhyCommand {
     workspace_root: AbsolutePathBuf,

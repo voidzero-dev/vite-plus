@@ -3664,7 +3664,7 @@ export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): 
  * Main entry point for the CLI, called from JavaScript.
  *
  * This is an async function that spawns a new thread for the non-Send async code
- * from vite_task, while allowing the NAPI async context to continue running
+ * from vt, while allowing the NAPI async context to continue running
  * and process JavaScript callbacks (via ThreadsafeFunction).
  */
 export declare function run(options: CliOptions): Promise<number>;

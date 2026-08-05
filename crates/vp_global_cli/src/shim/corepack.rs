@@ -17,8 +17,8 @@
 //! injected when not explicitly set, and Vite+-owned shims are restored
 //! afterwards if corepack removed or replaced them.
 
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
+use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use super::{
     dispatch::{
@@ -545,7 +545,7 @@ fn is_npm_link_wrapper(content: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

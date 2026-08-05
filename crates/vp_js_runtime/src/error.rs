@@ -1,5 +1,5 @@
 use thiserror::Error;
-use vite_str::Str;
+use vt_str::Str;
 
 /// Errors that can occur during JavaScript runtime management
 #[derive(Error, Debug)]

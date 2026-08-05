@@ -1,13 +1,13 @@
 use std::iter;
 
 use clap::{Parser, error::ErrorKind};
-use vite_path::AbsolutePath;
-use vite_str::Str;
-use vite_task::{
+use vt::{
     CommandHandler, HandledCommand, ScriptCommand,
     config::user::{EnabledCacheConfig, UserCacheConfig, UserRunConfig},
     loader::UserConfigLoader,
 };
+use vt_path::AbsolutePath;
+use vt_str::Str;
 
 use super::{
     resolver::{SubcommandResolver, check_cache_inputs},

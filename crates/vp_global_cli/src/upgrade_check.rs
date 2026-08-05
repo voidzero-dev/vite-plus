@@ -22,13 +22,13 @@ struct UpgradeCheckCache {
     prompted_at: u64,
 }
 
-fn read_cache(install_dir: &vite_path::AbsolutePath) -> Option<UpgradeCheckCache> {
+fn read_cache(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> {
     let cache_path = install_dir.join(CACHE_FILE_NAME);
     let data = std::fs::read_to_string(cache_path.as_path()).ok()?;
     serde_json::from_str(&data).ok()
 }
 
-fn write_cache(install_dir: &vite_path::AbsolutePath, cache: &UpgradeCheckCache) {
+fn write_cache(install_dir: &vt_path::AbsolutePath, cache: &UpgradeCheckCache) {
     let cache_path = install_dir.join(CACHE_FILE_NAME);
     if let Ok(data) = serde_json::to_string(cache) {
         let _ = std::fs::write(cache_path.as_path(), &data);
@@ -72,7 +72,7 @@ async fn resolve_version_string() -> Option<String> {
 }
 
 pub struct UpgradeCheckResult {
-    install_dir: vite_path::AbsolutePathBuf,
+    install_dir: vt_path::AbsolutePathBuf,
     cache: UpgradeCheckCache,
 }
 
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn cache_round_trip() {
         let dir = tempfile::tempdir().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
 
         let cache =
             UpgradeCheckCache { latest: "1.2.3".to_owned(), checked_at: 1000, prompted_at: 900 };
@@ -184,14 +184,14 @@ mod tests {
     #[test]
     fn read_cache_returns_none_for_missing_file() {
         let dir = tempfile::tempdir().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         assert!(read_cache(&dir_path).is_none());
     }
 
     #[test]
     fn read_cache_returns_none_for_corrupt_file() {
         let dir = tempfile::tempdir().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir_path.join(CACHE_FILE_NAME).as_path(), "not json").unwrap();
         assert!(read_cache(&dir_path).is_none());
     }

@@ -19,7 +19,7 @@ use crate::env_vars;
 /// subscribers (e.g., rolldown devtools) can claim it without panicking.
 ///
 /// # Environment Variables
-/// - `VP_LOG`: Controls log filtering (e.g., "debug", "`vite_task=trace`")
+/// - `VP_LOG`: Controls log filtering (e.g., "debug", "`vt=trace`")
 pub fn init_tracing() {
     static TRACING: OnceLock<()> = OnceLock::new();
     TRACING.get_or_init(|| {

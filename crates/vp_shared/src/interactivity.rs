@@ -1,6 +1,6 @@
 //! Shared CI-environment and interactive-terminal detection.
 
-pub use vite_powershell::is_stdin_terminal;
+pub use vt_powershell::is_stdin_terminal;
 
 /// Common CI environment variables.
 const CI_ENV_VARS: &[&str] = &[

@@ -11,21 +11,21 @@ disallowed-methods = [
   { path = "str::to_uppercase", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_to_uppercase` instead." },
   { path = "str::replace", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replace` instead." },
   { path = "str::replacen", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
-  { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vite_path::current_dir` instead." },
+  { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vt_path::current_dir` instead." },
   { path = "std::process::ExitStatus::code", reason = "Returns None for signal-terminated processes on Unix. Use `vp_shared::exit_code_from_status` instead." },
-  { path = "std::io::IsTerminal::is_terminal", reason = "Use `vite_powershell::is_stdin_terminal` for stdin, or `vp_shared::is_stdout_terminal` / `vp_shared::is_stderr_terminal`, which memoize the lookup." },
+  { path = "std::io::IsTerminal::is_terminal", reason = "Use `vt_powershell::is_stdin_terminal` for stdin, or `vp_shared::is_stdout_terminal` / `vp_shared::is_stderr_terminal`, which memoize the lookup." },
 ]
 
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster." },
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
-  { path = "std::path::Path", reason = "Use `vite_path::RelativePath` or `vite_path::AbsolutePath` instead" },
-  { path = "std::path::PathBuf", reason = "Use `vite_path::RelativePathBuf` or `vite_path::AbsolutePathBuf` instead" },
-  { path = "std::string::String", reason = "Use `vite_str::Str` for small strings. For large strings, prefer `Box/Rc/Arc<str>` if mutation is not needed." },
+  { path = "std::path::Path", reason = "Use `vt_path::RelativePath` or `vt_path::AbsolutePath` instead" },
+  { path = "std::path::PathBuf", reason = "Use `vt_path::RelativePathBuf` or `vt_path::AbsolutePathBuf` instead" },
+  { path = "std::string::String", reason = "Use `vt_str::Str` for small strings. For large strings, prefer `Box/Rc/Arc<str>` if mutation is not needed." },
 ]
 
 disallowed-macros = [
-  { path = "std::format", reason = "Use `vite_str::format` for small strings." },
+  { path = "std::format", reason = "Use `vt_str::format` for small strings." },
   { path = "std::println", reason = "Use `vp_shared::output` functions (`info`, `note`, `success`) instead." },
   { path = "std::print", reason = "Use `vp_shared::output` functions (`info`, `note`, `success`) instead." },
   { path = "std::eprintln", reason = "Use `vp_shared::output` functions (`warn`, `error`) instead." },

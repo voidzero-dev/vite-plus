@@ -1,9 +1,9 @@
 use std::{borrow::Cow, ffi::OsStr, process::Stdio, sync::Arc};
 
 use rustc_hash::FxHashMap;
-use vite_path::AbsolutePathBuf;
-use vite_task::ExitStatus;
 use vp_error::Error;
+use vt::ExitStatus;
+use vt_path::AbsolutePathBuf;
 
 use super::{
     resolver::SubcommandResolver,

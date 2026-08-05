@@ -6,9 +6,9 @@
 use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
 use vp_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
     commands::env::config::{self, ShimMode},
@@ -129,7 +129,7 @@ impl JsExecutor {
         // scripts_dir is typically packages/cli/dist, so parent is packages/cli
         scripts_dir
             .parent()
-            .map(vite_path::AbsolutePath::to_absolute_path_buf)
+            .map(vt_path::AbsolutePath::to_absolute_path_buf)
             .ok_or(Error::JsScriptsDirNotFound)
     }
 

@@ -26,9 +26,9 @@ use std::io::{self, Write};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
-use vite_path::AbsolutePathBuf;
 use vp_pm_cli::HttpClient;
 use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
+use vt_path::AbsolutePathBuf;
 
 /// Restrict DLL search to system32 only to prevent DLL hijacking
 /// when the installer is run from a Downloads folder.
@@ -295,7 +295,7 @@ async fn do_install(
 /// 5. System node present, interactive → enable (matching install.ps1's default-Y prompt;
 ///    user can disable via customize menu before proceeding)
 /// 6. System node present, silent → disable (don't silently take over)
-fn auto_detect_node_manager(install_dir: &vite_path::AbsolutePath, interactive: bool) -> bool {
+fn auto_detect_node_manager(install_dir: &vt_path::AbsolutePath, interactive: bool) -> bool {
     // VP_NODE_MANAGER env var: only "yes" and "no" are recognized;
     // unrecognized values fall through to normal auto-detection
     // (matching install.ps1/install.sh behavior).
@@ -383,9 +383,9 @@ async fn install_new_version(
 /// Windows locks running `.exe` files — rename the old one out of the way before copying.
 #[cfg(windows)]
 async fn replace_windows_exe(
-    src: &vite_path::AbsolutePathBuf,
-    dst: &vite_path::AbsolutePathBuf,
-    bin_dir: &vite_path::AbsolutePathBuf,
+    src: &vt_path::AbsolutePathBuf,
+    dst: &vt_path::AbsolutePathBuf,
+    bin_dir: &vt_path::AbsolutePathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let old_name = format!(
         "vp.exe.{}.old",
@@ -401,7 +401,7 @@ async fn replace_windows_exe(
 
 /// Set up the `bin/vp` entry point (trampoline copy on Windows, symlink on Unix).
 async fn setup_bin_shims(
-    install_dir: &vite_path::AbsolutePath,
+    install_dir: &vt_path::AbsolutePath,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bin_dir = install_dir.join("bin");
     tokio::fs::create_dir_all(&bin_dir).await?;

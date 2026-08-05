@@ -1,6 +1,6 @@
 use std::io;
 
-use vite_str::Str;
+use vt_str::Str;
 
 /// Error type returned by the PM dispatcher.
 ///
@@ -12,7 +12,7 @@ pub enum Error {
     Install(#[from] vp_error::Error),
 
     #[error("Workspace error: {0}")]
-    Workspace(#[from] vite_workspace::Error),
+    Workspace(#[from] vt_workspace::Error),
 
     #[error("Command execution failed: {0}")]
     CommandExecution(#[from] io::Error),

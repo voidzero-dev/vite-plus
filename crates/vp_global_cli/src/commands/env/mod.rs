@@ -25,7 +25,7 @@ use std::process::ExitStatus;
 
 #[cfg(windows)]
 pub(crate) use setup::{cleanup_legacy_windows_shim, get_trampoline_path, remove_or_rename_to_old};
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use crate::{
     cli::{EnvArgs, EnvSubcommands, exit_status},

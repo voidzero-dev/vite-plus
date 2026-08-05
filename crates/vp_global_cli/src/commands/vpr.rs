@@ -3,8 +3,8 @@
 //! Standalone shorthand for `vp run`. Delegates to the local or global
 //! vite-plus CLI to execute tasks.
 
-use vite_path::AbsolutePath;
 use vp_shared::{exit_code_from_status, output};
+use vt_path::AbsolutePath;
 
 /// Main entry point for vpr execution.
 ///

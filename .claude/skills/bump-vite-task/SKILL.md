@@ -1,6 +1,6 @@
 ---
 name: bump-vite-task
-description: Bump vite-task git dependency to the latest main commit. Use when you need to update the vite-task git-dependency crates (vite_task, fspy, pty_terminal_test, and friends; the authoritative set lives in Cargo.toml) in vite-plus.
+description: Bump vite-task git dependency to the latest main commit. Use when you need to update the vite-task git-dependency crates (vt, fspy, pty_terminal_test, and friends; the authoritative set lives in Cargo.toml) in vite-plus.
 allowed-tools: Read, Grep, Glob, Edit, Bash, Agent, WebFetch
 ---
 
@@ -39,7 +39,7 @@ Update the vite-task git dependency in `Cargo.toml` to the latest commit on the 
 
 - Run `cargo test -p vp_command -p vp_error -p vp_pm_cli -p vp_js_runtime -p vp_migration -p vp_shared -p vp_static_config -p vite-plus-cli -p vp_global_cli` to run the vite-plus crate tests.
 - Note: Some tests require network access (e.g., `vp_pm_cli::package_manager` tests, `vp_global_cli::commands::env` tests). These may fail in sandboxed environments. Verify they also fail on the main branch before dismissing them.
-- Note: `cargo test -p vite_task` will NOT work because vite_task is a git dependency, not a workspace member.
+- Note: `cargo test -p vt` will NOT work because vt is a git dependency, not a workspace member.
 - The PTY snapshot suite (`crates/vp_cli_snapshots`) is excluded from `just test`; it is covered in step 6.
 
 ### 6. Update snapshot tests

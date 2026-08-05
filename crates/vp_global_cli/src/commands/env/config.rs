@@ -6,11 +6,11 @@
 //! - Config file management
 
 use serde::{Deserialize, Serialize};
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vp_js_runtime::{
     NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
     read_package_json, resolve_node_version,
 };
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
 
@@ -329,7 +329,7 @@ pub(crate) async fn resolve_project_version_source(
 }
 
 fn validate_version_spec(
-    version: &vite_str::Str,
+    version: &vt_str::Str,
     source: &str,
     warn_invalid: bool,
 ) -> Option<String> {
@@ -455,8 +455,8 @@ pub async fn resolve_version_alias(
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
-    use vite_path::AbsolutePathBuf;
     use vp_js_runtime::VersionSource;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

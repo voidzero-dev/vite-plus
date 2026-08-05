@@ -529,7 +529,7 @@ pub struct InstallCommandResult {
 
 ```rust
 use vp_error::Error;
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 use vite_package_manager::{PackageManager, InstallOptions};
 
 pub struct InstallCommand {

@@ -204,7 +204,7 @@ Running: bun pm trust --all
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add a new variant under `PmCommands`:
 
@@ -234,7 +234,7 @@ pub enum PmCommands {
 use std::process::ExitStatus;
 
 use vp_error::Error;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 use vp_shared::output::{note, warn};
 
 use crate::package_manager::{PackageManager, PackageManagerType};
@@ -350,7 +350,7 @@ pub mod approve_builds;  // <- add this
 
 #### 3. CLI Implementation
 
-**File**: `crates/vite_task/src/approve_builds.rs` (new file)
+**File**: `crates/vt/src/approve_builds.rs` (new file)
 
 ```rust
 use vp_error::Error;
@@ -358,8 +358,8 @@ use vite_package_manager::{
     PackageManager,
     commands::approve_builds::ApproveBuildsOptions,
 };
-use vite_path::AbsolutePathBuf;
-use vite_workspace::Workspace;
+use vt_path::AbsolutePathBuf;
+use vt_workspace::Workspace;
 
 pub struct ApproveBuildsCommand {
     workspace_root: AbsolutePathBuf,
@@ -625,7 +625,7 @@ vp pm approve-builds --default-trusted
 
 ### Phase 1: Core plumbing
 
-1. Add `ApproveBuilds` variant to `PmCommands` in `crates/vite_task/src/lib.rs`.
+1. Add `ApproveBuilds` variant to `PmCommands` in `crates/vt/src/lib.rs`.
 2. Create `crates/vite_package_manager/src/commands/approve_builds.rs` with the pnpm + bun adapters.
 3. Wire pass-through for pnpm (`approve-builds`, `approve-builds <pkg>`, `approve-builds <pkg> !<pkg>`, `--all`).
 4. Wire `bun pm trust` (positionals + `--all`), with `!pkg` filter + warning.

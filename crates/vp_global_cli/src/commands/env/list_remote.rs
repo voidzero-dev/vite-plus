@@ -6,8 +6,8 @@ use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use vite_path::AbsolutePathBuf;
 use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry};
+use vt_path::AbsolutePathBuf;
 
 use super::config;
 use crate::{cli::SortingMethod, error::Error};

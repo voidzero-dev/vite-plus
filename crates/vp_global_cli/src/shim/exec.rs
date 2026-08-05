@@ -3,8 +3,8 @@
 //! On Unix, uses execve to replace the current process.
 //! On Windows, spawns the process and waits for completion.
 
-use vite_path::AbsolutePath;
 use vp_shared::{exit_code_from_status, output};
+use vt_path::AbsolutePath;
 
 /// Keep the child's `PWD` consistent with the process cwd; the std-Command
 /// sibling of [`vp_command::sync_child_pwd`] (rationale there). Shim

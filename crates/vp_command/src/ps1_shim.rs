@@ -31,8 +31,8 @@
 
 use std::ffi::OsString;
 
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powershell_host};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powershell_host};
 
 /// Rewrite a vp-managed `.cmd` invocation to go through `PowerShell`.
 ///
@@ -56,7 +56,7 @@ pub fn rewrite_cmd_to_powershell(
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     // `build_command` always inherits stdin into spawned children, so a TTY on
     // our stdin means a TTY in the child too. `is_stdin_terminal` is shared with
-    // `vite_task_plan::ps1_shim` via the `vite_powershell` crate.
+    // `vt_plan::ps1_shim` via the `vt_powershell` crate.
     let host = powershell_host()?;
     rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
 }

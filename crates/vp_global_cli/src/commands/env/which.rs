@@ -10,12 +10,12 @@ use std::process::ExitStatus;
 
 use chrono::Local;
 use owo_colors::OwoColorize;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
 use vp_shared::output;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{
     bin_config::{BinConfig, BinSource},

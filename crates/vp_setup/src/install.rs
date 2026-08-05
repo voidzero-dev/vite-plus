@@ -13,9 +13,9 @@ use std::{
 
 use flate2::read::GzDecoder;
 use tar::Archive;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
 

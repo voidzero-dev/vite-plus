@@ -124,9 +124,9 @@ crates/
 │       │   ├── migrate.rs   # Migration command
 │       │   └── ...
 │       ├── js_executor.rs   # JS execution via vp_js_runtime
-│       └── workspace.rs     # Workspace detection (reuse from vite_task)
+│       └── workspace.rs     # Workspace detection (reuse from vt)
 ├── vp_js_runtime/         # Existing - Node.js management
-├── vite_task/               # Existing - Task execution
+├── vt/               # Existing - Task execution
 └── ...
 ```
 
@@ -194,7 +194,7 @@ Only these commands can run without any Node.js:
 │                                                                              │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐   │
 │  │   CLI Parser     │  │ Workspace Detect │  │   VP_GLOBAL_CLI_JS_SCRIPTS_DIR  │   │
-│  │   (clap)         │  │ (from vite_task) │  │   (bundled scripts path) │   │
+│  │   (clap)         │  │ (from vt) │  │   (bundled scripts path) │   │
 │  └────────┬─────────┘  └────────┬─────────┘  └────────────┬─────────────┘   │
 │           │                     │                         │                 │
 │  ┌────────▼─────────────────────▼─────────────────────────▼───────────────┐ │
@@ -385,7 +385,7 @@ impl JsExecutor {
 
 - Set up `vp_global_cli` crate structure
 - Implement CLI parsing with clap
-- Implement workspace detection (reuse from `vite_task`)
+- Implement workspace detection (reuse from `vt`)
 - Implement package manager detection and wrapping
 - Implement ALL package manager commands:
   - `install [packages]` / `i` - Install dependencies or add packages
@@ -476,7 +476,7 @@ impl JsExecutor {
 [dependencies]
 vp_js_runtime = { path = "../vp_js_runtime" }
 vp_shared = { path = "../vp_shared" }  # For cache dir, etc.
-vite_path = { path = "../vite_path" }
+vt_path = { path = "../vt_path" }
 
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }

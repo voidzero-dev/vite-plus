@@ -8,7 +8,7 @@
 //! - Safe uninstall (only removes binaries owned by the package)
 
 use serde::{Deserialize, Serialize};
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use super::config::get_vp_home;
 use crate::error::Error;

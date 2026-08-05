@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::{Uuid, Version};
-use vite_path::AbsolutePathBuf;
+use vt_path::AbsolutePathBuf;
 
 use super::config::get_packages_dir;
 use crate::error::Error;
@@ -187,7 +187,7 @@ impl PackageMetadata {
 
 /// Recursively list packages in a directory (handles scoped packages in subdirs).
 async fn list_packages_recursive(
-    dir: &vite_path::AbsolutePath,
+    dir: &vt_path::AbsolutePath,
     packages: &mut Vec<PackageMetadata>,
 ) -> Result<(), Error> {
     let mut entries = tokio::fs::read_dir(dir).await?;

@@ -12,7 +12,7 @@ use oxc_ast::ast::{
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 /// Packages whose `defineConfig` helpers preserve top-level config fields.
 const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] = &["vite-plus", "vite"];
@@ -109,7 +109,7 @@ pub fn has_config_file(dir: &AbsolutePath) -> bool {
 /// Resolve the vite config file path in the given directory.
 ///
 /// Tries each config file name in priority order and returns the first one that exists.
-fn resolve_config_path(dir: &AbsolutePath) -> Option<vite_path::AbsolutePathBuf> {
+fn resolve_config_path(dir: &AbsolutePath) -> Option<vt_path::AbsolutePathBuf> {
     for name in CONFIG_FILE_NAMES {
         let path = dir.join(name);
         if path.as_path().exists() {
@@ -586,7 +586,7 @@ mod tests {
     #[test]
     fn resolves_ts_config() {
         let dir = TempDir::new().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
         let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_some());
@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn resolves_js_config() {
         let dir = TempDir::new().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
         let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_some());
@@ -604,7 +604,7 @@ mod tests {
     #[test]
     fn resolves_mts_config() {
         let dir = TempDir::new().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.mts"), "export default { run: {} }").unwrap();
         let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_some());
@@ -613,7 +613,7 @@ mod tests {
     #[test]
     fn js_takes_priority_over_ts() {
         let dir = TempDir::new().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.ts"), "export default { fromTs: true }")
             .unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { fromJs: true }")
@@ -626,7 +626,7 @@ mod tests {
     #[test]
     fn returns_empty_map_for_no_config() {
         let dir = TempDir::new().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_none());
     }
@@ -636,7 +636,7 @@ mod tests {
     #[test]
     fn resolve_static_config_reads_run_from_config_file() {
         let dir = TempDir::new().unwrap();
-        let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(
             dir.path().join("vite.config.ts"),
             r#"export default { run: { tasks: { build: { command: "echo hello" } } } }"#,

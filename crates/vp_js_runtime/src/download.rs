@@ -11,8 +11,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use tokio::{fs, io::AsyncWriteExt};
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_str::Str;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
 
 use crate::{Error, provider::ArchiveFormat};
 
@@ -109,7 +109,7 @@ pub async fn download_file(
         {
             return Err(Error::Io(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
-                vite_str::format!(
+                vt_str::format!(
                     "incomplete download: expected {expected_len} bytes, got {bytes_written}"
                 )
                 .to_string(),
@@ -310,11 +310,11 @@ fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result
 
     let file = File::open(archive_path)?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| Error::ExtractionFailed { reason: vite_str::format!("{e}") })?;
+        .map_err(|e| Error::ExtractionFailed { reason: vt_str::format!("{e}") })?;
 
     archive
         .extract(target_dir)
-        .map_err(|e| Error::ExtractionFailed { reason: vite_str::format!("{e}") })?;
+        .map_err(|e| Error::ExtractionFailed { reason: vt_str::format!("{e}") })?;
 
     tracing::debug!("Extraction completed");
     Ok(())
@@ -339,7 +339,7 @@ pub async fn move_to_cache(
     // Use a file-based lock to ensure atomicity of the move operation.
     // This prevents race conditions when multiple processes/threads
     // try to install the same runtime version concurrently.
-    let lock_path = parent.join(vite_str::format!("{version}.lock"));
+    let lock_path = parent.join(vt_str::format!("{version}.lock"));
     tracing::debug!("Acquiring lock file: {lock_path:?}");
 
     // Acquire file lock in a blocking task to avoid blocking the async runtime.

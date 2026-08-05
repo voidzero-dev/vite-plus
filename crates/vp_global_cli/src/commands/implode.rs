@@ -4,9 +4,9 @@ use std::{io::Write, process::ExitStatus};
 
 use directories::BaseDirs;
 use owo_colors::OwoColorize;
-use vite_path::AbsolutePathBuf;
-use vite_str::Str;
 use vp_shared::output;
+use vt_path::AbsolutePathBuf;
+use vt_str::Str;
 
 use crate::{
     cli::exit_status,
@@ -53,7 +53,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     {
         let bin_path = home_dir.join("bin");
         if let Err(e) = remove_windows_path_entry(&bin_path) {
-            output::warn(&vite_str::format!("Failed to clean Windows PATH: {e}"));
+            output::warn(&vt_str::format!("Failed to clean Windows PATH: {e}"));
         } else {
             output::success("Removed vite-plus from Windows PATH");
         }
@@ -138,15 +138,15 @@ fn confirm_implode(
 
     output::warn("This will completely remove vite-plus from your system!");
     output::raw("");
-    output::raw(&vite_str::format!("  Directory: {}", home_dir.as_path().display()));
+    output::raw(&vt_str::format!("  Directory: {}", home_dir.as_path().display()));
     if !affected_profiles.is_empty() {
         output::raw("  Shell profiles to clean:");
         for profile in affected_profiles {
-            output::raw(&vite_str::format!("    - {}", profile.name));
+            output::raw(&vt_str::format!("    - {}", profile.name));
         }
     }
     output::raw("");
-    output::raw(&vite_str::format!("Type {} to confirm:", "uninstall".bold()));
+    output::raw(&vt_str::format!("Type {} to confirm:", "uninstall".bold()));
 
     // String is needed here for read_line
     #[expect(clippy::disallowed_types)]
@@ -172,16 +172,16 @@ fn clean_affected_profiles(
             AffectedProfileKind::Main { content, env_file } => {
                 let cleaned = remove_vite_plus_lines(content, source_matcher, env_file);
                 match std::fs::write(&profile.path, cleaned.as_bytes()) {
-                    Ok(()) => output::success(&vite_str::format!("Cleaned {}", profile.name)),
+                    Ok(()) => output::success(&vt_str::format!("Cleaned {}", profile.name)),
                     Err(e) => {
-                        output::warn(&vite_str::format!("Failed to clean {}: {e}", profile.name));
+                        output::warn(&vt_str::format!("Failed to clean {}: {e}", profile.name));
                     }
                 }
             }
             AffectedProfileKind::Snippet => match std::fs::remove_file(&profile.path) {
-                Ok(()) => output::success(&vite_str::format!("Removed {}", profile.name)),
+                Ok(()) => output::success(&vt_str::format!("Removed {}", profile.name)),
                 Err(e) => {
-                    output::warn(&vite_str::format!("Failed to remove {}: {e}", profile.name));
+                    output::warn(&vt_str::format!("Failed to remove {}: {e}", profile.name));
                 }
             },
         }
@@ -194,11 +194,11 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
     {
         match std::fs::remove_dir_all(home_dir) {
             Ok(()) => {
-                output::success(&vite_str::format!("Removed {}", home_dir.as_path().display()));
+                output::success(&vt_str::format!("Removed {}", home_dir.as_path().display()));
                 Ok(())
             }
             Err(e) => {
-                output::error(&vite_str::format!(
+                output::error(&vt_str::format!(
                     "Failed to remove {}: {e}",
                     home_dir.as_path().display()
                 ));
@@ -214,9 +214,9 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
         // is immediately free for reinstall, then schedule deletion of the
         // renamed directory via a detached process.
         let trash_path =
-            home_dir.as_path().with_extension(vite_str::format!("removing-{}", std::process::id()));
+            home_dir.as_path().with_extension(vt_str::format!("removing-{}", std::process::id()));
         if let Err(e) = std::fs::rename(home_dir, &trash_path) {
-            output::error(&vite_str::format!(
+            output::error(&vt_str::format!(
                 "Failed to rename {} for removal: {e}",
                 home_dir.as_path().display()
             ));
@@ -225,13 +225,13 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
 
         match spawn_deferred_delete(&trash_path) {
             Ok(_) => {
-                output::success(&vite_str::format!(
+                output::success(&vt_str::format!(
                     "Scheduled removal of {} (will complete shortly)",
                     home_dir.as_path().display()
                 ));
             }
             Err(e) => {
-                output::error(&vite_str::format!(
+                output::error(&vt_str::format!(
                     "Failed to schedule removal of {}: {e}",
                     home_dir.as_path().display()
                 ));
@@ -247,7 +247,7 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
 #[cfg(windows)]
 fn build_deferred_delete_script(trash_path: &std::path::Path) -> Str {
     let p = trash_path.to_string_lossy();
-    vite_str::format!(
+    vt_str::format!(
         "for /L %i in (1,1,10) do @(\
             if not exist \"{p}\" exit /B 0 & \
             rmdir /S /Q \"{p}\" 2>NUL & \
@@ -288,13 +288,13 @@ impl VitePlusSourceMatcher {
 
         if let Ok(Some(suffix)) = home_dir.strip_prefix(user_home) {
             // `RelativePathBuf` guarantees forward-slash separators.
-            let suffix = vite_str::format!("{suffix}");
+            let suffix = vt_str::format!("{suffix}");
             if suffix.is_empty() {
                 roots.push(Str::from("$HOME"));
                 roots.push(Str::from("~"));
             } else {
-                roots.push(vite_str::format!("$HOME/{suffix}"));
-                roots.push(vite_str::format!("~/{suffix}"));
+                roots.push(vt_str::format!("$HOME/{suffix}"));
+                roots.push(vt_str::format!("~/{suffix}"));
             }
         }
 
@@ -315,7 +315,7 @@ impl VitePlusSourceMatcher {
 
 fn join_path_ref(root: &str, env_file: &str) -> Str {
     let separator = if root.ends_with('/') { "" } else { "/" };
-    vite_str::format!("{root}{separator}{env_file}")
+    vt_str::format!("{root}{separator}{env_file}")
 }
 
 fn normalize_path_separators(path: &str) -> Str {
@@ -384,9 +384,9 @@ fn remove_vite_plus_lines(
 
 /// Remove `.vite-plus\bin` from the Windows User PATH via PowerShell.
 #[cfg(windows)]
-fn remove_windows_path_entry(bin_path: &vite_path::AbsolutePath) -> std::io::Result<()> {
+fn remove_windows_path_entry(bin_path: &vt_path::AbsolutePath) -> std::io::Result<()> {
     let bin_str = bin_path.as_path().to_string_lossy();
-    let script = vite_str::format!(
+    let script = vt_str::format!(
         "[Environment]::SetEnvironmentVariable('Path', \
          ([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | \
          Where-Object {{ $_ -ne '{bin_str}' }}) -join ';', 'User')"
@@ -453,7 +453,7 @@ mod tests {
         let home_dir = user_home.join(".vite-plus");
         let matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
         let env_path = shell_path(&home_dir.join("env"));
-        let content = vite_str::format!("# existing\n. \"{env_path}\"\n");
+        let content = vt_str::format!("# existing\n. \"{env_path}\"\n");
         let result = remove_vite_plus_lines(&content, &matcher, "env");
         assert_eq!(&*result, "# existing\n");
     }
@@ -464,7 +464,7 @@ mod tests {
         let home_dir = user_home.join("tools").join("vp");
         let matcher = VitePlusSourceMatcher::new(&home_dir, &user_home);
         let env_path = shell_path(&home_dir.join("env"));
-        let content = vite_str::format!("# existing\n. \"{env_path}\"\n");
+        let content = vt_str::format!("# existing\n. \"{env_path}\"\n");
         let result = remove_vite_plus_lines(&content, &matcher, "env");
         assert_eq!(&*result, "# existing\n");
     }

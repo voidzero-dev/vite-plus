@@ -162,7 +162,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
 /// Create symlink in bin/ that points to the active vp binary.
 async fn setup_vp_wrapper(
     current_exe: &std::path::Path,
-    bin_dir: &vite_path::AbsolutePath,
+    bin_dir: &vt_path::AbsolutePath,
     refresh: bool,
 ) -> Result<(), Error> {
     #[cfg(unix)]
@@ -227,7 +227,7 @@ async fn setup_vp_wrapper(
 #[cfg(unix)]
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
-    bin_dir: &vite_path::AbsolutePath,
+    bin_dir: &vt_path::AbsolutePath,
 ) -> Result<std::path::PathBuf, Error> {
     if let Some(vite_plus_home) = bin_dir.parent() {
         let standalone_vp = vite_plus_home.join("current").join("bin").join("vp");
@@ -248,7 +248,7 @@ pub(crate) async fn resolve_unix_vp_shim_target(
 /// Returns `true` if the shim was created, `false` if it already exists.
 pub(crate) async fn create_shim(
     source: &std::path::Path,
-    bin_dir: &vite_path::AbsolutePath,
+    bin_dir: &vt_path::AbsolutePath,
     tool: &str,
     refresh: bool,
 ) -> Result<bool, Error> {
@@ -323,7 +323,7 @@ fn shim_filename(tool: &str) -> String {
 #[cfg(unix)]
 async fn create_unix_shim(
     source: &std::path::Path,
-    shim_path: &vite_path::AbsolutePath,
+    shim_path: &vt_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
     let bin_dir = shim_path.parent().ok_or_else(|| {
@@ -347,7 +347,7 @@ async fn create_unix_shim(
 #[cfg(windows)]
 async fn create_windows_shim(
     _source: &std::path::Path,
-    bin_dir: &vite_path::AbsolutePath,
+    bin_dir: &vt_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
     let trampoline_src = get_trampoline_path()?;
@@ -367,7 +367,7 @@ async fn create_windows_shim(
 /// Discovers all package binaries tracked by BinConfig with `source: Vp`
 /// and replaces their `.exe` with the current trampoline.
 #[cfg(windows)]
-async fn refresh_package_shims(bin_dir: &vite_path::AbsolutePath) -> Result<(), Error> {
+async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Error> {
     use super::bin_config::BinConfig;
 
     let package_bins = BinConfig::find_all_vp_source().await?;
@@ -407,12 +407,12 @@ async fn refresh_package_shims(bin_dir: &vite_path::AbsolutePath) -> Result<(), 
 /// The trampoline binary is distributed alongside vp.exe in the same directory.
 /// In tests, `VP_TRAMPOLINE_PATH` can override the resolved path.
 #[cfg(windows)]
-pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error> {
+pub(crate) fn get_trampoline_path() -> Result<vt_path::AbsolutePathBuf, Error> {
     // Allow tests to override the trampoline path
     if let Ok(override_path) = std::env::var(vp_shared::env_vars::VP_TRAMPOLINE_PATH) {
         let path = std::path::PathBuf::from(override_path);
         if path.exists() {
-            return vite_path::AbsolutePathBuf::new(path)
+            return vt_path::AbsolutePathBuf::new(path)
                 .ok_or_else(|| Error::Other("Invalid trampoline override path".into()));
         }
     }
@@ -433,7 +433,7 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
         ));
     }
 
-    vite_path::AbsolutePathBuf::new(trampoline)
+    vt_path::AbsolutePathBuf::new(trampoline)
         .ok_or_else(|| Error::Other("Invalid trampoline path".into()))
 }
 
@@ -442,7 +442,7 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
 ///
 /// This avoids accumulating `.old` files when the exe is not in use.
 #[cfg(windows)]
-pub(crate) async fn remove_or_rename_to_old(path: &vite_path::AbsolutePath) {
+pub(crate) async fn remove_or_rename_to_old(path: &vt_path::AbsolutePath) {
     match tokio::fs::remove_file(path).await {
         Ok(()) => return,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
@@ -458,7 +458,7 @@ pub(crate) async fn remove_or_rename_to_old(path: &vite_path::AbsolutePath) {
 /// On Windows, running `.exe` files can't be deleted or overwritten, but they can
 /// be renamed. The `.old` files are cleaned up by `cleanup_old_files()`.
 #[cfg(windows)]
-async fn rename_to_old(path: &vite_path::AbsolutePath) {
+async fn rename_to_old(path: &vt_path::AbsolutePath) {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -478,7 +478,7 @@ async fn rename_to_old(path: &vite_path::AbsolutePath) {
 /// timestamped `.old` file. This function tries to delete all such files. Files still
 /// in use by a running process will silently fail to delete and be cleaned up next time.
 #[cfg(windows)]
-async fn cleanup_old_files(bin_dir: &vite_path::AbsolutePath) {
+async fn cleanup_old_files(bin_dir: &vt_path::AbsolutePath) {
     let Ok(mut entries) = tokio::fs::read_dir(bin_dir).await else {
         return;
     };
@@ -493,7 +493,7 @@ async fn cleanup_old_files(bin_dir: &vite_path::AbsolutePath) {
 
 /// Remove legacy `.cmd` and shell script wrappers from previous versions.
 #[cfg(windows)]
-pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePath, tool: &str) {
+pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath, tool: &str) {
     // Remove old .cmd wrapper (best-effort, ignore NotFound)
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
     let _ = tokio::fs::remove_file(&cmd_path).await;
@@ -763,7 +763,7 @@ fn render_nu_path_ref(path_ref: &str) -> String {
 }
 
 /// Render the env-file content for `shell` against `vite_plus_home`.
-fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath) -> String {
+fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -> String {
     let bin_path = vite_plus_home.join("bin");
     let home_dir = vp_shared::EnvConfig::get().user_home;
     let home_dir = home_dir.as_deref();
@@ -804,7 +804,7 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath)
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
 /// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
-async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
+async fn create_env_files(vite_plus_home: &vt_path::AbsolutePath) -> Result<(), Error> {
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
         let content = render_env_content(shell, vite_plus_home);
         tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
@@ -814,7 +814,7 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
 }
 
 /// Print instructions for adding bin directory to PATH.
-fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
+fn print_path_instructions(bin_dir: &vt_path::AbsolutePath) {
     // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
     let home_path = bin_dir
         .parent()
@@ -876,7 +876,7 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
-    use vite_path::AbsolutePathBuf;
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 

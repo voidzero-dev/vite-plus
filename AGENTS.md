@@ -88,7 +88,7 @@ Important distinctions:
 - Define `run.tasks` in `vite.config.ts` when a task needs explicit command config, default caching, dependencies, input tracking, or environment tracking.
 - A task name can come from `package.json` or `vite.config.ts`, but not both.
 - Do not introduce `vite-task.json`; current Vite+ task configuration lives under `run` in `vite.config.ts`.
-- Do not run `cargo test -p vite_task` in this repo; Vite Task crates are git dependencies, not local workspace members.
+- Do not run `cargo test -p vt` in this repo; Vite Task crates are git dependencies, not local workspace members.
 
 Reference: `docs/guide/run.md` and `docs/config/run.md`.
 
@@ -152,7 +152,7 @@ Reference these files instead of duplicating rules here:
 - `.clippy.toml` — custom lint restrictions and disallowed Rust APIs/macros.
 - `crates/vp_shared/src/output.rs` — shared user-facing output helpers.
 - `crates/vp_shared/src/env_config.rs` — test-scoped environment configuration helpers.
-- `crates/vp_command/src/lib.rs` and `crates/vp_global_cli/src/cli.rs` — examples of `vite_path` usage in local Rust code.
+- `crates/vp_command/src/lib.rs` and `crates/vp_global_cli/src/cli.rs` — examples of `vt_path` usage in local Rust code.
 
 Prefer shared output helpers for user-facing messages and match nearby command style. New Rust code should satisfy the custom clippy restrictions.
 
@@ -172,7 +172,7 @@ Use the validation matrix above as the source of truth. For behavior-bearing cha
 ## Common Pitfalls
 
 - **Treating Vite+ as only Vite Task**: Vite Task is integrated, but this repo spans CLI, runtime, package management, bundled packages, create/migrate, docs, and upstream integration.
-- **Looking for local `packages/test` or `crates/vite_task`**: neither is tracked here. Check `packages/cli/BUNDLING.md` for test shims and `Cargo.toml` for Vite Task git dependency wiring.
+- **Looking for local `packages/test` or `crates/vt`**: neither is tracked here. Check `packages/cli/BUNDLING.md` for test shims and `Cargo.toml` for Vite Task git dependency wiring.
 - **Confusing built-ins with scripts**: `vp test` and `vp run test` can do different things.
 
 ## Debugging

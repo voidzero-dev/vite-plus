@@ -5,7 +5,7 @@
 
 use std::process::ExitStatus;
 
-use vite_path::AbsolutePath;
+use vt_path::AbsolutePath;
 
 use crate::{
     PackageManager,
@@ -57,7 +57,7 @@ async fn dispatch_dlx(
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
             run_resolution(cwd, resolution, render_diagnostics).await
         }
-        Err(vp_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_))) => {
+        Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
             run_resolution(cwd, args.resolve_npx_fallback(), render_diagnostics).await
         }
         Err(error) => Err(Error::Install(error)),

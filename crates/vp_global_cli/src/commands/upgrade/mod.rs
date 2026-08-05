@@ -6,10 +6,10 @@
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
-use vite_path::AbsolutePathBuf;
 use vp_pm_cli::HttpClient;
 use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
+use vt_path::AbsolutePathBuf;
 
 use crate::{commands::env::config::get_vp_home, error::Error};
 
