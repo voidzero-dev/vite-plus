@@ -111,10 +111,14 @@ d="$(dirname "$(dirname "$(dirname "$0")")")"
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
 
-if [ -n "${VP_HOME-}" ]; then
+if [ -n "${VP_BIN_DIR-}" ]; then
+  __vp_bin="$VP_BIN_DIR"
+elif [ -n "${VP_HOME-}" ]; then
   __vp_bin="$VP_HOME/bin"
-elif [ -n "${HOME-}" ]; then
+elif [ -n "${HOME-}" ] && [ -d "$HOME/.vite-plus/bin" ]; then
   __vp_bin="$HOME/.vite-plus/bin"
+elif [ -n "${HOME-}" ]; then
+  __vp_bin="$HOME/.local/bin"
 else
   __vp_bin=""
 fi

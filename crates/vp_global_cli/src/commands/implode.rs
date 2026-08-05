@@ -20,10 +20,11 @@ use crate::{
 const VITE_PLUS_COMMENT: &str = "# Vite+ bin";
 
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
-    let Ok(home_dir) = vp_shared::get_vp_home() else {
-        output::info("vite-plus is not installed (could not determine home directory)");
-        return Ok(exit_status(0));
-    };
+    let dirs = vp_shared::Dirs::get();
+    // Under the legacy layout this is the whole `~/.vite-plus` root; under the
+    // split layout only the data dir is removed for now (full split-layout
+    // removal is follow-up scope).
+    let home_dir = dirs.data_dir();
 
     if !home_dir.as_path().exists() {
         output::info("vite-plus is not installed (directory does not exist)");
@@ -51,7 +52,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // Remove Windows PATH entry
     #[cfg(windows)]
     {
-        let bin_path = home_dir.join("bin");
+        let bin_path = dirs.bin_dir();
         if let Err(e) = remove_windows_path_entry(&bin_path) {
             output::warn(&vt_str::format!("Failed to clean Windows PATH: {e}"));
         } else {

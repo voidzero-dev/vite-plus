@@ -1,7 +1,8 @@
 //! Background upgrade check for the vp CLI.
 //!
 //! Periodically queries the npm registry for the latest version and caches the
-//! result to `~/.vite-plus/.upgrade-check.json`. Displays a one-line notice on
+//! result to the state directory's `.upgrade-check.json` (see
+//! [`vp_shared::Dirs::upgrade_check_file`]). Displays a one-line notice on
 //! stderr when a newer version is available, at most once per 24 hours.
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -12,6 +13,8 @@ use vp_setup::registry;
 
 const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const PROMPT_INTERVAL_SECS: u64 = 24 * 60 * 60;
+/// Cache file name; see [`vp_shared::Dirs::upgrade_check_file`].
+#[cfg(test)]
 const CACHE_FILE_NAME: &str = ".upgrade-check.json";
 
 #[expect(clippy::disallowed_types)] // String required for serde JSON round-trip
@@ -22,14 +25,12 @@ struct UpgradeCheckCache {
     prompted_at: u64,
 }
 
-fn read_cache(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> {
-    let cache_path = install_dir.join(CACHE_FILE_NAME);
+fn read_cache(cache_path: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> {
     let data = std::fs::read_to_string(cache_path.as_path()).ok()?;
     serde_json::from_str(&data).ok()
 }
 
-fn write_cache(install_dir: &vt_path::AbsolutePath, cache: &UpgradeCheckCache) {
-    let cache_path = install_dir.join(CACHE_FILE_NAME);
+fn write_cache(cache_path: &vt_path::AbsolutePath, cache: &UpgradeCheckCache) {
     if let Ok(data) = serde_json::to_string(cache) {
         let _ = std::fs::write(cache_path.as_path(), &data);
     }
@@ -72,17 +73,17 @@ async fn resolve_version_string() -> Option<String> {
 }
 
 pub struct UpgradeCheckResult {
-    install_dir: vt_path::AbsolutePathBuf,
+    cache_path: vt_path::AbsolutePathBuf,
     cache: UpgradeCheckCache,
 }
 
 /// Returns an upgrade check result if a newer version is available and the user
 /// hasn't been prompted within the last 24 hours. Returns `None` otherwise.
 pub async fn check_for_update() -> Option<UpgradeCheckResult> {
-    let install_dir = vp_shared::get_vp_home().ok()?;
+    let cache_path = vp_shared::Dirs::get().upgrade_check_file();
     let current_version = env!("CARGO_PKG_VERSION");
     let now = now_secs();
-    let mut cache = read_cache(&install_dir);
+    let mut cache = read_cache(&cache_path);
 
     if should_check(cache.as_ref(), now) {
         let prompted_at = cache.as_ref().map_or(0, |c| c.prompted_at);
@@ -90,7 +91,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         match resolve_version_string().await {
             Some(latest) => {
                 let new_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(&install_dir, &new_cache);
+                write_cache(&cache_path, &new_cache);
                 cache = Some(new_cache);
             }
             None => {
@@ -98,7 +99,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
                 // retrying on every command when the registry is unreachable.
                 let latest = cache.as_ref().map(|c| c.latest.clone()).unwrap_or_default();
                 let failed_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(&install_dir, &failed_cache);
+                write_cache(&cache_path, &failed_cache);
                 cache = Some(failed_cache);
             }
         }
@@ -114,7 +115,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         return None;
     }
 
-    Some(UpgradeCheckResult { install_dir, cache })
+    Some(UpgradeCheckResult { cache_path, cache })
 }
 
 /// Print a one-line upgrade notice to stderr and record the prompt time.
@@ -133,7 +134,7 @@ pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
 
     let mut cache = result.cache.clone();
     cache.prompted_at = now_secs();
-    write_cache(&result.install_dir, &cache);
+    write_cache(&result.cache_path, &cache);
 }
 
 /// Whether the upgrade check should run for the given command args.
@@ -170,12 +171,13 @@ mod tests {
     fn cache_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let cache_file = dir_path.join(CACHE_FILE_NAME);
 
         let cache =
             UpgradeCheckCache { latest: "1.2.3".to_owned(), checked_at: 1000, prompted_at: 900 };
-        write_cache(&dir_path, &cache);
+        write_cache(&cache_file, &cache);
 
-        let loaded = read_cache(&dir_path).expect("should read back cache");
+        let loaded = read_cache(&cache_file).expect("should read back cache");
         assert_eq!(loaded.latest, "1.2.3");
         assert_eq!(loaded.checked_at, 1000);
         assert_eq!(loaded.prompted_at, 900);
@@ -185,15 +187,16 @@ mod tests {
     fn read_cache_returns_none_for_missing_file() {
         let dir = tempfile::tempdir().unwrap();
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        assert!(read_cache(&dir_path).is_none());
+        assert!(read_cache(&dir_path.join(CACHE_FILE_NAME)).is_none());
     }
 
     #[test]
     fn read_cache_returns_none_for_corrupt_file() {
         let dir = tempfile::tempdir().unwrap();
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir_path.join(CACHE_FILE_NAME).as_path(), "not json").unwrap();
-        assert!(read_cache(&dir_path).is_none());
+        let cache_file = dir_path.join(CACHE_FILE_NAME);
+        std::fs::write(cache_file.as_path(), "not json").unwrap();
+        assert!(read_cache(&cache_file).is_none());
     }
 
     fn with_env_vars_cleared<F: FnOnce()>(f: F) {

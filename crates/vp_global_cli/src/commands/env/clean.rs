@@ -13,9 +13,9 @@ use crate::error::Error;
 
 /// Execute the clean command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
-    let node_dir = home_dir.join("js_runtime").join("node");
-    let package_manager_dir = home_dir.join("package_manager");
+    let dirs = vp_shared::Dirs::get();
+    let node_dir = dirs.js_runtime_dir().join("node");
+    let package_manager_dir = dirs.package_manager_dir();
     let protected_versions = protected_node_versions(&cwd).await?;
 
     let corepack_cleaned = run_corepack_cache_clean(&cwd).await?;
@@ -138,7 +138,7 @@ async fn corepack_cache_clean_would_auto_install(
     cwd: &AbsolutePathBuf,
     corepack_path: &AbsolutePath,
 ) -> Result<bool, Error> {
-    let bin_dir = config::get_bin_dir()?;
+    let bin_dir = vp_shared::Dirs::get().bin_dir();
     if corepack_path.parent() != Some(&bin_dir) {
         return Ok(false);
     }

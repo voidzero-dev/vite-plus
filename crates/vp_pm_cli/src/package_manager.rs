@@ -376,9 +376,9 @@ pub fn package_manager_install_dir(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Option<AbsolutePathBuf> {
-    let home_dir = vp_shared::get_vp_home().ok()?;
+    let package_manager_dir = vp_shared::Dirs::get().package_manager_dir();
     let bin_name = package_manager_type.to_string();
-    Some(home_dir.join("package_manager").join(&bin_name).join(version).join(&bin_name))
+    Some(package_manager_dir.join(&bin_name).join(version).join(&bin_name))
 }
 
 /// Return the executable shim path for a package manager binary inside an install directory.
@@ -739,9 +739,8 @@ fn find_cached_package_manager_version(
     package_manager_type: PackageManagerType,
     range: &node_semver::Range,
 ) -> Result<Option<Str>, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
     let bin_name = package_manager_type.to_string();
-    let versions_dir = home_dir.join("package_manager").join(&bin_name);
+    let versions_dir = vp_shared::Dirs::get().package_manager_dir().join(&bin_name);
     let entries = match fs::read_dir(&versions_dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -844,7 +843,7 @@ pub async fn download_package_manager(
         package_name = "@yarnpkg/cli-dist".into();
     }
 
-    let home_dir = vp_shared::get_vp_home()?;
+    let package_manager_dir = vp_shared::Dirs::get().package_manager_dir();
     let bin_name = package_manager_type.to_string();
 
     // For bun, use platform-specific download flow.
@@ -852,7 +851,7 @@ pub async fn download_package_manager(
     // not the platform-specific binary, so we don't pass it through; the
     // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Bun) {
-        return download_bun_package_manager(&version, &home_dir).await;
+        return download_bun_package_manager(&version, &package_manager_dir).await;
     }
 
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
@@ -860,12 +859,13 @@ pub async fn download_package_manager(
     // A declared hash names the main tarball and is verified against it; the
     // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
-        return download_pnpm_native_package_manager(&version, &home_dir, expected_hash).await;
+        return download_pnpm_native_package_manager(&version, &package_manager_dir, expected_hash)
+            .await;
     }
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
-    // $VP_HOME/package_manager/pnpm/10.0.0
-    let target_dir = home_dir.join("package_manager").join(&bin_name).join(&version);
+    // <package_manager_dir>/pnpm/10.0.0
+    let target_dir = package_manager_dir.join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
 
     // If all shims already exist, return the target directory
@@ -978,13 +978,13 @@ fn get_bun_platform_package_name() -> Result<&'static str, Error> {
 /// Layout: `$VP_HOME/package_manager/bun/{version}/bun/bin/bun.native`
 async fn download_bun_package_manager(
     version: &Str,
-    home_dir: &AbsolutePath,
+    package_manager_dir: &AbsolutePath,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "bun".into();
     let platform_package_name = get_bun_platform_package_name()?;
 
-    // $VP_HOME/package_manager/bun/{version}
-    let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
+    // <package_manager_dir>/bun/{version}
+    let target_dir = package_manager_dir.join("bun").join(version.as_str());
     let install_dir = target_dir.join("bun");
 
     // If shims already exist, return early (same completeness check as the cache
@@ -1156,14 +1156,14 @@ async fn fetch_platform_integrity(
 /// Layout: `$VP_HOME/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
 async fn download_pnpm_native_package_manager(
     version: &Str,
-    home_dir: &AbsolutePath,
+    package_manager_dir: &AbsolutePath,
     expected_hash: Option<&str>,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "pnpm".into();
     let platform_package_name = get_pnpm_platform_package_name()?;
 
-    // $VP_HOME/package_manager/pnpm/{version}
-    let target_dir = home_dir.join("package_manager").join("pnpm").join(version.as_str());
+    // <package_manager_dir>/pnpm/{version}
+    let target_dir = package_manager_dir.join("pnpm").join(version.as_str());
     let install_dir = target_dir.join("pnpm");
 
     // If shims already exist, return early (same completeness check as the cache
@@ -1729,11 +1729,18 @@ mod tests {
         Complete,
     }
 
-    /// Create a fake managed package manager install under
-    /// `<vp_home>/package_manager/<name>/<version>/<name>/bin/`.
+    /// Create a fake managed package manager install under the legacy root
+    /// `<vp_home>/.vite-plus/package_manager/<name>/<version>/<name>/bin/`.
+    /// The on-disk `.vite-plus` selects the legacy layout for the overridden
+    /// user home.
     fn write_pm_install(vp_home: &AbsolutePath, name: &str, version: &str, state: InstallState) {
-        let bin_dir =
-            vp_home.join("package_manager").join(name).join(version).join(name).join("bin");
+        let bin_dir = vp_home
+            .join(".vite-plus")
+            .join("package_manager")
+            .join(name)
+            .join(version)
+            .join(name)
+            .join("bin");
         fs::create_dir_all(&bin_dir).unwrap();
         let bin_file = bin_dir.join(name);
         if matches!(state, InstallState::BinOnly | InstallState::Complete) {
@@ -3778,17 +3785,21 @@ mod tests {
                 .body("this is not a valid gzip archive");
         });
 
+        // The on-disk `.vite-plus` under the overridden user home selects
+        // the legacy layout, so package managers install under
+        // `<home>/.vite-plus/package_manager/`.
+        let legacy_root = vp_home.path().join(".vite-plus");
+        std::fs::create_dir_all(&legacy_root).unwrap();
         let _guard = EnvConfig::test_guard(EnvConfig {
             npm_registry: server.base_url().into(),
-            vite_plus_home: Some(vp_home.path().to_path_buf()),
-            ..EnvConfig::for_test()
+            ..EnvConfig::for_test_with_home(vp_home.path().to_path_buf())
         });
 
         let result = download_package_manager(PackageManagerType::Pnpm, "10.0.0", None).await;
         assert!(result.is_err(), "corrupt tarball should fail the install, got {result:?}");
 
         // The per-install temp dir must be gone after the failure.
-        let pnpm_dir = vp_home.path().join("package_manager").join("pnpm");
+        let pnpm_dir = legacy_root.join("package_manager").join("pnpm");
         let leftovers: Vec<_> = fs::read_dir(&pnpm_dir)
             .map(|rd| {
                 rd.filter_map(Result::ok)

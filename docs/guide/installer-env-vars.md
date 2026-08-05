@@ -25,9 +25,10 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_HOME`
 
-- **Purpose**: Installation directory; the installed CLI reads the same variable as the Vite+ home directory (see [Environment](/guide/env))
+- **Purpose**: Installation directory
 - **Default**: `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows)
 - **CLI equivalent**: `--install-dir`
+- **Details**: Installer scripts use it as the install directory, and the installed CLI reads it as the highest-priority layout rule: everything lives under this one root (the legacy monolithic layout). See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
 - **Example**:
 
   ```bash
@@ -75,7 +76,25 @@ When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) a
 
 ## Runtime Variables
 
-These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applies at runtime.
+These variables configure the installed Vite+ CLI.
+
+### `VP_BIN_DIR`
+
+- **Purpose**: Directory for executables and shims (`node`, `npm`, `npx`, `corepack`, `vpx`, `vpr`, the `vp` wrapper)
+- **Default**: `XDG_BIN_HOME` if set, then `XDG_DATA_HOME/../bin`, otherwise `~/.local/bin` (Unix) or `%LOCALAPPDATA%\vite-plus\bin` (Windows)
+- **Details**: Only applies in the split layout; ignored when the legacy monolithic layout is selected. See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
+
+### `VP_DATA_DIR`
+
+- **Purpose**: Payload data directory (CLI versions, managed Node.js runtimes, package managers, global packages)
+- **Default**: `XDG_DATA_HOME/vite-plus` if set, otherwise `~/.local/share/vite-plus` (Unix) or `%LOCALAPPDATA%\vite-plus\data` (Windows)
+- **Details**: Only applies in the split layout; ignored when the legacy monolithic layout is selected. See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
+
+### `VP_CACHE_DIR`
+
+- **Purpose**: Disposable cache directory
+- **Default**: `XDG_CACHE_HOME/vite-plus` if set, otherwise `~/.cache/vite-plus` (Unix) or `%LOCALAPPDATA%\vite-plus\cache` (Windows)
+- **Details**: Only applies in the split layout; ignored when the legacy monolithic layout is selected. See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
 
 ### `VP_NODE_DIST_MIRROR`
 
@@ -184,7 +203,36 @@ Vite+ also respects these standard environment variables:
 ### `HOME` / `USERPROFILE`
 
 - **Purpose**: User home directory
-- **Effect**: Base for the default `~/.vite-plus` path
+- **Effect**: Base for the default `~/.vite-plus` path and the Unix platform defaults (`~/.local/bin`, `~/.config`, ...)
+
+### `XDG_BIN_HOME` / `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_STATE_HOME` / `XDG_CACHE_HOME`
+
+- **Purpose**: XDG base directories honored when resolving the split layout
+- **Details**: Read directly from the process environment during directory resolution. See [Directory Layout and XDG Variables](#directory-layout-and-xdg-variables).
+
+## Directory Layout and XDG Variables
+
+The installed CLI resolves where its files live by picking one of two layouts; the first match wins:
+
+1. **`VP_HOME` is set** — the legacy monolithic layout rooted at its value; every category lives under this one root.
+2. **Executable self-location** — the running `vp` binary's own (canonicalized) path is `<root>/current/bin/vp`: `<root>` is a legacy monolithic install. This covers launches without `PATH` context (IDEs, the Windows shim trampoline).
+3. **`PATH` inference** — a `<root>/bin` entry on `PATH` that contains the legacy layout (`bin/vp` plus `current/bin/vp`) marks `<root>` as a legacy install.
+4. **`~/.vite-plus` exists** — the same legacy layout, grandfathered: existing installs keep working untouched and nothing is moved.
+5. **Otherwise (fresh installs)** — a split layout where each category resolves independently through its own override → XDG → platform-default chain:
+
+| Category | Contents | Resolution (first match wins) | Unix default | Windows default |
+| --- | --- | --- | --- | --- |
+| Executables and shims | `node`, `npm`, `npx`, `corepack`, `vpx`, `vpr`, the `vp` wrapper | `VP_BIN_DIR` → `XDG_BIN_HOME` → `XDG_DATA_HOME/../bin` | `~/.local/bin` | `%LOCALAPPDATA%\vite-plus\bin` |
+| Configuration | `config.json`, shell env scripts | `XDG_CONFIG_HOME/vite-plus` | `~/.config/vite-plus` | `%APPDATA%\vite-plus` |
+| Data | CLI versions, managed Node.js runtimes, package managers, global packages, per-binary `bins/*.json` metadata | `VP_DATA_DIR` → `XDG_DATA_HOME/vite-plus` | `~/.local/share/vite-plus` | `%LOCALAPPDATA%\vite-plus\data` |
+| State | Session and upgrade-check files | `XDG_STATE_HOME/vite-plus` | `~/.local/state/vite-plus` | `%LOCALAPPDATA%\vite-plus\state` |
+| Cache | Disposable caches | `VP_CACHE_DIR` → `XDG_CACHE_HOME/vite-plus` | `~/.cache/vite-plus` | `%LOCALAPPDATA%\vite-plus\cache` |
+
+Notes:
+
+- Relative values in the `VP_*_DIR` and `XDG_*` variables are ignored, per the XDG Base Directory specification.
+- `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` only apply in the split layout; the legacy layout (rule 1) is all-or-nothing.
+- The installer scripts currently still default to installing under `~/.vite-plus`, so fresh installs today land in the legacy layout (rule 4). The split layout becomes effective for fresh installs once the installer defaults are updated.
 
 ## Precedence
 

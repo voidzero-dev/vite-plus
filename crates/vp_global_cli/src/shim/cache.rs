@@ -39,7 +39,8 @@ pub struct ResolveCacheEntry {
     pub is_range: bool,
 }
 
-/// Resolution cache stored in VP_HOME/cache/resolve_cache.json.
+/// Resolution cache stored in `<cache>/resolve_cache.json`
+/// (`~/.vite-plus/cache/resolve_cache.json` under the legacy layout).
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ResolveCache {
     /// Cache format version for upgrade compatibility
@@ -184,8 +185,7 @@ impl ResolveCache {
 
 /// Get the cache file path.
 pub fn get_cache_path() -> Option<AbsolutePathBuf> {
-    let home = crate::commands::env::config::get_vp_home().ok()?;
-    Some(home.join("cache").join("resolve_cache.json"))
+    Some(vp_shared::Dirs::get().resolve_cache_file())
 }
 
 /// Invalidate the entire resolve cache by deleting the cache file.
@@ -344,15 +344,15 @@ mod tests {
         assert_eq!(cached_entry.unwrap().version, "20.20.0");
     }
 
-    // Run serially: mutates VP_HOME env var which affects get_cache_path()
     #[test]
-    #[serial_test::serial]
     fn test_invalidate_cache_removes_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Set VP_HOME to temp dir so invalidate_cache() targets our test file
-        let cache_dir = temp_path.join("cache");
+        // Sandboxed legacy layout: the on-disk `.vite-plus` under the
+        // overridden user home selects it, so the resolve cache lives at
+        // `<home>/.vite-plus/cache/resolve_cache.json`.
+        let cache_dir = temp_path.join(".vite-plus").join("cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
         let cache_file = cache_dir.join("resolve_cache.json");
 
@@ -373,14 +373,11 @@ mod tests {
         cache.save(&cache_file);
         assert!(std::fs::metadata(cache_file.as_path()).is_ok(), "Cache file should exist");
 
-        // Point VP_HOME to our temp dir and call invalidate_cache
-        unsafe {
-            std::env::set_var(vp_shared::env_vars::VP_HOME, temp_path.as_path());
-        }
+        // Point the sandboxed home at our temp dir and call invalidate_cache
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
+            temp_path.as_path(),
+        ));
         invalidate_cache();
-        unsafe {
-            std::env::remove_var(vp_shared::env_vars::VP_HOME);
-        }
 
         // Cache file should be removed
         assert!(

@@ -229,7 +229,7 @@ fn check_npm_global_install_result(
     node_dir: &AbsolutePath,
     node_version: &str,
 ) {
-    let Ok(bin_dir) = config::get_bin_dir() else { return };
+    let bin_dir = vp_shared::Dirs::get().bin_dir();
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
     #[cfg(unix)]
@@ -364,7 +364,11 @@ fn check_npm_global_install_result(
         let bin_display = bin_list.join(", ");
 
         output::raw(&vt_str::format!("'{bin_display}' is not available on your PATH."));
-        output::raw_inline("Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
+        let link_dir = vp_shared::Dirs::get().bin_dir();
+        output::raw_inline(&vt_str::format!(
+            "Create a link in {}/ to make it available? [Y/n] ",
+            link_dir.as_path().display()
+        ));
         let _ = std::io::Write::flush(&mut std::io::stdout());
 
         let mut input = String::new();
@@ -518,7 +522,7 @@ fn dedup_missing_bins(
 /// still delete its binary from `npm_bin_dir`, leaving our symlink dangling. In that
 /// case we repair the link by pointing directly at the surviving package's binary.
 fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefix: &AbsolutePath) {
-    let Ok(bin_dir) = config::get_bin_dir() else { return };
+    let bin_dir = vp_shared::Dirs::get().bin_dir();
 
     for (bin_name, package_name) in bin_entries {
         // Skip protected shims: a stale Npm BinConfig (e.g. a pre-default-shim
@@ -777,7 +781,8 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
             // Append current bin_dir to VP_BYPASS to prevent infinite loops
             // when multiple vite-plus installations exist in PATH.
             // The next installation will filter all accumulated paths.
-            if let Ok(bin_dir) = config::get_bin_dir() {
+            {
+                let bin_dir = vp_shared::Dirs::get().bin_dir();
                 let bypass_val = match std::env::var_os(env_vars::VP_BYPASS) {
                     Some(existing) => {
                         let mut paths: Vec<_> = std::env::split_paths(&existing).collect();
@@ -901,37 +906,32 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                if let Ok(home_dir) = vp_shared::get_vp_home() {
-                    let node_dir =
-                        home_dir.join("js_runtime").join("node").join(&*resolution.version);
-                    let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
-                    check_npm_global_install_result(
-                        &parsed.packages,
-                        original_path.as_deref(),
-                        &npm_prefix,
-                        &node_dir,
-                        &resolution.version,
-                    );
-                }
+                let node_dir =
+                    vp_shared::Dirs::get().js_runtime_dir().join("node").join(&*resolution.version);
+                let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
+                check_npm_global_install_result(
+                    &parsed.packages,
+                    original_path.as_deref(),
+                    &npm_prefix,
+                    &node_dir,
+                    &resolution.version,
+                );
             }
             return exit_code;
         }
 
         if let Some(parsed) = parse_npm_global_uninstall(args) {
             // Collect bin names before uninstall (package.json will be gone after)
-            let context = if let Ok(home_dir) = vp_shared::get_vp_home() {
-                let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
+            let (bins, npm_prefix) = {
+                let node_dir =
+                    vp_shared::Dirs::get().js_runtime_dir().join("node").join(&*resolution.version);
                 let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
                 let bins = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
-                Some((bins, npm_prefix))
-            } else {
-                None
+                (bins, npm_prefix)
             };
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                if let Some((bin_names, npm_prefix)) = context {
-                    remove_npm_global_uninstall_links(&bin_names, &npm_prefix);
-                }
+                remove_npm_global_uninstall_links(&bins, &npm_prefix);
             }
             return exit_code;
         }
@@ -1296,16 +1296,12 @@ async fn cached_project_source_still_current(
 
 /// Ensure Node.js is installed.
 pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, String> {
-    let home_dir = vp_shared::get_vp_home()
-        .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
-        .join("js_runtime")
-        .join("node")
-        .join(version);
+    let version_dir = vp_shared::Dirs::get().js_runtime_dir().join("node").join(version);
 
     #[cfg(windows)]
-    let binary_path = home_dir.join("node.exe");
+    let binary_path = version_dir.join("node.exe");
     #[cfg(not(windows))]
-    let binary_path = home_dir.join("bin").join("node");
+    let binary_path = version_dir.join("bin").join("node");
 
     // Check if already installed
     if binary_path.as_path().exists() {
@@ -1325,22 +1321,18 @@ pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, S
 
 /// Locate a tool binary within the Node.js installation.
 pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
-    let home_dir = vp_shared::get_vp_home()
-        .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
-        .join("js_runtime")
-        .join("node")
-        .join(version);
+    let version_dir = vp_shared::Dirs::get().js_runtime_dir().join("node").join(version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {
-        home_dir.join("node.exe")
+        version_dir.join("node.exe")
     } else {
         // npm and npx are .cmd scripts on Windows
-        home_dir.join(format!("{tool}.cmd"))
+        version_dir.join(format!("{tool}.cmd"))
     };
 
     #[cfg(not(windows))]
-    let tool_path = home_dir.join("bin").join(tool);
+    let tool_path = version_dir.join("bin").join(tool);
 
     if !tool_path.as_path().exists() {
         return Err(format!("Tool '{}' not found at {}", tool, tool_path.as_path().display()));
@@ -1367,7 +1359,7 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 /// `cwd` only resolves relative PATH entries; it is a parameter so tests can
 /// exercise them without mutating the process-wide working directory.
 fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let bin_dir = config::get_bin_dir().ok();
+    let bin_dir = vp_shared::Dirs::get().bin_dir();
     let path_var = std::env::var_os("PATH")?;
     tracing::debug!("path_var: {:?}", path_var);
 
@@ -1384,10 +1376,8 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
     // `~`-prefixed entries are left to `which`'s own tilde expansion.
     let mut filtered_paths: Vec<_> = std::env::split_paths(&path_var)
         .filter(|p| {
-            if let Some(ref bin) = bin_dir {
-                if p == bin.as_path() {
-                    return false;
-                }
+            if p == bin_dir.as_path() {
+                return false;
             }
             !bypass_paths.iter().any(|bp| p == bp)
         })
@@ -1395,7 +1385,7 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
         .collect();
 
     // Never return the running executable itself: with a misconfigured bin
-    // dir (e.g. VP_HOME overridden) the invoked shim can still live on PATH,
+    // dir (e.g. a custom install root) the invoked shim can still live on PATH,
     // and returning it would make the shim exec itself in an infinite loop.
     // Compare canonical identities (symlinks defeat path comparison, and
     // `current_exe` is fully resolved on Linux), then skip the self
@@ -1690,7 +1680,7 @@ mod tests {
 
     /// Simulates the SystemFirst loop prevention: Installation A sets VP_BYPASS
     /// with its own bin dir, then Installation B (seeing VP_BYPASS) should filter
-    /// both A's dir (from bypass) and its own dir (from get_bin_dir), finding the real tool
+    /// both A's dir (from bypass) and its own dir (from `Dirs::bin_dir`), finding the real tool
     /// in a third directory or returning None.
     #[test]
     #[serial]
@@ -1716,8 +1706,8 @@ mod tests {
         .unwrap();
 
         // Simulate: Installation A already set VP_BYPASS=<install_a_bin>
-        // Installation B also needs to filter install_b_bin (via get_bin_dir),
-        // but get_bin_dir returns the real vite-plus home. So we test by putting
+        // Installation B also needs to filter install_b_bin (via Dirs::bin_dir),
+        // but Dirs::bin_dir returns the real vite-plus home. So we test by putting
         // install_b_bin in the bypass as well (simulating cumulative append).
         let bypass =
             std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();

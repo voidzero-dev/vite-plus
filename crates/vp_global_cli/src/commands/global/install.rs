@@ -22,7 +22,7 @@ use crate::{
     commands::{
         env::{
             bin_config::BinConfig,
-            config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
+            config::{get_node_modules_dir, resolve_version, resolve_version_alias},
             package_metadata::{PackageMetadata, is_legacy_install_id, is_nested_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec, update_version_spec},
@@ -381,16 +381,7 @@ pub async fn install(
         }
 
         // 4.3 Prepare metadata and remove binaries that the new install no longer provides.
-        let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
-            Ok(bin_dir) => bin_dir,
-            Err(error) => {
-                let _ = cleanup_failed_install(&install_dir).await;
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                continue;
-            }
-        };
+        let bin_dir = vp_shared::Dirs::get().bin_dir();
         let metadata_version = installed_version.as_deref().unwrap_or("unknown");
 
         let mut metadata = PackageMetadata::new(
@@ -966,7 +957,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     };
 
     if dry_run {
-        let bin_dir = get_bin_dir()?;
+        let bin_dir = vp_shared::Dirs::get().bin_dir();
         let package_dir = match &metadata {
             Some(metadata) => metadata.installation_dir()?,
             None => PackageMetadata::installation_dir_for(&package_name, "")?,
@@ -991,7 +982,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     }
 
     // Remove shims and bin configs
-    let bin_dir = get_bin_dir()?;
+    let bin_dir = vp_shared::Dirs::get().bin_dir();
     for bin_name in &bins {
         remove_package_shim(&bin_dir, bin_name).await?;
         BinConfig::delete(bin_name).await?;

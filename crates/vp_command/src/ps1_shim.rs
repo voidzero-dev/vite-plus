@@ -46,8 +46,8 @@ use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powe
 /// - no `PowerShell` host (`pwsh.exe` or `powershell.exe`) is on PATH,
 /// - stdin is not a terminal (the `.ps1` wrappers hang on piped/null
 ///   stdin and the Ctrl+C concern doesn't apply without a TTY),
-/// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is
-///   unresolvable) AND not under any `node_modules/.bin/`,
+/// - the resolved path is outside the vite-plus install root
+///   AND not under any `node_modules/.bin/`,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
@@ -61,16 +61,18 @@ pub fn rewrite_cmd_to_powershell(
     rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
 }
 
-/// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
-/// Returns `None` if `vp_shared::get_vp_home()` failed; the rewrite still
-/// applies to `node_modules/.bin/*.cmd` paths in that case (the two scopes
-/// are independent).
+/// Cached vite-plus install root (`~/.vite-plus` under the legacy layout; the
+/// data directory under the split layout).
+///
+/// The returned value is always `Some`; the `Option` only exists because the
+/// rewrite scope check also applies to `node_modules/.bin/*.cmd` paths, which
+/// are independent of the install root.
 fn vp_home() -> Option<&'static AbsolutePathBuf> {
     use std::sync::LazyLock;
 
-    static VP_HOME: LazyLock<Option<AbsolutePathBuf>> =
-        LazyLock::new(|| vp_shared::get_vp_home().ok());
-    VP_HOME.as_ref()
+    static INSTALL_ROOT: LazyLock<AbsolutePathBuf> =
+        LazyLock::new(|| vp_shared::Dirs::get().data_dir());
+    Some(&INSTALL_ROOT)
 }
 
 /// Pure rewrite logic. Factored out so tests can drive it on any platform

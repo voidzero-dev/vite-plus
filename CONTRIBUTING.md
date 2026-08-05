@@ -60,7 +60,7 @@ pnpm bootstrap-cli
 vp --version
 ```
 
-This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus`.
+This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus` (the legacy monolithic layout; on-disk paths are resolved by `vp_shared::Dirs` in `crates/vp_shared/src/dirs.rs`).
 
 To switch back to a release version, use `vp upgrade --force` (`current` points to `local-dev-*` but the binary version may still match the release, so `--force` is needed)
 

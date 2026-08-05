@@ -3,10 +3,10 @@
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
-use vp_shared::{env_vars, output};
+use vp_shared::{Dirs, env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
-use super::config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version};
+use super::config::{self, ShimMode, load_config, resolve_version};
 use crate::{
     commands::shell::{ALL_SHELL_PROFILES, IDE_SHELL_PROFILES, ShellProfile, resolve_profile_path},
     error::Error,
@@ -110,9 +110,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
         Some(EnvSourcingStatus::IdeFound) | None => {} // All good, no guidance needed
         Some(EnvSourcingStatus::ShellOnly | EnvSourcingStatus::NotFound) => {
             // Show IDE setup guidance when env is not in IDE-relevant profiles
-            if let Ok(bin_dir) = get_bin_dir() {
-                print_ide_setup_guidance(&bin_dir);
-            }
+            print_ide_setup_guidance(&Dirs::get().env_scripts_dir());
         }
     }
 
@@ -130,19 +128,11 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     }
 }
 
-/// Check VP_HOME directory.
+/// Check the vite-plus home directory (the legacy root under the `Home`
+/// layout, the data directory under the split layout — same path on disk
+/// under `Home`).
 async fn check_vite_plus_home() -> bool {
-    let home = match get_vp_home() {
-        Ok(h) => h,
-        Err(e) => {
-            print_check(
-                &output::CROSS.red().to_string(),
-                env_vars::VP_HOME,
-                &format!("{e}").red().to_string(),
-            );
-            return false;
-        }
-    };
+    let home = Dirs::get().data_dir();
 
     let display = abbreviate_home(&home.as_path().display().to_string());
 
@@ -162,10 +152,7 @@ async fn check_vite_plus_home() -> bool {
 
 /// Check bin directory and shim files.
 async fn check_bin_dir() -> bool {
-    let bin_dir = match get_bin_dir() {
-        Ok(d) => d,
-        Err(_) => return false,
-    };
+    let bin_dir = Dirs::get().bin_dir();
 
     if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
         print_check(
@@ -265,15 +252,9 @@ async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
 /// Tries IDE-relevant profiles first, then falls back to all shell profiles.
 /// Returns `EnvSourcingStatus` indicating where (if anywhere) the sourcing was found.
 fn check_env_sourcing() -> EnvSourcingStatus {
-    let bin_dir = match get_bin_dir() {
-        Ok(d) => d,
-        Err(_) => return EnvSourcingStatus::NotFound,
-    };
+    let env_dir = Dirs::get().env_scripts_dir();
 
-    let home_path = bin_dir
-        .parent()
-        .map(|p| p.as_path().display().to_string())
-        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+    let home_path = env_dir.as_path().display().to_string();
     let home_path = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = home_path.strip_prefix(&home_dir) {
             format!("$HOME{suffix}")
@@ -339,10 +320,7 @@ fn check_session_override() {
 
 /// Check PATH configuration.
 async fn check_path() -> bool {
-    let bin_dir = match get_bin_dir() {
-        Ok(d) => d,
-        Err(_) => return false,
-    };
+    let bin_dir = Dirs::get().bin_dir();
 
     let path_var = std::env::var_os("PATH").unwrap_or_default();
     let paths: Vec<_> = std::env::split_paths(&path_var).collect();
@@ -359,7 +337,7 @@ async fn check_path() -> bool {
         print_check(&output::CROSS.red().to_string(), "vp", &"not in PATH".red().to_string());
         print_hint(&format!("Expected: {bin_display}"));
         println!();
-        print_path_fix(&bin_dir);
+        print_path_fix(&Dirs::get().env_scripts_dir());
         return false;
     }
 
@@ -396,14 +374,11 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
 }
 
 /// Print PATH fix instructions for shell setup.
-fn print_path_fix(bin_dir: &vt_path::AbsolutePath) {
+fn print_path_fix(env_dir: &vt_path::AbsolutePath) {
     #[cfg(not(windows))]
     {
-        // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
-        let home_path = bin_dir
-            .parent()
-            .map(|p| p.as_path().display().to_string())
-            .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+        // Use the $HOME prefix for readability when the env dir is under $HOME
+        let home_path = env_dir.as_path().display().to_string();
         let home_path = if let Ok(home_dir) = std::env::var("HOME") {
             if let Some(suffix) = home_path.strip_prefix(&home_dir) {
                 format!("$HOME{suffix}")
@@ -431,7 +406,7 @@ fn print_path_fix(bin_dir: &vt_path::AbsolutePath) {
 
     #[cfg(windows)]
     {
-        let _ = bin_dir;
+        let _ = env_dir;
         println!("  {}", "Add the bin directory to your PATH via:".dimmed());
         println!("  System Properties -> Environment Variables -> Path");
         println!();
@@ -469,12 +444,9 @@ fn check_profile_files(vite_plus_home: &str, profile_files: &[ShellProfile]) -> 
 }
 
 /// Print IDE setup guidance for GUI applications.
-fn print_ide_setup_guidance(bin_dir: &vt_path::AbsolutePath) {
-    // Derive vite_plus_home display path from bin_dir.parent(), using $HOME prefix
-    let home_path = bin_dir
-        .parent()
-        .map(|p| p.as_path().display().to_string())
-        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+fn print_ide_setup_guidance(env_dir: &vt_path::AbsolutePath) {
+    // Use the $HOME prefix for readability when the env dir is under $HOME
+    let home_path = env_dir.as_path().display().to_string();
     let home_path = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = home_path.strip_prefix(&home_dir) {
             format!("$HOME{suffix}")
@@ -571,10 +543,7 @@ async fn check_current_resolution(
             print_check(" ", "Version", &resolution.version.bright_green().to_string());
 
             // Check if Node.js is installed
-            let home_dir = match vp_shared::get_vp_home() {
-                Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
-                Err(_) => return None,
-            };
+            let home_dir = Dirs::get().js_runtime_dir().join("node").join(&resolution.version);
 
             #[cfg(windows)]
             let binary_path = home_dir.join("node.exe");

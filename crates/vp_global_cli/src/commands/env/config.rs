@@ -1,21 +1,20 @@
 //! Configuration and version resolution for the env command.
 //!
 //! This module provides:
-//! - VP_HOME path resolution
 //! - Version resolution with priority order
 //! - Config file management
+//!
+//! On-disk locations come from [`vp_shared::Dirs`].
 
 use serde::{Deserialize, Serialize};
 use vp_js_runtime::{
     NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
     read_package_json, resolve_node_version,
 };
+use vp_shared::Dirs;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
-
-/// Config file name
-const CONFIG_FILE: &str = "config.json";
 
 /// Shim mode determines how shims resolve tools.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -61,23 +60,6 @@ pub struct VersionResolution {
     pub is_range: bool,
 }
 
-/// Get the VP_HOME directory path.
-///
-/// Uses `VP_HOME` environment variable if set, otherwise defaults to `~/.vite-plus`.
-pub fn get_vp_home() -> Result<AbsolutePathBuf, Error> {
-    Ok(vp_shared::get_vp_home()?)
-}
-
-/// Get the bin directory path (~/.vite-plus/bin/).
-pub fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join("bin"))
-}
-
-/// Get the packages directory path (~/.vite-plus/packages/).
-pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join("packages"))
-}
-
 /// Get the node_modules directory path for a package.
 ///
 /// npm uses different layouts on Unix vs Windows:
@@ -110,14 +92,9 @@ pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> Absolu
     }
 }
 
-/// Get the config file path.
-pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join(CONFIG_FILE))
-}
-
 /// Load configuration from disk.
 pub async fn load_config() -> Result<Config, Error> {
-    let config_path = get_config_path()?;
+    let config_path = Dirs::get().config_file();
 
     if !tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
         return Ok(Config::default());
@@ -130,11 +107,11 @@ pub async fn load_config() -> Result<Config, Error> {
 
 /// Save configuration to disk.
 pub async fn save_config(config: &Config) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let vite_plus_home = get_vp_home()?;
+    let dirs = Dirs::get();
+    let config_path = dirs.config_file();
 
     // Ensure directory exists
-    tokio::fs::create_dir_all(&vite_plus_home).await?;
+    tokio::fs::create_dir_all(&dirs.config_dir()).await?;
 
     let content = serde_json::to_string_pretty(config)?;
     tokio::fs::write(&config_path, content).await?;
@@ -148,14 +125,9 @@ pub const VERSION_ENV_VAR: &str = vp_shared::env_vars::VP_NODE_VERSION;
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
 pub const SESSION_VERSION_FILE: &str = ".session-node-version";
 
-/// Get the path to the session version file (~/.vite-plus/.session-node-version).
-pub fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join(SESSION_VERSION_FILE))
-}
-
 /// Read the session version file. Returns `None` if the file is missing or empty.
 pub async fn read_session_version() -> Option<String> {
-    let path = get_session_version_path().ok()?;
+    let path = Dirs::get().session_node_version_file();
     let content = tokio::fs::read_to_string(&path).await.ok()?;
     let trimmed = content.trim().to_string();
     if trimmed.is_empty() { None } else { Some(trimmed) }
@@ -163,7 +135,7 @@ pub async fn read_session_version() -> Option<String> {
 
 /// Read the session version file synchronously. Returns `None` if the file is missing or empty.
 pub fn read_session_version_sync() -> Option<String> {
-    let path = get_session_version_path().ok()?;
+    let path = Dirs::get().session_node_version_file();
     let content = std::fs::read_to_string(path.as_path()).ok()?;
     let trimmed = content.trim().to_string();
     if trimmed.is_empty() { None } else { Some(trimmed) }
@@ -171,7 +143,7 @@ pub fn read_session_version_sync() -> Option<String> {
 
 /// Write the resolved version to the session version file.
 pub async fn write_session_version(version: &str) -> Result<(), Error> {
-    let path = get_session_version_path()?;
+    let path = Dirs::get().session_node_version_file();
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -182,7 +154,7 @@ pub async fn write_session_version(version: &str) -> Result<(), Error> {
 
 /// Delete the session version file. Ignores "not found" errors.
 pub async fn delete_session_version() -> Result<(), Error> {
-    let path = get_session_version_path()?;
+    let path = Dirs::get().session_node_version_file();
     match tokio::fs::remove_file(&path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -221,7 +193,7 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         return Ok(VersionResolution {
             version: session_version,
             source: SESSION_VERSION_FILE.into(),
-            source_path: get_session_version_path().ok(),
+            source_path: Some(Dirs::get().session_node_version_file()),
             project_root: None,
             is_range: false,
         });
@@ -373,7 +345,7 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
             version: resolved,
             source: "default".into(),
             // Don't set source_path for aliases (lts, latest) so cache can refresh
-            source_path: if is_alias { None } else { Some(get_config_path()?) },
+            source_path: if is_alias { None } else { Some(Dirs::get().config_file()) },
             project_root: None,
             is_range,
         });
@@ -1102,7 +1074,7 @@ mod tests {
         ));
 
         // Write empty content
-        let path = get_session_version_path().unwrap();
+        let path = Dirs::get().session_node_version_file();
         tokio::fs::create_dir_all(path.parent().unwrap()).await.unwrap();
         tokio::fs::write(&path, "").await.unwrap();
 
@@ -1125,7 +1097,7 @@ mod tests {
         write_session_version("20.18.0").await.unwrap();
 
         // Overwrite with whitespace-padded content
-        let path = get_session_version_path().unwrap();
+        let path = Dirs::get().session_node_version_file();
         tokio::fs::write(&path, "  20.18.0  \n").await.unwrap();
 
         assert_eq!(read_session_version().await.as_deref(), Some("20.18.0"));
@@ -1192,8 +1164,7 @@ mod tests {
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
             node_version: Some("24.0.0".into()),
-            vite_plus_home: Some(temp_dir.path().into()),
-            ..vp_shared::EnvConfig::for_test()
+            ..vp_shared::EnvConfig::for_test_with_home(temp_dir.path())
         });
 
         // Write session version file with different version

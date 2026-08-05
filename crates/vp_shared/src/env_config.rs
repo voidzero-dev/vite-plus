@@ -26,7 +26,7 @@
 //!     EnvConfig::for_test_with_home("/tmp/test"),
 //!     || {
 //!         assert_eq!(
-//!             EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
+//!             EnvConfig::get().user_home.as_ref().unwrap().to_str().unwrap(),
 //!             "/tmp/test"
 //!         );
 //!     },
@@ -53,8 +53,34 @@ thread_local! {
 pub struct EnvConfig {
     /// Override for the vite-plus home directory (`~/.vite-plus`).
     ///
+    /// Selects the legacy monolithic layout; takes priority over all
+    /// `VP_*_DIR`/`XDG_*` resolution.
+    ///
     /// Env: `VP_HOME`
     pub vite_plus_home: Option<PathBuf>,
+
+    /// Override for the directory where executables and shims are installed.
+    ///
+    /// Only applies to the split XDG/platform layout (fresh installs); a
+    /// legacy `~/.vite-plus` layout is all-or-nothing.
+    ///
+    /// Env: `VP_BIN_DIR`
+    pub vp_bin_dir: Option<PathBuf>,
+
+    /// Override for the payload data directory (CLI versions, Node.js
+    /// runtimes, package managers).
+    ///
+    /// Only applies to the split XDG/platform layout (fresh installs).
+    ///
+    /// Env: `VP_DATA_DIR`
+    pub vp_data_dir: Option<PathBuf>,
+
+    /// Override for the disposable cache directory.
+    ///
+    /// Only applies to the split XDG/platform layout (fresh installs).
+    ///
+    /// Env: `VP_CACHE_DIR`
+    pub vp_cache_dir: Option<PathBuf>,
 
     /// NPM registry URL.
     ///
@@ -107,6 +133,9 @@ impl EnvConfig {
     pub fn from_env() -> Self {
         Self {
             vite_plus_home: std::env::var(env_vars::VP_HOME).ok().map(PathBuf::from),
+            vp_bin_dir: std::env::var(env_vars::VP_BIN_DIR).ok().map(PathBuf::from),
+            vp_data_dir: std::env::var(env_vars::VP_DATA_DIR).ok().map(PathBuf::from),
+            vp_cache_dir: std::env::var(env_vars::VP_CACHE_DIR).ok().map(PathBuf::from),
             npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
                 .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into())
@@ -163,7 +192,7 @@ impl EnvConfig {
     ///     || {
     ///         let config = EnvConfig::get();
     ///         assert_eq!(
-    ///             config.vite_plus_home.as_ref().unwrap().to_str().unwrap(),
+    ///             config.user_home.as_ref().unwrap().to_str().unwrap(),
     ///             "/tmp/test"
     ///         );
     ///     },
@@ -194,6 +223,9 @@ impl EnvConfig {
     pub fn for_test() -> Self {
         Self {
             vite_plus_home: None,
+            vp_bin_dir: None,
+            vp_data_dir: None,
+            vp_cache_dir: None,
             npm_registry: "https://registry.npmjs.org".into(),
             node_dist_mirror: None,
             node_skip_signature_verify: false,
@@ -205,9 +237,24 @@ impl EnvConfig {
         }
     }
 
-    /// Create a test configuration with a custom home directory.
+    /// Create a test configuration with a custom user home directory.
+    ///
+    /// `Dirs` resolves entirely under this home: with no `<home>/.vite-plus`
+    /// on disk the split XDG/platform layout lands under `<home>` (fully
+    /// sandboxed, no host filesystem access); create `<home>/.vite-plus/`
+    /// to select the legacy monolithic layout instead.
     pub fn for_test_with_home(home: impl Into<PathBuf>) -> Self {
-        Self { vite_plus_home: Some(home.into()), ..Self::for_test() }
+        Self { user_home: Some(home.into()), ..Self::for_test() }
+    }
+
+    /// Whether the current thread runs under a `test_scope`/`test_guard`
+    /// override.
+    ///
+    /// `Dirs` uses this to skip host-environment detection (executable
+    /// self-location, `PATH` inference, XDG variables) so test threads
+    /// resolve purely from the injected config and stay hermetic.
+    pub(crate) fn is_test_override_active() -> bool {
+        TEST_CONFIG.with(|c| c.borrow().is_some())
     }
 
     /// Set a test config override and return a guard that restores the previous on drop.
@@ -239,7 +286,7 @@ mod tests {
     #[test]
     fn test_for_test_returns_defaults() {
         let config = EnvConfig::for_test();
-        assert!(config.vite_plus_home.is_none());
+        assert!(config.user_home.is_none());
         assert_eq!(config.npm_registry, "https://registry.npmjs.org");
         assert!(!config.is_ci);
         assert!(!config.node_skip_signature_verify);
@@ -248,7 +295,7 @@ mod tests {
     #[test]
     fn test_for_test_with_home() {
         let config = EnvConfig::for_test_with_home("/tmp/test-home");
-        assert_eq!(config.vite_plus_home, Some(PathBuf::from("/tmp/test-home")));
+        assert_eq!(config.user_home, Some(PathBuf::from("/tmp/test-home")));
     }
 
     #[test]
@@ -260,14 +307,14 @@ mod tests {
         };
         assert_eq!(config.npm_registry, "https://custom.registry");
         assert!(config.is_ci);
-        assert!(config.vite_plus_home.is_none());
+        assert!(config.user_home.is_none());
     }
 
     #[test]
     fn test_scope_overrides_get() {
         EnvConfig::test_scope(EnvConfig::for_test_with_home("/scoped/home"), || {
             let config = EnvConfig::get();
-            assert_eq!(config.vite_plus_home.as_ref().unwrap().to_str().unwrap(), "/scoped/home");
+            assert_eq!(config.user_home.as_ref().unwrap().to_str().unwrap(), "/scoped/home");
         });
     }
 
@@ -275,30 +322,24 @@ mod tests {
     fn test_scope_restores_previous() {
         let before = EnvConfig::get();
         EnvConfig::test_scope(EnvConfig::for_test_with_home("/tmp/scope"), || {
-            assert!(EnvConfig::get().vite_plus_home.is_some());
+            assert!(EnvConfig::get().user_home.is_some());
         });
         let after = EnvConfig::get();
-        assert_eq!(before.vite_plus_home.is_some(), after.vite_plus_home.is_some());
+        assert_eq!(before.user_home.is_some(), after.user_home.is_some());
     }
 
     #[test]
     fn test_nested_scopes() {
         EnvConfig::test_scope(EnvConfig::for_test_with_home("/outer"), || {
-            assert_eq!(
-                EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
-                "/outer"
-            );
+            assert_eq!(EnvConfig::get().user_home.as_ref().unwrap().to_str().unwrap(), "/outer");
             EnvConfig::test_scope(EnvConfig::for_test_with_home("/inner"), || {
                 assert_eq!(
-                    EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
+                    EnvConfig::get().user_home.as_ref().unwrap().to_str().unwrap(),
                     "/inner"
                 );
             });
             // Restored to outer
-            assert_eq!(
-                EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
-                "/outer"
-            );
+            assert_eq!(EnvConfig::get().user_home.as_ref().unwrap().to_str().unwrap(), "/outer");
         });
     }
 

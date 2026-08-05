@@ -19,7 +19,7 @@ use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{
     bin_config::{BinConfig, BinSource},
-    config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
+    config::{VERSION_ENV_VAR, get_node_modules_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::{cli::exit_status, error::Error};
@@ -110,7 +110,7 @@ async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<E
 
 #[cfg(unix)]
 async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
-    let link_path = get_bin_dir()?.join(tool);
+    let link_path = vp_shared::Dirs::get().bin_dir().join(tool);
     let target = tokio::fs::read_link(&link_path).await?;
     let binary_path = if target.is_absolute() {
         target
@@ -127,7 +127,7 @@ async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
 
 #[cfg(windows)]
 async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
-    let cmd_path = get_bin_dir()?.join(format!("{tool}.cmd"));
+    let cmd_path = vp_shared::Dirs::get().bin_dir().join(format!("{tool}.cmd"));
     let content = tokio::fs::read_to_string(&cmd_path).await?;
     let mut lines = content.lines();
     let source = match (lines.next(), lines.next(), lines.next(), lines.next()) {
@@ -202,8 +202,7 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
     let resolution = resolve_version(&cwd).await?;
 
     // Get the tool path
-    let home_dir =
-        vp_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolution.version);
+    let home_dir = vp_shared::Dirs::get().js_runtime_dir().join("node").join(&resolution.version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {

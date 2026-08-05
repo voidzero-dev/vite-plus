@@ -21,8 +21,6 @@ pub use dispatch::dispatch;
 pub(crate) use dispatch::find_system_tool;
 use vp_shared::env_vars;
 
-use crate::commands::env::config::get_bin_dir;
-
 /// Core shim tools (node, npm, npx).
 ///
 /// `corepack` is also a default shim (see `commands::env::setup::SHIM_TOOLS`)
@@ -48,20 +46,18 @@ pub fn extract_tool_name(argv0: &str) -> String {
     if cfg!(target_os = "linux") {
         stem
     } else {
-        let bin_dir = get_bin_dir();
-        if let Ok(bin_dir) = bin_dir {
-            if let Ok(read_dir) = fs::read_dir(&bin_dir) {
-                for bin in read_dir.flatten() {
-                    if bin.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase()
-                        == stem.to_lowercase()
-                    {
-                        return bin
-                            .path()
-                            .file_stem()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
-                    }
+        let bin_dir = vp_shared::Dirs::get().bin_dir();
+        if let Ok(read_dir) = fs::read_dir(&bin_dir) {
+            for bin in read_dir.flatten() {
+                if bin.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase()
+                    == stem.to_lowercase()
+                {
+                    return bin
+                        .path()
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
                 }
             }
         }
@@ -106,12 +102,8 @@ pub fn is_shim_tool(tool: &str) -> bool {
 /// because when running through a wrapper script (e.g., current/bin/vp), the current_exe()
 /// returns the wrapper's location, not the original shim's location.
 fn is_potential_package_binary(tool: &str) -> bool {
-    use crate::commands::env::config;
-
-    // Get the configured bin directory (respects VP_HOME env var)
-    let Ok(configured_bin) = config::get_bin_dir() else {
-        return false;
-    };
+    // Get the configured bin directory
+    let configured_bin = vp_shared::Dirs::get().bin_dir();
 
     // Check if the shim exists in the configured bin directory.
     // Use symlink_metadata to detect symlinks (even broken ones).
@@ -241,12 +233,11 @@ mod tests {
     /// Test that is_potential_package_binary checks the configured bin directory.
     ///
     /// The function now checks if a shim exists in the configured bin directory
-    /// (from VP_HOME/bin) instead of relying on current_exe().
+    /// (`Dirs::get().bin_dir()`) instead of relying on current_exe().
     /// This allows it to work correctly with wrapper scripts.
     #[test]
     fn test_is_potential_package_binary_checks_configured_bin() {
-        // The function checks config::get_bin_dir() which respects VP_HOME.
-        // Without setting VP_HOME, it defaults to ~/.vite-plus/bin.
+        // The function checks Dirs::get().bin_dir().
         //
         // Since we can't easily create test shims in the actual bin directory,
         // we just verify the function doesn't panic and returns false for

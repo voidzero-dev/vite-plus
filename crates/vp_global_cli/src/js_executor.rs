@@ -7,7 +7,7 @@ use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
 use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
-use vp_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
+use vp_shared::{Dirs, PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
@@ -106,6 +106,28 @@ impl JsExecutor {
         if let Ok(bin_path) = Self::get_bin_path() {
             tracing::debug!("Set VP_CLI_BIN to {:?}", bin_path);
             cmd.env(env_vars::VP_CLI_BIN, bin_path.as_path());
+        }
+
+        // Split (XDG) layout: hand JS scripts the resolved dirs so TS code
+        // that reads paths directly (the create-org tarball cache, generated
+        // git hook scripts) agrees with the Rust side, and nested vp
+        // processes resolve the same layout. Legacy installs self-locate
+        // their root (executable path / `PATH` inference / the grandfathered
+        // `~/.vite-plus`), and the legacy layout intentionally ignores these
+        // vars, so only inject them for the split layout. Explicit user
+        // overrides always win.
+        let dirs = Dirs::get();
+        if !dirs.is_legacy_layout() {
+            for (var, dir) in [
+                (env_vars::VP_BIN_DIR, dirs.bin_dir()),
+                (env_vars::VP_DATA_DIR, dirs.data_dir()),
+                (env_vars::VP_CACHE_DIR, dirs.cache_dir()),
+            ] {
+                if std::env::var_os(var).is_none() {
+                    tracing::debug!("Set {var} to {dir:?}");
+                    cmd.env(var, dir.as_path());
+                }
+            }
         }
 
         // Prepend runtime bin to PATH so child processes can find the JS runtime
@@ -618,8 +640,9 @@ mod tests {
         use tempfile::TempDir;
         use vp_shared::EnvConfig;
 
-        // Isolate VP_HOME so config defaults to managed mode (no `vp env off`)
-        // and the runtime download cache stays inside the test sandbox.
+        // Isolate the user home so config defaults to managed mode (no
+        // `vp env off`) and the runtime download cache stays inside the test
+        // sandbox (split layout under the temp home).
         let vp_home = TempDir::new().unwrap();
         let _guard =
             EnvConfig::test_guard(EnvConfig::for_test_with_home(vp_home.path().to_path_buf()));

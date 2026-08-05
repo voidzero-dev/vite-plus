@@ -6,7 +6,7 @@ use std::process::ExitStatus;
 
 use vt_path::AbsolutePathBuf;
 
-use super::config::{get_config_path, load_config, save_config};
+use super::config::{load_config, save_config};
 use crate::error::Error;
 
 /// Execute the default command.
@@ -24,7 +24,7 @@ async fn show_default() -> Result<ExitStatus, Error> {
     match config.default_node_version {
         Some(version) => {
             println!("Default Node.js version: {version}");
-            let config_path = get_config_path()?;
+            let config_path = vp_shared::Dirs::get().config_file();
             println!("  Set via: {}", config_path.as_path().display());
 
             // If it's an alias, also show the resolved version

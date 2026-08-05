@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use uuid::{Uuid, Version};
 use vt_path::AbsolutePathBuf;
 
-use super::config::get_packages_dir;
 use crate::error::Error;
 
 // This is legacy, for old Vite+ version's compatibility
@@ -117,7 +116,7 @@ impl PackageMetadata {
         package_name: &str,
         install_id: &str,
     ) -> Result<AbsolutePathBuf, Error> {
-        let packages_dir = get_packages_dir()?;
+        let packages_dir = vp_shared::Dirs::get().packages_dir();
         let package_dir = packages_dir.join(package_name);
         if install_id.is_empty() {
             Ok(package_dir)
@@ -134,7 +133,7 @@ impl PackageMetadata {
 
     /// Get the metadata file path for a package.
     pub fn metadata_path(package_name: &str) -> Result<AbsolutePathBuf, Error> {
-        let packages_dir = get_packages_dir()?;
+        let packages_dir = vp_shared::Dirs::get().packages_dir();
         Ok(packages_dir.join(format!("{package_name}.json")))
     }
 
@@ -173,7 +172,7 @@ impl PackageMetadata {
 
     /// List all installed packages.
     pub async fn list_all() -> Result<Vec<Self>, Error> {
-        let packages_dir = get_packages_dir()?;
+        let packages_dir = vp_shared::Dirs::get().packages_dir();
         if !tokio::fs::try_exists(&packages_dir).await.unwrap_or(false) {
             return Ok(Vec::new());
         }
@@ -358,9 +357,15 @@ mod tests {
         let result = metadata.save().await;
         assert!(result.is_ok(), "Failed to save scoped package metadata: {:?}", result.err());
 
-        // Verify the file exists at the correct location
-        let expected_path = temp_path.join("packages").join("@scope").join("test-pkg.json");
-        assert!(expected_path.exists(), "Metadata file not found at {:?}", expected_path);
+        // Verify the file exists at the correct location (under the resolved
+        // packages directory for the sandboxed home).
+        let expected_path =
+            vp_shared::Dirs::get().packages_dir().join("@scope").join("test-pkg.json");
+        assert!(
+            expected_path.as_path().exists(),
+            "Metadata file not found at {:?}",
+            expected_path.as_path()
+        );
     }
 
     #[tokio::test]

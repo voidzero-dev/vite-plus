@@ -102,7 +102,7 @@ impl NodeProvider {
     ///
     /// # Arguments
     /// * `version_req` - A semver range requirement (e.g., "^20.18.0")
-    /// * `cache_dir` - The cache directory path (e.g., `~/.cache/vite-plus/js_runtime`)
+    /// * `cache_dir` - The managed runtime install dir (e.g., `~/.vite-plus/js_runtime`)
     ///
     /// # Returns
     /// The highest LTS cached version that satisfies the requirement, or the
@@ -186,8 +186,7 @@ impl NodeProvider {
     ///
     /// Returns an error only if the download fails and no local cache exists.
     pub async fn fetch_version_index(&self) -> Result<Vec<NodeVersionEntry>, Error> {
-        let cache_dir = crate::cache::get_cache_dir()?;
-        let cache_path = cache_dir.join("node/index_cache.json");
+        let cache_path = vp_shared::Dirs::get().node_index_cache_file();
 
         // Try to load from cache
         let Some(cache) = load_cache(&cache_path).await else {

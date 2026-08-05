@@ -10,7 +10,7 @@
 use vp_shared::{PrependOptions, exit_code_from_status, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::{commands::env::config, shim::dispatch};
+use crate::shim::dispatch;
 
 /// Parsed vpx flags.
 #[derive(Debug, Default)]
@@ -184,20 +184,12 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
 ///
 /// This prevents vpx from finding itself (or other vite-plus shims) on PATH.
 fn find_on_path(cmd: &str) -> Option<AbsolutePathBuf> {
-    let bin_dir = config::get_bin_dir().ok();
+    let bin_dir = vp_shared::Dirs::get().bin_dir();
     let path_var = std::env::var_os("PATH")?;
 
     // Filter PATH to exclude vite-plus bin directory
-    let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| {
-            if let Some(ref bin) = bin_dir {
-                if p == bin.as_path() {
-                    return false;
-                }
-            }
-            true
-        })
-        .collect();
+    let filtered_paths: Vec<_> =
+        std::env::split_paths(&path_var).filter(|p| p != bin_dir.as_path()).collect();
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
     let cwd = vt_path::current_dir().ok()?;
@@ -709,12 +701,12 @@ mod tests {
     #[serial]
     fn test_find_on_path_excludes_vp_bin_dir() {
         let original_path = std::env::var_os("PATH");
-        let original_home = std::env::var_os("VP_HOME");
         let temp = tempfile::tempdir().unwrap();
 
-        // Set up a fake vite-plus home with bin dir
-        let fake_home = temp.path().join("vite-plus-home");
-        let fake_bin = fake_home.join("bin");
+        // Set up a fake vite-plus home with bin dir. The on-disk `.vite-plus`
+        // under the overridden user home selects the legacy layout, so the
+        // vp bin dir is `<home>/.vite-plus/bin`.
+        let fake_bin = temp.path().join(".vite-plus").join("bin");
         std::fs::create_dir_all(&fake_bin).unwrap();
         create_fake_executable(&fake_bin, "vpx-excluded-tool");
 
@@ -723,13 +715,14 @@ mod tests {
         std::fs::create_dir_all(&other_dir).unwrap();
         create_fake_executable(&other_dir, "vpx-excluded-tool");
 
-        let path = std::env::join_paths([fake_bin.as_path(), other_dir.as_path()]).unwrap();
+        let path = std::env::join_paths([fake_bin.as_os_str(), other_dir.as_os_str()]).unwrap();
 
         // SAFETY: serial test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var("VP_HOME", fake_home.as_os_str());
         }
+        let _guard =
+            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(temp.path()));
 
         let result = find_on_path("vpx-excluded-tool");
         assert!(result.is_some());
@@ -743,10 +736,6 @@ mod tests {
             match &original_path {
                 Some(v) => std::env::set_var("PATH", v),
                 None => std::env::remove_var("PATH"),
-            }
-            match &original_home {
-                Some(v) => std::env::set_var("VP_HOME", v),
-                None => std::env::remove_var("VP_HOME"),
             }
         }
     }

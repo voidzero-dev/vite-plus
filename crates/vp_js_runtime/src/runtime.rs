@@ -183,13 +183,13 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     version: &str,
 ) -> Result<JsRuntime, Error> {
     let platform = Platform::current();
-    let cache_dir = crate::cache::get_cache_dir()?;
+    let cache_dir = vp_shared::Dirs::get().js_runtime_dir();
 
     // Get paths from provider
     let binary_relative_path = provider.binary_relative_path(platform);
     let bin_dir_relative_path = provider.bin_dir_relative_path(platform);
 
-    // Cache path: $CACHE_DIR/vite-plus/js_runtime/{runtime}/{version}/
+    // Install path: <js_runtime_dir>/{runtime}/{version}/
     let install_dir = cache_dir.join(provider.name()).join(version);
 
     // Check if already cached
@@ -456,7 +456,7 @@ pub async fn resolve_node_version(
 /// Currently only supports Node.js runtime.
 pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result<JsRuntime, Error> {
     let provider = NodeProvider::new();
-    let cache_dir = crate::cache::get_cache_dir()?;
+    let cache_dir = vp_shared::Dirs::get().js_runtime_dir();
 
     // Resolve version from the project directory, walking up to inherit from ancestors
     let resolution = resolve_node_version(project_path, true).await?;
@@ -1041,7 +1041,7 @@ mod tests {
         let version = "20.17.0";
 
         // Clear any existing cache for this version
-        let cache_dir = crate::cache::get_cache_dir().unwrap();
+        let cache_dir = vp_shared::Dirs::get().js_runtime_dir();
         let install_dir = cache_dir.join("node").join(version);
         if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
             tokio::fs::remove_dir_all(&install_dir).await.unwrap();
