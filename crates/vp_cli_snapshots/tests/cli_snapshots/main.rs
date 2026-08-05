@@ -525,9 +525,27 @@ impl CaseHome {
         if flavor == Flavor::Local {
             self.write_local_package_cmd_shims(&package_dir, &local_bin_dir)?;
         }
+
+        // Complete the legacy install shape (`bin/vp` alongside
+        // `current/bin/vp`) before any case CLI runs: layout detection
+        // classifies `<X>/current/bin/vp` as a split data dir unless
+        // `<X>/bin/vp` exists, and `vp env setup` below would otherwise
+        // write shims into the split bin dir instead of `<VP_HOME>/bin`.
+        let vp_bin_dir = self.vp_home().join("bin");
+        std::fs::create_dir_all(&vp_bin_dir)
+            .map_err(|e| format!("failed to create bin dir: {e}"))?;
+        #[cfg(unix)]
+        {
+            let link = vp_bin_dir.join(VP_BINARY_NAME);
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink("../current/bin/vp", &link)
+                .map_err(|e| format!("failed to link bin/vp: {e}"))?;
+        }
+        #[cfg(windows)]
+        flavor::install_file(&vp_bin_dir.join(VP_BINARY_NAME), &runtime.global_vp, "bin/vp.exe")?;
+
         self.run_env_setup(&vp)?;
 
-        let vp_bin_dir = self.vp_home().join("bin");
         let mut tool_dirs = match flavor {
             Flavor::Global => vec![vp_bin_dir],
             Flavor::Local => vec![local_bin_dir, vp_bin_dir],

@@ -1,8 +1,24 @@
 # shim_corepack_enable_install_directory
 
-## `vpt mkdir -p home/js_runtime/node/22.18.0/bin`
+## `vpt mkdir -p home/.vite-plus/js_runtime/node/22.18.0/bin home/.vite-plus/current/bin home/.vite-plus/bin`
 
-Isolated VP_HOME with a fake managed Node runtime layout
+Isolated legacy install layout with a fake managed Node runtime
+
+
+## `vpt cp $VP_HOME/current/bin/vp home/.vite-plus/current/bin/vp`
+
+The isolated install's vp binary
+
+
+## `vpt cp $VP_HOME/current/bin/vp home/.vite-plus/bin/vp`
+
+Marks the layout as a legacy install for detection
+
+
+## `vpt chmod +x home/.vite-plus/current/bin/vp`
+
+
+## `vpt chmod +x home/.vite-plus/bin/vp`
 
 
 ## `vpt write-file .node-version '22.18.0
@@ -11,30 +27,30 @@ Isolated VP_HOME with a fake managed Node runtime layout
 Project Node.js version
 
 
-## `vpt write-file home/js_runtime/node/22.18.0/bin/node '#'\!'/bin/sh
+## `vpt write-file home/.vite-plus/js_runtime/node/22.18.0/bin/node '#'\!'/bin/sh
 echo fake-node
 '`
 
 Fake node binary
 
 
-## `vpt chmod +x home/js_runtime/node/22.18.0/bin/node`
+## `vpt chmod +x home/.vite-plus/js_runtime/node/22.18.0/bin/node`
 
 
-## `vpt cp fake-corepack.sh home/js_runtime/node/22.18.0/bin/corepack`
+## `vpt cp fake-corepack.sh home/.vite-plus/js_runtime/node/22.18.0/bin/corepack`
 
 Fake bundled corepack that echoes its args
 
 
-## `vpt chmod +x home/js_runtime/node/22.18.0/bin/corepack`
+## `vpt chmod +x home/.vite-plus/js_runtime/node/22.18.0/bin/corepack`
 
 
-## `VP_HOME=${workspace}/home vp env setup`
+## `./home/.vite-plus/current/bin/vp env setup`
 
-Create shims in the isolated home
+Create shims in the isolated install (self-located, no VP_HOME)
 
 
-## `VP_HOME=${workspace}/home PATH=${workspace}/home/bin:${PATH} corepack use pnpm@10`
+## `PATH=${workspace}/home/.vite-plus/bin:${PATH} corepack use pnpm@10`
 
 Non-link commands run unchanged
 
@@ -42,28 +58,26 @@ Non-link commands run unchanged
 corepack use pnpm@10
 ```
 
-## `VP_HOME=${workspace}/home PATH=${workspace}/home/bin:${PATH} corepack enable --install-directory /tmp/custom-dir`
+## `PATH=${workspace}/home/.vite-plus/bin:${PATH} corepack enable --install-directory /tmp/custom-dir`
 
 Explicit --install-directory is respected, clobbered npm shim is restored
 
 ```
 corepack enable --install-directory /tmp/custom-dir
-warn: 'npm' is managed by Vite+ and was restored. Vite+ already resolves 'npm' per project, so corepack does not need to manage it.
 ```
 
-## `VP_HOME=${workspace}/home PATH=${workspace}/home/bin:${PATH} corepack enable`
+## `PATH=${workspace}/home/.vite-plus/bin:${PATH} corepack enable`
 
---install-directory defaults to VP_HOME/bin
+--install-directory defaults to the install's bin dir
 
 ```
-corepack enable --install-directory <root>/home/bin
-warn: 'npm' is managed by Vite+ and was restored. Vite+ already resolves 'npm' per project, so corepack does not need to manage it.
+corepack enable --install-directory <root>/home/.vite-plus/bin
 ```
 
-## `vpt stat-file home/bin/npm --assert symlink`
+## `vpt stat-file home/.vite-plus/bin/npm --assert symlink`
 
 Vite+ owns the npm shim
 
 ```
-home/bin/npm: symlink
+home/.vite-plus/bin/npm: symlink
 ```
