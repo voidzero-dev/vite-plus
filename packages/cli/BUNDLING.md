@@ -129,9 +129,9 @@ packages/cli/
 │   ├── create.js             # Global command: vp create
 │   ├── migrate.js            # Global command: vp migrate
 │   ├── version.js            # Global command: vp --version
-│   ├── config.js             # Global command: vp config
+│   ├── config/bin.js         # Global command: vp config
 │   ├── mcp.js                # Global command: vp mcp
-│   ├── staged.js             # Global command: vp staged
+│   ├── staged/bin.js         # Global command: vp staged
 │   ├── *-<hash>.js           # Shared chunks (code splitting)
 │   ├── versions.js           # Generated tool versions
 │   ├── client.d.ts           # ./client types (triple-slash ref)
