@@ -1,6 +1,7 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { findWorkspaceRoot, hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
+import { cancelAndExit } from '../utils/prompts.ts';
 import {
   CreateConfigSchemaError,
   type CreateTemplateEntry,
@@ -20,7 +21,6 @@ import {
   pickOrgTemplate,
 } from './org-picker.ts';
 import { ensureOrgPackageExtracted, resolveBundledPath } from './org-tarball.ts';
-import { cancelAndExit } from './prompts.ts';
 
 /**
  * Resolution outcome for an org template spec.

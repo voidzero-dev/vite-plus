@@ -36,6 +36,17 @@ export function error(text: string) {
   return styleText('red', text);
 }
 
+export function formatDuration(durationMs: number) {
+  if (durationMs < 1000) {
+    return `${Math.max(1, durationMs)}ms`;
+  }
+  const durationSeconds = durationMs / 1000;
+  if (durationSeconds < 10) {
+    return `${durationSeconds.toFixed(1)}s`;
+  }
+  return `${Math.round(durationSeconds)}s`;
+}
+
 // Standard message prefix functions matching the Rust CLI convention.
 // warn/error go to stderr (diagnostics).
 

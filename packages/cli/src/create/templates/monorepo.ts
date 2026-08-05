@@ -7,6 +7,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
+import { getScopeFromPackageName } from '../../utils/package.ts';
 import { templatesDir } from '../../utils/path.ts';
 import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
@@ -260,11 +261,4 @@ export function dropAliasedRuntimeDevDeps(
       return changed ? pkg : undefined;
     },
   );
-}
-
-function getScopeFromPackageName(packageName: string) {
-  if (packageName.startsWith('@')) {
-    return packageName.split('/')[0];
-  }
-  return '';
 }
