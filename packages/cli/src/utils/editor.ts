@@ -164,13 +164,13 @@ function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="PropertiesComponent">
-    <![CDATA[{
+    <![CDATA[${JSON.stringify({
       "keyToString": {
         "javascript.preferred.runtime.type.id": "node",
-        "nodejs_interpreter_path": "${os.homedir()}/.vite-plus/bin/node",
-        "nodejs_package_manager_path": "${packageManager}",
+        "nodejs_interpreter_path": path.join(os.homedir(), ".vite-plus", "bin", "node"),
+        "nodejs_package_manager_path": packageManager,
       }
-    }]]>
+    })}]]>
   </component>
 </project>
 `;
