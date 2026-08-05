@@ -109,6 +109,7 @@ describe('writeEditorConfigs', () => {
     ) as Record<string, unknown>;
 
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
+    expect(settings['oxc.disableNestedConfig']).toBe(true);
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['editor.formatOnSave']).toBe(true);
     expect(settings['npm.scriptRunner']).toBeUndefined();
@@ -182,6 +183,7 @@ describe('writeEditorConfigs', () => {
 
     // New keys are added
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
+    expect(settings['oxc.disableNestedConfig']).toBe(true);
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['npm.scriptRunner']).toBe('vp');
     for (const lang of ['[javascript]', '[javascriptreact]', '[typescriptreact]']) {

@@ -37,6 +37,7 @@ top-level and nested comments survive; oxc settings are added without overwritin
   "[typescriptreact]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
+  "oxc.disableNestedConfig": true,
   "oxc.fmt.configPath": "./vite.config.ts",
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",

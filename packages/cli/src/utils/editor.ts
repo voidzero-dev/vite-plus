@@ -26,6 +26,7 @@ const VSCODE_LANGUAGE_OVERRIDES = {
 const VSCODE_SETTINGS = {
   'editor.defaultFormatter': 'oxc.oxc-vscode',
   ...VSCODE_LANGUAGE_OVERRIDES,
+  'oxc.disableNestedConfig': true,
   'oxc.fmt.configPath': './vite.config.ts',
   'editor.formatOnSave': true,
   // Oxfmt does not support partial formatting
