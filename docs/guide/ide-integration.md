@@ -118,7 +118,6 @@ You can also manually set up the IDE configuration to match your Vite+ setup:
 <project version="4">
   <component name="ExternalDependencies">
     <plugin id="com.github.oxc.project.oxcintellijplugin" />
-    <plugin id="intellij.vitejs" />
   </component>
 </project>
 ```

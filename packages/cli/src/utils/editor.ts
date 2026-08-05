@@ -155,7 +155,6 @@ const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ExternalDependencies">
     <plugin id="com.github.oxc.project.oxcintellijplugin" />
-    <plugin id="intellij.vitejs" />
   </component>
 </project>
 `;

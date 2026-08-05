@@ -566,7 +566,6 @@ describe('writeEditorConfigs', () => {
     expect(externalDependenciesXml).toContain(
       '<plugin id="com.github.oxc.project.oxcintellijplugin" />',
     );
-    expect(externalDependenciesXml).toContain('<plugin id="intellij.vitejs" />');
 
     const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
     expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
