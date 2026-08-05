@@ -14,12 +14,6 @@
 
 // ── Config: read once at startup via EnvConfig ──────────────────────────
 
-/// Override for the vite-plus home directory (default: `~/.vite-plus`).
-///
-/// Selects the legacy monolithic layout: every category lives under this one
-/// root. Takes priority over all `VP_*_DIR`/`XDG_*` resolution.
-pub const VP_HOME: &str = "VP_HOME";
-
 /// Override directory for executables and shims.
 ///
 /// Only applies to the split XDG/platform layout (fresh installs); a legacy

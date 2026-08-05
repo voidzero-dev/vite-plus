@@ -105,8 +105,11 @@ fn main() {
 
     let opts = cli::parse();
 
-    // Resolve install dir and set VP_HOME before starting the tokio runtime,
-    // so the unsafe set_var runs while we're still single-threaded.
+    // Resolve the install dir before starting the tokio runtime.
+    //
+    // The vp CLI no longer reads `VP_HOME`: the installed binary locates its
+    // own root from its `<root>/current/bin/vp` path, so no environment
+    // variable needs to be set for child processes.
     let install_dir = match resolve_install_dir(&opts) {
         Ok(dir) => dir,
         Err(e) => {
@@ -114,8 +117,6 @@ fn main() {
             std::process::exit(1);
         }
     };
-    // Safety: called in main() before any threads are spawned.
-    unsafe { std::env::set_var("VP_HOME", install_dir.as_path()) };
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap_or_else(|e| {
         print_error(&format!("Failed to create async runtime: {e}"));

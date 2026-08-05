@@ -2414,7 +2414,7 @@ The following decisions have been made:
 
 1. **VP_HOME Default Location**: `~/.vite-plus` - Simple, memorable path that's easy for users to find and configure.
 
-   > **Note (superseded):** Superseded by [#827](https://github.com/voidzero-dev/vite-plus/issues/827). Path resolution now lives in `crates/vp_shared/src/dirs.rs` (`Dirs`, with `Home`/`Custom` layout variants): `VP_HOME`, a legacy root detected from the `vp` binary's own path or from `PATH`, or an existing `~/.vite-plus` still selects the legacy monolithic layout (existing installs are grandfathered; nothing is moved), while fresh installs resolve a split XDG/platform layout per category.
+   > **Note (superseded):** Superseded by [#827](https://github.com/voidzero-dev/vite-plus/issues/827). Path resolution now lives in `crates/vp_shared/src/dirs.rs` (`Dirs`, with `Home`/`Custom` layout variants): a legacy root detected from the `vp` binary's own path or from `PATH`, or an existing `~/.vite-plus`, still selects the legacy monolithic layout (existing installs are grandfathered; nothing is moved), while fresh installs resolve a split XDG/platform layout per category. `VP_HOME` is no longer read by the CLI.
 
 2. **Windows Shim Strategy**: Trampoline `.exe` files that set `VP_SHIM_TOOL` and spawn `vp.exe` - Avoids "Terminate batch job?" prompt, works in all shells. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 

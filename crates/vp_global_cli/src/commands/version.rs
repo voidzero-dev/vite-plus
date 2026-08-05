@@ -236,7 +236,7 @@ mod tests {
     }
 
     // Run serially: the spawned `node` inherits this process's environment, and
-    // concurrent #[serial] tests mutate PATH/VP_HOME via std::env::set_var,
+    // concurrent #[serial] tests mutate PATH via std::env::set_var,
     // which can make a vp shim on PATH resolve incorrectly mid-test.
     #[test]
     #[serial]

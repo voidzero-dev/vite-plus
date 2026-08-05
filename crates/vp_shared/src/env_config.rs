@@ -51,14 +51,6 @@ thread_local! {
 /// time. Use `EnvConfig::get()` to access the current config from anywhere.
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
-    /// Override for the vite-plus home directory (`~/.vite-plus`).
-    ///
-    /// Selects the legacy monolithic layout; takes priority over all
-    /// `VP_*_DIR`/`XDG_*` resolution.
-    ///
-    /// Env: `VP_HOME`
-    pub vite_plus_home: Option<PathBuf>,
-
     /// Override for the directory where executables and shims are installed.
     ///
     /// Only applies to the split XDG/platform layout (fresh installs); a
@@ -132,7 +124,6 @@ impl EnvConfig {
     /// Called once in `main()` via `EnvConfig::init()`.
     pub fn from_env() -> Self {
         Self {
-            vite_plus_home: std::env::var(env_vars::VP_HOME).ok().map(PathBuf::from),
             vp_bin_dir: std::env::var(env_vars::VP_BIN_DIR).ok().map(PathBuf::from),
             vp_data_dir: std::env::var(env_vars::VP_DATA_DIR).ok().map(PathBuf::from),
             vp_cache_dir: std::env::var(env_vars::VP_CACHE_DIR).ok().map(PathBuf::from),
@@ -222,7 +213,6 @@ impl EnvConfig {
     #[must_use]
     pub fn for_test() -> Self {
         Self {
-            vite_plus_home: None,
             vp_bin_dir: None,
             vp_data_dir: None,
             vp_cache_dir: None,

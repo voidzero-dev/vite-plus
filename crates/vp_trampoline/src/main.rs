@@ -48,13 +48,12 @@ fn main() {
     install_ctrl_handler();
 
     // 4. Spawn vp.exe
-    //    - Always set VP_HOME so vp.exe uses the correct home directory
-    //      (matches what the old .cmd wrappers did with %~dp0..)
+    //    - No VP_HOME needed: vp.exe locates its install root from its own
+    //      `<root>/current/bin/vp.exe` path.
     //    - If tool is "vp", run in normal CLI mode (no VP_SHIM_TOOL)
     //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
     let mut cmd = Command::new(&vp_exe);
     cmd.args(env::args_os().skip(1));
-    cmd.env("VP_HOME", vp_home);
 
     if tool_name != "vp" {
         cmd.env("VP_SHIM_TOOL", tool_name);

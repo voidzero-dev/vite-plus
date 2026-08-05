@@ -8,28 +8,27 @@
 //! Two layouts are supported, selected once per resolution (first match
 //! wins):
 //!
-//! 0. **Explicit `VP_HOME`** — selects the legacy monolithic `Home` layout
-//!    rooted at its value. Takes priority over every other rule.
-//! 1. **Executable self-location** — the canonicalized `current_exe` path
+//! 0. **Executable self-location** — the canonicalized `current_exe` path
 //!    matches `<root>/current/bin/vp[.exe]` → legacy `Home(root)`. Covers
 //!    custom-location installs and launches without `PATH` context (IDEs,
 //!    the Windows trampoline).
-//! 2. **Legacy `PATH` inference** — a `<root>/bin` entry on `PATH` with the
+//! 1. **Legacy `PATH` inference** — a `<root>/bin` entry on `PATH` with the
 //!    legacy layout (`bin/vp` plus `current/bin/vp`) → `Home(root)`.
-//! 3. **Existing legacy root** — `<home>/.vite-plus` exists on disk →
+//! 2. **Existing legacy root** — `<home>/.vite-plus` exists on disk →
 //!    `Home`, so existing installs keep working untouched.
-//! 4. **Split XDG/platform layout** (`Custom`) — fresh installs. Each
+//! 3. **Split XDG/platform layout** (`Custom`) — fresh installs. Each
 //!    category resolves independently through its own `VP_*_DIR` override →
 //!    `XDG_*` → platform-default chain.
 //!
-//! The `XDG_*_HOME` variables are read directly from the process
-//! environment here — they are the one exception to [`EnvConfig`]
-//! centralization, because they participate in `Dirs` resolution.
+//! `VP_HOME` is no longer read; rules 0–1 replace it. The `XDG_*_HOME`
+//! variables are read directly from the process environment here — they are
+//! the one exception to [`EnvConfig`] centralization, because they
+//! participate in `Dirs` resolution.
 //!
 //! The access pattern mirrors [`EnvConfig`]: [`Dirs::get`] for global
 //! access. Tests override the environment through
 //! [`EnvConfig::test_scope`] / [`EnvConfig::test_guard`]: while a test
-//! override is active, the host-environment rules (1–2 and the XDG reads)
+//! override is active, the host-environment rules (0–1 and the XDG reads)
 //! are skipped and the home directory comes from the overridden
 //! [`EnvConfig::user_home`], so resolution stays hermetic and
 //! parallel-safe.
@@ -280,9 +279,9 @@ fn is_vp_home_layout(bin_dir: &AbsolutePath, home: &AbsolutePath) -> bool {
 /// Platform-neutral resolution core, injectable for tests.
 ///
 /// `detected_legacy_root` is the result of the host-environment legacy
-/// detection (executable self-location, then `PATH` inference; rules 1–2).
+/// detection (executable self-location, then `PATH` inference; rules 0–1).
 /// `legacy_exists` reports whether the legacy `~/.vite-plus` root exists on
-/// disk (rule 3); injected so tests exercise the grandfathering branch
+/// disk (rule 2); injected so tests exercise the grandfathering branch
 /// without touching host state (or against real tempdirs).
 fn resolve(
     config: &EnvConfig,
@@ -292,18 +291,13 @@ fn resolve(
     detected_legacy_root: Option<AbsolutePathBuf>,
     legacy_exists: impl Fn(&AbsolutePath) -> bool,
 ) -> Dirs {
-    // 0. Explicit `VP_HOME` always selects the monolithic legacy layout.
-    if let Some(root) = absolute(&config.vite_plus_home) {
-        return Dirs::home(root);
-    }
-
-    // 1/2. A legacy root detected from the executable location or `PATH`
-    //    selects the monolithic legacy layout.
+    // 0/1. A legacy root detected from the executable location or `PATH`
+    //    always selects the monolithic legacy layout.
     if let Some(root) = detected_legacy_root {
         return Dirs::home(root);
     }
 
-    // 3. Grandfathered installs: an existing `~/.vite-plus` keeps working
+    // 2. Grandfathered installs: an existing `~/.vite-plus` keeps working
     //    untouched; nothing is moved.
     let legacy_root = home_dir.join(LEGACY_HOME_DIR);
     if legacy_exists(&legacy_root) {
@@ -360,7 +354,7 @@ impl Dirs {
     fn resolve_from_env() -> Self {
         let config = EnvConfig::get();
 
-        // Rules 1–2 and the XDG variables read the real process environment.
+        // Rules 0–1 and the XDG variables read the real process environment.
         // Skip them while the thread runs under an `EnvConfig` test override
         // so tests resolve purely from the injected config: hermetic,
         // parallel-safe, and free of host state (a developer machine can
@@ -726,32 +720,6 @@ mod tests {
 
         assert!(dirs.is_legacy_layout());
         assert_eq!(dirs.data_dir().as_path(), abs("/vp-home").as_path());
-    }
-
-    #[test]
-    fn vp_home_selects_home_layout_with_legacy_mapping() {
-        let config = EnvConfig { vite_plus_home: Some(abs("/vp-home")), ..EnvConfig::for_test() };
-        // VP_HOME outranks even a detected/existing legacy root.
-        let detected = Some(AbsolutePathBuf::new(abs("/detected")).unwrap());
-        let dirs = resolve(&config, &test_home(), &no_xdg(), &unix_defaults(), detected, |_| true);
-
-        assert!(dirs.is_legacy_layout());
-        let root = dirs.data_dir();
-        assert_eq!(root.as_path(), abs("/vp-home").as_path());
-        assert_eq!(dirs.bin_dir().as_path(), abs("/vp-home/bin").as_path());
-        assert_eq!(dirs.config_dir().as_path(), root.as_path());
-        assert_eq!(dirs.state_dir().as_path(), root.as_path());
-        assert_eq!(dirs.cache_dir().as_path(), abs("/vp-home/cache").as_path());
-    }
-
-    #[test]
-    fn relative_vp_home_is_ignored() {
-        let config = EnvConfig {
-            vite_plus_home: Some(PathBuf::from("relative/vp")),
-            ..EnvConfig::for_test()
-        };
-        let dirs = resolve(&config, &test_home(), &no_xdg(), &unix_defaults(), None, never_exists);
-        assert!(!dirs.is_legacy_layout());
     }
 
     #[test]

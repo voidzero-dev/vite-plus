@@ -49,6 +49,9 @@ pub fn parse() -> Options {
         opts.version = std::env::var("VP_VERSION").ok();
     }
     if opts.install_dir.is_none() {
+        // Pre-cutover contract: the installer still honors `VP_HOME` as the
+        // install dir (install.sh/install.ps1 pass it through); the vp CLI
+        // itself no longer reads it.
         opts.install_dir = std::env::var("VP_HOME").ok();
     }
     if opts.registry.is_none() {

@@ -625,6 +625,11 @@ impl CaseHome {
         env.insert("TERM".into(), "xterm-256color".into());
         env.insert("VP_CLI_TEST".into(), "1".into());
         env.insert("NODE_NO_WARNINGS".into(), "1".into());
+        // The CLI no longer reads VP_HOME (the provisioned
+        // `<home>/.vite-plus/current/bin/vp` self-locates, and the on-disk
+        // `<home>/.vite-plus` selects the legacy layout). Kept for the
+        // generated env scripts and fixture steps that reference it; removal
+        // is installer-cutover follow-up.
         env.insert("VP_HOME".into(), self.vp_home().into_os_string());
         if cfg!(windows) {
             env.insert("USERPROFILE".into(), self.home.clone().into_os_string());

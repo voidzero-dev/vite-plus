@@ -137,12 +137,12 @@ async fn check_vite_plus_home() -> bool {
     let display = abbreviate_home(&home.as_path().display().to_string());
 
     if tokio::fs::try_exists(&home).await.unwrap_or(false) {
-        print_check(&output::CHECK.green().to_string(), env_vars::VP_HOME, &display);
+        print_check(&output::CHECK.green().to_string(), "Home directory", &display);
         true
     } else {
         print_check(
             &output::CROSS.red().to_string(),
-            env_vars::VP_HOME,
+            "Home directory",
             &"does not exist".red().to_string(),
         );
         print_hint("Run 'vp env setup' to create it.");
