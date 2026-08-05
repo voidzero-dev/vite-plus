@@ -4,7 +4,7 @@ This document explains how `@voidzero-dev/vite-plus-core` bundles multiple upstr
 
 ## Overview
 
-The core package uses a **multi-project bundling strategy** that combines 5 upstream projects:
+The core package uses a **multi-project bundling strategy** that combines 4 upstream projects:
 
 | Project                 | Source Location                                                 | Purpose                   |
 | ----------------------- | --------------------------------------------------------------- | ------------------------- |
@@ -12,7 +12,6 @@ The core package uses a **multi-project bundling strategy** that combines 5 upst
 | `rolldown`              | `rolldown/packages/rolldown`                                    | Rolldown bundler          |
 | `vite`                  | `vite/packages/vite`                                            | Vite v8 beta              |
 | `tsdown`                | `node_modules/tsdown`                                           | TypeScript build tool     |
-| `vitepress`             | `node_modules/vitepress`                                        | Documentation tool        |
 
 This approach enables users to access Vite, Rolldown, and related tools through a single package with consistent module specifier rewrites.
 
@@ -20,7 +19,7 @@ This approach enables users to access Vite, Rolldown, and related tools through 
 
 ## Build Steps
 
-The build process executes 6 steps in sequence:
+The build process executes 5 steps in sequence:
 
 ### Step 1: Bundle Rolldown Pluginutils (`bundleRolldownPluginutils`)
 
@@ -76,18 +75,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 **Input**: `node_modules/tsdown/dist/`
 **Output**: `dist/tsdown/`
 
-### Step 5: Bundle Vitepress (`bundleVitepress`)
-
-**Action**: Copies dist directory and rewrites vite imports.
-
-**Transformations**:
-
-- `vite` → `@voidzero-dev/vite-plus-core/vite`
-
-**Input**: `node_modules/vitepress/`
-**Output**: `dist/vitepress/`
-
-### Step 6: Merge Package.json (`mergePackageJson`)
+### Step 5: Merge Package.json (`mergePackageJson`)
 
 **Action**: Merges metadata from upstream packages and records bundled versions.
 
@@ -236,17 +224,11 @@ dist/
 │   ├── misc/
 │   ├── types/
 │   └── client.d.ts
-├── tsdown/                # TypeScript build tool
-│   ├── index.js
-│   ├── index-types.d.ts
-│   ├── run.js
-│   └── npm_entry_*.cjs    # Bundled CJS deps
-└── vitepress/             # Documentation tool
-    ├── dist/
-    ├── types/
-    ├── client.d.ts
-    ├── theme.d.ts
-    └── theme-without-fonts.d.ts
+└── tsdown/                # TypeScript build tool
+    ├── index.js
+    ├── index-types.d.ts
+    ├── run.js
+    └── npm_entry_*.cjs    # Bundled CJS deps
 ```
 
 ---
@@ -282,7 +264,6 @@ dist/
 | `rolldown`              | `../../rolldown/packages/rolldown`                                    | Git submodule  |
 | `vite`                  | `../../vite/packages/vite`                                            | Git submodule  |
 | `tsdown`                | `node_modules/tsdown`                                                 | npm dependency |
-| `vitepress`             | `node_modules/vitepress`                                              | npm dependency |
 
 ---
 
@@ -324,13 +305,6 @@ dist/
 5. Verify `bundledVersions.tsdown` in `package.json` is updated
 6. Test with `pnpm test`
 
-### Updating Vitepress
-
-1. Update `vitepress` version in `devDependencies`
-2. Run `pnpm install`
-3. Run `pnpm -C packages/core build`
-4. Test documentation builds
-
 ---
 
 ## Build Commands
@@ -361,8 +335,7 @@ RELEASE_BUILD=1 pnpm -C packages/core build
    ├── Bundle tsdown with Rolldown    Find CJS modules
    ├── buildCjsDeps()                 Bundle detected CJS deps
    └── Bundle types with dts plugin   Generate declarations
-5. bundleVitepress()              Copy + rewrite vite imports
-6. mergePackageJson()             Merge metadata + record versions
+5. mergePackageJson()             Merge metadata + record versions
 ```
 
 ### Key Constants

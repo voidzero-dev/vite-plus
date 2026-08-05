@@ -129,9 +129,9 @@ packages/cli/
 │   ├── create.js             # Global command: vp create
 │   ├── migrate.js            # Global command: vp migrate
 │   ├── version.js            # Global command: vp --version
-│   ├── config.js             # Global command: vp config
+│   ├── config/bin.js         # Global command: vp config
 │   ├── mcp.js                # Global command: vp mcp
-│   ├── staged.js             # Global command: vp staged
+│   ├── staged/bin.js         # Global command: vp staged
 │   ├── *-<hash>.js           # Shared chunks (code splitting)
 │   ├── versions.js           # Generated tool versions
 │   ├── client.d.ts           # ./client types (triple-slash ref)
@@ -290,7 +290,7 @@ The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-
 3. **Reduces duplication** - No file copying, just re-exports
 4. **Preserves module resolution** - Node.js resolves to the actual core package
 
-**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (vite, rolldown, tsdown, vitepress). See [Core Package Bundling](../core/BUNDLING.md) for details.
+**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (vite, rolldown, tsdown). See [Core Package Bundling](../core/BUNDLING.md) for details.
 
 ### Export Mapping (Core)
 
