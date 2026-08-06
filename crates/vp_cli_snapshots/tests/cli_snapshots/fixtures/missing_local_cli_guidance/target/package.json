@@ -1,0 +1,7 @@
+{
+  "name": "chdir-target",
+  "private": true,
+  "devDependencies": {
+    "vite-plus": "^0.1.0"
+  }
+}

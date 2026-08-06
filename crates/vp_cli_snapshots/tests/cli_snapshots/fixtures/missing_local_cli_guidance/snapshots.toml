@@ -1,0 +1,19 @@
+[[case]]
+name = "optional_dependency_prompts_install"
+vp = "global"
+cwd = "optional"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0"}'], snapshot = false },
+  { argv = ["vp", "lint", "src/index.js"], comment = "an optional vite-plus declaration should recommend installing dependencies" },
+]
+
+[[case]]
+name = "chdir_install_guidance_names_target"
+vp = "global"
+cwd = "caller"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "../target/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0"}'], snapshot = false },
+  { argv = ["vp", "-C", "../target", "lint", "src/index.js"], comment = "install guidance should name the project selected by -C" },
+]

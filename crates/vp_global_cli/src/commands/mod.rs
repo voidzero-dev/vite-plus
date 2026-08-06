@@ -30,6 +30,8 @@ struct DepCheckPackageJson {
     dependencies: HashMap<String, serde_json::Value>,
     #[serde(default)]
     dev_dependencies: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    optional_dependencies: HashMap<String, serde_json::Value>,
 }
 
 fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
@@ -47,7 +49,7 @@ fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
 }
 
 /// Check if vite-plus is listed in the nearest package.json's
-/// dependencies or devDependencies.
+/// dependencies, devDependencies, or optionalDependencies.
 ///
 /// Returns `true` if vite-plus is found, `false` if not found
 /// or if no package.json exists.
@@ -57,7 +59,8 @@ pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
         && let Ok(pkg) = serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
     {
         return pkg.dependencies.contains_key("vite-plus")
-            || pkg.dev_dependencies.contains_key("vite-plus");
+            || pkg.dev_dependencies.contains_key("vite-plus")
+            || pkg.optional_dependencies.contains_key("vite-plus");
     }
     false
 }
@@ -73,9 +76,10 @@ pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
         });
 
     if has_declared_vite_plus {
-        output::warn(
-            "No project-local vite-plus installation was found. Run `vp install` to install dependencies.",
-        );
+        output::warn(&format!(
+            "No project-local vite-plus installation was found. Run `vp install` in `{}` to install dependencies.",
+            cwd.as_path().display()
+        ));
     } else {
         output::warn(
             "This project does not use vite-plus. Learn how to migrate: https://viteplus.dev/guide/migrate",

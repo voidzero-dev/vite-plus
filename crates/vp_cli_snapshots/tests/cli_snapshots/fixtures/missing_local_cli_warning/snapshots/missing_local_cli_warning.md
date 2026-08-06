@@ -25,7 +25,7 @@ a project that declares vite-plus but has no local CLI gets installation guidanc
 ```
 VITE+ - The Unified Toolchain for the Web
 
-warn: No project-local vite-plus installation was found. Run `vp install` to install dependencies.
+warn: No project-local vite-plus installation was found. Run `vp install` in `<workspace>` to install dependencies.
 Found 0 warnings and 0 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
