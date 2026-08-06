@@ -67,7 +67,12 @@ pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
         return;
     }
 
-    if has_vite_plus_dependency(cwd) {
+    let has_declared_vite_plus = has_vite_plus_dependency(cwd)
+        || vt_workspace::find_workspace_root(cwd).is_ok_and(|(workspace_root, _)| {
+            has_vite_plus_dependency(workspace_root.path.as_ref())
+        });
+
+    if has_declared_vite_plus {
         output::warn(
             "No project-local vite-plus installation was found. Run `vp install` to install dependencies.",
         );

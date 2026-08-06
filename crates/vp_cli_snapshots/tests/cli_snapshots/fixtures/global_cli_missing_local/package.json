@@ -1,0 +1,10 @@
+{
+  "name": "global-cli-missing-local",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "vite-plus": "^0.1.0"
+  }
+}
