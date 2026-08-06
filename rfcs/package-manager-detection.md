@@ -223,7 +223,7 @@ Each package manager has specific files that trigger cache invalidation when cha
 
 ### Rust (core detection)
 
-- **File**: `crates/vite_pm_cli/src/package_manager.rs`
+- **File**: `crates/vp_pm_cli/src/package_manager.rs`
 - **Function**: `get_package_manager_type_and_version()` — priority-ordered detection
 - **Function**: `prompt_package_manager_selection()` — CI/TTY/interactive fallback
 - **Enum**: `PackageManagerType` — `Pnpm`, `Yarn`, `Npm`, `Bun`

@@ -233,7 +233,7 @@ vp add react --allow-build=react,napi -- --use-stderr
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add new command variants:
 
@@ -444,7 +444,7 @@ impl PackageManager {
 
 #### 3. Add Command Implementation
 
-**File**: `crates/vite_task/src/add.rs` (new file)
+**File**: `crates/vt/src/add.rs` (new file)
 
 ```rust
 pub struct AddCommand {
@@ -501,7 +501,7 @@ impl AddCommand {
 
 #### 4. Remove Command Implementation
 
-**File**: `crates/vite_task/src/remove.rs` (new file)
+**File**: `crates/vt/src/remove.rs` (new file)
 
 ```rust
 pub struct RemoveCommand {
@@ -1419,9 +1419,9 @@ None required - leverages existing:
 
 ### Modified Files
 
-- `crates/vite_task/src/lib.rs` - Add command enum variants
-- `crates/vite_task/src/add.rs` - New file
-- `crates/vite_task/src/remove.rs` - New file
+- `crates/vt/src/lib.rs` - Add command enum variants
+- `crates/vt/src/add.rs` - New file
+- `crates/vt/src/remove.rs` - New file
 - `crates/vite_package_manager/src/package_manager.rs` - Add command resolution methods
 - `docs/cli.md` - Documentation updates
 

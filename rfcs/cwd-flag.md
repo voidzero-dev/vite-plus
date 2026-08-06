@@ -255,7 +255,7 @@ An app command invocation is **bare** when it has no `-C` and no positional targ
 5. **Non-interactive and bare at the workspace root**: print the package list and the `-C` hint, exit 1.
 6. **Anywhere else**: current behavior, run in the current directory.
 
-"Workspace root" means the current directory's package is the workspace root package, as determined by `vite_workspace::find_workspace_root` (already called on every invocation in `packages/cli/binding/src/cli/mod.rs`).
+"Workspace root" means the current directory's package is the workspace root package, as determined by `vt_workspace::find_workspace_root` (already called on every invocation in `packages/cli/binding/src/cli/mod.rs`).
 
 ### Equivalence invariant
 
@@ -277,7 +277,7 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 ### Picker contents
 
 - One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
-- Fuzzy search over name and path via `vite_select::fuzzy_match`, paging identical to the task picker.
+- Fuzzy search over name and path via `vt_select::fuzzy_match`, paging identical to the task picker.
 - A runnable workspace root never elicits at all: the command runs in place, TTY or not, exactly as before this RFC. The invocation already has its configured target: a root app, or a single package whose `pnpm-workspace.yaml` only carries settings (catalogs, `minimumReleaseAge`). Eliciting only when the root is not a plausible target is what keeps the feature purely additive. The root needs a stronger runnable signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
 - With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
@@ -290,7 +290,7 @@ Used only for ranking and single-candidate auto-select, never to hide a package:
 | `dev` / `build` / `preview` | its directory directly contains one of Vite's config file names (`vite.config.{js,mjs,ts,cjs,mts,cts}`, the exact list Vite probes), **or** an `index.html` at the package root (Vite's default app entry)                                   |
 | `pack`                      | its `vite.config.*` explicitly declares a `pack` block (read via static extraction; neither a config without `pack` nor one that merely might contain it behind a spread counts), **or** `src/index.ts` exists (tsdown's only default entry) |
 
-Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vite_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
+Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vp_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
 
 "Exactly one likely-runnable package" means: after sorting rows runnable-first, the first row is runnable and the second is not. Auto-select additionally requires an interactive terminal.
 
@@ -312,7 +312,7 @@ export default defineConfig({
 - Type: `string` (one directory for all four commands) or a per-command object (`{ dev: './apps/web', pack: './packages/ui' }`, added on review demand). A command absent from the object falls through to the picker/listing resolution.
 - Consulted when a bare app command runs in the directory containing the root config: a workspace root, or a non-workspace repo root. The non-workspace shape has no package list, so `defaultPackage` is the only mechanism that covers it. An explicit `-C` always wins.
 - A missing directory errors: `defaultPackage points to a missing directory: ./frontend`.
-- Read via static extraction (`vite_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.
+- Read via static extraction (`vp_static_config` + the loader in `packages/cli/binding/src/cli/handler.rs`), like `run` config. At a non-workspace root there is no install to execute the config, so the file must work unexecuted: a plain default-export object with a static string value.
 - Only an explicitly declared `defaultPackage` changes behavior. A declared but non-static value (e.g. `process.env.DIR`) errors; a config that is unanalyzable or hides fields behind a spread is treated as not declaring the key and falls through to the picker or current-dir resolution, so an exotic config can never break unrelated bare commands.
 - Consulted only at the invocation root (a workspace root, a standalone package root, or a directory with no `package.json` ancestry). Below a workspace root the current directory already identifies the target, so a member package's own config never redirects.
 
@@ -338,10 +338,10 @@ Below the root the cwd already identifies the project, so prompting would be noi
 
 All changes live in the Rust layers; no upstream Vite or tsdown changes are required.
 
-- `crates/vite_global_cli/src/cli.rs`: parse the global `-C <dir>`; resolve the local install from `<dir>` and delegate with `<dir>` as the effective cwd.
+- `crates/vp_global_cli/src/cli.rs`: parse the global `-C <dir>`; resolve the local install from `<dir>` and delegate with `<dir>` as the effective cwd.
 - `packages/cli/binding/src/cli/types.rs` / `mod.rs`: parse `-C` on the local bin path; in `execute_direct_subcommand`, add the bare-invocation resolution order (workspace-root detection already happens here).
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
-- Picker: reuse `vite_select` and `vite_workspace`, both already dependencies via the `vite_task` crates.
+- Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
 - `packages/cli/src/pack-bin.ts` needs no change: positional handling is untouched and `-C` never reaches it.
 - Docs: a `-C` entry in the global CLI docs, `docs/guide/monorepo.md` "App Commands", and a `docs/config/` page for the new key.
@@ -360,7 +360,7 @@ Non-interactive branches are covered by snap tests:
 - `defaultPackage`: happy path and missing-directory error.
 - Equivalence checks: `vp -C <dir> build` and `cd <dir> && vp build` produce the same output in a fixture whose config reads `process.cwd()`.
 
-The interactive picker gets pty snapshot coverage in the `vite_task` repo style (`task_select` fixtures) if the picker lands near `vite_select`, or manual verification via tmux-driven interactive runs otherwise.
+The interactive picker gets pty snapshot coverage in the `vt` repo style (`task_select` fixtures) if the picker lands near `vt_select`, or manual verification via tmux-driven interactive runs otherwise.
 
 ## Open Questions
 
@@ -384,7 +384,7 @@ How comparable tools name "the member a root-level command targets when none is 
 | Vercel / Netlify / Amplify | `rootDirectory` / `base` / `appRoot` | per-app deploy config, not a default among many      |
 | GitHub Actions             | `defaults.run.working-directory`     | names the mechanism (cwd)                            |
 
-The pattern is `default` plus the tool's own noun for the unit: Angular, Nx, and Ionic say "project", Cargo says "members", Salesforce says "package directories". vp's noun is "package" (the picker, `vp run` docs, `vite_workspace`, pnpm vocabulary), hence `defaultPackage`.
+The pattern is `default` plus the tool's own noun for the unit: Angular, Nx, and Ionic say "project", Cargo says "members", Salesforce says "package directories". vp's noun is "package" (the picker, `vp run` docs, `vt_workspace`, pnpm vocabulary), hence `defaultPackage`.
 
 Rejected: `defaultProject` (collides with Vitest `test.projects`, and the picker says "package"), `defaultWorkspace` ("workspace" means the whole monorepo in vp/pnpm vocabulary), `defaultMembers` (plural, implies running in many packages; meaningless without a workspace), `appRoot`/`rootDirectory`/`base` (collide with Vite's `root`/`base` options), member markers (need enumeration, impossible without workspace metadata). The Angular and Nx deprecations do not transfer: cwd inference is built into the resolution order, and per-environment flexibility is open question 2.
 

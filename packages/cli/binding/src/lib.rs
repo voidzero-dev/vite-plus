@@ -32,7 +32,7 @@ use std::{collections::HashMap, error::Error as StdError, ffi::OsStr, fmt::Write
 
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-use vite_path::current_dir;
+use vt_path::current_dir;
 
 use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
@@ -42,7 +42,7 @@ use crate::cli::{
 #[napi_derive::module_init]
 #[allow(clippy::disallowed_macros)]
 pub fn init() {
-    vite_shared::ensure_blocking_stdio();
+    vp_shared::ensure_blocking_stdio();
     crate::cli::init_tracing();
 
     // Install a Vite+ panic hook so panics are correctly attributed to Vite+.
@@ -59,7 +59,7 @@ pub fn init() {
 /// Re-enable blocking stdio after Node.js has initialized its lazy standard streams.
 #[napi]
 pub fn ensure_blocking_stdio() {
-    vite_shared::ensure_blocking_stdio();
+    vp_shared::ensure_blocking_stdio();
 }
 
 /// Configuration options passed from JavaScript to Rust.
@@ -95,7 +95,7 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
 }
 
 /// Create a boxed resolver function from a ThreadsafeFunction
-/// NOTE: Uses anyhow::Error to avoid NAPI type interference with vite_error::Error
+/// NOTE: Uses anyhow::Error to avoid NAPI type interference with vp_error::Error
 fn create_resolver(
     tsf: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     error_message: &'static str,
@@ -154,7 +154,7 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This is an async function that spawns a new thread for the non-Send async code
-/// from vite_task, while allowing the NAPI async context to continue running
+/// from vt, while allowing the NAPI async context to continue running
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {
@@ -217,7 +217,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     match result {
         Ok(exit_status) => Ok(exit_status.0.into()),
         Err(e) => match e {
-            vite_error::Error::UserCancelled => Ok(130),
+            vp_error::Error::UserCancelled => Ok(130),
             _ => {
                 tracing::error!("Rust error: {:?}", e);
                 Err(napi::Error::from_reason(format_error_message(&e)))
@@ -229,14 +229,14 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 /// Render the Vite+ header using the Rust implementation.
 #[napi]
 pub fn vite_plus_header() -> String {
-    vite_shared::header::vite_plus_header()
+    vp_shared::header::vite_plus_header()
 }
 
 /// Whether the Vite+ banner should be emitted in the current environment.
 ///
-/// Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+/// Mirrors `vp_shared::header::should_print_header` so both CLIs apply
 /// the same TTY + git-hook gating without duplicating the rules in JS.
 #[napi]
 pub fn should_print_vite_plus_header() -> bool {
-    vite_shared::header::should_print_header()
+    vp_shared::header::should_print_header()
 }

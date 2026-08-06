@@ -8,9 +8,9 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
-      - 'crates/vite_installer/**'
-      - 'crates/vite_pm_cli/**'
-      - 'crates/vite_setup/**'
+      - 'crates/vp_installer/**'
+      - 'crates/vp_pm_cli/**'
+      - 'crates/vp_setup/**'
       - '.github/workflows/test-standalone-install.yml'
 
 concurrency:
@@ -841,7 +841,7 @@ jobs:
 
       - name: Build vp-setup.exe
         shell: bash
-        run: cargo build --release -p vite_installer
+        run: cargo build --release -p vp_installer
 
       - name: Install via vp-setup.exe (silent)
         shell: pwsh

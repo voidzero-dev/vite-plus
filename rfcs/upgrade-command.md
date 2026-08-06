@@ -147,7 +147,7 @@ Options:
 
 ### Architecture
 
-The upgrade command is implemented entirely in Rust within the `vite_global_cli` crate, mirroring the logic of `install.sh` but running as a native subprocess workflow.
+The upgrade command is implemented entirely in Rust within the `vp_global_cli` crate, mirroring the logic of `install.sh` but running as a native subprocess workflow.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -247,7 +247,7 @@ To get the `integrity` field for the platform package, we need to query its meta
 - Main package metadata: `{registry}/vite-plus-cli/{version}` → contains `dist.integrity`
 - Platform package metadata: `{registry}/@voidzero-dev/vite-plus-cli-{suffix}/{version}` → contains `dist.integrity`
 
-Platform detection reuses existing logic from `vite_js_runtime` or mirrors the bash script's approach:
+Platform detection reuses existing logic from `vp_js_runtime` or mirrors the bash script's approach:
 
 - `uname -s` → os (darwin, linux)
 - `uname -m` → arch (x64, arm64)
@@ -355,7 +355,7 @@ Key principle: **The `current` symlink is only swapped after all pre-swap steps 
 ### File Structure
 
 ```
-crates/vite_global_cli/
+crates/vp_global_cli/
 ├── src/
 │   ├── commands/
 │   │   ├── upgrade/
@@ -402,7 +402,7 @@ fn detect_platform() -> Result<String, Error> {
 
 ### Registry Client
 
-Uses `reqwest` (already a dependency via `vite_js_runtime`) for HTTP requests:
+Uses `reqwest` (already a dependency via `vp_js_runtime`) for HTTP requests:
 
 ```rust
 async fn resolve_version(registry: &str, version_or_tag: &str) -> Result<PackageMetadata, Error> {
@@ -527,13 +527,13 @@ Upgrade {
 
 **Files to create/modify:**
 
-- `crates/vite_global_cli/src/commands/upgrade/mod.rs` (new)
-- `crates/vite_global_cli/src/commands/upgrade/registry.rs` (new)
-- `crates/vite_global_cli/src/commands/upgrade/platform.rs` (new)
-- `crates/vite_global_cli/src/commands/upgrade/download.rs` (new)
-- `crates/vite_global_cli/src/commands/upgrade/install.rs` (new)
-- `crates/vite_global_cli/src/commands/mod.rs` (add module)
-- `crates/vite_global_cli/src/cli.rs` (add command variant + routing)
+- `crates/vp_global_cli/src/commands/upgrade/mod.rs` (new)
+- `crates/vp_global_cli/src/commands/upgrade/registry.rs` (new)
+- `crates/vp_global_cli/src/commands/upgrade/platform.rs` (new)
+- `crates/vp_global_cli/src/commands/upgrade/download.rs` (new)
+- `crates/vp_global_cli/src/commands/upgrade/install.rs` (new)
+- `crates/vp_global_cli/src/commands/mod.rs` (add module)
+- `crates/vp_global_cli/src/cli.rs` (add command variant + routing)
 
 **Success Criteria:**
 
