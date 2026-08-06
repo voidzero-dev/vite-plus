@@ -38,7 +38,7 @@ top-level and nested comments survive; oxc settings are added without overwritin
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "oxc.disableNestedConfig": true,
-  "oxc.fmt.configPath": "./vite.config.ts",
+  "oxc.fmt.disableNestedConfig": true,
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
 }
