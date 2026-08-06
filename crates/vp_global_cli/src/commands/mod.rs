@@ -48,14 +48,8 @@ fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     }
 }
 
-/// Check if vite-plus is listed in the nearest package.json's
-/// dependencies, devDependencies, or optionalDependencies.
-///
-/// Returns `true` if vite-plus is found, `false` if not found
-/// or if no package.json exists.
-pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
-    if let Some(package_json_path) = find_nearest_package_json(cwd)
-        && let Ok(file) = std::fs::File::open(&package_json_path)
+fn package_json_has_vite_plus_dependency(package_json_path: &AbsolutePath) -> bool {
+    if let Ok(file) = std::fs::File::open(package_json_path)
         && let Ok(pkg) = serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
     {
         return pkg.dependencies.contains_key("vite-plus")
@@ -65,20 +59,47 @@ pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
     false
 }
 
+fn find_vite_plus_dependency(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let mut current = cwd;
+    loop {
+        if package_json_has_vite_plus_dependency(&current.join("package.json")) {
+            return Some(current.to_absolute_path_buf());
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent,
+            _ => return None,
+        }
+    }
+}
+
+/// Check if vite-plus is listed in the nearest package.json's
+/// dependencies, devDependencies, or optionalDependencies.
+///
+/// Returns `true` if vite-plus is found, `false` if not found
+/// or if no package.json exists.
+pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
+    find_nearest_package_json(cwd)
+        .is_some_and(|package_json_path| package_json_has_vite_plus_dependency(&package_json_path))
+}
+
 pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
     if find_nearest_package_json(cwd).is_none() {
         return;
     }
 
-    let has_declared_vite_plus = has_vite_plus_dependency(cwd)
-        || vt_workspace::find_workspace_root(cwd).is_ok_and(|(workspace_root, _)| {
-            has_vite_plus_dependency(workspace_root.path.as_ref())
-        });
+    let install_dir = if has_vite_plus_dependency(cwd)
+        || vt_workspace::find_workspace_root(cwd)
+            .is_ok_and(|(workspace_root, _)| has_vite_plus_dependency(workspace_root.path.as_ref()))
+    {
+        Some(cwd.to_absolute_path_buf())
+    } else {
+        find_vite_plus_dependency(cwd)
+    };
 
-    if has_declared_vite_plus {
+    if let Some(install_dir) = install_dir {
         output::warn(&format!(
             "No project-local vite-plus installation was found. Run `vp install` in `{}` to install dependencies.",
-            cwd.as_path().display()
+            install_dir.as_path().display()
         ));
     } else {
         output::warn(
