@@ -842,7 +842,7 @@ async function writeInlinedProviderDts(
   const relToShim = (sub: string): string => {
     const r = relative(outDir, testDistDir).replaceAll('\\', '/');
     const prefix = r === '' ? '.' : r.startsWith('.') ? r : `./${r}`;
-    return `${prefix}/${sub}`;
+    return `${prefix}/${sub}.js`;
   };
   let result = upstream;
   for (const [bare, sub] of VITEST_TYPE_SPECIFIER_REWRITES) {
