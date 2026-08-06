@@ -7,51 +7,51 @@ should print the help message
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp pack [...FILES] [OPTIONS]
+Usage: vp pack [...files] [OPTIONS]
 
 Build a library.
 Options are forwarded to Vite+ Pack.
 
 Arguments:
-  [...FILES]  Files to bundle
+  [...files]  Bundle files
 
 Options:
-  -f, --format <FORMAT>         Bundle format: esm, cjs, iife, umd (default: esm)
+  -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                       Clean output directory, --no-clean to disable
-  --deps.never-bundle <MODULE>  Mark dependencies as external
+  --deps.never-bundle <module>  Mark dependencies as external
   --minify                      Minify output
   --devtools                    Enable devtools integration
-  --debug [FEAT]                Show debug logs
-  --target <TARGET>             Bundle target, e.g "es2015", "esnext"
-  -l, --logLevel <LEVEL>        Set log level: info, warn, error, silent
+  --debug [feat]                Show debug logs
+  --target <target>             Bundle target, e.g "es2015", "esnext"
+  -l, --logLevel <level>        Set log level: info, warn, error, silent
   --fail-on-warn                Fail on warnings (default: true)
   --no-write                    Disable writing files to disk, incompatible with watch mode (default: true)
-  -d, --out-dir <DIR>           Output directory (default: dist)
+  -d, --out-dir <dir>           Output directory (default: dist)
   --treeshake                   Tree-shake bundle (default: true)
   --sourcemap                   Generate source map (default: false)
   --shims                       Enable cjs and esm shims (default: false)
-  --platform <PLATFORM>         Target platform (default: node)
+  --platform <platform>         Target platform (default: node)
   --dts                         Generate dts files
   --publint                     Enable publint (default: false)
   --attw                        Enable Are the types wrong integration (default: false)
   --unused                      Enable unused dependencies check (default: false)
-  -w, --watch [PATH]            Watch mode
-  --ignore-watch <PATH>         Ignore custom paths in watch mode
-  --from-vite [VITEST]          Reuse config from Vite or Vitest
+  -w, --watch [path]            Watch mode
+  --ignore-watch <path>         Ignore custom paths in watch mode
+  --from-vite [vitest]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
-  --env.* <VALUE>               Define compile-time env variables
-  --env-file <FILE>             Load environment variables from a file, when used together with --env, variables in --env take precedence
-  --env-prefix <PREFIX>         Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
-  --on-success <COMMAND>        Command to run on success
-  --copy <DIR>                  Copy files to output dir
-  --public-dir <DIR>            Alias for --copy, deprecated
-  --tsconfig <TSCONFIG>         Set tsconfig path
+  --env.* <value>               Define compile-time env variables
+  --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
+  --on-success <command>        Command to run on success
+  --copy <dir>                  Copy files to output dir
+  --public-dir <dir>            Alias for --copy, deprecated
+  --tsconfig <tsconfig>         Set tsconfig path
   --unbundle                    Unbundle mode
-  --root <DIR>                  Root directory of input files
+  --root <dir>                  Root directory of input files
   --exe                         Bundle as executable
-  -W, --workspace [DIR]         Enable workspace mode
-  --concurrency <COUNT>         Maximum number of Rolldown builds to run in parallel
-  -F, --filter <PATTERN>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
+  -W, --workspace [dir]         Enable workspace mode
+  --concurrency <count>         Maximum number of Rolldown builds to run in parallel
+  -F, --filter <pattern>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
   --exports                     Generate export-related metadata for package.json (experimental)
   -h, --help                    Display this message
 
