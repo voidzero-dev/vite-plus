@@ -1,7 +1,0 @@
-{
-  "name": "optional-vite-plus",
-  "private": true,
-  "optionalDependencies": {
-    "vite-plus": "^0.1.0"
-  }
-}

@@ -1,7 +1,0 @@
-{
-  "name": "app",
-  "private": true,
-  "scripts": {
-    "build": "vpt print build"
-  }
-}
