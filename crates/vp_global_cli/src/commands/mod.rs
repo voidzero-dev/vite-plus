@@ -18,8 +18,8 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vp_shared::{PrependOptions, prepend_to_path_env};
-use vt_path::AbsolutePath;
+use vp_shared::{PrependOptions, output, prepend_to_path_env};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, js_executor::JsExecutor};
 
@@ -32,30 +32,49 @@ struct DepCheckPackageJson {
     dev_dependencies: HashMap<String, serde_json::Value>,
 }
 
+fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let mut current = cwd;
+    loop {
+        let package_json_path = current.join("package.json");
+        if package_json_path.as_path().exists() {
+            return Some(package_json_path);
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent,
+            _ => return None,
+        }
+    }
+}
+
 /// Check if vite-plus is listed in the nearest package.json's
 /// dependencies or devDependencies.
 ///
 /// Returns `true` if vite-plus is found, `false` if not found
 /// or if no package.json exists.
 pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
-    let mut current = cwd;
-    loop {
-        let package_json_path = current.join("package.json");
-        if package_json_path.as_path().exists() {
-            if let Ok(file) = std::fs::File::open(&package_json_path) {
-                if let Ok(pkg) =
-                    serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
-                {
-                    return pkg.dependencies.contains_key("vite-plus")
-                        || pkg.dev_dependencies.contains_key("vite-plus");
-                }
-            }
-            return false; // Found package.json but couldn't parse deps → treat as no dependency
-        }
-        match current.parent() {
-            Some(parent) if parent != current => current = parent,
-            _ => return false, // Reached filesystem root
-        }
+    if let Some(package_json_path) = find_nearest_package_json(cwd)
+        && let Ok(file) = std::fs::File::open(&package_json_path)
+        && let Ok(pkg) = serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
+    {
+        return pkg.dependencies.contains_key("vite-plus")
+            || pkg.dev_dependencies.contains_key("vite-plus");
+    }
+    false
+}
+
+pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
+    if find_nearest_package_json(cwd).is_none() {
+        return;
+    }
+
+    if has_vite_plus_dependency(cwd) {
+        output::warn(
+            "No project-local vite-plus installation was found. Run `vp install` to install dependencies.",
+        );
+    } else {
+        output::warn(
+            "This project does not use vite-plus. Learn how to migrate: https://viteplus.dev/guide/migrate",
+        );
     }
 }
 
