@@ -226,7 +226,15 @@ fn extract_config_from_expr(
             match first_arg_expr.get_inner_expression() {
                 Expression::ObjectExpression(obj) => extract_object_fields(obj),
                 Expression::ArrowFunctionExpression(arrow) => {
-                    extract_config_from_function_body(&arrow.body)
+                    // Block body: `() => { ... return { ... }; }`.
+                    if let Some(body) = arrow.get_function_body() {
+                        extract_config_from_function_body(body)
+                    } else if let Some(expr) = arrow.get_expression() {
+                        // Concise body: `() => ({ ... })`.
+                        extract_config_from_returned_expr(expr)
+                    } else {
+                        FieldMap::unanalyzable()
+                    }
                 }
                 Expression::FunctionExpression(func) => {
                     let Some(body) = func.body.as_ref() else {
@@ -242,11 +250,11 @@ fn extract_config_from_expr(
     }
 }
 
-/// Extract the config object from the body of a function passed to `defineConfig`.
+/// Extract the config object from the block body of a function passed to `defineConfig`.
 ///
-/// Handles two patterns:
-/// - Concise arrow body: `() => ({ ... })` — body has a single `ExpressionStatement`
-/// - Block body with exactly one return: `() => { ... return { ... }; }`
+/// Handles a block body with exactly one return: `() => { ... return { ... }; }`
+/// (or the equivalent `function () { ... }`). Concise arrow bodies (`() => ({ ... })`)
+/// are handled directly at the call site via [`extract_config_from_returned_expr`].
 ///
 /// Returns `FieldMap::unanalyzable()` if the body contains multiple `return` statements
 /// (at any nesting depth), since the returned config would depend on runtime control flow.
@@ -257,26 +265,21 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
     }
 
     for stmt in &body.statements {
-        match stmt {
-            Statement::ReturnStatement(ret) => {
-                let Some(arg) = ret.argument.as_ref() else {
-                    return FieldMap::unanalyzable();
-                };
-                if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
-                    return extract_object_fields(obj);
-                }
+        if let Statement::ReturnStatement(ret) = stmt {
+            let Some(arg) = ret.argument.as_ref() else {
                 return FieldMap::unanalyzable();
-            }
-            Statement::ExpressionStatement(expr_stmt) => {
-                // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
-                if let Expression::ObjectExpression(obj) =
-                    expr_stmt.expression.get_inner_expression()
-                {
-                    return extract_object_fields(obj);
-                }
-            }
-            _ => {}
+            };
+            return extract_config_from_returned_expr(arg);
         }
+    }
+    FieldMap::unanalyzable()
+}
+
+/// Extract config fields from an expression that stands in for the returned config
+/// object, e.g. the concise body of `() => ({ ... })` or the argument of a `return`.
+fn extract_config_from_returned_expr(expr: &Expression<'_>) -> FieldMap {
+    if let Expression::ObjectExpression(obj) = expr.get_inner_expression() {
+        return extract_object_fields(obj);
     }
     FieldMap::unanalyzable()
 }

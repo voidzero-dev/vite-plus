@@ -138,9 +138,20 @@ function buildGlobalVirtualStoreLayout(options: {
 }
 
 function runProject(root: string, env: Record<string, string> = {}) {
+  // The test runner spawns its workers with NODE_PATH pointing at the workspace
+  // virtual store (node_modules/.pnpm/node_modules), where the real `vite-plus`
+  // lives. Leaking that into the child would let core resolve the workspace's
+  // `vite-plus` and defeat the global-virtual-store isolation this fixture
+  // recreates, so strip it and let resolution walk only the synthetic layout.
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    NAPI_RS_ENFORCE_VERSION_CHECK: '',
+    ...env,
+  };
+  delete childEnv.NODE_PATH;
   try {
     const stdout = execFileSync(process.execPath, [path.join(root, 'project/main.cjs')], {
-      env: { ...process.env, NAPI_RS_ENFORCE_VERSION_CHECK: '', ...env },
+      env: childEnv,
       encoding: 'utf-8',
       timeout: 30_000,
     });
