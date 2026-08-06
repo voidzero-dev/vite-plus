@@ -92,7 +92,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
-- [`vp config`](/guide/commit-hooks) configures commit hooks and agent integration.
+- [`vp config`](/guide/commit-hooks) installs the Git hook dispatcher and configures agent integration.
 - [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [`vp install`](/guide/install) installs dependencies with the right package manager.
 - [`vp env`](/guide/env) manages Node.js versions.

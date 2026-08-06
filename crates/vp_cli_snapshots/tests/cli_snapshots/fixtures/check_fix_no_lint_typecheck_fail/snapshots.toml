@@ -1,0 +1,6 @@
+[[case]]
+name = "check_fix_no_lint_typecheck_fail"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--fix", "--no-lint"], continue-on-failure = true },
+]

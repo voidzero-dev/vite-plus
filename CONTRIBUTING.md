@@ -140,7 +140,7 @@ pnpm bootstrap-cli && pnpm test && git status
 
 ## CLI Snapshot Tests (PTY runner)
 
-CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vite_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
+CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vp_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
 
 ```bash
 # Build vp and run the whole suite
@@ -153,7 +153,19 @@ just snapshot-test create
 UPDATE_SNAPSHOTS=1 just snapshot-test create
 ```
 
-The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
+The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
+
+## Submitting Pull Requests
+
+Prioritize stacked pull requests when your work splits into reviewable layers, for example a refactor PR with the feature PR that depends on it stacked on top. Reviewers handle a stack of small PRs faster than one large PR, and each layer merges on its own.
+
+GitHub has built-in stacked pull requests ([public preview](https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/), rolling out to all repositories). Create stacks on github.com, or from the terminal:
+
+```bash
+gh extension install github/gh-stack
+```
+
+Stacked pull requests require all branches to be in this repository; GitHub does not support cross-fork stacks ([reference](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)). If you contribute from a fork, split large work into a sequence of standalone PRs instead.
 
 ## Verified Commits
 
@@ -162,7 +174,6 @@ All commits in PR branches should be GitHub-verified so reviewers can confirm co
 Set up local commit signing and GitHub verification first:
 
 - Follow GitHub's guide for GPG commit signature verification: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#gpg-commit-signature-verification
-- If you use Graphite, add the Graphite GPG key to your GitHub account from the Graphite UI as well, otherwise commits updated by Graphite won't show as verified.
 
 After setup, re-sign any existing commits in your branch so the full branch is verified:
 

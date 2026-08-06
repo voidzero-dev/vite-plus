@@ -1,0 +1,6 @@
+{
+  "name": "migration-hooks-skip-on-existing-hookspath",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

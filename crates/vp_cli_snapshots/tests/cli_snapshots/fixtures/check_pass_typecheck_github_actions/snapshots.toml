@@ -1,0 +1,7 @@
+[[case]]
+name = "check_pass_typecheck_github_actions"
+vp = "local"
+env = { "GITHUB_ACTIONS" = "true" }
+steps = [
+  ["vp", "check"],
+]

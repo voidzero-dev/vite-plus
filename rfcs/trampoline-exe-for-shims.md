@@ -93,7 +93,7 @@ Each trampoline is a copy of `vp-shim.exe` (the template binary distributed alon
 ### Crate Structure
 
 ```
-crates/vite_trampoline/
+crates/vp_trampoline/
 ├── Cargo.toml      # Zero external dependencies
 ├── src/
 │   └── main.rs     # ~90 lines, single-file binary
@@ -133,7 +133,7 @@ fn main() {
 
     // 5. Propagate exit code (error message via write_all, not eprintln!)
     match cmd.status() {
-        Ok(s) => process::exit(s.code().unwrap_or(1)),
+        Ok(status) => process::exit(exit_code_from_status(status)),
         Err(_) => {
             use std::io::Write;
             let mut stderr = std::io::stderr().lock();

@@ -38,12 +38,12 @@
       "description": "Ignore vite-task git dependency digest updates (bumped via the bump-vite-task workflow).",
       "matchDepNames": [
         "fspy",
-        "vite_glob",
-        "vite_path",
-        "vite_powershell",
-        "vite_str",
-        "vite_task",
-        "vite_workspace"
+        "vt_glob",
+        "vt_path",
+        "vt_powershell",
+        "vt_str",
+        "vt",
+        "vt_workspace"
       ],
       "enabled": false
     }

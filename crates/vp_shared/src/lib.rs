@@ -1,0 +1,46 @@
+//! Shared utilities for vite-plus crates
+
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_types,
+    clippy::print_stdout
+)]
+
+mod env_config;
+pub mod env_vars;
+mod error;
+pub mod header;
+mod home;
+mod http;
+mod interactivity;
+mod json_edit;
+pub mod output;
+mod package_json;
+mod path_env;
+mod process;
+mod stdio;
+pub mod string_similarity;
+mod tls;
+mod tracing;
+
+pub use env_config::{EnvConfig, TestEnvGuard};
+pub use error::format_error_chain;
+pub use home::{VP_BINARY_NAME, get_vp_home};
+pub use http::{HttpClientError, shared_http_client};
+pub use interactivity::{
+    is_ci_environment, is_interactive_terminal, is_stderr_terminal, is_stdin_terminal,
+    is_stdout_terminal,
+};
+pub use json_edit::{JsonStyle, edit_json_object, insert_after};
+pub use package_json::{
+    DevEngineDependency, DevEngineField, DevEngines, Engines, OnFail, PackageJson, dev_engine_entry,
+};
+pub use path_env::{
+    PrependOptions, PrependResult, format_path_prepended, format_path_with_prepend,
+    prepend_to_path_env,
+};
+pub use process::exit_code_from_status;
+pub use stdio::ensure_blocking_stdio;
+pub use tls::ensure_tls_provider;
+pub use tracing::init_tracing;

@@ -62,6 +62,7 @@ import {
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   type Framework,
   type NodeVersionManagerDetection,
@@ -915,10 +916,14 @@ async function executeMigrationPlan(
     }
   }
 
-  // 6. Skip staged migration when hooks are disabled (--no-hooks or preflight failed).
-  // Without hooks, lint-staged config must stay in package.json so existing
-  // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
-  const skipStagedMigration = !plan.shouldSetupHooks;
+  // Preserve lint-staged whenever hook setup is disabled/unsafe or existing
+  // project-owned hooks remain authoritative.
+  const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+    workspaceInfo.rootDir,
+    plan.shouldSetupHooks,
+    plan.packageManager,
+    workspaceInfo.packages,
+  );
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
@@ -937,7 +942,13 @@ async function executeMigrationPlan(
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
-    installGitHooks(workspaceInfo.rootDir, true, report, plan.packageManager);
+    installGitHooks(
+      workspaceInfo.rootDir,
+      true,
+      report,
+      plan.packageManager,
+      workspaceInfo.packages,
+    );
   }
 
   // 9. Write agent instructions (using pre-resolved decisions)
@@ -1398,7 +1409,15 @@ async function main() {
     if (plan.shouldSetupHooks) {
       await ensureExistingPackageManager();
       updateMigrationProgress('Configuring git hooks');
-      if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
+      if (
+        installGitHooks(
+          workspaceInfoOptional.rootDir,
+          true,
+          report,
+          packageManager,
+          workspaceInfoOptional.packages,
+        )
+      ) {
         didMigrate = true;
         needsInstall = true;
       }

@@ -1,8 +1,8 @@
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use owo_colors::OwoColorize;
-use vite_error::Error;
-use vite_shared::output;
-use vite_task::ExitStatus;
+use vp_error::Error;
+use vp_shared::output;
+use vt::ExitStatus;
 
 use super::types::SynthesizableSubcommand;
 
@@ -34,6 +34,13 @@ pub(super) fn normalize_help_args(args: Vec<String>) -> Vec<String> {
 
 fn is_vitest_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
+}
+
+/// Help/version flags of the forwarded app tools (Vite and tsdown are
+/// cac-based: `-v, --version`; vp's own clap surface uses `-V`). Requests for
+/// these must always reach the tool, never target elicitation.
+pub(super) fn is_app_tool_help_or_version_flag(arg: &str) -> bool {
+    matches!(arg, "-h" | "--help" | "-v" | "-V" | "--version")
 }
 
 fn is_vitest_watch_flag(arg: &str) -> bool {
@@ -99,7 +106,7 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Op
     let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
         Some(ContextValue::String(value)) => Some(value.to_owned()),
         Some(ContextValue::Strings(values)) => {
-            vite_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
+            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
         }
         _ => None,
     };
@@ -169,8 +176,8 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 }
 
 pub(super) fn print_help() {
-    let header = if vite_shared::header::should_print_header() {
-        format!("{}\n\n", vite_shared::header::vite_plus_header())
+    let header = if vp_shared::header::should_print_header() {
+        format!("{}\n\n", vp_shared::header::vite_plus_header())
     } else {
         String::new()
     };
@@ -201,6 +208,7 @@ pub(super) fn print_help() {
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
 
 Options:
+  -C <DIR>    Run as if vp was started in <DIR> instead of the current working directory
   -h, --help  Print help"
     );
 }
@@ -208,7 +216,7 @@ Options:
 #[cfg(test)]
 mod tests {
     use clap::Parser;
-    use vite_task::Command;
+    use vt::Command;
 
     use super::{super::types::CLIArgs, *};
 
@@ -224,7 +232,7 @@ mod tests {
         // After trailing_var_arg change, unknown flags like --yolo are
         // accepted as task arguments instead of producing a parse error.
         let args = CLIArgs::try_parse_from(["vp", "run", "--yolo"]).unwrap();
-        let debug = vite_str::format!("{args:?}");
+        let debug = vt_str::format!("{args:?}");
         assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}");
         assert!(matches!(args, CLIArgs::ViteTask(Command::Run(_))));
     }
