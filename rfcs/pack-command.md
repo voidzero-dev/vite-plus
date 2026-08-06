@@ -169,7 +169,7 @@ CLI flags override config file values. When both are provided, CLI flags take pr
 Global CLI (Rust) ─── Category C delegation ───▸ Local CLI (pack-bin.ts) ───▸ tsdown
 ```
 
-1. **Global CLI** (`crates/vite_global_cli/src/cli.rs`): The `Pack` command variant uses `trailing_var_arg` to capture all arguments, then unconditionally delegates to the local CLI.
+1. **Global CLI** (`crates/vp_global_cli/src/cli.rs`): The `Pack` command variant uses `trailing_var_arg` to capture all arguments, then unconditionally delegates to the local CLI.
 2. **Local CLI** (`packages/cli/src/pack-bin.ts`): Parses CLI options with `cac`, resolves config from `vite.config.ts`, and calls tsdown's `resolveUserConfig` + `buildWithConfigs`.
 3. **tsdown**: Handles all bundling logic, including the new SEA/exe feature.
 

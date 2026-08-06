@@ -273,7 +273,7 @@ When a version is explicitly specified in the package spec, the command skips al
 
 ### 1. Shim Detection
 
-**File**: `crates/vite_global_cli/src/shim/mod.rs`
+**File**: `crates/vp_global_cli/src/shim/mod.rs`
 
 Add `vpx` recognition to `detect_shim_tool()`:
 
@@ -289,7 +289,7 @@ if argv0_tool == "vpx" {
 
 ### 2. Dispatch Handler
 
-**File**: `crates/vite_global_cli/src/shim/dispatch.rs`
+**File**: `crates/vp_global_cli/src/shim/dispatch.rs`
 
 Handle `vpx` in the dispatch logic (delegates to `commands/vpx.rs`):
 
@@ -308,7 +308,7 @@ The dispatch module also exposes helper functions as `pub(crate)` for vpx to reu
 
 ### 3. Binary Resolution (`commands/vpx.rs`)
 
-**File**: `crates/vite_global_cli/src/commands/vpx.rs`
+**File**: `crates/vp_global_cli/src/commands/vpx.rs`
 
 Resolution order (when no version spec, no --package flag, and not shell mode):
 
@@ -329,7 +329,7 @@ Before executing any found binary, `prepend_node_modules_bin_to_path()` walks up
 
 ### 4. Setup
 
-**File**: `crates/vite_global_cli/src/commands/env/setup.rs`
+**File**: `crates/vp_global_cli/src/commands/env/setup.rs`
 
 Add `vpx` to the shim creation:
 

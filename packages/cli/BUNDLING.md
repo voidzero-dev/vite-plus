@@ -244,7 +244,7 @@ When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
 
 | Component          | Source                             | Purpose                        |
 | ------------------ | ---------------------------------- | ------------------------------ |
-| `vite_task`        | `packages/cli/binding/src/lib.rs`  | Task runner session management |
+| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management |
 | `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings |
 
 ### Export Chain

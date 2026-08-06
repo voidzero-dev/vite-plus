@@ -12,12 +12,12 @@ on:
     branches:
       - main
     # `paths` with negations instead of paths-ignore: PTY snapshot baselines
-    # are .md files (crates/vite_cli_snapshots/**/snapshots/*.md) and a
+    # are .md files (crates/vp_cli_snapshots/**/snapshots/*.md) and a
     # baseline-only push must still run CI. Later patterns win.
     paths:
       - '**'
       - '!**/*.md'
-      - 'crates/vite_cli_snapshots/**'
+      - 'crates/vp_cli_snapshots/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -67,7 +67,7 @@ jobs:
               - '!.github/workflows/deploy-docs.yml'
               - '!netlify.toml'
             snapshots:
-              - 'crates/vite_cli_snapshots/**'
+              - 'crates/vp_cli_snapshots/**'
 
   docs-fmt:
     name: Docs format check
@@ -193,13 +193,13 @@ jobs:
           cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
 
       # Keep the package selection in sync with the `test` recipe in justfile.
-      # vite_cli_snapshots is excluded there too: its snapshot suite needs a
+      # vp_cli_snapshots is excluded there too: its snapshot suite needs a
       # built vp and node at runtime and joins the Windows archive later.
       - name: Build test archive
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vite_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
+          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -218,7 +218,7 @@ jobs:
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          cargo nextest archive -p vite_cli_snapshots \
+          cargo nextest archive -p vp_cli_snapshots \
             --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -250,7 +250,7 @@ jobs:
       # --test-threads=1: nextest runs each test in its own process, so
       # serial_test's in-process locks no longer serialize tests that contend
       # on cross-process shared state (fixed temp paths, e.g.
-      # `vp-test-custom-home` in vite_shared::home tests). The whole suite is
+      # `vp-test-custom-home` in vp_shared::home tests). The whole suite is
       # only ~1 minute of test time, so full serialization is cheap
       # insurance; revisit if it becomes the bottleneck.
       - name: Run tests
@@ -901,10 +901,10 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
-  # Runs the PTY snapshot suite (crates/vite_cli_snapshots) with BOTH vp
+  # Runs the PTY snapshot suite (crates/vp_cli_snapshots) with BOTH vp
   # flavors on Linux and macOS: the local flavor uses the packages/cli build
   # from this job, the global flavor reuses the installed release binary via
-  # VP_SNAP_GLOBAL_VP (no vite_global_cli compile; build-upstream builds or
+  # VP_SNAP_GLOBAL_VP (no vp_global_cli compile; build-upstream builds or
   # cache-restores it). One leg per OS: the suite is not sharded. Windows
   # runs in cli-snapshot-test-windows via the cross-compiled archive.
   cli-snapshot-test:
@@ -963,11 +963,11 @@ jobs:
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
-          cargo test -p vite_cli_snapshots
+          cargo test -p vp_cli_snapshots
         env:
           RUST_BACKTRACE: '1'
 
-  # Runs the PTY snapshot suite (crates/vite_cli_snapshots) on Windows with
+  # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
   # and vpt arrive cross-compiled in the nextest archive from
   # build-windows-tests, the global vp comes prebuilt from build-windows-cli,
@@ -1189,7 +1189,7 @@ jobs:
               set -e
               apt-get update -qq && apt-get install -y -qq --no-install-recommends cmake python3
               rustup show
-              cargo build -p vite_global_cli
+              cargo build -p vp_global_cli
             '
 
       - name: Run vp in node:24-bookworm-slim without a CA store

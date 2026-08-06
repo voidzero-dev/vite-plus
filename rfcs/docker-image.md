@@ -417,7 +417,7 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
    tradeoffs are why it is not shipped now:
 
    - On musl, vp downloads Node.js from `unofficial-builds.nodejs.org`, which
-     publishes no PGP signature (see `crates/vite_js_runtime/src/providers/node.rs`),
+     publishes no PGP signature (see `crates/vp_js_runtime/src/providers/node.rs`),
      so an Alpine variant would not get the "official, signature-verified Node.js"
      guarantee the Debian image has.
    - musl is the classic native-addon sharp edge (prebuilt addons are usually

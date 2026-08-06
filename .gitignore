@@ -7,8 +7,8 @@ dist
 rolldown
 rolldown-vite
 vite
-/crates/vite_global_cli/vp
+/crates/vp_global_cli/vp
 .void/
 
 # PTY snapshot runner failure artifacts (reviewed via the diff, never committed)
-crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new

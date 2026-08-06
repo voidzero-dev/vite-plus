@@ -440,7 +440,7 @@ These are internal identifiers, API references, or project name references:
 ### Phase 2: Rust CLI Output Standardization
 
 1. Create shared output module with `info()`, `warn()`, `error()`, `note()`, `success()` and symbol constants
-2. Add as dependency to `vite_global_cli` and `vite_install`
+2. Add as dependency to `vp_global_cli` and `vite_install`
 3. Migrate `upgrade/mod.rs` (6 message sites)
 4. Migrate `main.rs` error handling (3 sites)
 5. Migrate `vpx.rs` (4 sites)

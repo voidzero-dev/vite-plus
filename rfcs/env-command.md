@@ -26,7 +26,7 @@ A shim-based approach where:
 - Shims (`node`, `npm`, `npx`, `corepack`) are symlinks to the `vp` binary (Unix) or trampoline `.exe` files (Windows)
 - The `vp` CLI itself is also in `VP_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
-- Version resolution and installation leverage existing `vite_js_runtime` infrastructure
+- Version resolution and installation leverage existing `vp_js_runtime` infrastructure
 
 ## Command Usage
 
@@ -622,7 +622,7 @@ lts/iron
 ### File Structure
 
 ```
-crates/vite_global_cli/
+crates/vp_global_cli/
 ├── src/
 │   ├── main.rs                       # Entry point with shim detection
 │   ├── cli.rs                        # Add Env command
@@ -1781,7 +1781,7 @@ User runs: npm install -g codex
              ▼
 ┌───────────────────────────────────────────────────────────┐
 │  dispatch("npm", ["install", "-g", "codex"])               │
-│  (crates/vite_global_cli/src/shim/dispatch.rs)             │
+│  (crates/vp_global_cli/src/shim/dispatch.rs)             │
 │                                                             │
 │  1–5. vpx / recursion / bypass / shim / core checks        │
 │  6. resolve version    → 20.18.0                           │
