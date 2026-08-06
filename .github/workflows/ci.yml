@@ -947,14 +947,9 @@ jobs:
 
       # https://github.com/marketplace/actions/setup-nu
       - name: Install Nushell
-        if: runner.os == 'Linux'
         uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
         with:
           version: '*'
-
-      - name: Test generated Nushell environment
-        if: runner.os == 'Linux'
-        run: VP_BIN_UNDER_TEST="$HOME/.vite-plus/bin/vp" .github/scripts/test-nushell-env.sh
 
       # Provision the managed runtime once into the real home so cases can
       # seed from it (seed-runtime) instead of each downloading ~50MB.
@@ -974,6 +969,7 @@ jobs:
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
+          VP_SNAP_NU_BIN="$(command -v nu)" \
           cargo test -p vp_cli_snapshots
         env:
           RUST_BACKTRACE: '1'

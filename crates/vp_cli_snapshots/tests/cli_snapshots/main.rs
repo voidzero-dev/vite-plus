@@ -437,6 +437,7 @@ struct CaseInstall {
     path_env: OsString,
     tool_dirs: Vec<PathBuf>,
     vpt: PathBuf,
+    nu: Option<PathBuf>,
 }
 
 impl CaseInstall {
@@ -450,6 +451,12 @@ impl CaseInstall {
     ) -> Result<PathBuf, String> {
         if program == "vpt" {
             return Ok(self.vpt.clone());
+        }
+        if program == "nu" {
+            return self.nu.clone().ok_or_else(|| {
+                "`nu` is required by this snapshot case; install Nushell or set VP_SNAP_NU_BIN"
+                    .to_owned()
+            });
         }
 
         // An explicit `./`-prefixed program runs a file the case itself
@@ -546,6 +553,7 @@ impl CaseHome {
             path_env: compose_path_env(&path_dirs),
             tool_dirs,
             vpt: runtime.vpt.clone(),
+            nu: runtime.nu.clone(),
         })
     }
 
