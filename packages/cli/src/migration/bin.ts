@@ -26,7 +26,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
+import { accent, formatDuration, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -557,17 +557,6 @@ async function collectMigrationPlan(
   };
 
   return plan;
-}
-
-function formatDuration(durationMs: number) {
-  if (durationMs < 1000) {
-    return `${Math.max(1, durationMs)}ms`;
-  }
-  const durationSeconds = durationMs / 1000;
-  if (durationSeconds < 10) {
-    return `${durationSeconds.toFixed(1)}s`;
-  }
-  return `${Math.round(durationSeconds)}s`;
 }
 
 /**

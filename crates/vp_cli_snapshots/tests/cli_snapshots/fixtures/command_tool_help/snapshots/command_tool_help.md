@@ -16,20 +16,20 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --host [HOST]           Specify hostname
-  --port <PORT>           Specify port
-  --open [PATH]           Open browser on startup
-  --cors                  Enable CORS
-  --strictPort            Exit if specified port is already in use
-  --force                 Ignore the optimizer cache and re-bundle
-  --experimentalBundle    Use experimental full bundle mode
-  --base <PATH>           Public base path
-  -l, --logLevel <LEVEL>  Set log level
-  --clearScreen           Allow or disable clearing the screen
-  -d, --debug [FEAT]      Show debug logs
-  -f, --filter <FILTER>   Filter debug logs
-  -m, --mode <MODE>       Set env mode
-  -h, --help              Print help
+  --host [host]           [string] specify hostname
+  --port <port>           [number] specify port
+  --open [path]           [boolean | string] open browser on startup
+  --cors                  [boolean] enable CORS
+  --strictPort            [boolean] exit if specified port is already in use
+  --force                 [boolean] force the optimizer to ignore the cache and re-bundle
+  --experimentalBundle    [boolean] use experimental full bundle mode (this is highly experimental)
+  --base <path>           [string] public base path (default: /)
+  -l, --logLevel <level>  [string] info | warn | error | silent
+  --clearScreen           [boolean] allow/disable clear screen when logging
+  -d, --debug [feat]      [string | boolean] show debug logs
+  -f, --filter <filter>   [string] filter debug logs
+  -m, --mode <mode>       [string] set env mode
+  -h, --help              Display this message
 
 Examples:
   vp dev
@@ -53,25 +53,25 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --target <TARGET>             Transpile target
-  --outDir <DIR>                Output directory
-  --assetsDir <DIR>             Directory for generated assets
-  --assetsInlineLimit <NUMBER>  Static asset inline threshold
-  --ssr [ENTRY]                 Build for server-side rendering
-  --sourcemap [MODE]            Output source maps
-  --minify [MINIFIER]           Enable or disable minification
-  --manifest [NAME]             Emit a build manifest
-  --ssrManifest [NAME]          Emit an SSR manifest
-  --emptyOutDir                 Empty outDir even when it is outside root
-  -w, --watch                   Rebuild when files change
-  --app                         Build an application with the builder API
-  --base <PATH>                 Public base path
-  -l, --logLevel <LEVEL>        Set log level
-  --clearScreen                 Allow or disable clearing the screen
-  -d, --debug [FEAT]            Show debug logs
-  -f, --filter <FILTER>         Filter debug logs
-  -m, --mode <MODE>             Set env mode
-  -h, --help                    Print help
+  --target <target>             [string] transpile target (default: 'baseline-widely-available')
+  --outDir <dir>                [string] output directory (default: dist)
+  --assetsDir <dir>             [string] directory under outDir to place assets in (default: assets)
+  --assetsInlineLimit <number>  [number] static asset base64 inline threshold in bytes (default: 4096)
+  --ssr [entry]                 [string] build specified entry for server-side rendering
+  --sourcemap [output]          [boolean | "inline" | "hidden"] output source maps for build (default: false)
+  --minify [minifier]           [boolean | "oxc" | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: oxc)
+  --manifest [name]             [boolean | string] emit build manifest json
+  --ssrManifest [name]          [boolean | string] emit ssr manifest json
+  --emptyOutDir                 [boolean] force empty outDir when it's outside of root
+  -w, --watch                   [boolean] rebuilds when modules have changed on disk
+  --app                         [boolean] same as `builder: {}`
+  --base <path>                 [string] public base path (default: /)
+  -l, --logLevel <level>        [string] info | warn | error | silent
+  --clearScreen                 [boolean] allow/disable clear screen when logging
+  -d, --debug [feat]            [string | boolean] show debug logs
+  -f, --filter <filter>         [string] filter debug logs
+  -m, --mode <mode>             [string] set env mode
+  -h, --help                    Display this message
 
 Examples:
   vp build
@@ -95,18 +95,18 @@ Arguments:
   [ROOT]  Project root directory (default: current directory)
 
 Options:
-  --host [HOST]           Specify hostname
-  --port <PORT>           Specify port
-  --strictPort            Exit if specified port is already in use
-  --open [PATH]           Open browser on startup
-  --outDir <DIR>          Output directory to preview
-  --base <PATH>           Public base path
-  -l, --logLevel <LEVEL>  Set log level
-  --clearScreen           Allow or disable clearing the screen
-  -d, --debug [FEAT]      Show debug logs
-  -f, --filter <FILTER>   Filter debug logs
-  -m, --mode <MODE>       Set env mode
-  -h, --help              Print help
+  --host [host]           [string] specify hostname
+  --port <port>           [number] specify port
+  --strictPort            [boolean] exit if specified port is already in use
+  --open [path]           [boolean | string] open browser on startup
+  --outDir <dir>          [string] output directory (default: dist)
+  --base <path>           [string] public base path (default: /)
+  -l, --logLevel <level>  [string] info | warn | error | silent
+  --clearScreen           [boolean] allow/disable clear screen when logging
+  -d, --debug [feat]      [string | boolean] show debug logs
+  -f, --filter <filter>   [string] filter debug logs
+  -m, --mode <mode>       [string] set env mode
+  -h, --help              Display this message
 
 Examples:
   vp preview
@@ -137,79 +137,79 @@ Arguments:
   [FILTERS]...  Test file filters
 
 Options:
-  -r, --root <PATH>                   Root path
-  -u, --update [TYPE]                 Update snapshot (accepts boolean, "new", "all" or "none")
+  -r, --root <path>                   Root path
+  -u, --update [type]                 Update snapshot (accepts boolean, "new", "all" or "none")
   -w, --watch                         Enable watch mode
-  -t, --testNamePattern <PATTERN>     Run tests with full names matching the specified regexp pattern
-  --dir <PATH>                        Base directory to scan for the test files
+  -t, --testNamePattern <pattern>     Run tests with full names matching the specified regexp pattern
+  --dir <path>                        Base directory to scan for the test files
   --ui                                Enable UI
   --open                              Open UI automatically (default: !process.env.CI)
-  --api [PORT]                        Specify server port; if true, defaults to 51204
-  --silent [VALUE]                    Silent console output from tests. Use 'passed-only' to see logs from failing tests only
+  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204. Use '--help --api' for more info.
+  --silent [value]                    Silent console output from tests. Use 'passed-only' to see logs from failing tests only.
   --hideSkippedTests                  Hide logs for skipped tests
-  --reporter <NAME>                   Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
-  --outputFile <FILENAME/-S>          Write test results to a file; use dot notation for individual outputs of multiple reporters (for example, --outputFile.tap=./tap.txt)
-  --coverage                          Enable coverage reporting
-  --mode <NAME>                       Override Vite mode (default: test or benchmark)
-  --isolate                           Run every test file in isolation. Use --no-isolate to disable (default: true)
-  --globals                           Inject APIs globally
+  --reporter <name>                   Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
+  --outputFile <filename/-s>          Write test results to a file when supporter reporter is also specified, use cac's dot notation for individual outputs of multiple reporters (example: --outputFile.tap=./tap.txt)
+  --coverage                          Enable coverage report. Use '--help --coverage' for more info.
+  --mode <name>                       Override Vite mode (default: test or benchmark)
+  --isolate                           Run every test file in isolation. To disable isolation, use --no-isolate (default: true)
+  --globals                           Inject apis globally
   --dom                               Mock browser API with happy-dom
-  --browser <NAME>                    Run tests in the browser; equivalent to --browser.enabled (default: false)
-  --pool <POOL>                       Specify pool when not running in the browser (default: forks)
-  --execArgv <OPTION>                 Pass additional arguments to Node.js when spawning worker threads or child processes
-  --vmMemoryLimit <LIMIT>             Memory limit for VM pools
-  --fileParallelism                   Run test files in parallel. Use --no-file-parallelism to disable (default: true)
-  --maxWorkers <WORKERS>              Maximum number or percentage of workers to run tests in
-  --environment <NAME>                Specify runner environment (default: node)
+  --browser <name>                    Run tests in the browser. Equivalent to --browser.enabled (default: false). Use '--help --browser' for more info.
+  --pool <pool>                       Specify pool, if not running in the browser (default: forks)
+  --execArgv <option>                 Pass additional arguments to node process when spawning worker_threads or child_process.
+  --vmMemoryLimit <limit>             Memory limit for VM pools. If you see memory leaks, try to tinker this value.
+  --fileParallelism                   Should all test files run in parallel. Use --no-file-parallelism to disable (default: true)
+  --maxWorkers <workers>              Maximum number or percentage of workers to run tests in
+  --environment <name>                Specify runner environment, if not running in the browser (default: node)
   --passWithNoTests                   Pass when no tests are found
-  --logHeapUsage                      Show the size of the heap for each test when running in Node.js
-  --detectAsyncLeaks                  Detect asynchronous resources leaking from test files (default: false)
-  --allowOnly                         Allow tests and suites marked as only (default: !process.env.CI)
+  --logHeapUsage                      Show the size of heap for each test when running in node
+  --detectAsyncLeaks                  Detect asynchronous resources leaking from the test file (default: false)
+  --allowOnly                         Allow tests and suites that are marked as only (default: !process.env.CI)
   --dangerouslyIgnoreUnhandledErrors  Ignore any unhandled errors that occur
-  --shard <SHARDS>                    Test suite shard to execute in the format <index>/<count>
-  --changed [SINCE]                   Run tests affected by changed files (default: false)
-  --sequence <OPTIONS>                Configure test sorting
-  --inspect [[HOST:]PORT]             Enable Node.js inspector (default: 127.0.0.1:9229)
-  --inspectBrk [[HOST:]PORT]          Enable Node.js inspector and break before tests start
-  --testTimeout <TIMEOUT>             Default test timeout in milliseconds (default: 5000; 0 disables)
-  --hookTimeout <TIMEOUT>             Default hook timeout in milliseconds (default: 10000; 0 disables)
-  --bail <NUMBER>                     Stop test execution after the given number of failures (default: 0)
-  --retry <TIMES>                     Retry failed tests (default: 0)
-  --diff <PATH>                       DiffOptions object or path to a module exporting one
-  --exclude <GLOB>                    Additional file globs to exclude from tests
-  --expandSnapshotDiff                Show the full diff when a snapshot fails
+  --shard <shards>                    Test suite shard to execute in a format of <index>/<count>
+  --changed [since]                   Run tests that are affected by the changed files (default: false)
+  --sequence <options>                Options for how tests should be sorted. Use '--help --sequence' for more info.
+  --inspect [[host:]port]             Enable Node.js inspector (default: 127.0.0.1:9229)
+  --inspectBrk [[host:]port]          Enable Node.js inspector and break before the test starts
+  --testTimeout <timeout>             Default timeout of a test in milliseconds (default: 5000). Use 0 to disable timeout completely.
+  --hookTimeout <timeout>             Default hook timeout in milliseconds (default: 10000). Use 0 to disable timeout completely.
+  --bail <number>                     Stop test execution when given number of tests have failed (default: 0)
+  --retry <times>                     Retry the test specific number of times if it fails (default: 0). Use '--help --retry' for more info.
+  --diff <path>                       DiffOptions object or a path to a module which exports DiffOptions object. Use '--help --diff' for more info.
+  --exclude <glob>                    Additional file globs to be excluded from test
+  --expandSnapshotDiff                Show full diff when snapshot fails
   --disableConsoleIntercept           Disable automatic interception of console logging (default: false)
-  --typecheck                         Enable typechecking alongside tests (default: false)
-  --project <NAME>                    Select one or more Vitest workspace projects by name or wildcard
-  --slowTestThreshold <THRESHOLD>     Threshold for a test or suite to be considered slow (default: <duration>)
-  --teardownTimeout <TIMEOUT>         Default teardown timeout in milliseconds (default: 10000)
-  --cache                             Enable cache
-  --maxConcurrency <NUMBER>           Maximum number of concurrent tests and suites (default: 5)
-  --expect                            Configure expect matchers
+  --typecheck                         Enable typechecking alongside tests (default: false). Use '--help --typecheck' for more info.
+  --project <name>                    The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern.
+  --slowTestThreshold <threshold>     Threshold in milliseconds for a test or suite to be considered slow (default: 300)
+  --teardownTimeout <timeout>         Default timeout of a teardown function in milliseconds (default: 10000)
+  --cache                             Enable cache. Use '--help --cache' for more info.
+  --maxConcurrency <number>           Maximum number of concurrent tests and suites during test file execution (default: 5)
+  --expect                            Configuration options for expect() matches. Use '--help --expect' for more info.
   --printConsoleTrace                 Always print console stack traces
   --includeTaskLocation               Collect test and suite locations in the location property
-  --attachmentsDir <DIR>              Directory for attachments created with context.annotate (default: .vitest-attachments)
+  --attachmentsDir <dir>              The directory where attachments from context.annotate are stored in (default: .vitest-attachments)
   --run                               Disable watch mode
-  --no-color                          Remove colors from console output (default: true)
-  --clearScreen                       Clear the terminal when rerunning tests in watch mode (default: true)
-  --standalone                        Start Vitest without running tests until files change (default: false)
-  --mergeReports [PATH]               Merge previously recorded blob reports without running tests
-  --listTags [TYPE]                   List available tags; --list-tags=json outputs JSON
-  --clearCache                        Delete all Vitest caches without running tests
-  --tagsFilter <EXPRESSION>           Run only tests matching the tag expression
-  --strictTags                        Error when a test uses an undefined tag (default: true)
-  --experimental <FEATURES>           Enable experimental features
+  --no-color                          Removes colors from the console output (default: true)
+  --clearScreen                       Clear terminal screen when re-running tests during watch mode (default: true)
+  --standalone                        Start Vitest without running tests. Tests will be running only on change. If browser mode is enabled, the UI will be opened automatically. This option is ignored when CLI file filters are passed. (default: false)
+  --mergeReports [path]               Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests
+  --listTags [type]                   List all available tags instead of running tests. --list-tags=json will output tags in JSON format, unless there are no tags.
+  --clearCache                        Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run.
+  --tagsFilter <expression>           Run only tests with the specified tags. You can use logical operators && (and), || (or) and ! (not) to create complex expressions, see https://vitest.dev/guide/test-tags#syntax for more information.
+  --strictTags                        Should Vitest throw an error if test has a tag that is not defined in the config. (default: true)
+  --experimental <features>           Experimental features.. Use '--help --experimental' for more info.
   -h, --help                          Display this message
 
 Bench Options:
-  --compare <FILENAME>     Benchmark output file to compare against
-  --outputJson <FILENAME>  Benchmark output file
+  --compare <filename>     Benchmark output file to compare against
+  --outputJson <filename>  Benchmark output file
 
 List Options:
-  --json [TRUE/PATH]                Print collected tests as JSON or write to a file (default: false)
-  --filesOnly                       Print only test files without test cases
-  --staticParse                     Parse files statically instead of running them (default: false)
-  --staticParseConcurrency <LIMIT>  Number of test files to process concurrently
+  --json [true/path]                Print collected tests as JSON or write to a file (Default: false)
+  --filesOnly                       Print only test files with out the test cases
+  --staticParse                     Parse files statically instead of running them to collect tests (default: false)
+  --staticParseConcurrency <limit>  How many tests to process at the same time (default: os.availableParallelism())
 
 Examples:
   vp test
@@ -224,51 +224,51 @@ Documentation: https://viteplus.dev/guide/test
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp pack [...FILES] [OPTIONS]
+Usage: vp pack [...files] [OPTIONS]
 
 Build a library.
 Options are forwarded to Vite+ Pack.
 
 Arguments:
-  [...FILES]  Files to bundle
+  [...files]  Bundle files
 
 Options:
-  -f, --format <FORMAT>         Bundle format: esm, cjs, iife, umd (default: esm)
+  -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                       Clean output directory, --no-clean to disable
-  --deps.never-bundle <MODULE>  Mark dependencies as external
+  --deps.never-bundle <module>  Mark dependencies as external
   --minify                      Minify output
   --devtools                    Enable devtools integration
-  --debug [FEAT]                Show debug logs
-  --target <TARGET>             Bundle target, e.g "es2015", "esnext"
-  -l, --logLevel <LEVEL>        Set log level: info, warn, error, silent
+  --debug [feat]                Show debug logs
+  --target <target>             Bundle target, e.g "es2015", "esnext"
+  -l, --logLevel <level>        Set log level: info, warn, error, silent
   --fail-on-warn                Fail on warnings (default: true)
   --no-write                    Disable writing files to disk, incompatible with watch mode (default: true)
-  -d, --out-dir <DIR>           Output directory (default: dist)
+  -d, --out-dir <dir>           Output directory (default: dist)
   --treeshake                   Tree-shake bundle (default: true)
   --sourcemap                   Generate source map (default: false)
   --shims                       Enable cjs and esm shims (default: false)
-  --platform <PLATFORM>         Target platform (default: node)
+  --platform <platform>         Target platform (default: node)
   --dts                         Generate dts files
   --publint                     Enable publint (default: false)
   --attw                        Enable Are the types wrong integration (default: false)
   --unused                      Enable unused dependencies check (default: false)
-  -w, --watch [PATH]            Watch mode
-  --ignore-watch <PATH>         Ignore custom paths in watch mode
-  --from-vite [VITEST]          Reuse config from Vite or Vitest
+  -w, --watch [path]            Watch mode
+  --ignore-watch <path>         Ignore custom paths in watch mode
+  --from-vite [vitest]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
-  --env.* <VALUE>               Define compile-time env variables
-  --env-file <FILE>             Load environment variables from a file, when used together with --env, variables in --env take precedence
-  --env-prefix <PREFIX>         Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
-  --on-success <COMMAND>        Command to run on success
-  --copy <DIR>                  Copy files to output dir
-  --public-dir <DIR>            Alias for --copy, deprecated
-  --tsconfig <TSCONFIG>         Set tsconfig path
+  --env.* <value>               Define compile-time env variables
+  --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
+  --on-success <command>        Command to run on success
+  --copy <dir>                  Copy files to output dir
+  --public-dir <dir>            Alias for --copy, deprecated
+  --tsconfig <tsconfig>         Set tsconfig path
   --unbundle                    Unbundle mode
-  --root <DIR>                  Root directory of input files
+  --root <dir>                  Root directory of input files
   --exe                         Bundle as executable
-  -W, --workspace [DIR]         Enable workspace mode
-  --concurrency <COUNT>         Maximum number of Rolldown builds to run in parallel
-  -F, --filter <PATTERN>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
+  -W, --workspace [dir]         Enable workspace mode
+  --concurrency <count>         Maximum number of Rolldown builds to run in parallel
+  -F, --filter <pattern>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
   --exports                     Generate export-related metadata for package.json (experimental)
   -h, --help                    Display this message
 
