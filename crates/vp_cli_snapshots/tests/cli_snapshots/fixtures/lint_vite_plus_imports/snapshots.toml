@@ -1,0 +1,12 @@
+[[case]]
+name = "lint_vite_plus_imports"
+vp = "local"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "lint", "src/index.ts"], comment = "should fail before fix (index.ts)", continue-on-failure = true },
+  { argv = ["vp", "lint", "src/types.ts"], comment = "should fail before fix (types.ts)", continue-on-failure = true },
+  { argv = ["vp", "lint", "--fix", "src/index.ts", "src/types.ts"], comment = "rewrite vitest/@vitest imports; vite imports are preserved outside config files (issue #2004)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/index.ts"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/types.ts"], continue-on-failure = true },
+  { argv = ["vp", "lint", "src/index.ts", "src/types.ts"], comment = "confirm the rewritten files are clean", continue-on-failure = true },
+]

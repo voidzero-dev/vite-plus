@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # vitest/tsdown reference types are rewritten; vite references are preserved (issue #2004)",
-    "cat src/env.d.ts # vite references stay on vite (non-config); vitest/tsdown references become vite-plus"
-  ]
-}

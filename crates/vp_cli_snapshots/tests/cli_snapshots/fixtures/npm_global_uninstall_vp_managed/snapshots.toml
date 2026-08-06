@@ -1,0 +1,12 @@
+[[case]]
+name = "npm_global_uninstall_vp_managed"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "./npm-global-vp-managed-pkg"], comment = "Install via vp (creates managed shim)", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-vp-managed-pkg"], comment = "npm install (should warn about conflict)", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-vp-managed-pkg"], comment = "npm uninstall should NOT remove the vp-managed shim", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-vp-managed-cli"], comment = "Shim should still exist", continue-on-failure = true },
+  { argv = ["npm-global-vp-managed-cli"], comment = "Verify the shim still works", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "npm-global-vp-managed-pkg"], comment = "Cleanup", continue-on-failure = true },
+]

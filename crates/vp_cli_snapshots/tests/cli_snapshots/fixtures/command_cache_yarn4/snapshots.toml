@@ -1,0 +1,8 @@
+[[case]]
+name = "command_cache_yarn4"
+vp = "global"
+skip-platforms = ["windows", "macos"]
+steps = [
+  { argv = ["vp", "pm", "cache", "dir"], comment = "should show cache directory (uses yarn config get cacheFolder)", continue-on-failure = true },
+  { argv = ["vp", "pm", "cache", "path"], comment = "should show cache path (alias for dir, uses yarn config get cacheFolder)", continue-on-failure = true },
+]

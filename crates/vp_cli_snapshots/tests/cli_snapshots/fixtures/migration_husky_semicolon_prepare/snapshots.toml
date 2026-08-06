@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_husky_semicolon_prepare"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve a semicolon-composed Husky prepare script", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the prepare script and Husky dependency should remain", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

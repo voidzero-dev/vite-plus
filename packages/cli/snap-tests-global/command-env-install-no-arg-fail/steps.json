@@ -1,5 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "env": {},
-  "commands": ["vp env install # No version config - should error"]
-}

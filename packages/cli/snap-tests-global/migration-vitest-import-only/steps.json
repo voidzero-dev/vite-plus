@@ -1,9 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # ordinary vitest imports should migrate without retaining direct vitest",
-    "cat package.json # direct dependency and shared pin should be removed",
-    "cat example.spec.ts # source import should use the Vite+ public surface",
-    "cat pnpm-workspace.yaml"
-  ]
-}

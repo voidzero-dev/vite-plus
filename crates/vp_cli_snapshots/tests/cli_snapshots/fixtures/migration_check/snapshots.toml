@@ -1,0 +1,6 @@
+[[case]]
+name = "migration_check"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--help"], comment = "show help", continue-on-failure = true },
+]

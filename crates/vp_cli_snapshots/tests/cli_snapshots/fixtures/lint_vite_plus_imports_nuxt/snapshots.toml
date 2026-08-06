@@ -1,0 +1,11 @@
+[[case]]
+name = "lint_vite_plus_imports_nuxt"
+vp = "local"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "lint", "--threads=1", "src/nuxt.spec.ts", "src/unit.spec.ts"], comment = "bare Vitest imports are exempt in this Nuxt package; the non-config Vite import is preserved (issue #2004); @vitest/browser (not upstream Vitest) still fails", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "--fix", "src/nuxt.spec.ts", "src/unit.spec.ts"], comment = "fix @vitest/browser without touching upstream Vitest or the preserved Vite import", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/nuxt.spec.ts"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/unit.spec.ts"], continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "src/nuxt.spec.ts", "src/unit.spec.ts"], comment = "confirm the package-level compatible result is clean", continue-on-failure = true },
+]

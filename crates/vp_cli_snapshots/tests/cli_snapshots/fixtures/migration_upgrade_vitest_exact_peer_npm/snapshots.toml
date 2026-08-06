@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_upgrade_vitest_exact_peer_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "exact @vitest peers require a package-local vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "ecosystem packages and vitest should align to the bundled version", continue-on-failure = true },
+]

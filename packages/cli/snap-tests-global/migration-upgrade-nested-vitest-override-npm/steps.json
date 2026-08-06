@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # nested Vitest override is user-owned and not pending removal",
-    "cat package.json # object-valued override is preserved",
-    "vp migrate --no-interactive # nested override must not make migration permanently pending"
-  ]
-}

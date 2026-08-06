@@ -1,9 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # existing Vite+ workspace packages should be reconciled",
-    "cat package.json # root should not gain a direct vitest",
-    "cat packages/app/package.json # only the peer consumer should gain local vitest",
-    "cat pnpm-workspace.yaml # shared vitest config should exist for the consuming package"
-  ]
-}

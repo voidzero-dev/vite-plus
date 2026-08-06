@@ -1,0 +1,14 @@
+[[case]]
+name = "command_why_pnpm10_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "-w"], comment = "should check why in workspace root", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--filter", "app"], comment = "should check why in specific package", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-package", "-D", "--filter", "app"], comment = "should check why dev dependencies in app", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--filter", "*"], comment = "should check why in all packages", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "-r"], comment = "should check why recursively", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--filter", "app", "--json"], comment = "should support json output with filter", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-install", "--filter", "app", "--depth", "1"], comment = "should support depth limiting with filter", continue-on-failure = true },
+]

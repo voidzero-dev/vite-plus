@@ -1,0 +1,7 @@
+[[case]]
+name = "vite_plugins_run_verbatim_build"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "dist/index.html", "run-verbatim-plugin-injected"], comment = "a verbatim build task under vp run should still load vite plugins" },
+]

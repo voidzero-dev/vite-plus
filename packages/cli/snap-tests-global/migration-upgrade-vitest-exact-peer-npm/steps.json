@@ -1,7 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # exact @vitest peers require a package-local vitest",
-    "cat package.json # ecosystem packages and vitest should align to the bundled version"
-  ]
-}

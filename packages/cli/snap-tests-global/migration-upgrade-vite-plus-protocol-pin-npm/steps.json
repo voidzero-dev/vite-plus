@@ -1,7 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # deliberate vite-plus protocol pin must survive bootstrap",
-    "cat package.json # file pin should remain while stale vitest config is removed"
-  ]
-}

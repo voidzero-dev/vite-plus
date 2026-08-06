@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive --no-hooks # vite-plus declared in dependencies must NOT be duplicated into devDependencies",
-    "cat package.json # vite-plus stays in dependencies (normalized to catalog:); no duplicate devDependencies entry",
-    "cat pnpm-workspace.yaml # the catalog carries the managed vite-plus version that the dependencies catalog: ref resolves to"
-  ]
-}

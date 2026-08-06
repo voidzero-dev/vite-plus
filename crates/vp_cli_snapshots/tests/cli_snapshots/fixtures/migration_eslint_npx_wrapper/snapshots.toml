@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_eslint_npx_wrapper"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should rewrite bare and bunx eslint but leave other wrappers unchanged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check eslint removed, bare and bunx eslint rewritten, npx/pnpm exec unchanged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "eslint.config.mjs", "--assert-not", "file"], comment = "check eslint config is removed", continue-on-failure = true },
+]

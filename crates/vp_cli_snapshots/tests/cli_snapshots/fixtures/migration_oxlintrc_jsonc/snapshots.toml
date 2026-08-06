@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_oxlintrc_jsonc"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect .oxlintrc.jsonc and .oxfmtrc.jsonc", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.jsonc", "--assert-not", "file"], comment = "check .oxlintrc.jsonc is removed", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.jsonc", "--assert-not", "file"], comment = "check .oxfmtrc.jsonc is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

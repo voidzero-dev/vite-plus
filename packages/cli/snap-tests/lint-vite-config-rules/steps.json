@@ -1,3 +1,0 @@
-{
-  "commands": ["vp lint # Test that vp lint reads rules from vite.config.ts"]
-}

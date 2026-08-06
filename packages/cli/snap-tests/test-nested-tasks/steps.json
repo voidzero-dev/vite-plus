@@ -1,3 +1,0 @@
-{
-  "commands": ["vp run script1 # simple task", "vp run script2 # nested task should work"]
-}

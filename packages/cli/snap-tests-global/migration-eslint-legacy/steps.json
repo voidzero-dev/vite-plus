@@ -1,3 +1,0 @@
-{
-  "commands": ["vp migrate --no-interactive # should show legacy eslint config warning"]
-}

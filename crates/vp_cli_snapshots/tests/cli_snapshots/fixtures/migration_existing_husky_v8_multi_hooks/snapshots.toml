@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_existing_husky_v8_multi_hooks"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should warn about husky v8 and skip hooks setup", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "husky/lint-staged should remain in devDeps, prepare should stay as husky", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/pre-commit"], comment = "hook file should be unchanged (still has bootstrap)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".husky/commit-msg"], comment = "hook file should be unchanged (still has bootstrap)", continue-on-failure = true },
+]

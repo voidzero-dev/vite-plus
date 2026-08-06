@@ -1,7 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "cd node && test \"$(npm --version)\" = \"$(node ../print-version.js)\" && node ../print-path.js",
-    "cd specific && test \"$(npm --version)\" = \"$(node ../print-version.js)\" && test \"$(node ../print-version.js)\" = \"$(node ./print-package-json-pm-version.js)\" && node ../print-path.js"
-  ]
-}

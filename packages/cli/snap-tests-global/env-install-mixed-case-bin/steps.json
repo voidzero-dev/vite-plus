@@ -1,4 +1,0 @@
-{
-  "commands": ["vp install -g .", "MixedCaseBin"],
-  "after": ["vp remove -g env-install-mixed-case-bin"]
-}

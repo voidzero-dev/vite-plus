@@ -1,0 +1,75 @@
+# migration_eslint_rerun_dual_config
+
+## `vp migrate --no-interactive`
+
+should detect vite-plus + eslint and auto-migrate eslint
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+◇ Updated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• Dependencies:
+    vite-plus  latest → <version>
+    vite              → <version>
+• Package manager settings configured
+• Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
+```
+
+## `vpt print-file package.json`
+
+check eslint removed and scripts rewritten
+
+```
+{
+  "name": "migration-eslint-rerun-dual-config",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<version>",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+## `vpt stat-file eslint.config.mjs --assert-not file`
+
+check flat config is removed
+
+**Exit code:** 1
+
+```
+eslint.config.mjs: file
+stat-file assertion failed
+```
+
+## `vpt stat-file .eslintrc --assert-not file`
+
+check legacy config is also removed
+
+**Exit code:** 1
+
+```
+.eslintrc: file
+stat-file assertion failed
+```
+
+## `vpt print-file vite.config.ts`
+
+check oxlint config merged into vite.config.ts
+
+**Exit code:** 1
+
+```
+vite.config.ts: not found
+missing file
+```

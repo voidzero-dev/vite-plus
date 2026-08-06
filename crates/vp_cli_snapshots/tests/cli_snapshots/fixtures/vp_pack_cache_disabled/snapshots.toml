@@ -1,0 +1,9 @@
+[[case]]
+name = "vp_pack_cache_disabled"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "hello#build"], comment = "first build", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/hello/dist"], comment = "should have the library", continue-on-failure = true },
+  { argv = ["vp", "run", "hello#build"], comment = "cache disabled, no cache hit", continue-on-failure = true },
+  { argv = ["vp", "run", "hello#build"], comment = "should show cache disabled", continue-on-failure = true },
+]

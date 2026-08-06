@@ -1,0 +1,18 @@
+# command_staged_no_config
+
+## `vp staged`
+
+should warn about missing staged config and exit with code 1
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+error: No "staged" config found in vite.config.ts. Please add a staged config:
+
+  // vite.config.ts
+  export default defineConfig({
+    staged: { '*': 'vp check --fix' },
+  });
+```

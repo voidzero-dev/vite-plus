@@ -1,0 +1,6 @@
+[[case]]
+name = "shim_recursive_npm_run"
+vp = "global"
+steps = [
+  { argv = ["npm", "run", "outer"], comment = "Outer script calls npm run inner recursively", continue-on-failure = true },
+]

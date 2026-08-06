@@ -1,0 +1,10 @@
+[[case]]
+name = "command_config_pnpm11"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "config", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "list", "--location", "project"], comment = "should list all project configuration", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "set", "vitePlusPmConfigTestKey", "test-value", "--location", "project"], comment = "should set config value in project scope", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "get", "vitePlusPmConfigTestKey", "--location", "project"], comment = "should get config value from project scope", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "delete", "vitePlusPmConfigTestKey", "--location", "project"], comment = "should delete config key from project scope", continue-on-failure = true },
+]

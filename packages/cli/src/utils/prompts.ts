@@ -244,6 +244,7 @@ export async function upgradeYarn(cwd: string, interactive?: boolean, silent = f
 export async function promptGitHooks(options: {
   hooks?: boolean;
   interactive: boolean;
+  message?: string;
 }): Promise<boolean> {
   if (options.hooks === false) {
     return false;
@@ -254,6 +255,7 @@ export async function promptGitHooks(options: {
   if (options.interactive) {
     const selected = await prompts.confirm({
       message:
+        options.message ??
         'Set up pre-commit hooks to run formatting, linting, and type checking with auto-fixes?',
       initialValue: true,
     });

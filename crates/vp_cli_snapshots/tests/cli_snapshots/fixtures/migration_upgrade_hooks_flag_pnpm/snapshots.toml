@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_upgrade_hooks_flag_pnpm"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--hooks", "--no-interactive"], comment = "existing Vite+ project: upgrade plus only the git hooks action", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "hooks configured to .vite-hooks/_", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "pre-commit hook runs vp staged", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".nvmrc", "--assert", "file"], comment = "node version file is not migrated without --full", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".node-version", "--assert-not", "file"], comment = "only the hooks action ran", continue-on-failure = true },
+]

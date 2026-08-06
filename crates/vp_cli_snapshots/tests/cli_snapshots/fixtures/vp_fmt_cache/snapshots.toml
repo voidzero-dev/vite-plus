@@ -1,0 +1,7 @@
+[[case]]
+name = "vp_fmt_cache"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "fmt"], comment = "first run populates the cache", continue-on-failure = true },
+  { argv = ["vp", "run", "fmt"], comment = "second run should be a cache hit", continue-on-failure = true },
+]

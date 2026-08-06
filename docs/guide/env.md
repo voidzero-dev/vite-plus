@@ -6,12 +6,16 @@
 
 Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
 
-The project Node.js version is resolved from these sources, in priority order:
+Vite+ checks the current directory first, then walks up through its parents. The nearest directory
+with a supported declaration wins. Within each directory, sources are checked in this order:
 
-1. `.node-version` file (current or parent directories)
+1. `.node-version` file
 2. `devEngines.runtime` in `package.json` (the [devEngines standard](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines))
 3. `engines.node` in `package.json`
-4. The global default (`vp env default`), then the latest LTS
+4. `.nvmrc` file
+
+If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the
+latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
@@ -64,6 +68,16 @@ Open the profile file for editing:
 Invoke-Item $PROFILE
 ```
 
+Windows Command Prompt (`cmd.exe`) cannot define the wrapper function needed for `vp env use` to update the current shell session. Use the generated `vp-use.cmd` command instead:
+
+```batch
+vp-use 20
+node --version
+vp-use --unset
+```
+
+Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 
 ### Manage
@@ -74,6 +88,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 - `vp env use` sets a Node.js version for the current shell session
 - `vp env install` installs a Node.js version
 - `vp env uninstall` removes an installed Node.js version
+- `vp env clean` removes unused managed Node.js runtimes, all downloaded package managers, and the Corepack cache.
 - `vp env exec` runs a command with a specific Node.js version
 - `vp node` runs a Node.js script — shorthand for `vp env exec node`
 
@@ -101,10 +116,11 @@ vp env print                  # Print shell snippet for this session
 
 # Manage
 vp env pin lts                # Pin the project to the latest LTS release
-vp env install                # Install the version from .node-version or package.json
+vp env install                # Install the version from .node-version, package.json, or .nvmrc
 vp env default lts            # Set the global default version
 vp env use 20                 # Use Node.js 20 for the current shell session
 vp env use --unset            # Remove the session override
+vp env clean                  # Remove unused managed caches
 
 # Inspect
 vp env current                # Show current resolved environment

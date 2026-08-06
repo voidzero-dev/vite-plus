@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # plugin referenced via lint.jsPlugins must be preserved through cleanup AND sanitization",
-    "cat package.json # eslint-plugin-survives stays in devDependencies (eslint itself is removed)",
-    "cat vite.config.ts # lint.jsPlugins keeps `eslint-plugin-survives`; lint.rules keeps `survives/no-fiction`"
-  ]
-}

@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp run build # synthetic build (vp build) should have cache disabled without cacheScripts"
-  ]
-}

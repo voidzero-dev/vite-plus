@@ -1631,11 +1631,16 @@ export declare class BindingDevEngine {
   getBundleState(): Promise<BindingBundleState>;
   ensureLatestBuildOutput(): Promise<BindingResult<undefined>>;
   triggerFullBuild(): void;
-  invalidate(
-    caller: string,
-    firstInvalidatedBy?: string | undefined | null,
-  ): Promise<BindingResult<Array<BindingClientHmrUpdate>>>;
-  registerModules(clientId: string, modules: Array<string>): Promise<void>;
+  /**
+   * Client-connect signal (the clientId hello): creates the per-client session
+   * with an empty ship map. Reconnects arrive as fresh clientIds.
+   */
+  registerClient(clientId: string): Promise<void>;
+  /**
+   * Delivery notification from the serving middleware: the response for
+   * `filename` completed, so record its modules as shipped to that client.
+   */
+  notifyPayloadDelivered(filename: string): Promise<void>;
   removeClient(clientId: string): Promise<void>;
   close(): Promise<void>;
   /**
@@ -1645,7 +1650,7 @@ export declare class BindingDevEngine {
    * The module was previously stubbed with a proxy, and now we need to compile the
    * actual module and its dependencies.
    */
-  compileEntry(moduleId: string, clientId: string): Promise<string>;
+  compileEntry(moduleId: string, clientId: string): Promise<BindingLazyChunkOutput>;
 }
 
 export declare class BindingLoadPluginContext {
@@ -2132,6 +2137,7 @@ export interface BindingDevtoolsOptions {
 }
 
 export interface BindingDevWatchOptions {
+  enabled?: boolean;
   skipWrite?: boolean;
   usePolling?: boolean;
   pollInterval?: number;
@@ -2327,7 +2333,9 @@ export interface BindingEsmExternalRequirePluginConfig {
 export interface BindingExperimentalDevModeOptions {
   host?: string;
   port?: number;
-  implement?: string;
+  implement: string;
+  /** @deprecated Common runtime injection will be disabled by default in the future. */
+  skipCommonRuntimeInjection?: boolean;
   lazy?: boolean;
 }
 
@@ -2355,19 +2363,18 @@ export interface BindingGeneratedCodeOptions {
   preset?: string;
 }
 
-export interface BindingHmrBoundaryOutput {
-  boundary: string;
-  acceptedVia: string;
-}
-
 export type BindingHmrUpdate =
   | {
       type: 'Patch';
       code: string;
       filename: string;
       sourcemap?: string;
-      sourcemapFilename?: string;
-      hmrBoundaries: Array<BindingHmrBoundaryOutput>;
+      sourcemapFilename?: string /**
+       * Stable ids of the changed modules — the `changedIds` of the push envelope.
+       * The client walks from these on its own graph.
+       */;
+      changedIds: Array<string> /** Per-client envelope sequence number. */;
+      seq: number;
     }
   | { type: 'FullReload'; reason?: string }
   | { type: 'Noop' };
@@ -2384,6 +2391,23 @@ export interface BindingHookJsLoadOutput {
 
 export interface BindingHookJsResolveIdOptions {
   isEntry?: boolean;
+  /**
+   * - `import-statement`: `import { foo } from './lib.js';`
+   * - `dynamic-import`: `import('./lib.js')`
+   * - `require-call`: `require('./lib.js')`
+   * - `import-rule`: `@import 'bg-color.css'`
+   * - `url-token`: `url('./icon.png')`
+   * - `new-url`: `new URL('./worker.js', import.meta.url)`
+   * - `hot-accept`: `import.meta.hot.accept('./lib.js', () => {})`
+   */
+  kind?:
+    | 'import-statement'
+    | 'dynamic-import'
+    | 'require-call'
+    | 'import-rule'
+    | 'url-token'
+    | 'new-url'
+    | 'hot-accept';
   scan?: boolean;
   custom?: BindingVitePluginCustom;
 }
@@ -2408,6 +2432,24 @@ export interface BindingHookRenderChunkOutput {
    * omitting the field, which mirrors Rollup's "possibly broken" semantics).
    */
   map?: BindingSourcemap | null;
+}
+
+export interface BindingHookResolveFileUrlArgs {
+  /** Preliminary filename of the chunk containing the reference. */
+  chunkId: string;
+  /** Filename of the emitted file, relative to the output directory. */
+  fileName: string;
+  format: 'es' | 'cjs' | 'iife' | 'umd';
+  /** Id of the module containing the `import.meta.ROLLDOWN_FILE_URL_*` reference. */
+  moduleId: string;
+  referenceId: string;
+  /** Path from the chunk to the emitted file. */
+  relativePath: string;
+  /**
+   * The `<urlId>` of `import.meta.ROLLDOWN_FILE_URL_<referenceId>_<urlId>`, if present.
+   * Only the rolldown-specific form carries it; the `ROLLUP_FILE_URL_` alias never does.
+   */
+  urlId?: string;
 }
 
 export interface BindingHookResolveIdExtraArgs {
@@ -2455,6 +2497,14 @@ export interface BindingHookTransformOutput {
    */
   map?: BindingSourcemap | null;
   moduleType?: string;
+}
+
+export interface BindingHotUpdateArgs {
+  kind: 'create' | 'update' | 'delete';
+  /** Normalized absolute path of the changed file. */
+  file: string;
+  /** The affected module ids as currently computed (raw module ids). */
+  modules: Array<string>;
 }
 
 export interface BindingIndentOptions {
@@ -2510,6 +2560,8 @@ export interface BindingInputOptions {
   keepNames?: boolean;
   checks?: BindingChecksOptions;
   deferSyncScanData?: undefined | (() => BindingDeferSyncScanData[]);
+  /** Asked for while the build is closing, so what it returns includes `closeBundle`. */
+  pluginTimings?: undefined | (() => BindingPluginTimingsMeasurement);
   makeAbsoluteExternalsRelative?: BindingMakeAbsoluteExternalsRelative;
   devtools?: BindingDevtoolsOptions;
   invalidateJsSideCache?: () => void;
@@ -2536,6 +2588,22 @@ export interface BindingJsonSourcemap {
 
 export interface BindingJsWatchChangeEvent {
   event: string;
+}
+
+/**
+ * The client-facing slice of a lazy-compile result. The carried modules and
+ * stamps stay server-side as the engine's pending-payload entry.
+ */
+export interface BindingLazyChunkOutput {
+  code: string;
+  filename: string;
+  /**
+   * The chunk's sourcemap, when `sourcemap` is `File` or `Hidden`. Serve it
+   * under `sourcemapFilename`, which is what the chunk's `sourceMappingURL`
+   * refers to.
+   */
+  sourcemap?: string;
+  sourcemapFilename?: string;
 }
 
 export interface BindingLog {
@@ -2678,6 +2746,8 @@ export interface BindingOutputs {
 
 export interface BindingOverwriteOptions {
   contentOnly?: boolean;
+  /** Stores the replaced content in the generated sourcemap's `names` field. */
+  storeName?: boolean;
 }
 
 export interface BindingPluginContextResolvedId {
@@ -2772,6 +2842,11 @@ export interface BindingPluginOptions {
     chunk: BindingRenderedChunk,
   ) => MaybePromise<void | string>;
   augmentChunkHashMeta?: BindingPluginHookMeta;
+  resolveFileUrl?: (
+    ctx: BindingPluginContext,
+    args: BindingHookResolveFileUrlArgs,
+  ) => MaybePromise<void | string | null>;
+  resolveFileUrlMeta?: BindingPluginHookMeta;
   renderStart?: (ctx: BindingPluginContext, opts: BindingNormalizedOptions) => void;
   renderStartMeta?: BindingPluginHookMeta;
   renderError?: (ctx: BindingPluginContext, error: BindingError[]) => void;
@@ -2797,6 +2872,11 @@ export interface BindingPluginOptions {
     event: string,
   ) => MaybePromise<VoidNullable>;
   watchChangeMeta?: BindingPluginHookMeta;
+  hotUpdate?: (
+    ctx: BindingPluginContext,
+    args: BindingHotUpdateArgs,
+  ) => MaybePromise<VoidNullable<Array<string>>>;
+  hotUpdateMeta?: BindingPluginHookMeta;
   closeWatcher?: (ctx: BindingPluginContext) => MaybePromise<VoidNullable>;
   closeWatcherMeta?: BindingPluginHookMeta;
   banner?: (ctx: BindingPluginContext, chunk: BindingRenderedChunk) => void;
@@ -2812,6 +2892,33 @@ export interface BindingPluginOptions {
 export declare const enum BindingPluginOrder {
   Pre = 0,
   Post = 1,
+}
+
+/**
+ * What one callback cost, measured inside it on the JavaScript side — the one place the
+ * measurement exists, since this side can only bracket dispatch and completion.
+ */
+export interface BindingPluginTiming {
+  /** The plugin the callback belongs to, or the options it was configured on. */
+  owner: string;
+  kind: 'plugin' | 'outputOption' | 'inputOption';
+  hook: string;
+  calls: number;
+  ms: number;
+  maxInFlight: number;
+  /** How much of `ms` is double counted because calls overlapped. */
+  overlapMs: number;
+  /**
+   * Whether `ms` may be compared against another row's — false once two calls of this hook
+   * overlapped, because then their spans cover work each other was doing.
+   */
+  rankable: boolean;
+}
+
+export interface BindingPluginTimingsMeasurement {
+  /** Wall time in which any measured callback was running, counting overlap once. */
+  busyMs: number;
+  rows: Array<BindingPluginTiming>;
 }
 
 export interface BindingPluginWithIndex {
@@ -2843,8 +2950,7 @@ export declare const enum BindingPropertyWriteSideEffects {
 
 export declare const enum BindingRebuildStrategy {
   Always = 0,
-  Auto = 1,
-  Never = 2,
+  Never = 1,
 }
 
 export interface BindingReplacePluginConfig {
@@ -2970,6 +3076,8 @@ export interface BindingTsconfigResult {
 
 export interface BindingUpdateOptions {
   overwrite?: boolean;
+  /** Stores the replaced content in the generated sourcemap's `names` field. */
+  storeName?: boolean;
 }
 
 export interface BindingViteAliasPluginAlias {
@@ -3189,7 +3297,6 @@ export interface JsOutputChunk {
   map?: BindingSourcemap;
   sourcemapFilename?: string;
   preliminaryFilename: string;
-  preliminarySourcemapFilename?: string;
 }
 
 /** Error emitted from native side, it only contains kind and message, no stack trace. */
@@ -3230,19 +3337,14 @@ export declare function resolveTsconfig(
 ): BindingTsconfigResult | null;
 
 /**
- * Shutdown the tokio runtime manually.
+ * Release one holder of the tokio runtime, shutting it down once none are left.
  *
  * This is required for the wasm target with `tokio_unstable` cfg.
  * In the wasm runtime, the `park` threads will hang there until the tokio::Runtime is shutdown.
  */
 export declare function shutdownAsyncRuntime(): void;
 
-/**
- * Start the async runtime manually.
- *
- * This is required when the async runtime is shutdown manually.
- * Usually it's used in test.
- */
+/** Acquire one holder of the tokio runtime, starting it if it is not running. */
 export declare function startAsyncRuntime(): void;
 
 export interface ViteImportGlobMeta {
@@ -3365,6 +3467,9 @@ export interface DownloadPackageManagerResult {
   packageName: string;
   version: string;
 }
+
+/** Re-enable blocking stdio after Node.js has initialized its lazy standard streams. */
+export declare function ensureBlockingStdio(): void;
 
 /**
  * Whether `config_key` is already declared as a top-level property in the
@@ -3559,7 +3664,7 @@ export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): 
  * Main entry point for the CLI, called from JavaScript.
  *
  * This is an async function that spawns a new thread for the non-Send async code
- * from vite_task, while allowing the NAPI async context to continue running
+ * from vt, while allowing the NAPI async context to continue running
  * and process JavaScript callbacks (via ThreadsafeFunction).
  */
 export declare function run(options: CliOptions): Promise<number>;
@@ -3567,7 +3672,7 @@ export declare function run(options: CliOptions): Promise<number>;
 /**
  * Run a command with fspy tracking, callable from JavaScript.
  *
- * This function wraps `vite_command::run_command_with_fspy` to provide
+ * This function wraps `vp_command::run_command_with_fspy` to provide
  * a JavaScript-friendly interface for executing commands and tracking
  * their file system accesses.
  *
@@ -3637,7 +3742,7 @@ export interface RunCommandResult {
 /**
  * Whether the Vite+ banner should be emitted in the current environment.
  *
- * Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+ * Mirrors `vp_shared::header::should_print_header` so both CLIs apply
  * the same TTY + git-hook gating without duplicating the rules in JS.
  */
 export declare function shouldPrintVitePlusHeader(): boolean;

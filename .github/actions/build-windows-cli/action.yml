@@ -79,7 +79,7 @@ runs:
     - name: Build Rust CLI binaries
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vite_global_cli -p vite_trampoline -p vite_installer
+      run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vp_global_cli -p vp_trampoline -p vp_installer
       env:
         XWIN_ACCEPT_LICENSE: '1'
         CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH

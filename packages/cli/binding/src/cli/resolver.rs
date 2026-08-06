@@ -1,11 +1,11 @@
 use std::{env, ffi::OsStr, iter, sync::Arc};
 
 use rustc_hash::FxHashMap;
-use vite_path::AbsolutePath;
-use vite_str::Str;
-use vite_task::config::user::{
+use vt::config::user::{
     AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
 };
+use vt_path::AbsolutePath;
+use vt_str::Str;
 
 use super::{
     help::should_prepend_vitest_run,

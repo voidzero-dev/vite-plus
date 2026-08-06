@@ -1,0 +1,7 @@
+[[case]]
+name = "command_upgrade_check"
+vp = "global"
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "upgrade", "--check", "--tag", "alpha"], comment = "alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)", continue-on-failure = true },
+]

@@ -1,0 +1,19 @@
+[[case]]
+name = "env_node_child_process_npm"
+vp = "global"
+skip-platforms = ["windows"]
+comment = """
+The legacy case compared `$(npm --version)` against a node child process's
+`npm --version` via shell command substitution. There is no shell, but both
+projects pin the resolution deterministically (node/ pins the runtime, so its
+bundled npm version is fixed; specific/ pins devEngines.packageManager), so the
+snapshot itself asserts the resolved versions, and print-path.js asserts the
+child process resolves npm to the vp shim.
+"""
+steps = [
+  { argv = ["node", "../print-version.js"], cwd = "node", comment = "child-process npm is the pinned runtime's bundled npm", continue-on-failure = true },
+  { argv = ["node", "../print-path.js"], cwd = "node", comment = "child-process npm resolves to the vp shim", continue-on-failure = true },
+  { argv = ["node", "../print-version.js"], cwd = "specific", comment = "child-process npm is the devEngines.packageManager pin", continue-on-failure = true },
+  { argv = ["node", "./print-package-json-pm-version.js"], cwd = "specific", comment = "the pin itself, for comparison with the step above", continue-on-failure = true },
+  { argv = ["node", "../print-path.js"], cwd = "specific", comment = "child-process npm resolves to the vp shim", continue-on-failure = true },
+]

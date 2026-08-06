@@ -1,0 +1,6 @@
+[[case]]
+name = "vite_plugins_async_test"
+vp = "local"
+steps = [
+  { argv = ["vp", "test"], comment = "async plugins factory should load vitest plugin with configureVitest hook", continue-on-failure = true },
+]

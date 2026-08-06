@@ -26,7 +26,7 @@ A shim-based approach where:
 - Shims (`node`, `npm`, `npx`, `corepack`) are symlinks to the `vp` binary (Unix) or trampoline `.exe` files (Windows)
 - The `vp` CLI itself is also in `VP_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
-- Version resolution and installation leverage existing `vite_js_runtime` infrastructure
+- Version resolution and installation leverage existing `vp_js_runtime` infrastructure
 
 ## Command Usage
 
@@ -179,7 +179,12 @@ vp env install latest
 
 # Uninstall a Node.js version
 vp env uninstall 20.18.0
+
+# Clean unused managed caches
+vp env clean
 ```
+
+`vp env clean` removes all locally installed Node.js runtimes except the current resolved version and the configured default version. It also removes all downloaded Vite+ package-manager installs under `~/.vite-plus/package_manager` and runs `corepack cache clean` to clear Corepack-managed package-manager downloads.
 
 ### Global Package Commands
 
@@ -617,7 +622,7 @@ lts/iron
 ### File Structure
 
 ```
-crates/vite_global_cli/
+crates/vp_global_cli/
 ├── src/
 │   ├── main.rs                       # Entry point with shim detection
 │   ├── cli.rs                        # Add Env command
@@ -1776,7 +1781,7 @@ User runs: npm install -g codex
              ▼
 ┌───────────────────────────────────────────────────────────┐
 │  dispatch("npm", ["install", "-g", "codex"])               │
-│  (crates/vite_global_cli/src/shim/dispatch.rs)             │
+│  (crates/vp_global_cli/src/shim/dispatch.rs)             │
 │                                                             │
 │  1–5. vpx / recursion / bypass / shim / core checks        │
 │  6. resolve version    → 20.18.0                           │
@@ -2132,6 +2137,27 @@ $ vp env list-remote --json
 }
 ```
 
+## Clean Command
+
+The `vp env clean` command reclaims space used by managed runtime and package-manager downloads.
+
+### Behavior
+
+- Preserves the Node.js version currently resolved for the working directory.
+- Preserves the configured global default Node.js version, when one is set.
+- Removes every other directory under `~/.vite-plus/js_runtime/node/`.
+- Removes all downloaded package-manager installs under `~/.vite-plus/package_manager/`.
+- Runs `corepack cache clean` so Corepack-managed package-manager downloads are removed too.
+
+### Example
+
+```bash
+$ vp env clean
+✓ Cleaned Corepack cache
+✓ Removed 2 Node.js runtimes
+✓ Removed 4 package manager installs
+```
+
 ### Current Command (JSON)
 
 ```bash
@@ -2163,7 +2189,7 @@ $ vp env --current --json
 | ------------------------ | ----------------------------------------------------------------------------------------------- | -------------- |
 | `VP_HOME`                | Base directory for bin and config                                                               | `~/.vite-plus` |
 | `VP_NODE_VERSION`        | Session override for Node.js version (set by `vp env use`)                                      | unset          |
-| `VITE_LOG`               | Log level: debug, info, warn, error                                                             | `warn`         |
+| `VP_LOG`                 | Log level: debug, info, warn, error                                                             | `warn`         |
 | `VP_DEBUG_SHIM`          | Enable extra shim diagnostics                                                                   | unset          |
 | `VP_BYPASS`              | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
 | `VP_TOOL_RECURSION`      | **Internal**: Prevents shim recursion                                                           | unset          |
@@ -2331,8 +2357,9 @@ env-doctor/
 9. Implement `vp env pin [version]` for per-directory version pinning
 10. Implement `vp env unpin` as alias for `pin --unpin`
 11. Implement `vp env list` (local) and `vp env list-remote` (remote) to show versions
-12. Implement recursion prevention (`VP_TOOL_RECURSION`)
-13. Implement `vp env exec --node <version>` command
+12. Implement `vp env clean` to remove unused managed runtime and package-manager caches
+13. Implement recursion prevention (`VP_TOOL_RECURSION`)
+14. Implement `vp env exec --node <version>` command
 
 ### Phase 2: Full Tool Support (P1)
 

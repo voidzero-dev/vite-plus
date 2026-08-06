@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # npmx.dev shape: existing Vite+ upgrade, concrete @vitest/* should move into the catalog",
-    "cat package.json # @vitest/browser-playwright and @vitest/coverage-v8 should become catalog:",
-    "cat pnpm-workspace.yaml # the default catalog should own the aligned @vitest/* packages"
-  ]
-}

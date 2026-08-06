@@ -1,0 +1,13 @@
+[[case]]
+name = "migration_partially_installed_vite_plus"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "should finish core rewrites even when vite-plus is already installed in a pnpm project", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "scripts should be rewritten without adding package.json overrides", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "pnpm overrides and peerDependencyRules should be configured", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "vite imports should be rewritten", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsconfig.app.json"], comment = "vite/client is preserved (issue #2004: tsconfig is not a vite.config)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "AGENTS.md", "--assert-not", "file"], comment = "disabled agent setup should not write instructions", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks", "--assert-not", "dir"], comment = "disabled hook setup should not write hooks", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vscode", "--assert-not", "dir"], comment = "disabled editor setup should not write editor config", continue-on-failure = true },
+]

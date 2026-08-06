@@ -26,7 +26,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
+import { accent, formatDuration, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -62,6 +62,7 @@ import {
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   type Framework,
   type NodeVersionManagerDetection,
@@ -314,8 +315,8 @@ const helpMessage = renderCliDoc({
         '',
         '  Command mapping:',
         '  - `vp run <script>` is the equivalent of `pnpm run <script>`',
-        '  - `vp test` runs the built-in test command, while `vp run test` runs the',
-        '    `test` script from `package.json`',
+        '  - `vp dev` and `vp test` always run the built-ins; `vp run dev` and',
+        '    `vp run test` run the `dev` and `test` scripts from `package.json`',
         '  - `vp install`, `vp add`, and `vp remove` delegate through the package',
         '    manager declared by `packageManager`',
         '  - `vp dev`, `vp build`, `vp preview`, `vp lint`, `vp fmt`, `vp check`,',
@@ -556,17 +557,6 @@ async function collectMigrationPlan(
   };
 
   return plan;
-}
-
-function formatDuration(durationMs: number) {
-  if (durationMs < 1000) {
-    return `${Math.max(1, durationMs)}ms`;
-  }
-  const durationSeconds = durationMs / 1000;
-  if (durationSeconds < 10) {
-    return `${durationSeconds.toFixed(1)}s`;
-  }
-  return `${Math.round(durationSeconds)}s`;
 }
 
 /**
@@ -915,10 +905,14 @@ async function executeMigrationPlan(
     }
   }
 
-  // 6. Skip staged migration when hooks are disabled (--no-hooks or preflight failed).
-  // Without hooks, lint-staged config must stay in package.json so existing
-  // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
-  const skipStagedMigration = !plan.shouldSetupHooks;
+  // Preserve lint-staged whenever hook setup is disabled/unsafe or existing
+  // project-owned hooks remain authoritative.
+  const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+    workspaceInfo.rootDir,
+    plan.shouldSetupHooks,
+    plan.packageManager,
+    workspaceInfo.packages,
+  );
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
@@ -937,7 +931,13 @@ async function executeMigrationPlan(
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
-    installGitHooks(workspaceInfo.rootDir, true, report, plan.packageManager);
+    installGitHooks(
+      workspaceInfo.rootDir,
+      true,
+      report,
+      plan.packageManager,
+      workspaceInfo.packages,
+    );
   }
 
   // 9. Write agent instructions (using pre-resolved decisions)
@@ -1398,7 +1398,15 @@ async function main() {
     if (plan.shouldSetupHooks) {
       await ensureExistingPackageManager();
       updateMigrationProgress('Configuring git hooks');
-      if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
+      if (
+        installGitHooks(
+          workspaceInfoOptional.rootDir,
+          true,
+          report,
+          packageManager,
+          workspaceInfoOptional.packages,
+        )
+      ) {
         didMigrate = true;
         needsInstall = true;
       }

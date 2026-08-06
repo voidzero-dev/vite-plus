@@ -1,0 +1,10 @@
+[[case]]
+name = "npm_install_with_options"
+vp = "local"
+steps = [
+  { argv = ["vp", "install", "--help"], comment = "print help message", continue-on-failure = true },
+  { argv = ["vp", "run", "install"], comment = "https://docs.npmjs.com/cli/v10/commands/npm-install", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "node_modules"], continue-on-failure = true },
+  { argv = ["vp", "run", "install"], comment = "install again hit cache", continue-on-failure = true },
+  { argv = ["vp", "run", "--last-details"], continue-on-failure = true },
+]

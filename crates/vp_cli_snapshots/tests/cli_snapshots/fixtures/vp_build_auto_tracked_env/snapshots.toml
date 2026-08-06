@@ -1,0 +1,8 @@
+[[case]]
+name = "vp_build_auto_tracked_env"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build"], comment = "first build", envs = [["VITE_GREETING", "hello"]], continue-on-failure = true },
+  { argv = ["vp", "run", "build"], comment = "same env, cache hit", envs = [["VITE_GREETING", "hello"]], continue-on-failure = true },
+  { argv = ["vp", "run", "build"], comment = "VITE_ env changed, cache miss (tracked via vite-task-client)", envs = [["VITE_GREETING", "world"]], continue-on-failure = true },
+]

@@ -1,8 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # source-only browser provider should be restored",
-    "cat package.json # provider, framework peer, and local vitest should be present",
-    "cat pnpm-workspace.yaml # shared vitest catalog and override should be present"
-  ]
-}

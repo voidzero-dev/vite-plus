@@ -1,0 +1,8 @@
+[[case]]
+name = "command_info_no_package_json"
+vp = ["local", "global"]
+local-registry = true
+steps = [
+  { argv = ["vp", "info", "vite@2.0.0", "version"], comment = "should work without package.json", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "vite@2.0.0", "version"], comment = "should work without package.json", continue-on-failure = true },
+]

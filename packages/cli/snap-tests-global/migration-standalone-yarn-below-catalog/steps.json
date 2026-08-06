@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # Yarn < 4.10.0 cannot resolve `catalog:`, so managed specs stay concrete",
-    "cat package.json # concrete specs: `vite` via the @voidzero-dev/vite-plus-core alias, no `catalog:` references",
-    "cat .yarnrc.yml # node-modules linker is configured, but no catalog field is written"
-  ]
-}

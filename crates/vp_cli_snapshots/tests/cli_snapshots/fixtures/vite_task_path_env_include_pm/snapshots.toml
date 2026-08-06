@@ -1,0 +1,7 @@
+[[case]]
+name = "vite_task_path_env_include_pm"
+vp = "local"
+steps = [
+  { argv = ["vp", "install", "--no-frozen-lockfile"], continue-on-failure = true },
+  { argv = ["vp", "run", "check-yarn-version"], continue-on-failure = true },
+]

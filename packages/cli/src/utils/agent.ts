@@ -301,6 +301,57 @@ export interface AgentConflictInfo {
   targetPath: string;
 }
 
+/** Order target paths for the shared detect/write traversal: AGENTS.md first. */
+function orderAgentTargetPaths(projectRoot: string, targetPaths: string[]): string[] {
+  const orderedPaths = targetPaths.includes(AGENT_STANDARD_PATH)
+    ? [AGENT_STANDARD_PATH, ...targetPaths.filter((p) => p !== AGENT_STANDARD_PATH)]
+    : targetPaths;
+  const dedupedPaths: string[] = [];
+  const seenDestinationPaths = new Set<string>();
+  for (const targetPath of orderedPaths) {
+    const destinationKey = path.resolve(path.join(projectRoot, targetPath));
+    if (seenDestinationPaths.has(destinationKey)) {
+      continue;
+    }
+    seenDestinationPaths.add(destinationKey);
+    dedupedPaths.push(targetPath);
+  }
+  return dedupedPaths;
+}
+
+type ExistingAgentTarget =
+  | { kind: 'symlink' }
+  | { kind: 'duplicate' }
+  | { kind: 'markers'; existingContent: string; updatedContent: string }
+  | { kind: 'conflict'; existingContent: string };
+
+/**
+ * Classify an existing agent instruction file for the shared detect/write
+ * traversal. Registers the file's realpath in the caller-owned `seenRealPaths`.
+ */
+async function classifyExistingAgentTarget(
+  destinationPath: string,
+  incomingContent: string,
+  seenRealPaths: Set<string>,
+): Promise<ExistingAgentTarget> {
+  if (fs.lstatSync(destinationPath).isSymbolicLink()) {
+    return { kind: 'symlink' };
+  }
+
+  const destinationRealPath = await fsPromises.realpath(destinationPath);
+  if (seenRealPaths.has(destinationRealPath)) {
+    return { kind: 'duplicate' };
+  }
+  seenRealPaths.add(destinationRealPath);
+
+  const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
+  const updatedContent = replaceMarkedAgentInstructionsSection(existingContent, incomingContent);
+  if (updatedContent !== undefined) {
+    return { kind: 'markers', existingContent, updatedContent };
+  }
+  return { kind: 'conflict', existingContent };
+}
+
 /**
  * Detect agent instruction files that would conflict (exist without markers).
  * Returns only files that need a user decision (append or skip).
@@ -324,21 +375,12 @@ export async function detectAgentConflicts({
 
   const incomingContent = await fsPromises.readFile(sourcePath, 'utf-8');
   const shouldLinkToAgents = targetPaths.includes(AGENT_STANDARD_PATH);
-  const orderedPaths = shouldLinkToAgents
-    ? [AGENT_STANDARD_PATH, ...targetPaths.filter((p) => p !== AGENT_STANDARD_PATH)]
-    : targetPaths;
 
   const conflicts: AgentConflictInfo[] = [];
-  const seenDestinationPaths = new Set<string>();
   const seenRealPaths = new Set<string>();
 
-  for (const targetPathToCheck of orderedPaths) {
+  for (const targetPathToCheck of orderAgentTargetPaths(projectRoot, targetPaths)) {
     const destinationPath = path.join(projectRoot, targetPathToCheck);
-    const destinationKey = path.resolve(destinationPath);
-    if (seenDestinationPaths.has(destinationKey)) {
-      continue;
-    }
-    seenDestinationPaths.add(destinationKey);
 
     // If linking to AGENTS.md, non-AGENTS.md paths that are not regular files get linked
     if (shouldLinkToAgents && targetPathToCheck !== AGENT_STANDARD_PATH) {
@@ -348,30 +390,18 @@ export async function detectAgentConflicts({
       }
     }
 
-    if (fs.existsSync(destinationPath)) {
-      if (fs.lstatSync(destinationPath).isSymbolicLink()) {
-        continue;
-      }
+    if (!fs.existsSync(destinationPath)) {
+      continue;
+    }
 
-      const destinationRealPath = await fsPromises.realpath(destinationPath);
-      if (seenRealPaths.has(destinationRealPath)) {
-        continue;
-      }
-
-      const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
-      const updatedContent = replaceMarkedAgentInstructionsSection(
-        existingContent,
-        incomingContent,
-      );
-      if (updatedContent !== undefined) {
-        // Has markers — will auto-update, no conflict
-        seenRealPaths.add(destinationRealPath);
-        continue;
-      }
-
-      // Conflict — needs user decision
+    const state = await classifyExistingAgentTarget(
+      destinationPath,
+      incomingContent,
+      seenRealPaths,
+    );
+    if (state.kind === 'conflict') {
+      // Needs user decision; markers auto-update, symlinks/duplicates are skipped
       conflicts.push({ targetPath: targetPathToCheck });
-      seenRealPaths.add(destinationRealPath);
     }
   }
 
@@ -406,21 +436,12 @@ export async function writeAgentInstructions({
     return;
   }
 
-  const seenDestinationPaths = new Set<string>();
   const seenRealPaths = new Set<string>();
   const incomingContent = await fsPromises.readFile(sourcePath, 'utf-8');
   const shouldLinkToAgents = paths.includes(AGENT_STANDARD_PATH);
-  const orderedPaths = shouldLinkToAgents
-    ? [AGENT_STANDARD_PATH, ...paths.filter((p) => p !== AGENT_STANDARD_PATH)]
-    : paths;
 
-  for (const targetPathToWrite of orderedPaths) {
+  for (const targetPathToWrite of orderAgentTargetPaths(projectRoot, paths)) {
     const destinationPath = path.join(projectRoot, targetPathToWrite);
-    const destinationKey = path.resolve(destinationPath);
-    if (seenDestinationPaths.has(destinationKey)) {
-      continue;
-    }
-    seenDestinationPaths.add(destinationKey);
 
     await fsPromises.mkdir(path.dirname(destinationPath), { recursive: true });
 
@@ -432,31 +453,30 @@ export async function writeAgentInstructions({
     }
 
     if (fs.existsSync(destinationPath)) {
-      if (fs.lstatSync(destinationPath).isSymbolicLink()) {
+      const state = await classifyExistingAgentTarget(
+        destinationPath,
+        incomingContent,
+        seenRealPaths,
+      );
+
+      if (state.kind === 'symlink') {
         if (!silent) {
           prompts.log.info(`Skipped writing ${targetPathToWrite} (symlink)`);
         }
         continue;
       }
 
-      const destinationRealPath = await fsPromises.realpath(destinationPath);
-      if (seenRealPaths.has(destinationRealPath)) {
+      if (state.kind === 'duplicate') {
         if (!silent) {
           prompts.log.info(`Skipped writing ${targetPathToWrite} (duplicate target)`);
         }
         continue;
       }
 
-      const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
-      const updatedContent = replaceMarkedAgentInstructionsSection(
-        existingContent,
-        incomingContent,
-      );
-      if (updatedContent !== undefined) {
-        if (updatedContent !== existingContent) {
-          await fsPromises.writeFile(destinationPath, updatedContent);
+      if (state.kind === 'markers') {
+        if (state.updatedContent !== state.existingContent) {
+          await fsPromises.writeFile(destinationPath, state.updatedContent);
         }
-        seenRealPaths.add(destinationRealPath);
         continue;
       }
 
@@ -496,7 +516,7 @@ export async function writeAgentInstructions({
         await appendAgentContent(
           destinationPath,
           targetPathToWrite,
-          existingContent,
+          state.existingContent,
           incomingContent,
           silent,
         );
@@ -506,7 +526,6 @@ export async function writeAgentInstructions({
           prompts.log.info(`Skipped writing ${targetPathToWrite}${suffix}`);
         }
       }
-      seenRealPaths.add(destinationRealPath);
       continue;
     }
 

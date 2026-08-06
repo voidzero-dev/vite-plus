@@ -1,0 +1,7 @@
+[[case]]
+name = "command_list_no_package_json"
+vp = "global"
+steps = [
+  { argv = ["vp", "ls"], comment = "should output nothing without package.json", continue-on-failure = true },
+  { argv = ["vp", "pm", "list"], comment = "should output nothing without package.json", continue-on-failure = true },
+]

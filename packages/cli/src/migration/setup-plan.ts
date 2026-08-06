@@ -35,10 +35,11 @@ async function collectGitHooksDecision(
   rootDir: string,
   packageManager: PackageManager | undefined,
   options: MigrationOptions,
+  packages: readonly WorkspacePackage[] = [],
 ): Promise<boolean> {
   let shouldSetupHooks = await promptGitHooks(options);
   if (shouldSetupHooks) {
-    const reason = preflightGitHooksSetup(rootDir, packageManager);
+    const reason = preflightGitHooksSetup(rootDir, packageManager, packages);
     if (reason) {
       prompts.log.warn(`⚠ ${reason}`);
       shouldSetupHooks = false;
@@ -182,7 +183,12 @@ export async function collectMigrationSetupPlan(
   packages?: WorkspacePackage[],
   includeEslint = true,
 ): Promise<MigrationSetupPlan> {
-  const shouldSetupHooks = await collectGitHooksDecision(rootDir, packageManager, options);
+  const shouldSetupHooks = await collectGitHooksDecision(
+    rootDir,
+    packageManager,
+    options,
+    packages,
+  );
   const agentPlan = await collectAgentInstructionPlan(rootDir, options);
   const editorPlan = await collectEditorConfigPlan(rootDir, options);
   const eslintPlan = includeEslint

@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive --no-hooks 2>&1 # project config process handlers must not terminate migration",
-    "cat vite.config.ts # migration still rewrites the config after its compatibility probe crashes"
-  ]
-}

@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_standalone_bun_install"
+vp = "local"
+skip-platforms = ["windows"]
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+local-registry = true
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "standalone (non-workspace) bun upgrade must keep concrete specs so `bun install` resolves instead of failing with `vite@catalog: failed to resolve`", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "vite/vite-plus stay concrete (vite via the @voidzero-dev/vite-plus-core alias); NO top-level catalog field is written", continue-on-failure = true },
+]

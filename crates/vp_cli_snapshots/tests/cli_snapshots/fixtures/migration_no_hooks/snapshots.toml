@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_no_hooks"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-interactive"], comment = "migration with --no-hooks should skip hooks setup", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json has no prepare script and no lint-staged config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks", "--assert-not", "dir"], comment = "no .vite-hooks directory when --no-hooks", continue-on-failure = true },
+]

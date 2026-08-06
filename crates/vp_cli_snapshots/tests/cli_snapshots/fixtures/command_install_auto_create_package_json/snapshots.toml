@@ -1,0 +1,12 @@
+[[case]]
+name = "command_install_auto_create_package_json"
+vp = ["local", "global"]
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "stat-file", "package.json", "--assert-not", "file"], comment = "verify no package.json exists", continue-on-failure = true },
+  { tty = false, argv = ["vp", "install", "--silent"], comment = "should auto-create package.json and install" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { tty = false, argv = ["vp", "add", "testnpm2", "-D"], comment = "should add package to auto-created package.json" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

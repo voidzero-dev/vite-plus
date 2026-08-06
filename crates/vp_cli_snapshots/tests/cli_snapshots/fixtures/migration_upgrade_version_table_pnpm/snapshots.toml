@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_upgrade_version_table_pnpm"
+vp = "global"
+env = { VP_VERSION = "0.2.1" }
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", "{\"name\":\"@voidzero-dev/vite-plus-core\",\"version\":\"0.1.21\",\"bundledVersions\":{\"vite\":\"8.0.0\"}}"], comment = "stub the installed vite-plus-core alias so the raw upstream vite version is read", snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "existing-Vite+ upgrade shows the toolchain version-change table with the raw vite row", continue-on-failure = true },
+]

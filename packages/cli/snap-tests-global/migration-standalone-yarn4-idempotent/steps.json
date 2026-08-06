@@ -1,9 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # implicit Yarn Berry PnP converts before the first pass",
-    "cat package.json # migrated dependency specs use the Yarn catalog immediately",
-    "cat .yarnrc.yml # managed catalog entries are available to those specs",
-    "cat example.spec.ts # ordinary Vitest imports use the Vite+ public surface",
-    "vp migrate --no-interactive # a freshly migrated standalone Yarn project is complete"
-  ]
-}

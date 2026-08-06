@@ -1,0 +1,8 @@
+[[case]]
+name = "command_nested_typo_help"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "apprev-build", "--help"], comment = "typo should not print pm parent help", continue-on-failure = true },
+  { argv = ["vp", "help", "pm", "apprev-build"], comment = "help alias should not print pm parent help for a typo", continue-on-failure = true },
+  { argv = ["vp", "pm", "--help", "apprev-build"], comment = "help flag before typo should not print pm parent help", continue-on-failure = true },
+]

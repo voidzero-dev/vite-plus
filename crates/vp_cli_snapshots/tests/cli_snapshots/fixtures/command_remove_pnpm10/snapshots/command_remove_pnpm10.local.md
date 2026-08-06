@@ -1,0 +1,175 @@
+# command_remove_pnpm10
+
+## `vp remove --help`
+
+should show help
+
+```
+Remove packages from dependencies
+
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  <PACKAGES>...           Packages to remove
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -D, --save-dev          Only remove from `devDependencies` (pnpm-specific)
+  -O, --save-optional     Only remove from `optionalDependencies` (pnpm-specific)
+  -P, --save-prod         Only remove from `dependencies` (pnpm-specific)
+      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root    Remove from workspace root
+  -r, --recursive         Remove recursively from all workspace packages
+  -g, --global            Remove global packages
+      --dry-run           Preview what would be removed without actually removing (only with -g)
+  -h, --help              Print help
+```
+
+## `vp remove`
+
+should error because no packages specified
+
+**Exit code:** 2
+
+```
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
+```
+
+## `vp remove testnpm2 -D`
+
+should error when remove not exists package from dev dependencies
+
+**Exit code:** 1
+
+```
+ ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS  Cannot remove 'testnpm2': project has no 'devDependencies'
+```
+
+*(skipped 1 step(s) to the next line boundary: step failed)*
+
+## `vp add testnpm2`
+
+should add packages to dependencies
+
+```
+
+dependencies:
+ testnpm2 1.0.1
+
+Done in <duration> using pnpm <version>
+```
+
+## `vp add -D test-vite-plus-install`
+
+```
+
+devDependencies:
+ test-vite-plus-install 1.0.0
+
+Done in <duration> using pnpm <version>
+```
+
+## `vp add -O test-vite-plus-package-optional`
+
+```
+
+optionalDependencies:
+ test-vite-plus-package-optional 1.0.0
+
+Done in <duration> using pnpm <version>
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-remove-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```
+
+## `vp remove testnpm2 test-vite-plus-install`
+
+should remove packages from dependencies
+
+```
+Packages: -2
+--
+
+dependencies:
+- testnpm2 1.0.1
+
+devDependencies:
+- test-vite-plus-install 1.0.0
+
+Done in <duration> using pnpm <version>
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-remove-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.0",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```
+
+## `vp remove -O test-vite-plus-package-optional -- --loglevel=warn`
+
+support remove package from optional dependencies and pass through arguments
+
+```
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-remove-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.0"
+}
+```
+
+## `vp remove -g --dry-run testnpm2`
+
+support remove global package with dry-run
+
+**Exit code:** 1
+
+```
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+```
+
+*(skipped 1 step(s) to the next line boundary: step failed)*
+
+## `vp rm --stream foo`
+
+should show tips to use pass through arguments when options are not supported
+
+**Exit code:** 2
+
+```
+error: Unexpected argument '--stream'
+
+Use `-- --stream` to pass the argument as a value
+```

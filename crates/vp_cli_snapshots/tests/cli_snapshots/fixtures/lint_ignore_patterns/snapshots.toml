@@ -1,0 +1,6 @@
+[[case]]
+name = "lint_ignore_patterns"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "src/"], comment = "Test that lint ignorePatterns works - ignored files should not be linted", continue-on-failure = true },
+]

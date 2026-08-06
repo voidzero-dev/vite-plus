@@ -1,13 +1,13 @@
 use std::iter;
 
 use clap::{Parser, error::ErrorKind};
-use vite_path::AbsolutePath;
-use vite_str::Str;
-use vite_task::{
+use vt::{
     CommandHandler, HandledCommand, ScriptCommand,
     config::user::{EnabledCacheConfig, UserCacheConfig, UserRunConfig},
     loader::UserConfigLoader,
 };
+use vt_path::AbsolutePath;
+use vt_str::Str;
 
 use super::{
     resolver::{SubcommandResolver, check_cache_inputs},
@@ -44,6 +44,23 @@ impl CommandHandler for VitePlusCommandHandler {
         if program != "vp" && program != "vpr" {
             return Ok(HandledCommand::Verbatim);
         }
+
+        // Help must pass through the local JS entrypoint, which owns the prepared documents.
+        if command
+            .args
+            .iter()
+            .take_while(|arg| arg.as_str() != "--")
+            .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
+        {
+            return Ok(HandledCommand::Verbatim);
+        }
+
+        // A leading global `-C` runs verbatim: CLIArgs has no global flags, and
+        // the spawned vp/vpr binary applies the directory change (and target
+        // elicitation) exactly like a direct invocation.
+        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
+            return Ok(HandledCommand::Verbatim);
+        }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
         let cli_args = match CLIArgs::try_parse_from(
@@ -73,6 +90,13 @@ impl CommandHandler for VitePlusCommandHandler {
                 )))
             }
             CLIArgs::Synthesizable(subcmd) => {
+                // Bare app commands in scripts get the same workspace-root
+                // target elicitation as direct invocations: spawn the real
+                // binary, which elicits (defaultPackage note, listing +
+                // exit 1) identically instead of silently running the root.
+                if super::app_target::needs_elicitation(&subcmd, &command.cwd) {
+                    return Ok(HandledCommand::Verbatim);
+                }
                 let resolved = self.resolver.resolve(subcmd, None, &command.envs).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
@@ -112,9 +136,9 @@ impl UserConfigLoader for VitePlusConfigLoader {
         package_path: &AbsolutePath,
     ) -> anyhow::Result<Option<UserRunConfig>> {
         // Try static config extraction first (no JS runtime needed)
-        let static_fields = vite_static_config::resolve_static_config(package_path);
+        let static_fields = vp_static_config::resolve_static_config(package_path);
         match static_fields.get("run") {
-            Some(vite_static_config::FieldValue::Json(run_value)) => {
+            Some(vp_static_config::FieldValue::Json(run_value)) => {
                 tracing::debug!(
                     "Using statically extracted run config for {}",
                     package_path.as_path().display()
@@ -122,7 +146,7 @@ impl UserConfigLoader for VitePlusConfigLoader {
                 let run_config: UserRunConfig = serde_json::from_value(run_value)?;
                 return Ok(Some(run_config));
             }
-            Some(vite_static_config::FieldValue::NonStatic) => {
+            Some(vp_static_config::FieldValue::NonStatic) => {
                 // `run` field exists (or may exist via a spread) — fall back to NAPI
                 tracing::debug!(
                     "run config is not statically analyzable for {}, falling back to NAPI",

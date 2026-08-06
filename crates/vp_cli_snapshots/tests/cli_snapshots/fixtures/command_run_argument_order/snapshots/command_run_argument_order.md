@@ -1,0 +1,28 @@
+# command_run_argument_order
+
+## `vp run -r hello`
+
+new syntax: -r before task, runs recursively
+
+```
+~/packages/lib-b$ echo hello from lib-b ⊘ cache disabled
+hello from lib-b
+
+~/packages/app-a$ echo hello from app-a ⊘ cache disabled
+hello from app-a
+
+---
+vp run: 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
+```
+
+## `vp run hello -r`
+
+old syntax: -r after task, passed through as arg
+
+**Exit code:** 1
+
+```
+Task "hello" not found. Did you mean:
+  app-a#hello: echo hello from app-a
+  lib-b#hello: echo hello from lib-b
+```

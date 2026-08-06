@@ -1,0 +1,6 @@
+[[case]]
+name = "check_pass"
+vp = "local"
+steps = [
+  ["vp", "check"],
+]

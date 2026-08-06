@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_standalone_yarn_below_catalog"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "Yarn < 4.10.0 cannot resolve `catalog:`, so managed specs stay concrete", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "concrete specs: `vite` via the @voidzero-dev/vite-plus-core alias, no `catalog:` references", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".yarnrc.yml"], comment = "node-modules linker is configured, but no catalog field is written", continue-on-failure = true },
+]

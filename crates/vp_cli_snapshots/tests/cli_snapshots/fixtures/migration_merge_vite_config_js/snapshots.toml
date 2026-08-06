@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_merge_vite_config_js"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should merge vite.config.js and remove oxlintrc", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.js"], comment = "check vite.config.js", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "check .oxlintrc.json is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

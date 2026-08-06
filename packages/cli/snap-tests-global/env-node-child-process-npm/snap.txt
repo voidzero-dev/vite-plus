@@ -1,5 +1,0 @@
-> cd node && test "$(npm --version)" = "$(node ../print-version.js)" && node ../print-path.js
-<vite-plus-home>/js_runtime/node/<semver>/bin/npm
-
-> cd specific && test "$(npm --version)" = "$(node ../print-version.js)" && test "$(node ../print-version.js)" = "$(node ./print-package-json-pm-version.js)" && node ../print-path.js
-<vite-plus-home>/package_manager/npm/<semver>/npm/bin/npm

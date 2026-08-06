@@ -1,0 +1,9 @@
+[[case]]
+name = "shim_pnpm_uses_project_node_version"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "pnpm"], comment = "Ensure pnpm is globally installed", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "node", "-v"], comment = "Node version resolved from .node-version", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "pnpm", "exec", "node", "-v"], comment = "pnpm should use same project Node version", continue-on-failure = true },
+]

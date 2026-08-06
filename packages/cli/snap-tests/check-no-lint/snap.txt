@@ -1,2 +1,0 @@
-> vp check --no-lint
-pass: All 3 files are correctly formatted (<variable>ms, <variable> threads)

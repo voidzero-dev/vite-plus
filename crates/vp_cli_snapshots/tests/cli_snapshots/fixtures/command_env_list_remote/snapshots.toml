@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_list_remote"
+vp = "global"
+skip-platforms = ["windows"]
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "install", "lts"], comment = "Install an LTS Node.js version locally", continue-on-failure = true },
+  { argv = ["vp", "env", "default", "lts"], comment = "Set it as the global default (stored as the `lts` alias)", continue-on-failure = true },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process'); const {versions}=JSON.parse(execFileSync('vp',['env','list-remote','--lts','--json'],{encoding:'utf8'})); console.log('installed marked:', versions.some(v=>v.installed)); console.log('current marked:', versions.some(v=>v.current)); console.log('default marked:', versions.some(v=>v.default));"], comment = "installed/current/default flags should all resolve, including the `lts` default alias", continue-on-failure = true },
+]

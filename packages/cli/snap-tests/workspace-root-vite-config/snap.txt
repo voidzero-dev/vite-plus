@@ -1,7 +1,0 @@
-> # Test that lint picks up workspace root config
-> # vp lint
-> # Test that fmt picks up workspace root config - specify file
-> vp fmt packages/app-b/index.js --check
-Checking formatting...
-All matched files use the correct format.
-Finished in <variable>ms on 1 files using <variable> threads.

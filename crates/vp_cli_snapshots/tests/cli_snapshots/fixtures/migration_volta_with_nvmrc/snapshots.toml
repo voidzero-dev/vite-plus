@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_volta_with_nvmrc"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = ".nvmrc should take priority over volta.node", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = "check .node-version comes from .nvmrc (v20.19.0), not volta.node (18.0.0)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".nvmrc", "--assert-not", "file"], comment = "check .nvmrc is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "volta field must remain intact", continue-on-failure = true },
+]

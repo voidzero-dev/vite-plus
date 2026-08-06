@@ -1,7 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp pack --deps.never-bundle node:path src/index.ts # should bundle with deps.never-bundle flag",
-    "vp pack --external node:path src/index.ts # should bundle with legacy external flag"
-  ]
-}

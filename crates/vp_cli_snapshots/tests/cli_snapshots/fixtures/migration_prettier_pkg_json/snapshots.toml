@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_prettier_pkg_json"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect prettier in package.json and auto-migrate", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prettier key removed, scripts rewritten, dep removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check oxfmt config merged into vite.config.ts with semi/singleQuote settings", continue-on-failure = true },
+]

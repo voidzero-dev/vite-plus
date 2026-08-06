@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # retained vitest augmentations should keep a package-local vitest",
-    "cat src/index.ts # declare module 'vite'/'vitest' outside config files are preserved: through the core alias a 'vite' augmentation reaches the UserConfig that types vite-plus defineConfig, while vite-plus exports no UserConfig symbol to merge a rewritten augmentation with",
-    "cat package.json # check package.json",
-    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
-  ]
-}

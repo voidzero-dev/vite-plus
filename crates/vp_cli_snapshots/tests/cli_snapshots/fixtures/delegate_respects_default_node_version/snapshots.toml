@@ -1,0 +1,13 @@
+[[case]]
+name = "delegate_respects_default_node_version"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "default", "22.18.0"], comment = "Set global default to 22.18.0", continue-on-failure = true },
+  { argv = ["vp", "run", "check-node"], comment = "Should also use 22.18.0", continue-on-failure = true },
+  { argv = ["vp", "exec", "node", "-e", "console.log(process.version)"], comment = "Should also use 22.18.0", continue-on-failure = true },
+  { argv = ["vp", "env", "which", "node"], comment = "Should show 22.18.0 from 'default' source", continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "env", "default", "lts"], comment = "Restore default to LTS", continue-on-failure = true },
+]

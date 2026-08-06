@@ -12,12 +12,12 @@ on:
     branches:
       - main
     # `paths` with negations instead of paths-ignore: PTY snapshot baselines
-    # are .md files (crates/vite_cli_snapshots/**/snapshots/*.md) and a
+    # are .md files (crates/vp_cli_snapshots/**/snapshots/*.md) and a
     # baseline-only push must still run CI. Later patterns win.
     paths:
       - '**'
       - '!**/*.md'
-      - 'crates/vite_cli_snapshots/**'
+      - 'crates/vp_cli_snapshots/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -67,7 +67,7 @@ jobs:
               - '!.github/workflows/deploy-docs.yml'
               - '!netlify.toml'
             snapshots:
-              - 'crates/vite_cli_snapshots/**'
+              - 'crates/vp_cli_snapshots/**'
 
   docs-fmt:
     name: Docs format check
@@ -193,13 +193,13 @@ jobs:
           cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
 
       # Keep the package selection in sync with the `test` recipe in justfile.
-      # vite_cli_snapshots is excluded there too: its snapshot suite needs a
+      # vp_cli_snapshots is excluded there too: its snapshot suite needs a
       # built vp and node at runtime and joins the Windows archive later.
       - name: Build test archive
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vite_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
+          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -218,7 +218,7 @@ jobs:
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          cargo nextest archive -p vite_cli_snapshots \
+          cargo nextest archive -p vp_cli_snapshots \
             --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -245,14 +245,16 @@ jobs:
 
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain.
+      # Cross-compiled archives may also contain host-built proc-macro tests;
+      # filter them out before Windows tries to list their ELF binaries.
       # --test-threads=1: nextest runs each test in its own process, so
       # serial_test's in-process locks no longer serialize tests that contend
       # on cross-process shared state (fixed temp paths, e.g.
-      # `vp-test-custom-home` in vite_shared::home tests). The whole suite is
+      # `vp-test-custom-home` in vp_shared::home tests). The whole suite is
       # only ~1 minute of test time, so full serialization is cheap
       # insurance; revisit if it becomes the bottleneck.
       - name: Run tests
-        run: cargo-nextest nextest run --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
+        run: cargo-nextest nextest run -E 'platform(target)' --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
         env:
           RUST_MIN_STACK: '8388608'
           # Keep Windows env parity with the `test` recipe in justfile.
@@ -343,7 +345,7 @@ jobs:
   # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
   # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
   # cargo-xwin, then publishes them as the windows-cli-binaries artifact. The
-  # Windows entries of cli-e2e-test, cli-snap-test, and install-e2e-test-sfw
+  # Windows entries of cli-e2e-test and install-e2e-test-sfw
   # download that artifact instead of each spending ~24 minutes rebuilding the
   # same binaries on slow windows-latest runners whenever build-upstream's
   # NAPI binding cache misses. Release builds are unaffected: they keep
@@ -899,143 +901,10 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
-  cli-snap-test:
-    name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
-    needs:
-      - download-previous-rolldown-binaries
-      - build-windows-cli
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 3
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            shard: 3
-            shardTotal: 3
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            shard: 3
-            shardTotal: 3
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: ./.github/actions/clone
-
-      # Dev Drive works on the Namespace Windows runner: setup-dev-drive v4
-      # creates and mounts its ReFS VHD on namespace-profile-windows-4c-8g, and
-      # all three Windows shards pass with this step succeeding (nested
-      # virtualization is available there). Only cli-snapshot-test-windows moved
-      # off Namespace, and for an unrelated reason (Session-0 ConPTY, see there).
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          # Route TEMP/TMP onto the Dev Drive (ReFS) so `tmpdir()` from
-          # `packages/tools/src/snap-test.ts` lives on a filesystem that
-          # cleanly resolves pnpm's junction reparse points. NTFS-on-C:
-          # preserves the junction-target backslashes during resolution,
-          # which produces mixed `\` / `/` paths that break Node's ESM
-          # subpath-import walk-up (`#module-sync-enabled` inside
-          # `@voidzero-dev/vite-plus-core` → `ERR_PACKAGE_IMPORT_NOT_DEFINED`
-          # during `vp fmt --write` in the
-          # `new-create-vite-migrates-eslint-prettier` snap test).
-          env-mapping: |
-            TEMP,{{ DEV_DRIVE }}/Temp
-            TMP,{{ DEV_DRIVE }}/Temp
-
-      - name: Create TEMP/TMP on Dev Drive
-        if: runner.os == 'Windows'
-        # `setup-dev-drive` only mounts the drive; it doesn't create the
-        # dir we point TEMP/TMP at. Anything that calls `os.tmpdir()` /
-        # `lstat($TEMP)` before this dir exists fails (e.g. the bootstrap
-        # CLI installer's `lstat 'E:\Temp'` ENOENT).
-        shell: bash
-        run: mkdir -p "$TEMP" "$TMP"
-
-      # Windows runs against the prebuilt binaries from build-windows-cli,
-      # so it needs no Rust toolchain here (the Dev Drive above stays for
-      # the TEMP/TMP routing).
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-        if: runner.os != 'Windows'
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-snap-test-${{ matrix.target }}
-
-      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
-
-      - name: Install docs dependencies
-        run: pnpm -C docs install --frozen-lockfile
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
-      # See the cli-e2e-test job for details on the prebuilt binaries.
-      - name: Download prebuilt Windows binaries
-        if: runner.os == 'Windows'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: windows-cli-binaries
-
-      - name: Build with upstream
-        uses: ./.github/actions/build-upstream
-        with:
-          target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' }}
-
-      - name: Install Global CLI vp
-        run: |
-          pnpm bootstrap-cli:ci
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
-          else
-            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
-          fi
-
-      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
-        run: |
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          bash .github/scripts/retry-failed-snap-tests.sh
-        env:
-          RUST_MIN_STACK: 8388608
-
-  # Runs the PTY snapshot suite (crates/vite_cli_snapshots) with BOTH vp
+  # Runs the PTY snapshot suite (crates/vp_cli_snapshots) with BOTH vp
   # flavors on Linux and macOS: the local flavor uses the packages/cli build
   # from this job, the global flavor reuses the installed release binary via
-  # VP_SNAP_GLOBAL_VP (no vite_global_cli compile; build-upstream builds or
+  # VP_SNAP_GLOBAL_VP (no vp_global_cli compile; build-upstream builds or
   # cache-restores it). One leg per OS: the suite is not sharded. Windows
   # runs in cli-snapshot-test-windows via the cross-compiled archive.
   cli-snapshot-test:
@@ -1085,15 +954,20 @@ jobs:
           "$HOME/.vite-plus/bin/vp" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
 
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
+
       - name: Run PTY snapshot tests
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
-          cargo test -p vite_cli_snapshots
+          cargo test -p vp_cli_snapshots
         env:
           RUST_BACKTRACE: '1'
 
-  # Runs the PTY snapshot suite (crates/vite_cli_snapshots) on Windows with
+  # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
   # and vpt arrive cross-compiled in the nextest archive from
   # build-windows-tests, the global vp comes prebuilt from build-windows-cli,
@@ -1104,20 +978,23 @@ jobs:
       - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
-    # Stays on GitHub-hosted windows-latest, NOT the Namespace Windows runner:
-    # this is a PTY snapshot suite. The runner opens a pseudo-console (ConPTY)
-    # and spawns vp into it, but Namespace's Windows runners execute jobs under a
-    # Session-0 service account with no interactive console, where that ConPTY
-    # spawn blocks — vp is never launched and every case times out at 60s.
-    # windows-latest runs in a session where ConPTY works.
-    runs-on: windows-latest
+    # Runs on the Namespace Windows runner. This is a PTY snapshot suite that
+    # opens a pseudo-console (ConPTY) and spawns vp into it. It previously stayed
+    # on GitHub-hosted windows-latest because Namespace's Windows runners ran
+    # under a Session-0 service account with no interactive console, where the
+    # ConPTY spawn blocked and every case timed out at 60s. #2126 (vite-task
+    # bump) resolved that; revert to windows-latest if it recurs.
+    runs-on: namespace-profile-windows-4c-8g
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      # Same Dev Drive TEMP routing as cli-snap-test: staged fixture
-      # workspaces live under os.tmpdir() and must resolve pnpm junction
-      # reparse points cleanly (see that job for the full story).
+      # Route TEMP/TMP onto a Dev Drive (ReFS): staged fixture workspaces
+      # live under os.tmpdir() and must resolve pnpm junction reparse points
+      # cleanly. NTFS-on-C: preserves the junction-target backslashes during
+      # resolution, which produces mixed `\` / `/` paths that break Node's
+      # ESM subpath-import walk-up (`#module-sync-enabled` inside
+      # `@voidzero-dev/vite-plus-core` -> `ERR_PACKAGE_IMPORT_NOT_DEFINED`).
       - name: Setup Dev Drive
         uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
         with:
@@ -1164,6 +1041,12 @@ jobs:
         run: |
           "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1267,8 +1150,62 @@ jobs:
 
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test
-              bash .github/scripts/retry-failed-snap-tests.sh
             "
+
+  # Regression test for #2278: Debian slim images ship no ca-certificates
+  # package, and every vp command that touched the network aborted there
+  # (0.1.23 to 0.2.6) or failed with a handled error (#2273). The global vp
+  # is built inside a bookworm container so the binary's glibc floor matches
+  # the runtime image, then runs in node:24-bookworm-slim (the image from the
+  # report) where HTTPS must work through the bundled Mozilla roots fallback.
+  certless-image-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
+    name: Cert-less image E2E test
+    runs-on: namespace-profile-linux-x64-default
+    timeout-minutes: 30
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: certless-image-test
+
+      # Mounting the host rustup and cargo homes reuses the pinned nightly
+      # that setup-rust installed and the restored registry cache, so the
+      # container downloads nothing on a warm run (rustup dist binaries
+      # target glibc 2.17 and run on bookworm's 2.36). `rustup show` still
+      # installs the toolchain if the mount misses it.
+      - name: Build the global vp in a bookworm container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -v "$HOME/.rustup:/usr/local/rustup" \
+            -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+            -v "$HOME/.cargo/git:/usr/local/cargo/git" \
+            -w /work rust:1-bookworm bash -c '
+              set -e
+              apt-get update -qq && apt-get install -y -qq --no-install-recommends cmake python3
+              rustup show
+              cargo build -p vp_global_cli
+            '
+
+      - name: Run vp in node:24-bookworm-slim without a CA store
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/target/debug/vp:/usr/local/bin/vp:ro" \
+            node:24-bookworm-slim bash -c '
+              set -ex
+              # The image must actually lack the CA bundle, or this job stops
+              # guarding anything.
+              test ! -e /etc/ssl/certs/ca-certificates.crt
+              vp --version
+              # HTTPS to nodejs.org through the shared client; exits nonzero
+              # without the bundled-roots fallback.
+              vp env list-remote --lts
+            '
 
   install-e2e-test:
     name: Local CLI `vp install` E2E test
@@ -1311,9 +1248,13 @@ jobs:
           export PATH=$PWD/node_modules/.bin:$PATH
           vp -h
           # Test vp install on various repositories with different package managers
+          # Entry format: "owner/repo:dir" or "owner/repo:dir:ref" (tag or branch to clone)
           repos=(
             # pnpm workspace
-            "pnpm/pnpm:pnpm"
+            # Pinned to the latest stable tag: pnpm main pins pnpm v12 alphas,
+            # whose @pnpm/exe ships a placeholder bin that breaks pnpm's
+            # version self-switch (pnpm/pnpm#12811)
+            "pnpm/pnpm:pnpm:v11.11.0"
             "vitejs/vite:vite"
             # yarn workspace
             "napi-rs/napi-rs:napi-rs"
@@ -1324,13 +1265,17 @@ jobs:
           )
 
           for repo_info in "${repos[@]}"; do
-            IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vp install on $repo…"
+            IFS=':' read -r repo dir_name ref <<< "$repo_info"
+            echo "Testing vp install on $repo${ref:+ ($ref)}…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"
             fi
-            git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
+            clone_args=(--depth 1)
+            if [ -n "$ref" ]; then
+              clone_args+=(--branch "$ref")
+            fi
+            git clone "${clone_args[@]}" "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
             vp install --no-frozen-lockfile
             # run again to show install cache increase by time
@@ -1477,7 +1422,7 @@ jobs:
       - lint
       - cli-e2e-test
       - cli-e2e-test-musl
-      - cli-snap-test
+      - certless-image-test
       - cli-snapshot-test
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.

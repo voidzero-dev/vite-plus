@@ -1,0 +1,11 @@
+[[case]]
+name = "fallback_all_invalid_to_user_default"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "default", "22.18.0"], comment = "Set user default", continue-on-failure = true },
+  { argv = ["vp", "exec", "node", "-e", "console.log(process.version)"], comment = "Should use default 22.18.0, not LTS", continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "env", "default", "lts"], comment = "Restore default", continue-on-failure = true },
+]

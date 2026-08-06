@@ -1,0 +1,9 @@
+[[case]]
+name = "global_cli_fallback"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "build", "-h"], comment = "should fall back to global vite-plus and show build help", continue-on-failure = true },
+  { argv = ["vp", "dev", "-h"], comment = "should fall back to global vite-plus and show dev help", continue-on-failure = true },
+  { argv = ["vp", "test", "-h"], comment = "should fall back to global vite-plus and show test help", continue-on-failure = true },
+]

@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # root with a vitest-adjacent dep but no direct vitest still gets a direct vitest pin",
-    "cat package.json # vitest pinned at the root even though vite-plus is injected first"
-  ]
-}

@@ -1,0 +1,6 @@
+[[case]]
+name = "check_fix_paths"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--fix", "src/index.js"], continue-on-failure = true },
+]

@@ -1,0 +1,6 @@
+{
+  "name": "global-local-no-version",
+  "bin": {
+    "global-local-no-version": "./bin.js"
+  }
+}

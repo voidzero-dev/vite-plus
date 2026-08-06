@@ -1,8 +1,0 @@
-> vp migrate --no-interactive # migration preserves bunfig.toml without an install section
-◇ Migrated . to Vite+ <semver>
-• Node <semver>  bun <semver>
-• 2 config updates applied
-
-> cat bunfig.toml # check Bun configuration is unchanged
-[run]
-shell = "bun"

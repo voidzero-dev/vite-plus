@@ -1,0 +1,7 @@
+[[case]]
+name = "command_version"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "--version"], continue-on-failure = true },
+]

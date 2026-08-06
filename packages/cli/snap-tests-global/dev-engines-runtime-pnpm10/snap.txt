@@ -1,2 +1,0 @@
-> vp dlx -s print-current-version # should print Node.js version 22.18.0 from devEngines.runtime
-v22.18.0

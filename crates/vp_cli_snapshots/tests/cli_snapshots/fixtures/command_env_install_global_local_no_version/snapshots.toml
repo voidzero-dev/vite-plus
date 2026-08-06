@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_install_global_local_no_version"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "."], continue-on-failure = true },
+  { argv = ["vp", "list", "-g", "global-local-no-version"], continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "global-local-no-version"], continue-on-failure = true },
+]

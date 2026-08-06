@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_upgrade_vitest_non_runtime_only_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "non-runtime @vitest packages must not keep a vitest pin", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "internal packages align, eslint plugin stays independent, vitest is removed", continue-on-failure = true },
+]

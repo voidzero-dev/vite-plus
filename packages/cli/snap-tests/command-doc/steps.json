@@ -1,7 +1,0 @@
-{
-  "ignoredPlatforms": ["win32", "darwin", "linux"],
-  "commands": [
-    "vp run doc # build documentation",
-    "vp run doc # build documentation again should hit the cache"
-  ]
-}

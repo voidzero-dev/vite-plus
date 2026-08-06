@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_vitest_import_only"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "ordinary vitest imports should migrate without retaining direct vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "direct dependency and shared pin should be removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "example.spec.ts"], comment = "source import should use the Vite+ public surface", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], continue-on-failure = true },
+]

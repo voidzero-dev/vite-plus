@@ -1,0 +1,6 @@
+[[case]]
+name = "dev_engines_runtime_pnpm11"
+vp = "global"
+steps = [
+  { argv = ["vp", "dlx", "-s", "print-current-version"], comment = "should print Node.js version 22.22.2 from devEngines.runtime", continue-on-failure = true },
+]

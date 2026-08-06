@@ -1,0 +1,69 @@
+# migration_eslint_monorepo_package_only
+
+## `vp migrate --no-interactive`
+
+migration should warn about package-only eslint
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.
+◇ Migrated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• 2 config updates applied
+```
+
+## `vpt print-file package.json`
+
+check root package.json
+
+```
+{
+  "name": "migration-eslint-monorepo-package-only",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@10.18.0"
+}
+```
+
+## `vpt print-file packages/app/package.json`
+
+check app eslint preserved (not migrated)
+
+```
+{
+  "name": "app",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
+```
+
+## `vpt print-file packages/app/eslint.config.mjs`
+
+check package eslint config preserved
+
+```
+export default [
+  {
+    rules: {
+      'no-unused-vars': 'error',
+    },
+  },
+];
+```

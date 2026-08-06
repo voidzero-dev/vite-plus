@@ -6,20 +6,20 @@
 
 You'll need the following tools installed on your system:
 
-```
+```bash
 brew install pnpm node just cmake
 ```
 
 Install Rust & Cargo using rustup:
 
-```
+```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install cargo-binstall
 ```
 
 Initial setup to install dependencies for Vite+:
 
-```
+```bash
 just init
 ```
 
@@ -49,13 +49,13 @@ just init
 
 To create a release build of Vite+ and all upstream dependencies, run:
 
-```
+```bash
 just build
 ```
 
 ## Install the Vite+ Global CLI from source code
 
-```
+```bash
 pnpm bootstrap-cli
 vp --version
 ```
@@ -70,7 +70,7 @@ vp upgrade --force
 
 ## Validate the local build against a real project
 
-Unit and snap tests don't cover everything. Interactive flows in particular (prompts, pickers, scaffolding) are easiest to validate by running your work-in-progress CLI inside a real Vite+ project.
+Automated tests don't cover everything. Complex flows such as prompts, pickers, and scaffolding are also worth validating by running your work-in-progress CLI inside a real Vite+ project.
 
 First, understand how `vp` picks which `vite-plus` to run: for JS-backed commands (such as `vp create`), the global `vp` binary resolves `vite-plus` from the project's `node_modules` first and only falls back to the global installation in `~/.vite-plus`. If your test project has `vite-plus` installed from npm, `pnpm bootstrap-cli` alone will not make it run your local code.
 
@@ -118,7 +118,7 @@ pnpm local-registry --pack --serve
 Notes:
 
 - The served versions carry an old publish time, so `minimumReleaseAge` gates never quarantine them, and wrapped runs get throwaway Yarn Berry / bun caches (both cache registry state in ways that would otherwise leak stale local builds between runs).
-- The same server backs the install snap fixtures (`localVitePlusPackages` in `steps.json`) and ecosystem e2e (`ecosystem-ci/patch-project.ts`), so a flow that works here works there too.
+- The same server backs PTY snapshot cases with `local-registry = true` and ecosystem e2e (`ecosystem-ci/patch-project.ts`), so a flow that works here works there too.
 - `pnpm local-registry:ps` lists any registry processes still running (e.g. a `--serve` you forgot, or a wrapper that was killed mid-run); `pnpm local-registry:kill` stops them all and removes their leftover temp caches.
 
 ### Global CLI (Rust) changes
@@ -134,13 +134,13 @@ vp --version
 
 You can run this command to build, test and check if there are any snapshot changes:
 
-```
+```bash
 pnpm bootstrap-cli && pnpm test && git status
 ```
 
 ## CLI Snapshot Tests (PTY runner)
 
-CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vite_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
+CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vp_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
 
 ```bash
 # Build vp and run the whole suite
@@ -153,26 +153,19 @@ just snapshot-test create
 UPDATE_SNAPSHOTS=1 just snapshot-test create
 ```
 
-The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vite_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
+The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
 
-## Running Snap Tests (legacy)
+## Submitting Pull Requests
 
-The legacy snap trees in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI) still run in CI while they are migrated to the PTY runner (`tool migrate-snap-tests`). Do not add new cases to them.
+Prioritize stacked pull requests when your work splits into reviewable layers, for example a refactor PR with the feature PR that depends on it stacked on top. Reviewers handle a stack of small PRs faster than one large PR, and each layer merges on its own.
+
+GitHub has built-in stacked pull requests ([public preview](https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/), rolling out to all repositories). Create stacks on github.com, or from the terminal:
 
 ```bash
-# Run all snap tests (local + global)
-pnpm -F vite-plus snap-test
-
-# Run only local CLI snap tests
-pnpm -F vite-plus snap-test-local
-pnpm -F vite-plus snap-test-local <name-filter>
-
-# Run only global CLI snap tests
-pnpm -F vite-plus snap-test-global
-pnpm -F vite-plus snap-test-global <name-filter>
+gh extension install github/gh-stack
 ```
 
-Legacy snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
+Stacked pull requests require all branches to be in this repository; GitHub does not support cross-fork stacks ([reference](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)). If you contribute from a fork, split large work into a sequence of standalone PRs instead.
 
 ## Verified Commits
 
@@ -181,7 +174,6 @@ All commits in PR branches should be GitHub-verified so reviewers can confirm co
 Set up local commit signing and GitHub verification first:
 
 - Follow GitHub's guide for GPG commit signature verification: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#gpg-commit-signature-verification
-- If you use Graphite, add the Graphite GPG key to your GitHub account from the Graphite UI as well, otherwise commits updated by Graphite won't show as verified.
 
 After setup, re-sign any existing commits in your branch so the full branch is verified:
 
@@ -208,7 +200,7 @@ git push --force-with-lease
 
 To sync the latest upstream dependencies such as Rolldown and Vite, run:
 
-```
+```bash
 pnpm tool sync-remote
 just build
 ```

@@ -44,12 +44,12 @@ The vite-task repository has a working implementation of exactly this design, us
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pty_terminal`             | Spawns a child in a PTY (`portable-pty`), feeds output through a `vt100` emulator, answers cursor-position queries, handles resize and ctrl-c. Encodes platform workarounds: ConPTY on Windows, a global lock for musl PTY crashes, macOS slave-fd lifetime for EIO truncation. |
 | `pty_terminal_test`        | `TestTerminal` wrapper plus `Reader::expect_milestone(name)`: block until the child emits a named milestone, then return the rendered screen.                                                                                                                                   |
-| `pty_terminal_test_client` | Child-side helper that encodes milestones as OSC 8 hyperlinks (`https://milestone.invalid/<hex(name)>` with a zero-width-space anchor), which survive both Unix PTYs and Windows ConPTY and arrive inline with the output they mark.                                            |
+| `pty_terminal_test_client` | Child-side helper that encodes milestones as window-title updates (`OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)>`, a fresh id per emission), which survive both Unix PTYs and Windows ConPTY and arrive in-order with the output they mark.                          |
 | `snapshot_test`            | Minimal snapshot store: compare or update via `UPDATE_SNAPSHOTS=1`, write `<name>.new` on mismatch, return a unified diff as the failure message.                                                                                                                               |
 
-On top of these, `vite_task_bin/tests/e2e_snapshots` implements a `libtest-mimic` custom test target: fixtures declare cases in `snapshots.toml`, steps are argv arrays (no shell), interactive steps carry an ordered `interactions` list, and each case produces one Markdown snapshot containing the command lines, the interaction log, and fenced terminal screenshots captured at each milestone and at exit.
+On top of these, `vt_bin/tests/e2e_snapshots` implements a `libtest-mimic` custom test target: fixtures declare cases in `snapshots.toml`, steps are argv arrays (no shell), interactive steps carry an ordered `interactions` list, and each case produces one Markdown snapshot containing the command lines, the interaction log, and fenced terminal screenshots captured at each milestone and at exit.
 
-vite-plus already depends on vite-task crates via git (`fspy`, `vite_glob`, `vite_path`, `vite_str`, `vite_task`, `vite_workspace`), and the Rust CLI's interactive picker work is planned on `vite_select`, which already exposes the `after_render` hook that milestone emission needs. Reusing this stack is the lowest-risk path to deterministic interactive testing.
+vite-plus already depends on vite-task crates via git (`fspy`, `vt_glob`, `vt_path`, `vt_str`, `vt`, `vt_workspace`), and the Rust CLI's interactive picker work is planned on `vt_select`, which already exposes the `after_render` hook that milestone emission needs. Reusing this stack is the lowest-risk path to deterministic interactive testing.
 
 ## Goals
 
@@ -71,7 +71,7 @@ vite-plus already depends on vite-task crates via git (`fspy`, `vite_glob`, `vit
 New layout (names open to bikeshedding):
 
 ```
-crates/vite_cli_snapshots/          # dev-only crate, never published or packaged
+crates/vp_cli_snapshots/          # dev-only crate, never published or packaged
 ├── Cargo.toml                      # publish = false; dev-deps: libtest-mimic,
 │                                   #   pty_terminal_test, snapshot_test
 ├── src/bin/vpt.rs                  # test utility multitool (own bin target)
@@ -90,9 +90,9 @@ crates/vite_cli_snapshots/          # dev-only crate, never published or package
                 └── <case>.md       # recorded snapshots
 ```
 
-The runner is a dedicated workspace crate, not a test target of `crates/vite_global_cli`. The product crate stays untouched: no test-only bin in its target list, no `vpt` dependencies in its dependency graph, no packaging exclusions to maintain. `vpt` is a bin target of the runner crate itself, so `CARGO_BIN_EXE_vpt` still resolves it for free.
+The runner is a dedicated workspace crate, not a test target of `crates/vp_global_cli`. The product crate stays untouched: no test-only bin in its target list, no `vpt` dependencies in its dependency graph, no packaging exclusions to maintain. `vpt` is a bin target of the runner crate itself, so `CARGO_BIN_EXE_vpt` still resolves it for free.
 
-The one thing this layout gives up is `CARGO_BIN_EXE_vp` (Cargo only sets it for tests of the package that defines the binary). Instead the runner resolves `vp` at runtime from its own executable location: test binaries run from `target/<profile>/deps/`, so the global binary sits in the parent directory (the same technique `assert_cmd::cargo_bin` uses). A runtime lookup is also friendlier to the Windows CI flow, where nextest archives are built on Linux and run on another machine, than a compile-time absolute path baked in by `env!`. Build ordering is handled by the entry-point recipe (`just snapshot-test` and the pnpm wrapper run `cargo build -p vite_global_cli` before `cargo test -p vite_cli_snapshots`); if the binary is missing, the runner fails fast with that instruction rather than testing a stale build.
+The one thing this layout gives up is `CARGO_BIN_EXE_vp` (Cargo only sets it for tests of the package that defines the binary). Instead the runner resolves `vp` at runtime from its own executable location: test binaries run from `target/<profile>/deps/`, so the global binary sits in the parent directory (the same technique `assert_cmd::cargo_bin` uses). A runtime lookup is also friendlier to the Windows CI flow, where nextest archives are built on Linux and run on another machine, than a compile-time absolute path baked in by `env!`. Build ordering is handled by the entry-point recipe (`just snapshot-test` and the pnpm wrapper run `cargo build -p vp_global_cli` before `cargo test -p vp_cli_snapshots`); if the binary is missing, the runner fails fast with that instruction rather than testing a stale build.
 
 Execution flow per case:
 
@@ -125,7 +125,7 @@ local-registry = false                      # optional; serve checkout packages 
 seed-runtime = true                         # default; symlink a provisioned managed JS
                                             #   runtime into the case VP_HOME (false for
                                             #   runtime-provisioning tests)
-env = { VITE_DISABLE_AUTO_INSTALL = "1" }   # optional; case-wide env additions
+env = { CUSTOM_ENV = "value" }             # optional; case-wide env additions
 unset-env = ["GITHUB_ACTIONS"]              # optional; remove from the baseline env
 steps = [ ... ]
 after = [ ... ]                             # optional cleanup steps, never snapshotted
@@ -212,7 +212,7 @@ The snapshot then contains the rendered picker at cursor position 0, at cursor p
 
 ### Global (`vp = "global"`)
 
-The runner runs the freshly built Rust binary, resolved from the target directory next to the test executable (see Design overview), linked into the per-case bin dir under the names `vp`, `vpr`, and `vpx`. `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` points at the checkout's `packages/cli/dist`, as today.
+The runner runs the freshly built Rust binary, resolved from the target directory next to the test executable (see Design overview), linked into the per-case bin dir under the names `vp`, `vpr`, and `vpx`. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` points at the checkout's `packages/cli/dist`, as today.
 
 This removes two standing costs of the current global runner:
 
@@ -237,13 +237,13 @@ The per-case bin dir fronts `packages/cli/bin` (the JS dispatch), which requires
 
 ## Milestone protocol and CLI instrumentation
 
-A milestone is an invisible marker the CLI writes into its output stream at a deterministic render point. The encoding is the vite-task protocol unchanged: an OSC 8 hyperlink whose URI is `https://milestone.invalid/<hex(name)>`, anchored on a zero-width space. It survives Unix PTYs and Windows ConPTY, arrives in-order with the output it marks, and renders as nothing in a real terminal.
+A milestone is an invisible marker the CLI writes into its output stream at a deterministic render point. The encoding is the vite-task protocol: a window-title update (`OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)>`) with a fresh random id per emission so repeated names stay observable as distinct title changes. It survives Unix PTYs and Windows ConPTY, arrives in-order with the output it marks, and renders as nothing in a real terminal's screen content.
 
 Emission is gated on `VP_EMIT_MILESTONES=1`, which only the runner sets. vp is a widely distributed CLI whose output gets piped into logs and other tools, so unconditional emission (vite-task's choice) is not appropriate here.
 
 Instrumentation points:
 
-- **Rust prompts** (`crates/vite_global_cli`, `crates/vite_shared`): emit via `pty_terminal_test_client` (a new git dependency, same source as the existing vite-task crates). The planned interactive package picker builds on `vite_select`, whose `after_render(RenderState)` hook was designed for exactly this; the picker emits `select:app-target:<index>` per render.
+- **Rust prompts** (`crates/vp_global_cli`, `crates/vp_shared`): emit via `pty_terminal_test_client` (a new git dependency, same source as the existing vite-task crates). The planned interactive package picker builds on `vt_select`, whose `after_render(RenderState)` hook was designed for exactly this; the picker emits `select:app-target:<index>` per render.
 - **TS prompts** (`packages/prompts`): a small helper (`emitMilestone(name)`) writes the same byte sequence, wired into each prompt component's render loop. Naming convention: `<kind>:<id>:<state>`, for example `text:project-name:my-app`, `select:template:1`, `confirm:approve-builds:yes`, `spinner:install:stop`. Prompt call sites gain a stable `id` (the component kind plus an explicit name where ambiguous).
 - **Non-prompt sync points**: long-running commands may mark stable lifecycle points (`dev-server:ready`, `watch:rebuilt`) so tests of servers and watch modes have something to wait on before sending the next keystroke or ctrl-c. This is what unblocks the parked `command-pack-watch-restart` case.
 
@@ -313,7 +313,7 @@ What should shrink or disappear relative to today's ~50 regexes: spinner-frame m
 
 ## The vpt test utility
 
-`vpt` is a small Rust multitool (a bin target of `crates/vite_cli_snapshots`, so its dependencies never touch the product crates) replacing the shell built-ins that dominate the old corpus (427 `cat`, 141 `test`, plus `mkdir`/`rm`/`ls`/`echo`/`cp`/`chmod`/`printf` and `json-edit`).
+`vpt` is a small Rust multitool (a bin target of `crates/vp_cli_snapshots`, so its dependencies never touch the product crates) replacing the shell built-ins that dominate the old corpus (427 `cat`, 141 `test`, plus `mkdir`/`rm`/`ls`/`echo`/`cp`/`chmod`/`printf` and `json-edit`).
 
 It is deliberately not a new design. vite-task's `vtt` multitool already covers almost all of this surface with 20 subcommands, so `vpt` adopts `vtt`'s subcommand names and semantics verbatim wherever they overlap and ports the implementations (they are std-only by design, a few dozen lines each). Keeping the contract identical means fixtures, snapshots, and habits transfer between the two repos.
 
@@ -338,7 +338,7 @@ Payload subcommands, for cases where the command under test spawns other command
 
 vp-specific additions with no `vtt` counterpart: `vpt json-edit <file> <dot-path> <value>` (the existing snap-tests `json-edit` helper for fixture manifest edits) and `vpt chmod`.
 
-Reusing `vtt` itself was considered and rejected. Cargo git dependencies provide library code only, never a dependency's binaries, so obtaining the `vtt` executable would require an out-of-band `cargo install --git` pinned in lockstep with the other vite-task git deps across local dev, CI, and nextest archives. Reusing it as a library would mean depending on `vite_task_bin` and dragging the entire `vt` product tree (task engine, TUI, server, fspy) into the runner build for a handful of trivial helpers. And vp-specific subcommands would then need upstream PRs plus dep bumps before tests here could use them. If the duplication ever becomes a maintenance burden, the designated path is upstream extraction: vite-task moves the subcommands into a small library crate (as `pty_terminal` already is for the emulator) and `vtt`/`vpt` become thin bin wrappers over it.
+Reusing `vtt` itself was considered and rejected. Cargo git dependencies provide library code only, never a dependency's binaries, so obtaining the `vtt` executable would require an out-of-band `cargo install --git` pinned in lockstep with the other vite-task git deps across local dev, CI, and nextest archives. Reusing it as a library would mean depending on `vt_bin` and dragging the entire `vt` product tree (task engine, TUI, server, fspy) into the runner build for a handful of trivial helpers. And vp-specific subcommands would then need upstream PRs plus dep bumps before tests here could use them. If the duplication ever becomes a maintenance burden, the designated path is upstream extraction: vite-task moves the subcommands into a small library crate (as `pty_terminal` already is for the emulator) and `vtt`/`vpt` become thin bin wrappers over it.
 
 Everything `vpt` prints is deterministic and platform-identical, which directly attacks the biggest cause of the 182 Windows skips. The subcommand list grows as migration finds patterns worth first-classing; anything not worth a subcommand is a sign the old case was testing the shell, not vp.
 
@@ -354,9 +354,9 @@ The registry tool itself is unchanged; it already serves packed tarballs overlai
 
 ## CI integration
 
-- The suite is a cargo test target: `cargo build -p vite_global_cli` followed by `cargo test -p vite_cli_snapshots --test cli_snapshots`, wrapped in a `just snapshot-test` recipe. Sharding uses `cargo nextest --partition` instead of the custom `--shard=i/n` logic.
-- Both flavors run in CI from day one, in dedicated jobs. `cli-snapshot-test` (Linux and macOS, one leg per OS) builds `packages/cli/dist`, installs the release binary, and runs the full suite with the global flavor pointed at the installed binary via `VP_SNAP_GLOBAL_VP`, so no second `vite_global_cli` compile is needed. (`VP_SNAP_SKIP_FLAVORS` remains available for environments that cannot provide one of the flavors, e.g. local runs without a built `dist/`.)
-- The Windows story reuses the existing cross-compile infrastructure: `build-windows-tests` produces a dedicated `-p vite_cli_snapshots` nextest archive (carrying the test binary and `vpt`), and the `cli-snapshot-test-windows` job runs it on `windows-latest` with no Rust toolchain. The global `vp` comes prebuilt from `build-windows-cli` via `VP_SNAP_GLOBAL_VP`, the JS CLI is built on the runner for the local flavor, and nextest's `--workspace-remap` rewrites `CARGO_MANIFEST_DIR`/`CARGO_BIN_EXE_vpt` at run time so the relocated binaries find fixtures and helpers in the checkout (the runner prefers those runtime values over compile-time paths for exactly this reason).
+- The suite is a cargo test target: `cargo build -p vp_global_cli` followed by `cargo test -p vp_cli_snapshots --test cli_snapshots`, wrapped in a `just snapshot-test` recipe. Sharding uses `cargo nextest --partition` instead of the custom `--shard=i/n` logic.
+- Both flavors run in CI from day one, in dedicated jobs. `cli-snapshot-test` (Linux and macOS, one leg per OS) builds `packages/cli/dist`, installs the release binary, and runs the full suite with the global flavor pointed at the installed binary via `VP_SNAP_GLOBAL_VP`, so no second `vp_global_cli` compile is needed. (`VP_SNAP_SKIP_FLAVORS` remains available for environments that cannot provide one of the flavors, e.g. local runs without a built `dist/`.)
+- The Windows story reuses the existing cross-compile infrastructure: `build-windows-tests` produces a dedicated `-p vp_cli_snapshots` nextest archive (carrying the test binary and `vpt`), and the `cli-snapshot-test-windows` job runs it on `windows-latest` with no Rust toolchain. The global `vp` comes prebuilt from `build-windows-cli` via `VP_SNAP_GLOBAL_VP`, the JS CLI is built on the runner for the local flavor, and nextest's `--workspace-remap` rewrites `CARGO_MANIFEST_DIR`/`CARGO_BIN_EXE_vpt` at run time so the relocated binaries find fixtures and helpers in the checkout (the runner prefers those runtime values over compile-time paths for exactly this reason).
 - musl coverage keeps its Alpine container leg; `pty_terminal` already serializes PTY spawn on musl internally.
 - Pass/fail is the test exit code. The `git diff` gate and `retry-failed-snap-tests.sh` do not apply to the new suite. If a case proves flaky, the fix is a milestone or a redaction rule, not a rerun; a temporary quarantine (`ignore = true` plus an issue) is the pressure valve.
 
@@ -366,7 +366,7 @@ Developer commands:
 just snapshot-test                                                  # build vp, run all
 just snapshot-test create                                           # substring filter
 UPDATE_SNAPSHOTS=1 just snapshot-test create_basic                  # accept changes
-cargo test -p vite_cli_snapshots --test cli_snapshots -- create     # direct, if vp is built
+cargo test -p vp_cli_snapshots --test cli_snapshots -- create     # direct, if vp is built
 ```
 
 Thin pnpm wrappers (`pnpm snapshot-test [filter]`) keep DX parity with today's scripts.
@@ -380,7 +380,7 @@ tool migrate-snap-tests packages/cli/snap-tests --vp local [name-filter]
 tool migrate-snap-tests packages/cli/snap-tests-global --vp global [name-filter]
 ```
 
-For each old case directory it emits a new fixture under `crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/` and appends to a migration report.
+For each old case directory it emits a new fixture under `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/` and appends to a migration report.
 
 ### Field mapping
 
@@ -426,9 +426,9 @@ Old `snap.txt` files are not converted; the formats measure different things (by
 
 A TypeScript runner (node-pty plus a JS vt100 such as `@xterm/headless`) was considered, since the current runner and the local CLI are TS. Rejected because: the milestone protocol, ConPTY ordering quirks, musl PTY crashes, macOS EIO truncation, and the snapshot/diff mechanics are already solved and battle-tested in crates this repo can consume with an existing dependency pattern (git deps on vite-task); node-pty is a native module with its own build/prebuilt matrix; and a Rust `libtest-mimic` target integrates with the workspace's existing `just test` / nextest / xwin CI machinery. The TS side still participates (milestone emission in `packages/prompts`, the migration tool, the local registry), but process orchestration is Rust.
 
-### Dedicated runner crate, not a test target of `vite_global_cli`
+### Dedicated runner crate, not a test target of `vp_global_cli`
 
-vite-task hosts its runner inside the product bin crate (`vite_task_bin`), which is what makes `CARGO_BIN_EXE_vt` available to its tests. Mirroring that here was considered and rejected. Bin targets cannot use dev-dependencies, so `vpt`'s dependencies would become regular dependencies of `vite_global_cli`, growing the product build graph with test-only code; every release build of the package would produce an extra binary that packaging must exclude forever; and the product crate's manifest would stop describing the product. A dedicated `crates/vite_cli_snapshots` (with `publish = false`, excluded from release builds entirely) keeps all of that out of the product. The price is resolving `vp` at runtime from the target directory instead of `env!("CARGO_BIN_EXE_vp")`, plus a build-ordering wrapper recipe; the runtime lookup is also the more robust choice for relocated nextest archives on Windows.
+vite-task hosts its runner inside the product bin crate (`vt_bin`), which is what makes `CARGO_BIN_EXE_vt` available to its tests. Mirroring that here was considered and rejected. Bin targets cannot use dev-dependencies, so `vpt`'s dependencies would become regular dependencies of `vp_global_cli`, growing the product build graph with test-only code; every release build of the package would produce an extra binary that packaging must exclude forever; and the product crate's manifest would stop describing the product. A dedicated `crates/vp_cli_snapshots` (with `publish = false`, excluded from release builds entirely) keeps all of that out of the product. The price is resolving `vp` at runtime from the target directory instead of `env!("CARGO_BIN_EXE_vp")`, plus a build-ordering wrapper recipe; the runtime lookup is also the more robust choice for relocated nextest archives on Windows.
 
 ### argv steps and `vpt`, not a shell
 
@@ -463,7 +463,7 @@ Shared global state forced `serial`, ordering hazards, and the bootstrap byte-ma
 
 ## Rollout plan
 
-Phase 1, runner: add the git deps (`pty_terminal_test`, `pty_terminal_test_client`, `snapshot_test`), the `crates/vite_cli_snapshots` crate with its `cli_snapshots` test target and `vpt` bin, flavor provisioning, redaction, the `just snapshot-test` recipe, and CI wiring. Land with a handful of hand-written cases covering both flavors, one interactive case, and one `local-registry` case.
+Phase 1, runner: add the git deps (`pty_terminal_test`, `pty_terminal_test_client`, `snapshot_test`), the `crates/vp_cli_snapshots` crate with its `cli_snapshots` test target and `vpt` bin, flavor provisioning, redaction, the `just snapshot-test` recipe, and CI wiring. Land with a handful of hand-written cases covering both flavors, one interactive case, and one `local-registry` case.
 
 Phase 2, instrumentation: milestone emission in `packages/prompts` (clack components) and in the Rust prompt/selector paths. Land the PR #2031 follow-up picker tests and a `vp create` interactive flow as the proof cases, plus the parked watch-restart case.
 

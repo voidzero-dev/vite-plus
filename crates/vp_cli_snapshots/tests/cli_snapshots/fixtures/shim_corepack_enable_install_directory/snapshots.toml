@@ -1,0 +1,17 @@
+[[case]]
+name = "shim_corepack_enable_install_directory"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "home/js_runtime/node/22.18.0/bin"], comment = "Isolated VP_HOME with a fake managed Node runtime layout", snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], comment = "Project Node.js version", snapshot = false },
+  { argv = ["vpt", "write-file", "home/js_runtime/node/22.18.0/bin/node", "#!/bin/sh\necho fake-node\n"], comment = "Fake node binary", snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "home/js_runtime/node/22.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "cp", "fake-corepack.sh", "home/js_runtime/node/22.18.0/bin/corepack"], comment = "Fake bundled corepack that echoes its args", snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "home/js_runtime/node/22.18.0/bin/corepack"], snapshot = false },
+  { argv = ["vp", "env", "setup"], envs = [["VP_HOME", "${workspace}/home"]], comment = "Create shims in the isolated home", snapshot = false },
+  { argv = ["corepack", "use", "pnpm@10"], envs = [["VP_HOME", "${workspace}/home"], ["PATH", "${workspace}/home/bin:${PATH}"]], comment = "Non-link commands run unchanged" },
+  { argv = ["corepack", "enable", "--install-directory", "/tmp/custom-dir"], envs = [["VP_HOME", "${workspace}/home"], ["PATH", "${workspace}/home/bin:${PATH}"]], comment = "Explicit --install-directory is respected, clobbered npm shim is restored" },
+  { argv = ["corepack", "enable"], envs = [["VP_HOME", "${workspace}/home"], ["PATH", "${workspace}/home/bin:${PATH}"]], comment = "--install-directory defaults to VP_HOME/bin" },
+  { argv = ["vpt", "stat-file", "home/bin/npm", "--assert", "symlink"], comment = "Vite+ owns the npm shim" },
+]

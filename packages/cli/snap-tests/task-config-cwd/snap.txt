@@ -1,4 +1,0 @@
-> vp run hello
-~/subfolder$ node a.js
-hello from subfolder
-

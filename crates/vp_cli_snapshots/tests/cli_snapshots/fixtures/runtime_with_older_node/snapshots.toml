@@ -1,0 +1,6 @@
+[[case]]
+name = "runtime_with_older_node"
+vp = "global"
+steps = [
+  { argv = ["vp", "exec", "node", "--version"], comment = ".node-version pins Node 20.13.0 (below the declared engines floor) and still runs", continue-on-failure = true },
+]

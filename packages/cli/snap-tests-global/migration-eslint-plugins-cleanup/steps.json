@@ -1,8 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # migration should remove ESLint, plugins, configs, scopes, formatters, and peer eslint",
-    "cat package.json # verify the comprehensive ESLint ecosystem cleanup",
-    "test ! -f eslint.config.mjs # check eslint config is removed",
-    "cat vite.config.ts # verify the generated vite.config.ts"
-  ]
-}

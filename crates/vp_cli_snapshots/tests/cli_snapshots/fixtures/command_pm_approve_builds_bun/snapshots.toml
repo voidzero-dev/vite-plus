@@ -1,0 +1,10 @@
+[[case]]
+name = "command_pm_approve_builds_bun"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "approve-builds", "--help"], comment = "should show help with --all caveat", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds"], comment = "bun no-args: prints contextual note, exit 0", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "!core-js"], comment = "deny-only: prints deny warn, no redundant note", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "--all"], comment = "forwards bun pm trust --all (errors on empty project — no lockfile)", continue-on-failure = true },
+]

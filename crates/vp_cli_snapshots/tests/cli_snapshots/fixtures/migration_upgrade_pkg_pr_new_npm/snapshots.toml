@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_upgrade_pkg_pr_new_npm"
+vp = "global"
+env = { VP_OVERRIDE_PACKAGES = "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\",\"vitest\":\"4.1.10\"}", VP_VERSION = "0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617" }
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "bridge commit builds replace every stale managed spec", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "direct dependencies and npm overrides use the same immutable commit version", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "bridge commit migration is idempotent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "rerun leaves package.json unchanged (identical to the first migration)", continue-on-failure = true },
+]

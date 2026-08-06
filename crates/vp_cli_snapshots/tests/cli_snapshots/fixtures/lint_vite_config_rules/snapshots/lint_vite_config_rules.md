@@ -1,0 +1,20 @@
+# lint_vite_config_rules
+
+## `vp lint`
+
+Test that vp lint reads rules from vite.config.ts
+
+```
+
+  ⚠ eslint(no-console): Unexpected console statement.
+   ╭─[src/has-console.js:3:3]
+ 2 │ function example() {
+ 3 │   console.log('hello');
+   ·   ───────────
+ 4 │   return 'hello';
+   ╰────
+  help: Delete this console statement.
+
+Found 1 warning and 0 errors.
+Finished in <duration> on 3 files with <n> rules using <n> threads.
+```

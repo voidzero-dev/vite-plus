@@ -1,0 +1,12 @@
+[[case]]
+name = "command_env_install_global_local"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "."], continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "./another-package.tgz"], continue-on-failure = true },
+  { argv = ["vp", "list", "-g", "just-a-normal-package"], continue-on-failure = true },
+  { argv = ["vp", "list", "-g", "another-normal-package"], continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "just-a-normal-package", "another-normal-package"], continue-on-failure = true },
+]

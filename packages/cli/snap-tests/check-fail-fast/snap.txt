@@ -1,5 +1,0 @@
-[1]> vp check
-error: Formatting issues found
-src/index.js (<variable>ms)
-
-Found formatting issues in 1 file (<variable>ms, <variable> threads). Run `vp check --fix` to fix them.

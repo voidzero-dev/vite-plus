@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_monorepo_root_vitest_adjacent"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "root with a vitest-adjacent dep but no direct vitest still gets a direct vitest pin", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "vitest pinned at the root even though vite-plus is injected first", continue-on-failure = true },
+]

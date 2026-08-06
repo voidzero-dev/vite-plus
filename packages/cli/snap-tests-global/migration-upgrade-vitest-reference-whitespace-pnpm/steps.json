@@ -1,9 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # TypeScript whitespace in a Vitest type directive is valid",
-    "cat package.json # rewritten directive does not retain a redundant Vitest dependency",
-    "cat env.d.ts # directive is rewritten to the Vite+ public type surface",
-    "cat pnpm-workspace.yaml # rewritten directive does not retain shared Vitest management",
-    "vp migrate --no-interactive # directive rewriting is stable on rerun"
-  ]
-}

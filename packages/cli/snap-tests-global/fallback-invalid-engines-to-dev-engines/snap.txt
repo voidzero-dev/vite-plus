@@ -1,8 +1,0 @@
-> vp exec node -e "console.log(process.version)" # Should use devEngines.runtime 22.18.0, not LTS
-warning: invalid version 'invalid' in engines.node, ignoring
-v<semver>
-
-> vp env which node # Should show devEngines.runtime source
-<vite-plus-home>/js_runtime/node/<semver>/bin/node
-  Version:    <semver>
-  Source:     <cwd>/package.json

@@ -1,0 +1,7 @@
+[[case]]
+name = "command_publish_pnpm10"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "publish", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "--dry-run", "--", "--loglevel", "error"], comment = "should preview publish without actually publishing (uses pnpm publish --dry-run)", continue-on-failure = true },
+]

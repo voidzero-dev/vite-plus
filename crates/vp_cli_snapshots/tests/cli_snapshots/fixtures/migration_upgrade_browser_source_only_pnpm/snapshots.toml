@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_upgrade_browser_source_only_pnpm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "source-only browser provider should be restored", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "provider, framework peer, and local vitest should be present", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "shared vitest catalog and override should be present", continue-on-failure = true },
+]

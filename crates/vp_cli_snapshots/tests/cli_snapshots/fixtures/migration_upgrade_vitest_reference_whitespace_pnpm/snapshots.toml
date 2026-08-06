@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_upgrade_vitest_reference_whitespace_pnpm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "TypeScript whitespace in a Vitest type directive is valid", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "rewritten directive does not retain a redundant Vitest dependency", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "env.d.ts"], comment = "directive is rewritten to the Vite+ public type surface", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "rewritten directive does not retain shared Vitest management", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "directive rewriting is stable on rerun", continue-on-failure = true },
+]

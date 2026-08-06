@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_eslint"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect eslint and auto-migrate", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check eslint removed and scripts rewritten", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "eslint.config.mjs", "--assert-not", "file"], comment = "check eslint config is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check oxlint config merged into vite.config.ts", continue-on-failure = true },
+]

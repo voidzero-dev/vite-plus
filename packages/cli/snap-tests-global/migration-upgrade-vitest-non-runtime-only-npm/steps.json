@@ -1,7 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp migrate --no-interactive # non-runtime @vitest packages must not keep a vitest pin",
-    "cat package.json # internal packages align, eslint plugin stays independent, vitest is removed"
-  ]
-}

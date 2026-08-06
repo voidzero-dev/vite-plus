@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_upgrade_deprecated_coverage_c8_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "deprecated coverage-c8 has an independent version line", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "coverage-c8 must not be rewritten to a nonexistent Vitest 4 version", continue-on-failure = true },
+]

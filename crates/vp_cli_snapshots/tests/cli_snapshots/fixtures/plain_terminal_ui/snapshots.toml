@@ -1,0 +1,15 @@
+[[case]]
+name = "plain_terminal_ui"
+vp = "local"
+env = { VP_CLI_TEST = "0" }
+steps = [
+  { argv = ["vp", "run", "hello"], envs = [["FOO", "1"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "hit cache", envs = [["FOO", "1"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "env changed", envs = [["FOO", "2"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "env added", envs = [["FOO", "2"], ["BAR", "1"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "env removed", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "input.txt", "bar\n"], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "input changed", continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "untrackedEnv changed", envs = [["VITE_TASK_PASS_THROUGH_ENVS", "PTE"]], continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "cwd changed", envs = [["VITE_TASK_PASS_THROUGH_ENVS", "PTE"], ["VITE_TASK_CWD", "subfolder"]], continue-on-failure = true },
+]

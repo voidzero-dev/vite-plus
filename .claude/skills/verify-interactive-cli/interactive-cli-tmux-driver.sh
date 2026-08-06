@@ -1,6 +1,6 @@
 #!/bin/bash
-# Drive and capture an interactive `vp` (clack) prompt flow inside tmux, to verify
-# interactive UX that snap tests (which run non-interactively) never cover.
+# Drive and capture an interactive `vp` (clack) prompt flow inside tmux for
+# manual verification against an installed CLI.
 #
 # Usage:
 #   interactive-cli-tmux-driver.sh <project-dir> "<command>" [STOP_AT_REGEX]

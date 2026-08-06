@@ -1,0 +1,10 @@
+[[case]]
+name = "check_cache_enabled"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "run", "check"], comment = "first run should be cache miss", continue-on-failure = true },
+  { argv = ["vp", "run", "check"], comment = "second run should be cache hit", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "src/foo.js", "export const foo = 1;\n"], continue-on-failure = true },
+  { argv = ["vp", "run", "check"], comment = "third run should be cache miss after new file added", continue-on-failure = true },
+]

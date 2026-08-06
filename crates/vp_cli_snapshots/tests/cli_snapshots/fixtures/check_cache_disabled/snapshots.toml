@@ -1,0 +1,6 @@
+[[case]]
+name = "check_cache_disabled"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "check"], comment = "vp check should have cache disabled without run.cache", continue-on-failure = true },
+]

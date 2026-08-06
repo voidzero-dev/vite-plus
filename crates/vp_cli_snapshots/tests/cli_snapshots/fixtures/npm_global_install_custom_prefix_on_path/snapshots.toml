@@ -1,0 +1,16 @@
+[[case]]
+name = "npm_global_install_custom_prefix_on_path"
+vp = "global"
+serial = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "custom-prefix-on-path/bin"], snapshot = false },
+  { argv = ["npm", "install", "-g", "./npm-global-on-path-pkg"], envs = [["PATH", "${workspace}/custom-prefix-on-path/bin:${PATH}"], ["NPM_CONFIG_PREFIX", "${workspace}/custom-prefix-on-path"]], comment = "Should install without hint (bin dir on PATH)", tty = false },
+  # npm installs package bins as symlinks; the legacy `test -f` followed them.
+  { argv = ["vpt", "stat-file", "custom-prefix-on-path/bin/npm-global-on-path-cli", "--assert", "symlink"], comment = "Verify installed to custom prefix" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-on-path-cli", "--assert", "missing"], comment = "No link should be created" },
+]
+after = [
+  { argv = ["npm", "uninstall", "-g", "npm-global-on-path-pkg"], envs = [["NPM_CONFIG_PREFIX", "${workspace}/custom-prefix-on-path"]] },
+  { argv = ["vpt", "rm", "-rf", "custom-prefix-on-path"] },
+]

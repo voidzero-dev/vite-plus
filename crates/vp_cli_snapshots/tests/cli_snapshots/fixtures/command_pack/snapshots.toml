@@ -1,0 +1,10 @@
+[[case]]
+name = "command_pack"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pack", "-h"], comment = "should print the help message", continue-on-failure = true },
+  { argv = ["vp", "run", "pack"], comment = "should build the library", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "dist"], comment = "should have the library", continue-on-failure = true },
+  { argv = ["vp", "run", "pack"], comment = "should hit cache", continue-on-failure = true },
+]

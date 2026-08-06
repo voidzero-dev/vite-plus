@@ -1,9 +1,0 @@
-{
-  "commands": [
-    {
-      "command": "vp run build",
-      "ignoreOutput": true
-    },
-    "cat dist/index.html | grep 'run-verbatim-plugin-injected' # a verbatim build task under vp run should still load vite plugins"
-  ]
-}

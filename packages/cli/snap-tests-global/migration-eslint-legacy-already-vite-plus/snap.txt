@@ -1,8 +1,0 @@
-> vp migrate --no-interactive # should show legacy config warning and already using Vite+
-◇ Updated . to Vite+ <semver>
-• Node <semver>  pnpm <semver>
-• Dependencies:
-    vite-plus  latest → <semver>
-    vite              → <semver>
-• Package manager settings configured
-• Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.

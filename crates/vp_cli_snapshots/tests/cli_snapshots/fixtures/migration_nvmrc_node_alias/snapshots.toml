@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_nvmrc_node_alias"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "'node' alias should be mapped to lts/* with an info message", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = "check node alias is mapped to lts/*", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".nvmrc", "--assert-not", "file"], comment = "check .nvmrc is removed", continue-on-failure = true },
+]

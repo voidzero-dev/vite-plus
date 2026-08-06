@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp install --help | head -n 20 # print help message",
-    "vp install --prod # https://pnpm.io/cli/install#--prod--p",
-    "ls node_modules",
-    "vp install --prod # install again hit cache"
-  ]
-}

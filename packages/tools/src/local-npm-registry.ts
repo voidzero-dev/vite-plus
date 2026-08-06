@@ -9,11 +9,10 @@
 // Runs directly with `node` (erasable-syntax TypeScript, no loader needed).
 //
 // Used by:
-// - snap tests: the harness packs the checkout once per run (see
-//   `localVitePlusPackages` in `snap-test.ts`) and fixtures wrap commands with
-//   `node $SNAP_LOCAL_REGISTRY -- vp ...`. Fixtures may also provide a
+// - PTY snapshot tests: the runner packs the checkout once per run and starts
+//   a registry for cases with `local-registry = true`. Fixtures may provide a
 //   `./mock-manifest.json` (keyed by URL path, e.g. `"@your-org/create"`) and
-//   `./tarballs/<name>` in their case directory (the `create-org-*` cases).
+//   `./tarballs/<name>` in their case directory (the `create_org_*` cases).
 // - ecosystem e2e: `patch-project.ts` serves the e2e tgz artifacts with
 //   `--packages-dir` so `vp migrate` / `vp install` resolve the local build
 //   through the standard registry code paths.
@@ -55,6 +54,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
+import { exitCodeFromClose } from './exit-code.ts';
 import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
 
 interface PackageManifest {
@@ -162,8 +162,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 // `--pack-to <dir>`: pack the checkout packages into <dir> and exit, without
 // serving. The PTY snapshot runner calls this once per run, then points each
-// case's `--serve` registry at the shared dir via SNAP_LOCAL_VP_PACKAGES_DIR
-// (the packed-once-per-run optimization the legacy harness did in-process).
+// case's `--serve` registry at the shared dir via SNAP_LOCAL_VP_PACKAGES_DIR.
 if (packTo) {
   await packLocalVitePlusPackages(repoRoot, packTo);
   process.exit(0);
@@ -228,7 +227,8 @@ const upstreamAgent = new HttpsAgent({ keepAlive: true, maxSockets: 64 });
 // in a pnpm-packed tarball, so long-name (pax header) handling is unnecessary.
 function readPackageJsonFromTarball(tgzBytes: Buffer, sourcePath: string): PackageManifest {
   const tar = gunzipSync(tgzBytes);
-  for (let offset = 0; offset + 512 <= tar.length;) {
+  let offset = 0;
+  while (offset + 512 <= tar.length) {
     const rawName = tar.subarray(offset, offset + 100).toString();
     const nulIndex = rawName.indexOf('\0');
     const name = nulIndex === -1 ? rawName : rawName.slice(0, nulIndex);
@@ -579,7 +579,7 @@ server.listen(0, '127.0.0.1', () => {
   });
   child.on('exit', (code, signal) => {
     cleanupRegistryEnv(registryEnv);
-    const exitCode = code ?? (signal ? 128 : 0);
+    const exitCode = exitCodeFromClose(code, signal);
     server.close(() => process.exit(exitCode));
   });
 });

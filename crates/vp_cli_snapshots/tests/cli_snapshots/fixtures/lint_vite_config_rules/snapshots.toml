@@ -1,0 +1,6 @@
+[[case]]
+name = "lint_vite_config_rules"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint"], comment = "Test that vp lint reads rules from vite.config.ts", continue-on-failure = true },
+]

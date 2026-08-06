@@ -1,0 +1,8 @@
+[[case]]
+name = "command_env_install_fail"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "voidzero-nonexistent-pkg-xyz-12345"], comment = "Install non-existent package", continue-on-failure = true },
+]

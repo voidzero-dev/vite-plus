@@ -1,0 +1,12 @@
+[[case]]
+name = "bin_oxfmt_wrapper"
+vp = "local"
+# The wrapper is addressed by path through the workspace parent, the legacy
+# runner's layout.
+link-node-modules = true
+steps = [
+  { argv = ["node", "../node_modules/vite-plus/bin/oxfmt"], comment = "should reject non-LSP usage", continue-on-failure = true },
+  { argv = ["node", "../node_modules/vite-plus/bin/oxfmt", "--help"], comment = "should reject non-LSP usage", continue-on-failure = true },
+  { argv = ["node", "../node_modules/vite-plus/bin/oxfmt", "--lsp", "--help"], comment = "should allow LSP mode" },
+  { argv = ["node", "../node_modules/vite-plus/bin/oxfmt", "--stdin-filepath=a.ts", "--help"], comment = "should allow Stdin mode" },
+]

@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_not_supported_vitest3"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"3.2.4\"}"], comment = "stub the installed vitest so migrate reads the unsupported version offline", snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should fail because vitest version is not supported", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json is not updated", continue-on-failure = true },
+]

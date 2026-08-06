@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_skip_vite_peer_dependency"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve vite peer contracts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/index.ts"], comment = "vite imports stay public, vitest imports rewrite", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "vite peer range is preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]
