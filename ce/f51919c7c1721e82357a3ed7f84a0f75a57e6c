@@ -1,0 +1,75 @@
+README.md
+  s_431aa2d8c58680::t_2d309ffd18c114 26,200
+packages/cli/README.md
+  s_431aa2d8c58680::t_e02b3e892e8e97 20,194
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_unknown.md
+  s_431aa2d8c58680::t_7f1eab8d1dadae 5,10-11,16,21
+crates/vp_global_cli/src/command_picker.rs
+  s_431aa2d8c58680::t_6c39cbca76ce14 112
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/cli_helper_message/snapshots/cli_helper_message.md
+  s_431aa2d8c58680::t_cac1b02ef09605 54
+docs/guide/index.md
+  s_431aa2d8c58680::t_6ec3d513ae186e 129
+crates/vp_global_cli/src/commands/toolchain.rs
+  s_431aa2d8c58680::t_0e4af27d5b8adf 36,42
+packages/cli/binding/src/cli/mod.rs
+  s_431aa2d8c58680::t_d0ce9a22517046 283,288,290-293,307,313
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_helper/snapshots/command_helper.md
+  s_431aa2d8c58680::t_54fe75b30ddff4 28
+crates/vp_toolchain/src/lib.rs
+  s_431aa2d8c58680::t_2a2ca3412bfa3d 128,130,456,544,580,591
+rfcs/toolchain-command.md
+  s_431aa2d8c58680::t_2b1441c77d42b5 11-12,22-24,26-27,31-32,34,41-42,44-45,53,57,60-61,78-79,85,88-91,93,96-97,104,107,110-111,115-116,126,129,139,141-143,145-148,150,152,172-173,175-176,182-183,219,221,224-225,228,232-233,312-321,325-328,330,333-334,357-358,360-362,366,376-380,390-391,395-396,398-400,412-413,417-419,421-422,426,430-432,438-440,443,447-448,450-451,453-456,458-459,470,472,484,503,505-506,510-515,521,530-532,536,541-542,546-548,552-554,558-559,564,569,576
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_why_hint.local.md
+  s_431aa2d8c58680::t_ae53ad1700b968 5,10,15
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_why_hint.global.md
+  s_431aa2d8c58680::t_38468d030806a4 5,10,15
+crates/vp_global_cli/src/cli.rs
+  s_431aa2d8c58680::t_dcabc9723ffd15 198,200,204,208
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_json.md
+  s_431aa2d8c58680::t_94e3d0486f695a 5
+packages/cli/binding/src/cli/types.rs
+  s_431aa2d8c58680::t_6bb32165d018dd 100,104,108,132
+docs/guide/upgrade.md
+  s_431aa2d8c58680::t_5937f7c27f5853 14,16,25-26,32-34,112,122,124
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/vp_help/snapshots/help.local.md
+  s_431aa2d8c58680::t_922ee0376c881d 28
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/vp_help/snapshots/help.global.md
+  s_431aa2d8c58680::t_65cd1a1b600def 54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/cli_helper_message/snapshots/cli_helper_message_local.md
+  s_431aa2d8c58680::t_218bde54033b12 28
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_global_from_local_cli.md
+  s_431aa2d8c58680::t_f441fb75d0fadc 10
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_vp_alias/snapshots/command_vp_alias.md
+  s_431aa2d8c58680::t_62c6e11d66ad6a 28
+docs/guide/install.md
+  s_431aa2d8c58680::t_92188b7aaee9e2 152-155
+crates/vp_global_cli/src/help.rs
+  s_431aa2d8c58680::t_a18d35e82337a5 446
+docs/guide/troubleshooting.md
+  s_431aa2d8c58680::t_bb06a12aaedd51 18-19
+packages/cli/binding/src/cli/help.rs
+  s_431aa2d8c58680::t_08411e1fb13a17 206
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots.toml
+  s_431aa2d8c58680::t_3d95de47901c42 26,33-34,59-60
+crates/vp_pm_cli/src/cli.rs
+  s_431aa2d8c58680::t_d98fec896935e0 318,320,624-626
+packages/cli/AGENTS.md
+  s_431aa2d8c58680::t_60e0b10c5a7725 13,15-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cef51919c7c1721e82357a3ed7f84a0f75a57e6c",
+  "prompts": {},
+  "sessions": {
+    "s_431aa2d8c58680": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4690-cc8f-7d22-9259-a63dbc7145ec",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
