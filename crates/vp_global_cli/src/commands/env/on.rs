@@ -4,18 +4,8 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
-
 use super::config::{ShimMode, load_config, save_config};
 use crate::{error::Error, help};
-
-fn accent_command(command: &str) -> String {
-    if help::should_style_help() {
-        format!("`{}`", command.bright_blue())
-    } else {
-        format!("`{command}`")
-    }
-}
 
 /// Execute the `vp env on` command.
 pub async fn execute() -> Result<ExitStatus, Error> {
@@ -34,7 +24,7 @@ pub async fn execute() -> Result<ExitStatus, Error> {
     println!();
     println!("All vp commands and shims will now always use Vite+ managed Node.js.");
     println!();
-    println!("Run {} to prefer system Node.js instead.", accent_command("vp env off"));
+    println!("Run {} to prefer system Node.js instead.", help::accent_command("vp env off"));
 
     Ok(ExitStatus::default())
 }

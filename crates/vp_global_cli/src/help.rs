@@ -79,6 +79,14 @@ fn write_documentation_footer(output: &mut String, documentation_url: &str) {
     let _ = writeln!(output, "{} {documentation_url}", render_heading("Documentation"));
 }
 
+pub fn accent(text: &str) -> String {
+    if should_style_help() { text.bright_blue().to_string() } else { text.to_string() }
+}
+
+pub fn accent_command(command: &str) -> String {
+    format!("`{}`", accent(command))
+}
+
 pub fn should_style_help() -> bool {
     vp_shared::is_stdout_terminal()
         && std::env::var_os("NO_COLOR").is_none()
