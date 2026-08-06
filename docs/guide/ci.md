@@ -8,7 +8,7 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 ## setup-vp Versioning
 
-Replace `<setup-vp-version>` in the examples below with the latest [exact release tag](https://github.com/voidzero-dev/setup-vp/releases), or use a commit SHA. Do not use the `v1` tag: it is frozen and no longer receives updates. Renovate and Dependabot can update pinned tags.
+Set `<setup-vp-version>` in each example to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates. Renovate and Dependabot can update exact versions.
 
 ## GitHub Actions
 
@@ -33,7 +33,7 @@ With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
 ## GitLab CI/CD
 
-Use the reusable `setup-vp` remote template in your GitLab CI/CD configuration. Pin the remote URL and `setup-ref` to the same exact release tag:
+Use the reusable `setup-vp` remote template in your GitLab CI/CD configuration. Set the remote URL and `setup-ref` to the same release tag or commit SHA:
 
 ```yaml [.gitlab-ci.yml]
 include:

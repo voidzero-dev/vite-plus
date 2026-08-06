@@ -181,7 +181,7 @@ Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) action t
     cache: true
 ```
 
-Replace `<setup-vp-version>` with the latest exact [`setup-vp` release tag](https://github.com/voidzero-dev/setup-vp/releases), or use a commit SHA. Do not use the `v1` tag: it is frozen and no longer receives updates.
+Set `<setup-vp-version>` to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
 
 #### Manual Installation & Migration
 
