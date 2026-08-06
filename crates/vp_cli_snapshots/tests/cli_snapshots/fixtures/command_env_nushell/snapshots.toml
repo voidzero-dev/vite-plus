@@ -2,6 +2,7 @@
 name = "command_env_nushell"
 vp = "global"
 skip-platforms = ["windows"]
+requires = ["nu"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "home\with spaces"']], snapshot = false },
   { argv = ["vpt", "cp", "assert.nu", 'vp "home\with spaces"/assert.nu'], snapshot = false },

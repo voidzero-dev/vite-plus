@@ -196,11 +196,13 @@ fn vpt_path() -> Result<PathBuf, String> {
 /// Resolves an optional Nushell binary for fixtures that exercise generated
 /// `env.nu` files. The explicit override keeps CI deterministic; a developer's
 /// PATH is the local fallback.
-fn nushell_path() -> Result<Option<PathBuf>, String> {
+pub fn nushell_path() -> Result<Option<PathBuf>, String> {
     if let Some(nu) = std::env::var_os("VP_SNAP_NU_BIN") {
         let nu = PathBuf::from(nu);
         if nu.is_file() {
-            return Ok(Some(nu));
+            return std::fs::canonicalize(&nu).map(Some).map_err(|e| {
+                format!("failed to canonicalize VP_SNAP_NU_BIN {}: {e}", nu.display())
+            });
         }
         return Err(format!("VP_SNAP_NU_BIN is set but {} does not exist", nu.display()));
     }

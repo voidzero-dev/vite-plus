@@ -75,6 +75,7 @@ vp = "local"                  # "local" | "global" | ["local", "global"]
 comment = "What this proves." # rendered into the snapshot
 cwd = "packages/app"          # optional, relative to the fixture root
 skip-platforms = ["windows"]  # or { os = "linux", libc = "musl" }
+requires = ["nu"]             # ignore when an optional runner tool is absent
 ignore = false                # true: only runs with `-- --ignored`
 seed-runtime = true           # false: start from an empty VP_HOME
 link-node-modules = false     # true: expose the run-root node_modules as

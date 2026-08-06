@@ -316,6 +316,22 @@ impl PlatformFilter {
     }
 }
 
+#[derive(Clone, Copy, serde::Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+enum RequiredTool {
+    Nu,
+}
+
+impl RequiredTool {
+    /// A configuration error counts as available here so the trial runs and
+    /// reports that error instead of silently hiding a bad override.
+    fn is_missing(self) -> bool {
+        match self {
+            Self::Nu => matches!(flavor::nushell_path(), Ok(None)),
+        }
+    }
+}
+
 #[derive(serde::Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 struct Case {
@@ -332,6 +348,10 @@ struct Case {
     /// Exclude-list of platforms this case does not run on.
     #[serde(default, rename = "skip-platforms")]
     skip_platforms: Vec<PlatformFilter>,
+    /// Optional runner-owned tools needed by this case. The trial is ignored
+    /// when a tool is unavailable, while invalid explicit overrides still fail.
+    #[serde(default)]
+    requires: Vec<RequiredTool>,
     /// Marks the trial `#[ignore]` (runnable with `cargo test -- --ignored`).
     #[serde(default)]
     ignore: bool,
@@ -1602,6 +1622,7 @@ fn main() {
             if case.skip_platforms.iter().any(PlatformFilter::matches_current) {
                 continue;
             }
+            let required_tool_missing = case.requires.iter().any(|tool| tool.is_missing());
             let multi = case.vp.is_multi();
             let case = Arc::new(case);
             for flavor in case.vp.flavors() {
@@ -1623,7 +1644,9 @@ fn main() {
                 let fixture_name = Arc::clone(&fixture_name);
                 let tmp_dir_path = Arc::clone(&tmp_dir_path);
                 let case = Arc::clone(&case);
-                let ignored = case.ignore || (case.local_registry && !local_build_present);
+                let ignored = case.ignore
+                    || required_tool_missing
+                    || (case.local_registry && !local_build_present);
                 let isolated = case_needs_isolation(&case);
                 let timings = Arc::clone(&timings);
                 let timing_name = trial_name.clone();
