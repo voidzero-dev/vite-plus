@@ -1,0 +1,18 @@
+[[case]]
+name = "npm_global_uninstall_shared_bin_name"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "./pkg-a"], comment = "Install pkg-a (creates link for npm-global-shared-cli)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-shared-cli", "--assert", "symlink"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "$VP_HOME/bins/npm-global-shared-cli.json"], comment = "BinConfig should point to pkg-a", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "--force", "./pkg-b"], comment = "Install pkg-b with force (overwrites npm-global-shared-cli)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-shared-cli", "--assert", "symlink"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "$VP_HOME/bins/npm-global-shared-cli.json"], comment = "BinConfig should now point to pkg-b", continue-on-failure = true },
+  { argv = ["npm-global-shared-cli"], comment = "Should print pkg-b message (latest installed)", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-shared-pkg-a"], comment = "Uninstall pkg-a, should NOT remove the link (owned by pkg-b now)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-shared-cli"], comment = "link should still exist", continue-on-failure = true },
+  { argv = ["npm-global-shared-cli"], comment = "Should still work (owned by pkg-b)", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-shared-pkg-b"], comment = "Uninstall pkg-b, NOW should remove the link", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-shared-cli"], comment = "link should be removed" },
+]

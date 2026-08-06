@@ -1,0 +1,13 @@
+# The legacy `echo //comment >> src/foo.js` appends became write-file steps
+# carrying the full appended content.
+[[case]]
+name = "vitest_browser_mode"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [
+  { argv = ["vp", "run", "test"] },
+  { argv = ["vpt", "write-file", "src/foo.js", "export default 'foo';\n//comment\n"], snapshot = false },
+  { argv = ["vp", "run", "test"] },
+  { argv = ["vpt", "write-file", "src/bar.js", "export default 'bar';\n//comment\n"], snapshot = false },
+  { argv = ["vp", "run", "test"] },
+]

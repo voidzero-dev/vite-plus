@@ -1,2 +1,0 @@
-> vp dev --port 12312312312 2>&1 | grep -E '(RangeError|No available ports)' # intentionally use an invalid port (exceeds 0-65535) to trigger port error
-Error: No available ports found between 12312312312 and 65535

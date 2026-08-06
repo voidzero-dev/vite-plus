@@ -1,0 +1,9 @@
+[[case]]
+name = "fmt_no_config_message"
+vp = "local"
+steps = [
+  { argv = ["vp", "fmt"], comment = "should show 'vp fmt --init' instead of 'oxfmt --init'", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--init"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "should have fmt config", continue-on-failure = true },
+  { argv = ["vp", "fmt"], comment = "should no longer show 'No config found' message", continue-on-failure = true },
+]

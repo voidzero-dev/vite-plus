@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp pm prune --help # should show help",
-    "vp pm prune # should show warning that yarn does not support prune command"
-  ]
-}

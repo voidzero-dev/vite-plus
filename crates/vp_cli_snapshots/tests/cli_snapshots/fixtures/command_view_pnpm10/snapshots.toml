@@ -1,0 +1,14 @@
+[[case]]
+name = "command_view_pnpm10"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "view", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2"], comment = "should view lodash package information (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "version"], comment = "should view lodash version field (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2@1.0.0"], comment = "should view specific version of lodash (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "dist.tarball"], comment = "should view nested field (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "dependencies"], comment = "should view dependencies object (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "dist.tarball", "--json"], comment = "should view package.dist.tarball info in JSON format (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "version", "--json"], comment = "should view field in JSON format (uses npm view)", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "--", "--loglevel=warn"], comment = "should support pass through arguments (uses npm view)", continue-on-failure = true },
+]

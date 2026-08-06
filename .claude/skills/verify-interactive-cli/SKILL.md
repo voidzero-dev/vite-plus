@@ -1,12 +1,12 @@
 ---
 name: verify-interactive-cli
-description: Drive and capture vp's interactive (clack) prompts in a tmux session to verify interactive UX and catch spinner-over-prompt bugs that snap tests (which run non-interactively) miss. Use when asked to test/verify/capture an interactive vp command's prompts (vp migrate, vp create, ...), reproduce a prompt-rendering bug, or show the real interactive CLI output for a PR.
+description: Drive and capture vp's interactive (clack) prompts in a tmux session to manually verify interactive UX and catch spinner-over-prompt bugs. Use when asked to test/verify/capture an interactive vp command's prompts (vp migrate, vp create, ...), reproduce a prompt-rendering bug, or show the real interactive CLI output for a PR.
 allowed-tools: Bash, Read
 ---
 
 # Verify vp's interactive CLI prompts
 
-Snap tests run `vp` non-interactively, so interactive clack prompts (hooks / agent / editor confirms, the Node-version upgrade confirm) and TTY-only rendering bugs are never exercised. This skill drives the real prompts in a TTY (via tmux), captures clean output, and can catch a spinner animating underneath an active prompt (a real, recurring UX bug class, e.g. the "Preparing migration" and "Checking Node.js version support" spinners).
+The PTY snapshot suite covers scripted prompt flows. This skill complements it by driving an installed CLI in tmux, capturing clean output, and checking a prompt over several seconds for a spinner animating underneath it (a real, recurring UX bug class, e.g. the "Preparing migration" and "Checking Node.js version support" spinners).
 
 ## Prerequisites
 

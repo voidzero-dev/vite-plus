@@ -1,0 +1,6 @@
+[[case]]
+name = "command_owner_npm10"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "owner", "list", "testnpm2"], comment = "should list package owners", continue-on-failure = true },
+]

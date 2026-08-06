@@ -1,0 +1,11 @@
+[[case]]
+name = "command_exec_cwd"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["node", "setup.js"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "exec", "-c", "basename $(pwd)"], comment = "cwd is package root", continue-on-failure = true },
+  { argv = ["vp", "exec", "-c", "basename $(pwd)"], cwd = "src", comment = "cwd preserved in subdirectory", continue-on-failure = true },
+  { argv = ["vp", "exec", "-c", "basename $(pwd)"], cwd = "src/nested", comment = "cwd preserved in nested subdirectory", continue-on-failure = true },
+  { argv = ["vp", "exec", "node", "-e", "const p = require('path'); console.log(p.basename(process.cwd()))"], cwd = "src", comment = "non-shell mode also preserves cwd", continue-on-failure = true },
+]

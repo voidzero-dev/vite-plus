@@ -28,6 +28,8 @@ Alternatively, download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 The `vp-setup.exe` is not yet code-signed. Your browser may show a warning when downloading. Click **"..."** → **"Keep"** → **"Keep anyway"** to proceed. If Windows Defender SmartScreen blocks the file when you run it, click **"More info"** → **"Run anyway"**.
 :::
 
+The installer scripts and `vp-setup.exe` read [environment variables](/guide/installer-env-vars) such as `VP_VERSION` and `VP_HOME`.
+
 After installation, open a new shell and run:
 
 ```bash
@@ -90,7 +92,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
-- [`vp config`](/guide/commit-hooks) configures commit hooks and agent integration.
+- [`vp config`](/guide/commit-hooks) installs the Git hook dispatcher and configures agent integration.
 - [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [`vp install`](/guide/install) installs dependencies with the right package manager.
 - [`vp env`](/guide/env) manages Node.js versions.

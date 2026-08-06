@@ -12,7 +12,8 @@
 
 import path from 'node:path';
 
-import { run } from '../binding/index.js';
+import { ensureBlockingStdio, run } from '../binding/index.js';
+import { maybePrintCommandHelp } from './help.ts';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
 import { doc } from './resolve-doc.ts';
 import { fmt } from './resolve-fmt.ts';
@@ -22,6 +23,12 @@ import { test } from './resolve-test.ts';
 import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
+
+// Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
+// the output streams before restoring the blocking semantics expected by Rust.
+void process.stdout;
+void process.stderr;
+ensureBlockingStdio();
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -38,6 +45,55 @@ function getErrorMessage(err: unknown): string {
 // Parse command line arguments
 let args = process.argv.slice(2);
 
+// Global `-C <dir>` flag: run as if vp was started in <dir>. The global Rust
+// CLI parses this itself and spawns bin.js with the target cwd already set;
+// this branch covers direct local-bin invocations (`pnpm exec vp -C <dir> ...`).
+// Accepts `-C dir`, `-Cdir`, and `-C=dir`, matching the clap grammar.
+if (args[0]?.startsWith('-C')) {
+  const inline = args[0].length > 2;
+  const dir = inline ? args[0].slice(args[0][2] === '=' ? 3 : 2) : args[1];
+  if (!dir) {
+    errorMsg('-C requires a directory argument');
+    process.exit(1);
+  }
+  const target = path.resolve(dir);
+  // chdir is the single validation point: a pre-check stat can itself throw
+  // (EACCES on a parent, ELOOP), while chdir reports every failure mode
+  // through one catchable path.
+  try {
+    process.chdir(target);
+  } catch (err) {
+    const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      errorMsg(`directory not found: ${dir}`);
+    } else {
+      errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+    }
+    process.exit(1);
+  }
+  if (process.platform !== 'win32') {
+    // Keep the POSIX PWD in sync, like a real `cd`.
+    process.env.PWD = target;
+  }
+  args = args.slice(inline ? 1 : 2);
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
+
+// `vpr` is shorthand for `vp run`: the bin/vpr shim imports this file
+// unchanged (argv0 tells them apart, like the Rust shim dispatch), and the
+// rewrite happens here, after -C consumption, so `vpr -C <dir> <task>`
+// orders itself correctly by construction.
+if (path.basename(process.argv[1] ?? '') === 'vpr') {
+  args = ['run', ...args];
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
+
+// The list the Rust CLI parses: after the -C and vpr rewrites above (both
+// are consumed/settled here), before the help transform below (the Rust CLI
+// applies `help [command]` itself and needs the untransformed list to tell
+// `vp help fmt` apart from `vp fmt --help`).
+const rustCliArgs = args;
+
 // Transform `vp help [command]` into `vp [command] --help`
 if (args[0] === 'help' && args[1]) {
   args = [args[1], '--help', ...args.slice(2)];
@@ -46,8 +102,9 @@ if (args[0] === 'help' && args[1]) {
 
 const command = args[0];
 
-// Global commands — handled by tsdown-bundled modules in dist/
-if (command === 'create') {
+if (maybePrintCommandHelp(args)) {
+  // Help is rendered by the local CLI so it matches the installed toolchain.
+} else if (command === 'create') {
   await import('./create/bin.js');
 } else if (command === 'migrate') {
   await import('./migration/bin.js');
@@ -81,7 +138,7 @@ if (command === 'create') {
       test,
       doc,
       resolveUniversalViteConfig,
-      args: process.argv.slice(2),
+      args: rustCliArgs,
     });
 
     let finalExitCode = exitCode;

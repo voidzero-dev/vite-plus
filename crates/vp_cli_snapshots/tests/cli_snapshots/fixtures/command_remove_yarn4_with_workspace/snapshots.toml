@@ -1,0 +1,20 @@
+[[case]]
+name = "command_remove_yarn4_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "add", "testnpm2", "-D"], comment = "install and ignore output", snapshot = false },
+  { argv = ["vp", "add", "testnpm2", "-D", "--filter=*", "--filter=@vite-plus-test/utils"], snapshot = false },
+  { argv = ["vp", "add", "test-vite-plus-install", "--filter=*", "--filter=@vite-plus-test/utils"], snapshot = false },
+  { argv = ["vp", "add", "test-vite-plus-package-optional", "-O", "--filter=*", "--filter=@vite-plus-test/utils"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], comment = "prepare packages", continue-on-failure = true },
+  { argv = ["vp", "remove", "testnpm2", "-r"], comment = "should remove package from all workspaces and root" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "-O", "test-vite-plus-package-optional", "-r"], comment = "should remove optional package from all workspaces" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "test-vite-plus-install", "--filter=app"], comment = "should remove package by filter=app" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "test-vite-plus-install", "--filter=app"], comment = "should remove package by filter=*" },
+  ["vp", "remove", "test-vite-plus-install", "--filter=*"],
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], continue-on-failure = true },
+]

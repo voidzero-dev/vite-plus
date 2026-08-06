@@ -1,0 +1,1 @@
+{ "name": "per-command-fallthrough", "type": "module", "private": true, "workspaces": ["packages/*"] }

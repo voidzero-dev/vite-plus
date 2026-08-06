@@ -1,0 +1,10 @@
+[[case]]
+name = "env_install_mixed_case_bin"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "."], continue-on-failure = true },
+  { argv = ["MixedCaseBin"], continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "env-install-mixed-case-bin"], continue-on-failure = true },
+]

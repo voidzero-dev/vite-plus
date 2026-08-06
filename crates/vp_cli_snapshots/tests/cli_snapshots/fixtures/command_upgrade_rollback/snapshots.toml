@@ -1,0 +1,7 @@
+[[case]]
+name = "command_upgrade_rollback"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "upgrade", "--rollback"], comment = "should fail with no previous version", continue-on-failure = true },
+]

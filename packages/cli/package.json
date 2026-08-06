@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "0.2.4",
+  "version": "0.2.8",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -61,11 +61,6 @@
     },
     "./bin": {
       "import": "./dist/bin.js"
-    },
-    "./binding": {
-      "types": "./binding/index.d.cts",
-      "import": "./binding/index.cjs",
-      "require": "./binding/index.cjs"
     },
     "./fmt": {
       "types": "./dist/fmt.d.ts",
@@ -355,9 +350,6 @@
     "build": "oxnode -C dev ./build.ts",
     "build-ts": "oxnode -C dev ./build.ts --skip-native",
     "build-native": "oxnode -C dev ./build.ts --skip-ts",
-    "snap-test": "pnpm snap-test-local && pnpm snap-test-global",
-    "snap-test-local": "tool snap-test",
-    "snap-test-global": "tool snap-test --dir snap-tests-global --bin-dir ~/.vite-plus/bin",
     "publish-native": "node ./publish-native-addons.ts",
     "test": "vitest run"
   },
@@ -380,16 +372,16 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@emnapi/core": "catalog:",
+    "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
-    "@oxc-node/core": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
-    "@voidzero-dev/vite-plus-tools": "workspace:*",
     "bingo": "catalog:",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
@@ -402,7 +394,6 @@
     "mri": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
-    "rolldown-plugin-dts": "catalog:",
     "semver": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",

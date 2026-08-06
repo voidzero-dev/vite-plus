@@ -55,7 +55,7 @@ jobs:
           update_json packages/cli/package.json
           update_json packages/core/package.json
           update_toml packages/cli/binding/Cargo.toml
-          update_toml crates/vite_global_cli/Cargo.toml
+          update_toml crates/vp_global_cli/Cargo.toml
 
       - name: Refresh Cargo.lock
         run: cargo check

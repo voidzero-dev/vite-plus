@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp run lint # first run populates the cache",
-    "vp run lint # second run should be a cache hit"
-  ]
-}

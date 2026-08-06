@@ -1,0 +1,6 @@
+[[case]]
+name = "command_owner_yarn1"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "owner", "list", "testnpm2"], comment = "should list package owners (uses npm owner)", continue-on-failure = true },
+]

@@ -1,0 +1,8 @@
+[[case]]
+name = "command_vp_alias"
+vp = "local"
+skip-platforms = ["linux"]
+steps = [
+  { argv = ["vp", "-h"], comment = "vp should show help same as vite", continue-on-failure = true },
+  { argv = ["vp", "run", "-h"], comment = "vp run should show help", continue-on-failure = true },
+]

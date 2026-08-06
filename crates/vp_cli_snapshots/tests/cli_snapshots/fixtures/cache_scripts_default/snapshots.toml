@@ -1,0 +1,7 @@
+[[case]]
+name = "cache_scripts_default"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "hello"], comment = "cache should be disabled by default for package.json scripts", continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "second run should also show cache disabled", continue-on-failure = true },
+]

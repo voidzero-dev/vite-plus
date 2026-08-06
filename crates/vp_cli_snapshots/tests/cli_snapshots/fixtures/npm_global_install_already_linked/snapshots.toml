@@ -1,0 +1,14 @@
+[[case]]
+name = "npm_global_install_already_linked"
+vp = "global"
+steps = [
+  { tty = false, argv = ["npm", "config", "get", "prefix"], continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "./npm-global-linked-pkg"], comment = "First install via vp (creates managed shim)", continue-on-failure = true },
+  { argv = ["npm-global-linked-cli"], comment = "Should be callable via the link", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-linked-pkg"], comment = "Should not create duplicate link", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "npm-global-linked-pkg"], comment = "Cleanup", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-linked-cli"], comment = "link should be removed" },
+]
+after = [
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-linked-pkg"], continue-on-failure = true },
+]

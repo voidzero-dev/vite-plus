@@ -1,6 +1,13 @@
 packages:
   - .
 
+# pnpm 11 fails installs on unreviewed dependency build scripts
+# (ERR_PNPM_IGNORED_BUILDS). These scripts were already skipped under
+# pnpm 10; keep them skipped explicitly.
+allowBuilds:
+  esbuild: false
+  vue-demi: false
+
 peerDependencyRules:
   allowAny:
     - vitepress

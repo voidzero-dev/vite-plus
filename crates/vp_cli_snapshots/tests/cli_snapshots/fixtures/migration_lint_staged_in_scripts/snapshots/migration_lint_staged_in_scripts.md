@@ -1,0 +1,77 @@
+# migration_lint_staged_in_scripts
+
+## `git init`
+
+
+## `vp migrate --no-interactive`
+
+migration should preserve lint-staged commands when Husky is detected
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
+◇ Migrated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• 1 config update applied
+```
+
+## `vpt print-file package.json`
+
+check Husky prepare, lint-staged script, dependencies, and config are preserved
+
+```
+{
+  "name": "migration-lint-staged-in-scripts",
+  "scripts": {
+    "prepare": "husky",
+    "check-staged": "lint-staged --diff HEAD~1"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<version>",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+## `vpt print-file pnpm-workspace.yaml`
+
+check pnpm-workspace.yaml has overrides and catalog
+
+```
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@<version>
+  vite-plus: <version>
+overrides:
+  vite: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
+```
+
+## `vpt print-file vite.config.ts`
+
+check staged config is not migrated while Husky owns the hook
+
+```
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
+});
+```

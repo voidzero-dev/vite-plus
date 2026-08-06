@@ -1,0 +1,20 @@
+# fmt_ignore_patterns
+
+## `vp fmt src/`
+
+Test that fmt ignorePatterns works - ignored files should not be formatted
+
+```
+Finished in <duration> on 1 files using <n> threads.
+```
+
+## `vpt print-file src/ignored/badly-formatted.js`
+
+Verify that ignored file still has bad formatting (was not formatted)
+
+```
+// This file has bad formatting but should be ignored due to ignorePatterns
+function   badlyFormatted(    ){
+return    'hello'   ;   }
+export{badlyFormatted}
+```

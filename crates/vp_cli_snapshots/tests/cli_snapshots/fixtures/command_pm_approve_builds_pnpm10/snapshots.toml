@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pm_approve_builds_pnpm10"
+vp = "local"
+steps = [
+  { argv = ["vp", "pm", "approve-builds", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "--all"], comment = "forwards to pnpm approve-builds --all (nothing to approve)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild", "fsevents"], comment = "forwards positional packages to pnpm", continue-on-failure = true },
+]

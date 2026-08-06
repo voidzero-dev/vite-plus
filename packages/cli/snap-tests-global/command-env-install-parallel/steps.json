@@ -1,8 +1,0 @@
-{
-  "env": {},
-  "commands": [
-    "vp install -g --concurrency 1 ./parallel-pkg-a ./parallel-pkg-b # Install multiple global packages",
-    "parallel-a && parallel-b # Both binaries should be callable",
-    "vp remove -g parallel-pkg-a parallel-pkg-b # Cleanup"
-  ]
-}

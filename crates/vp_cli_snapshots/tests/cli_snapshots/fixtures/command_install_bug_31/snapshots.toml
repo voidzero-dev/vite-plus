@@ -1,0 +1,16 @@
+[[case]]
+name = "command_install_bug_31"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "--no-frozen-lockfile", "--silent"], comment = "install dependencies work", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "packages/sub-project"], comment = "create sub project and package.json" },
+  { argv = ["vpt", "write-file", "packages/sub-project/package.json", "{\"name\": \"sub-project\", \"dependencies\": { \"testnpm2\": \"1.0.0\" }}\n"], continue-on-failure = true },
+  { argv = ["vp", "install", "--no-frozen-lockfile", "--silent"], comment = "install again should work and without cache", continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/sub-project/node_modules/testnpm2/package.json"], comment = "check testnpm2 is installed", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "others/other"], comment = "create non workspace project" },
+  { argv = ["vpt", "write-file", "others/other/package.json", "{\"name\": \"other\", \"dependencies\": { \"testnpm2\": \"1.0.0\" }}\n"], continue-on-failure = true },
+  { argv = ["vp", "install", "--no-frozen-lockfile", "--silent"], comment = "should install cache hit", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "others/other/node_modules/testnpm2", "--assert-not", "dir"], comment = "the directory must not exist" },
+  { argv = ["vpt", "rm", "-rf", "packages/sub-project"], comment = "remove sub project", continue-on-failure = true },
+  { argv = ["vp", "install", "--no-frozen-lockfile", "--silent"], comment = "should install again without cache", continue-on-failure = true },
+]

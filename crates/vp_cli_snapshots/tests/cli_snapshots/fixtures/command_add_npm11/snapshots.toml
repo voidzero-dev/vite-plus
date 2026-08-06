@@ -1,0 +1,17 @@
+[[case]]
+name = "command_add_npm11"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "add", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "-D", "--", "--no-audit"], comment = "should add package as dev dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "test-vite-plus-install", "--allow-build=test-vite-plus-install", "--", "--no-audit"], comment = "should add packages to dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "install", "test-vite-plus-package@1.0.0", "--save-peer", "--", "--no-audit"], comment = "should install package alias for add" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "test-vite-plus-package-optional", "-O", "--", "--no-audit"], comment = "should add package as optional dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "test-vite-plus-package-optional", "--", "--loglevel=warn", "--no-audit"], comment = "support pass through arguments" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

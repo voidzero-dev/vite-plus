@@ -1,0 +1,7 @@
+[[case]]
+name = "command_dlx_no_package_json"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], comment = "should work without package.json", continue-on-failure = true },
+]

@@ -1,6 +1,0 @@
-> vp --version
-vp v<semver>
-
-Local vite-plus:
-  vite-plus  Not found
-

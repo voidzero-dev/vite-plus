@@ -1,0 +1,17 @@
+# command_pm_approve_builds_pnpm11
+
+## `vp pm approve-builds --all`
+
+forwards pnpm approve-builds --all (nothing to approve)
+
+```
+There are no packages awaiting approval
+```
+
+## `vp pm approve-builds esbuild !core-js`
+
+pnpm 11.x supports !pkg deny syntax — forwarded as positional args
+
+```
+There are no packages awaiting approval
+```

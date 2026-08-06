@@ -1,0 +1,9 @@
+[[case]]
+name = "check_backpressure_nonblocking_stdout"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+comment = "vp check exposes the stdout EAGAIN failure when a large diagnostic replay meets a non-blocking, backpressured pipe (#2165)."
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vpt", "backpressure-run", "--digest", "6,8", "--", "vp", "check"], tty = false, timeout = 120000 },
+]

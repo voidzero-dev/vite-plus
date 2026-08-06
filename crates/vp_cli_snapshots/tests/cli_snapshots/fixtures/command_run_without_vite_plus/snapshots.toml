@@ -1,0 +1,9 @@
+[[case]]
+name = "command_run_without_vite_plus"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vp", "run", "hello"], comment = "should execute via global vite-plus task runner", continue-on-failure = true },
+  { argv = ["vp", "run", "greet", "--arg1", "value1"], comment = "should pass through args", continue-on-failure = true },
+  { argv = ["vp", "run", "nonexistent"], tty = false, comment = "should show task not found error", continue-on-failure = true },
+]

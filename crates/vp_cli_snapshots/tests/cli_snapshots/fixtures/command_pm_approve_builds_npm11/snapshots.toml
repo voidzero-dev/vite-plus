@@ -1,0 +1,13 @@
+[[case]]
+name = "command_pm_approve_builds_npm11"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "approve-builds", "--help"], comment = "should show help with pnpm/npm deny + --all caveats", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds"], comment = "no args -> npm approve-scripts --allow-scripts-pending (lists pending)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild"], comment = "-> npm approve-scripts esbuild (advisory note)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "!core-js"], comment = "deny-only -> npm deny-scripts core-js (advisory note)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild", "!core-js"], comment = "mixed approve+deny -> rejected, exit non-zero", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "--", "esbuild"], comment = "positional via -- on the pending path -> rejected, exit non-zero", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "--all"], comment = "-> npm approve-scripts --all (advisory note)", continue-on-failure = true },
+]

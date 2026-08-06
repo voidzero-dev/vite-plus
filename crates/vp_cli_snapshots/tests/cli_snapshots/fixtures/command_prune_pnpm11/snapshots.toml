@@ -1,0 +1,18 @@
+[[case]]
+name = "command_prune_pnpm11"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune"], comment = "should prune extraneous dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--prod"], comment = "should prune dev dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--no-optional"], comment = "should prune optional dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--prod", "--no-optional"], comment = "should prune both dev and optional dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--", "--loglevel=warn"], comment = "should support pass through arguments" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

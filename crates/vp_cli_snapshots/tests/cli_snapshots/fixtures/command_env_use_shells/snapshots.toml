@@ -1,0 +1,16 @@
+[[case]]
+name = "command_env_use_shells"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_ENV_USE_EVAL_ENABLE = "1" }
+steps = [
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect bash and output posix export", envs = [["VP_SHELL", "bash"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect zsh and output posix export", envs = [["VP_SHELL", "zsh"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect fish and output fish export", envs = [["VP_SHELL", "fish"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect nushell and output nushell export", envs = [["VP_SHELL", "nu"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect powershell and output powershell export", envs = [["VP_SHELL", "pwsh"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect cmd and output cmd export", envs = [["VP_SHELL", "cmd"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect case-insensitive bash", envs = [["VP_SHELL", "BASH"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect case-insensitive fish", envs = [["VP_SHELL", "FISH"]], continue-on-failure = true },
+  { argv = ["vp", "env", "use", "20.18.0", "--no-install"], comment = "should detect case-insensitive powershell", envs = [["VP_SHELL", "POWERSHELL"]], continue-on-failure = true },
+]

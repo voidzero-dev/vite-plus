@@ -1,0 +1,21 @@
+[[case]]
+name = "command_remove_pnpm10"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "remove", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "remove"], comment = "should error because no packages specified", continue-on-failure = true },
+  { argv = ["vp", "remove", "testnpm2", "-D"], comment = "should error when remove not exists package from dev dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2"], comment = "should add packages to dependencies" },
+  ["vp", "add", "-D", "test-vite-plus-install"],
+  ["vp", "add", "-O", "test-vite-plus-package-optional"],
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "testnpm2", "test-vite-plus-install"], comment = "should remove packages from dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "-O", "test-vite-plus-package-optional", "--", "--loglevel=warn"], comment = "support remove package from optional dependencies and pass through arguments" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "--dry-run", "testnpm2"], comment = "support remove global package with dry-run" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "rm", "--stream", "foo"], comment = "should show tips to use pass through arguments when options are not supported", continue-on-failure = true },
+]

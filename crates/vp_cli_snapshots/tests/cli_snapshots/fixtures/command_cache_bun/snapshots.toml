@@ -1,0 +1,8 @@
+[[case]]
+name = "command_cache_bun"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "cache", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "cache", "dir"], comment = "should show cache directory", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "cache", "path"], comment = "should show cache path (alias for dir)", snapshot = false, continue-on-failure = true },
+]

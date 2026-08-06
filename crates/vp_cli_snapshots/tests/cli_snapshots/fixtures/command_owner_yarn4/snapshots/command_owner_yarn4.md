@@ -1,0 +1,9 @@
+# command_owner_yarn4
+
+## `vp pm owner list testnpm2`
+
+should list package owners (uses npm owner)
+
+```
+fengmk2 <fengmk2@gmail.com>
+```

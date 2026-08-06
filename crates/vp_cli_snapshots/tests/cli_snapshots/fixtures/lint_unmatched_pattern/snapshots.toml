@@ -1,0 +1,6 @@
+[[case]]
+name = "lint_unmatched_pattern"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "package.json"], comment = "non-lintable file, should exit non-zero", continue-on-failure = true },
+]

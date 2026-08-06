@@ -1,0 +1,16 @@
+[[case]]
+name = "command_list_pnpm10_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "list"], comment = "should list current workspace root dependencies", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive"], comment = "should list all packages in workspace recursively", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--filter", "app"], comment = "should list specific workspace package (uses --filter app list)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--filter", "app", "--filter", "@vite-plus-test/utils"], comment = "should list multiple workspace packages", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--json"], comment = "should list all workspace packages in JSON format", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--depth", "0"], comment = "should list workspace packages with depth limit", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--only-projects"], comment = "should list only workspace projects (pnpm-specific)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--exclude-peers"], comment = "should exclude peer dependencies in workspace", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive", "--prod"], comment = "should list production dependencies in workspace", continue-on-failure = true },
+]

@@ -1,4 +1,0 @@
-{
-  "ignoredPlatforms": ["linux"],
-  "commands": ["vp -h # vp should show help same as vite", "vp run -h # vp run should show help"]
-}

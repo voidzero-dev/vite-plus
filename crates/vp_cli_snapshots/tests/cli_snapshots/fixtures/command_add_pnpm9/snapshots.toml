@@ -1,0 +1,19 @@
+[[case]]
+name = "command_add_pnpm9"
+vp = "global"
+skip-platforms = ["windows"]
+env = { NODE_OPTIONS = "--no-deprecation" }
+steps = [
+  { argv = ["vp", "add", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "-D"], comment = "should add package as dev dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "test-vite-plus-install"], comment = "should add packages to dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "test-vite-plus-install", "--allow-build=test-vite-plus-install"], comment = "should error because allow-build is not supported at pnpm@9", continue-on-failure = true },
+  { argv = ["vp", "install", "test-vite-plus-package@1.0.0", "--save-peer"], comment = "should install package alias for add" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "test-vite-plus-package-optional", "-O"], comment = "should add package as optional dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "test-vite-plus-package-optional", "--", "--loglevel=warn"], comment = "support pass through arguments" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

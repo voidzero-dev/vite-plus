@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "node verify-extensions.mjs # bundled @tsdown/exe and @tsdown/css load without a top-level tsdown (issue #1586)"
-  ]
-}

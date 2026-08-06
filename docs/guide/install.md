@@ -69,6 +69,8 @@ Use the `-g` flag for installing, updating or removing globally installed packag
 - `vp list -g [pkg]` lists global packages
 - `vp outdated -g [pkg]` prints outdated packages
 
+Updates keep the version spec a package was installed with: a package installed from a dist-tag (e.g. `vp install -g some-pkg@nightly`) updates to the newest version of that tag, and a version range stays within the range. Reinstall with a different spec (e.g. `vp update -g some-pkg@latest`) to switch, or pass `--latest` to `vp update -g` to move packages to the `latest` tag and clear their recorded specs. `vp outdated -g` reports both the newest version matching the recorded spec (`Wanted`) and the newest version on the `latest` tag.
+
 ::: warning
 These commands do **NOT** interact with the underlying package manager's global installation directory.
 

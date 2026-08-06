@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp run hello 2>&1 | grep 'cache disabled' # cache should be disabled by default for package.json scripts",
-    "vp run hello 2>&1 | grep 'cache disabled' # second run should also show cache disabled"
-  ]
-}

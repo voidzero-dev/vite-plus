@@ -1,0 +1,15 @@
+[[case]]
+name = "command_pack_npm10_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "pack", "--json"], comment = "should pack current workspace root", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--recursive", "--json"], comment = "should pack all packages in workspace (uses --workspaces)" },
+  { argv = ["vpt", "rm", "-f", "command-pack-npm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--filter", "app", "--json"], comment = "should pack specific package (uses --workspace app)" },
+  { argv = ["vpt", "rm", "-f", "command-pack-npm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--filter", "app", "--filter", "@vite-plus-test/utils", "--json"], comment = "should pack multiple packages" },
+  { argv = ["vpt", "rm", "-f", "command-pack-npm10-with-workspace-1.0.0.tgz", "app-1.0.0.tgz", "vite-plus-test-utils-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--pack-destination", "./dist", "--json"], comment = "should pack with destination" },
+  { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
+]

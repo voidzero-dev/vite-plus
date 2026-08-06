@@ -1,0 +1,22 @@
+[[case]]
+name = "command_staged_with_config"
+vp = "global"
+skip-platforms = ["windows", "macos"]
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["git", "add", "-A"], snapshot = false },
+  { argv = ["git", "commit", "-m", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", "src/index.ts", "export const hello = 'world';\nexport const foo = 1;\n"], comment = "append foo (write-file with the full appended content)", snapshot = false },
+  { argv = ["git", "add", "src/index.ts"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "staged"], comment = "should succeed with staged .ts files", continue-on-failure = true },
+  { argv = ["git", "add", "-A"], snapshot = false },
+  { argv = ["git", "commit", "-m", "second"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", "src/index.ts", "export const hello = 'world';\nexport const foo = 1;\nexport const bar = 2;\n"], comment = "append bar", snapshot = false },
+  { argv = ["git", "add", "src/index.ts"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "staged", "--debug"], comment = "should succeed with debug enabled", snapshot = false, continue-on-failure = true },
+  { argv = ["git", "add", "-A"], snapshot = false },
+  { argv = ["git", "commit", "-m", "third"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", "src/fail.js", "eval(\"code\");\n"], snapshot = false },
+  { argv = ["git", "add", "src/fail.js"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "staged"], comment = "should fail when staged .js file has lint errors", snapshot = false, continue-on-failure = true },
+]

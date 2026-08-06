@@ -1,0 +1,12 @@
+[[case]]
+name = "command_dlx_npm10"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "dlx", "--help"], comment = "should show help message", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], comment = "should run cowsay with npm exec", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "cowsay@1.6.0", "hello"], comment = "should run specific version", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "-p", "cowsay", "-p", "lolcatjs", "cowsay", "hello"], comment = "should run with multiple packages", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "-p", "cowsay", "-c", "echo hello-from-shell | cowsay"], comment = "should run shell mode command (vp's own shell handles the pipe)", continue-on-failure = true },
+]

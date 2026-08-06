@@ -42,11 +42,8 @@ export default defineConfig({
       },
     ],
     ignorePatterns: [
-      '**/snap-tests/**',
-      '**/snap-tests-global/**',
-      '**/snap-tests-todo/**',
       // PTY snapshot fixtures; also excluded in test/fmt below and tsconfig.json
-      'crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/**',
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'packages/*/binding/**',
     ],
   },
@@ -56,10 +53,8 @@ export default defineConfig({
       './vite/**',
       './rolldown/**',
       '**/node_modules/**',
-      '**/snap-tests/**',
-      '**/snap-tests-global/**',
       // PTY snapshot fixtures; also excluded in lint/fmt here and tsconfig.json
-      'crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/**',
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
       'packages/*/binding/__tests__/',
     ],
@@ -68,13 +63,7 @@ export default defineConfig({
     ignorePatterns: [
       '**/tmp/**',
       // PTY snapshot fixtures; also excluded in lint/test above and tsconfig.json
-      'crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/**',
-      'packages/cli/snap-tests/check-*/**',
-      'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
-      // JSONC fixtures intentionally keep comments and trailing commas
-      'packages/cli/snap-tests/migration-preserve-editor-jsonc-comments/.vscode/**',
-      'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
-      'packages/cli/snap-tests-global/migration-partially-installed-vite-plus/**',
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'ecosystem-ci/*/**',
       'packages/cli/src/run-config.ts',
       'vite',

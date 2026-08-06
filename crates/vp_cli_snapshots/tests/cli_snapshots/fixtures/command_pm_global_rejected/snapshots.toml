@@ -1,0 +1,14 @@
+[[case]]
+name = "command_pm_global_rejected"
+vp = "local"
+steps = [
+  { argv = ["vp", "install", "-g", "testnpm2"], comment = "rejected: managed install", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "testnpm2", "--node", "20"], comment = "rejected: --node implicitly covered", continue-on-failure = true },
+  { argv = ["vp", "add", "-g", "testnpm2"], comment = "rejected: managed add", continue-on-failure = true },
+  { argv = ["vp", "add", "-g", "testnpm2", "--node", "20"], comment = "rejected: --node implicitly covered", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "testnpm2"], comment = "rejected: managed uninstall", continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "--dry-run", "testnpm2"], comment = "rejected: --dry-run implicitly covered", continue-on-failure = true },
+  { argv = ["vp", "update", "-g"], comment = "rejected: managed update", continue-on-failure = true },
+  { argv = ["vp", "update", "-g", "testnpm2"], comment = "rejected: managed update with package", continue-on-failure = true },
+  { argv = ["vp", "pm", "ls", "-g"], comment = "rejected: managed packages listing", continue-on-failure = true },
+]

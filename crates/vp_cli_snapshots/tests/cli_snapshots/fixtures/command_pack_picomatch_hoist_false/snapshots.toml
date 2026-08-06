@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pack_picomatch_hoist_false"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pack", "src/index.ts"], continue-on-failure = true },
+]

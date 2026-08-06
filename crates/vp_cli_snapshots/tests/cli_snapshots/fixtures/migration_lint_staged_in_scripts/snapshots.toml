@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_lint_staged_in_scripts"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve lint-staged commands when Husky is detected", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check Husky prepare, lint-staged script, dependencies, and config are preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check staged config is not migrated while Husky owns the hook", continue-on-failure = true },
+]

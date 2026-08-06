@@ -31,15 +31,18 @@ If VS Code has multiple folders open, the shared Oxc language server may pick a 
 
 - Confirm the extension is using the intended workspace.
 
-## `vp build` does not run my build script
+## `vp dev` or `vp build` does not run my script
 
-Unlike package managers, built-in commands cannot be overwritten. If you are trying to run a `package.json` script use `vp run build` instead.
+Unlike package managers, built-in commands cannot be overwritten. If you are trying to run a `package.json` script use `vp run <script>` instead.
 
 For example:
 
+- `vp dev` always starts the built-in Vite dev server
 - `vp build` always runs the built-in Vite build
 - `vp test` always runs the built-in Vitest command
-- `vp run build` and `vp run test` run `package.json` scripts instead
+- `vp run dev`, `vp run build`, and `vp run test` run the matching `package.json` scripts instead
+
+See [Built-in Commands vs Scripts](/guide/run#built-in-commands-vs-scripts) for when to prefer each path.
 
 ::: info
 You can also run custom tasks defined in `vite.config.ts` and migrate away from `package.json` scripts entirely.
@@ -50,8 +53,9 @@ You can also run custom tasks defined in `vite.config.ts` and migrate away from 
 If `vp staged` fails or your pre-commit hook does not run:
 
 - make sure `vite.config.ts` contains a `staged` block
-- run `vp config` to install hooks
-- check whether hook installation was skipped intentionally through `VITE_GIT_HOOKS=0`
+- make sure the project-owned pre-commit hook runs `vp staged`
+- run `vp config` to install the hook dispatcher
+- check whether hook installation was skipped intentionally through `VP_GIT_HOOKS=0`
 
 A minimal staged config looks like this:
 

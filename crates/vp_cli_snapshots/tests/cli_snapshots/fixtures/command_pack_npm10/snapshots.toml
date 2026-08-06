@@ -1,0 +1,12 @@
+[[case]]
+name = "command_pack_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "pack", "--json"], comment = "should pack current package" },
+  { argv = ["vpt", "rm", "-f", "command-pack-npm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--pack-destination", "./dist", "--json"], comment = "should pack with destination" },
+  { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--json", "--", "--loglevel=warn"], comment = "should support pass through arguments" },
+  { argv = ["vpt", "rm", "-f", "command-pack-npm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+]

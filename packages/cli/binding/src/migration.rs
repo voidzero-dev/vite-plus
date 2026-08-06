@@ -23,7 +23,7 @@ use napi_derive::napi;
 #[napi]
 pub fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Option<String>> {
     let updated =
-        vite_migration::rewrite_scripts(&scripts_json, &rules_yaml).map_err(anyhow::Error::from)?;
+        vp_migration::rewrite_scripts(&scripts_json, &rules_yaml).map_err(anyhow::Error::from)?;
     Ok(updated)
 }
 
@@ -41,7 +41,7 @@ pub fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Optio
 /// * `updated` - The updated scripts JSON string, or `null` if no changes were made
 #[napi]
 pub fn rewrite_eslint(scripts_json: String) -> Result<Option<String>> {
-    let updated = vite_migration::rewrite_eslint(&scripts_json).map_err(anyhow::Error::from)?;
+    let updated = vp_migration::rewrite_eslint(&scripts_json).map_err(anyhow::Error::from)?;
     Ok(updated)
 }
 
@@ -59,7 +59,7 @@ pub fn rewrite_eslint(scripts_json: String) -> Result<Option<String>> {
 /// * `updated` - The updated scripts JSON string, or `null` if no changes were made
 #[napi]
 pub fn rewrite_prettier(scripts_json: String) -> Result<Option<String>> {
-    let updated = vite_migration::rewrite_prettier(&scripts_json).map_err(anyhow::Error::from)?;
+    let updated = vp_migration::rewrite_prettier(&scripts_json).map_err(anyhow::Error::from)?;
     Ok(updated)
 }
 
@@ -106,7 +106,7 @@ pub fn merge_json_config(
     json_config_path: String,
     config_key: String,
 ) -> Result<MergeJsonConfigResult> {
-    let result = vite_migration::merge_json_config(
+    let result = vp_migration::merge_json_config(
         Path::new(&vite_config_path),
         Path::new(&json_config_path),
         &config_key,
@@ -157,7 +157,7 @@ pub fn upsert_json_config(
     json_config_path: String,
     config_key: String,
 ) -> Result<MergeJsonConfigResult> {
-    let result = vite_migration::upsert_json_config(
+    let result = vp_migration::upsert_json_config(
         Path::new(&vite_config_path),
         Path::new(&json_config_path),
         &config_key,
@@ -180,7 +180,7 @@ pub fn upsert_json_config(
 #[napi]
 pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
     let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
-    Ok(vite_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
+    Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
 }
 
 /// Error from batch import rewriting
@@ -234,7 +234,7 @@ pub fn merge_tsdown_config(
     tsdown_config_path: String,
 ) -> Result<MergeJsonConfigResult> {
     let result =
-        vite_migration::merge_tsdown_config(Path::new(&vite_config_path), &tsdown_config_path)
+        vp_migration::merge_tsdown_config(Path::new(&vite_config_path), &tsdown_config_path)
             .map_err(anyhow::Error::from)?;
 
     Ok(MergeJsonConfigResult {
@@ -249,7 +249,7 @@ pub fn merge_tsdown_config(
 /// `vite-plus` when needed.
 #[napi]
 pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResult> {
-    let result = vite_migration::wrap_lazy_plugins(Path::new(&vite_config_path))
+    let result = vp_migration::wrap_lazy_plugins(Path::new(&vite_config_path))
         .map_err(anyhow::Error::from)?;
 
     Ok(MergeJsonConfigResult {
@@ -291,9 +291,9 @@ pub fn rewrite_imports_in_directory(
     root: String,
     preserve_vitest_in_nuxt_packages: Option<bool>,
 ) -> Result<BatchRewriteResult> {
-    let result = vite_migration::rewrite_imports_in_directory_with_options(
+    let result = vp_migration::rewrite_imports_in_directory_with_options(
         Path::new(&root),
-        vite_migration::RewriteImportsOptions {
+        vp_migration::RewriteImportsOptions {
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
         },
     )

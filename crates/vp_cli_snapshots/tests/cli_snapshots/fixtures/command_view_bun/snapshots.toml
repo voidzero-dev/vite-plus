@@ -1,0 +1,8 @@
+[[case]]
+name = "command_view_bun"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "view", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2"], comment = "should view package information", continue-on-failure = true },
+  { argv = ["vp", "pm", "view", "testnpm2", "version"], comment = "should view version field", continue-on-failure = true },
+]
