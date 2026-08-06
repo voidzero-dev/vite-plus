@@ -1,0 +1,19 @@
+.github/actions/build-windows-cli/action.yml
+  s_431aa2d8c58680::t_08e79ae2f52094 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bb758a4aa728f2bdf3adfcc03655a303a9c7bb68",
+  "prompts": {},
+  "sessions": {
+    "s_431aa2d8c58680": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4690-cc8f-7d22-9259-a63dbc7145ec",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
