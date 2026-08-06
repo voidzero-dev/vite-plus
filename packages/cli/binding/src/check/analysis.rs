@@ -1,5 +1,5 @@
 use owo_colors::OwoColorize;
-use vite_shared::output;
+use vp_shared::output;
 
 #[derive(Debug, Clone)]
 pub(super) struct CheckSummary {
@@ -152,7 +152,7 @@ pub(super) fn print_stdout_block(block: &str) {
 
 pub(super) fn print_summary_line(message: &str) {
     output::raw("");
-    if vite_shared::is_stdout_terminal() && message.contains('`') {
+    if vp_shared::is_stdout_terminal() && message.contains('`') {
         let mut formatted = String::with_capacity(message.len());
         let mut segments = message.split('`');
         if let Some(first) = segments.next() {

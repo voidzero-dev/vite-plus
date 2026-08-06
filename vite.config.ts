@@ -43,7 +43,7 @@ export default defineConfig({
     ],
     ignorePatterns: [
       // PTY snapshot fixtures; also excluded in test/fmt below and tsconfig.json
-      'crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/**',
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'packages/*/binding/**',
     ],
   },
@@ -54,7 +54,7 @@ export default defineConfig({
       './rolldown/**',
       '**/node_modules/**',
       // PTY snapshot fixtures; also excluded in lint/fmt here and tsconfig.json
-      'crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/**',
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
       'packages/*/binding/__tests__/',
     ],
@@ -63,7 +63,7 @@ export default defineConfig({
     ignorePatterns: [
       '**/tmp/**',
       // PTY snapshot fixtures; also excluded in lint/test above and tsconfig.json
-      'crates/vite_cli_snapshots/tests/cli_snapshots/fixtures/**',
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'ecosystem-ci/*/**',
       'packages/cli/src/run-config.ts',
       'vite',

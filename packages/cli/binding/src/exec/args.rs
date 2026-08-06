@@ -1,4 +1,4 @@
-use vite_workspace::package_filter::PackageQueryArgs;
+use vt_workspace::package_filter::PackageQueryArgs;
 
 /// Parsed exec arguments (clap-derived).
 #[derive(Debug, clap::Args)]

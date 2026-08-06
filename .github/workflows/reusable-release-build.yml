@@ -66,7 +66,7 @@ jobs:
           # the version that gets published/installed (the release version, or
           # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
           # `version = "..."` so crate dependency versions are never touched.
-          for f in crates/vite_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+          for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
           done
           # Stamp the package.json files too:
@@ -91,7 +91,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in crates/vite_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+          for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
             if ! grep -qF "version = \"${VERSION}\"" "$f"; then
               echo "ERROR: version stamp failed for $f"; head -5 "$f"; exit 1
             fi
@@ -118,7 +118,7 @@ jobs:
       - name: Upload Rust CLI binary artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vite-global-cli-${{ matrix.settings.target }}
+          name: vp-global-cli-${{ matrix.settings.target }}
           path: |
             ./target/${{ matrix.settings.target }}/release/vp
             ./target/${{ matrix.settings.target }}/release/vp.exe

@@ -241,12 +241,12 @@ Hook setup behavior:
 Both commands follow Category B (JS Script Commands) pattern — same as `vp create` and `vp migrate`:
 
 ```rust
-// crates/vite_global_cli/src/commands/config.rs
+// crates/vp_global_cli/src/commands/config.rs
 pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus, Error> {
     super::delegate::execute(cwd, "config", args).await
 }
 
-// crates/vite_global_cli/src/commands/staged.rs
+// crates/vp_global_cli/src/commands/staged.rs
 pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus, Error> {
     super::delegate::execute(cwd, "staged", args).await
 }

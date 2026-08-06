@@ -201,13 +201,13 @@ consistent with `vp pm dist-tag`/`fund`/`token` on bun.
 
 ## Implementation Architecture
 
-The current code lives in `crates/vite_pm_cli/` (clap surface + dispatch) and
+The current code lives in `crates/vp_pm_cli/` (clap surface + dispatch) and
 `crates/vite_install/src/commands/` (per-command resolvers). The
 `PackageManagerCommand`/`PmCommands` enums are shared by both the global CLI and
 the local NAPI binding via `#[command(flatten)]`, so adding a variant surfaces
 in both CLIs automatically.
 
-### 1. Clap surface: `crates/vite_pm_cli/src/cli.rs`
+### 1. Clap surface: `crates/vp_pm_cli/src/cli.rs`
 
 Add a `Stage` variant to `PmCommands` and a `StageCommands` subcommand enum
 (modeled on the existing `DistTagCommands`):
@@ -332,7 +332,7 @@ Register the module in `crates/vite_install/src/commands/mod.rs`:
 pub mod stage;
 ```
 
-### 3. Handler: `crates/vite_pm_cli/src/handlers.rs`
+### 3. Handler: `crates/vp_pm_cli/src/handlers.rs`
 
 Import `stage::{StageCommandOptions, StageSubcommand}` and add a `PmCommands::Stage`
 arm to `run_pm_subcommand`, converting the clap `StageCommands` into the owned

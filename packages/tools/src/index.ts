@@ -1,17 +1,9 @@
 const subcommand = process.argv[2];
 
 switch (subcommand) {
-  case 'replace-file-content':
-    const { replaceFileContent } = await import('./replace-file-content.ts');
-    replaceFileContent();
-    break;
   case 'sync-remote':
     const { syncRemote } = await import('./sync-remote-deps.ts');
     await syncRemote();
-    break;
-  case 'json-sort':
-    const { jsonSort } = await import('./json-sort.ts');
-    jsonSort();
     break;
   case 'install-global-cli':
     const { installGlobalCli } = await import('./install-global-cli.ts');
@@ -37,7 +29,7 @@ switch (subcommand) {
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: replace-file-content, sync-remote, json-sort, install-global-cli, brand-vite, local-npm-registry',
+      'Available subcommands: sync-remote, install-global-cli, brand-vite, local-npm-registry',
     );
     process.exit(1);
 }
