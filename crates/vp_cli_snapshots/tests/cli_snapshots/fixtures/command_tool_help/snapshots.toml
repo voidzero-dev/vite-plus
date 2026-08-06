@@ -14,8 +14,14 @@ steps = [
 [[case]]
 name = "command_tool_help_global_delegation"
 vp = "global"
-comment = "Global and task-script help delegate to the local vite-plus CLI."
+comment = "Global top-level help uses the local vite-plus CLI, while extra task arguments reach the wrapped command."
 steps = [
   ["vp", "dev", "--help"],
   ["vpr", "localhelp", "--help"],
 ]
+
+[[case]]
+name = "command_tool_deep_help_delegation"
+vp = "local"
+comment = "Help requests with additional arguments delegate to the underlying tool."
+steps = [["vp", "test", "--help", "--coverage"]]

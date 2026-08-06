@@ -1079,18 +1079,10 @@ export function maybePrintCommandHelp(args: readonly string[]): boolean {
   }
 
   const commandArgs = args.slice(1);
-  const terminatorIndex = commandArgs.indexOf('--');
-  const ownArgs = terminatorIndex === -1 ? commandArgs : commandArgs.slice(0, terminatorIndex);
-  const hasHelpFlag = ownArgs.some((arg) => arg === '-h' || arg === '--help');
-  if (!hasHelpFlag) {
+  const isTopLevelHelp =
+    commandArgs.length === 1 && (commandArgs[0] === '-h' || commandArgs[0] === '--help');
+  if (!isTopLevelHelp) {
     return false;
-  }
-
-  // Arguments after the task/command belong to the wrapped process, not to vp.
-  if (command === 'run' || command === 'exec' || command === 'cache') {
-    if (commandArgs.length !== 1) {
-      return false;
-    }
   }
 
   printHeader();
