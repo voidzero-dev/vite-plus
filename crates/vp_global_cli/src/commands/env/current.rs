@@ -4,7 +4,6 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
 use serde::Serialize;
 use vp_pm_cli::{
     PackageManagerResolution, package_manager_bin_path, package_manager_install_dir,
@@ -62,16 +61,12 @@ impl PackageManagerInfo {
     }
 }
 
-fn accent(text: &str) -> String {
-    if help::should_style_help() { text.bright_blue().to_string() } else { text.to_string() }
-}
-
 fn print_rows(title: &str, rows: &[(&str, String)]) {
     println!("{}", help::render_heading(title));
     let label_width = rows.iter().map(|(label, _)| label.chars().count()).max().unwrap_or(0);
     for (label, value) in rows {
         let padding = " ".repeat(label_width.saturating_sub(label.chars().count()));
-        println!("  {}{}  {value}", accent(label), padding);
+        println!("  {}{}  {value}", help::accent(label), padding);
     }
 }
 
