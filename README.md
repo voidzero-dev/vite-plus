@@ -181,11 +181,13 @@ vp migrate
 Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) action to install Vite+ in GitHub Actions:
 
 ```yaml
-- uses: voidzero-dev/setup-vp@v1
+- uses: voidzero-dev/setup-vp@<setup-vp-version>
   with:
     node-version: '22'
     cache: true
 ```
+
+Replace `<setup-vp-version>` with the latest exact [`setup-vp` release tag](https://github.com/voidzero-dev/setup-vp/releases), or use a commit SHA. Do not use the `v1` tag: it is frozen and no longer receives updates.
 
 #### Manual Installation & Migration
 

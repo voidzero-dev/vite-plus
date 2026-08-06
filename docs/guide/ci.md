@@ -6,12 +6,16 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 [`voidzero-dev/setup-vp`](https://github.com/voidzero-dev/setup-vp) provides integrations for GitHub Actions and GitLab CI/CD. Both install Vite+ and can install project dependencies. The GitHub Action can also set up Node.js and cache package manager data automatically, while the GitLab CI/CD template uses the Node.js runtime and cache configuration provided by the job.
 
+## setup-vp Versioning
+
+Replace `<setup-vp-version>` in the examples below with the latest [exact release tag](https://github.com/voidzero-dev/setup-vp/releases), or use a commit SHA. Do not use the `v1` tag: it is frozen and no longer receives updates. Renovate and Dependabot can update pinned tags.
+
 ## GitHub Actions
 
 The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package-manager setup, or manual dependency caching steps in your workflow.
 
 ```yaml [.github/workflows/ci.yml]
-- uses: voidzero-dev/setup-vp@v1
+- uses: voidzero-dev/setup-vp@<setup-vp-version>
   with:
     node-version: '24'
     cache: true
@@ -29,11 +33,13 @@ With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
 ## GitLab CI/CD
 
-Use the reusable `setup-vp` remote template in your GitLab CI/CD configuration:
+Use the reusable `setup-vp` remote template in your GitLab CI/CD configuration. Pin the remote URL and `setup-ref` to the same exact release tag:
 
 ```yaml [.gitlab-ci.yml]
 include:
-  - remote: 'https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml'
+  - remote: 'https://raw.githubusercontent.com/voidzero-dev/setup-vp/<setup-vp-version>/gitlab/setup-vp.yml'
+    inputs:
+      setup-ref: '<setup-vp-version>'
 
 test:
   extends: .setup-vp
@@ -76,7 +82,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 #### After:
 
 ```yaml [.github/workflows/ci.yml]
-- uses: voidzero-dev/setup-vp@v1
+- uses: voidzero-dev/setup-vp@<setup-vp-version>
   with:
     node-version: '24'
     cache: true

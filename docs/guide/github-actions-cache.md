@@ -63,6 +63,8 @@ vp run lint # should print "cache hit"
 
 Restore `node_modules/.vite/task-cache` after `vp install`, because package installation can recreate or modify `node_modules`.
 
+Replace `<setup-vp-version>` below with the latest exact [`setup-vp` release tag](https://github.com/voidzero-dev/setup-vp/releases), or use a commit SHA.
+
 ```yaml [.github/workflows/ci.yml]
 name: CI
 
@@ -80,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@<setup-vp-version>
         with:
           node-version: '24'
           cache: true
