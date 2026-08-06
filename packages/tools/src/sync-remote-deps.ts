@@ -144,155 +144,85 @@ function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) 
   }
 }
 
-function transformRolldownExport(exportPath: string, exportValue: unknown): [string, ExportValue] {
-  // Skip package.json
-  if (exportPath === './package.json') {
-    return ['', null];
-  }
-
-  // Transform export path: . -> ./rolldown, ./foo -> ./rolldown/foo
-  const newExportPath = exportPath === '.' ? './rolldown' : `./rolldown${exportPath.slice(1)}`;
-
-  // Transform export value
-  const transformValue = (value: unknown): ExportValue => {
-    if (typeof value === 'string') {
-      // Skip 'dev' condition paths that point to src
-      if (value.startsWith('./src/')) {
-        return null;
-      }
-      // Transform dist paths
-      return value.replace(/^\.\/dist\//, './dist/rolldown/');
+function createExportTransformer(exportPathPrefix: string, distPathPrefix: string) {
+  return (exportPath: string, exportValue: unknown): [string, ExportValue] => {
+    if (exportPath === './package.json') {
+      return ['', null];
     }
 
-    if (value && typeof value === 'object') {
-      const result: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(value)) {
-        // Skip 'dev' condition
-        if (key === 'dev') {
-          continue;
+    const newExportPath =
+      exportPath === '.' ? exportPathPrefix : `${exportPathPrefix}${exportPath.slice(1)}`;
+
+    const transformValue = (value: unknown): ExportValue => {
+      if (typeof value === 'string') {
+        if (value.startsWith('./src/')) {
+          return null;
         }
+        return value.replace(/^\.\/dist\//, distPathPrefix);
+      }
 
-        const transformed = transformValue(val);
-        if (transformed !== null) {
-          result[key] = transformed;
+      if (value && typeof value === 'object') {
+        const result: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(value)) {
+          if (key === 'dev') {
+            continue;
+          }
+          const transformed = transformValue(val);
+          if (transformed !== null) {
+            result[key] = transformed;
+          }
+        }
+        return Object.keys(result).length > 0 ? (result as ExportValue) : null;
+      }
+
+      return value as ExportValue;
+    };
+
+    const newValue = transformValue(exportValue);
+
+    if (typeof newValue === 'string') {
+      if (newValue.endsWith('.mjs')) {
+        return [
+          newExportPath,
+          {
+            default: newValue,
+            types: newValue.replace(/\.mjs$/, '.d.mts'),
+          },
+        ];
+      } else if (newValue.endsWith('.js')) {
+        return [
+          newExportPath,
+          {
+            default: newValue,
+            types: newValue.replace(/\.js$/, '.d.ts'),
+          },
+        ];
+      }
+      return [newExportPath, newValue];
+    }
+
+    if (newValue && typeof newValue === 'object') {
+      const importPath = ('import' in newValue ? newValue.import : newValue.default) as
+        | string
+        | undefined;
+      if (importPath && !('types' in newValue)) {
+        if (importPath.endsWith('.mjs')) {
+          newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
+        } else if (importPath.endsWith('.js')) {
+          newValue.types = importPath.replace(/\.js$/, '.d.ts');
         }
       }
-      return Object.keys(result).length > 0 ? (result as ExportValue) : null;
     }
 
-    return value as ExportValue;
-  };
-
-  const newValue = transformValue(exportValue);
-
-  // Handle string values or add types if missing
-  if (typeof newValue === 'string') {
-    // Convert string to object with default and types
-    if (newValue.endsWith('.mjs')) {
-      return [
-        newExportPath,
-        {
-          default: newValue,
-          types: newValue.replace(/\.mjs$/, '.d.mts'),
-        },
-      ];
-    } else if (newValue.endsWith('.js')) {
-      return [
-        newExportPath,
-        {
-          default: newValue,
-          types: newValue.replace(/\.js$/, '.d.ts'),
-        },
-      ];
-    }
     return [newExportPath, newValue];
-  }
-
-  if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as
-      | string
-      | undefined;
-    if (importPath && !('types' in newValue)) {
-      if (importPath.endsWith('.mjs')) {
-        newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
-      } else if (importPath.endsWith('.js')) {
-        newValue.types = importPath.replace(/\.js$/, '.d.ts');
-      }
-    }
-  }
-
-  return [newExportPath, newValue];
+  };
 }
 
-function transformPluginutilsExport(
-  exportPath: string,
-  exportValue: unknown,
-): [string, ExportValue] {
-  // Skip package.json
-  if (exportPath === './package.json') {
-    return ['', null];
-  }
-
-  // Transform . -> ./rolldown/pluginutils
-  const newExportPath =
-    exportPath === '.' ? './rolldown/pluginutils' : `./rolldown/pluginutils${exportPath.slice(1)}`;
-
-  // Transform paths
-  const transformValue = (value: unknown): ExportValue => {
-    if (typeof value === 'string') {
-      if (value.startsWith('./src/')) {
-        return null;
-      }
-      return value.replace(/^\.\/dist\//, './dist/pluginutils/');
-    }
-
-    if (value && typeof value === 'object') {
-      const result: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(value)) {
-        if (key === 'dev') {
-          continue;
-        }
-        const transformed = transformValue(val);
-        if (transformed !== null) {
-          result[key] = transformed;
-        }
-      }
-      return Object.keys(result).length > 0 ? (result as ExportValue) : null;
-    }
-
-    return value as ExportValue;
-  };
-
-  const newValue = transformValue(exportValue);
-
-  // Handle string values or add types if missing
-  if (typeof newValue === 'string') {
-    // Convert string to object with default and types
-    if (newValue.endsWith('.js')) {
-      return [
-        newExportPath,
-        {
-          default: newValue,
-          types: newValue.replace(/\.js$/, '.d.ts'),
-        },
-      ];
-    }
-    return [newExportPath, newValue];
-  }
-
-  if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as
-      | string
-      | undefined;
-    if (importPath && !('types' in newValue)) {
-      if (importPath.endsWith('.js')) {
-        newValue.types = importPath.replace(/\.js$/, '.d.ts');
-      }
-    }
-  }
-
-  return [newExportPath, newValue];
-}
+const transformRolldownExport = createExportTransformer('./rolldown', './dist/rolldown/');
+const transformPluginutilsExport = createExportTransformer(
+  './rolldown/pluginutils',
+  './dist/pluginutils/',
+);
 
 function transformViteExport(exportPath: string, exportValue: unknown): [string, ExportValue] {
   // Skip package.json
