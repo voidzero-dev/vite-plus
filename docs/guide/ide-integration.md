@@ -26,7 +26,8 @@ You can also manually set up the VS Code config:
   "[javascriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
   "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
   "[typescriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
-  "oxc.fmt.configPath": "./vite.config.ts",
+  "oxc.disableNestedConfig": true,
+  "oxc.fmt.disableNestedConfig": true,
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
   "editor.codeActionsOnSave": {
@@ -35,7 +36,7 @@ You can also manually set up the VS Code config:
 }
 ```
 
-This gives the project a shared default formatter and enables Oxc-powered fix actions on save. The language-specific override blocks (`[javascript]`, `[typescript]`, etc.) are required because VS Code prioritizes user-level `[language]` settings over the workspace-level `editor.defaultFormatter` — without them, a global Prettier configuration would silently take over. Setting `oxc.fmt.configPath` to `./vite.config.ts` keeps editor format-on-save aligned with the `fmt` block in your Vite+ config. Vite+ uses `formatOnSaveMode: "file"` because Oxfmt does not support partial formatting.
+This gives the project a shared default formatter and enables Oxc-powered fix actions on save. The language-specific override blocks (`[javascript]`, `[typescript]`, etc.) are required because VS Code prioritizes user-level `[language]` settings over the workspace-level `editor.defaultFormatter` — without them, a global Prettier configuration would silently take over. Setting `oxc.disableNestedConfig` and `oxc.fmt.disableNestedConfig` prevents nested Oxlint and Oxfmt configs from diverging from the root Vite+ config. Vite+ uses `formatOnSaveMode: "file"` because Oxfmt does not support partial formatting.
 
 To let the VS Code NPM Scripts panel run scripts through `vp`, add the following to your `.vscode/settings.json`:
 
