@@ -4,6 +4,7 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import validateNpmPackageName from 'validate-npm-package-name';
 
+import { cancelAndExit } from '../utils/prompts.ts';
 import { accent } from '../utils/terminal.ts';
 import { getRandomProjectName } from './random-name.ts';
 import { getProjectDirFromPackageName } from './utils.ts';
@@ -121,11 +122,6 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
     case 'no':
       cancelAndExit();
   }
-}
-
-export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
-  prompts.cancel(message);
-  process.exit(exitCode);
 }
 
 function isEmpty(path: string) {

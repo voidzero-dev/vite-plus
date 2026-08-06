@@ -7,6 +7,7 @@ import spawn from 'cross-spawn';
 import { rewriteScripts } from '../../../binding/index.js';
 import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
 import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
+import { findGitRoot } from '../../utils/git.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
   hasStagedConfigInViteConfig,
@@ -93,24 +94,6 @@ function findNonRegularViteHookPath(projectPath: string): string | null {
     }
   }
   return null;
-}
-
-/**
- * Walk up from `startPath` looking for `.git` (directory or file — submodules
- * use a `.git` file).  Returns the directory that contains `.git`, or `null`.
- */
-function findGitRoot(startPath: string): string | null {
-  let dir = startPath;
-  while (true) {
-    if (fs.existsSync(path.join(dir, '.git'))) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      return null;
-    }
-    dir = parent;
-  }
 }
 
 function findWorkspacePackageHookPolicy(
