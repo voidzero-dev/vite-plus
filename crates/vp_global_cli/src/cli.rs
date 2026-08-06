@@ -195,17 +195,17 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Show versions and relationships in the active Vite+ toolchain
+    /// Show active Vite+ tools, versions, and relationships
     Toolchain {
-        /// Filter by tool or package name
+        /// Tool or package names to show
         #[arg(value_name = "TOOLS")]
         tools: Vec<String>,
 
-        /// Output the toolchain graph as JSON
+        /// Print the graph as JSON
         #[arg(long)]
         json: bool,
 
-        /// Inspect the global Vite+ toolchain
+        /// Use the global Vite+ toolchain
         #[arg(long)]
         global: bool,
     },

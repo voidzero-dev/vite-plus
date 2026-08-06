@@ -51,7 +51,7 @@ Manage Dependencies:
   pm                         Forward a command to the package manager
 
 Inspect:
-  toolchain  Show versions and relationships in the active Vite+ toolchain
+  toolchain  Show active Vite+ tools, versions, and relationships
 
 Maintain:
   upgrade  Update vp itself to the latest version

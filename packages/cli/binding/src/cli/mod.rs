@@ -280,17 +280,17 @@ fn execute_toolchain_command(
     options: Option<&CliOptions>,
 ) -> Result<ExitStatus, Error> {
     if args.global {
-        vp_shared::output::error("`--global` is only supported by the globally installed `vp` CLI");
+        vp_shared::output::error("The `--global` option requires the global `vp` CLI");
         return Ok(ExitStatus(1));
     }
 
     let options = options.ok_or_else(|| {
-        Error::Anyhow(anyhow::anyhow!("toolchain metadata is unavailable in this CLI"))
+        Error::Anyhow(anyhow::anyhow!("this CLI does not include toolchain metadata"))
     })?;
-    let manifest_path = vt_path::AbsolutePathBuf::new(
-        options.toolchain_manifest_path.clone().into(),
-    )
-    .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("toolchain manifest path must be absolute")))?;
+    let manifest_path =
+        vt_path::AbsolutePathBuf::new(options.toolchain_manifest_path.clone().into()).ok_or_else(
+            || Error::Anyhow(anyhow::anyhow!("the toolchain manifest path must be absolute")),
+        )?;
     let manifest = vp_toolchain::load_manifest(&manifest_path)
         .map_err(|error| Error::Anyhow(anyhow::Error::new(error)))?;
     let version = vp_toolchain::root_version(&manifest).ok_or_else(|| {
@@ -304,13 +304,13 @@ fn execute_toolchain_command(
     let report = match vp_toolchain::build_report(&manifest, &args.tools, source) {
         Ok(report) => report,
         Err(vp_toolchain::ToolchainError::UnknownFilter(filter)) => {
-            let message = format!("`{filter}` is not part of the Vite+ toolchain manifest");
+            let message = format!("`{filter}` is not in the Vite+ toolchain");
             if args.json {
                 vp_shared::output::raw_stderr(&format!("error: {message}"));
             } else {
                 vp_shared::output::error(&message);
                 vp_shared::output::raw_stderr(&format!(
-                    "hint: run `vp why {filter}` to inspect project dependencies"
+                    "hint: run `vp why {filter}` to show project dependencies"
                 ));
             }
             return Ok(ExitStatus(1));

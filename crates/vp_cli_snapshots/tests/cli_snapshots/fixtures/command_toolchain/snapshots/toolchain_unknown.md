@@ -2,21 +2,21 @@
 
 ## `vp toolchain rollup`
 
-human output points back to the package graph
+readable output points to the package graph
 
 **Exit code:** 1
 
 ```
-error: `rollup` is not part of the Vite+ toolchain manifest
-hint: run `vp why rollup` to inspect project dependencies
+error: `rollup` is not in the Vite+ toolchain
+hint: run `vp why rollup` to show project dependencies
 ```
 
 ## `vp toolchain rollup --json`
 
-JSON mode omits the human hint
+JSON output does not include the readable hint
 
 **Exit code:** 1
 
 ```
-error: `rollup` is not part of the Vite+ toolchain manifest
+error: `rollup` is not in the Vite+ toolchain
 ```

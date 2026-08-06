@@ -23,15 +23,15 @@ steps = [
 name = "toolchain_json"
 vp = "global"
 steps = [
-  { argv = ["vp", "toolchain", "vite", "--json", "--global"], tty = false, comment = "JSON contains one node per ID and no human header" },
+  { argv = ["vp", "toolchain", "vite", "--json", "--global"], tty = false, comment = "JSON contains one node per ID and no CLI header" },
 ]
 
 [[case]]
 name = "toolchain_unknown"
 vp = "local"
 steps = [
-  { argv = ["vp", "toolchain", "rollup"], comment = "human output points back to the package graph", continue-on-failure = true },
-  { argv = ["vp", "toolchain", "rollup", "--json"], tty = false, comment = "JSON mode omits the human hint", continue-on-failure = true },
+  { argv = ["vp", "toolchain", "rollup"], comment = "readable output points to the package graph", continue-on-failure = true },
+  { argv = ["vp", "toolchain", "rollup", "--json"], tty = false, comment = "JSON output does not include the readable hint", continue-on-failure = true },
 ]
 
 [[case]]
@@ -56,6 +56,6 @@ steps = [
 name = "toolchain_why_hint"
 vp = ["local", "global"]
 steps = [
-  { argv = ["vp", "why", "vite"], timeout = 120000, comment = "a successful human package query points to toolchain inspection" },
-  { argv = ["vp", "why", "vite", "--json"], tty = false, timeout = 120000, comment = "machine-readable package-manager output has no hint" },
+  { argv = ["vp", "why", "vite"], timeout = 120000, comment = "readable vp why output shows the toolchain hint" },
+  { argv = ["vp", "why", "vite", "--json"], tty = false, timeout = 120000, comment = "JSON package output does not include the hint" },
 ]

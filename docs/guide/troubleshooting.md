@@ -15,8 +15,8 @@ Vite+ expects modern upstream tool versions.
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 
-Run `vp toolchain` to see the versions selected by the local Vite+ package.
-Use `vp toolchain --global` to inspect the global release.
+Run `vp toolchain` to show the versions from the local Vite+ package.
+Run `vp toolchain --global` to show the versions from the global Vite+ release.
 
 ## `vp check` does not run type-aware lint rules or type checks
 

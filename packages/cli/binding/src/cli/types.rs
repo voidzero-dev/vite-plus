@@ -97,15 +97,15 @@ pub enum SynthesizableSubcommand {
 
 #[derive(Debug, clap::Args)]
 pub struct ToolchainArgs {
-    /// Filter by tool or package name
+    /// Tool or package names to show
     #[arg(value_name = "TOOLS")]
     pub tools: Vec<String>,
 
-    /// Output the toolchain graph as JSON
+    /// Print the graph as JSON
     #[arg(long)]
     pub json: bool,
 
-    /// Inspect the global Vite+ toolchain
+    /// Use the global Vite+ toolchain
     #[arg(long)]
     pub global: bool,
 }
@@ -129,7 +129,7 @@ pub(super) enum CLIArgs {
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),
 
-    /// Show versions and relationships in the active Vite+ toolchain
+    /// Show active Vite+ tools, versions, and relationships
     Toolchain(ToolchainArgs),
 }
 

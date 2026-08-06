@@ -443,10 +443,7 @@ pub fn top_level_help_doc() -> HelpDoc {
             ),
             section_rows(
                 "Inspect",
-                vec![row(
-                    "toolchain",
-                    "Show versions and relationships in the active Vite+ toolchain",
-                )],
+                vec![row("toolchain", "Show active Vite+ tools, versions, and relationships")],
             ),
             section_rows(
                 "Maintain",

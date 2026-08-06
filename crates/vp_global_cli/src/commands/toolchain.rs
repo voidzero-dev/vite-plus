@@ -33,13 +33,13 @@ pub async fn execute(
     let report = match vp_toolchain::build_report(&manifest, &tools, source) {
         Ok(report) => report,
         Err(vp_toolchain::ToolchainError::UnknownFilter(filter)) => {
-            let message = format!("`{filter}` is not part of the Vite+ toolchain manifest");
+            let message = format!("`{filter}` is not in the Vite+ toolchain");
             if json {
                 vp_shared::output::raw_stderr(&format!("error: {message}"));
             } else {
                 vp_shared::output::error(&message);
                 vp_shared::output::raw_stderr(&format!(
-                    "hint: run `vp why {filter}` to inspect project dependencies"
+                    "hint: run `vp why {filter}` to show project dependencies"
                 ));
             }
             return Ok(crate::cli::exit_status(1));

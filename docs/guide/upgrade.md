@@ -11,10 +11,9 @@ There are two parts to upgrading Vite+:
 
 You can upgrade both of them independently.
 
-## Inspect the Toolchain
+## Show the Toolchain
 
-Run `vp toolchain` to see the exact components selected for the current
-directory:
+Run `vp toolchain` to show the components for the current directory:
 
 ```bash
 vp toolchain
@@ -23,16 +22,16 @@ vp toolchain vite rolldown oxc
 vp toolchain --json
 ```
 
-The command uses the local `vite-plus` package when the project has one. Pass
-`--global` to inspect the release paired with the global `vp` command:
+The command uses the local `vite-plus` package when the project has one. Use
+`--global` to show the release for the global `vp` command:
 
 ```bash
 vp toolchain --global
 ```
 
-`vp why <package>` still reports the package manager's installed dependency
-graph. It cannot report code bundled into `@voidzero-dev/vite-plus-core` or
-engines compiled into Vite+, so use `vp toolchain` for those versions and
+`vp why <package>` shows the dependency graph from the package manager. It
+cannot show code bundled into `@voidzero-dev/vite-plus-core`. It also cannot
+show engines compiled into Vite+. Use `vp toolchain` to show those versions and
 relationships.
 
 ## Global `vp`
@@ -110,7 +109,7 @@ irm https://vite.plus/ps1 | iex
 Remove-Item Env:\VP_PR_VERSION
 ```
 
-The installer resolves the ref to its `0.0.0-commit.<sha>` build through the registry bridge and installs it like any other version. Run `vp toolchain --global` afterward to confirm which build and tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
+The installer uses the registry bridge to resolve the ref to a `0.0.0-commit.<sha>` build. It installs this build like other versions. Run `vp toolchain --global` to show the active build and tool versions. After testing, run `vp upgrade --force` to restore the published release. You can also run the installer without `VP_PR_VERSION`.
 
 ### Local `vite-plus` Preview
 
@@ -120,6 +119,6 @@ After installing the preview global CLI above, run migrate in the project to mov
 vp migrate
 ```
 
-Migrate points the project at the bridge registry (writing it to `.npmrc`, or `.yarnrc.yml` for Yarn Berry) and pins `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias to the matching `0.0.0-commit.<sha>` version. That registry line is what lets the same versions resolve in the project's own CI, so commit it if you want CI to test the preview too.
+Migrate writes the bridge registry to `.npmrc`. For Yarn Berry, it writes the registry to `.yarnrc.yml`. It pins `vite-plus` and the `vite` alias to the matching `0.0.0-commit.<sha>` version. The `vite` alias points to `@voidzero-dev/vite-plus-core`. Commit the registry line if the project CI must test the preview.
 
-After installing, check the selected versions with `vp toolchain`. When testing is complete, restore the published release: set `vite-plus` back to `latest`, remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`), and reinstall with `vp install`.
+After the install, run `vp toolchain` to show the selected versions. After testing, set `vite-plus` to `latest`. Remove the bridge `registry` line from `.npmrc` or `.yarnrc.yml`. Then run `vp install`.

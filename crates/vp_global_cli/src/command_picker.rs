@@ -109,7 +109,7 @@ const COMMANDS: &[CommandEntry] = &[
     CommandEntry {
         label: "toolchain",
         command: "toolchain",
-        summary: "Inspect Vite+ tool versions and relationships.",
+        summary: "Show Vite+ tool versions and relationships.",
         append_help: false,
     },
     CommandEntry {

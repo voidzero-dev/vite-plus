@@ -125,9 +125,9 @@ pub enum ToolchainError {
     UnsupportedSchema(u32),
     #[error("invalid toolchain manifest: {0}")]
     InvalidManifest(Str),
-    #[error("`{0}` is not part of the Vite+ toolchain manifest")]
+    #[error("`{0}` is not in the Vite+ toolchain")]
     UnknownFilter(Str),
-    #[error("failed to serialize toolchain report: {0}")]
+    #[error("failed to create toolchain JSON: {0}")]
     Serialize(#[from] serde_json::Error),
 }
 
@@ -453,7 +453,7 @@ pub fn why_hint<T: AsRef<str>>(manifest: &Manifest, queries: &[T]) -> Option<Str
         filters.push_str(node.name.as_str());
     }
     Some(vt_str::format!(
-        "Vite+ also provides {provided} through its toolchain.\nRun `vp toolchain {filters}` to inspect bundled versions and relationships."
+        "Vite+ also provides {provided} through its toolchain.\nRun `vp toolchain {filters}` to show these versions and relationships."
     ))
 }
 
@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn unknown_filter_is_an_error() {
         let error = filter_manifest(&manifest(), &["rollup"]).unwrap_err();
-        assert_eq!(error.to_string(), "`rollup` is not part of the Vite+ toolchain manifest");
+        assert_eq!(error.to_string(), "`rollup` is not in the Vite+ toolchain");
     }
 
     #[test]
@@ -577,7 +577,7 @@ mod tests {
             why_hint(&manifest(), &["vite", "vitest"]).as_deref(),
             Some(
                 "Vite+ also provides vite@8.0.0, vitest@4.0.0 through its toolchain.\n\
-                 Run `vp toolchain vite vitest` to inspect bundled versions and relationships."
+                 Run `vp toolchain vite vitest` to show these versions and relationships."
             )
         );
     }
@@ -588,7 +588,7 @@ mod tests {
             why_hint(&manifest(), &["vite", "react"]).as_deref(),
             Some(
                 "Vite+ also provides vite@8.0.0 through its toolchain.\n\
-                 Run `vp toolchain vite` to inspect bundled versions and relationships."
+                 Run `vp toolchain vite` to show these versions and relationships."
             )
         );
     }

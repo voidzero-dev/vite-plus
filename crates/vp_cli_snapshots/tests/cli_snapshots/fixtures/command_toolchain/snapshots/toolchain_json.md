@@ -2,7 +2,7 @@
 
 ## `vp toolchain vite --json --global`
 
-JSON contains one node per ID and no human header
+JSON contains one node per ID and no CLI header
 
 ```
 {

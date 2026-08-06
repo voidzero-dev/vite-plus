@@ -149,10 +149,10 @@ Use these when you need to understand the current state of dependencies.
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
 
-These commands report the package manager's installed graph. Use
-`vp toolchain [tool]` for versions bundled or compiled into Vite+, including
-Vite, Rolldown, and Oxc. A human-readable `vp why` query prints a hint when its
-package name also belongs to the Vite+ toolchain.
+These commands show the packages that the package manager installed. They do
+not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show
+these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why`
+shows a hint when Vite+ also provides the package.
 
 #### Rebuild
 
