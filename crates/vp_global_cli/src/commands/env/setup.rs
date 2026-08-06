@@ -731,6 +731,8 @@ const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\ns
 fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
     fn render_path(path: &std::path::Path) -> String {
         let rendered = path.display().to_string();
+        // Windows: `C:\Users\xxx\.vite-plus` → `C:/Users/xxx/.vite-plus`
+        // Unix: `/tmp/vp\home` → `/tmp/vp\home` (the backslash is preserved)
         if cfg!(windows) { rendered.replace('\\', "/") } else { rendered }
     }
 
@@ -757,7 +759,12 @@ fn render_nu_path_ref(path_ref: &str) -> String {
     }
 }
 
+/// Escapes a value so it can be safely embedded in a Nushell double-quoted string.
+///
+/// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
+/// https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
 fn escape_nu_double_quoted_string(value: &str) -> String {
+    // `vp "home\with spaces"` → `vp \"home\\with spaces\"`
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
