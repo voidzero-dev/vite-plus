@@ -17,8 +17,6 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
-
 use super::config::{get_bin_dir, get_vp_home};
 use crate::{error::Error, help};
 
@@ -46,14 +44,6 @@ impl EnvShell {
 /// Tools to create shims for (node, npm, npx, corepack, vpx, vpr)
 pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "corepack", "vpx", "vpr"];
 
-fn accent_command(command: &str) -> String {
-    if help::should_style_help() {
-        format!("`{}`", command.bright_blue())
-    } else {
-        format!("`{command}`")
-    }
-}
-
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
     let vite_plus_home = get_vp_home()?;
@@ -67,7 +57,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     if env_only {
         println!("{}", help::render_heading("Setup"));
         println!("  Updated shell environment files.");
-        println!("  Run {} to verify setup.", accent_command("vp env doctor"));
+        println!("  Run {} to verify setup.", help::accent_command("vp env doctor"));
         return Ok(ExitStatus::default());
     }
 
@@ -869,7 +859,7 @@ fn print_path_instructions(bin_dir: &vt_path::AbsolutePath) {
     println!();
     println!(
         "  Restart your terminal and IDE, then run {} to verify.",
-        accent_command("vp env doctor")
+        help::accent_command("vp env doctor")
     );
 }
 
