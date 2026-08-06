@@ -34,10 +34,10 @@ if (!VERSION) {
 const rustCliArtifactsDir = join(repoRoot, 'rust-cli-artifacts');
 if (existsSync(rustCliArtifactsDir)) {
   for (const dir of await readdir(rustCliArtifactsDir)) {
-    if (!dir.startsWith('vite-global-cli-')) {
+    if (!dir.startsWith('vp-global-cli-')) {
       continue;
     }
-    const target = dir.slice('vite-global-cli-'.length);
+    const target = dir.slice('vp-global-cli-'.length);
     const releaseDir = join(repoRoot, 'target', target, 'release');
     mkdirSync(releaseDir, { recursive: true });
     for (const file of await readdir(join(rustCliArtifactsDir, dir))) {
@@ -186,7 +186,7 @@ for (const napiTarget of pkg.napi.targets) {
     const shimSource = join(repoRoot, 'target', napiTarget, 'release', shimName);
     if (!existsSync(shimSource)) {
       console.error(
-        `Error: ${shimName} not found at ${shimSource}. Run "cargo build -p vite_trampoline --release --target ${napiTarget}" first.`,
+        `Error: ${shimName} not found at ${shimSource}. Run "cargo build -p vp_trampoline --release --target ${napiTarget}" first.`,
       );
       process.exit(1);
     }

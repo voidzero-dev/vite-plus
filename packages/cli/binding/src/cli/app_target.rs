@@ -7,11 +7,11 @@
 //! invocation directory, then the interactive package picker (a package
 //! listing plus exit 1 when the terminal is not interactive).
 
-use vite_error::Error;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{env_vars, output};
-use vite_task::ExitStatus;
-use vite_workspace::WorkspaceFile;
+use vp_error::Error;
+use vp_shared::{env_vars, output};
+use vt::ExitStatus;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_workspace::WorkspaceFile;
 
 use super::types::SynthesizableSubcommand;
 
@@ -26,8 +26,8 @@ pub(super) enum AppTarget {
 }
 
 struct PackageRow {
-    name: vite_str::Str,
-    path: vite_str::Str,
+    name: vt_str::Str,
+    path: vt_str::Str,
     absolute: AbsolutePathBuf,
     runnable: bool,
 }
@@ -169,7 +169,7 @@ fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
 /// app, for which the signal is a root `index.html`. A shared root config
 /// for lint/fmt/tasks declares neither, so it never makes the root a target.
 fn root_looks_runnable(
-    config: &vite_static_config::FieldMap,
+    config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
 ) -> bool {
@@ -196,9 +196,9 @@ fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
     match command {
         "pack" => {
             dir.as_path().join("src/index.ts").is_file()
-                || vite_static_config::resolve_static_config(dir).get_declared("pack").is_some()
+                || vp_static_config::resolve_static_config(dir).get_declared("pack").is_some()
         }
-        _ => vite_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
+        _ => vp_static_config::has_config_file(dir) || dir.as_path().join("index.html").is_file(),
     }
 }
 
@@ -209,14 +209,14 @@ fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
 fn resolve_default_package(
     command: &str,
     cwd: &AbsolutePath,
-    value: vite_static_config::FieldValue,
+    value: vp_static_config::FieldValue,
 ) -> AppTarget {
     let fail = |msg: &str| {
         output::error(msg);
         AppTarget::Exit(ExitStatus(1))
     };
     match value {
-        vite_static_config::FieldValue::Json(serde_json::Value::String(dir)) => {
+        vp_static_config::FieldValue::Json(serde_json::Value::String(dir)) => {
             let target = cwd.join(&dir).clean();
             if !target.as_path().is_dir() {
                 return fail(&format!("defaultPackage points to a missing directory: {dir}"));
@@ -224,16 +224,16 @@ fn resolve_default_package(
             output::note(&format!("vp {command}: using {dir} (defaultPackage in vite.config.ts)"));
             AppTarget::Dir(target)
         }
-        vite_static_config::FieldValue::Json(other) => {
+        vp_static_config::FieldValue::Json(other) => {
             fail(&format!("defaultPackage must be a string of a directory, got: {other}"))
         }
-        vite_static_config::FieldValue::NonStatic => fail(
+        vp_static_config::FieldValue::NonStatic => fail(
             "defaultPackage in vite.config.ts must be a static string literal so vp can read it without executing the config",
         ),
     }
 }
 
-/// Fuzzy package picker on `vite_select`, the same component behind the
+/// Fuzzy package picker on `vt_select`, the same component behind the
 /// `vp run` task selector. Returns the selected row index, or `None` on
 /// Ctrl+C. When the PTY snapshot runner sets `VP_EMIT_MILESTONES=1`, every
 /// render emits a `package-select:<query>:<index>` milestone (an invisible
@@ -243,10 +243,10 @@ fn resolve_default_package(
 fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>, Error> {
     let emit_milestones =
         std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_some_and(|value| value == "1");
-    let items: Vec<vite_select::SelectItem> = rows
+    let items: Vec<vt_select::SelectItem> = rows
         .iter()
-        .map(|row| vite_select::SelectItem {
-            label: vite_str::format!("{} {}", row.name, row.path),
+        .map(|row| vt_select::SelectItem {
+            label: vt_str::format!("{} {}", row.name, row.path),
             display_name: row.name.clone(),
             description: row.path.clone(),
             group: None,
@@ -254,7 +254,7 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         .collect();
     let prompt =
         format!("Select a package to {command} (\u{2191}/\u{2193}, Enter to run, type to search):");
-    let params = vite_select::SelectParams {
+    let params = vt_select::SelectParams {
         items: &items,
         query: None,
         header: None,
@@ -263,23 +263,23 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
     };
     let mut selected_index = 0usize;
     let mut stdout = std::io::stdout();
-    let result = vite_select::select_list(
+    let result = vt_select::select_list(
         &mut stdout,
         &params,
-        vite_select::Mode::Interactive { selected_index: &mut selected_index },
+        vt_select::Mode::Interactive { selected_index: &mut selected_index },
         |state| {
             if !emit_milestones {
                 return;
             }
             let milestone =
-                vite_str::format!("package-select:{}:{}", state.query, state.selected_index);
+                vt_str::format!("package-select:{}:{}", state.query, state.selected_index);
             emit_milestone_title(&milestone);
         },
     )
     .map_err(Error::Anyhow)?;
     Ok(match result {
-        vite_select::SelectResult::Selected => Some(selected_index),
-        vite_select::SelectResult::Cancelled => None,
+        vt_select::SelectResult::Selected => Some(selected_index),
+        vt_select::SelectResult::Cancelled => None,
     })
 }
 
@@ -288,7 +288,7 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
 /// `OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The protocol
 /// is shared with vite-task's `pty_terminal_test_client`, whose emitting API
 /// compiles to a no-op outside its `testing` feature (enabling that feature
-/// here would also un-gate vite_task's own task-picker milestones in
+/// here would also un-gate vt's own task-picker milestones in
 /// production), so the sequence is written by hand. A fresh random id per
 /// emission keeps repeated milestones with the same name observable as
 /// distinct title changes through Windows ConPTY.
@@ -317,7 +317,7 @@ enum Classification {
     /// walking the tree a second time — the hot path for a bare command deep
     /// inside a large monorepo, where the walk is the only per-invocation
     /// cost this feature adds.
-    RunInPlace(Option<vite_workspace::WorkspaceRoot>),
+    RunInPlace(Option<vt_workspace::WorkspaceRoot>),
     /// Elicit a target: `defaultPackage`, or the picker/listing at a
     /// workspace root.
     Elicit(&'static str, Elicitation),
@@ -327,9 +327,9 @@ enum Classification {
 enum Elicitation {
     /// The invocation root's config explicitly declares `defaultPackage`
     /// (with this value — possibly invalid, which the resolver reports).
-    DefaultPackage(vite_static_config::FieldValue),
+    DefaultPackage(vp_static_config::FieldValue),
     /// Bare app command at a real workspace root: picker/listing territory.
-    WorkspaceRoot(vite_workspace::WorkspaceRoot),
+    WorkspaceRoot(vt_workspace::WorkspaceRoot),
 }
 
 /// Applies a `defaultPackage` declaration to one command. A string covers
@@ -340,11 +340,11 @@ enum Elicitation {
 /// [`resolve_default_package`] to report.
 fn default_package_for_command(
     command: &str,
-    value: vite_static_config::FieldValue,
-) -> Option<vite_static_config::FieldValue> {
+    value: vp_static_config::FieldValue,
+) -> Option<vp_static_config::FieldValue> {
     match value {
-        vite_static_config::FieldValue::Json(serde_json::Value::Object(map)) => {
-            map.get(command).cloned().map(vite_static_config::FieldValue::Json)
+        vp_static_config::FieldValue::Json(serde_json::Value::Object(map)) => {
+            map.get(command).cloned().map(vp_static_config::FieldValue::Json)
         }
         other => Some(other),
     }
@@ -368,12 +368,12 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classif
     if !is_bare(command, args) {
         return Classification::RunInPlace(None);
     }
-    let workspace = vite_workspace::find_workspace_root(cwd);
+    let workspace = vt_workspace::find_workspace_root(cwd);
     let at_invocation_root =
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
     // Resolved once and reused by `root_looks_runnable` below, so a bare
     // command at a root reads and parses the config a single time.
-    let root_config = at_invocation_root.then(|| vite_static_config::resolve_static_config(cwd));
+    let root_config = at_invocation_root.then(|| vp_static_config::resolve_static_config(cwd));
     if let Some(value) = root_config
         .as_ref()
         .and_then(|config| config.get_declared("defaultPackage"))
@@ -437,7 +437,7 @@ fn note_directory_positional(subcommand: &SynthesizableSubcommand, cwd: &Absolut
 pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePath,
-) -> Result<(AppTarget, Option<vite_workspace::WorkspaceRoot>), Error> {
+) -> Result<(AppTarget, Option<vt_workspace::WorkspaceRoot>), Error> {
     note_directory_positional(subcommand, cwd);
     let (command, elicitation) = match classify(subcommand, cwd) {
         Classification::RunInPlace(workspace_root) => {
@@ -453,7 +453,7 @@ pub(super) fn resolve_app_target(
     };
 
     let graph =
-        vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
+        vt_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
     let mut rows: Vec<PackageRow> = graph
         .node_weights()
         .filter(|info| {
@@ -465,7 +465,7 @@ pub(super) fn resolve_app_target(
             let absolute = info.absolute_path.to_absolute_path_buf();
             PackageRow {
                 name: info.package_json.name.clone(),
-                path: vite_str::Str::from(info.path.as_str()),
+                path: vt_str::Str::from(info.path.as_str()),
                 runnable: member_looks_runnable(&absolute, command),
                 absolute,
             }
@@ -481,7 +481,7 @@ pub(super) fn resolve_app_target(
     // In an interactive terminal, pick the target: exactly one likely-runnable
     // package (rows are sorted runnable first) auto-selects without a menu;
     // otherwise the fuzzy picker runs.
-    if vite_shared::is_interactive_terminal() {
+    if vp_shared::is_interactive_terminal() {
         let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
         let picked = if single_runnable { Some(0) } else { run_package_picker(command, &rows)? };
         let Some(index) = picked else {

@@ -22,7 +22,7 @@ Rust with no external `gpg` dependency.
 ## Background
 
 The runtime download flow resolves an expected hash once, then verifies the
-archive against it (`crates/vite_js_runtime/src/runtime.rs`):
+archive against it (`crates/vp_js_runtime/src/runtime.rs`):
 
 ```rust
 let expected_hash = match &download_info.hash_verification {
@@ -122,7 +122,7 @@ dependency is introduced and musl/Windows cross-builds are unaffected.
 The trusted keys are vendored from the
 [`nodejs/release-keys`](https://github.com/nodejs/release-keys) repository
 (all current and historical release keys) into
-`crates/vite_js_runtime/src/assets/node-release-keys.asc` and embedded with
+`crates/vp_js_runtime/src/assets/node-release-keys.asc` and embedded with
 `include_str!`. Historical keys are required: for example `node-v18.20.5` is
 signed by a key that is not in Node's current "primary keys" list, so a
 current-keys-only set would break Node 18 LTS verification.
@@ -229,7 +229,7 @@ The keyring is kept current automatically. A scheduled workflow
 embedded keyring from `nodejs/release-keys` via
 `.github/scripts/update-node-release-keys.sh` and opens a pull request when it
 changes. The PR is **not** auto-merged: a human reviews which keys changed
-before the trust anchor is updated, and PR CI (the `vite_js_runtime` tests)
+before the trust anchor is updated, and PR CI (the `vp_js_runtime` tests)
 confirms every vendored key still parses. The same script can be run locally to
 refresh the keyring on demand.
 
@@ -252,24 +252,24 @@ pure-Rust OpenPGP library can verify RSA-signed releases without it.
 
 ## Implementation
 
-- `crates/vite_js_runtime/src/pgp_verify.rs` (new): keyring parsing,
+- `crates/vp_js_runtime/src/pgp_verify.rs` (new): keyring parsing,
   `verify_clearsigned`, revocation and subkey-policy checks, and the async
   `verify_signed_shasums` wrapper (runs on a blocking thread; key parsing and
   verification are CPU-bound).
-- `crates/vite_js_runtime/src/assets/node-release-keys.asc` (new): vendored
+- `crates/vp_js_runtime/src/assets/node-release-keys.asc` (new): vendored
   release keyring.
-- `crates/vite_js_runtime/src/provider.rs`: `ShasumsSignature`, and the
+- `crates/vp_js_runtime/src/provider.rs`: `ShasumsSignature`, and the
   `signature` field on `HashVerification::ShasumsFile`.
-- `crates/vite_js_runtime/src/providers/node.rs`: build the `.asc` URL and set
+- `crates/vp_js_runtime/src/providers/node.rs`: build the `.asc` URL and set
   `required` from the resolved host.
-- `crates/vite_js_runtime/src/runtime.rs`: fetch/verify the `.asc`, with the
+- `crates/vp_js_runtime/src/runtime.rs`: fetch/verify the `.asc`, with the
   best-effort fallback for non-official mirrors.
-- `crates/vite_js_runtime/src/error.rs`: `SignatureVerificationFailed`.
+- `crates/vp_js_runtime/src/error.rs`: `SignatureVerificationFailed`.
 
 ## Testing
 
 Unit tests use vendored real fixtures under
-`crates/vite_js_runtime/src/assets/test/`:
+`crates/vp_js_runtime/src/assets/test/`:
 
 - A genuine release verifies and yields the expected checksum.
 - A tampered SHASUMS body is rejected.

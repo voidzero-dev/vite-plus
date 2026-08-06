@@ -1,6 +1,6 @@
 /**
  * Render-milestone markers for the PTY snapshot suite
- * (crates/vite_cli_snapshots): invisible window-title updates the runner
+ * (crates/vp_cli_snapshots): invisible window-title updates the runner
  * synchronizes on via `expect-milestone` interactions. Emission is gated on
  * `VP_EMIT_MILESTONES=1`, which only the runner sets; real terminals and
  * piped output never see these markers as content (they only update the

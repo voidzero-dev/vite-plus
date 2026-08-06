@@ -175,12 +175,12 @@ This keeps the check broadly useful without interfering with special commands.
 ### File Structure
 
 ```
-crates/vite_global_cli/src/
+crates/vp_global_cli/src/
 ├── upgrade_check.rs        # New: cache read/write, background check, display
 ├── main.rs                # Modified: spawn check, display result after command
 ```
 
-No new crate — this is a small, focused module in the existing `vite_global_cli` crate. It imports `resolve_version` from the existing `commands/upgrade/registry.rs`.
+No new crate — this is a small, focused module in the existing `vp_global_cli` crate. It imports `resolve_version` from the existing `commands/upgrade/registry.rs`.
 
 ### Implementation Details
 

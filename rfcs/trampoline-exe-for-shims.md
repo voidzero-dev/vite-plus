@@ -93,7 +93,7 @@ Each trampoline is a copy of `vp-shim.exe` (the template binary distributed alon
 ### Crate Structure
 
 ```
-crates/vite_trampoline/
+crates/vp_trampoline/
 ├── Cargo.toml      # Zero external dependencies
 ├── src/
 │   └── main.rs     # ~90 lines, single-file binary
