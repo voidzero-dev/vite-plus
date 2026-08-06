@@ -1384,9 +1384,9 @@ async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
     let bun_shim = bin_prefix.join("bun");
     shim::write_native_shims(&native_bin, &bun_shim).await?;
 
-    // Create bunx shim -> bun.native (bunx is just bun with different argv[0])
+    // Native wrappers cannot preserve bunx as argv[0], so select its equivalent x subcommand.
     let bunx_shim = bin_prefix.join("bunx");
-    shim::write_native_shims(&native_bin, &bunx_shim).await?;
+    shim::write_native_shims_with_args(&native_bin, &bunx_shim, &["x"]).await?;
 
     Ok(())
 }
