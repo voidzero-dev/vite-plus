@@ -6,7 +6,12 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../editor.js';
+import {
+  detectExistingEditors,
+  selectEditor,
+  selectEditors,
+  writeEditorConfigs,
+} from '../editor.js';
 
 const tempDirs: string[] = [];
 
@@ -74,6 +79,74 @@ describe('selectEditors', () => {
         onCancel: vi.fn(),
       }),
     ).resolves.toEqual(['zed']);
+  });
+
+  it('resolves --editor intellij to jetbrains and warns about the non-canonical ID used', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+
+    await expect(
+      selectEditors({
+        interactive: false,
+        editor: 'intellij',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['jetbrains']);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('--editor intellij was passed; use --editor jetbrains instead, as it\'s the canonical ID for that editor.'),
+    );
+  });
+
+  it('resolves --editor webstorm to jetbrains and warns about the non-canonical ID used', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+
+    await expect(
+      selectEditors({
+        interactive: false,
+        editor: 'webstorm',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['jetbrains']);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('--editor webstorm was passed; use --editor jetbrains instead, as it\'s the canonical ID for that editor.'),
+    );
+  });
+
+  it('does not show intellij/webstorm aliases as interactive TUI options', async () => {
+    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['vscode']);
+
+    await selectEditors({
+      interactive: true,
+      onCancel: vi.fn(),
+    });
+
+    expect(multiselectSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.not.arrayContaining([
+          expect.objectContaining({ value: 'intellij' }),
+          expect.objectContaining({ value: 'webstorm' }),
+        ]),
+      }),
+    );
+  });
+});
+
+describe('selectEditor', () => {
+  it('resolves --editor intellij to jetbrains and warns about the non-canonical ID used', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+
+    await expect(
+      selectEditor({
+        interactive: false,
+        editor: 'intellij',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toBe('jetbrains');
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('--editor intellij was passed; use --editor jetbrains instead, as it\'s the canonical ID for that editor.'),
+    );
   });
 });
 

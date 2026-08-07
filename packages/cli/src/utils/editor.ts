@@ -165,11 +165,11 @@ function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
 <project version="4">
   <component name="PropertiesComponent">
     <![CDATA[${JSON.stringify({
-      "keyToString": {
-        "javascript.preferred.runtime.type.id": "node",
-        "nodejs_interpreter_path": path.join(os.homedir(), ".vite-plus", "bin", "node"),
-        "nodejs_package_manager_path": packageManager,
-      }
+      keyToString: {
+        'javascript.preferred.runtime.type.id': 'node',
+        nodejs_interpreter_path: path.join(os.homedir(), '.vite-plus', 'bin', 'node'),
+        nodejs_package_manager_path: packageManager,
+      },
     })}]]>
   </component>
 </project>
@@ -220,6 +220,12 @@ export const EDITORS = [
       '.gitignore': JETBRAINS_GITIGNORE_ADDITION,
     },
   },
+] as const;
+
+// Deprecated aliases kept for backwards-compatible `--editor` values; not shown as TUI options.
+const EDITOR_ALIASES = [
+  { id: 'intellij', alias: 'jetbrains' },
+  { id: 'webstorm', alias: 'jetbrains' },
 ] as const;
 
 export type EditorId = (typeof EDITORS)[number]['id'];
@@ -686,7 +692,19 @@ function resolveEditorId(editor: string): EditorId | undefined {
   const match = EDITORS.find(
     (option) => option.id === normalized || option.label.toLowerCase() === normalized,
   );
-  return match?.id;
+  if (match) {
+    return match.id;
+  }
+
+  const aliasMatch = EDITOR_ALIASES.find((option) => option.id === normalized);
+  if (aliasMatch) {
+    prompts.log.warn(
+      `--editor ${aliasMatch.id} was passed; use --editor ${aliasMatch.alias} instead, as it's the canonical ID for the editor.`,
+    );
+    return aliasMatch.alias;
+  }
+
+  return undefined;
 }
 
 function resolveEditorIds(editors: readonly string[]): EditorId[] | undefined {
