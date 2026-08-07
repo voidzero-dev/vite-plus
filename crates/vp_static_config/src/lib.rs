@@ -1259,13 +1259,30 @@ mod tests {
     fn define_config_arrow_no_return_object() {
         // Arrow function that doesn't return an object literal
         assert_non_static(
-            &parse_js_ts_config(
+            &parse(
                 r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 return someFunction();
             });
             ",
-                "ts",
+            ),
+            "run",
+        );
+    }
+
+    #[test]
+    fn define_config_arrow_expression_body_no_object() {
+        // Concise arrow body that is not an object literal. oxc represents it as an
+        // expression rather than a function body, so it takes its own extraction path.
+        assert_non_static(
+            &parse(
+                r"
+            import { defineConfig } from 'vite-plus';
+
+            export default defineConfig(() => someFunction());
+            ",
             ),
             "run",
         );
@@ -1275,8 +1292,10 @@ mod tests {
     fn define_config_arrow_multiple_returns() {
         // Multiple top-level returns → not analyzable
         assert_non_static(
-            &parse_js_ts_config(
+            &parse(
                 r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 if (mode === 'production') {
                     return { run: { cacheScripts: true } };
@@ -1284,7 +1303,6 @@ mod tests {
                 return { run: { cacheScripts: false } };
             });
             ",
-                "ts",
             ),
             "run",
         );
@@ -1293,7 +1311,9 @@ mod tests {
     #[test]
     fn define_config_arrow_empty_body() {
         assert_non_static(
-            &parse_js_ts_config("export default defineConfig(() => {});", "ts"),
+            &parse(
+                "import { defineConfig } from 'vite-plus';\nexport default defineConfig(() => {});",
+            ),
             "run",
         );
     }
