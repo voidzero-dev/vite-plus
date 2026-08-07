@@ -48,3 +48,55 @@ This path is powered by [tsgolint](https://github.com/oxc-project/tsgolint) on t
 ## JS Plugins
 
 If you are migrating from ESLint and still depend on a few critical JavaScript-based ESLint plugins, Oxlint has [JS plugin support](https://oxc.rs/docs/guide/usage/linter/js-plugins) that can help you keep those plugins running while you complete the migration.
+
+### Writing Your Own Rules
+
+Import the plugin authoring API from `vite-plus/lint/plugins`:
+
+```js [lint/my-plugin.js]
+import { definePlugin, defineRule } from 'vite-plus/lint/plugins';
+
+const noFoo = defineRule({
+  meta: { messages: { noFoo: 'Do not name things "foo".' } },
+  create(context) {
+    return {
+      Identifier(node) {
+        if (node.name === 'foo') {
+          context.report({ node, messageId: 'noFoo' });
+        }
+      },
+    };
+  },
+});
+
+export default definePlugin({
+  meta: { name: 'my' },
+  rules: { 'no-foo': noFoo },
+});
+```
+
+Register it under `lint.jsPlugins` and enable its rules:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: {
+    jsPlugins: ['./lint/my-plugin.js'],
+    rules: {
+      'my/no-foo': 'error',
+    },
+  },
+});
+```
+
+For rule tests, `RuleTester` is available from `vite-plus/lint/rule-tester`.
+
+Both entrypoints re-export the copy that ships with Vite+, so the API always
+matches the bundled Oxlint. Prefer them over adding `@oxlint/plugins` or
+`oxlint` as a direct dependency: a separately pinned copy drifts from the
+linter that actually loads your plugin, and it is not resolvable from a plugin
+file under pnpm's strict layout unless every package that hosts one declares
+it. `vp migrate` rewrites existing `oxlint` / `@oxlint/plugins` imports for you
+(see [Oxlint JS Plugin Imports](/guide/migrate-rules#oxlint-js-plugin-imports)),
+and the `vite-plus/prefer-vite-plus-imports` rule flags any that come back.

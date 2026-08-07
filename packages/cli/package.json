@@ -70,6 +70,14 @@
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
     },
+    "./lint/plugins": {
+      "types": "./dist/lint-plugins.d.ts",
+      "import": "./dist/lint-plugins.js"
+    },
+    "./lint/rule-tester": {
+      "types": "./dist/lint-rule-tester.d.ts",
+      "import": "./dist/lint-rule-tester.js"
+    },
     "./oxlint-plugin": {
       "module-sync": "./dist/oxlint-plugin.js",
       "node": "./dist/oxlint-plugin.js",

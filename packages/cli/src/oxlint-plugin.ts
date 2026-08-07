@@ -44,6 +44,36 @@ function isViteConfigFile(filename: string): boolean {
   return VITE_CONFIG_FILE_BASENAMES.has(path.basename(filename));
 }
 
+const OXLINT_PACKAGE = 'oxlint';
+const OXLINT_PLUGINS_PACKAGE = '@oxlint/plugins';
+const OXLINT_PLUGINS_DEV_SUBPATH = 'oxlint/plugins-dev';
+const VITE_PLUS_LINT_PLUGINS = 'vite-plus/lint/plugins';
+const VITE_PLUS_LINT_RULE_TESTER = 'vite-plus/lint/rule-tester';
+
+// Everything the `oxlint` package still exports from its main entry: the config
+// surface. Those imports are correct as-is and must not be redirected. Anything
+// else named in an `import … from 'oxlint'` is the pre-`@oxlint/plugins`
+// authoring API (`defineRule`, `Context`, `ESTree`, …), which no longer resolves
+// once the migration strips the standalone `oxlint` dependency.
+//
+// Kept as a denylist rather than an allowlist of ~60 plugin type names: it is
+// small and stable, and an unrecognized name falls on the side of fixing the
+// breakage. Mirrors the `rewrite-oxlint-plugin-api-import` rule in
+// `crates/vp_migration/src/import_rewriter.rs`; the two MUST stay in sync.
+const OXLINT_CONFIG_SURFACE_EXPORTS = new Set([
+  'defineConfig',
+  'AllowWarnDeny',
+  'DummyRule',
+  'DummyRuleMap',
+  'ExternalPluginEntry',
+  'ExternalPluginsConfig',
+  'OxlintConfig',
+  'OxlintEnv',
+  'OxlintGlobals',
+  'OxlintOverride',
+  'RuleCategories',
+]);
+
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   if (specifier === 'vite') {
     return 'vite-plus';
@@ -112,7 +142,43 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     }
   }
 
+  // The Oxlint JS-plugin authoring API. Vite+ bundles Oxlint, so a project's
+  // own plugin should reach the API through `vite-plus` rather than pinning
+  // `@oxlint/plugins` against whatever Oxlint the bundled linter runs. These two
+  // specifiers serve nothing but the plugin API, so they rewrite unconditionally;
+  // the ambiguous bare `oxlint` specifier is handled in `reportLegacyOxlintPluginApiImport`.
+  if (specifier === OXLINT_PLUGINS_PACKAGE) {
+    return VITE_PLUS_LINT_PLUGINS;
+  }
+
+  if (specifier === OXLINT_PLUGINS_DEV_SUBPATH) {
+    return VITE_PLUS_LINT_RULE_TESTER;
+  }
+
   return null;
+}
+
+function importedName(specifier: ESTree.ImportSpecifier): string | undefined {
+  const imported = specifier.imported;
+  if (imported.type === 'Identifier') {
+    return imported.name;
+  }
+  return typeof imported.value === 'string' ? imported.value : undefined;
+}
+
+/**
+ * True when an `import … from 'oxlint'` names at least one binding outside
+ * Oxlint's config surface, i.e. it is reaching for the plugin authoring API.
+ *
+ * Default, namespace, and bare side-effect imports carry no discriminating name,
+ * so they report `false` and are left alone rather than risk a wrong rewrite.
+ */
+function importsOxlintPluginApi(node: ESTree.ImportDeclaration): boolean {
+  return node.specifiers.some(
+    (specifier) =>
+      specifier.type === 'ImportSpecifier' &&
+      !OXLINT_CONFIG_SURFACE_EXPORTS.has(importedName(specifier) ?? ''),
+  );
 }
 
 function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): string {
@@ -179,6 +245,20 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   }
 }
 
+function reportSpecifier(context: Context, literal: ESTree.StringLiteral, replacement: string) {
+  context.report({
+    node: literal,
+    messageId: 'preferVitePlusImports',
+    data: {
+      from: literal.value,
+      to: replacement,
+    },
+    fix(fixer) {
+      return fixer.replaceText(literal, quoteSpecifier(literal, replacement));
+    },
+  });
+}
+
 function maybeReportLiteral(
   context: Context,
   literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
@@ -201,17 +281,24 @@ function maybeReportLiteral(
     return;
   }
 
-  context.report({
-    node: literal,
-    messageId: 'preferVitePlusImports',
-    data: {
-      from: literal.value,
-      to: replacement,
-    },
-    fix(fixer) {
-      return fixer.replaceText(literal, quoteSpecifier(literal, replacement));
-    },
-  });
+  reportSpecifier(context, literal, replacement);
+}
+
+/**
+ * `import { defineRule } from 'oxlint'` → `'vite-plus/lint/plugins'`.
+ *
+ * Split out from {@link maybeReportLiteral} because the bare `oxlint` specifier
+ * cannot be judged from the specifier string alone: it still serves the config
+ * surface. Only an `ImportDeclaration` exposes the named bindings needed to tell
+ * the two apart, so the other statement forms (re-export, `require`, dynamic
+ * `import`) intentionally do not get this rewrite.
+ */
+function reportLegacyOxlintPluginApiImport(context: Context, node: ESTree.ImportDeclaration) {
+  const literal = node.source;
+  if (literal.value !== OXLINT_PACKAGE || !importsOxlintPluginApi(node)) {
+    return;
+  }
+  reportSpecifier(context, literal, VITE_PLUS_LINT_PLUGINS);
 }
 
 export const preferVitePlusImportsRule = defineRule({
@@ -237,6 +324,7 @@ export const preferVitePlusImportsRule = defineRule({
       },
       ImportDeclaration(node) {
         maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        reportLegacyOxlintPluginApiImport(context, node);
       },
       ExportAllDeclaration(node) {
         maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);

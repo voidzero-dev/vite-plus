@@ -102,6 +102,14 @@ describe('rewriteVitePlusImportSpecifier', () => {
     expect(rewriteVitePlusImportSpecifier('vitest/node')).toBe('vite-plus/test/node');
     expect(rewriteVitePlusImportSpecifier('tsx')).toBeNull();
   });
+
+  it('maps the Oxlint plugin authoring API to vite-plus', () => {
+    expect(rewriteVitePlusImportSpecifier('@oxlint/plugins')).toBe('vite-plus/lint/plugins');
+    expect(rewriteVitePlusImportSpecifier('oxlint/plugins-dev')).toBe('vite-plus/lint/rule-tester');
+    // The bare `oxlint` specifier still serves the config surface, so it cannot
+    // be judged from the specifier alone: the rule decides per import statement.
+    expect(rewriteVitePlusImportSpecifier('oxlint')).toBeNull();
+  });
 });
 
 new RuleTester({
@@ -112,6 +120,20 @@ new RuleTester({
   valid: [
     `import { defineConfig } from 'vite-plus'`,
     `export { expect } from 'vite-plus/test'`,
+    // Oxlint's config surface still lives in the `oxlint` package; only the
+    // plugin authoring API moved. Redirecting these would break them.
+    `import { defineConfig } from 'oxlint'`,
+    {
+      code: `import type { OxlintConfig, OxlintOverride } from 'oxlint'`,
+      filename: 'types.ts',
+    },
+    // No named binding means no way to tell the config surface from the plugin
+    // API, so these are left alone rather than risk a wrong autofix.
+    `import oxlint from 'oxlint'`,
+    `import * as oxlint from 'oxlint'`,
+    `import 'oxlint'`,
+    `import { defineRule } from 'vite-plus/lint/plugins'`,
+    `import { RuleTester } from 'vite-plus/lint/rule-tester'`,
     // `vitest/package.json` must NOT be autofixed — `vite-plus` has no
     // `./test/package.json` export, so a rewrite would break resolution.
     `import pkg from 'vitest/package.json'`,
@@ -191,6 +213,34 @@ new RuleTester({
     },
   ],
   invalid: [
+    {
+      code: `import { definePlugin, defineRule } from '@oxlint/plugins'`,
+      errors: 1,
+      output: `import { definePlugin, defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import { RuleTester } from "oxlint/plugins-dev"`,
+      errors: 1,
+      output: `import { RuleTester } from "vite-plus/lint/rule-tester"`,
+    },
+    {
+      // The pre-`@oxlint/plugins` authoring API: `oxlint` no longer exports it,
+      // and the migration strips the standalone dependency it came from.
+      code: `import { defineRule } from 'oxlint'`,
+      errors: 1,
+      output: `import { defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import type { Context, ESTree } from 'oxlint'`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `import type { Context, ESTree } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import { defineRule as rule } from "oxlint"`,
+      errors: 1,
+      output: `import { defineRule as rule } from "vite-plus/lint/plugins"`,
+    },
     {
       code: `import { page } from '@vitest/browser/context'`,
       errors: 1,
