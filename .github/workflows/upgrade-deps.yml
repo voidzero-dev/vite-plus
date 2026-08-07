@@ -29,6 +29,9 @@ jobs:
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
+      - name: Capture current upstream CLI help
+        run: node .github/scripts/cli-help-diff.ts capture --output "${UPGRADE_DEPS_META_DIR}/cli-help-before.json"
+
       - name: Rustup Adds Target
         run: rustup target add x86_64-unknown-linux-gnu
 
@@ -60,11 +63,25 @@ jobs:
         env:
           RELEASE_BUILD: 'true'
 
+      - name: Generate upstream CLI help diff report
+        id: cli-help-diff
+        run: |
+          node .github/scripts/cli-help-diff.ts capture \
+            --versions "${UPGRADE_DEPS_META_DIR}/versions.json" \
+            --output "${UPGRADE_DEPS_META_DIR}/cli-help-after.json"
+          node .github/scripts/cli-help-diff.ts report \
+            --before "${UPGRADE_DEPS_META_DIR}/cli-help-before.json" \
+            --after "${UPGRADE_DEPS_META_DIR}/cli-help-after.json" \
+            --output "${UPGRADE_DEPS_META_DIR}/cli-help-report.md" \
+            --github-output "${GITHUB_OUTPUT}"
+
       - name: Check upgrade dependencies
         id: check-upgrade-dependencies
         timeout-minutes: 180
         uses: anthropics/claude-code-action@558b1d6cab4085c7753fe402c10bef0fbb92ac7a # v1.0.165
         env:
+          CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
+          CLI_HELP_DIFF_REPORT: ${{ env.UPGRADE_DEPS_META_DIR }}/cli-help-report.md
           RELEASE_BUILD: 'true'
         with:
           claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -117,15 +134,19 @@ jobs:
                and rebuild.
             3. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
                to resync the workspace.
-            4. Compare tsdown CLI options with `vp pack` and sync new/removed options per
+            4. If `CLI_HELP_DIFF_CHANGED` is `true`, read the upstream help diff at
+               `$CLI_HELP_DIFF_REPORT`, then follow
+               `.claude/skills/sync-upstream-cli-help/SKILL.md` to update the mirrored
+               help documents. If it is `false`, do not modify help documents.
+            5. Compare tsdown CLI options with `vp pack` and sync new/removed options per
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            5. Install the global CLI:
+            6. Install the global CLI:
                - `pnpm bootstrap-cli:ci`
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            6. If any Rust code or `Cargo.toml` was modified, run `cargo check
+            7. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            7. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
-            8. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+            8. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            9. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
             ### Generated artifacts and build diffs
@@ -319,6 +340,7 @@ jobs:
           fi
 
       - name: Create/Update PR
+        id: create-pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           base: main
@@ -328,3 +350,10 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
           commit-message: ${{ steps.pr-content.outputs.commit-message }}
+
+      - name: Comment upstream CLI help diff
+        if: steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
