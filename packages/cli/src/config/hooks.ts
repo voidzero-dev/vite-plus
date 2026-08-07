@@ -233,7 +233,7 @@ function gitConfigSet(key: string, value: string): { ok: boolean; error?: string
 }
 
 function gitConfigUnset(key: string): { ok: boolean; error?: string } {
-  const result = spawnSync('git', ['config', '--local', '--unset', key]);
+  const result = spawnSync('git', ['config', '--local', '--unset-all', key]);
   if (result.status == null) {
     return { ok: false, error: 'git command not found' };
   }
@@ -460,7 +460,7 @@ function getScopedHooksPath(scope: 'local' | 'worktree'): string {
 }
 
 function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null {
-  const result = spawnSync('git', ['config', `--${scope}`, '--unset', 'core.hooksPath']);
+  const result = spawnSync('git', ['config', `--${scope}`, '--unset-all', 'core.hooksPath']);
   if (result.status == null) {
     return { message: 'git command not found', isError: true };
   }

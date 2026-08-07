@@ -298,6 +298,30 @@ describe('enable / disable / status', () => {
   );
 
   it.skipIf(process.platform === 'win32')(
+    'enable clears duplicate disable-preference values',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-multi-disabled-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+        execSync('git config --local --add vp.hooks.disabled true', { cwd: tmp });
+        execSync('git config --local --add vp.hooks.disabled true', { cwd: tmp });
+        expect(isHooksUserDisabled()).toBe(true);
+
+        expect(enable().isError).toBe(false);
+        expect(isHooksUserDisabled()).toBe(false);
+        expect(() =>
+          execSync('git config --local --get vp.hooks.disabled', { cwd: tmp }),
+        ).toThrow();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
     'disable leaves a foreign core.hooksPath alone but still records preference',
     () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-foreign-disable-'));
