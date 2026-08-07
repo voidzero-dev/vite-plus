@@ -115,6 +115,19 @@ if (project === 'vinext') {
     throw new Error(`vinext patch: \`testTimeout: 30000\` not found in ${viteConfigPath}`);
   }
   await writeFile(viteConfigPath, patchedConfig, 'utf-8');
+
+  // oxlint 1.77 applies `.gitignore` to explicitly passed paths too
+  // (oxc-project/oxc#25133). vinext's prefer-shared-utils rule test symlinks a
+  // temp fixture directory into the repo and lints those files by path, and
+  // `.gitignore` covers the link name, so oxlint now reports "No files found to
+  // lint". Drop the ignore entry so the rule test keeps linting its fixtures.
+  const gitignorePath = join(repoRoot, '.gitignore');
+  const gitignore = await readFile(gitignorePath, 'utf-8');
+  const patchedGitignore = gitignore.replace(/^__lint_rule_fixtures__-\*$\n?/m, '');
+  if (patchedGitignore === gitignore) {
+    throw new Error(`vinext patch: \`__lint_rule_fixtures__-*\` not found in ${gitignorePath}`);
+  }
+  await writeFile(gitignorePath, patchedGitignore, 'utf-8');
 }
 
 if (project === 'dify') {
