@@ -95,6 +95,12 @@ const COMMANDS: &[CommandEntry] = &[
         append_help: false,
     },
     CommandEntry {
+        label: "hooks",
+        command: "hooks",
+        summary: "Manage the Git hook dispatcher.",
+        append_help: false,
+    },
+    CommandEntry {
         label: "outdated",
         command: "outdated",
         summary: "Check for outdated packages.",
