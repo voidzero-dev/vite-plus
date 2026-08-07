@@ -6,8 +6,8 @@
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind, ObjectPropertyKind,
-    Program, Statement, VariableDeclarationKind,
+    ArrowFunctionBody, BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind,
+    ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
@@ -225,9 +225,17 @@ fn extract_config_from_expr(
             // `defineConfig({ ... } satisfies UserConfig)`.
             match first_arg_expr.get_inner_expression() {
                 Expression::ObjectExpression(obj) => extract_object_fields(obj),
-                Expression::ArrowFunctionExpression(arrow) => {
-                    extract_config_from_function_body(&arrow.body)
-                }
+                Expression::ArrowFunctionExpression(arrow) => match &arrow.body {
+                    // Block body: `() => { ... return { ... }; }`
+                    ArrowFunctionBody::FunctionBody(body) => {
+                        extract_config_from_function_body(body)
+                    }
+                    // Concise expression body: `() => ({ ... })`
+                    body => match body.as_expression().map(Expression::get_inner_expression) {
+                        Some(Expression::ObjectExpression(obj)) => extract_object_fields(obj),
+                        _ => FieldMap::unanalyzable(),
+                    },
+                },
                 Expression::FunctionExpression(func) => {
                     let Some(body) = func.body.as_ref() else {
                         return FieldMap::unanalyzable();

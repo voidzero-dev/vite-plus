@@ -138,9 +138,16 @@ function buildGlobalVirtualStoreLayout(options: {
 }
 
 function runProject(root: string, env: Record<string, string> = {}) {
+  // Keep resolution hermetic: the test runner exports NODE_PATH pointing at the
+  // repo's pnpm virtual store (node_modules/.pnpm/node_modules), which would let
+  // the child resolve the repo's own `vite-plus` package and defeat the walk-up
+  // isolation this layout models. Drop it so `vite-plus/binding` is resolved
+  // purely by Node's directory walk from core's realpath, as in issue #2054.
+  const childEnv = { ...process.env, NAPI_RS_ENFORCE_VERSION_CHECK: '', ...env };
+  delete childEnv.NODE_PATH;
   try {
     const stdout = execFileSync(process.execPath, [path.join(root, 'project/main.cjs')], {
-      env: { ...process.env, NAPI_RS_ENFORCE_VERSION_CHECK: '', ...env },
+      env: childEnv,
       encoding: 'utf-8',
       timeout: 30_000,
     });
