@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
@@ -110,7 +109,7 @@ function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
     <![CDATA[${JSON.stringify({
       keyToString: {
         'javascript.preferred.runtime.type.id': 'node',
-        nodejs_interpreter_path: path.join(os.homedir(), '.vite-plus', 'bin', 'node'),
+        nodejs_interpreter_path: '$USER_HOME$/.vite-plus/bin/node.exe',
         nodejs_package_manager_path: packageManager,
       },
     })}]]>
