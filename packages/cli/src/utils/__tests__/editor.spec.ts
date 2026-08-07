@@ -652,7 +652,7 @@ describe('writeEditorConfigs', () => {
     expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     expect(workspaceXml).toContain('"javascript.preferred.runtime.type.id": "node"');
     expect(workspaceXml).toContain(
-      `"nodejs_interpreter_path": "${os.homedir()}/.vite-plus/bin/node"`,
+      `"nodejs_interpreter_path": "$USER_HOME$/.vite-plus/bin/node.exe"`,
     );
     expect(workspaceXml).toContain('"nodejs_package_manager_path": "pnpm"');
 

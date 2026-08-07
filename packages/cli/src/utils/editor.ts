@@ -645,7 +645,7 @@ function resolveEditorId(editor: string): EditorId | undefined {
   const aliasMatch = EDITOR_ALIASES.find((option) => option.id === normalized);
   if (aliasMatch) {
     prompts.log.warn(
-      `--editor ${aliasMatch.id} was passed; use --editor ${aliasMatch.alias} instead, as it's the canonical ID for the editor.`,
+      `--editor ${aliasMatch.id} was passed; use --editor ${aliasMatch.alias} instead, as it's the canonical ID for that editor.`,
     );
     return aliasMatch.alias;
   }
