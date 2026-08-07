@@ -93,7 +93,9 @@ describe('selectEditors', () => {
     ).resolves.toEqual(['jetbrains']);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('--editor intellij was passed; use --editor jetbrains instead, as it\'s the canonical ID for that editor.'),
+      expect.stringContaining(
+        "--editor intellij was passed; use --editor jetbrains instead, as it's the canonical ID for that editor.",
+      ),
     );
   });
 
@@ -109,7 +111,9 @@ describe('selectEditors', () => {
     ).resolves.toEqual(['jetbrains']);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('--editor webstorm was passed; use --editor jetbrains instead, as it\'s the canonical ID for that editor.'),
+      expect.stringContaining(
+        "--editor webstorm was passed; use --editor jetbrains instead, as it's the canonical ID for that editor.",
+      ),
     );
   });
 
@@ -145,7 +149,9 @@ describe('selectEditor', () => {
     ).resolves.toBe('jetbrains');
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('--editor intellij was passed; use --editor jetbrains instead, as it\'s the canonical ID for that editor.'),
+      expect.stringContaining(
+        "--editor intellij was passed; use --editor jetbrains instead, as it's the canonical ID for that editor.",
+      ),
     );
   });
 });

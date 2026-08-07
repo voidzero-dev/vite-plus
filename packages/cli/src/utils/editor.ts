@@ -106,13 +106,17 @@ function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="PropertiesComponent">
-    <![CDATA[${JSON.stringify({
-      keyToString: {
-        'javascript.preferred.runtime.type.id': 'node',
-        nodejs_interpreter_path: '$USER_HOME$/.vite-plus/bin/node.exe',
-        nodejs_package_manager_path: packageManager,
+    <![CDATA[${JSON.stringify(
+      {
+        keyToString: {
+          'javascript.preferred.runtime.type.id': 'node',
+          nodejs_interpreter_path: '$USER_HOME$/.vite-plus/bin/node.exe',
+          nodejs_package_manager_path: packageManager,
+        },
       },
-    }, null, 2)}]]>
+      null,
+      2,
+    )}]]>
   </component>
 </project>
 `;
