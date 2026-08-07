@@ -95,6 +95,21 @@ pub enum SynthesizableSubcommand {
     },
 }
 
+#[derive(Debug, clap::Args)]
+pub struct ToolchainArgs {
+    /// Tool or package names to show
+    #[arg(value_name = "TOOLS")]
+    pub tools: Vec<String>,
+
+    /// Print the graph as JSON
+    #[arg(long)]
+    pub json: bool,
+
+    /// Use the global Vite+ toolchain
+    #[arg(long)]
+    pub global: bool,
+}
+
 /// Top-level CLI argument parser for vite-plus.
 #[derive(Debug, Parser)]
 #[command(name = "vp", disable_help_subcommand = true)]
@@ -113,6 +128,9 @@ pub(super) enum CLIArgs {
 
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),
+
+    /// Show active Vite+ tools, versions, and relationships
+    Toolchain(ToolchainArgs),
 }
 
 /// Type alias for boxed async resolver function
@@ -136,6 +154,8 @@ pub struct CliOptions {
     pub test: BoxedResolverFn,
     pub pack: BoxedResolverFn,
     pub doc: BoxedResolverFn,
+    pub toolchain_manifest_path: String,
+    pub vite_plus_package_path: String,
     pub resolve_universal_vite_config: ViteConfigResolverFn,
 }
 

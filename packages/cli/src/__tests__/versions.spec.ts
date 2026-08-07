@@ -2,7 +2,7 @@
  * Verify that the vite-plus/versions export works correctly.
  *
  * Tests run against the already-built dist/ directory, ensuring
- * that syncVersionsExport() produces correct artifacts.
+ * that syncToolchainExports() produces correct artifacts.
  */
 import fs from 'node:fs';
 import { createRequire } from 'node:module';

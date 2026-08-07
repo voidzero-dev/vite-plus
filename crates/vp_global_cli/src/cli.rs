@@ -195,6 +195,21 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Show active Vite+ tools, versions, and relationships
+    Toolchain {
+        /// Tool or package names to show
+        #[arg(value_name = "TOOLS")]
+        tools: Vec<String>,
+
+        /// Print the graph as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Use the global Vite+ toolchain
+        #[arg(long)]
+        global: bool,
+    },
+
     /// Manage Node.js versions
     Env(EnvArgs),
 
@@ -246,6 +261,7 @@ impl Commands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::PackageManager(pm) => pm.is_quiet_or_machine_readable(),
+            Self::Toolchain { json, .. } => *json,
             Self::Upgrade { silent, .. } => *silent,
             Self::Env(args) => {
                 args.command.as_ref().is_some_and(|sub| sub.is_quiet_or_machine_readable())
@@ -565,6 +581,7 @@ async fn run_package_manager_command(
     cwd: AbsolutePathBuf,
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
+    let why_hint_packages = command.why_hint_packages().map(<[String]>::to_vec);
     match command.managed_global_command() {
         Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) => {
             return managed_install(packages, node, force, concurrency).await;
@@ -611,7 +628,27 @@ async fn run_package_manager_command(
     }
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    Ok(vp_pm_cli::dispatch(&cwd, command).await?)
+    let status = vp_pm_cli::dispatch(&cwd, command).await?;
+    if status.success()
+        && let Some(packages) = why_hint_packages
+        && let Some(manifest) = active_toolchain_manifest(&cwd)
+        && let Some(hint) = vp_toolchain::why_hint(&manifest, &packages)
+    {
+        output::raw_stderr("");
+        output::raw_stderr(&hint);
+    }
+    Ok(status)
+}
+
+fn active_toolchain_manifest(cwd: &vt_path::AbsolutePath) -> Option<vp_toolchain::Manifest> {
+    let manifest_path = if let Some(package_dir) =
+        crate::js_executor::JsExecutor::resolve_local_vite_plus_package_dir(cwd)
+    {
+        package_dir.join("dist").join("toolchain.json")
+    } else {
+        crate::js_executor::JsExecutor::new(None).get_scripts_dir().ok()?.join("toolchain.json")
+    };
+    vp_toolchain::load_manifest(&manifest_path).ok()
 }
 
 async fn managed_install(
@@ -1031,6 +1068,10 @@ pub async fn run_command_with_options(
         Commands::Cache { args } => {
             maybe_print_runtime_header("cache", &args, render_options.show_header);
             commands::delegate::execute(cwd, "cache", &args, raw_subcommand).await
+        }
+
+        Commands::Toolchain { tools, json, global } => {
+            commands::toolchain::execute(cwd, tools, json, global, raw_subcommand).await
         }
 
         Commands::Env(args) => commands::env::execute(cwd, args).await,

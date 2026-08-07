@@ -25,6 +25,7 @@ Core Commands:
   cache          Manage the task cache
   config         Configure hooks and agent integration
   staged         Run linters on staged files
+  toolchain      Show Vite+ tool versions and relationships
 
 Package Manager Commands:
   install    Install all dependencies, or add packages if package names are provided

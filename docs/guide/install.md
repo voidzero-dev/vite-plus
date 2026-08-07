@@ -149,6 +149,11 @@ Use these when you need to understand the current state of dependencies.
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
 
+These commands show the packages that the package manager installed. They do
+not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show
+these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why`
+shows a hint when Vite+ also provides the package.
+
 #### Rebuild
 
 Use `vp rebuild` when native modules need to be recompiled, for example after switching Node.js versions or when a C/C++ addon fails to load.
