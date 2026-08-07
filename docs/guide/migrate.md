@@ -22,6 +22,9 @@ The positional `PATH` argument is optional.
 
 - If omitted, `vp migrate` migrates the current directory
 - If provided, it migrates that target directory instead
+- For a monorepo, the target must be the workspace root. Workspace members
+  cannot be migrated independently because migration updates shared package
+  manager configuration, catalogs, and lockfiles.
 
 ```bash
 vp migrate

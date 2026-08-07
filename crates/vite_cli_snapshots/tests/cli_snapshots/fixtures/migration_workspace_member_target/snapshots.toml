@@ -1,0 +1,64 @@
+[[case]]
+name = "migration_workspace_member_cwd"
+vp = "global"
+cwd = "vendor/sub"
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-agent",
+    "--no-editor",
+    "--no-hooks",
+  ], comment = "reject migration from a workspace member before changing files", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "../../package.json",
+  ], comment = "workspace root remains unchanged", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "workspace member remains unchanged", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "stat-file",
+    "../../pnpm-workspace.yaml",
+    "--assert",
+    "missing",
+  ], comment = "no package-manager files are created at the workspace root" },
+]
+
+[[case]]
+name = "migration_workspace_member_explicit_path"
+vp = "global"
+cwd = "vendor/sub"
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    ".",
+    "--no-interactive",
+    "--no-agent",
+    "--no-editor",
+    "--no-hooks",
+  ], comment = "reject an explicit workspace-member target before changing files", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "../../package.json",
+  ], comment = "workspace root remains unchanged", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "workspace member remains unchanged", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "stat-file",
+    "../../pnpm-workspace.yaml",
+    "--assert",
+    "missing",
+  ], comment = "no package-manager files are created at the workspace root" },
+]

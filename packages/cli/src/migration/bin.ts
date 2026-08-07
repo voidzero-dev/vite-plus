@@ -1043,6 +1043,15 @@ async function main() {
   printHeader();
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
+  if (
+    workspaceInfoOptional.isMonorepo &&
+    path.resolve(projectPath) !== path.resolve(workspaceInfoOptional.rootDir)
+  ) {
+    cancelAndExit(
+      `Cannot migrate a workspace member independently. Run \`vp migrate\` from the workspace root at ${workspaceInfoOptional.rootDir}.`,
+      1,
+    );
+  }
   const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
   const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
