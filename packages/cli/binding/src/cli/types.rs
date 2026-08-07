@@ -3,10 +3,8 @@ use std::{ffi::OsStr, future::Future, pin::Pin, sync::Arc};
 use clap::{Parser, Subcommand};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use vite_str::Str;
-use vite_task::{
-    Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest,
-};
+use vt::{Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
+use vt_str::Str;
 
 /// Resolved configuration from vite.config.ts
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -111,7 +109,7 @@ pub(super) enum CLIArgs {
 
     /// Package manager commands (install, add, remove, update, dedupe, …)
     #[command(flatten)]
-    PackageManager(vite_pm_cli::PackageManagerCommand),
+    PackageManager(vp_pm_cli::PackageManagerCommand),
 
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),
@@ -164,4 +162,11 @@ pub(crate) struct CapturedCommandOutput {
     pub(crate) status: ExitStatus,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
+}
+
+/// Convert a child's exit status to the vite-task `ExitStatus`, preserving
+/// the `128 + signal` mapping. A `From` impl is blocked by the orphan rule:
+/// both types are foreign here.
+pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
+    ExitStatus(vp_shared::exit_code_from_status(status) as u8)
 }

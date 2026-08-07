@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { renderCliDoc } from '../help.js';
 
@@ -71,6 +71,49 @@ describe('renderCliDoc', () => {
     `);
   });
 
+  it('aligns wrapped help text within the terminal width', () => {
+    Object.defineProperty(process.stdout, 'columns', { configurable: true, value: 40 });
+
+    try {
+      const output = renderCliDoc(
+        {
+          sections: [
+            {
+              title: 'Details',
+              lines: ['  * `all`  - Include every category except one.'],
+            },
+            {
+              title: 'Options',
+              rows: [
+                {
+                  label: '--config=<path>',
+                  description: 'Override the configuration file used for import resolution.',
+                },
+              ],
+            },
+          ],
+        },
+        { color: false },
+      );
+
+      expect(output).toMatchInlineSnapshot(`
+        "Details:
+          * \`all\`  - Include every category
+          except one.
+
+        Options:
+          --config=<path>  Override the
+                           configuration
+                           file used for
+                           import
+                           resolution.
+        "
+      `);
+    } finally {
+      Reflect.deleteProperty(process.stdout, 'columns');
+    }
+  });
+
   it('renders documentation footer when present', () => {
     const output = renderCliDoc({
       usage: 'vp demo',
@@ -81,5 +124,29 @@ describe('renderCliDoc', () => {
     expect(stripVTControlCharacters(output)).toContain(
       'Documentation: https://viteplus.dev/guide/demo',
     );
+  });
+
+  it('renders inline example comments in a muted color', () => {
+    const noColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+    vi.stubEnv('FORCE_COLOR', '1');
+
+    try {
+      const output = renderCliDoc({
+        sections: [
+          {
+            title: 'Examples',
+            lines: ['  vp exec node --version  # Run local node'],
+          },
+        ],
+      });
+
+      expect(output).toContain('\u001B[90m # Run local node\u001B[39m');
+    } finally {
+      vi.unstubAllEnvs();
+      if (noColor !== undefined) {
+        process.env.NO_COLOR = noColor;
+      }
+    }
   });
 });

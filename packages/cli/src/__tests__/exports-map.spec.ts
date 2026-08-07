@@ -91,6 +91,30 @@ describe('package.json exports map', () => {
     // vitest/config re-exports defineConfig / configDefaults — sanity-check one.
     expect(typeof cfg.defineConfig).toBe('function');
   });
+
+  it('browser-playwright declaration uses NodeNext-compatible relative specifiers', () => {
+    // Matches quoted relative module specifiers such as './node' and '../browser.js'.
+    const relativeModuleSpecifier = /(['"])(\.\.?\/[^'"]+)\1/g;
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
+    const entry = (pkg.exports as Record<string, unknown>)['./test/browser-playwright'];
+    expect(isConditionObject(entry)).toBe(true);
+    const types = (entry as ExportConditions).types;
+    expect(types).toBeTypeOf('string');
+
+    const source = fs.readFileSync(path.resolve(cliPkgDir, types as string), 'utf-8');
+    const relativeSpecifiers = Array.from(
+      source.matchAll(relativeModuleSpecifier),
+      (match) => match[2],
+    );
+    expect(
+      relativeSpecifiers.length,
+      'declaration should contain relative specifiers',
+    ).toBeGreaterThan(0);
+    expect(
+      relativeSpecifiers.filter((specifier) => !specifier.endsWith('.js')),
+      'declaration contains NodeNext-incompatible relative specifiers',
+    ).toEqual([]);
+  });
 });
 
 /**

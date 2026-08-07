@@ -1,0 +1,8 @@
+{
+  "name": "global-install-dynamic-import",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "global-install-dynamic-import": "./bin.js"
+  }
+}

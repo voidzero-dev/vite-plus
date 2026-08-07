@@ -43,5 +43,5 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           commit-message: 'chore(runtime): refresh Node.js release keyring'
           add-paths: |
-            crates/vite_js_runtime/src/assets/node-release-keys.asc
+            crates/vp_js_runtime/src/assets/node-release-keys.asc
           body-path: ${{ runner.temp }}/keyring-pr-body.md

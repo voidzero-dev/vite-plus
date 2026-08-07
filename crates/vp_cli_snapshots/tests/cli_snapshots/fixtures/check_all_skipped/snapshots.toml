@@ -1,0 +1,6 @@
+[[case]]
+name = "check_all_skipped"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--no-fmt", "--no-lint"], continue-on-failure = true },
+]

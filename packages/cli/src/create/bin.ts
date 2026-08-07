@@ -21,6 +21,7 @@ import {
   rewriteMonorepoProject,
   rewriteStandaloneProject,
   setPackageManager,
+  shouldSkipStagedMigrationForHooks,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -36,11 +37,12 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
-import { initGitRepository } from '../utils/git.ts';
+import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
+  cancelAndExit,
   type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
@@ -50,7 +52,7 @@ import {
   runViteInstall,
   selectPackageManager,
 } from '../utils/prompts.ts';
-import { accent, muted, log, printHeader, success } from '../utils/terminal.ts';
+import { accent, formatDuration, muted, log, printHeader, success } from '../utils/terminal.ts';
 import {
   detectWorkspace,
   updatePackageJsonWithDeps,
@@ -67,7 +69,6 @@ import {
   resolveOrgManifestForCreate,
 } from './org-resolve.ts';
 import {
-  cancelAndExit,
   checkProjectDirExists,
   promptPackageNameAndTargetDir,
   promptTargetDir,
@@ -376,36 +377,11 @@ function formatTemplateName(templateName: string) {
   return `${frameworkName} + ${isTypeScript ? 'TypeScript' : 'JavaScript'}`;
 }
 
-function formatDuration(durationMs: number) {
-  if (durationMs < 1000) {
-    return `${Math.max(1, durationMs)}ms`;
-  }
-  const durationSeconds = durationMs / 1000;
-  if (durationSeconds < 10) {
-    return `${durationSeconds.toFixed(1)}s`;
-  }
-  return `${Math.round(durationSeconds)}s`;
-}
-
 function getNextCommand(projectDir: string, command: string) {
   if (!projectDir || projectDir === '.') {
     return command;
   }
   return `cd ${projectDir} && ${command}`;
-}
-
-function findGitRoot(startPath: string) {
-  let dir = startPath;
-  while (true) {
-    if (fs.existsSync(path.join(dir, '.git'))) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      return undefined;
-    }
-    dir = parent;
-  }
 }
 
 function getCopilotSetupRoot(projectRoot: string, isExistingMonorepo: boolean) {
@@ -826,7 +802,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: workspace detection > CLI flag > interactive prompt/default
+  // Resolve package manager: existing monorepo > CLI flag > ambient detection > prompt/default
   if (
     options.packageManager &&
     !Object.values(PackageManager).includes(options.packageManager as PackageManager)
@@ -837,16 +813,23 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     );
     cancelAndExit('Invalid --package-manager value', 1);
   }
+  const requestedPackageManager = options.packageManager as PackageManager | undefined;
+  const detectedPackageManager = workspaceInfoOptional.packageManager;
   const packageManager =
-    workspaceInfoOptional.packageManager ??
-    (options.packageManager as PackageManager | undefined) ??
+    (isMonorepo
+      ? (detectedPackageManager ?? requestedPackageManager)
+      : (requestedPackageManager ?? detectedPackageManager)) ??
     (await selectPackageManager(options.interactive, compactOutput));
+  const packageManagerVersion =
+    packageManager === detectedPackageManager
+      ? workspaceInfoOptional.packageManagerVersion
+      : 'latest';
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
     packageManager,
-    workspaceInfoOptional.packageManagerVersion,
+    packageManagerVersion,
     options.interactive,
     shouldSilencePackageManagerInstallLog,
   );
@@ -1067,6 +1050,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     // rewrite monorepo to add vite-plus dependencies
     const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+    const scaffoldedWorkspace = await detectWorkspace(fullPath);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = scaffoldedWorkspace.workspacePatterns;
+    workspaceInfo.parentDirs = scaffoldedWorkspace.parentDirs;
+    workspaceInfo.packages = scaffoldedWorkspace.packages;
     if (shouldInitGit) {
       const gitResult = spawn.sync('git', ['init'], { stdio: 'pipe', cwd: fullPath });
       if (gitResult.status === 0) {
@@ -1109,7 +1097,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
-    rewriteMonorepo(workspaceInfo, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+      workspaceInfo.packages,
+    );
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, compactOutput);
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
       if (await initGitRepository(fullPath)) {
@@ -1126,7 +1120,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       injectCreateDefaultTemplate(fullPath, bundled.scope, compactOutput);
     }
     if (shouldSetupHooks) {
-      installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
+      installGitHooks(
+        fullPath,
+        compactOutput,
+        undefined,
+        workspaceInfo.packageManager,
+        workspaceInfo.packages,
+      );
     }
     updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
@@ -1293,7 +1293,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // `@oxlint/migrate` can resolve eslint.config.js's plugin imports, then
   // migrate before the vite-plus rewrite so the generated .oxlintrc/.oxfmtrc
   // get merged into vite.config.ts — matching `vp migrate`. Pin the
-  // packageManager field (vite_install hardcodes pnpm in CI/non-TTY when no
+  // packageManager field (vp_pm_cli defaults to pnpm in CI/non-TTY when no
   // signal is present) and force yarn's classic node_modules layout
   // (Plug'n'Play zip entries break @oxlint/migrate's fileURLToPath resolution).
   const installAndMigrate = async (installCwd: string) => {
@@ -1400,7 +1400,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(workspaceInfo.rootDir);
     }
     updateCreateProgress('Integrating into monorepo');
-    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteMonorepoProject(
+      fullPath,
+      workspaceInfo.packageManager,
+      skipStagedMigration,
+      compactOutput,
+    );
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
@@ -1426,20 +1436,28 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // No git setup here: `resolveGitInit` always returns false inside an
     // existing monorepo (the package shares the monorepo's repository).
   } else {
-    if (shouldMigrateLintFmtTools) {
-      await installAndMigrate(fullPath);
-    }
-    updateCreateProgress('Applying Vite+ project setup');
-    rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
-    for (const framework of detectFramework(fullPath)) {
-      if (!hasFrameworkShim(fullPath, framework)) {
-        addFrameworkShim(fullPath, framework);
-      }
-    }
+    // Establish the destination's intended Git root before hook preflight.
+    // Otherwise a project scaffolded inside another repository is mistaken
+    // for a subdirectory project and its staged workflow is left half-set-up.
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
       if (await initGitRepository(fullPath)) {
         ensureDefaultGitignoreEntries(fullPath);
+      }
+    }
+    if (shouldMigrateLintFmtTools) {
+      await installAndMigrate(fullPath);
+    }
+    updateCreateProgress('Applying Vite+ project setup');
+    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+      fullPath,
+      shouldSetupHooks,
+      workspaceInfo.packageManager,
+    );
+    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    for (const framework of detectFramework(fullPath)) {
+      if (!hasFrameworkShim(fullPath, framework)) {
+        addFrameworkShim(fullPath, framework);
       }
     }
     if (shouldSetupHooks) {

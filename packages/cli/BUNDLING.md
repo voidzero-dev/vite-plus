@@ -129,9 +129,9 @@ packages/cli/
 │   ├── create.js             # Global command: vp create
 │   ├── migrate.js            # Global command: vp migrate
 │   ├── version.js            # Global command: vp --version
-│   ├── config.js             # Global command: vp config
+│   ├── config/bin.js         # Global command: vp config
 │   ├── mcp.js                # Global command: vp mcp
-│   ├── staged.js             # Global command: vp staged
+│   ├── staged/bin.js         # Global command: vp staged
 │   ├── *-<hash>.js           # Shared chunks (code splitting)
 │   ├── versions.js           # Generated tool versions
 │   ├── client.d.ts           # ./client types (triple-slash ref)
@@ -154,14 +154,16 @@ packages/cli/
 
 The CLI builds native bindings for the following platform targets:
 
-| Target                      | Platform | Architecture | Output File                       |
-| --------------------------- | -------- | ------------ | --------------------------------- |
-| `aarch64-apple-darwin`      | macOS    | ARM64        | `vite-plus.darwin-arm64.node`     |
-| `x86_64-apple-darwin`       | macOS    | x64          | `vite-plus.darwin-x64.node`       |
-| `aarch64-unknown-linux-gnu` | Linux    | ARM64        | `vite-plus.linux-arm64-gnu.node`  |
-| `x86_64-unknown-linux-gnu`  | Linux    | x64          | `vite-plus.linux-x64-gnu.node`    |
-| `aarch64-pc-windows-msvc`   | Windows  | ARM64        | `vite-plus.win32-arm64-msvc.node` |
-| `x86_64-pc-windows-msvc`    | Windows  | x64          | `vite-plus.win32-x64-msvc.node`   |
+| Target                       | Platform | Architecture | Output File                       |
+| ---------------------------- | -------- | ------------ | --------------------------------- |
+| `aarch64-apple-darwin`       | macOS    | ARM64        | `vite-plus.darwin-arm64.node`     |
+| `x86_64-apple-darwin`        | macOS    | x64          | `vite-plus.darwin-x64.node`       |
+| `aarch64-unknown-linux-gnu`  | Linux    | ARM64 glibc  | `vite-plus.linux-arm64-gnu.node`  |
+| `aarch64-unknown-linux-musl` | Linux    | ARM64 musl   | `vite-plus.linux-arm64-musl.node` |
+| `x86_64-unknown-linux-gnu`   | Linux    | x64 glibc    | `vite-plus.linux-x64-gnu.node`    |
+| `x86_64-unknown-linux-musl`  | Linux    | x64 musl     | `vite-plus.linux-x64-musl.node`   |
+| `aarch64-pc-windows-msvc`    | Windows  | ARM64        | `vite-plus.win32-arm64-msvc.node` |
+| `x86_64-pc-windows-msvc`     | Windows  | x64          | `vite-plus.win32-x64-msvc.node`   |
 
 These targets are defined in `package.json` under the `napi.targets` field.
 
@@ -220,29 +222,21 @@ await cli.build({
 
 ### Module Specifier Rewriting
 
-During release builds, the core package rewrites all `@rolldown/binding-*` imports to point to `vite-plus/binding`:
-
-```typescript
-// In packages/core/build.ts
-if (process.env.RELEASE_BUILD) {
-  // @rolldown/binding-darwin-arm64 → vite-plus/binding
-  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
-}
-```
+During release builds, the core package rewrites each supported `@rolldown/binding-*` import to the matching Vite+ platform package (see `packages/core/build-support/rewrite-rolldown-binding.ts`):
 
 **Transformation examples**:
 
-| Original Import                    | After Rewrite       |
-| ---------------------------------- | ------------------- |
-| `@rolldown/binding-darwin-arm64`   | `vite-plus/binding` |
-| `@rolldown/binding-linux-x64-gnu`  | `vite-plus/binding` |
-| `@rolldown/binding-win32-x64-msvc` | `vite-plus/binding` |
+| Original Import                    | After Rewrite                            |
+| ---------------------------------- | ---------------------------------------- |
+| `@rolldown/binding-darwin-arm64`   | `@voidzero-dev/vite-plus-darwin-arm64`   |
+| `@rolldown/binding-linux-x64-gnu`  | `@voidzero-dev/vite-plus-linux-x64-gnu`  |
+| `@rolldown/binding-win32-x64-msvc` | `@voidzero-dev/vite-plus-win32-x64-msvc` |
 
 This means:
 
-1. The bundled rolldown code in `@voidzero-dev/vite-plus-core/rolldown` resolves native bindings from `vite-plus/binding`
+1. The bundled rolldown code in `@voidzero-dev/vite-plus-core/rolldown` resolves native bindings through core's own declared optional dependencies (injected at publish time by `publish-native-addons.ts`)
 2. Users don't need to install separate `@rolldown/binding-*` platform packages
-3. The single `.node` file contains both vite-plus task runner and rolldown bindings
+3. The platform `.node` file contains both vite-plus task runner and rolldown bindings
 
 ### Native Binding Contents
 
@@ -250,7 +244,7 @@ When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
 
 | Component          | Source                             | Purpose                        |
 | ------------------ | ---------------------------------- | ------------------------------ |
-| `vite_task`        | `packages/cli/binding/src/lib.rs`  | Task runner session management |
+| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management |
 | `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings |
 
 ### Export Chain
@@ -259,23 +253,27 @@ When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
 User imports 'vite-plus/rolldown'
   → packages/cli re-exports from @voidzero-dev/vite-plus-core/rolldown
     → packages/core/dist/rolldown/index.mjs
-      → Native binding: vite-plus/binding (rewritten from @rolldown/binding-*)
-        → binding/vite-plus.darwin-arm64.node (contains rolldown_binding)
+      → Native binding: @voidzero-dev/vite-plus-darwin-arm64
+        (rewritten from @rolldown/binding-darwin-arm64)
+        → vite-plus.darwin-arm64.node (contains rolldown_binding)
 ```
 
 ### Platform-Specific Publishing
 
 Native bindings are published as separate platform packages for optimal install size:
 
-| Platform    | Published Package                         |
-| ----------- | ----------------------------------------- |
-| macOS ARM64 | `@voidzero-dev/vite-plus-darwin-arm64`    |
-| macOS x64   | `@voidzero-dev/vite-plus-darwin-x64`      |
-| Linux ARM64 | `@voidzero-dev/vite-plus-linux-arm64-gnu` |
-| Linux x64   | `@voidzero-dev/vite-plus-linux-x64-gnu`   |
-| Windows x64 | `@voidzero-dev/vite-plus-win32-x64-msvc`  |
+| Platform          | Published Package                          |
+| ----------------- | ------------------------------------------ |
+| macOS ARM64       | `@voidzero-dev/vite-plus-darwin-arm64`     |
+| macOS x64         | `@voidzero-dev/vite-plus-darwin-x64`       |
+| Linux ARM64 glibc | `@voidzero-dev/vite-plus-linux-arm64-gnu`  |
+| Linux ARM64 musl  | `@voidzero-dev/vite-plus-linux-arm64-musl` |
+| Linux x64 glibc   | `@voidzero-dev/vite-plus-linux-x64-gnu`    |
+| Linux x64 musl    | `@voidzero-dev/vite-plus-linux-x64-musl`   |
+| Windows ARM64     | `@voidzero-dev/vite-plus-win32-arm64-msvc` |
+| Windows x64       | `@voidzero-dev/vite-plus-win32-x64-msvc`   |
 
-These are automatically installed via `optionalDependencies` based on the user's platform.
+These are automatically installed via `optionalDependencies` based on the user's platform. `publish-native-addons.ts` injects the exact-pinned entries into both `vite-plus` (via napi-rs prePublish) and `@voidzero-dev/vite-plus-core` during publish; the committed package.json files carry none of them.
 
 See `publish-native-addons.ts` for the publishing pipeline.
 
@@ -292,7 +290,7 @@ The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-
 3. **Reduces duplication** - No file copying, just re-exports
 4. **Preserves module resolution** - Node.js resolves to the actual core package
 
-**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (vite, rolldown, tsdown, vitepress). See [Core Package Bundling](../core/BUNDLING.md) for details.
+**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (vite, rolldown, tsdown). See [Core Package Bundling](../core/BUNDLING.md) for details.
 
 ### Export Mapping (Core)
 

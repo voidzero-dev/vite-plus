@@ -1,0 +1,7 @@
+[[case]]
+name = "command_pack_no_input"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pack"], comment = "should not mention tsdown in error", continue-on-failure = true },
+]
