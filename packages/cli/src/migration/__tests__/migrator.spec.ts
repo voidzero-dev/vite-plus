@@ -8977,3 +8977,41 @@ describe('collectMigrationSetupPlan ESLint gating', () => {
     },
   );
 });
+
+describe('collectMigrationSetupPlan non-interactive editor conflicts', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-setup-plan-editor-'));
+    writePkgAt(tmpDir, { name: 'x' });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('skips (never overwrites) existing non-JSON jetbrains files, only merges JSON-like ones', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.idea'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.idea', 'externalDependencies.xml'),
+      '<project version="4"><component name="Custom"/></project>',
+    );
+    fs.writeFileSync(path.join(tmpDir, '.idea', 'workspace.xml'), '<project version="4"/>');
+
+    const plan = await collectMigrationSetupPlan(
+      tmpDir,
+      PackageManager.pnpm,
+      {
+        interactive: false,
+        hooks: false,
+        agent: false as const,
+        editor: 'jetbrains',
+      },
+      undefined,
+      false,
+    );
+
+    expect(plan.editorConflictDecisions.get('externalDependencies.xml')).toBe('skip');
+    expect(plan.editorConflictDecisions.get('workspace.xml')).toBe('skip');
+  });
+});

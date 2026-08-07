@@ -1089,6 +1089,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       interactive: options.interactive,
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+      packageManager,
     });
     if (selectedEditors?.includes('vscode')) {
       ensureGitignoreVsCodeEditorConfigs(fullPath);
@@ -1269,6 +1270,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       interactive: options.interactive,
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+      packageManager,
     });
     if (selectedEditors?.includes('vscode')) {
       ensureGitignoreVsCodeEditorConfigs(fullPath);
