@@ -55,7 +55,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 - make sure `vite.config.ts` contains a `staged` block
 - make sure the project-owned pre-commit hook runs `vp staged` (for example `.vite-hooks/pre-commit`)
 - run `vp hooks status` to see preference, `core.hooksPath`, and whether the dispatcher is installed
-- run `vp hooks setup` (or `vp config`) to install the hook dispatcher
+- run `vp hooks enable` (or `vp config`) to install the hook dispatcher
 - if status shows `Preference: disabled (local)`, re-enable with `vp hooks enable`
 - check whether hooks were skipped intentionally through `VP_GIT_HOOKS=0`
 

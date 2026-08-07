@@ -31,7 +31,7 @@ export const DEFAULT_HOOKS_DIR = '.vite-hooks';
 
 /** Local git config: user chose `vp hooks disable` (survives prepare / vp config). */
 const PREFERENCE_DISABLED_KEY = 'vp.hooks.disabled';
-/** Local git config: last hooks directory used by setup/enable. */
+/** Local git config: last hooks directory used by enable. */
 const PREFERENCE_DIR_KEY = 'vp.hooks.dir';
 
 // Build nested dirname expression: depth 3 → dirname "$(dirname "$(dirname "$0"))"
@@ -327,7 +327,7 @@ function unsetOwnedHooksPath(target: string): InstallResult | null {
 
 export interface InstallOptions {
   /**
-   * When true, ignore a user-disabled preference (used by `vp hooks setup` / `enable`).
+   * When true, ignore a user-disabled preference (used by `vp hooks enable`).
    * Still honors `VP_GIT_HOOKS=0` / `HUSKY=0`.
    */
   ignoreUserPreference?: boolean;
@@ -413,7 +413,7 @@ export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): 
  * Install (or refresh) the Vite+ hook dispatcher and mark hooks as enabled.
  * Clears a previous `vp hooks disable` preference.
  */
-export function setup(dir = DEFAULT_HOOKS_DIR): InstallResult {
+export function enable(dir = DEFAULT_HOOKS_DIR): InstallResult {
   const result = install(dir, { ignoreUserPreference: true });
   if (result.isError) {
     return result;
@@ -426,13 +426,6 @@ export function setup(dir = DEFAULT_HOOKS_DIR): InstallResult {
     message: `Git hook dispatcher installed at ${dir}/_`,
     isError: false,
   };
-}
-
-/**
- * Re-enable hooks after `disable` (same as setup).
- */
-export function enable(dir = DEFAULT_HOOKS_DIR): InstallResult {
-  return setup(dir);
 }
 
 /**
@@ -564,8 +557,8 @@ export function status(dir?: string): InstallResult & { status?: HooksStatus } {
 
   // Preference is the stored user decision, not runtime activity.
   // - disabled (local): user ran `vp hooks disable`
-  // - enabled: setup/enable ran (or hooks are currently owned/installed)
-  // - not set: no disable preference and no evidence of a prior setup
+  // - enabled: enable ran (or hooks are currently owned/installed)
+  // - not set: no disable preference and no evidence of a prior enable
   const preferenceLabel = userDisabled
     ? 'disabled (local)'
     : getStoredHooksDir() || dispatcherInstalled || ownsHooksPath

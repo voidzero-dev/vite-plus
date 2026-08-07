@@ -9,7 +9,7 @@ Vite+ supports commit hooks and staged-file checks without additional tooling.
 
 Use:
 
-- `vp hooks setup` / `enable` / `disable` / `status` to manage the generated hook dispatcher
+- `vp hooks enable` / `disable` / `status` to manage the generated hook dispatcher
 - `vp config` to install the dispatcher (when not disabled) and update agent integration
 - `vp staged` to run checks against the files currently staged in Git
 
@@ -19,7 +19,7 @@ If you use [`vp create`](/guide/create) or [`vp migrate`](/guide/migrate), Vite+
 
 ```bash
 # Install or refresh the dispatcher
-vp hooks setup
+vp hooks enable
 
 # Check what is active in this clone
 vp hooks status
@@ -38,31 +38,29 @@ vp hooks enable
 Manage the Vite+ Git hook dispatcher for the current repository:
 
 ```bash
-vp hooks setup
-vp hooks setup --hooks-dir .custom-hooks
-vp hooks disable
 vp hooks enable
+vp hooks enable --hooks-dir .custom-hooks
+vp hooks disable
 vp hooks status
 ```
 
 | Command   | Behavior                                                                                                                                                                                                           |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `setup`   | Install or refresh the generated dispatcher under `<hooks-dir>/_` and set `core.hooksPath`. Clears a previous disable preference.                                                                                  |
+| `enable`  | Install or refresh the generated dispatcher under `<hooks-dir>/_` and set `core.hooksPath`. Clears a previous disable preference.                                                                                  |
 | `disable` | Tear down the dispatcher (unset `core.hooksPath` when it points at Vite+, remove `<hooks-dir>/_`) and **persist** the disable decision in local git config so `vp config` / lifecycle scripts do not reinstall it. |
-| `enable`  | Re-enable after `disable` (same as `setup`).                                                                                                                                                                       |
 | `status`  | Show preference, `core.hooksPath`, dispatcher presence, and project-owned hook scripts.                                                                                                                            |
 
-By default, project hooks live in `.vite-hooks`. Pass `--hooks-dir` to use another subdirectory. After the first successful setup, the directory is remembered in local git config for later `enable` / `disable` / `status` / `vp config` calls in this clone.
+By default, project hooks live in `.vite-hooks`. Pass `--hooks-dir` to use another subdirectory. After the first successful enable, the directory is remembered in local git config for later `enable` / `disable` / `status` / `vp config` calls in this clone.
 
 `status` reports preference as:
 
-- `not set` — no disable preference and no prior setup in this clone
-- `enabled` — setup/enable has run (or the dispatcher is currently owned)
+- `not set` — no disable preference and no prior enable in this clone
+- `enabled` — enable has run (or the dispatcher is currently owned)
 - `disabled (local)` — after `vp hooks disable`
 
 Check the `Dispatcher` and `core.hooksPath` lines to see whether hooks are actually active.
 
-`disable` / `setup` do **not** delete project-owned hook scripts (for example `.vite-hooks/pre-commit`), the `staged` block in `vite.config.ts`, or lifecycle scripts that call `vp config`.
+`disable` / `enable` do **not** delete project-owned hook scripts (for example `.vite-hooks/pre-commit`), the `staged` block in `vite.config.ts`, or lifecycle scripts that call `vp config`.
 
 ### `vp config`
 
@@ -89,7 +87,7 @@ You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle sc
 
 Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed to the repository.
 The generated dispatcher and shims under `.vite-hooks/_` are ignored and recreated by `vp config`
-or `vp hooks setup`. Neither command creates or modifies project hook scripts or staged-file
+or `vp hooks enable`. Neither command creates or modifies project hook scripts or staged-file
 configuration.
 
 ### `vp staged`
@@ -140,7 +138,7 @@ Set `VP_GIT_HOOKS=0` in the environment of the process that runs `git commit`, a
 VP_GIT_HOOKS=0 git commit -m "content update"
 ```
 
-`HUSKY=0` is honored the same way for ecosystem tooling compatibility. Setting `VP_GIT_HOOKS=0` in an environment also keeps `vp config` / `vp hooks setup` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
+`HUSKY=0` is honored the same way for ecosystem tooling compatibility. Setting `VP_GIT_HOOKS=0` in an environment also keeps `vp config` / `vp hooks enable` from reinstalling hooks there when a lifecycle script such as `prepare` runs.
 
 ### Init script
 
@@ -173,7 +171,7 @@ This:
 1. Unsets `core.hooksPath` when it points at the Vite+ dispatcher
 2. Removes the generated `<hooks-dir>/_` directory
 3. Records a **local** disable preference so lifecycle scripts skip reinstall until you run
-   `vp hooks enable` (or `vp hooks setup`) again
+   `vp hooks enable` again
 
 To re-enable:
 
@@ -193,7 +191,7 @@ git config --unset core.hooksPath
 rm -rf .vite-hooks/_
 # optional: prevent prepare/vp config from reinstalling in this clone
 git config --local vp.hooks.disabled true
-# optional: remembered hooks directory (set by setup/enable/disable)
+# optional: remembered hooks directory (set by enable/disable)
 # git config --local vp.hooks.dir .vite-hooks
 ```
 

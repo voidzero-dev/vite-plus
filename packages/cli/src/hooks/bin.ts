@@ -5,13 +5,12 @@ import {
   disable,
   enable,
   resolveHooksDir,
-  setup,
   status,
 } from '../config/hooks.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { log, printHeader } from '../utils/terminal.ts';
 
-const SUBCOMMANDS = ['setup', 'disable', 'enable', 'status'] as const;
+const SUBCOMMANDS = ['enable', 'disable', 'status'] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 function isSubcommand(value: string | undefined): value is Subcommand {
@@ -28,16 +27,12 @@ function printHelp(): void {
         title: 'Commands',
         rows: [
           {
-            label: 'setup',
+            label: 'enable',
             description: 'Install or refresh the hook dispatcher (sets core.hooksPath)',
           },
           {
             label: 'disable',
             description: 'Disable hooks: unset core.hooksPath, remove <dir>/_, persist preference',
-          },
-          {
-            label: 'enable',
-            description: 'Re-enable hooks after disable (same as setup)',
           },
           {
             label: 'status',
@@ -60,17 +55,16 @@ function printHelp(): void {
         rows: [
           {
             label: 'VP_GIT_HOOKS=0',
-            description: 'Skip dispatcher install in setup/enable (and skip hooks at commit time)',
+            description: 'Skip dispatcher install in enable (and skip hooks at commit time)',
           },
         ],
       },
       {
         title: 'Examples',
         lines: [
-          '  vp hooks setup',
-          '  vp hooks setup --hooks-dir .custom-hooks',
-          '  vp hooks disable',
           '  vp hooks enable',
+          '  vp hooks enable --hooks-dir .custom-hooks',
+          '  vp hooks disable',
           '  vp hooks status',
         ],
       },
@@ -122,9 +116,6 @@ async function main() {
   const dir = resolveHooksDir(dirFlag);
 
   switch (subcommand) {
-    case 'setup':
-      applyResult(setup(dir));
-      return;
     case 'enable':
       applyResult(enable(dir));
       return;

@@ -23,7 +23,6 @@ import {
   install,
   isHooksUserDisabled,
   resolveHooksDir,
-  setup,
   status,
 } from '../hooks.js';
 
@@ -248,9 +247,9 @@ describe('install', () => {
   });
 });
 
-describe('setup / disable / enable / status', () => {
+describe('enable / disable / status', () => {
   it.skipIf(process.platform === 'win32')(
-    'setup installs dispatcher; disable tears down and persists preference; enable restores',
+    'enable installs dispatcher; disable tears down and persists preference; enable restores',
     () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-lifecycle-'));
       const originalCwd = process.cwd();
@@ -262,7 +261,7 @@ describe('setup / disable / enable / status', () => {
         mkdirSync(hooksDir, { recursive: true });
         writeFileSync(join(hooksDir, 'pre-commit'), 'vp staged\n');
 
-        expect(setup(hooksDir).isError).toBe(false);
+        expect(enable(hooksDir).isError).toBe(false);
         expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
         expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
           '.vite-hooks/_',
@@ -342,7 +341,7 @@ describe('setup / disable / enable / status', () => {
       expect(unset.isError).toBe(false);
       expect(unset.message).toContain('Preference:     not set');
 
-      expect(setup().isError).toBe(false);
+      expect(enable().isError).toBe(false);
       const active = status();
       expect(active.isError).toBe(false);
       expect(active.status?.userDisabled).toBe(false);
@@ -375,7 +374,7 @@ describe('setup / disable / enable / status', () => {
         mkdirSync(customDir, { recursive: true });
         writeFileSync(join(tmp, customDir, 'pre-commit'), 'vp staged\n');
 
-        expect(setup(customDir).isError).toBe(false);
+        expect(enable(customDir).isError).toBe(false);
         expect(resolveHooksDir()).toBe(customDir);
         expect(existsSync(join(tmp, customDir, '_', 'pre-commit'))).toBe(true);
         expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(

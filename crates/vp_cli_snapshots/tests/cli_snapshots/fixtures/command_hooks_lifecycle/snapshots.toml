@@ -4,9 +4,9 @@ vp = "local"
 skip-platforms = ["windows"]
 steps = [
   { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
-  { argv = ["vp", "hooks", "status"], comment = "preference not set before setup", continue-on-failure = true },
-  { argv = ["vp", "hooks", "setup"], comment = "install dispatcher", continue-on-failure = true },
-  { argv = ["vp", "hooks", "status"], comment = "preference enabled after setup", continue-on-failure = true },
+  { argv = ["vp", "hooks", "status"], comment = "preference not set before enable", continue-on-failure = true },
+  { argv = ["vp", "hooks", "enable"], comment = "install dispatcher", continue-on-failure = true },
+  { argv = ["vp", "hooks", "status"], comment = "preference enabled after enable", continue-on-failure = true },
   { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
   { argv = ["vp", "hooks", "disable"], comment = "tear down and persist preference", continue-on-failure = true },
   { argv = ["vp", "hooks", "status"], comment = "preference disabled (local)", continue-on-failure = true },

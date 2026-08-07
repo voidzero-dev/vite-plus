@@ -5,7 +5,7 @@
 
 ## `vp hooks status`
 
-preference not set before setup
+preference not set before enable
 
 ```
 Preference:     not set
@@ -15,7 +15,7 @@ Dispatcher:     missing (.vite-hooks/_)
 Project hooks:  pre-commit
 ```
 
-## `vp hooks setup`
+## `vp hooks enable`
 
 install dispatcher
 
@@ -25,7 +25,7 @@ Git hook dispatcher installed at .vite-hooks/_
 
 ## `vp hooks status`
 
-preference enabled after setup
+preference enabled after enable
 
 ```
 Preference:     enabled
