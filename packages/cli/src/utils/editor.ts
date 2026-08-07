@@ -112,7 +112,7 @@ function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
         nodejs_interpreter_path: '$USER_HOME$/.vite-plus/bin/node.exe',
         nodejs_package_manager_path: packageManager,
       },
-    })}]]>
+    }, null, 2)}]]>
   </component>
 </project>
 `;
