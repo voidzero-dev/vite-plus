@@ -6,6 +6,8 @@ Use `vp implode` to remove `vp` and all related Vite+ data from your machine.
 
 `vp implode` is the cleanup command for removing a Vite+ installation and its managed data. Use it if you no longer want Vite+ to manage your runtime, package manager, and related local tooling state.
 
+It removes the Vite+ directories for the resolved layout — the legacy monolithic root (`~/.vite-plus`, or a custom root chosen at install time), or the split-layout data, config, state, and cache directories plus the vp-owned shims in the bin directory — and cleans the Vite+ lines from your shell profiles.
+
 ::: info
 If you decide Vite+ is not for you, please [share your feedback with us](https://discord.gg/cAnsqHh5PX).
 :::

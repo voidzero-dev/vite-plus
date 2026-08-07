@@ -9,6 +9,12 @@ import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
 
 function getCacheRoot(): string {
+  // The global CLI injects VP_CACHE_DIR under the split (XDG) layout; legacy
+  // installs resolve through VP_HOME / ~/.vite-plus as before.
+  const cacheDir = process.env.VP_CACHE_DIR;
+  if (cacheDir) {
+    return path.join(cacheDir, 'create-org');
+  }
   const home = process.env.VP_HOME || path.join(os.homedir(), '.vite-plus');
   return path.join(home, 'tmp', 'create-org');
 }

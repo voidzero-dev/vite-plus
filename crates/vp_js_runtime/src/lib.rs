@@ -43,7 +43,6 @@
     clippy::print_stdout
 )]
 
-mod cache;
 mod dev_engines;
 mod download;
 mod error;

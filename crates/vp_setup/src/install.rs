@@ -217,8 +217,10 @@ fn format_install_failure_message(
 
 /// Write stdout and stderr from a failed install to `upgrade.log`.
 ///
-/// The log is written to the **parent** of `version_dir` (i.e. `~/.vite-plus/upgrade.log`)
-/// so it survives the cleanup that removes `version_dir` on failure.
+/// The log is written to the **parent** of `version_dir` (i.e. the data dir's
+/// `upgrade.log` — `<data>/upgrade.log`, `~/.vite-plus/upgrade.log` under the
+/// legacy layout) so it survives the cleanup that removes `version_dir` on
+/// failure.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
 pub async fn write_upgrade_log(

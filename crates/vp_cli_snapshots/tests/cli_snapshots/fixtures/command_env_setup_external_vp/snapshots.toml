@@ -3,16 +3,20 @@ name = "command_env_setup_external_vp"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vpt", "mkdir", "-p", "external", "home"], comment = "Prepare isolated external install and VP_HOME", snapshot = false },
-  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], comment = "Simulate a Homebrew-style vp outside VP_HOME", snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "external/current/bin", "external/bin", "external/js_runtime/node/22.18.0/bin"], comment = "A second, complete legacy install outside the case home", snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/current/bin/vp", "external/current/bin/vp"], comment = "The external install's vp binary", snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/current/bin/vp", "external/bin/vp"], comment = "Marks the external layout as a legacy install for detection", snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/current/bin/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/bin/vp"], snapshot = false },
   { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], comment = "Project Node.js version", snapshot = false },
-  { argv = ["vpt", "write-file", "home/js_runtime/node/22.18.0/bin/node", "#!/bin/sh\necho vp-managed-node-22.18.0\n"], comment = "Preinstall managed Node runtime", snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "home/js_runtime/node/22.18.0/bin/node"], snapshot = false },
-  { argv = ["./external/vp", "env", "setup"], envs = [["VP_HOME", "${workspace}/home"]], comment = "Setup shims from external vp", snapshot = false },
+  { argv = ["vpt", "write-file", "external/js_runtime/node/22.18.0/bin/node", "#!/bin/sh\necho vp-managed-node-22.18.0\n"], comment = "Preinstall managed Node runtime", snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/js_runtime/node/22.18.0/bin/node"], snapshot = false },
+  # Pin VP_HOME to the external root: VpDirs no longer self-locates from the
+  # binary path / PATH, so env setup must target that install explicitly.
+  { argv = ["./external/current/bin/vp", "env", "setup"], envs = [["VP_HOME", "${workspace}/external"]], comment = "env setup targets the external install via VP_HOME", snapshot = false },
   # The legacy step set VP_BYPASS to reach a system node, which the hermetic
   # case PATH does not have; the node shim resolving the pinned 22.18.0 from
   # the seeded runtime serves the same purpose (any node can run the asserts).
-  { argv = ["node", "assert-shims.mjs"], comment = "Shims should point to external vp, not VP_HOME/current/bin/vp" },
-  { argv = ["node", "-v"], envs = [["VP_HOME", "${workspace}/home"], ["PATH", "${workspace}/home/bin:${PATH}"]], comment = "node shim uses the project version" },
+  { argv = ["node", "assert-shims.mjs"], comment = "Shims point to the external install's vp, not the case home's" },
+  { argv = ["node", "-v"], envs = [["VP_HOME", "${workspace}/external"], ["PATH", "${workspace}/external/bin:${PATH}"]], comment = "node shim uses the project version" },
 ]

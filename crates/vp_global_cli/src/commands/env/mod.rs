@@ -3,6 +3,8 @@
 //! This module provides the `vp env` command for managing Node.js environments
 //! through shim-based version management.
 
+use vp_shared::VpDirs;
+
 pub mod bin_config;
 mod clean;
 pub mod config;
@@ -109,8 +111,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Uninstall { version } => {
                 let provider = vp_js_runtime::NodeProvider::new();
                 let resolved = config::resolve_version_alias(&version, &provider).await?;
-                let home_dir = vp_shared::get_vp_home()?;
-                let version_dir = home_dir.join("js_runtime").join("node").join(&resolved);
+                let version_dir = VpDirs::js_runtime_dir().join("node").join(&resolved);
                 if !version_dir.as_path().exists() {
                     eprintln!("Node.js v{} is not installed", resolved);
                     return Ok(exit_status(1));

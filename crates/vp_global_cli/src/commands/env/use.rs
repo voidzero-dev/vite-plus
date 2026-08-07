@@ -10,6 +10,7 @@
 
 use std::process::ExitStatus;
 
+use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -137,8 +138,7 @@ pub async fn execute(
 
     // Ensure version is installed (unless --no-install)
     if !no_install {
-        let home_dir =
-            vp_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolved_version);
+        let home_dir = VpDirs::js_runtime_dir().join("node").join(&resolved_version);
 
         #[cfg(windows)]
         let binary_path = home_dir.join("node.exe");

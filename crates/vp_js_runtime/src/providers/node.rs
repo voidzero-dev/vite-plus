@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use node_semver::{Range, Version};
 use serde::{Deserialize, Serialize};
+use vp_shared::VpDirs;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
@@ -30,6 +31,9 @@ const DEFAULT_NODE_DIST_URL: &str = "https://unofficial-builds.nodejs.org/downlo
 
 /// Default cache TTL in seconds (1 hour)
 const DEFAULT_CACHE_TTL_SECS: u64 = 3600;
+
+/// Version-index cache file under `<js_runtime>/node/`.
+const INDEX_CACHE_FILE: &str = "index_cache.json";
 
 /// A single entry from the Node.js version index
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -102,7 +106,8 @@ impl NodeProvider {
     ///
     /// # Arguments
     /// * `version_req` - A semver range requirement (e.g., "^20.18.0")
-    /// * `cache_dir` - The cache directory path (e.g., `~/.cache/vite-plus/js_runtime`)
+    /// * `cache_dir` - The managed runtime install dir (i.e. `VpDirs::js_runtime_dir()`,
+    ///   `<data>/js_runtime` — `~/.vite-plus/js_runtime` under the legacy layout)
     ///
     /// # Returns
     /// The highest LTS cached version that satisfies the requirement, or the
@@ -186,8 +191,7 @@ impl NodeProvider {
     ///
     /// Returns an error only if the download fails and no local cache exists.
     pub async fn fetch_version_index(&self) -> Result<Vec<NodeVersionEntry>, Error> {
-        let cache_dir = crate::cache::get_cache_dir()?;
-        let cache_path = cache_dir.join("node/index_cache.json");
+        let cache_path = VpDirs::js_runtime_dir().join("node").join(INDEX_CACHE_FILE);
 
         // Try to load from cache
         let Some(cache) = load_cache(&cache_path).await else {

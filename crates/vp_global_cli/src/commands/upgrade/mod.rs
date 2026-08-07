@@ -8,10 +8,10 @@ use std::process::ExitStatus;
 use owo_colors::OwoColorize;
 use vp_pm_cli::HttpClient;
 use vp_setup::{install, integrity, platform, registry};
-use vp_shared::output;
+use vp_shared::{VpDirs, output};
 use vt_path::AbsolutePathBuf;
 
-use crate::{commands::env::config::get_vp_home, error::Error};
+use crate::error::Error;
 
 /// Options for the upgrade command.
 pub struct UpgradeOptions {
@@ -34,7 +34,7 @@ pub struct UpgradeOptions {
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
-    let install_dir = get_vp_home()?;
+    let install_dir = VpDirs::data_dir();
 
     // Handle --rollback
     if options.rollback {
