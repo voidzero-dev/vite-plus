@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parse as parseYaml } from 'yaml';
+import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
+import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.js';
 import { VITE_PLUS_OVERRIDE_PACKAGES, VITEST_VERSION } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
@@ -31,6 +32,8 @@ const {
   rewriteMonorepo,
   rewriteMonorepoProject,
   detectPendingCoreMigration,
+  getScriptRulesYaml,
+  readRulesYaml,
   detectVitePlusBootstrapPending,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
@@ -8347,6 +8350,36 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
     expect((tsconfig.compilerOptions as { types: string[] }).types).toContain(
       'vite-plus/pack/client',
     );
+  });
+});
+
+function ruleIds(yaml: string): unknown[] {
+  return parseAllDocuments(yaml).map((document) => (document.toJS() as { id?: unknown })?.id);
+}
+
+describe('script rules YAML', () => {
+  it('keeps every rule when staged migration runs', () => {
+    expect(ruleIds(getScriptRulesYaml())).toContain('replace-lint-staged');
+  });
+
+  // Regression guard: the skip variant used to be built by splitting on blank lines, so
+  // a formatter that collapsed them dropped every rule and left ast-grep nothing to parse.
+  it('drops only the lint-staged rule when staged migration is skipped', () => {
+    const ids = ruleIds(getScriptRulesYaml(true));
+
+    expect(ids).toEqual(ruleIds(readRulesYaml()).filter((id) => id !== 'replace-lint-staged'));
+    expect(ids.every((id) => typeof id === 'string')).toBe(true);
+  });
+
+  it('still rewrites the remaining tools when staged migration is skipped', () => {
+    const scripts = { test: 'vitest', staged: 'lint-staged' };
+
+    const rewritten = rewriteScripts(JSON.stringify(scripts), getScriptRulesYaml(true));
+
+    expect(JSON.parse(rewritten!) as Record<string, string>).toEqual({
+      test: 'vp test',
+      staged: 'lint-staged',
+    });
   });
 });
 
