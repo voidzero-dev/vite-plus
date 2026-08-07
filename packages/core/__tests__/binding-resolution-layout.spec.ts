@@ -138,9 +138,20 @@ function buildGlobalVirtualStoreLayout(options: {
 }
 
 function runProject(root: string, env: Record<string, string> = {}) {
+  const childEnv: Record<string, string | undefined> = {
+    ...process.env,
+    NAPI_RS_ENFORCE_VERSION_CHECK: '',
+    ...env,
+  };
+  // The layout under test is a hermetic pnpm global virtual store. An ambient
+  // NODE_PATH (pnpm sets it to the outer repo's `.pnpm/node_modules` when tests
+  // run via `pnpm test`) would put real hoisted packages on the child's
+  // resolution path and defeat the isolation this test depends on — the real
+  // issue #2054 layout has no such NODE_PATH.
+  delete childEnv.NODE_PATH;
   try {
     const stdout = execFileSync(process.execPath, [path.join(root, 'project/main.cjs')], {
-      env: { ...process.env, NAPI_RS_ENFORCE_VERSION_CHECK: '', ...env },
+      env: childEnv,
       encoding: 'utf-8',
       timeout: 30_000,
     });
