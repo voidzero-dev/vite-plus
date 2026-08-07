@@ -7,7 +7,7 @@ import { updateExistingAgentInstructions } from '../utils/agent.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
 import { log, printHeader } from '../utils/terminal.ts';
-import { install, isHooksUserDisabled, resolveHooksDir } from './hooks.ts';
+import { install, isHooksUserDisabled, resolveHooksLocation } from './hooks.ts';
 
 async function main() {
   const args = mri(process.argv.slice(3), {
@@ -56,28 +56,41 @@ async function main() {
 
   // --- Step 1: Hooks setup ---
   // Prefer CLI flag, then last-used dir from local git config, then default.
-  const hooksDir = resolveHooksDir(dir);
-  const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
-
-  let shouldSetupHooks = !skipHooks;
-  if (shouldSetupHooks && isHooksUserDisabled()) {
-    // Honor `vp hooks disable` without re-prompting (option A).
-    log('skip install (hooks disabled; run `vp hooks enable` to re-enable)');
-    shouldSetupHooks = false;
-  } else if (shouldSetupHooks && interactive && isFirstHooksRun && !dir && !isLifecycleScript) {
-    // Explicit directories and lifecycle scripts already opt in.
-    shouldSetupHooks = await promptGitHooks({
-      interactive,
-      message: 'Install the Git hook dispatcher for this project?',
-    });
-  }
-
-  if (shouldSetupHooks) {
-    const { message, isError } = install(hooksDir);
-    if (message) {
-      log(message);
-      if (isError) {
+  // Skip location resolution entirely when `--no-hooks` so agent-only runs
+  // do not fail on a missing git repo or invalid `--hooks-dir`.
+  if (!skipHooks) {
+    const location = resolveHooksLocation(dir);
+    if ('isError' in location) {
+      if (location.message) {
+        log(location.message);
+      }
+      if (location.isError) {
         process.exit(1);
+      }
+    } else {
+      const isFirstHooksRun = !existsSync(join(location.baseDir, location.dir, '_', 'pre-commit'));
+
+      let shouldSetupHooks = true;
+      if (isHooksUserDisabled()) {
+        // Honor `vp hooks disable` without re-prompting (option A).
+        log('skip install (hooks disabled; run `vp hooks enable` to re-enable)');
+        shouldSetupHooks = false;
+      } else if (interactive && isFirstHooksRun && !dir && !isLifecycleScript) {
+        // Explicit directories and lifecycle scripts already opt in.
+        shouldSetupHooks = await promptGitHooks({
+          interactive,
+          message: 'Install the Git hook dispatcher for this project?',
+        });
+      }
+
+      if (shouldSetupHooks) {
+        const { message, isError } = install(dir);
+        if (message) {
+          log(message);
+          if (isError) {
+            process.exit(1);
+          }
+        }
       }
     }
   }

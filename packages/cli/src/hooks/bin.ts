@@ -1,12 +1,6 @@
 import mri from 'mri';
 
-import {
-  DEFAULT_HOOKS_DIR,
-  disable,
-  enable,
-  resolveHooksDir,
-  status,
-} from '../config/hooks.ts';
+import { DEFAULT_HOOKS_DIR, disable, enable, status } from '../config/hooks.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { log, printHeader } from '../utils/terminal.ts';
 
@@ -113,17 +107,16 @@ async function main() {
   }
 
   const dirFlag = args['hooks-dir'] as string | undefined;
-  const dir = resolveHooksDir(dirFlag);
 
   switch (subcommand) {
     case 'enable':
-      applyResult(enable(dir));
+      applyResult(enable(dirFlag));
       return;
     case 'disable':
-      applyResult(disable(dir));
+      applyResult(disable(dirFlag));
       return;
     case 'status':
-      applyResult(status(dirFlag ? dir : undefined));
+      applyResult(status(dirFlag));
       return;
   }
 }

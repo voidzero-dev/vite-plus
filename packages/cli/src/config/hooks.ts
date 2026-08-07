@@ -32,8 +32,11 @@ export const DEFAULT_HOOKS_DIR = '.vite-hooks';
 
 /** Local git config: user chose `vp hooks disable` (survives prepare / vp config). */
 const PREFERENCE_DISABLED_KEY = 'vp.hooks.disabled';
-/** Local git config: last hooks directory used by enable. */
+/** Local git config: last hooks directory used by enable (relative to setup cwd). */
 const PREFERENCE_DIR_KEY = 'vp.hooks.dir';
+/** Local git config: `git rev-parse --show-prefix` when the dir was stored. `.` = worktree root. */
+const PREFERENCE_PREFIX_KEY = 'vp.hooks.prefix';
+const ROOT_PREFIX_TOKEN = '.';
 
 // Build nested dirname expression: depth 3 → dirname "$(dirname "$(dirname "$0"))"
 function nestedDirname(depth: number): string {
@@ -264,6 +267,25 @@ export function setStoredHooksDir(dir: string): { ok: boolean; error?: string } 
   return gitConfigSet(PREFERENCE_DIR_KEY, dir);
 }
 
+function getStoredHooksPrefix(): string | null {
+  const value = gitConfigGet(PREFERENCE_PREFIX_KEY, { local: true });
+  if (value == null) {
+    return null;
+  }
+  if (value === ROOT_PREFIX_TOKEN) {
+    return '';
+  }
+  return value.replace(/\/$/, '');
+}
+
+function setStoredHooksLocation(dir: string, prefix: string): { ok: boolean; error?: string } {
+  const storedDir = gitConfigSet(PREFERENCE_DIR_KEY, dir);
+  if (!storedDir.ok) {
+    return storedDir;
+  }
+  return gitConfigSet(PREFERENCE_PREFIX_KEY, prefix || ROOT_PREFIX_TOKEN);
+}
+
 /**
  * Resolve the hooks directory: CLI flag > stored preference > default.
  */
@@ -272,6 +294,146 @@ export function resolveHooksDir(dir?: string): string {
     return dir;
   }
   return getStoredHooksDir() ?? DEFAULT_HOOKS_DIR;
+}
+
+export type HooksLocation = {
+  toplevel: string;
+  /** Absolute directory that was cwd when the hooks dir was chosen. */
+  baseDir: string;
+  /** Hooks directory relative to `baseDir`. */
+  dir: string;
+  /** `git rev-parse --show-prefix` of `baseDir` (empty at worktree root). */
+  prefix: string;
+  /** `core.hooksPath` value (git-root relative). */
+  target: string;
+};
+
+function displayHooksDir(location: HooksLocation): string {
+  return location.prefix ? `${location.prefix}/${location.dir}` : location.dir;
+}
+
+function getGitWorktree(): { toplevel: string; prefix: string } | InstallResult {
+  const toplevel = getGitToplevel();
+  if (typeof toplevel !== 'string') {
+    return toplevel;
+  }
+  const prefixResult = spawnSync('git', ['rev-parse', '--show-prefix']);
+  if (prefixResult.status == null) {
+    return { message: 'git command not found', isError: true };
+  }
+  if (prefixResult.status !== 0) {
+    return { message: ".git can't be found", isError: false };
+  }
+  const prefix = prefixResult.stdout.toString().trim().replace(/\/$/, '');
+  return { toplevel, prefix };
+}
+
+export type ResolveHooksLocationOptions = {
+  /**
+   * When nothing is stored, bind the default dir to the worktree root (`root`)
+   * or to the current git prefix (`cwd`). `enable` / `install` use `cwd` so a
+   * subdirectory install still works; `status` / `disable` use `root` so a
+   * nested cwd still finds the usual root dispatcher.
+   */
+  unstoredPrefix?: 'cwd' | 'root';
+  /**
+   * When nothing is stored, adopt `core.hooksPath` if it already points at a
+   * Vite+ dispatcher (`_/h`). Covers custom dirs and pre-`vp hooks` clones.
+   */
+  adoptEffectiveDispatcher?: boolean;
+};
+
+function buildHooksLocation(
+  git: { toplevel: string; prefix: string },
+  hooksDir: string,
+  prefix: string,
+): HooksLocation | InstallResult {
+  const dirError = validateHooksDir(hooksDir);
+  if (dirError) {
+    return dirError;
+  }
+  const baseDir = prefix ? resolve(git.toplevel, prefix) : git.toplevel;
+  const target = prefix ? `${prefix}/${hooksDir}/_` : `${hooksDir}/_`;
+  return { toplevel: git.toplevel, baseDir, dir: hooksDir, prefix, target };
+}
+
+function tryAdoptEffectiveDispatcher(git: {
+  toplevel: string;
+  prefix: string;
+}): HooksLocation | null {
+  const existing = getEffectiveHooksPath();
+  if (!existing) {
+    return null;
+  }
+  const abs = isAbsolute(existing) ? existing : resolve(git.toplevel, existing);
+  let dispatcherDir: string;
+  try {
+    dispatcherDir = realpathSync(abs);
+  } catch {
+    return null;
+  }
+  if (!existsSync(join(dispatcherDir, 'h'))) {
+    return null;
+  }
+  const hooksAbs = resolve(dispatcherDir, '..');
+  const relHooks = relative(git.toplevel, hooksAbs);
+  if (!relHooks || relHooks === '.' || relHooks.startsWith('..')) {
+    return null;
+  }
+  const posixRel = relHooks.split(sep).join('/');
+  let prefix = '';
+  let dir = posixRel;
+  if (posixRel === DEFAULT_HOOKS_DIR) {
+    prefix = '';
+    dir = DEFAULT_HOOKS_DIR;
+  } else if (posixRel.endsWith(`/${DEFAULT_HOOKS_DIR}`)) {
+    prefix = posixRel.slice(0, -(DEFAULT_HOOKS_DIR.length + 1));
+    dir = DEFAULT_HOOKS_DIR;
+  }
+  const location = buildHooksLocation(git, dir, prefix);
+  return 'isError' in location ? null : location;
+}
+
+/**
+ * Resolve where hook files live.
+ *
+ * An explicit `dir` is relative to the current working directory (current
+ * git prefix). Omitting it uses the stored dir + the prefix recorded at
+ * enable/disable time, so later commands find the same tree from any cwd.
+ */
+export function resolveHooksLocation(
+  dir?: string,
+  options: ResolveHooksLocationOptions = {},
+): HooksLocation | InstallResult {
+  const git = getGitWorktree();
+  if ('isError' in git) {
+    return git;
+  }
+
+  let prefix: string;
+  let hooksDir: string;
+  if (dir !== undefined) {
+    prefix = git.prefix;
+    hooksDir = dir;
+  } else {
+    const storedDir = getStoredHooksDir();
+    if (storedDir) {
+      hooksDir = storedDir;
+      prefix = getStoredHooksPrefix() ?? git.prefix;
+    } else if (options.adoptEffectiveDispatcher) {
+      const adopted = tryAdoptEffectiveDispatcher(git);
+      if (adopted) {
+        return adopted;
+      }
+      hooksDir = DEFAULT_HOOKS_DIR;
+      prefix = options.unstoredPrefix === 'root' ? '' : git.prefix;
+    } else {
+      hooksDir = DEFAULT_HOOKS_DIR;
+      prefix = options.unstoredPrefix === 'root' ? '' : git.prefix;
+    }
+  }
+
+  return buildHooksLocation(git, hooksDir, prefix);
 }
 
 function validateHooksDir(dir: string): InstallResult | null {
@@ -285,19 +447,6 @@ function validateHooksDir(dir: string): InstallResult | null {
     return { message: 'hooks directory must be a project subdirectory', isError: true };
   }
   return null;
-}
-
-function computeTarget(dir: string): { target: string } | InstallResult {
-  const prefixResult = spawnSync('git', ['rev-parse', '--show-prefix']);
-  if (prefixResult.status == null) {
-    return { message: 'git command not found', isError: true };
-  }
-  if (prefixResult.status !== 0) {
-    return { message: ".git can't be found", isError: false };
-  }
-  const rel = prefixResult.stdout.toString().trim().replace(/\/$/, '');
-  const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
-  return { target };
 }
 
 function getEffectiveHooksPath(): string {
@@ -367,7 +516,7 @@ export interface InstallOptions {
   ignoreUserPreference?: boolean;
 }
 
-export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): InstallResult {
+export function install(dir?: string, options: InstallOptions = {}): InstallResult {
   // VP_GIT_HOOKS is the canonical name; VITE_GIT_HOOKS is kept for backwards compatibility.
   if (
     process.env.HUSKY === '0' ||
@@ -382,32 +531,23 @@ export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): 
       isError: false,
     };
   }
-  const dirError = validateHooksDir(dir);
-  if (dirError) {
-    return dirError;
+  const location = resolveHooksLocation(dir);
+  if ('isError' in location) {
+    return location;
   }
-  const unsafeInstallPath = findUnsafeHookInstallPath(process.cwd(), dir);
+  const unsafeInstallPath = findUnsafeHookInstallPath(location.baseDir, location.dir);
   if (unsafeInstallPath) {
     return { message: describeUnsafeHookInstallPath(unsafeInstallPath), isError: false };
   }
-  // Use --show-prefix to get the relative path from git root to cwd.
-  // This avoids Windows path normalization issues (MSYS paths, 8.3 short names)
-  // that make path.relative() unreliable across git and Node.js representations.
-  const targetResult = computeTarget(dir);
-  if ('message' in targetResult) {
-    return targetResult;
-  }
-  const { target } = targetResult;
 
-  const internal = (x = '') => join(dir, '_', x);
+  const internal = (x = '') => join(location.baseDir, location.dir, '_', x);
   // Read the effective value so a worktree-scoped setting cannot silently
   // override the local value we are about to write.
   const existingHooksPath = getEffectiveHooksPath();
-  const toplevel = getGitToplevel();
-  if (typeof toplevel !== 'string') {
-    return toplevel;
-  }
-  if (existingHooksPath && !hooksPathsEqual(existingHooksPath, target, toplevel)) {
+  if (
+    existingHooksPath &&
+    !hooksPathsEqual(existingHooksPath, location.target, location.toplevel)
+  ) {
     return {
       message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
       isError: false,
@@ -417,13 +557,13 @@ export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): 
   rmSync(internal('husky.sh'), { force: true });
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
-  writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
+  writeFileSync(internal('h'), hookScript(location.dir), { mode: 0o755 });
   chmodSync(internal('h'), 0o755);
   for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
     writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
     chmodSync(internal(hook), 0o755);
   }
-  const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', target]);
+  const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', location.target]);
   if (status == null) {
     return { message: 'git command not found', isError: true };
   }
@@ -439,7 +579,7 @@ export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): 
       isError: true,
     };
   }
-  const storeDir = setStoredHooksDir(dir);
+  const storeDir = setStoredHooksLocation(location.dir, location.prefix);
   if (!storeDir.ok) {
     return { message: storeDir.error || 'failed to store hooks directory', isError: true };
   }
@@ -451,7 +591,11 @@ export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): 
  * Install (or refresh) the Vite+ hook dispatcher and mark hooks as enabled.
  * Clears a previous `vp hooks disable` preference.
  */
-export function enable(dir = DEFAULT_HOOKS_DIR): InstallResult {
+export function enable(dir?: string): InstallResult {
+  const location = resolveHooksLocation(dir);
+  if ('isError' in location) {
+    return location;
+  }
   const result = install(dir, { ignoreUserPreference: true });
   if (result.isError) {
     return result;
@@ -461,7 +605,7 @@ export function enable(dir = DEFAULT_HOOKS_DIR): InstallResult {
     return result;
   }
   return {
-    message: `Git hook dispatcher installed at ${dir}/_`,
+    message: `Git hook dispatcher installed at ${displayHooksDir(location)}/_`,
     isError: false,
   };
 }
@@ -474,24 +618,22 @@ export function enable(dir = DEFAULT_HOOKS_DIR): InstallResult {
  * - Removes the generated `<dir>/_` directory
  * - Leaves project-owned hooks, staged config, and package.json scripts alone
  */
-export function disable(dir = DEFAULT_HOOKS_DIR): InstallResult {
-  const dirError = validateHooksDir(dir);
-  if (dirError) {
-    return dirError;
+export function disable(dir?: string): InstallResult {
+  const location = resolveHooksLocation(dir, {
+    unstoredPrefix: 'root',
+    adoptEffectiveDispatcher: true,
+  });
+  if ('isError' in location) {
+    return location;
   }
-
-  const targetResult = computeTarget(dir);
-  if ('message' in targetResult) {
-    return targetResult;
-  }
-  const { target } = targetResult;
-  const internalDir = join(dir, '_');
+  const displayedDir = displayHooksDir(location);
+  const internalDir = join(location.baseDir, location.dir, '_');
   const hasInternalDir = existsSync(internalDir);
 
   // Refuse unsafe trees before any git config mutation so we never leave a
   // partial teardown (hooksPath cleared but `_/` still present).
   if (hasInternalDir) {
-    const unsafeInstallPath = findUnsafeHookInstallPath(process.cwd(), dir);
+    const unsafeInstallPath = findUnsafeHookInstallPath(location.baseDir, location.dir);
     if (unsafeInstallPath) {
       return {
         message: describeUnsafeHookInstallPath(unsafeInstallPath),
@@ -501,13 +643,10 @@ export function disable(dir = DEFAULT_HOOKS_DIR): InstallResult {
   }
 
   const existingHooksPath = getEffectiveHooksPath();
-  const toplevel = getGitToplevel();
-  if (typeof toplevel !== 'string') {
-    return toplevel;
-  }
-  const ownsHooksPath = !!existingHooksPath && hooksPathsEqual(existingHooksPath, target, toplevel);
+  const ownsHooksPath =
+    !!existingHooksPath && hooksPathsEqual(existingHooksPath, location.target, location.toplevel);
   const foreignHooksPath =
-    !!existingHooksPath && !hooksPathsEqual(existingHooksPath, target, toplevel);
+    !!existingHooksPath && !hooksPathsEqual(existingHooksPath, location.target, location.toplevel);
 
   const actions: string[] = [];
   const notes: string[] = [];
@@ -518,14 +657,14 @@ export function disable(dir = DEFAULT_HOOKS_DIR): InstallResult {
   if (!pref.ok) {
     return { message: pref.error || 'failed to persist hooks disabled preference', isError: true };
   }
-  const storeDir = setStoredHooksDir(dir);
+  const storeDir = setStoredHooksLocation(location.dir, location.prefix);
   if (!storeDir.ok) {
     return { message: storeDir.error || 'failed to store hooks directory', isError: true };
   }
   actions.push('recorded disable preference (local git config)');
 
   if (ownsHooksPath) {
-    const unsetError = unsetOwnedHooksPath(target);
+    const unsetError = unsetOwnedHooksPath(location.target);
     if (unsetError) {
       return {
         message: `${unsetError.message}; disable preference was recorded (local git config). Run \`vp hooks enable\` to clear it, or \`git config --local --unset vp.hooks.disabled\``,
@@ -535,16 +674,16 @@ export function disable(dir = DEFAULT_HOOKS_DIR): InstallResult {
     actions.push(`unset core.hooksPath (was "${existingHooksPath}")`);
   } else if (foreignHooksPath) {
     notes.push(
-      `core.hooksPath is set to "${existingHooksPath}" (not Vite+ dispatcher "${target}"), left unchanged`,
+      `core.hooksPath is set to "${existingHooksPath}" (not Vite+ dispatcher "${location.target}"), left unchanged`,
     );
   }
 
   if (hasInternalDir) {
     rmSync(internalDir, { recursive: true, force: true });
-    actions.push(`removed ${internalDir}`);
+    actions.push(`removed ${displayedDir}/_`);
   }
 
-  const summary = `Git hooks disabled: ${actions.join('; ')}. Project-owned hooks under ${dir}/ and staged config were left unchanged. Run \`vp hooks enable\` to re-enable.`;
+  const summary = `Git hooks disabled: ${actions.join('; ')}. Project-owned hooks under ${displayedDir}/ and staged config were left unchanged. Run \`vp hooks enable\` to re-enable.`;
   if (notes.length > 0) {
     return { message: `${summary} ${notes.join('; ')}.`, isError: false };
   }
@@ -555,42 +694,25 @@ export function disable(dir = DEFAULT_HOOKS_DIR): InstallResult {
  * Report whether Vite+ hooks are set up, disabled by preference, and active.
  */
 export function status(dir?: string): InstallResult & { status?: HooksStatus } {
-  const hooksDir = resolveHooksDir(dir);
-  if (dir) {
-    const dirError = validateHooksDir(dir);
-    if (dirError) {
-      return dirError;
-    }
-  } else {
-    const dirError = validateHooksDir(hooksDir);
-    if (dirError) {
-      return dirError;
-    }
+  const location = resolveHooksLocation(dir, {
+    unstoredPrefix: 'root',
+    adoptEffectiveDispatcher: true,
+  });
+  if ('isError' in location) {
+    return location;
   }
-
-  const prefixResult = spawnSync('git', ['rev-parse', '--show-prefix']);
-  if (prefixResult.status == null) {
-    return { message: 'git command not found', isError: true };
-  }
-  if (prefixResult.status !== 0) {
-    return { message: ".git can't be found", isError: false };
-  }
-
-  const rel = prefixResult.stdout.toString().trim().replace(/\/$/, '');
-  const target = rel ? `${rel}/${hooksDir}/_` : `${hooksDir}/_`;
+  const hooksDir = displayHooksDir(location);
   const existingHooksPath = getEffectiveHooksPath();
   const userDisabled = isHooksUserDisabled();
-  const dispatcherInstalled = existsSync(join(hooksDir, '_', 'h'));
-  const toplevel = getGitToplevel();
-  if (typeof toplevel !== 'string') {
-    return toplevel;
-  }
-  const ownsHooksPath = !!existingHooksPath && hooksPathsEqual(existingHooksPath, target, toplevel);
+  const dispatcherInstalled = existsSync(join(location.baseDir, location.dir, '_', 'h'));
+  const ownsHooksPath =
+    !!existingHooksPath && hooksPathsEqual(existingHooksPath, location.target, location.toplevel);
 
   let projectHooks: string[] = [];
-  if (existsSync(hooksDir)) {
+  const hooksDirPath = join(location.baseDir, location.dir);
+  if (existsSync(hooksDirPath)) {
     try {
-      projectHooks = readdirSync(hooksDir, { withFileTypes: true })
+      projectHooks = readdirSync(hooksDirPath, { withFileTypes: true })
         .filter((entry) => entry.isFile() && SUPPORTED_GIT_HOOK_NAMES.includes(entry.name))
         .map((entry) => entry.name)
         .toSorted();
