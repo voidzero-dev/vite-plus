@@ -10,10 +10,10 @@
 use std::{io::Write, process::ExitStatus};
 
 use vp_js_runtime::NodeProvider;
-use vp_shared::output;
+use vp_shared::{VpDirs, output};
 use vt_path::AbsolutePathBuf;
 
-use super::config::{get_config_path, load_config};
+use super::config::load_config;
 use crate::{cli::PinTarget, error::Error};
 
 /// Node version file name
@@ -76,7 +76,7 @@ async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let config = load_config().await?;
     match config.default_node_version {
         Some(version) => {
-            let config_path = get_config_path()?;
+            let config_path = VpDirs::config_dir().join("config.json");
             println!("No version pinned.");
             println!("  Using default: {version} (from {})", config_path.as_path().display());
         }
@@ -583,7 +583,6 @@ pub async fn do_unpin(
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use tempfile::TempDir;
     use vt_path::AbsolutePathBuf;
 
@@ -690,19 +689,14 @@ mod tests {
     }
 
     #[tokio::test]
-    // Run serially: mutates VP_HOME env var which affects invalidate_cache()
-    #[serial]
     async fn test_do_unpin_invalidates_cache() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Point VP_HOME to temp dir
-        unsafe {
-            std::env::set_var(vp_shared::env_vars::VP_HOME, temp_path.as_path());
-        }
-
-        // Create cache file manually
-        let cache_dir = temp_path.join("cache");
+        // Sandboxed legacy layout: pin VP_HOME to the install root so cache
+        // is `<root>/cache` (and stays isolated under async thread pools).
+        let install_root = temp_path.join(".vite-plus");
+        let cache_dir = install_root.join("cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
         let cache_file = cache_dir.join("resolve_cache.json");
         std::fs::write(&cache_file, r#"{"version":2,"entries":{}}"#).unwrap();
@@ -710,6 +704,9 @@ mod tests {
             std::fs::metadata(cache_file.as_path()).is_ok(),
             "Cache file should exist before unpin"
         );
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
+            install_root.as_path(),
+        ));
 
         // Create .node-version and unpin
         let node_version_path = temp_path.join(".node-version");
@@ -722,27 +719,16 @@ mod tests {
             std::fs::metadata(cache_file.as_path()).is_err(),
             "Cache file should be removed after unpin"
         );
-
-        // Cleanup
-        unsafe {
-            std::env::remove_var(vp_shared::env_vars::VP_HOME);
-        }
     }
 
-    // Run serially: mutates VP_HOME env var which affects invalidate_cache()
     #[tokio::test]
-    #[serial]
     async fn test_do_pin_invalidates_cache() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Point VP_HOME to temp dir
-        unsafe {
-            std::env::set_var(vp_shared::env_vars::VP_HOME, temp_path.as_path());
-        }
-
-        // Create cache file manually
-        let cache_dir = temp_path.join("cache");
+        // Sandboxed legacy layout (see test_do_unpin_invalidates_cache).
+        let install_root = temp_path.join(".vite-plus");
+        let cache_dir = install_root.join("cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
         let cache_file = cache_dir.join("resolve_cache.json");
         std::fs::write(&cache_file, r#"{"version":2,"entries":{}}"#).unwrap();
@@ -750,6 +736,9 @@ mod tests {
             std::fs::metadata(cache_file.as_path()).is_ok(),
             "Cache file should exist before pin"
         );
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
+            install_root.as_path(),
+        ));
 
         // Pin an exact version (no_install=true to skip download, force=true to skip prompt)
         let result = do_pin(&temp_path, "20.18.0", true, true, None).await;
@@ -766,11 +755,6 @@ mod tests {
             std::fs::metadata(cache_file.as_path()).is_err(),
             "Cache file should be removed after pin"
         );
-
-        // Cleanup
-        unsafe {
-            std::env::remove_var(vp_shared::env_vars::VP_HOME);
-        }
     }
 
     #[tokio::test]

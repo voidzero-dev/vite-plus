@@ -32,6 +32,8 @@ webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
+temp-env = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

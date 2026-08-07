@@ -307,6 +307,8 @@ jobs:
   # Post (or update) a single sticky PR comment with the preview image tag after
   # it publishes. Re-runs reuse the same comment via the hidden marker instead of
   # creating a new one.
+  # Split / legacy-upgrade install coverage lives in test-standalone-install.yml
+  # (local branch build + install.sh, no bridge dependency).
   comment-docker-preview:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&

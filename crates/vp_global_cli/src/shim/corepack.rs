@@ -17,7 +17,7 @@
 //! injected when not explicitly set, and Vite+-owned shims are restored
 //! afterwards if corepack removed or replaced them.
 
-use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
+use vp_shared::{PrependOptions, VpDirs, env_vars, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use super::{
@@ -29,7 +29,7 @@ use super::{
 };
 use crate::commands::env::{
     bin_config::{BinConfig, BinSource},
-    config, setup,
+    setup,
 };
 
 /// Binary names corepack `enable`/`disable` may create or remove in the
@@ -58,23 +58,12 @@ pub(crate) async fn dispatch_corepack(args: &[String]) -> i32 {
     // restore any Vite+-owned shims corepack removed or replaced. The arg
     // check runs first so the common path skips bin-dir resolution entirely.
     if is_corepack_link_command(args) {
-        match config::get_bin_dir() {
-            Ok(bin_dir) => {
-                full_args.extend(inject_install_directory(args, &bin_dir));
-                let owned_shims = snapshot_vp_owned_shims(&bin_dir).await;
-                let exit_code = exec::spawn_tool(&program, &full_args);
-                restore_vp_owned_shims(&bin_dir, &owned_shims).await;
-                return exit_code;
-            }
-            Err(e) => {
-                // Without a bin dir there is nothing to inject or restore;
-                // run corepack as-is, but say so instead of failing silently.
-                output::warn(&format!(
-                    "Cannot resolve the Vite+ bin directory ({e}); running corepack without \
-                     an --install-directory default, created launchers may not be on PATH"
-                ));
-            }
-        }
+        let bin_dir = VpDirs::bin_dir();
+        full_args.extend(inject_install_directory(args, &bin_dir));
+        let owned_shims = snapshot_vp_owned_shims(&bin_dir).await;
+        let exit_code = exec::spawn_tool(&program, &full_args);
+        restore_vp_owned_shims(&bin_dir, &owned_shims).await;
+        return exit_code;
     }
 
     // The bundled corepack and native binaries have no leading args; exec

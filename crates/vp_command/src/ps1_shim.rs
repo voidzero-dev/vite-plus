@@ -7,9 +7,10 @@
 //! `PowerShell` sidesteps the prompt and lets Ctrl+C propagate cleanly.
 //!
 //! The rewrite is scoped to two patterns:
-//!   - Inside `$VP_HOME` (`~/.vite-plus` by default) — vp's managed shims:
-//!     - `$VP_HOME/js_runtime/node/<ver>/{npm,npx}.cmd`,
-//!     - `$VP_HOME/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
+//!   - Inside vp's data directory (`~/.vite-plus` legacy root, or the split
+//!     data dir — see [`VpDirs::data_dir`]) — vp's managed shims:
+//!     - `<data>/js_runtime/node/<ver>/{npm,npx}.cmd`,
+//!     - `<data>/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
 //!   - Any `<...>/node_modules/.bin/*.cmd` — the canonical layout for
 //!     npm/pnpm/yarn-emitted shims (cmd-shim writes both `.cmd` and `.ps1`
 //!     so the wrappers stay equivalent).
@@ -31,6 +32,7 @@
 
 use std::ffi::OsString;
 
+use vp_shared::VpDirs;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powershell_host};
 
@@ -46,8 +48,8 @@ use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powe
 /// - no `PowerShell` host (`pwsh.exe` or `powershell.exe`) is on PATH,
 /// - stdin is not a terminal (the `.ps1` wrappers hang on piped/null
 ///   stdin and the Ctrl+C concern doesn't apply without a TTY),
-/// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is
-///   unresolvable) AND not under any `node_modules/.bin/`,
+/// - the resolved path is outside the vite-plus install root
+///   AND not under any `node_modules/.bin/`,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
@@ -58,19 +60,24 @@ pub fn rewrite_cmd_to_powershell(
     // our stdin means a TTY in the child too. `is_stdin_terminal` is shared with
     // `vt_plan::ps1_shim` via the `vt_powershell` crate.
     let host = powershell_host()?;
-    rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
+    let install_root = vp_home();
+    rewrite_in_scope(
+        resolved,
+        install_root.as_ref().map(AsRef::as_ref),
+        host,
+        is_stdin_terminal(),
+    )
 }
 
-/// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
-/// Returns `None` if `vp_shared::get_vp_home()` failed; the rewrite still
-/// applies to `node_modules/.bin/*.cmd` paths in that case (the two scopes
-/// are independent).
-fn vp_home() -> Option<&'static AbsolutePathBuf> {
-    use std::sync::LazyLock;
-
-    static VP_HOME: LazyLock<Option<AbsolutePathBuf>> =
-        LazyLock::new(|| vp_shared::get_vp_home().ok());
-    VP_HOME.as_ref()
+/// The vite-plus data directory (`~/.vite-plus` under the legacy layout; the
+/// split data directory otherwise). Resolved per call so env/test overrides
+/// are observed, matching the `VpDirs` recompute-on-every-call contract.
+///
+/// The returned value is always `Some`; the `Option` only exists because the
+/// rewrite scope check also applies to `node_modules/.bin/*.cmd` paths, which
+/// are independent of the install root.
+fn vp_home() -> Option<AbsolutePathBuf> {
+    Some(VpDirs::data_dir())
 }
 
 /// Pure rewrite logic. Factored out so tests can drive it on any platform

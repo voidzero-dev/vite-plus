@@ -1,8 +1,9 @@
 //! Setup command implementation for creating bin directory and shims.
 //!
-//! Creates the following structure:
-//! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx/corepack shims
-//! - ~/.vite-plus/current/ - Contains the actual vp CLI binary
+//! Creates the following structure (legacy layout shown; under the split
+//! layout the bin dir and data dir are separate, see [`VpDirs`]):
+//! - <bin>/     - Contains vp symlink and node/npm/npx/corepack shims
+//! - <data>/current/ - Contains the actual vp CLI binary
 //!
 //! On Unix:
 //! - bin/vp is a symlink to the active vp binary
@@ -17,7 +18,8 @@
 
 use std::process::ExitStatus;
 
-use super::config::{get_bin_dir, get_vp_home};
+use vp_shared::VpDirs;
+
 use crate::{error::Error, help};
 
 /// Shells that get a generated `~/.vite-plus/env.*` setup script.
@@ -46,13 +48,11 @@ pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "corepack", "vpx"
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
-    let vite_plus_home = get_vp_home()?;
-
-    // Ensure home directory exists (env files are written here)
-    tokio::fs::create_dir_all(&vite_plus_home).await?;
+    // Ensure the env-scripts directory exists (env files are written here)
+    tokio::fs::create_dir_all(&VpDirs::config_dir()).await?;
 
     // Create env files with PATH guard (prevents duplicate PATH entries)
-    create_env_files(&vite_plus_home).await?;
+    create_env_files().await?;
 
     if env_only {
         println!("{}", help::render_heading("Setup"));
@@ -61,7 +61,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
         return Ok(ExitStatus::default());
     }
 
-    let bin_dir = get_bin_dir()?;
+    let bin_dir = VpDirs::bin_dir();
 
     println!("{}", help::render_heading("Setup"));
     println!("  Preparing vite-plus environment.");
@@ -144,7 +144,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     }
 
     println!();
-    print_path_instructions(&bin_dir);
+    print_path_instructions(&VpDirs::config_dir());
 
     Ok(ExitStatus::default())
 }
@@ -219,14 +219,24 @@ pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
     bin_dir: &vt_path::AbsolutePath,
 ) -> Result<std::path::PathBuf, Error> {
-    if let Some(vite_plus_home) = bin_dir.parent() {
-        let standalone_vp = vite_plus_home.join("current").join("bin").join("vp");
-        if tokio::fs::try_exists(&standalone_vp).await.unwrap_or(false) {
-            let standalone_vp = tokio::fs::canonicalize(&standalone_vp).await.ok();
-            let current_exe = tokio::fs::canonicalize(current_exe).await.ok();
-            if standalone_vp.is_some() && standalone_vp == current_exe {
-                return Ok(std::path::PathBuf::from("../current/bin/vp"));
+    // `current/bin/vp` is the symlink-stable entry point: `current` is
+    // retargeted on upgrade, so shims pointing through it never dangle when
+    // old version directories are pruned. Resolve it via `VpDirs` so both the
+    // legacy and split layouts are covered (under the split layout `bin_dir`
+    // is not a child of the data dir).
+    let standalone_vp = VpDirs::current_dir().join("bin").join(vp_shared::VP_BINARY_NAME);
+    if tokio::fs::try_exists(&standalone_vp).await.unwrap_or(false) {
+        let standalone_canonical = tokio::fs::canonicalize(&standalone_vp).await.ok();
+        let current_exe_canonical = tokio::fs::canonicalize(current_exe).await.ok();
+        if standalone_canonical.is_some() && standalone_canonical == current_exe_canonical {
+            // Prefer a target relative to the bin dir so a relocated install
+            // root keeps working.
+            if let Some(root) = bin_dir.parent()
+                && let Ok(relative) = standalone_vp.as_path().strip_prefix(root.as_path())
+            {
+                return Ok(std::path::Path::new("..").join(relative));
             }
+            return Ok(standalone_vp.into_path_buf());
         }
     }
 
@@ -519,7 +529,6 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
-export VP_HOME="__VP_HOME__"
 __vp_bin="__VP_BIN__"
 case ":${PATH}:" in
     *":${__vp_bin}:"*)
@@ -567,7 +576,6 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-set -gx VP_HOME "__VP_HOME__"
 set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
@@ -603,7 +611,6 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-$env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
@@ -664,7 +671,6 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-$env:VP_HOME = "__VP_HOME_WIN__"
 $__vp_bin = "__VP_BIN_WIN__"
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
@@ -725,8 +731,10 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
+// Locates the real vp.exe next to the bin dir: `<base>\current\bin\vp.exe`
+// (legacy layout) or `<base>\data\current\bin\vp.exe` (split layout).
 #[cfg(windows)]
-const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset VP_HOME=%~dp0..\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
+const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset \"VP_EXE=%~dp0..\\current\\bin\\vp.exe\"\r\nif not exist \"%VP_EXE%\" set \"VP_EXE=%~dp0..\\data\\current\\bin\\vp.exe\"\r\nfor /f \"delims=\" %%i in ('%VP_EXE% env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
 fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
@@ -752,37 +760,26 @@ fn render_nu_path_ref(path_ref: &str) -> String {
     }
 }
 
-/// Render the env-file content for `shell` against `vite_plus_home`.
-fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -> String {
-    let bin_path = vite_plus_home.join("bin");
+/// Render the env-file content for `shell` against the resolved [`VpDirs`].
+fn render_env_content(shell: EnvShell) -> String {
+    let bin_path = VpDirs::bin_dir();
     let home_dir = vp_shared::EnvConfig::get().user_home;
     let home_dir = home_dir.as_deref();
-    let home_path_ref = render_home_relative_path(vite_plus_home.as_path(), home_dir);
     let bin_path_ref = render_home_relative_path(bin_path.as_path(), home_dir);
 
     match shell {
-        EnvShell::Posix => ENV_TEMPLATE_POSIX
-            .replace("__VP_HOME__", &home_path_ref)
-            .replace("__VP_BIN__", &bin_path_ref),
-        EnvShell::Fish => ENV_TEMPLATE_FISH
-            .replace("__VP_HOME__", &home_path_ref)
-            .replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Posix => ENV_TEMPLATE_POSIX.replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Fish => ENV_TEMPLATE_FISH.replace("__VP_BIN__", &bin_path_ref),
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
-            let home_path_ref_nu = render_nu_path_ref(&home_path_ref);
             let bin_path_ref_nu = render_nu_path_ref(&bin_path_ref);
-            ENV_TEMPLATE_NU
-                .replace("__VP_HOME__", &home_path_ref_nu)
-                .replace("__VP_BIN__", &bin_path_ref_nu)
+            ENV_TEMPLATE_NU.replace("__VP_BIN__", &bin_path_ref_nu)
         }
         EnvShell::Powershell => {
             // PowerShell uses the actual absolute path (not $HOME-relative)
-            let home_path_win = vite_plus_home.as_path().display().to_string();
             let bin_path_win = bin_path.as_path().display().to_string();
-            ENV_TEMPLATE_PS1
-                .replace("__VP_HOME_WIN__", &home_path_win)
-                .replace("__VP_BIN_WIN__", &bin_path_win)
+            ENV_TEMPLATE_PS1.replace("__VP_BIN_WIN__", &bin_path_win)
         }
     }
 }
@@ -794,22 +791,20 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
 /// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
-async fn create_env_files(vite_plus_home: &vt_path::AbsolutePath) -> Result<(), Error> {
+async fn create_env_files() -> Result<(), Error> {
+    let env_dir = VpDirs::config_dir();
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-        let content = render_env_content(shell, vite_plus_home);
-        tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
+        let content = render_env_content(shell);
+        tokio::fs::write(env_dir.join(shell.env_file_name()), content).await?;
     }
 
     Ok(())
 }
 
-/// Print instructions for adding bin directory to PATH.
-fn print_path_instructions(bin_dir: &vt_path::AbsolutePath) {
-    // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
-    let home_path = bin_dir
-        .parent()
-        .map(|p| p.as_path().display().to_string())
-        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+/// Print instructions for sourcing the env files from `env_dir`.
+fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
+    // Use the $HOME prefix for readability when the env dir is under $HOME
+    let home_path = env_dir.as_path().display().to_string();
     let (home_path, nu_home_path) = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = home_path.strip_prefix(&home_dir) {
             // POSIX/Fish use $HOME; Nushell's `source` is a parse-time keyword
@@ -879,12 +874,20 @@ mod tests {
         assert!(!crate::commands::global::CORE_SHIMS.contains(&"corepack"));
     }
 
-    /// Helper: create a test_guard with user_home set to the given path.
-    fn home_guard(home: impl Into<std::path::PathBuf>) -> vp_shared::TestEnvGuard {
-        vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            user_home: Some(home.into()),
+    /// Set up a sandboxed legacy layout for env-file rendering tests.
+    ///
+    /// Pins `vite_plus_home` to `<home>/.vite-plus` (reliable under async
+    /// thread pools) and `user_home` to `home` so env scripts can render
+    /// `$HOME/.vite-plus/...`. Returns the EnvConfig guard and the legacy root.
+    fn legacy_home(home: &std::path::Path) -> (vp_shared::TestEnvGuard, AbsolutePathBuf) {
+        let root = home.join(".vite-plus");
+        std::fs::create_dir_all(&root).unwrap();
+        let guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
+            vite_plus_home: Some(root.clone()),
+            user_home: Some(home.to_path_buf()),
             ..vp_shared::EnvConfig::for_test()
-        })
+        });
+        (guard, AbsolutePathBuf::new(root).unwrap())
     }
 
     #[cfg(windows)]
@@ -921,10 +924,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_creates_all_files() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let env_path = home.join("env");
         let env_fish_path = home.join("env.fish");
@@ -939,10 +941,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_nu_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
         assert!(
@@ -950,8 +951,8 @@ mod tests {
             "env.nu should not contain __VP_BIN__ placeholder"
         );
         assert!(
-            nu_content.contains("~/bin"),
-            "env.nu should reference ~/bin (not $HOME/bin — Nushell does not expand $HOME in string literals)"
+            nu_content.contains("~/.vite-plus/bin"),
+            "env.nu should reference ~/.vite-plus/bin (not $HOME/bin — Nushell does not expand $HOME in string literals)"
         );
         assert!(
             nu_content.contains("VP_ENV_USE_EVAL_ENABLE"),
@@ -967,11 +968,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_replaces_placeholder_with_home_relative_path() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join("vp_home")).unwrap();
-        let _guard = home_guard(temp_dir.path());
-        tokio::fs::create_dir_all(&home).await.unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
@@ -987,64 +986,69 @@ mod tests {
             !fish_content.contains("__VP_BIN__"),
             "env.fish file should not contain __VP_BIN__ placeholder"
         );
+
+        // VP_HOME is gone: the CLI locates its install root from the
+        // executable path, so the env scripts must not set it.
+        for (name, content) in [
+            ("env", &env_content),
+            ("env.fish", &fish_content),
+            ("env.nu", &nu_content),
+            ("env.ps1", &ps1_content),
+        ] {
+            assert!(
+                !content.contains("VP_HOME"),
+                "{name} should not reference VP_HOME, got: {content}"
+            );
+        }
+
+        // Should use $HOME-relative path since the bin dir is under HOME
         assert!(
-            !env_content.contains("__VP_HOME__") && !fish_content.contains("__VP_HOME__"),
-            "env files should not contain __VP_HOME__ placeholder"
+            env_content.contains("$HOME/.vite-plus/bin"),
+            "env file should reference $HOME/.vite-plus/bin, got: {env_content}"
         );
         assert!(
-            !nu_content.contains("__VP_HOME__") && !ps1_content.contains("__VP_HOME_WIN__"),
-            "env files should not contain VP_HOME placeholders"
+            fish_content.contains("$HOME/.vite-plus/bin"),
+            "env.fish file should reference $HOME/.vite-plus/bin, got: {fish_content}"
+        );
+        assert!(
+            nu_content.contains("~/.vite-plus/bin"),
+            "env.nu file should reference ~/.vite-plus/bin, got: {nu_content}"
         );
 
-        // Should use $HOME-relative path since install dir is under HOME
+        let expected_bin = home.join("bin").as_path().display().to_string();
         assert!(
-            env_content.contains("$HOME/vp_home/bin"),
-            "env file should reference $HOME/vp_home/bin, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains("$HOME/vp_home/bin"),
-            "env.fish file should reference $HOME/vp_home/bin, got: {fish_content}"
-        );
-        assert!(
-            env_content.contains("export VP_HOME=\"$HOME/vp_home\""),
-            "env file should export VP_HOME, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains("set -gx VP_HOME \"$HOME/vp_home\""),
-            "env.fish file should export VP_HOME, got: {fish_content}"
-        );
-        assert!(
-            nu_content.contains("$env.VP_HOME = (\"~/vp_home\" | path expand --no-symlink)"),
-            "env.nu file should set home-relative VP_HOME, got: {nu_content}"
-        );
-        assert!(
-            nu_content.contains("~/vp_home/bin"),
-            "env.nu file should reference ~/vp_home/bin, got: {nu_content}"
-        );
-
-        let expected_home = home.as_path().display().to_string();
-        assert!(
-            ps1_content.contains(&format!("$env:VP_HOME = \"{expected_home}\"")),
-            "env.ps1 file should set VP_HOME, got: {ps1_content}"
+            ps1_content.contains(&format!("$__vp_bin = \"{expected_bin}\"")),
+            "env.ps1 file should set the bin dir, got: {ps1_content}"
         );
     }
 
     #[tokio::test]
-    async fn test_create_env_files_uses_absolute_path_when_not_under_home() {
+    async fn test_create_env_files_uses_absolute_path_when_bin_not_under_home() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        // Set user_home to a different path so install dir is NOT under HOME
-        let _guard = home_guard("/nonexistent-home-dir");
+        let home = temp_dir.path().join("home");
+        // Bin directory outside HOME via VP_BIN_DIR override (split layout).
+        let outside_bin = temp_dir.path().join("outside-bin");
+        std::fs::create_dir_all(&outside_bin).unwrap();
+        // Split layout: user home without a grandfathered ~/.vite-plus, plus an
+        // explicit bin override (VP_HOME must stay unset so VpEnvs can win).
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
+            user_home: Some(home),
+            vp_bin_dir: Some(outside_bin.clone()),
+            ..vp_shared::EnvConfig::for_test()
+        });
 
-        create_env_files(&home).await.unwrap();
+        assert!(!VpDirs::is_legacy_layout(), "no .vite-plus under home → split layout");
+        tokio::fs::create_dir_all(VpDirs::config_dir().as_path()).await.unwrap();
 
-        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        create_env_files().await.unwrap();
 
-        // Should use absolute path since install dir is not under HOME
-        let expected_bin = home.join("bin");
-        let expected_str = expected_bin.as_path().display().to_string().replace('\\', "/");
-        let expected_home = home.as_path().display().to_string().replace('\\', "/");
+        let env_content =
+            tokio::fs::read_to_string(VpDirs::config_dir().join("env")).await.unwrap();
+        let fish_content =
+            tokio::fs::read_to_string(VpDirs::config_dir().join("env.fish")).await.unwrap();
+
+        // Should use the absolute path since the bin dir is not under HOME
+        let expected_str = outside_bin.display().to_string().replace('\\', "/");
         assert!(
             env_content.contains(&expected_str),
             "env file should use absolute path {expected_str}, got: {env_content}"
@@ -1053,26 +1057,32 @@ mod tests {
             fish_content.contains(&expected_str),
             "env.fish file should use absolute path {expected_str}, got: {fish_content}"
         );
-        assert!(
-            env_content.contains(&format!("export VP_HOME=\"{expected_home}\"")),
-            "env file should export absolute VP_HOME {expected_home}, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains(&format!("set -gx VP_HOME \"{expected_home}\"")),
-            "env.fish file should export absolute VP_HOME {expected_home}, got: {fish_content}"
-        );
 
-        // Should NOT use $HOME-relative path
-        assert!(!env_content.contains("$HOME/bin"), "env file should not reference $HOME/bin");
+        // Should NOT use a $HOME-relative path for the bin dir
+        assert!(
+            !env_content.contains("export PATH=\"$HOME"),
+            "env file should not reference a $HOME-relative bin, got: {env_content}"
+        );
+    }
+
+    #[test]
+    fn test_render_home_relative_path_falls_back_to_absolute_outside_home() {
+        let (path, home) = if cfg!(windows) {
+            (r"C:\install\vp", r"C:\Users\vp")
+        } else {
+            ("/opt/vp", "/home/vp")
+        };
+        let rendered =
+            render_home_relative_path(std::path::Path::new(path), Some(std::path::Path::new(home)));
+        assert_eq!(rendered, path.replace('\\', "/"));
     }
 
     #[tokio::test]
     async fn test_create_env_files_posix_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
@@ -1100,10 +1110,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_fish_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
 
@@ -1122,16 +1131,15 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_is_idempotent() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
         // Create env files twice
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
         let first_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let first_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
         let first_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
         let second_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let second_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
         let second_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
@@ -1144,10 +1152,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_posix_contains_vp_shell_function() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
@@ -1171,10 +1178,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_fish_contains_vp_function() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
 
@@ -1193,10 +1199,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_ps1_contains_vp_function() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
@@ -1215,27 +1220,30 @@ mod tests {
     #[serial_test::serial]
     async fn test_execute_creates_cmd_wrapper_in_fresh_home() {
         let temp_dir = TempDir::new().unwrap();
-        let fresh_home = temp_dir.path().join("new-vite-plus");
         let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
-        let _env_guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vite_plus_home: Some(fresh_home.clone()),
-            user_home: Some(temp_dir.path().to_path_buf()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        // Fresh home (no `.vite-plus` yet): the split layout is selected and
+        // setup creates the bin directory.
+        let _env_guard = vp_shared::EnvConfig::test_guard(
+            vp_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
-        assert!(!fresh_home.exists(), "VP_HOME should not exist before initial setup");
+        let bin_dir = VpDirs::bin_dir();
+        assert!(!bin_dir.as_path().exists(), "bin dir should not exist before initial setup");
         let status = execute(false, false).await.unwrap();
 
         assert!(status.success(), "initial vp env setup should succeed");
-        let bin_dir = AbsolutePathBuf::new(fresh_home.join("bin")).unwrap();
         let cmd_content = tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
         assert!(
-            cmd_content.contains("set VP_HOME=%~dp0..\r\nfor /f"),
-            "vp-use.cmd should set VP_HOME before invoking vp env use, got: {cmd_content}"
+            !cmd_content.contains("VP_HOME"),
+            "vp-use.cmd should not set VP_HOME, got: {cmd_content}"
         );
         assert!(
-            cmd_content.contains("%~dp0..\\current\\bin\\vp.exe env use %*"),
-            "vp-use.cmd should invoke the install-local vp.exe"
+            cmd_content.contains("%~dp0..\\current\\bin\\vp.exe"),
+            "vp-use.cmd should try the legacy-layout vp.exe first, got: {cmd_content}"
+        );
+        assert!(
+            cmd_content.contains("%~dp0..\\data\\current\\bin\\vp.exe"),
+            "vp-use.cmd should fall back to the split-layout vp.exe, got: {cmd_content}"
         );
     }
 
@@ -1243,12 +1251,11 @@ mod tests {
     #[cfg(unix)]
     async fn test_create_env_files_does_not_create_cmd_wrapper_on_unix() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         tokio::fs::create_dir_all(&bin_dir).await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         assert!(
             !bin_dir.join("vp-use.cmd").as_path().exists(),
@@ -1259,31 +1266,36 @@ mod tests {
     #[tokio::test]
     async fn test_execute_env_only_creates_home_dir_and_env_files() {
         let temp_dir = TempDir::new().unwrap();
-        let fresh_home = temp_dir.path().join("new-vite-plus");
-        // Directory does NOT exist yet — execute should create it
+        // Fresh user home (no `.vite-plus`, no VP_HOME): split layout; execute
+        // creates the env-scripts config directory under that home.
+        // Use a nested home that does not yet exist so the assertion is
+        // meaningful (TempDir itself already exists on disk).
+        let home = temp_dir.path().join("user-home");
         let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vite_plus_home: Some(fresh_home.clone()),
-            user_home: Some(temp_dir.path().to_path_buf()),
+            user_home: Some(home),
             ..vp_shared::EnvConfig::for_test()
         });
+
+        let env_dir = VpDirs::config_dir();
+        assert!(!env_dir.as_path().exists(), "env dir should not exist before initial setup");
 
         let status = execute(false, true).await.unwrap();
         assert!(status.success(), "execute --env-only should succeed");
 
         // Directory should now exist
-        assert!(fresh_home.exists(), "VP_HOME directory should be created");
+        assert!(env_dir.as_path().exists(), "env directory should be created");
 
         // Env files should be written
-        assert!(fresh_home.join("env").exists(), "env file should be created");
-        assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
-        assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
+        assert!(env_dir.join("env").as_path().exists(), "env file should be created");
+        assert!(env_dir.join("env.fish").as_path().exists(), "env.fish file should be created");
+        assert!(env_dir.join("env.ps1").as_path().exists(), "env.ps1 file should be created");
     }
 
     #[tokio::test]
     #[cfg(unix)]
     async fn test_unix_vp_shim_target_prefers_standalone_layout_for_current_exe() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         let standalone_vp = home.join("current").join("bin").join("vp");
 
@@ -1298,9 +1310,35 @@ mod tests {
 
     #[tokio::test]
     #[cfg(unix)]
+    async fn test_unix_vp_shim_target_prefers_standalone_layout_under_split_dirs() {
+        // Split layout: bin dir (`~/.local/bin`) is not the data dir's child,
+        // so the shim target must be derived from `VpDirs`, not `bin_dir/..`.
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join("user-home");
+        let bin_dir = AbsolutePathBuf::new(home.join(".local/bin")).unwrap();
+        let data_dir = home.join(".local/share/vite-plus");
+        let standalone_vp = data_dir.join("current").join("bin").join("vp");
+
+        tokio::fs::create_dir_all(standalone_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&standalone_vp, b"vp").await.unwrap();
+
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
+            vp_data_dir: Some(data_dir.clone()),
+            user_home: Some(home.clone()),
+            ..vp_shared::EnvConfig::for_test()
+        });
+
+        let target = resolve_unix_vp_shim_target(standalone_vp.as_path(), &bin_dir).await.unwrap();
+
+        assert_eq!(target, std::path::Path::new("../share/vite-plus/current/bin/vp"));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
     async fn test_unix_vp_shim_target_uses_current_exe_when_standalone_is_stale() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         let standalone_vp = home.join("current").join("bin").join("vp");
         let external_vp = temp_dir.path().join("external-vp");
@@ -1319,7 +1357,7 @@ mod tests {
     #[cfg(unix)]
     async fn test_unix_vp_shim_target_uses_current_exe_without_standalone_layout() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         let external_vp = temp_dir.path().join("external-vp");
 
@@ -1335,7 +1373,7 @@ mod tests {
     #[cfg(unix)]
     async fn test_create_shim_replaces_stale_unix_symlink_without_refresh() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         let standalone_vp = home.join("current").join("bin").join("vp");
         let external_vp = temp_dir.path().join("external-vp");
@@ -1358,7 +1396,7 @@ mod tests {
     #[cfg(unix)]
     async fn test_create_shim_replaces_broken_unix_symlink_without_refresh() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         let external_vp = temp_dir.path().join("external-vp");
         let node_shim = bin_dir.join("node");
@@ -1378,7 +1416,7 @@ mod tests {
     #[cfg(unix)]
     async fn test_setup_vp_wrapper_replaces_stale_unix_symlink_without_refresh() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let (_guard, home) = legacy_home(temp_dir.path());
         let bin_dir = home.join("bin");
         let standalone_vp = home.join("current").join("bin").join("vp");
         let external_vp = temp_dir.path().join("external-vp");
@@ -1418,10 +1456,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_env_files_contains_dynamic_completion() {
         let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        let (_guard, home) = legacy_home(temp_dir.path());
 
-        create_env_files(&home).await.unwrap();
+        create_env_files().await.unwrap();
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();

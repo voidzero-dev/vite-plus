@@ -74,7 +74,7 @@ Updates keep the version spec a package was installed with: a package installed 
 ::: warning
 These commands do **NOT** interact with the underlying package manager's global installation directory.
 
-Instead, Vite+ manages its own global packages under `VP_HOME/packages`, allowing them to remain available across different Node.js versions.
+Instead, Vite+ manages its own global packages in the `packages` subdirectory of its data directory (`VP_HOME/packages` in the legacy `~/.vite-plus` layout; see [Directory Layout and XDG Variables](/guide/installer-env-vars#directory-layout-and-xdg-variables)), allowing them to remain available across different Node.js versions.
 
 As a result, commands such as `vp link` do not affect Vite+'s global packages and will not appear in `vp list -g`.
 :::

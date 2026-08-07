@@ -21,7 +21,7 @@ latest LTS.
 
 When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
-By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VP_HOME`.
+Fresh installs store the managed runtime and related files in a split XDG-style layout — resolved per category from `VP_BIN_DIR`/`VP_DATA_DIR`/`VP_CACHE_DIR`, the `XDG_*` base directories, and platform defaults. Installs that already have `~/.vite-plus` keep the legacy monolithic layout (grandfathered; nothing is moved). The `VP_HOME` variable is deprecated but still honored as the highest-priority layout rule, so older env scripts and custom-location installs that export it keep working; the installers also accept it as an override selecting the legacy layout. See [Directory Layout and XDG Variables](/guide/installer-env-vars#directory-layout-and-xdg-variables). References to `VP_HOME` paths below use the legacy layout; under the split layout, substitute the corresponding bin/config/data/state directory.
 
 If you want to keep that behavior, run:
 
@@ -43,7 +43,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 
 ### Setup
 
-- `vp env setup` creates or updates shims in `VP_HOME/bin` (and writes the per-shell setup scripts under `VP_HOME`)
+- `vp env setup` creates or updates shims in the Vite+ bin directory (`VP_HOME/bin` in the legacy layout) and writes the per-shell setup scripts to the config directory (`VP_HOME` in the legacy layout)
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
@@ -51,6 +51,9 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
 
 ```powershell
+# Split layout (fresh installs)
+. "$env:APPDATA\vite-plus\env.ps1"
+# Legacy layout (existing ~/.vite-plus installs)
 . "$env:USERPROFILE\.vite-plus\env.ps1"
 ```
 
@@ -76,9 +79,9 @@ node --version
 vp-use --unset
 ```
 
-Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the Vite+ bin directory (`VP_HOME/bin` in the legacy layout) on Windows.
 
-In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
+In CI, `vp env use` can still run without shell initialization. It writes a temporary session file to the Vite+ state directory (`VP_HOME` in the legacy layout) so later shim calls in the same job can resolve the selected Node.js version.
 
 ### Manage
 
@@ -144,7 +147,7 @@ Vite+ creates a `corepack` shim by default, so corepack works without a system N
 - On Node.js 25 and later, where corepack is no longer bundled, Vite+ installs corepack as a managed global package on first use. Only the `corepack` binary is linked; run `vp install -g corepack` yourself if you also want the package's pnpm/yarn launchers exposed directly.
 - If you install corepack explicitly with `vp install -g corepack`, that installation is always preferred.
 
-`corepack enable` normally creates `pnpm`/`yarn` launchers next to the corepack binary, which under Vite+ would not be on `PATH`. The shim fixes this by defaulting `--install-directory` to `VP_HOME/bin`, so after `corepack enable` the launchers are available everywhere and still resolve the project's Node.js and package-manager versions:
+`corepack enable` normally creates `pnpm`/`yarn` launchers next to the corepack binary, which under Vite+ would not be on `PATH`. The shim fixes this by defaulting `--install-directory` to the Vite+ bin directory (`VP_HOME/bin` in the legacy layout), so after `corepack enable` the launchers are available everywhere and still resolve the project's Node.js and package-manager versions:
 
 ```bash
 corepack enable               # pnpm and yarn now resolve via corepack

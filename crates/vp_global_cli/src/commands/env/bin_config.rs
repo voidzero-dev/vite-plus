@@ -8,9 +8,9 @@
 //! - Safe uninstall (only removes binaries owned by the package)
 
 use serde::{Deserialize, Serialize};
+use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
-use super::config::get_vp_home;
 use crate::error::Error;
 
 /// Source that installed a binary.
@@ -52,9 +52,10 @@ impl BinConfig {
         Self { name, package, version: String::new(), node_version, source: BinSource::Npm }
     }
 
-    /// Get the bins directory path (~/.vite-plus/bins/).
+    /// Get the bins directory path (`<data>/bins/`; `~/.vite-plus/bins/` under
+    /// the legacy layout — identical on disk).
     pub fn bins_dir() -> Result<AbsolutePathBuf, Error> {
-        Ok(get_vp_home()?.join("bins"))
+        Ok(VpDirs::bins_dir())
     }
 
     /// Get the path to a binary's config file.

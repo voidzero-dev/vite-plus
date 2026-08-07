@@ -9,6 +9,7 @@ use vp_pm_cli::{
     PackageManagerResolution, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
+use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
 use super::config::resolve_version;
@@ -75,9 +76,8 @@ pub async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Err
     let resolution = resolve_version(&cwd).await?;
     let package_manager = resolve_package_manager_info(&cwd);
 
-    // Get the home directory for this version
-    let home_dir =
-        vp_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolution.version);
+    // Get the install directory for this version
+    let home_dir = VpDirs::js_runtime_dir().join("node").join(&resolution.version);
 
     #[cfg(windows)]
     let (node_path, npm_path, npx_path) =

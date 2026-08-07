@@ -1,16 +1,24 @@
 # command_env_setup_external_vp
 
-## `vpt mkdir -p external home`
+## `vpt mkdir -p external/current/bin external/bin external/js_runtime/node/22.18.0/bin`
 
-Prepare isolated external install and VP_HOME
-
-
-## `vpt cp $VP_HOME/bin/vp external/vp`
-
-Simulate a Homebrew-style vp outside VP_HOME
+A second, complete legacy install outside the case home
 
 
-## `vpt chmod +x external/vp`
+## `vpt cp $VP_HOME/current/bin/vp external/current/bin/vp`
+
+The external install's vp binary
+
+
+## `vpt cp $VP_HOME/current/bin/vp external/bin/vp`
+
+Marks the external layout as a legacy install for detection
+
+
+## `vpt chmod +x external/current/bin/vp`
+
+
+## `vpt chmod +x external/bin/vp`
 
 
 ## `vpt write-file .node-version '22.18.0
@@ -19,30 +27,30 @@ Simulate a Homebrew-style vp outside VP_HOME
 Project Node.js version
 
 
-## `vpt write-file home/js_runtime/node/22.18.0/bin/node '#'\!'/bin/sh
+## `vpt write-file external/js_runtime/node/22.18.0/bin/node '#'\!'/bin/sh
 echo vp-managed-node-22.18.0
 '`
 
 Preinstall managed Node runtime
 
 
-## `vpt chmod +x home/js_runtime/node/22.18.0/bin/node`
+## `vpt chmod +x external/js_runtime/node/22.18.0/bin/node`
 
 
-## `VP_HOME=${workspace}/home ./external/vp env setup`
+## `VP_HOME=${workspace}/external ./external/current/bin/vp env setup`
 
-Setup shims from external vp
+env setup targets the external install via VP_HOME
 
 
 ## `node assert-shims.mjs`
 
-Shims should point to external vp, not VP_HOME/current/bin/vp
+Shims point to the external install's vp, not the case home's
 
 ```
-all shims point to external vp
+all shims point to the external install
 ```
 
-## `VP_HOME=${workspace}/home PATH=${workspace}/home/bin:${PATH} node -v`
+## `VP_HOME=${workspace}/external PATH=${workspace}/external/bin:${PATH} node -v`
 
 node shim uses the project version
 

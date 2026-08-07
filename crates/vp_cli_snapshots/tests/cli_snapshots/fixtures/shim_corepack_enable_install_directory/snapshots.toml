@@ -3,6 +3,9 @@ name = "shim_corepack_enable_install_directory"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
+  # Pin an isolated legacy root at ${workspace}/home (the case HOME dir, not
+  # the provisioned ${workspace}/home/.vite-plus). Fakes live under that root
+  # so seed runtime under .vite-plus cannot shadow them.
   { argv = ["vpt", "mkdir", "-p", "home/js_runtime/node/22.18.0/bin"], comment = "Isolated VP_HOME with a fake managed Node runtime layout", snapshot = false },
   { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], comment = "Project Node.js version", snapshot = false },
   { argv = ["vpt", "write-file", "home/js_runtime/node/22.18.0/bin/node", "#!/bin/sh\necho fake-node\n"], comment = "Fake node binary", snapshot = false },

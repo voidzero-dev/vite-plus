@@ -435,6 +435,8 @@ jobs:
 
       - name: Install Global CLI vp
         run: |
+          # Grandfather legacy root until snapshot/CI paths fully use split layout (#2371).
+          mkdir -p "${USERPROFILE:-$HOME}/.vite-plus"
           pnpm bootstrap-cli:ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
@@ -846,7 +848,8 @@ jobs:
             echo "Error: $VP_HOME still exists after implode"
             exit 1
           fi
-          # Reinstall
+          # Reinstall (re-seed legacy root for grandfather until #2371)
+          mkdir -p "${USERPROFILE:-$HOME}/.vite-plus"
           pnpm bootstrap-cli:ci
           vp --version
 
@@ -875,6 +878,7 @@ jobs:
             Write-Error "$vpHome still exists after implode"
             exit 1
           }
+          New-Item -ItemType Directory -Force -Path (Join-Path $HOME '.vite-plus') | Out-Null
           pnpm bootstrap-cli:ci
           vp --version
 
@@ -898,6 +902,7 @@ jobs:
             echo Error: .vite-plus still exists after implode
             exit /b 1
           )
+          mkdir "%USERPROFILE%\.vite-plus" 2>NUL
           pnpm bootstrap-cli:ci
           vp --version
 
@@ -943,7 +948,10 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Install Global CLI vp
-        run: pnpm bootstrap-cli:ci
+        run: |
+          # Grandfather legacy root until snapshot fixtures use split layout (#2371).
+          mkdir -p "$HOME/.vite-plus"
+          pnpm bootstrap-cli:ci
 
       # Provision the managed runtime once into the real home so cases can
       # seed from it (seed-runtime) instead of each downloading ~50MB.
@@ -1030,7 +1038,10 @@ jobs:
 
       - name: Install Global CLI vp
         shell: bash
-        run: pnpm bootstrap-cli:ci
+        run: |
+          # Grandfather legacy root until snapshot fixtures use split layout (#2371).
+          mkdir -p "$USERPROFILE/.vite-plus"
+          pnpm bootstrap-cli:ci
 
       # Provision the managed runtime once into the real home so cases can
       # seed from it (seed-runtime) instead of each downloading ~50MB.
@@ -1131,6 +1142,8 @@ jobs:
               cp ./package/rolldown-binding.linux-x64-musl.node ./rolldown/packages/rolldown/dist/shared/
               rm -rf package *.tgz
 
+              # Grandfather legacy root until CI paths fully use split layout (#2371).
+              mkdir -p /root/.vite-plus
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
@@ -1240,6 +1253,8 @@ jobs:
 
       - name: Build CLI
         run: |
+          # Grandfather legacy root until CI paths fully use split layout (#2371).
+          mkdir -p "$HOME/.vite-plus"
           pnpm bootstrap-cli:ci
           echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
 
@@ -1357,6 +1372,8 @@ jobs:
 
       - name: Build CLI
         run: |
+          # Grandfather legacy root until CI paths fully use split layout (#2371).
+          mkdir -p "${USERPROFILE:-$HOME}/.vite-plus"
           pnpm bootstrap-cli:ci
           # Mirror the per-OS path form used by the `test` job (ci.yml ~L266):
           # GITHUB_PATH on Windows needs a Windows-style path, otherwise child

@@ -5,7 +5,7 @@
 
 use std::{path::Path, process::ExitStatus};
 
-use vp_shared::{env_vars, output};
+use vp_shared::{VpDirs, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{config, list::list_installed_versions};
@@ -13,9 +13,8 @@ use crate::error::Error;
 
 /// Execute the clean command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
-    let node_dir = home_dir.join("js_runtime").join("node");
-    let package_manager_dir = home_dir.join("package_manager");
+    let node_dir = VpDirs::js_runtime_dir().join("node");
+    let package_manager_dir = VpDirs::package_manager_dir();
     let protected_versions = protected_node_versions(&cwd).await?;
 
     let corepack_cleaned = run_corepack_cache_clean(&cwd).await?;
@@ -138,7 +137,7 @@ async fn corepack_cache_clean_would_auto_install(
     cwd: &AbsolutePathBuf,
     corepack_path: &AbsolutePath,
 ) -> Result<bool, Error> {
-    let bin_dir = config::get_bin_dir()?;
+    let bin_dir = VpDirs::bin_dir();
     if corepack_path.parent() != Some(&bin_dir) {
         return Ok(false);
     }

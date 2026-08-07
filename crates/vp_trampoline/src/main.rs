@@ -19,6 +19,22 @@ use std::{
     process::{self, Command, ExitStatus},
 };
 
+/// Locate the real `vp.exe` relative to the install base dir (the parent of
+/// the bin dir the trampoline copy lives in).
+///
+/// Legacy layout first (`<base>/current/bin/vp.exe`, where the bin dir is
+/// `<base>/bin`), then the split layout (`<base>/data/current/bin/vp.exe`,
+/// where the bin dir is a separate `<base>/bin`). Returns the path and
+/// whether it is the legacy layout; `None` if neither exists.
+fn locate_vp_exe(base: &std::path::Path) -> Option<(std::path::PathBuf, bool)> {
+    let legacy = base.join("current").join("bin").join("vp.exe");
+    if legacy.is_file() {
+        return Some((legacy, true));
+    }
+    let split = base.join("data").join("current").join("bin").join("vp.exe");
+    split.is_file().then_some((split, false))
+}
+
 /// Preserve Unix signal termination using the shell's `128 + signal` convention.
 fn exit_code_from_status(status: ExitStatus) -> i32 {
     #[cfg(unix)]
@@ -37,10 +53,19 @@ fn main() {
     let tool_name =
         exe_path.file_stem().and_then(|s| s.to_str()).unwrap_or_else(|| process::exit(1));
 
-    // 2. Locate vp.exe: <bin_dir>/../current/bin/vp.exe
+    // 2. Locate vp.exe: legacy `<base>/current/bin/vp.exe` first, then the
+    //    split layout's `<base>/data/current/bin/vp.exe`.
     let bin_dir = exe_path.parent().unwrap_or_else(|| process::exit(1));
-    let vp_home = bin_dir.parent().unwrap_or_else(|| process::exit(1));
-    let vp_exe = vp_home.join("current").join("bin").join("vp.exe");
+    let base = bin_dir.parent().unwrap_or_else(|| process::exit(1));
+    let (vp_exe, is_legacy) = locate_vp_exe(base).unwrap_or_else(|| {
+        use std::io::Write;
+        let stderr = std::io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(b"vite-plus: could not locate vp.exe under ");
+        let _ = handle.write_all(base.as_os_str().as_encoded_bytes());
+        let _ = handle.write_all(b" (tried current\\bin and data\\current\\bin)\n");
+        process::exit(1);
+    });
 
     // 3. Install Ctrl+C handler that ignores signals (child will handle them).
     //    This prevents the "Terminate batch job (Y/N)?" prompt.
@@ -48,13 +73,20 @@ fn main() {
     install_ctrl_handler();
 
     // 4. Spawn vp.exe
-    //    - Always set VP_HOME so vp.exe uses the correct home directory
-    //      (matches what the old .cmd wrappers did with %~dp0..)
+    //    - Legacy layout: pin the root via deprecated VP_HOME so vp.exe uses
+    //      the full monolithic mapping (config/state live under the root;
+    //      VP_*_DIR alone cannot express that). Only needed for custom /
+    //      non-`~/.vite-plus` roots — standard Home Exist would already win,
+    //      but pinning is cheap and keeps PATH-only installs correct.
+    //    - Split layout: no override; platform defaults + self-location of
+    //      `<base>/data/current/bin/vp.exe` match.
     //    - If tool is "vp", run in normal CLI mode (no VP_SHIM_TOOL)
     //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
     let mut cmd = Command::new(&vp_exe);
     cmd.args(env::args_os().skip(1));
-    cmd.env("VP_HOME", vp_home);
+    if is_legacy {
+        cmd.env("VP_HOME", base);
+    }
 
     if tool_name != "vp" {
         cmd.env("VP_SHIM_TOOL", tool_name);
@@ -83,14 +115,53 @@ fn main() {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn preserves_signal_exit_code() {
         let status = Command::new("/bin/sh").arg("-c").arg("kill -ILL $$").status().unwrap();
         assert_eq!(exit_code_from_status(status), 132);
+    }
+
+    fn test_base(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("vp-trampoline-test-{name}-{}", process::id()))
+    }
+
+    #[test]
+    fn locate_vp_exe_prefers_legacy_layout() {
+        let base = test_base("legacy");
+        let legacy_dir = base.join("current").join("bin");
+        std::fs::create_dir_all(&legacy_dir).unwrap();
+        std::fs::write(legacy_dir.join("vp.exe"), b"MZ").unwrap();
+
+        assert_eq!(locate_vp_exe(&base).unwrap(), (legacy_dir.join("vp.exe"), true));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn locate_vp_exe_falls_back_to_split_layout() {
+        let base = test_base("split");
+        let split_dir = base.join("data").join("current").join("bin");
+        std::fs::create_dir_all(&split_dir).unwrap();
+        std::fs::write(split_dir.join("vp.exe"), b"MZ").unwrap();
+
+        assert_eq!(locate_vp_exe(&base).unwrap(), (split_dir.join("vp.exe"), false));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn locate_vp_exe_returns_none_when_absent() {
+        let base = test_base("absent");
+        std::fs::create_dir_all(&base).unwrap();
+
+        assert!(locate_vp_exe(&base).is_none());
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
 

@@ -82,9 +82,10 @@ export function installGlobalCli() {
   }
 
   try {
-    const installDir = process.env.VP_HOME
-      ? path.resolve(process.env.VP_HOME)
-      : path.join(os.homedir(), '.vite-plus');
+    // Match install.sh / VpDirs resolution: do not force VP_HOME. Prefer
+    // explicit VP_*_DIR / deprecated VP_HOME from the environment; otherwise
+    // grandfather ~/.vite-plus when present, else the split platform data dir.
+    const installDir = resolveInstallDataDir();
 
     // Locate the Rust vp binary (built by cargo or copied by CI)
     const binaryName = isWindows ? 'vp.exe' : 'vp';
@@ -134,7 +135,6 @@ export function installGlobalCli() {
       ...(process.env as Record<string, string>),
       VP_LOCAL_TGZ: tgzPath,
       VP_LOCAL_BINARY: binaryPath,
-      VP_HOME: installDir,
       VP_VERSION: localDevVer,
       CI: 'true',
       // Skip vp install in install.sh — we handle deps ourselves:
@@ -188,6 +188,36 @@ function getTargetDirs(): string[] {
     dirs.unshift(process.env.CARGO_TARGET_DIR);
   }
   return dirs;
+}
+
+/**
+ * Data dir for CLI versions + `current`, mirroring install.sh / VpDirs:
+ * VP_HOME (deprecated) → existing ~/.vite-plus → absolute VP_DATA_DIR →
+ * XDG_DATA_HOME / platform default.
+ *
+ * Relative VP_DATA_DIR is ignored (same as XDG / install.sh).
+ */
+function resolveInstallDataDir(): string {
+  if (process.env.VP_HOME) {
+    return path.resolve(process.env.VP_HOME);
+  }
+  const legacy = path.join(os.homedir(), '.vite-plus');
+  if (existsSync(legacy)) {
+    return legacy;
+  }
+  const vpDataDir = process.env.VP_DATA_DIR;
+  if (vpDataDir && path.isAbsolute(vpDataDir)) {
+    return vpDataDir;
+  }
+  if (isWindows) {
+    const localAppData = process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local');
+    return path.join(localAppData, 'vite-plus', 'data');
+  }
+  const xdgData = process.env.XDG_DATA_HOME;
+  if (xdgData && path.isAbsolute(xdgData)) {
+    return path.join(xdgData, 'vite-plus');
+  }
+  return path.join(os.homedir(), '.local', 'share', 'vite-plus');
 }
 
 function removeInstallPath(targetPath: string) {

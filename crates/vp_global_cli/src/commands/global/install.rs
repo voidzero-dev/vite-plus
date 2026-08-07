@@ -15,14 +15,14 @@ use owo_colors::OwoColorize;
 use tokio::process::Command;
 use uuid::Uuid;
 use vp_js_runtime::NodeProvider;
-use vp_shared::{format_path_prepended, output};
+use vp_shared::{VpDirs, format_path_prepended, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use crate::{
     commands::{
         env::{
             bin_config::BinConfig,
-            config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
+            config::{get_node_modules_dir, resolve_version, resolve_version_alias},
             package_metadata::{PackageMetadata, is_legacy_install_id, is_nested_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec, update_version_spec},
@@ -381,16 +381,7 @@ pub async fn install(
         }
 
         // 4.3 Prepare metadata and remove binaries that the new install no longer provides.
-        let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
-            Ok(bin_dir) => bin_dir,
-            Err(error) => {
-                let _ = cleanup_failed_install(&install_dir).await;
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                continue;
-            }
-        };
+        let bin_dir = VpDirs::bin_dir();
         let metadata_version = installed_version.as_deref().unwrap_or("unknown");
 
         let mut metadata = PackageMetadata::new(
@@ -966,7 +957,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     };
 
     if dry_run {
-        let bin_dir = get_bin_dir()?;
+        let bin_dir = VpDirs::bin_dir();
         let package_dir = match &metadata {
             Some(metadata) => metadata.installation_dir()?,
             None => PackageMetadata::installation_dir_for(&package_name, "")?,
@@ -991,7 +982,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     }
 
     // Remove shims and bin configs
-    let bin_dir = get_bin_dir()?;
+    let bin_dir = VpDirs::bin_dir();
     for bin_name in &bins {
         remove_package_shim(&bin_dir, bin_name).await?;
         BinConfig::delete(bin_name).await?;
@@ -1400,7 +1391,9 @@ mod tests {
         let _env_guard =
             vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
 
-        // Create bin directory
+        // `for_test_with_home` pins the legacy root at `temp_path` itself
+        // (VP_HOME Set mapping), so shims live at `<home>/bin` — matching
+        // `VpDirs::bin_dir()` / uninstall, not `<home>/.vite-plus/bin`.
         let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
         tokio::fs::create_dir_all(&bin_dir).await.unwrap();
 
@@ -1535,7 +1528,10 @@ mod tests {
         let _trampoline_guard = FakeTrampolineGuard::new(&temp_path);
         let _env_guard =
             vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
+
+        // `for_test_with_home` pins the legacy root at `temp_path` itself.
         let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
 
         let mut previous_metadata = PackageMetadata::new(
             "test-package".to_string(),

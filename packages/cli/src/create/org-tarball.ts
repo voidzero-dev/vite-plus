@@ -8,9 +8,40 @@ import { parseTarGzip } from 'nanotar';
 import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
 
-function getCacheRoot(): string {
-  const home = process.env.VP_HOME || path.join(os.homedir(), '.vite-plus');
-  return path.join(home, 'tmp', 'create-org');
+// Exported for tests.
+export function getCacheRoot(): string {
+  // The global CLI injects VP_CACHE_DIR under the split (XDG) layout; this
+  // fallback only runs for out-of-band invocations. Never default to
+  // `~/.vite-plus` when it doesn't already exist — creating it would trip
+  // the CLI's legacy-layout detection and flip a split install back to
+  // legacy.
+  const cacheDir = process.env.VP_CACHE_DIR;
+  if (cacheDir) {
+    return path.join(cacheDir, 'create-org');
+  }
+  const legacyHome = process.env.VP_HOME || path.join(os.homedir(), '.vite-plus');
+  if (process.env.VP_HOME || fs.existsSync(legacyHome)) {
+    return path.join(legacyHome, 'tmp', 'create-org');
+  }
+  // Split-layout platform cache default, mirroring VpDirs::cache_dir.
+  return path.join(getPlatformCacheDir(), 'create-org');
+}
+
+/**
+ * Platform cache directory for a fresh split-layout install
+ * (`$XDG_CACHE_HOME/vite-plus` or `~/.cache/vite-plus` on Unix,
+ * `%LOCALAPPDATA%\vite-plus\cache` on Windows). Kept in sync with
+ * `crates/vp_shared/src/dirs/resolution.rs`.
+ */
+function getPlatformCacheDir(): string {
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    return path.join(localAppData, 'vite-plus', 'cache');
+  }
+  // Relative XDG values are treated as unset, per the XDG Base Directory Spec.
+  const xdgCache = process.env.XDG_CACHE_HOME;
+  const base = xdgCache && path.isAbsolute(xdgCache) ? xdgCache : path.join(os.homedir(), '.cache');
+  return path.join(base, 'vite-plus');
 }
 
 /**

@@ -5,12 +5,19 @@ permissions: {}
 on:
   workflow_dispatch:
   pull_request:
+    # Released-CLI jobs seed ~/.vite-plus so install.sh/ps1 take the Exist
+    # (grandfather) branch against npm latest. Layout jobs build the branch
+    # CLI and exercise fresh split install + legacy upgrade + implode.
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'packages/tools/src/install-global-cli.ts'
       - 'crates/vp_installer/**'
       - 'crates/vp_pm_cli/**'
       - 'crates/vp_setup/**'
+      - 'crates/vp_shared/**'
+      - 'crates/vp_global_cli/**'
+      - 'crates/vp_trampoline/**'
       - '.github/workflows/test-standalone-install.yml'
 
 concurrency:
@@ -39,6 +46,9 @@ jobs:
             name: macOS ARM64
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Seed legacy root (released CLI uses grandfather path)
+        run: mkdir -p "$HOME/.vite-plus"
 
       - name: Run install.sh
         run: cat packages/cli/install.sh | bash
@@ -130,6 +140,7 @@ jobs:
 
       - name: Run install.sh
         run: |
+          mkdir -p "$HOME/.vite-plus"
           output=$(cat packages/cli/install.sh | bash 2>&1) || {
             echo "$output"
             echo "Install script exited with non-zero status"
@@ -169,13 +180,14 @@ jobs:
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
-              cat /workspace/packages/cli/install.sh | bash
+              # Escape \$HOME so the container expands it (not the GHA host).
+              mkdir -p \"\$HOME/.vite-plus\" && cat /workspace/packages/cli/install.sh | bash
               if [ -f ~/.profile ]; then
                 source ~/.profile
               elif [ -f ~/.bashrc ]; then
                 source ~/.bashrc
               else
-                export PATH="$HOME/.vite-plus/bin:$PATH"
+                export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
               fi
 
               vp --version
@@ -228,7 +240,8 @@ jobs:
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
-              cat /workspace/packages/cli/install.sh | bash
+              # Escape \$HOME so the container expands it (not the GHA host).
+              mkdir -p \"\$HOME/.vite-plus\" && cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
@@ -285,7 +298,8 @@ jobs:
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
-              cat /workspace/packages/cli/install.sh | bash
+              # Escape \$HOME so the container expands it (not the GHA host).
+              mkdir -p \"\$HOME/.vite-plus\" && cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
@@ -330,13 +344,11 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Pin VP_HOME to USERPROFILE
-        # Namespace's Windows runners run jobs under a service account whose real
-        # profile (C:\Windows\system32\config\systemprofile) differs from
-        # %USERPROFILE%; vp resolves its home from the OS profile. Pin VP_HOME so
-        # the install, generated shims, and these assertions share one location.
+      - name: Seed legacy root under USERPROFILE
+        # Seed ~/.vite-plus so install takes the grandfather (Exist) branch
+        # under the runner profile (same as VpDirs Home rule).
         shell: bash
-        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+        run: mkdir -p "$USERPROFILE/.vite-plus"
 
       - name: Assert PowerShell 5.x
         shell: powershell
@@ -420,6 +432,10 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      - name: Seed legacy root (released CLI uses grandfather path)
+        shell: bash
+        run: mkdir -p "$USERPROFILE/.vite-plus"
+
       - name: Run install.ps1
         shell: pwsh
         run: |
@@ -487,13 +503,11 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Pin VP_HOME to USERPROFILE
-        # Namespace's Windows runners run jobs under a service account whose real
-        # profile (C:\Windows\system32\config\systemprofile) differs from
-        # %USERPROFILE%; vp resolves its home from the OS profile. Pin VP_HOME so
-        # the install, generated shims, and these assertions share one location.
+      - name: Seed legacy root under USERPROFILE
+        # Seed ~/.vite-plus so install takes the grandfather (Exist) branch
+        # under the runner profile (same as VpDirs Home rule).
         shell: bash
-        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+        run: mkdir -p "$USERPROFILE/.vite-plus"
 
       - name: Install PowerShell 7.6
         shell: pwsh
@@ -584,6 +598,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $env:CI = "true"
           $env:VP_NODE_MANAGER = "no"
+          # Custom install root via deprecated VP_HOME (installer override / full legacy mapping)
           $env:VP_HOME = Join-Path $env:RUNNER_TEMP "vite-plus-release-age"
 
           $npmrc = Join-Path $env:USERPROFILE ".npmrc"
@@ -655,7 +670,7 @@ jobs:
     # resolved home against PATH. Namespace's Windows runners execute jobs under a
     # Session-0 service account whose real profile is
     # C:\Windows\system32\config\systemprofile, not %USERPROFILE%, so even with
-    # VP_HOME set the installed vp resolves the systemprofile home and doctor
+    # Without a seeded ~/.vite-plus the installed vp may resolve the systemprofile home and doctor
     # fails. The other install jobs pass on Namespace because they don't run
     # `vp env doctor` under `set -e`.
     runs-on: windows-latest
@@ -663,6 +678,10 @@ jobs:
       contents: read
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Seed legacy root (released CLI uses grandfather path)
+        shell: bash
+        run: mkdir -p "$USERPROFILE/.vite-plus"
 
       - name: Run install.ps1
         shell: pwsh
@@ -818,13 +837,11 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Pin VP_HOME to USERPROFILE
-        # Namespace's Windows runners run jobs under a service account whose real
-        # profile (C:\Windows\system32\config\systemprofile) differs from
-        # %USERPROFILE%; vp-setup.exe installs into VP_HOME (falling back to the OS
-        # profile). Pin it so the install and these assertions share one location.
+      - name: Seed legacy root under USERPROFILE
+        # Seed ~/.vite-plus so install takes the grandfather (Exist) branch
+        # under the runner profile (same as VpDirs Home rule).
         shell: bash
-        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+        run: mkdir -p "$USERPROFILE/.vite-plus"
 
       - name: Setup Dev Drive
         uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
@@ -844,8 +861,12 @@ jobs:
         run: cargo build --release -p vp_installer
 
       - name: Install via vp-setup.exe (silent)
+        # Pin VP_HOME to USERPROFILE so the installer does not follow BaseDirs
+        # into the Session-0 systemprofile on Namespace Windows runners.
         shell: pwsh
-        run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
+        run: |
+          $env:VP_HOME = Join-Path $env:USERPROFILE '.vite-plus'
+          & ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
 
       - name: Set PATH
         shell: bash
@@ -868,3 +889,224 @@ jobs:
         run: |
           vp --version
           vp --help
+
+  # ── Branch CLI layout coverage (current install.sh + VpDirs) ────────────
+  # Build the PR's vp binary and drive install.sh via install-global-cli so
+  # we exercise the same script users run, without the registry bridge.
+
+  test-install-split:
+    name: Test install (split layout, local build, ${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+            shell: bash
+          - os: macos-latest
+            name: macOS
+            shell: bash
+          # GitHub-hosted windows-latest (not Namespace): split defaults use
+          # %LOCALAPPDATA%/%APPDATA% under the runner profile, same reason
+          # test-install-ps1 stays off Namespace Session-0 systemprofile.
+          - os: windows-latest
+            name: Windows
+            shell: bash
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: install-layout-${{ matrix.os }}
+
+      - name: Build vp CLI
+        run: cargo build -p vp_global_cli -p vp_trampoline --release
+
+      - name: Clean install roots (fresh split install)
+        shell: bash
+        run: |
+          rm -rf "$HOME/.vite-plus"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            local_app="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}"
+            roaming_app="${APPDATA:-$USERPROFILE/AppData/Roaming}"
+            rm -rf \
+              "$local_app/vite-plus" \
+              "$roaming_app/vite-plus"
+          else
+            rm -rf \
+              "$HOME/.local/share/vite-plus" \
+              "$HOME/.config/vite-plus" \
+              "$HOME/.local/state/vite-plus" \
+              "$HOME/.cache/vite-plus"
+            rm -f "$HOME/.local/bin/vp"
+          fi
+
+      - name: Install via install script (local branch CLI)
+        run: pnpm install-global-cli
+
+      - name: Verify split layout
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            local_app="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}"
+            roaming_app="${APPDATA:-$USERPROFILE/AppData/Roaming}"
+            bin_dir="$local_app/vite-plus/bin"
+            data_dir="$local_app/vite-plus/data"
+            config_dir="$roaming_app/vite-plus"
+            vp_bin="$bin_dir/vp.exe"
+            [ -f "$vp_bin" ] || { echo "::error::vp missing at $vp_bin"; exit 1; }
+            [ -d "$data_dir/current" ] || { echo "::error::versions missing from the data dir"; exit 1; }
+            [ -f "$config_dir/env.ps1" ] || [ -f "$config_dir/env" ] || {
+              echo "::error::env script missing from the config dir ($config_dir)"
+              ls -la "$config_dir" 2>/dev/null || true
+              exit 1
+            }
+            [ ! -e "$HOME/.vite-plus" ] || { echo "::error::legacy root must not be created by a split install"; exit 1; }
+            "$vp_bin" --version
+          else
+            [ -x "$HOME/.local/bin/vp" ] || { echo "::error::vp shim missing at ~/.local/bin/vp"; exit 1; }
+            [ -d "$HOME/.local/share/vite-plus/current" ] || { echo "::error::versions missing from the data dir"; exit 1; }
+            [ -f "$HOME/.config/vite-plus/env" ] || { echo "::error::env script missing from the config dir"; exit 1; }
+            [ ! -e "$HOME/.vite-plus" ] || { echo "::error::legacy root must not be created by a split install"; exit 1; }
+            "$HOME/.local/bin/vp" --version
+          fi
+
+      - name: Implode split install
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            local_app="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}"
+            roaming_app="${APPDATA:-$USERPROFILE/AppData/Roaming}"
+            bin_dir="$local_app/vite-plus/bin"
+            data_dir="$local_app/vite-plus/data"
+            config_dir="$roaming_app/vite-plus"
+            "$bin_dir/vp.exe" implode -y
+            # Windows deferred delete may leave a .removing-* rename briefly;
+            # data/config must not remain under their live paths.
+            [ ! -e "$data_dir" ] || { echo "::error::data dir remains after implode"; exit 1; }
+            [ ! -e "$config_dir" ] || { echo "::error::config dir remains after implode"; exit 1; }
+            [ ! -e "$bin_dir/vp.exe" ] || { echo "::error::vp shim remains after implode"; exit 1; }
+          else
+            "$HOME/.local/bin/vp" implode -y
+            [ ! -e "$HOME/.local/share/vite-plus" ] || { echo "::error::data dir remains after implode"; exit 1; }
+            [ ! -e "$HOME/.config/vite-plus" ] || { echo "::error::config dir remains after implode"; exit 1; }
+            # Shared ~/.local/bin must not be removed; only the vp shim.
+            [ ! -e "$HOME/.local/bin/vp" ] || { echo "::error::vp shim remains after implode"; exit 1; }
+          fi
+
+  test-install-legacy-upgrade:
+    name: Test install (legacy upgrade, local build, ${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: install-layout-${{ matrix.os }}
+
+      - name: Build vp CLI
+        run: cargo build -p vp_global_cli -p vp_trampoline --release
+
+      - name: Seed empty legacy root
+        shell: bash
+        run: |
+          # Exist gate: presence of ~/.vite-plus selects the grandfather layout
+          # (same as VpDirs Home rule and install.sh LEGACY_LAYOUT=true).
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            local_app="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}"
+            roaming_app="${APPDATA:-$USERPROFILE/AppData/Roaming}"
+            rm -rf \
+              "$local_app/vite-plus" \
+              "$roaming_app/vite-plus"
+          else
+            rm -rf \
+              "$HOME/.local/share/vite-plus" \
+              "$HOME/.config/vite-plus" \
+              "$HOME/.local/state/vite-plus" \
+              "$HOME/.cache/vite-plus"
+            rm -f "$HOME/.local/bin/vp"
+          fi
+          mkdir -p "$HOME/.vite-plus/bin"
+
+      - name: Install via install script (local branch CLI)
+        run: pnpm install-global-cli
+
+      - name: Verify legacy layout preserved
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            vp_bin="$HOME/.vite-plus/bin/vp.exe"
+            [ -f "$vp_bin" ] || { echo "::error::vp missing at $vp_bin"; exit 1; }
+            [ -d "$HOME/.vite-plus/current" ] || { echo "::error::current missing under legacy root"; exit 1; }
+            # Windows env scripts may be env.ps1 / env.cmd under the root.
+            [ -f "$HOME/.vite-plus/env" ] || [ -f "$HOME/.vite-plus/env.ps1" ] || {
+              echo "::error::env script should live under legacy root"
+              ls -la "$HOME/.vite-plus" 2>/dev/null || true
+              exit 1
+            }
+            local_app="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}"
+            [ ! -e "$local_app/vite-plus/data" ] || {
+              echo "::error::split data dir must not be created on legacy upgrade"
+              exit 1
+            }
+            "$vp_bin" --version
+          else
+            [ -x "$HOME/.vite-plus/bin/vp" ] || { echo "::error::vp missing at ~/.vite-plus/bin/vp"; exit 1; }
+            [ -d "$HOME/.vite-plus/current" ] || { echo "::error::current missing under legacy root"; exit 1; }
+            [ -f "$HOME/.vite-plus/env" ] || { echo "::error::env script should live under legacy root"; exit 1; }
+            [ ! -e "$HOME/.local/share/vite-plus" ] || { echo "::error::split data dir must not be created on legacy upgrade"; exit 1; }
+            "$HOME/.vite-plus/bin/vp" --version
+          fi
+
+      - name: Implode legacy install
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            "$HOME/.vite-plus/bin/vp.exe" implode -y
+            # Deferred delete renames away the live path immediately.
+            [ ! -e "$HOME/.vite-plus" ] || { echo "::error::legacy root remains after implode"; exit 1; }
+          else
+            "$HOME/.vite-plus/bin/vp" implode -y
+            [ ! -e "$HOME/.vite-plus" ] || { echo "::error::legacy root remains after implode"; exit 1; }
+          fi

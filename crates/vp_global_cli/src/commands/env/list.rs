@@ -6,6 +6,7 @@ use std::{cmp::Ordering, process::ExitStatus};
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
+use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
 use super::config;
@@ -52,8 +53,7 @@ fn compare_versions(a: &str, b: &str) -> Ordering {
 
 /// Execute the list command (local installed versions).
 pub async fn execute(cwd: AbsolutePathBuf, json_output: bool) -> Result<ExitStatus, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
-    let node_dir = home_dir.join("js_runtime").join("node");
+    let node_dir = VpDirs::js_runtime_dir().join("node");
 
     let versions = list_installed_versions(node_dir.as_path());
 

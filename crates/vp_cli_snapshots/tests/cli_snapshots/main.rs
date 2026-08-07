@@ -525,9 +525,27 @@ impl CaseHome {
         if flavor == Flavor::Local {
             self.write_local_package_cmd_shims(&package_dir, &local_bin_dir)?;
         }
+
+        // Complete the legacy install shape (`bin/vp` alongside
+        // `current/bin/vp`) before any case CLI runs: layout detection
+        // classifies `<X>/current/bin/vp` as a split data dir unless
+        // `<X>/bin/vp` exists, and `vp env setup` below would otherwise
+        // write shims into the split bin dir instead of `<VP_HOME>/bin`.
+        let vp_bin_dir = self.vp_home().join("bin");
+        std::fs::create_dir_all(&vp_bin_dir)
+            .map_err(|e| format!("failed to create bin dir: {e}"))?;
+        #[cfg(unix)]
+        {
+            let link = vp_bin_dir.join(VP_BINARY_NAME);
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink("../current/bin/vp", &link)
+                .map_err(|e| format!("failed to link bin/vp: {e}"))?;
+        }
+        #[cfg(windows)]
+        flavor::install_file(&vp_bin_dir.join(VP_BINARY_NAME), &runtime.global_vp, "bin/vp.exe")?;
+
         self.run_env_setup(&vp)?;
 
-        let vp_bin_dir = self.vp_home().join("bin");
         let mut tool_dirs = match flavor {
             Flavor::Global => vec![vp_bin_dir],
             Flavor::Local => vec![local_bin_dir, vp_bin_dir],
@@ -625,6 +643,11 @@ impl CaseHome {
         env.insert("TERM".into(), "xterm-256color".into());
         env.insert("VP_CLI_TEST".into(), "1".into());
         env.insert("NODE_NO_WARNINGS".into(), "1".into());
+        // The CLI no longer reads VP_HOME (the provisioned
+        // `<home>/.vite-plus/current/bin/vp` self-locates, and the on-disk
+        // `<home>/.vite-plus` selects the legacy layout). Kept because
+        // fixture steps reference `$VP_HOME/...` in `vpt` argv (expanded
+        // from this env by vpt's `expand_env_arg`).
         env.insert("VP_HOME".into(), self.vp_home().into_os_string());
         if cfg!(windows) {
             env.insert("USERPROFILE".into(), self.home.clone().into_os_string());

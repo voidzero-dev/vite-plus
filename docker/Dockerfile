@@ -60,8 +60,12 @@ RUN apt-get update \
 # root work those phases occasionally need.
 USER vp
 
-ENV VP_HOME=/home/vp/.vite-plus \
-    PATH=/home/vp/.vite-plus/bin:$PATH
+# PATH carries both candidate bin dirs: the install script fetched from
+# vite.plus picks the split XDG layout (~/.local/bin) when the CLI being
+# installed supports it, and the legacy monolithic layout (~/.vite-plus/bin)
+# otherwise — e.g. while the released install script still predates the
+# split default. Whichever is unused is simply absent from PATH lookups.
+ENV PATH=/home/vp/.local/bin:/home/vp/.vite-plus/bin:$PATH
 
 # Install the vp global CLI. The installer downloads the platform package from
 # npm (or from the registry bridge when VP_PR_VERSION is set). Node.js itself is
@@ -71,9 +75,10 @@ ENV VP_HOME=/home/vp/.vite-plus \
 # The installer pre-provisions a default Node.js (~190 MB). Drop it: each project
 # downloads its own pinned Node.js at build time, so the default is dead weight in a
 # builder image. The node/npm/npx shims remain and fetch the right version on
-# first use.
+# first use. The runtime lands in the data dir of whichever layout the
+# installer selected (split: ~/.local/share/vite-plus, legacy: ~/.vite-plus).
 RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" bash \
  && vp --version \
- && rm -rf "$VP_HOME/js_runtime"
+ && rm -rf /home/vp/.local/share/vite-plus/js_runtime /home/vp/.vite-plus/js_runtime
 
 WORKDIR /app
