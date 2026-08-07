@@ -3,6 +3,7 @@ import mri from 'mri';
 import { DEFAULT_HOOKS_DIR, disable, enable, status } from '../config/hooks.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { log, printHeader } from '../utils/terminal.ts';
+import { unexpectedHooksArgsError } from './args.ts';
 
 const SUBCOMMANDS = ['enable', 'disable', 'status'] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
@@ -104,6 +105,12 @@ async function main() {
   if (args.help || wantsHelp) {
     printHelp();
     return;
+  }
+
+  const unexpected = unexpectedHooksArgsError(args);
+  if (unexpected) {
+    log(unexpected);
+    process.exit(1);
   }
 
   const dirFlag = args['hooks-dir'] as string | undefined;
