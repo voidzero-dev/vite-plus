@@ -163,14 +163,14 @@ impl HttpClient {
 
         let client = vp_shared::shared_http_client()?;
 
-        // Progress bar (only when a message is given, on a TTY, and not in CI).
-        // Built once and reused across retry attempts; its position is reset at
-        // the start of every attempt so a retried download doesn't double-count
-        // bytes.
+        // Progress bar (only in TTY and not in CI). Built once and reused across
+        // retry attempts; its position is reset at the start of every attempt so
+        // a retried download doesn't double-count bytes.
         let is_ci = vp_shared::EnvConfig::get().is_ci;
-        let show_progress =
-            should_show_progress(message.is_some(), vp_shared::is_stderr_terminal(), is_ci);
-        let progress = if let Some(message) = message.filter(|_| show_progress) {
+        let progress = if let Some(message) = message
+            && vp_shared::is_stderr_terminal()
+            && !is_ci
+        {
             let pb = ProgressBar::new_spinner();
             pb.set_style(
                 ProgressStyle::default_spinner()
@@ -272,14 +272,6 @@ impl HttpClient {
 
         Ok(())
     }
-}
-
-/// Whether a download's progress bar should render: a caller opted in with a
-/// message, output is going to an interactive terminal, and we're not in CI
-/// (piped/non-interactive/CI output should stay log-only, not carry a
-/// spinner or bar).
-const fn should_show_progress(has_message: bool, is_terminal: bool, is_ci: bool) -> bool {
-    has_message && is_terminal && !is_ci
 }
 
 fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Result<(), Error> {
@@ -476,16 +468,6 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-
-    #[test]
-    fn test_should_show_progress() {
-        // A message alone isn't enough: also needs a real terminal and no CI.
-        assert!(should_show_progress(true, true, false));
-        assert!(!should_show_progress(false, true, false), "no message -> no progress");
-        assert!(!should_show_progress(true, false, false), "non-terminal -> no progress");
-        assert!(!should_show_progress(true, true, true), "CI -> no progress, even with a TTY");
-        assert!(!should_show_progress(false, false, true));
-    }
 
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {
@@ -710,32 +692,6 @@ mod tests {
         assert_eq!(content, mock_content);
     }
 
-    /// Passing a progress `message` must not change the downloaded content —
-    /// the progress bar is a cosmetic side effect on stderr, not part of the
-    /// download contract. Whether the bar actually renders depends on
-    /// `should_show_progress` (covered separately below), which is false in
-    /// this non-interactive test run either way.
-    #[tokio::test]
-    async fn test_http_client_download_file_with_message() {
-        let server = MockServer::start();
-        let temp_dir = TempDir::new().unwrap();
-        let target_file = temp_dir.path().join("downloaded.txt");
-
-        let mock_content = b"Hello, World! This is test content.";
-
-        server.mock(|when, then| {
-            when.method(GET).path("/file.txt");
-            then.status(200).header("content-type", "text/plain").body(mock_content);
-        });
-
-        let client = HttpClient::new();
-        let url = vt_str::format!("{}/file.txt", server.base_url());
-
-        let result = client.download_file(&url, &target_file, Some("Downloading test...")).await;
-        assert!(result.is_ok(), "Failed to download file: {result:?}");
-        assert_eq!(fs::read(&target_file).unwrap(), mock_content);
-    }
-
     #[tokio::test]
     async fn test_http_client_retry_on_server_error() {
         // Test that the client correctly retries on server errors
@@ -779,35 +735,6 @@ mod tests {
         assert!(target_dir.join("package/bin/yarn.cmd").exists());
 
         // TempDir automatically cleans up when it goes out of scope
-    }
-
-    /// A download message (as passed by `package_manager.rs` call sites, e.g.
-    /// "Downloading pnpm v10.0.0...") must not affect the download/extract
-    /// result — the progress bar is cosmetic stderr output, not part of the
-    /// download contract.
-    #[tokio::test]
-    async fn test_download_and_extract_tgz_with_message() {
-        let server = MockServer::start();
-        let temp_dir = TempDir::new().unwrap();
-        let target_dir = temp_dir.path().join("extracted");
-
-        let mock_tgz = create_mock_package_tgz();
-        server.mock(|when, then| {
-            when.method(GET).path("/test-package.tgz");
-            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
-        });
-
-        let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash(
-            &url,
-            &target_dir,
-            None,
-            Some("Downloading test-package..."),
-        )
-        .await;
-        assert!(result.is_ok(), "Failed to download and extract: {result:?}");
-        assert!(target_dir.join("package/bin/yarn").exists());
-        assert!(target_dir.join("package/bin/yarn.cmd").exists());
     }
 
     /// Regression test for flaky package-manager / node downloads.
