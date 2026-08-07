@@ -9,11 +9,48 @@
 //!
 //! Standard system variables (`PATH`, `HOME`, `CI`, etc.) are intentionally
 //! excluded — they're well-known and benefit less from constant definitions.
+//! The `XDG_*_HOME` base-directory variables are the exception: they
+//! participate in `VpDirs` path resolution, so they get constants too.
 
 // ── Config: read once at startup via EnvConfig ──────────────────────────
 
-/// Override for the vite-plus home directory (default: `~/.vite-plus`).
-pub const VP_HOME: &str = "VP_HOME";
+/// Deprecated override for the vite-plus home directory (`~/.vite-plus`).
+///
+/// Still honored as the highest-priority layout rule (selects the legacy
+/// monolithic layout) for backward compatibility — older env scripts and
+/// custom-location installs export it — but no longer set by the installers
+/// or the generated env scripts. Prefer `VP_*_DIR` / `XDG_*` variables.
+pub const DEPRECATED_VP_HOME: &str = "VP_HOME";
+
+/// Override directory for executables and shims.
+///
+/// Only applies to the split XDG/platform layout (fresh installs); a legacy
+/// `~/.vite-plus` layout is all-or-nothing.
+pub const VP_BIN_DIR: &str = "VP_BIN_DIR";
+
+/// Override directory for payload data: CLI versions, Node.js runtimes, and
+/// package managers (the disk hogs).
+pub const VP_DATA_DIR: &str = "VP_DATA_DIR";
+
+/// Override directory for the disposable cache.
+pub const VP_CACHE_DIR: &str = "VP_CACHE_DIR";
+
+// ── XDG base directories: read by VpDirs resolution ────────────────────
+
+/// XDG base directory for executables.
+pub const XDG_BIN_HOME: &str = "XDG_BIN_HOME";
+
+/// XDG base directory for user configuration.
+pub const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+
+/// XDG base directory for user data.
+pub const XDG_DATA_HOME: &str = "XDG_DATA_HOME";
+
+/// XDG base directory for user state.
+pub const XDG_STATE_HOME: &str = "XDG_STATE_HOME";
+
+/// XDG base directory for disposable caches.
+pub const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
 
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vt=trace"`).
 pub const VP_LOG: &str = "VP_LOG";

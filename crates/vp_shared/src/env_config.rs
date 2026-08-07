@@ -51,10 +51,37 @@ thread_local! {
 /// time. Use `EnvConfig::get()` to access the current config from anywhere.
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
-    /// Override for the vite-plus home directory (`~/.vite-plus`).
+    /// Deprecated override for the vite-plus home directory (`~/.vite-plus`).
     ///
-    /// Env: `VP_HOME`
+    /// Still honored as the highest-priority layout rule (legacy monolithic
+    /// layout) for backward compatibility; no longer set by installers or
+    /// generated env scripts.
+    ///
+    /// Env: `VP_HOME` (deprecated)
     pub vite_plus_home: Option<PathBuf>,
+
+    /// Override for the directory where executables and shims are installed.
+    ///
+    /// Only applies to the split XDG/platform layout (fresh installs); a
+    /// legacy `~/.vite-plus` layout is all-or-nothing.
+    ///
+    /// Env: `VP_BIN_DIR`
+    pub vp_bin_dir: Option<PathBuf>,
+
+    /// Override for the payload data directory (CLI versions, Node.js
+    /// runtimes, package managers).
+    ///
+    /// Only applies to the split XDG/platform layout (fresh installs).
+    ///
+    /// Env: `VP_DATA_DIR`
+    pub vp_data_dir: Option<PathBuf>,
+
+    /// Override for the disposable cache directory.
+    ///
+    /// Only applies to the split XDG/platform layout (fresh installs).
+    ///
+    /// Env: `VP_CACHE_DIR`
+    pub vp_cache_dir: Option<PathBuf>,
 
     /// NPM registry URL.
     ///
@@ -106,7 +133,10 @@ impl EnvConfig {
     /// Called once in `main()` via `EnvConfig::init()`.
     pub fn from_env() -> Self {
         Self {
-            vite_plus_home: std::env::var(env_vars::VP_HOME).ok().map(PathBuf::from),
+            vite_plus_home: std::env::var(env_vars::DEPRECATED_VP_HOME).ok().map(PathBuf::from),
+            vp_bin_dir: std::env::var(env_vars::VP_BIN_DIR).ok().map(PathBuf::from),
+            vp_data_dir: std::env::var(env_vars::VP_DATA_DIR).ok().map(PathBuf::from),
+            vp_cache_dir: std::env::var(env_vars::VP_CACHE_DIR).ok().map(PathBuf::from),
             npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
                 .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into())
@@ -146,6 +176,15 @@ impl EnvConfig {
                 .clone()
                 .unwrap_or_else(|| ENV_CONFIG.get().cloned().unwrap_or_else(Self::from_env))
         })
+    }
+
+    /// Whether a thread-local test config is currently active.
+    ///
+    /// When true, path resolution must not fall back to the process environment
+    /// for unset layout fields — `for_test()` zeros them deliberately.
+    #[must_use]
+    pub fn is_test_scoped() -> bool {
+        TEST_CONFIG.with(|c| c.borrow().is_some())
     }
 
     /// Run a closure with a test config override (thread-local, parallel-safe).
@@ -194,6 +233,9 @@ impl EnvConfig {
     pub fn for_test() -> Self {
         Self {
             vite_plus_home: None,
+            vp_bin_dir: None,
+            vp_data_dir: None,
+            vp_cache_dir: None,
             npm_registry: "https://registry.npmjs.org".into(),
             node_dist_mirror: None,
             node_skip_signature_verify: false,
@@ -205,7 +247,12 @@ impl EnvConfig {
         }
     }
 
-    /// Create a test configuration with a custom home directory.
+    /// Create a test configuration that pins the install root via `VP_HOME`.
+    ///
+    /// Sets [`Self::vite_plus_home`] so [`crate::VpDirs`] resolves the legacy
+    /// monolithic mapping under `home` (same isolation pattern as production
+    /// `VP_HOME`). Use struct-update syntax to also set `user_home` /
+    /// `vp_*_dir` when a test needs split-layout fields.
     pub fn for_test_with_home(home: impl Into<PathBuf>) -> Self {
         Self { vite_plus_home: Some(home.into()), ..Self::for_test() }
     }
@@ -239,7 +286,7 @@ mod tests {
     #[test]
     fn test_for_test_returns_defaults() {
         let config = EnvConfig::for_test();
-        assert!(config.vite_plus_home.is_none());
+        assert!(config.user_home.is_none());
         assert_eq!(config.npm_registry, "https://registry.npmjs.org");
         assert!(!config.is_ci);
         assert!(!config.node_skip_signature_verify);
@@ -260,7 +307,7 @@ mod tests {
         };
         assert_eq!(config.npm_registry, "https://custom.registry");
         assert!(config.is_ci);
-        assert!(config.vite_plus_home.is_none());
+        assert!(config.user_home.is_none());
     }
 
     #[test]
