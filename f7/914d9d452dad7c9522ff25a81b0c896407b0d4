@@ -1,0 +1,25 @@
+README.md
+  s_431aa2d8c58680::t_a68f1a4434f6a8 190
+docs/guide/ci.md
+  s_431aa2d8c58680::t_9cbb3ba30edd3d 11,36
+docs/guide/github-actions-cache.md
+  s_431aa2d8c58680::t_4c49ae9e78df05 66
+packages/cli/README.md
+  s_431aa2d8c58680::t_e437270932eeb5 184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f7914d9d452dad7c9522ff25a81b0c896407b0d4",
+  "prompts": {},
+  "sessions": {
+    "s_431aa2d8c58680": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4690-cc8f-7d22-9259-a63dbc7145ec",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
