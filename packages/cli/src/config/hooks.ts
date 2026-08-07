@@ -5,6 +5,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -114,6 +115,36 @@ export function normalizeHooksPath(hooksPath: string): string {
     normalized = normalized.slice(0, -1);
   }
   return normalized;
+}
+
+function getGitToplevel(): string | InstallResult {
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel']);
+  if (result.status == null) {
+    return { message: 'git command not found', isError: true };
+  }
+  if (result.status !== 0) {
+    return { message: ".git can't be found", isError: false };
+  }
+  const toplevel = result.stdout.toString().trim();
+  try {
+    return realpathSync(toplevel);
+  } catch {
+    return toplevel;
+  }
+}
+
+/** Resolve a core.hooksPath value against the worktree root for ownership checks. */
+function resolveHooksPath(hooksPath: string, gitRoot: string): string {
+  const resolved = isAbsolute(hooksPath) ? hooksPath : resolve(gitRoot, hooksPath);
+  try {
+    return normalizeHooksPath(realpathSync(resolved));
+  } catch {
+    return normalizeHooksPath(resolved);
+  }
+}
+
+function hooksPathsEqual(a: string, b: string, gitRoot: string): boolean {
+  return resolveHooksPath(a, gitRoot) === resolveHooksPath(b, gitRoot);
 }
 
 export function findUnsafeHookInstallPath(root: string, dir: string): UnsafeHookInstallPath | null {
@@ -301,11 +332,14 @@ function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null
  * while worktree holds the Vite+ target).
  */
 function unsetOwnedHooksPath(target: string): InstallResult | null {
-  const normalizedTarget = normalizeHooksPath(target);
+  const toplevel = getGitToplevel();
+  if (typeof toplevel !== 'string') {
+    return toplevel;
+  }
 
   for (const scope of ['local', 'worktree'] as const) {
     const scopedPath = getScopedHooksPath(scope);
-    if (!scopedPath || normalizeHooksPath(scopedPath) !== normalizedTarget) {
+    if (!scopedPath || !hooksPathsEqual(scopedPath, target, toplevel)) {
       continue;
     }
     const unsetError = unsetScopedHooksPath(scope);
@@ -315,7 +349,7 @@ function unsetOwnedHooksPath(target: string): InstallResult | null {
   }
 
   const finalPath = getEffectiveHooksPath();
-  if (finalPath && normalizeHooksPath(finalPath) === normalizedTarget) {
+  if (finalPath && hooksPathsEqual(finalPath, target, toplevel)) {
     return {
       message: `could not unset core.hooksPath (still "${finalPath}"); remove it with git config --unset core.hooksPath`,
       isError: true,
@@ -369,7 +403,11 @@ export function install(dir = DEFAULT_HOOKS_DIR, options: InstallOptions = {}): 
   // Read the effective value so a worktree-scoped setting cannot silently
   // override the local value we are about to write.
   const existingHooksPath = getEffectiveHooksPath();
-  if (existingHooksPath && normalizeHooksPath(existingHooksPath) !== normalizeHooksPath(target)) {
+  const toplevel = getGitToplevel();
+  if (typeof toplevel !== 'string') {
+    return toplevel;
+  }
+  if (existingHooksPath && !hooksPathsEqual(existingHooksPath, target, toplevel)) {
     return {
       message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
       isError: false,
@@ -463,10 +501,13 @@ export function disable(dir = DEFAULT_HOOKS_DIR): InstallResult {
   }
 
   const existingHooksPath = getEffectiveHooksPath();
-  const ownsHooksPath =
-    !!existingHooksPath && normalizeHooksPath(existingHooksPath) === normalizeHooksPath(target);
+  const toplevel = getGitToplevel();
+  if (typeof toplevel !== 'string') {
+    return toplevel;
+  }
+  const ownsHooksPath = !!existingHooksPath && hooksPathsEqual(existingHooksPath, target, toplevel);
   const foreignHooksPath =
-    !!existingHooksPath && normalizeHooksPath(existingHooksPath) !== normalizeHooksPath(target);
+    !!existingHooksPath && !hooksPathsEqual(existingHooksPath, target, toplevel);
 
   const actions: string[] = [];
   const notes: string[] = [];
@@ -540,8 +581,11 @@ export function status(dir?: string): InstallResult & { status?: HooksStatus } {
   const existingHooksPath = getEffectiveHooksPath();
   const userDisabled = isHooksUserDisabled();
   const dispatcherInstalled = existsSync(join(hooksDir, '_', 'h'));
-  const ownsHooksPath =
-    !!existingHooksPath && normalizeHooksPath(existingHooksPath) === normalizeHooksPath(target);
+  const toplevel = getGitToplevel();
+  if (typeof toplevel !== 'string') {
+    return toplevel;
+  }
+  const ownsHooksPath = !!existingHooksPath && hooksPathsEqual(existingHooksPath, target, toplevel);
 
   let projectHooks: string[] = [];
   if (existsSync(hooksDir)) {

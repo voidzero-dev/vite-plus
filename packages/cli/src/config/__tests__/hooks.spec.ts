@@ -415,6 +415,53 @@ describe('enable / disable / status', () => {
   });
 
   it.skipIf(process.platform === 'win32')(
+    'treats an absolute core.hooksPath spelling as owned',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-abs-path-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+
+        expect(enable().isError).toBe(false);
+        const absoluteHooksPath = join(tmp, '.vite-hooks', '_');
+        execSync(`git config core.hooksPath ${JSON.stringify(absoluteHooksPath)}`, { cwd: tmp });
+
+        expect(status().status?.ownsHooksPath).toBe(true);
+        expect(install()).toEqual({ message: '', isError: false });
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'disable unsets an absolute spelling of the owned hooks path',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-abs-path-disable-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+
+        expect(enable().isError).toBe(false);
+        const absoluteHooksPath = join(tmp, '.vite-hooks', '_');
+        execSync(`git config core.hooksPath ${JSON.stringify(absoluteHooksPath)}`, { cwd: tmp });
+
+        const result = disable();
+        expect(result.isError).toBe(false);
+        expect(result.message).toContain('unset core.hooksPath');
+        expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
     'disable unsets only the worktree Vite+ path and leaves a foreign local path',
     () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-worktree-disable-'));
