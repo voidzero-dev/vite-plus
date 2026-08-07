@@ -51,6 +51,10 @@ dependsOn?: Array<DependsOnEntry>, } & ({
  */
 cache?: true,
 /**
+ * Whether to replay cached stdout/stderr on cache hits.
+ */
+replayLogs?: boolean,
+/**
  * Environment variable names to be fingerprinted and passed to the task.
  */
 env?: Array<string>,
