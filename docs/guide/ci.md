@@ -8,7 +8,34 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 ## setup-vp Versioning
 
-Set `<setup-vp-version>` in each example to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates. Renovate and Dependabot can update exact versions.
+Set `<setup-vp-version>` in each example to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
+
+### Automatic Version Updates
+
+Dependabot and Renovate can update exact versions in GitHub Actions workflows.
+
+To use [Dependabot version updates](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates), add a `github-actions` entry to `.github/dependabot.yml`:
+
+```yaml [.github/dependabot.yml]
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
+
+Dependabot checks `uses:` entries in `.github/workflows` each week.
+
+[Renovate's GitHub Actions manager](https://docs.renovatebot.com/modules/manager/github-actions/) detects `uses:` entries by default. You do not need a package rule for `setup-vp`.
+
+When you use a commit SHA, add the exact release tag in a comment. Renovate uses the comment to find updates:
+
+```yaml
+- uses: voidzero-dev/setup-vp@<commit-sha> # <setup-vp-version>
+```
+
+These settings apply only to GitHub Actions workflows. For GitLab CI/CD, update both version values together.
 
 ## GitHub Actions
 

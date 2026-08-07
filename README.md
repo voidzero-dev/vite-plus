@@ -189,6 +189,8 @@ Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) action t
 
 Set `<setup-vp-version>` to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
 
+See [Automatic Version Updates](https://viteplus.dev/guide/ci#automatic-version-updates) to configure Dependabot or Renovate.
+
 #### Manual Installation & Migration
 
 If you are manually migrating a project to Vite+, install these dev dependencies first:

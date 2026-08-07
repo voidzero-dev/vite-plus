@@ -65,6 +65,8 @@ Restore `node_modules/.vite/task-cache` after `vp install`, because package inst
 
 Set `<setup-vp-version>` below to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead.
 
+See [Automatic Version Updates](/guide/ci#automatic-version-updates) to configure Dependabot or Renovate.
+
 ```yaml [.github/workflows/ci.yml]
 name: CI
 
