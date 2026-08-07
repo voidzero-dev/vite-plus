@@ -8538,6 +8538,7 @@ dependencies = [
  "futures-util",
  "hex",
  "httpmock",
+ "indicatif",
  "indoc",
  "node-semver",
  "pathdiff",
