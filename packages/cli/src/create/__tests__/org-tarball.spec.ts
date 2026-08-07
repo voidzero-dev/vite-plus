@@ -2,15 +2,94 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cleanupStaleStagingDirs,
+  getCacheRoot,
   normalizeEntryName,
   parseEntryMode,
   resolveBundledPath,
   sanitizeHostForPath,
 } from '../org-tarball.js';
+
+describe('getCacheRoot', () => {
+  const scratchDirs: string[] = [];
+
+  beforeEach(() => {
+    // Isolate from the developer/CI environment (empty string is falsy, so
+    // the code under test treats it as unset).
+    vi.stubEnv('VP_CACHE_DIR', '');
+    vi.stubEnv('VP_HOME', '');
+    vi.stubEnv('XDG_CACHE_HOME', '');
+    vi.stubEnv('LOCALAPPDATA', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    for (const dir of scratchDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function stubHome(): string {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-cache-root-'));
+    scratchDirs.push(home);
+    // `os.homedir()` honors $HOME (POSIX) / %USERPROFILE% (Windows).
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    return home;
+  }
+
+  it('prefers VP_CACHE_DIR when set', () => {
+    vi.stubEnv('VP_CACHE_DIR', '/vp/cache');
+    expect(getCacheRoot()).toBe(path.join('/vp/cache', 'create-org'));
+  });
+
+  it('uses the legacy tmp dir when VP_HOME is set', () => {
+    vi.stubEnv('VP_HOME', '/vp/legacy');
+    expect(getCacheRoot()).toBe(path.join('/vp/legacy', 'tmp', 'create-org'));
+  });
+
+  it('uses the legacy tmp dir when ~/.vite-plus already exists', () => {
+    const home = stubHome();
+    fs.mkdirSync(path.join(home, '.vite-plus'));
+    expect(getCacheRoot()).toBe(path.join(home, '.vite-plus', 'tmp', 'create-org'));
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'falls back to the split cache dir without touching ~/.vite-plus',
+    () => {
+      const home = stubHome();
+      vi.stubEnv('XDG_CACHE_HOME', '');
+      expect(getCacheRoot()).toBe(path.join(home, '.cache', 'vite-plus', 'create-org'));
+      // The fallback must not create the legacy root: its mere existence
+      // would flip future resolutions back to the legacy layout.
+      expect(fs.existsSync(path.join(home, '.vite-plus'))).toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('honors an absolute XDG_CACHE_HOME', () => {
+    stubHome();
+    vi.stubEnv('XDG_CACHE_HOME', '/xdg/cache');
+    expect(getCacheRoot()).toBe(path.join('/xdg/cache', 'vite-plus', 'create-org'));
+  });
+
+  it.skipIf(process.platform === 'win32')('ignores a relative XDG_CACHE_HOME', () => {
+    const home = stubHome();
+    vi.stubEnv('XDG_CACHE_HOME', 'relative/cache');
+    expect(getCacheRoot()).toBe(path.join(home, '.cache', 'vite-plus', 'create-org'));
+  });
+
+  it.skipIf(process.platform !== 'win32')('uses %LOCALAPPDATA% on Windows', () => {
+    stubHome();
+    vi.stubEnv('LOCALAPPDATA', 'C:\\Users\\test\\AppData\\Local');
+    expect(getCacheRoot()).toBe(
+      path.join('C:\\Users\\test\\AppData\\Local', 'vite-plus', 'cache', 'create-org'),
+    );
+  });
+});
 
 describe('resolveBundledPath', () => {
   const scratchDirs: string[] = [];

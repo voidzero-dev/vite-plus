@@ -28,6 +28,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use vp_pm_cli::HttpClient;
 use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
+use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
 /// Restrict DLL search to system32 only to prevent DLL hijacking
@@ -105,48 +106,61 @@ fn main() {
 
     let opts = cli::parse();
 
-    // Resolve install dir and set VP_HOME before starting the tokio runtime,
-    // so the unsafe set_var runs while we're still single-threaded.
-    let install_dir = match resolve_install_dir(&opts) {
-        Ok(dir) => dir,
-        Err(e) => {
-            print_error(&format!("Failed to resolve install directory: {e}"));
-            std::process::exit(1);
-        }
-    };
-    // Safety: called in main() before any threads are spawned.
-    unsafe { std::env::set_var("VP_HOME", install_dir.as_path()) };
+    // Apply --install-dir before any VpDirs call so resolution matches the
+    // rest of the toolchain (same chain as install.sh / the vp CLI).
+    if let Some(ref dir) = opts.install_dir
+        && let Err(e) = apply_install_dir_override(dir)
+    {
+        print_error(&format!("Failed to resolve install directory: {e}"));
+        std::process::exit(1);
+    }
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap_or_else(|e| {
         print_error(&format!("Failed to create async runtime: {e}"));
         std::process::exit(1);
     });
 
-    let code = rt.block_on(run(opts, install_dir));
+    let code = rt.block_on(run(opts));
     std::process::exit(code);
 }
 
-#[allow(clippy::print_stdout, clippy::print_stderr)]
-async fn run(mut opts: cli::Options, install_dir: AbsolutePathBuf) -> i32 {
-    let install_dir_display = install_dir.as_path().to_string_lossy().to_string();
+/// Pin layout for `--install-dir` / installer `VP_HOME` overrides.
+///
+/// Custom roots use the legacy monolithic mapping. `VP_HOME` is the only env
+/// that selects that full mapping (bin/data/cache/config/state under one root);
+/// it is set only for this explicit override path, not for auto-detected
+/// grandfathered installs.
+fn apply_install_dir_override(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let path = std::path::PathBuf::from(dir);
+    let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
+    let install_dir = AbsolutePathBuf::new(abs).ok_or("Invalid installation directory")?;
+    // Safety: called in main() before any threads are spawned.
+    unsafe {
+        std::env::set_var(vp_shared::env_vars::DEPRECATED_VP_HOME, install_dir.as_path());
+    }
+    Ok(())
+}
 
+#[allow(clippy::print_stdout, clippy::print_stderr)]
+async fn run(mut opts: cli::Options) -> i32 {
     // Pre-compute Node.js manager default before showing the menu,
     // so the user sees the resolved value and can override it.
     if !opts.no_node_manager {
-        opts.no_node_manager = !auto_detect_node_manager(&install_dir, !opts.yes);
+        let bin_dir = VpDirs::bin_dir();
+        opts.no_node_manager = !auto_detect_node_manager(&bin_dir, !opts.yes);
     }
 
     if !opts.yes {
-        let proceed = show_interactive_menu(&mut opts, &install_dir_display);
+        let proceed = show_interactive_menu(&mut opts);
         if !proceed {
             println!("Installation cancelled.");
             return 0;
         }
     }
 
-    let code = match do_install(&opts, &install_dir).await {
+    let code = match do_install(&opts).await {
         Ok(()) => {
-            print_success(&opts, &install_dir_display);
+            print_success(&opts);
             0
         }
         Err(e) => {
@@ -165,18 +179,17 @@ async fn run(mut opts: cli::Options, install_dir: AbsolutePathBuf) -> i32 {
 }
 
 #[allow(clippy::print_stdout)]
-async fn do_install(
-    opts: &cli::Options,
-    install_dir: &AbsolutePathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn do_install(opts: &cli::Options) -> Result<(), Box<dyn std::error::Error>> {
+    // Data dir holds CLI versions + `current` (legacy root, or split data dir).
+    let install_dir = VpDirs::data_dir();
     let platform_suffix = platform::detect_platform_suffix()?;
     if !opts.quiet {
         print_info(&format!("detected platform: {platform_suffix}"));
     }
 
     // Check local version first to potentially skip HTTP requests
-    tokio::fs::create_dir_all(install_dir).await?;
-    let current_version = install::read_current_version(install_dir).await;
+    tokio::fs::create_dir_all(&install_dir).await?;
+    let current_version = install::read_current_version(&install_dir).await;
 
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
 
@@ -237,7 +250,7 @@ async fn do_install(
             opts,
             &platform_data,
             &version_dir,
-            install_dir,
+            &install_dir,
             &target_version,
             current_version.is_some(),
         )
@@ -257,7 +270,7 @@ async fn do_install(
     if !opts.quiet {
         print_info("setting up shims...");
     }
-    if let Err(e) = setup_bin_shims(install_dir).await {
+    if let Err(e) = setup_bin_shims(&install_dir).await {
         print_warn(&format!("Shim setup failed (non-fatal): {e}"));
     }
 
@@ -265,15 +278,15 @@ async fn do_install(
         if !opts.quiet {
             print_info("setting up Node.js version manager...");
         }
-        if let Err(e) = install::refresh_shims(install_dir).await {
+        if let Err(e) = install::refresh_shims(&install_dir).await {
             print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
         }
-    } else if let Err(e) = install::create_env_files(install_dir).await {
+    } else if let Err(e) = install::create_env_files(&install_dir).await {
         print_warn(&format!("Env file creation failed (non-fatal): {e}"));
     }
 
     if !opts.no_modify_path {
-        let bin_dir_str = install_dir.join("bin").as_path().to_string_lossy().to_string();
+        let bin_dir_str = VpDirs::bin_dir().as_path().to_string_lossy().to_string();
         if let Err(e) = modify_path(&bin_dir_str, opts.quiet) {
             print_warn(&format!("PATH modification failed (non-fatal): {e}"));
         }
@@ -289,13 +302,13 @@ async fn do_install(
 ///
 /// Matches install.ps1/install.sh auto-detect logic:
 /// 1. VP_NODE_MANAGER=yes → enable; VP_NODE_MANAGER=no → disable
-/// 2. Already managing Node (bin/node.exe exists) → enable (refresh)
+/// 2. Already managing Node (`node` shim exists in the bin dir) → enable (refresh)
 /// 3. CI / Codespaces / DevContainer / DevPod → enable
 /// 4. No system `node` found → enable
 /// 5. System node present, interactive → enable (matching install.ps1's default-Y prompt;
 ///    user can disable via customize menu before proceeding)
 /// 6. System node present, silent → disable (don't silently take over)
-fn auto_detect_node_manager(install_dir: &vt_path::AbsolutePath, interactive: bool) -> bool {
+fn auto_detect_node_manager(bin_dir: &vt_path::AbsolutePath, interactive: bool) -> bool {
     // VP_NODE_MANAGER env var: only "yes" and "no" are recognized;
     // unrecognized values fall through to normal auto-detection
     // (matching install.ps1/install.sh behavior).
@@ -309,7 +322,7 @@ fn auto_detect_node_manager(install_dir: &vt_path::AbsolutePath, interactive: bo
     }
 
     // Already managing Node (shims exist from a previous install)
-    let node_shim = install_dir.join("bin").join(if cfg!(windows) { "node.exe" } else { "node" });
+    let node_shim = bin_dir.join(if cfg!(windows) { "node.exe" } else { "node" });
     if node_shim.as_path().exists() {
         return true;
     }
@@ -399,11 +412,13 @@ async fn replace_windows_exe(
     Ok(())
 }
 
-/// Set up the `bin/vp` entry point (trampoline copy on Windows, symlink on Unix).
-async fn setup_bin_shims(
-    install_dir: &vt_path::AbsolutePath,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let bin_dir = install_dir.join("bin");
+/// Set up the `vp` entry point in the bin dir (trampoline copy on Windows,
+/// symlink on Unix).
+///
+/// Bin path comes from [`VpDirs::bin_dir`]: `<data>/bin` under the legacy
+/// layout, the separate split-layout bin dir (e.g. `~/.local/bin`) otherwise.
+async fn setup_bin_shims(install_dir: &AbsolutePathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let bin_dir = VpDirs::bin_dir();
     tokio::fs::create_dir_all(&bin_dir).await?;
 
     #[cfg(windows)]
@@ -434,7 +449,15 @@ async fn setup_bin_shims(
 
     #[cfg(unix)]
     {
-        let link_target = std::path::PathBuf::from("../current/bin/vp");
+        // Legacy layout (bin dir is the data-local `bin`): keep the relative
+        // `../current/bin/vp` target. Split layout: the bin dir lives outside
+        // the data dir, so link absolutely.
+        let link_target =
+            if bin_dir.as_path().parent().is_some_and(|parent| parent == install_dir.as_path()) {
+                std::path::PathBuf::from("../current/bin/vp")
+            } else {
+                install_dir.join("current").join("bin").join("vp").as_path().to_path_buf()
+            };
         let link_path = bin_dir.join("vp");
         let _ = tokio::fs::remove_file(&link_path).await;
         tokio::fs::symlink(&link_target, &link_path).await?;
@@ -466,16 +489,6 @@ async fn download_with_progress(
     Ok(data)
 }
 
-fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
-    if let Some(ref dir) = opts.install_dir {
-        let path = std::path::PathBuf::from(dir);
-        let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
-        AbsolutePathBuf::new(abs).ok_or_else(|| "Invalid installation directory".into())
-    } else {
-        Ok(vp_shared::get_vp_home()?)
-    }
-}
-
 #[allow(clippy::print_stdout)]
 fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
@@ -497,10 +510,11 @@ fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Err
 }
 
 #[allow(clippy::print_stdout)]
-fn show_interactive_menu(opts: &mut cli::Options, install_dir: &str) -> bool {
+fn show_interactive_menu(opts: &mut cli::Options) -> bool {
     loop {
         let version = opts.version.as_deref().unwrap_or(&opts.tag);
-        let bin_dir = format!("{install_dir}{sep}bin", sep = std::path::MAIN_SEPARATOR);
+        let install_dir = VpDirs::data_dir().as_path().to_string_lossy().to_string();
+        let bin_dir = VpDirs::bin_dir().as_path().to_string_lossy().to_string();
 
         println!();
         println!("  {}", "Welcome to Vite+ Installer!".bold());
@@ -594,11 +608,12 @@ fn read_input(prompt: &str) -> String {
 }
 
 #[allow(clippy::print_stdout)]
-fn print_success(opts: &cli::Options, install_dir: &str) {
+fn print_success(opts: &cli::Options) {
     if opts.quiet {
         return;
     }
 
+    let env_script = VpDirs::config_dir().join("env");
     println!();
     println!("  {} Vite+ has been installed successfully!", "\u{2714}".green().bold());
     println!();
@@ -606,7 +621,9 @@ fn print_success(opts: &cli::Options, install_dir: &str) {
     println!();
     println!("    {}", "vp --help".cyan());
     println!();
-    println!("  Install directory: {install_dir}");
+    println!("  Install directory: {}", VpDirs::data_dir().as_path().display());
+    println!("  Bin directory:     {}", VpDirs::bin_dir().as_path().display());
+    println!("  Shell setup:       . \"{}\"", env_script.as_path().display());
     println!("  Documentation:     {}", "https://viteplus.dev/guide/");
     println!();
 }

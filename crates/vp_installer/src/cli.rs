@@ -22,7 +22,10 @@ pub struct Options {
     #[arg(long = "tag", default_value = "latest")]
     pub tag: String,
 
-    /// Custom installation directory (default: ~/.vite-plus)
+    /// Custom installation directory: selects the legacy monolithic layout
+    /// rooted at this directory (default: split platform layout, or the
+    /// legacy root when `~/.vite-plus` already exists). Equivalent to setting
+    /// the deprecated `VP_HOME` override for this process.
     #[arg(long = "install-dir")]
     pub install_dir: Option<String>,
 
@@ -49,7 +52,10 @@ pub fn parse() -> Options {
         opts.version = std::env::var("VP_VERSION").ok();
     }
     if opts.install_dir.is_none() {
-        opts.install_dir = std::env::var("VP_HOME").ok();
+        // Installer-only: honor deprecated `VP_HOME` as a custom legacy root
+        // (same as install.sh). Prefer `VP_*_DIR` / XDG for split overrides;
+        // those are read by VpDirs without going through this flag.
+        opts.install_dir = std::env::var(vp_shared::env_vars::DEPRECATED_VP_HOME).ok();
     }
     if opts.registry.is_none() {
         opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok();
