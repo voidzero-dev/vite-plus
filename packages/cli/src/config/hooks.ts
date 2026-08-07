@@ -663,14 +663,17 @@ export function disable(dir?: string): InstallResult {
   }
   actions.push('recorded disable preference (local git config)');
 
+  // Always inspect each scope. A foreign worktree value can hide an owned
+  // local path; leaving that local value behind would come back if the
+  // worktree override is later removed.
+  const unsetError = unsetOwnedHooksPath(location.target);
+  if (unsetError) {
+    return {
+      message: `${unsetError.message}; disable preference was recorded (local git config). Run \`vp hooks enable\` to clear it, or \`git config --local --unset vp.hooks.disabled\``,
+      isError: true,
+    };
+  }
   if (ownsHooksPath) {
-    const unsetError = unsetOwnedHooksPath(location.target);
-    if (unsetError) {
-      return {
-        message: `${unsetError.message}; disable preference was recorded (local git config). Run \`vp hooks enable\` to clear it, or \`git config --local --unset vp.hooks.disabled\``,
-        isError: true,
-      };
-    }
     actions.push(`unset core.hooksPath (was "${existingHooksPath}")`);
   } else if (foreignHooksPath) {
     notes.push(

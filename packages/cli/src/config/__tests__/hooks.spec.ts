@@ -561,6 +561,38 @@ describe('enable / disable / status', () => {
   );
 
   it.skipIf(process.platform === 'win32')(
+    'disable unsets a local Vite+ path hidden by a foreign worktree path',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-worktree-hidden-local-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        execSync('git config extensions.worktreeConfig true', { cwd: tmp });
+        execSync('git config --local core.hooksPath .vite-hooks/_', { cwd: tmp });
+        execSync('git config --worktree core.hooksPath .husky/_', { cwd: tmp });
+        mkdirSync(join(tmp, '.vite-hooks', '_'), { recursive: true });
+        writeFileSync(join(tmp, '.vite-hooks', '_', 'h'), 'stale\n');
+        process.chdir(tmp);
+
+        const result = disable();
+        expect(result.isError).toBe(false);
+        expect(isHooksUserDisabled()).toBe(true);
+        expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(
+          execSync('git config --worktree --get core.hooksPath', { cwd: tmp }).toString().trim(),
+        ).toBe('.husky/_');
+        expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+          '.husky/_',
+        );
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
     'disable unsets only the worktree Vite+ path and leaves a foreign local path',
     () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-worktree-disable-'));
