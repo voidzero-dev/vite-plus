@@ -124,7 +124,10 @@ function overrideSpecSatisfiesVitePlus(
   spec: string | undefined,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  if (!spec) {
+  // npm/bun `overrides` may hold a nested object value — a user override scoped
+  // UNDER the dependency (e.g. `{"vite": {"rollup": "..."}}`) that does not
+  // alias the dependency itself, so it never satisfies the managed override.
+  if (typeof spec !== 'string' || !spec) {
     return false;
   }
   if (isSemanticVitePlusOverrideSpec(dependencyName, spec)) {
