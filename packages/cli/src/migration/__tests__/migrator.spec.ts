@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parse as parseYaml } from 'yaml';
+import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
+import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.js';
 import { VITE_PLUS_OVERRIDE_PACKAGES, VITEST_VERSION } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
@@ -31,6 +32,8 @@ const {
   rewriteMonorepo,
   rewriteMonorepoProject,
   detectPendingCoreMigration,
+  getScriptRulesYaml,
+  readRulesYaml,
   detectVitePlusBootstrapPending,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
@@ -8350,6 +8353,36 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
   });
 });
 
+function ruleIds(yaml: string): unknown[] {
+  return parseAllDocuments(yaml).map((document) => (document.toJS() as { id?: unknown })?.id);
+}
+
+describe('script rules YAML', () => {
+  it('keeps every rule when staged migration runs', () => {
+    expect(ruleIds(getScriptRulesYaml())).toContain('replace-lint-staged');
+  });
+
+  // Regression guard: the skip variant used to be built by splitting on blank lines, so
+  // a formatter that collapsed them dropped every rule and left ast-grep nothing to parse.
+  it('drops only the lint-staged rule when staged migration is skipped', () => {
+    const ids = ruleIds(getScriptRulesYaml(true));
+
+    expect(ids).toEqual(ruleIds(readRulesYaml()).filter((id) => id !== 'replace-lint-staged'));
+    expect(ids.every((id) => typeof id === 'string')).toBe(true);
+  });
+
+  it('still rewrites the remaining tools when staged migration is skipped', () => {
+    const scripts = { test: 'vitest', staged: 'lint-staged' };
+
+    const rewritten = rewriteScripts(JSON.stringify(scripts), getScriptRulesYaml(true));
+
+    expect(JSON.parse(rewritten!) as Record<string, string>).toEqual({
+      test: 'vp test',
+      staged: 'lint-staged',
+    });
+  });
+});
+
 describe('existing Vite+ core migration finalization', () => {
   let tmpDir: string;
 
@@ -8976,4 +9009,42 @@ describe('collectMigrationSetupPlan ESLint gating', () => {
       expect(plan.migrateEslint).toBe(expected);
     },
   );
+});
+
+describe('collectMigrationSetupPlan non-interactive editor conflicts', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-setup-plan-editor-'));
+    writePkgAt(tmpDir, { name: 'x' });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('skips (never overwrites) existing non-JSON jetbrains files, only merges JSON-like ones', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.idea'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.idea', 'externalDependencies.xml'),
+      '<project version="4"><component name="Custom"/></project>',
+    );
+    fs.writeFileSync(path.join(tmpDir, '.idea', 'workspace.xml'), '<project version="4"/>');
+
+    const plan = await collectMigrationSetupPlan(
+      tmpDir,
+      PackageManager.pnpm,
+      {
+        interactive: false,
+        hooks: false,
+        agent: false as const,
+        editor: 'jetbrains',
+      },
+      undefined,
+      false,
+    );
+
+    expect(plan.editorConflictDecisions.get('externalDependencies.xml')).toBe('skip');
+    expect(plan.editorConflictDecisions.get('workspace.xml')).toBe('skip');
+  });
 });

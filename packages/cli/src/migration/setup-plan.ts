@@ -8,7 +8,12 @@ import {
   detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
 } from '../utils/agent.ts';
-import { detectEditorConflicts, type EditorId, selectEditor } from '../utils/editor.ts';
+import {
+  detectEditorConflicts,
+  type EditorId,
+  isJsonLikeFile,
+  selectEditor,
+} from '../utils/editor.ts';
 import { cancelAndExit, promptGitHooks } from '../utils/prompts.ts';
 import {
   confirmEslintMigration,
@@ -142,7 +147,11 @@ async function collectEditorConfigPlan(
       }
       editorConflictDecisions.set(conflict.fileName, action);
     } else {
-      editorConflictDecisions.set(conflict.fileName, 'merge');
+      // Non-JSON files (e.g. JetBrains XML) can't be merged, so only skip them here.
+      editorConflictDecisions.set(
+        conflict.fileName,
+        isJsonLikeFile(conflict.fileName) ? 'merge' : 'skip',
+      );
     }
   }
 

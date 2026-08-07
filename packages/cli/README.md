@@ -175,11 +175,15 @@ vp migrate
 Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) action to install Vite+ in GitHub Actions:
 
 ```yaml
-- uses: voidzero-dev/setup-vp@v1
+- uses: voidzero-dev/setup-vp@<setup-vp-version>
   with:
     node-version: '22'
     cache: true
 ```
+
+Set `<setup-vp-version>` to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
+
+See [Automatic Version Updates](https://viteplus.dev/guide/ci#automatic-version-updates) to configure Dependabot or Renovate.
 
 #### Manual Installation & Migration
 

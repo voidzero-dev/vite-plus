@@ -526,7 +526,7 @@ const commandHelpDocs = {
           },
           {
             label: '-W, --warn=NAME',
-            description: 'Deny the rule or category (emit a warning)',
+            description: 'Warn on the rule or category (emit a warning)',
           },
           {
             label: '-D, --deny=NAME',

@@ -6,7 +6,12 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../editor.js';
+import {
+  detectExistingEditors,
+  selectEditor,
+  selectEditors,
+  writeEditorConfigs,
+} from '../editor.js';
 
 const tempDirs: string[] = [];
 
@@ -75,6 +80,80 @@ describe('selectEditors', () => {
       }),
     ).resolves.toEqual(['zed']);
   });
+
+  it('resolves --editor intellij to jetbrains and warns about the non-canonical ID used', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+
+    await expect(
+      selectEditors({
+        interactive: false,
+        editor: 'intellij',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['jetbrains']);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "--editor intellij was passed; use --editor jetbrains instead, as it's the canonical ID for that editor.",
+      ),
+    );
+  });
+
+  it('resolves --editor webstorm to jetbrains and warns about the non-canonical ID used', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+
+    await expect(
+      selectEditors({
+        interactive: false,
+        editor: 'webstorm',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['jetbrains']);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "--editor webstorm was passed; use --editor jetbrains instead, as it's the canonical ID for that editor.",
+      ),
+    );
+  });
+
+  it('does not show intellij/webstorm aliases as interactive TUI options', async () => {
+    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['vscode']);
+
+    await selectEditors({
+      interactive: true,
+      onCancel: vi.fn(),
+    });
+
+    expect(multiselectSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.not.arrayContaining([
+          expect.objectContaining({ value: 'intellij' }),
+          expect.objectContaining({ value: 'webstorm' }),
+        ]),
+      }),
+    );
+  });
+});
+
+describe('selectEditor', () => {
+  it('resolves --editor intellij to jetbrains and warns about the non-canonical ID used', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+
+    await expect(
+      selectEditor({
+        interactive: false,
+        editor: 'intellij',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toBe('jetbrains');
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "--editor intellij was passed; use --editor jetbrains instead, as it's the canonical ID for that editor.",
+      ),
+    );
+  });
 });
 
 describe('detectExistingEditors', () => {
@@ -90,6 +169,14 @@ describe('detectExistingEditors', () => {
 
   it('returns undefined when no editor config files exist', () => {
     expect(detectExistingEditors(createTempDir())).toBeUndefined();
+  });
+
+  it('detects existing jetbrains editor config files', () => {
+    const projectRoot = createTempDir();
+    fs.mkdirSync(path.join(projectRoot, '.idea'), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), '<project />');
+
+    expect(detectExistingEditors(projectRoot)).toEqual(['jetbrains']);
   });
 });
 
@@ -540,5 +627,90 @@ describe('writeEditorConfigs', () => {
     expect(vscodeExtensions.recommendations).toContain('VoidZero.vite-plus-extension-pack');
     expect(zedSettings['npm.scriptRunner']).toBeUndefined();
     expect(zedSettings.lsp).toBeDefined();
+  });
+
+  it('writes all jetbrains editor config files', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+
+    const externalDependenciesXml = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'externalDependencies.xml'),
+      'utf8',
+    );
+    expect(externalDependenciesXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(externalDependenciesXml).toContain(
+      '<plugin id="com.github.oxc.project.oxcintellijplugin" />',
+    );
+
+    const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
+    expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(workspaceXml).toContain('"javascript.preferred.runtime.type.id": "node"');
+    expect(workspaceXml).toContain(
+      `"nodejs_interpreter_path": "$USER_HOME$/.vite-plus/bin/node.exe"`,
+    );
+    expect(workspaceXml).toContain('"nodejs_package_manager_path": "pnpm"');
+
+    const oxfmtSettingsXml = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'OxfmtSettings.xml'),
+      'utf8',
+    );
+    expect(oxfmtSettingsXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(oxfmtSettingsXml).toContain('<component name="OxfmtSettings">');
+    expect(oxfmtSettingsXml).toContain(
+      '<option name="preferOxfmtCodeStyleSettings" value="true" />',
+    );
+
+    const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
+    expect(gitignore).toBe('**\n!externalDependencies.xml\n');
+  });
+
+  it('writes workspace.xml with the resolved package manager', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+      packageManager: 'yarn',
+    });
+
+    const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
+    expect(workspaceXml).toContain('"nodejs_package_manager_path": "yarn"');
+  });
+
+  it('does not overwrite existing non-JSON jetbrains file in non-interactive mode', async () => {
+    const projectRoot = createTempDir();
+    const xmlPath = path.join(projectRoot, '.idea', 'externalDependencies.xml');
+    fs.mkdirSync(path.dirname(xmlPath), { recursive: true });
+    fs.writeFileSync(xmlPath, '<project version="4"><component name="Custom"/></project>', 'utf8');
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'jetbrains',
+      interactive: false,
+      silent: true,
+    });
+
+    const xml = fs.readFileSync(xmlPath, 'utf8');
+    expect(xml).toBe('<project version="4"><component name="Custom"/></project>');
+
+    const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
+    expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+
+    const oxfmtSettingsXml = fs.readFileSync(
+      path.join(projectRoot, '.idea', 'OxfmtSettings.xml'),
+      'utf8',
+    );
+    expect(oxfmtSettingsXml).toContain('<component name="OxfmtSettings">');
+
+    const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
+    expect(gitignore).toBe('**\n!externalDependencies.xml\n');
   });
 });

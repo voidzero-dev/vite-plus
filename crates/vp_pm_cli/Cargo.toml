@@ -16,6 +16,7 @@ crossterm = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
+indicatif = { workspace = true }
 indoc = { workspace = true }
 node-semver = { workspace = true }
 pathdiff = { workspace = true }
