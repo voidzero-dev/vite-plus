@@ -230,6 +230,10 @@ pub enum Commands {
         /// Custom npm registry URL
         #[arg(long)]
         registry: Option<String>,
+
+        /// Refresh the cached update status without producing output
+        #[arg(long, hide = true)]
+        background_check: bool,
     },
 
     /// Remove vp and all related data
@@ -1036,7 +1040,16 @@ pub async fn run_command_with_options(
         Commands::Env(args) => commands::env::execute(cwd, args).await,
 
         // Self-Management
-        Commands::Upgrade { version, tag, check, rollback, force, silent, registry } => {
+        Commands::Upgrade {
+            version,
+            tag,
+            check,
+            rollback,
+            force,
+            silent,
+            registry,
+            background_check,
+        } => {
             commands::upgrade::execute(commands::upgrade::UpgradeOptions {
                 version,
                 tag,
@@ -1045,6 +1058,7 @@ pub async fn run_command_with_options(
                 force,
                 silent,
                 registry,
+                background_check,
             })
             .await
         }
