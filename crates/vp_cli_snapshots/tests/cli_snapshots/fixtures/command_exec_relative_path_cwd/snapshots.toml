@@ -1,0 +1,9 @@
+[[case]]
+name = "command_exec_relative_path_cwd"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "A relative PATH entry must resolve against the selected package cwd, not the vp process cwd."
+steps = [
+  { argv = ["node", "setup.js"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "exec", "--filter", "app", "--", "fake-node"], envs = [["PATH", "./tools:${PATH}"]], comment = "relative PATH entry resolves from the selected package", continue-on-failure = true },
+]

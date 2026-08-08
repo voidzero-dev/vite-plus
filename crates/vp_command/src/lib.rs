@@ -21,6 +21,15 @@ use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 mod ps1_shim;
 
+fn normalize_path_env(
+    path_env: &OsStr,
+    cwd: &AbsolutePath,
+) -> Result<OsString, std::env::JoinPathsError> {
+    std::env::join_paths(std::env::split_paths(path_env).map(|path| {
+        if path.is_absolute() || path.starts_with("~") { path } else { cwd.as_path().join(path) }
+    }))
+}
+
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
 pub struct FspyCommandResult {
@@ -39,6 +48,7 @@ pub fn resolve_bin(
     path_env: Option<&OsStr>,
     cwd: impl AsRef<AbsolutePath>,
 ) -> Result<AbsolutePathBuf, Error> {
+    let cwd = cwd.as_ref();
     let current_path;
     let path_env = if let Some(p) = path_env {
         p
@@ -46,8 +56,14 @@ pub fn resolve_bin(
         current_path = std::env::var_os("PATH").unwrap_or_default();
         &current_path
     };
-    let path = which::which_in(bin_name, Some(path_env), cwd.as_ref())
+    // `which` resolves relative PATH entries against the process cwd instead of the supplied
+    // command cwd. Commands are spawned with `cwd`, so resolve the entries the same way first;
+    // leave `~` entries for `which` to expand against the user's home directory.
+    let path_env = normalize_path_env(path_env, cwd)
         .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
+    let path = which::which_in(bin_name, Some(&path_env), cwd)
+        .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
+    let path = if path.is_absolute() { path } else { cwd.as_path().join(path) };
     AbsolutePathBuf::new(path).ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()))
 }
 
@@ -397,6 +413,96 @@ mod tests {
 
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")
+    }
+
+    #[cfg(unix)]
+    fn create_executable(path: &std::path::Path) {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_resolve_bin_with_relative_path_entry() {
+        use std::path::PathBuf;
+
+        let temp_dir = create_temp_dir();
+        let cwd_path = temp_dir.path().canonicalize().unwrap();
+        let cwd = AbsolutePathBuf::new(cwd_path.clone()).unwrap();
+        let bin_dir = cwd_path.join("node_modules/.bin");
+        let bin_path = bin_dir.join("fake-node");
+        let fallback_bin_dir = cwd_path.join("fallback-bin");
+        let fallback_bin_path = fallback_bin_dir.join("fake-node");
+
+        create_executable(&bin_path);
+        create_executable(&fallback_bin_path);
+
+        let path_env =
+            std::env::join_paths([PathBuf::from("./node_modules/.bin"), fallback_bin_dir]).unwrap();
+        let resolved = resolve_bin("fake-node", Some(&path_env), &cwd).unwrap();
+
+        assert_eq!(resolved.into_path_buf(), bin_path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_resolve_bin_continues_after_missing_relative_path_entry() {
+        use std::path::PathBuf;
+
+        let temp_dir = create_temp_dir();
+        let cwd_path = temp_dir.path().canonicalize().unwrap();
+        let cwd = AbsolutePathBuf::new(cwd_path.clone()).unwrap();
+        let fallback_bin_dir = cwd_path.join("fallback-bin");
+        let fallback_bin_path = fallback_bin_dir.join("fake-node");
+
+        create_executable(&fallback_bin_path);
+
+        let path_env =
+            std::env::join_paths([PathBuf::from("./missing-bin"), fallback_bin_dir]).unwrap();
+        let resolved = resolve_bin("fake-node", Some(&path_env), &cwd).unwrap();
+
+        assert_eq!(resolved.into_path_buf(), fallback_bin_path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_resolve_bin_with_empty_path_entry() {
+        use std::path::PathBuf;
+
+        let temp_dir = create_temp_dir();
+        let cwd_path = temp_dir.path().canonicalize().unwrap();
+        let cwd = AbsolutePathBuf::new(cwd_path.clone()).unwrap();
+        let bin_path = cwd_path.join("fake-node");
+
+        create_executable(&bin_path);
+
+        let path_env = std::env::join_paths([PathBuf::new()]).unwrap();
+        let resolved = resolve_bin("fake-node", Some(&path_env), &cwd).unwrap();
+
+        assert_eq!(resolved.into_path_buf(), bin_path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_normalize_path_env_preserves_tilde_entry() {
+        use std::path::PathBuf;
+
+        let temp_dir = create_temp_dir();
+        let cwd_path = temp_dir.path().canonicalize().unwrap();
+        let cwd = AbsolutePathBuf::new(cwd_path).unwrap();
+        let path_env = std::env::join_paths([PathBuf::from("~/bin")]).unwrap();
+
+        let normalized = normalize_path_env(&path_env, &cwd).unwrap();
+
+        assert_eq!(
+            std::env::split_paths(&normalized).collect::<Vec<_>>(),
+            [PathBuf::from("~/bin")]
+        );
     }
 
     mod run_command_tests {
