@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 node-semver = { workspace = true }
 thiserror = { workspace = true }
 tar = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 owo-colors = { workspace = true }
@@ -44,7 +45,6 @@ uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 serial_test = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

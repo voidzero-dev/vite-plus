@@ -1,68 +1,160 @@
-//! Background upgrade check for the vp CLI.
+//! Background upgrade check state for the vp CLI.
 //!
-//! Periodically queries the npm registry for the latest version and caches the
-//! result to `~/.vite-plus/.upgrade-check.json`. Displays a one-line notice on
-//! stderr when a newer version is available, at most once per 24 hours.
+//! Shell integrations launch `vp upgrade --background-check` as an OS-native
+//! background process. That command records a retry cooldown before touching
+//! the network, then queries the npm registry and caches only whether an update
+//! is available. Foreground commands only read this cache.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fs::{File, OpenOptions},
+    io::{Seek, SeekFrom, Write},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use vp_setup::registry;
 
 const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const PROMPT_INTERVAL_SECS: u64 = 24 * 60 * 60;
-const CACHE_FILE_NAME: &str = ".upgrade-check.json";
+const CACHE_DIR_NAME: &str = "cache";
+const CACHE_FILE_NAME: &str = "upgrade-check.json";
+const LOCK_FILE_NAME: &str = "upgrade-check.lock";
+const UPGRADE_NOTICE: &str = "A new version of vp is available. Run `vp upgrade` to update.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum UpgradeCheckStatus {
+    Unknown,
+    Current,
+    Available,
+}
 
 #[expect(clippy::disallowed_types)] // String required for serde JSON round-trip
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UpgradeCheckCache {
-    latest: String,
+    checked_for: String,
+    status: UpgradeCheckStatus,
     checked_at: u64,
     prompted_at: u64,
 }
 
+impl UpgradeCheckCache {
+    fn needs_check(&self, current_version: &str, now: u64) -> bool {
+        self.checked_for != current_version
+            || now.saturating_sub(self.checked_at) > CHECK_INTERVAL_SECS
+    }
+
+    fn notice_due(&self, current_version: &str, now: u64) -> bool {
+        self.checked_for == current_version
+            && self.status == UpgradeCheckStatus::Available
+            && now.saturating_sub(self.prompted_at) > PROMPT_INTERVAL_SECS
+    }
+}
+
+struct UpgradeCheckLock {
+    _file: File,
+    cache_dir: vt_path::AbsolutePathBuf,
+    #[expect(clippy::disallowed_types)] // UUID token is persisted in the lock file
+    token: String,
+}
+
+impl UpgradeCheckLock {
+    fn is_current(&self) -> bool {
+        std::fs::read_to_string(self.cache_dir.join(LOCK_FILE_NAME).as_path())
+            .is_ok_and(|token| token == self.token)
+    }
+
+    fn write_cache(&self, cache: &UpgradeCheckCache) -> std::io::Result<()> {
+        if !self.is_current() {
+            return Err(std::io::ErrorKind::NotFound.into());
+        }
+
+        persist_cache(&self.cache_dir, cache)
+    }
+}
+
+fn cache_dir(install_dir: &vt_path::AbsolutePath) -> vt_path::AbsolutePathBuf {
+    install_dir.join(CACHE_DIR_NAME)
+}
+
+fn cache_path(install_dir: &vt_path::AbsolutePath) -> vt_path::AbsolutePathBuf {
+    cache_dir(install_dir).join(CACHE_FILE_NAME)
+}
+
 fn read_cache(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> {
-    let cache_path = install_dir.join(CACHE_FILE_NAME);
-    let data = std::fs::read_to_string(cache_path.as_path()).ok()?;
+    let data = std::fs::read_to_string(cache_path(install_dir).as_path()).ok()?;
     serde_json::from_str(&data).ok()
 }
 
-fn write_cache(install_dir: &vt_path::AbsolutePath, cache: &UpgradeCheckCache) {
-    let cache_path = install_dir.join(CACHE_FILE_NAME);
-    if let Ok(data) = serde_json::to_string(cache) {
-        let _ = std::fs::write(cache_path.as_path(), &data);
+fn persist_cache(
+    cache_dir: &vt_path::AbsolutePath,
+    cache: &UpgradeCheckCache,
+) -> std::io::Result<()> {
+    let cache_path = cache_dir.join(CACHE_FILE_NAME);
+    let data = serde_json::to_vec(cache).map_err(std::io::Error::other)?;
+    let mut temp = tempfile::NamedTempFile::new_in(cache_dir.as_path())?;
+    temp.write_all(&data)?;
+    temp.as_file().sync_all()?;
+    temp.persist(cache_path.as_path()).map_err(|error| error.error)?;
+    Ok(())
+}
+
+fn try_acquire_lock(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckLock> {
+    let cache_dir = cache_dir(install_dir);
+    if let Err(error) = std::fs::create_dir(cache_dir.as_path())
+        && error.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        return None;
     }
+    let path = cache_dir.join(LOCK_FILE_NAME);
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path.as_path())
+        .ok()?;
+    file.try_lock().ok()?;
+
+    let token = uuid::Uuid::new_v4().to_string();
+    file.set_len(0).ok()?;
+    file.seek(SeekFrom::Start(0)).ok()?;
+    file.write_all(token.as_bytes()).ok()?;
+    file.sync_all().ok()?;
+    Some(UpgradeCheckLock { _file: file, cache_dir, token })
 }
 
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-fn should_check(cache: Option<&UpgradeCheckCache>, now: u64) -> bool {
-    if std::env::var_os("VP_NO_UPDATE_CHECK").is_some()
-        || std::env::var_os("CI").is_some()
+fn checks_disabled() -> bool {
+    std::env::var_os("VP_NO_UPDATE_CHECK").is_some()
+        || vp_shared::EnvConfig::get().is_ci
         || std::env::var_os("VP_CLI_TEST").is_some()
-    {
-        return false;
-    }
-
-    cache.is_none_or(|c| now.saturating_sub(c.checked_at) > CHECK_INTERVAL_SECS)
 }
 
-fn should_prompt(cache: Option<&UpgradeCheckCache>, now: u64) -> bool {
-    cache.is_none_or(|c| now.saturating_sub(c.prompted_at) > PROMPT_INTERVAL_SECS)
+fn should_check(cache: Option<&UpgradeCheckCache>, current_version: &str, now: u64) -> bool {
+    !checks_disabled() && cache.is_none_or(|cache| cache.needs_check(current_version, now))
 }
 
-/// Returns `true` if `latest` is strictly newer than `current` per semver.
-/// Returns `false` for equal versions, downgrades, or unparsable strings.
-fn is_newer_version(current: &str, latest: &str) -> bool {
-    if latest.is_empty() || current == "0.0.0" {
-        return false;
+fn read_due_notice(
+    install_dir: &vt_path::AbsolutePath,
+    current_version: &str,
+    now: u64,
+) -> Option<UpgradeCheckCache> {
+    read_cache(install_dir).filter(|cache| cache.notice_due(current_version, now))
+}
+
+fn status_for_versions(current: &str, latest: &str) -> UpgradeCheckStatus {
+    if current == "0.0.0" {
+        return UpgradeCheckStatus::Current;
     }
+
     match (node_semver::Version::parse(current), node_semver::Version::parse(latest)) {
-        (Ok(current), Ok(latest)) => latest > current,
-        _ => false,
+        (Ok(current), Ok(latest)) if latest > current => UpgradeCheckStatus::Available,
+        (Ok(_), Ok(_)) => UpgradeCheckStatus::Current,
+        _ => UpgradeCheckStatus::Unknown,
     }
 }
 
@@ -71,75 +163,89 @@ async fn resolve_version_string() -> Option<String> {
     registry::resolve_version_string("latest", None).await.ok()
 }
 
-pub struct UpgradeCheckResult {
-    install_dir: vt_path::AbsolutePathBuf,
-    cache: UpgradeCheckCache,
-}
-
-/// Returns an upgrade check result if a newer version is available and the user
-/// hasn't been prompted within the last 24 hours. Returns `None` otherwise.
-pub async fn check_for_update() -> Option<UpgradeCheckResult> {
-    let install_dir = vp_shared::get_vp_home().ok()?;
+/// Refresh the cached update status. This function intentionally runs in the
+/// current process; shell integrations decide how to run that process in the
+/// background.
+pub async fn run_background_check() {
+    let Ok(install_dir) = vp_shared::get_vp_home() else {
+        return;
+    };
     let current_version = env!("CARGO_PKG_VERSION");
     let now = now_secs();
-    let mut cache = read_cache(&install_dir);
 
-    if should_check(cache.as_ref(), now) {
-        let prompted_at = cache.as_ref().map_or(0, |c| c.prompted_at);
-
-        match resolve_version_string().await {
-            Some(latest) => {
-                let new_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(&install_dir, &new_cache);
-                cache = Some(new_cache);
-            }
-            None => {
-                // Still update checked_at so we back off for 24h instead of
-                // retrying on every command when the registry is unreachable.
-                let latest = cache.as_ref().map(|c| c.latest.clone()).unwrap_or_default();
-                let failed_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(&install_dir, &failed_cache);
-                cache = Some(failed_cache);
-            }
-        }
+    if !should_check(read_cache(&install_dir).as_ref(), current_version, now) {
+        return;
     }
 
-    let cache = cache?;
+    let Some(lock) = try_acquire_lock(&install_dir) else {
+        return;
+    };
 
-    if !is_newer_version(current_version, &cache.latest) {
-        return None;
+    // Another process may have refreshed the cache before this process won the
+    // lock, so check again while holding it.
+    let cache = read_cache(&install_dir);
+    let now = now_secs();
+    if !should_check(cache.as_ref(), current_version, now) {
+        return;
     }
 
-    if !should_prompt(Some(&cache), now) {
-        return None;
+    let prompted_at = cache
+        .as_ref()
+        .filter(|cache| cache.checked_for == current_version)
+        .map_or(0, |cache| cache.prompted_at);
+    let pending = UpgradeCheckCache {
+        checked_for: current_version.to_owned(),
+        status: UpgradeCheckStatus::Unknown,
+        checked_at: now,
+        prompted_at,
+    };
+
+    // Persist the cooldown before the first await. If the shell or OS ends this
+    // process during the request, subsequent commands still avoid a retry storm.
+    if lock.write_cache(&pending).is_err() {
+        return;
     }
 
-    Some(UpgradeCheckResult { install_dir, cache })
+    let status = resolve_version_string().await.map_or(UpgradeCheckStatus::Unknown, |latest| {
+        status_for_versions(current_version, &latest)
+    });
+    let completed = UpgradeCheckCache { status, checked_at: now_secs(), ..pending };
+    let _ = lock.write_cache(&completed);
 }
 
-/// Print a one-line upgrade notice to stderr and record the prompt time.
+/// Print a generic one-line upgrade notice from cache and record the prompt time.
 #[expect(clippy::print_stderr, clippy::disallowed_macros)]
-pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
-    let current_version = env!("CARGO_PKG_VERSION");
-    eprintln!(
-        "\n{} {} {} {}{} {}",
-        "vp update available:".bright_black(),
-        current_version.bright_black(),
-        "\u{2192}".bright_black(),
-        result.cache.latest.bright_green().bold(),
-        ", run".bright_black(),
-        "vp upgrade".bright_green().bold(),
-    );
+pub fn display_cached_upgrade_notice() {
+    if checks_disabled() {
+        return;
+    }
 
-    let mut cache = result.cache.clone();
-    cache.prompted_at = now_secs();
-    write_cache(&result.install_dir, &cache);
+    let Ok(install_dir) = vp_shared::get_vp_home() else {
+        return;
+    };
+    let current_version = env!("CARGO_PKG_VERSION");
+    let now = now_secs();
+    if read_due_notice(&install_dir, current_version, now).is_none() {
+        return;
+    }
+
+    let Some(lock) = try_acquire_lock(&install_dir) else {
+        return;
+    };
+    let Some(mut cache) = read_due_notice(&install_dir, current_version, now) else {
+        return;
+    };
+
+    eprintln!("\n{UPGRADE_NOTICE}");
+
+    cache.prompted_at = now;
+    let _ = lock.write_cache(&cache);
 }
 
-/// Whether the upgrade check should run for the given command args.
+/// Whether a foreground command may display a cached upgrade notice.
 /// Returns `false` for commands excluded by design, quiet modes, and
 /// machine-readable output flags (--silent, -s, --json, --parseable, --format json).
-pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
+pub fn should_display_for_command(args: &crate::cli::Args) -> bool {
     if !cfg!(test) && !vp_shared::is_stderr_terminal() {
         return false;
     }

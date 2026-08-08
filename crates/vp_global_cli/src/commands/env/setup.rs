@@ -537,9 +537,21 @@ case ":${PATH}:" in
 esac
 unset __vp_bin
 
+# Start the Rust update checker as a detached shell job. The checker itself
+# uses a cross-process lock and returns immediately when the cache is fresh.
+__vp_background_upgrade_check() {
+    case $- in *i*) ;; *) return 0 ;; esac
+    (
+        command vp upgrade --background-check </dev/null >/dev/null 2>&1 &
+        disown 2>/dev/null || true
+    )
+}
+__vp_background_upgrade_check
+
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 vp() {
+    __vp_background_upgrade_check
     if [ "$1" = "env" ] && [ "$2" = "use" ]; then
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
         __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 VP_SHELL=sh command vp "$@")" || return $?
@@ -572,9 +584,17 @@ set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
 
+function __vp_background_upgrade_check
+    status is-interactive; or return
+    command vp upgrade --background-check </dev/null >/dev/null 2>&1 &
+    disown 2>/dev/null
+end
+__vp_background_upgrade_check
+
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
+    __vp_background_upgrade_check
     if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
@@ -606,9 +626,17 @@ const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev
 $env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
+def __vp_background_upgrade_check [] {
+    if $nu.is-interactive {
+        job spawn { ^vp upgrade --background-check | complete | ignore } | ignore
+    }
+}
+__vp_background_upgrade_check
+
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
+    __vp_background_upgrade_check
     if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
@@ -670,9 +698,21 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
 }
 
+function __vp_background_upgrade_check {
+    if (-not [Environment]::UserInteractive -or [Console]::IsInputRedirected) { return }
+    $__vp_args = [Environment]::GetCommandLineArgs()
+    if ($__vp_args -match '^-(NonInteractive|noni|File|f|Command(WithArgs)?|c(wa)?|EncodedCommand|e(c)?)$' -or $__vp_args -match '\.ps1$') { return }
+    try {
+        $__vp_null = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { "NUL" } else { "/dev/null" }
+        Start-Process -FilePath (Join-Path $__vp_bin "vp") -ArgumentList "upgrade", "--background-check" -NoNewWindow -RedirectStandardError $__vp_null -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+}
+__vp_background_upgrade_check
+
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp {
+    __vp_background_upgrade_check
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp") @args; return
