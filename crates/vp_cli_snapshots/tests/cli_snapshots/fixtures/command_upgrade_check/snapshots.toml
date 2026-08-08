@@ -5,3 +5,17 @@ skip-platforms = ["windows", { os = "linux", libc = "musl" }]
 steps = [
   { argv = ["vp", "upgrade", "--check", "--tag", "alpha"], comment = "alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_upgrade_background_notice"
+vp = "global"
+local-registry = true
+unset-env = ["VP_CLI_TEST"]
+comment = "A background check records an available update without contaminating machine output, then the foreground CLI shows the generic notice at most once per prompt interval."
+steps = [
+  { argv = ["vp", "upgrade", "--background-check"], snapshot = false },
+  { argv = ["vpt", "grep-file", "$VP_HOME/cache/upgrade-check.json", '"status":"available"'], snapshot = false },
+  { argv = ["vp", "env", "list", "--json"], comment = "Machine-readable output does not consume the pending notice.", snapshot = false },
+  { argv = ["vp", "env", "off"], comment = "The next interactive command displays the cached update notice." },
+  { argv = ["vp", "env", "off"], comment = "A subsequent command stays quiet after the notice timestamp is recorded." },
+]
