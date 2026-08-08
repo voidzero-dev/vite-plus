@@ -1251,6 +1251,131 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_env_files_launch_background_upgrade_checks() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let posix = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let nu = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+        let powershell = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+
+        #[cfg(unix)]
+        assert!(
+            std::process::Command::new("sh")
+                .arg("-n")
+                .arg(home.join("env").as_path())
+                .status()
+                .unwrap()
+                .success(),
+            "POSIX integration should parse as a shell script"
+        );
+
+        for (shell, content) in
+            [("POSIX", posix.as_str()), ("Fish", fish.as_str()), ("Nushell", nu.as_str())]
+        {
+            assert!(
+                content.contains("upgrade --background-check"),
+                "{shell} integration should invoke the hidden check command"
+            );
+            assert!(
+                content.matches("__vp_background_upgrade_check").count() >= 3,
+                "{shell} integration should check at startup and before each vp command"
+            );
+        }
+
+        assert!(
+            posix.contains("(\n        command vp upgrade --background-check")
+                && posix.contains("&\n        disown"),
+            "POSIX should detach in a subshell without replacing the caller's last background PID"
+        );
+        assert!(fish.contains("&\n    disown"), "Fish should detach with shell job control");
+        assert!(nu.contains("job spawn"), "Nushell should use its native job API");
+        assert!(posix.contains("case $- in *i*)"), "POSIX should require an interactive shell");
+        assert!(fish.contains("status is-interactive"), "Fish should require an interactive shell");
+        assert!(
+            nu.contains("if $nu.is-interactive"),
+            "Nushell should require an interactive shell"
+        );
+        for expected in [
+            "--background-check",
+            "Start-Process",
+            "-NoNewWindow",
+            "[Environment]::UserInteractive",
+            "[Console]::IsInputRedirected",
+            "[Environment]::GetCommandLineArgs()",
+            "Command(WithArgs)?",
+            "e(c)?",
+            "\\.ps1$",
+        ] {
+            assert!(
+                powershell.contains(expected),
+                "PowerShell integration should contain `{expected}`"
+            );
+        }
+        assert!(
+            powershell.matches("__vp_background_upgrade_check").count() >= 3,
+            "PowerShell integration should check at startup and before each vp command"
+        );
+        for (shell, content) in [
+            ("POSIX", posix.as_str()),
+            ("Fish", fish.as_str()),
+            ("Nushell", nu.as_str()),
+            ("PowerShell", powershell.as_str()),
+        ] {
+            assert!(
+                !content.contains("VP_NO_UPDATE_CHECK") && !content.contains("CI"),
+                "{shell} should leave update-check policy to the hidden command"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_posix_background_upgrade_check_preserves_last_background_pid() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let vp_path = home.join("bin/vp");
+        tokio::fs::create_dir_all(vp_path.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&vp_path, "#!/bin/sh\nexit 0\n").await.unwrap();
+        std::fs::set_permissions(&vp_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let status = std::process::Command::new("bash")
+            .env("HOME", temp_dir.path())
+            .args([
+                "--noprofile",
+                "--norc",
+                "-i",
+                "-c",
+                r#"
+source "$1"
+sleep 30 &
+server_pid=$!
+vp build
+checker_pid=$!
+kill "$server_pid"
+wait "$server_pid" 2>/dev/null
+test "$checker_pid" = "$server_pid"
+"#,
+                "bash",
+            ])
+            .arg(home.join("env").as_path())
+            .status()
+            .unwrap();
+
+        assert!(status.success(), "POSIX wrapper should preserve the caller's `$!`");
+    }
+
+    #[tokio::test]
     #[cfg(windows)]
     #[serial_test::serial]
     async fn test_execute_creates_cmd_wrapper_in_fresh_home() {

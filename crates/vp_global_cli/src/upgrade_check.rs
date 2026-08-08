@@ -86,6 +86,16 @@ fn read_cache(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> 
     serde_json::from_str(&data).ok()
 }
 
+#[cfg(test)]
+fn write_cache(
+    install_dir: &vt_path::AbsolutePath,
+    cache: &UpgradeCheckCache,
+) -> std::io::Result<()> {
+    let cache_dir = cache_dir(install_dir);
+    std::fs::create_dir_all(cache_dir.as_path())?;
+    persist_cache(&cache_dir, cache)
+}
+
 fn persist_cache(
     cache_dir: &vt_path::AbsolutePath,
     cache: &UpgradeCheckCache,
@@ -144,6 +154,13 @@ fn read_due_notice(
     now: u64,
 ) -> Option<UpgradeCheckCache> {
     read_cache(install_dir).filter(|cache| cache.notice_due(current_version, now))
+}
+
+/// Returns `true` if `latest` is strictly newer than `current` per semver.
+/// Returns `false` for equal versions, downgrades, or unparsable strings.
+#[cfg(test)]
+fn is_newer_version(current: &str, latest: &str) -> bool {
+    status_for_versions(current, latest) == UpgradeCheckStatus::Available
 }
 
 fn status_for_versions(current: &str, latest: &str) -> UpgradeCheckStatus {
@@ -268,7 +285,16 @@ pub fn should_display_for_command(args: &crate::cli::Args) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+
     use serial_test::serial;
+    use tokio::net::TcpListener;
 
     use super::*;
 
@@ -277,14 +303,81 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
 
-        let cache =
-            UpgradeCheckCache { latest: "1.2.3".to_owned(), checked_at: 1000, prompted_at: 900 };
-        write_cache(&dir_path, &cache);
+        let cache = UpgradeCheckCache {
+            checked_for: "1.2.3".to_owned(),
+            status: UpgradeCheckStatus::Available,
+            checked_at: 1000,
+            prompted_at: 900,
+        };
+        write_cache(&dir_path, &cache).unwrap();
 
         let loaded = read_cache(&dir_path).expect("should read back cache");
-        assert_eq!(loaded.latest, "1.2.3");
+        let expected_path = dir_path.join("cache").join("upgrade-check.json");
+        assert_eq!(cache_path(&dir_path), expected_path);
+        assert!(expected_path.as_path().exists());
+        assert_eq!(loaded.checked_for, "1.2.3");
+        assert_eq!(loaded.status, UpgradeCheckStatus::Available);
         assert_eq!(loaded.checked_at, 1000);
         assert_eq!(loaded.prompted_at, 900);
+    }
+
+    #[test]
+    fn cache_write_atomically_replaces_existing_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let mut cache = UpgradeCheckCache {
+            checked_for: "1.2.3".to_owned(),
+            status: UpgradeCheckStatus::Unknown,
+            checked_at: 1000,
+            prompted_at: 0,
+        };
+        write_cache(&dir_path, &cache).unwrap();
+
+        cache.status = UpgradeCheckStatus::Available;
+        cache.checked_at = 2000;
+        write_cache(&dir_path, &cache).unwrap();
+
+        let loaded = read_cache(&dir_path).unwrap();
+        assert_eq!(loaded.status, UpgradeCheckStatus::Available);
+        assert_eq!(loaded.checked_at, 2000);
+    }
+
+    #[test]
+    fn lock_is_exclusive_and_released_by_its_owner() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+
+        let lock = try_acquire_lock(&dir_path).expect("first process should acquire the lock");
+        let first_token = lock.token.clone();
+        assert!(try_acquire_lock(&dir_path).is_none(), "second process must not acquire the lock");
+        drop(lock);
+
+        let next = try_acquire_lock(&dir_path).expect("lock should be reusable after owner exits");
+        assert_ne!(next.token, first_token, "each owner should write a new generation token");
+    }
+
+    #[test]
+    fn locked_cache_write_does_not_recreate_a_moved_install() {
+        let dir = tempfile::tempdir().unwrap();
+        let install_path = dir.path().join("vite-plus");
+        std::fs::create_dir(&install_path).unwrap();
+        let install_dir = vt_path::AbsolutePathBuf::new(install_path.clone()).unwrap();
+        let lock = try_acquire_lock(&install_dir).expect("worker should acquire the lock");
+        let moved_path = dir.path().join("vite-plus.removing");
+        std::fs::rename(&install_path, &moved_path).unwrap();
+        let cache = UpgradeCheckCache {
+            checked_for: "1.2.3".to_owned(),
+            status: UpgradeCheckStatus::Available,
+            checked_at: 1000,
+            prompted_at: 0,
+        };
+
+        assert!(!lock.is_current(), "moving the install should invalidate the worker");
+        assert!(
+            lock.write_cache(&cache).is_err(),
+            "an invalidated worker must not write its result"
+        );
+        assert!(!install_path.exists(), "the removed install path must stay absent");
     }
 
     #[test]
@@ -298,7 +391,8 @@ mod tests {
     fn read_cache_returns_none_for_corrupt_file() {
         let dir = tempfile::tempdir().unwrap();
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir_path.join(CACHE_FILE_NAME).as_path(), "not json").unwrap();
+        std::fs::create_dir_all(cache_dir(&dir_path).as_path()).unwrap();
+        std::fs::write(cache_path(&dir_path).as_path(), "not json").unwrap();
         assert!(read_cache(&dir_path).is_none());
     }
 
@@ -317,12 +411,18 @@ mod tests {
         unsafe {
             if let Some(v) = ci {
                 std::env::set_var("CI", v);
+            } else {
+                std::env::remove_var("CI");
             }
             if let Some(v) = test {
                 std::env::set_var("VP_CLI_TEST", v);
+            } else {
+                std::env::remove_var("VP_CLI_TEST");
             }
             if let Some(v) = no_check {
                 std::env::set_var("VP_NO_UPDATE_CHECK", v);
+            } else {
+                std::env::remove_var("VP_NO_UPDATE_CHECK");
             }
         }
     }
@@ -331,7 +431,7 @@ mod tests {
     #[serial]
     fn should_check_returns_true_when_no_cache() {
         with_env_vars_cleared(|| {
-            assert!(should_check(None, now_secs()));
+            assert!(should_check(None, "1.0.0", now_secs()));
         });
     }
 
@@ -340,9 +440,13 @@ mod tests {
     fn should_check_returns_false_when_cache_fresh() {
         with_env_vars_cleared(|| {
             let now = now_secs();
-            let cache =
-                UpgradeCheckCache { latest: "1.0.0".to_owned(), checked_at: now, prompted_at: 0 };
-            assert!(!should_check(Some(&cache), now));
+            let cache = UpgradeCheckCache {
+                checked_for: "1.0.0".to_owned(),
+                status: UpgradeCheckStatus::Current,
+                checked_at: now,
+                prompted_at: 0,
+            };
+            assert!(!should_check(Some(&cache), "1.0.0", now));
         });
     }
 
@@ -353,11 +457,27 @@ mod tests {
             let now = now_secs();
             let stale_time = now - CHECK_INTERVAL_SECS - 1;
             let cache = UpgradeCheckCache {
-                latest: "1.0.0".to_owned(),
+                checked_for: "1.0.0".to_owned(),
+                status: UpgradeCheckStatus::Current,
                 checked_at: stale_time,
                 prompted_at: 0,
             };
-            assert!(should_check(Some(&cache), now));
+            assert!(should_check(Some(&cache), "1.0.0", now));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn should_check_returns_true_for_a_different_cli_version() {
+        with_env_vars_cleared(|| {
+            let now = now_secs();
+            let cache = UpgradeCheckCache {
+                checked_for: "1.0.0".to_owned(),
+                status: UpgradeCheckStatus::Current,
+                checked_at: now,
+                prompted_at: 0,
+            };
+            assert!(should_check(Some(&cache), "1.0.1", now));
         });
     }
 
@@ -368,40 +488,44 @@ mod tests {
             unsafe {
                 std::env::set_var("VP_NO_UPDATE_CHECK", "1");
             }
-            assert!(!should_check(None, now_secs()));
+            assert!(!should_check(None, "1.0.0", now_secs()));
         });
     }
 
     #[test]
-    fn should_prompt_returns_true_when_no_cache() {
-        assert!(should_prompt(None, now_secs()));
-    }
-
-    #[test]
-    fn should_prompt_returns_true_when_never_prompted() {
+    fn notice_is_due_when_never_prompted() {
         let cache = UpgradeCheckCache {
-            latest: "2.0.0".to_owned(),
+            checked_for: "1.0.0".to_owned(),
+            status: UpgradeCheckStatus::Available,
             checked_at: now_secs(),
             prompted_at: 0,
         };
-        assert!(should_prompt(Some(&cache), now_secs()));
+        assert!(cache.notice_due("1.0.0", now_secs()));
     }
 
     #[test]
-    fn should_prompt_returns_false_when_recently_prompted() {
+    fn notice_is_not_due_when_recently_prompted() {
         let now = now_secs();
-        let cache =
-            UpgradeCheckCache { latest: "2.0.0".to_owned(), checked_at: now, prompted_at: now };
-        assert!(!should_prompt(Some(&cache), now));
+        let cache = UpgradeCheckCache {
+            checked_for: "1.0.0".to_owned(),
+            status: UpgradeCheckStatus::Available,
+            checked_at: now,
+            prompted_at: now,
+        };
+        assert!(!cache.notice_due("1.0.0", now));
     }
 
     #[test]
-    fn should_prompt_returns_true_when_prompt_stale() {
+    fn notice_is_due_when_prompt_stale() {
         let now = now_secs();
         let stale = now - PROMPT_INTERVAL_SECS - 1;
-        let cache =
-            UpgradeCheckCache { latest: "2.0.0".to_owned(), checked_at: now, prompted_at: stale };
-        assert!(should_prompt(Some(&cache), now));
+        let cache = UpgradeCheckCache {
+            checked_for: "1.0.0".to_owned(),
+            status: UpgradeCheckStatus::Available,
+            checked_at: now,
+            prompted_at: stale,
+        };
+        assert!(cache.notice_due("1.0.0", now));
     }
 
     #[test]
@@ -462,56 +586,103 @@ mod tests {
 
     #[test]
     fn should_run_for_normal_command() {
-        assert!(should_run_for_command(&parse_args(&["build"])));
+        assert!(should_display_for_command(&parse_args(&["build"])));
     }
 
     #[test]
     fn should_not_run_for_upgrade() {
-        assert!(!should_run_for_command(&parse_args(&["upgrade"])));
+        assert!(!should_display_for_command(&parse_args(&["upgrade"])));
     }
 
     #[test]
     fn should_not_run_for_install_silent() {
-        assert!(!should_run_for_command(&parse_args(&["install", "--silent"])));
+        assert!(!should_display_for_command(&parse_args(&["install", "--silent"])));
     }
 
     #[test]
     fn should_not_run_for_dlx_short_silent() {
-        assert!(!should_run_for_command(&parse_args(&["dlx", "-s", "pkg"])));
+        assert!(!should_display_for_command(&parse_args(&["dlx", "-s", "pkg"])));
     }
 
     #[test]
     fn should_not_run_for_why_json() {
-        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--json"])));
+        assert!(!should_display_for_command(&parse_args(&["why", "lodash", "--json"])));
     }
 
     #[test]
     fn should_not_run_for_why_parseable() {
-        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--parseable"])));
+        assert!(!should_display_for_command(&parse_args(&["why", "lodash", "--parseable"])));
     }
 
     #[test]
     fn should_not_run_for_outdated_format_json() {
-        assert!(!should_run_for_command(&parse_args(&["outdated", "--format", "json"])));
+        assert!(!should_display_for_command(&parse_args(&["outdated", "--format", "json"])));
     }
 
     #[test]
     fn should_not_run_for_pm_list_parseable() {
-        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--parseable"])));
+        assert!(!should_display_for_command(&parse_args(&["pm", "list", "--parseable"])));
     }
 
     #[test]
     fn should_not_run_for_pm_list_json() {
-        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--json"])));
+        assert!(!should_display_for_command(&parse_args(&["pm", "list", "--json"])));
     }
 
     #[test]
     fn should_not_run_for_env_current_json() {
-        assert!(!should_run_for_command(&parse_args(&["env", "current", "--json"])));
+        assert!(!should_display_for_command(&parse_args(&["env", "current", "--json"])));
     }
 
     #[test]
     fn should_run_for_outdated_without_format() {
-        assert!(should_run_for_command(&parse_args(&["outdated"])));
+        assert!(should_display_for_command(&parse_args(&["outdated"])));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    #[serial]
+    async fn concurrent_slow_checks_start_one_request_and_back_off_before_it_finishes() {
+        let home = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let registry = format!("http://{}", listener.local_addr().unwrap());
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let server_request_count = Arc::clone(&request_count);
+        let server = tokio::spawn(async move {
+            loop {
+                let (connection, _) = listener.accept().await.unwrap();
+                server_request_count.fetch_add(1, Ordering::SeqCst);
+                tokio::spawn(async move {
+                    let _connection = connection;
+                    std::future::pending::<()>().await;
+                });
+            }
+        });
+
+        let _env = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
+            vite_plus_home: Some(home.path().to_path_buf()),
+            npm_registry: registry,
+            ..vp_shared::EnvConfig::for_test()
+        });
+
+        let checks = (0..5).map(|_| tokio::spawn(run_background_check())).collect::<Vec<_>>();
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while request_count.load(Ordering::SeqCst) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("at least one registry request should start");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let observed_requests = request_count.load(Ordering::SeqCst);
+        let cache_exists = home.path().join(CACHE_DIR_NAME).join(CACHE_FILE_NAME).exists();
+        for check in checks {
+            check.abort();
+        }
+        server.abort();
+
+        assert_eq!(observed_requests, 1, "concurrent checks must share one registry request");
+        assert!(cache_exists, "the retry cooldown must be persisted before awaiting the registry");
     }
 }
