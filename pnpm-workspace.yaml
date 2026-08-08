@@ -19,8 +19,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.142.0
-  '@oxc-project/types': =0.142.0
+  '@oxc-project/runtime': =0.143.0
+  '@oxc-project/types': =0.143.0
   '@oxlint/plugins': =1.73.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
@@ -96,11 +96,11 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.142.0
-  oxc-parser: =0.142.0
-  oxc-transform: =0.142.0
-  oxfmt: =0.61.0
-  oxlint: =1.76.0
+  oxc-minify: =0.143.0
+  oxc-parser: =0.143.0
+  oxc-transform: =0.143.0
+  oxfmt: =0.62.0
+  oxlint: =1.77.0
   oxlint-tsgolint: =7.0.2001
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -216,6 +216,9 @@ packageExtensions:
     peerDependenciesMeta:
       source-map-js:
         optional: true
+  '@volar/typescript':
+    dependencies:
+      '@volar/language-service': 2.4.28
 patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch

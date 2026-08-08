@@ -22,15 +22,38 @@ export function readRulesYaml(): string {
   return cachedRulesYaml;
 }
 
+// Each rule is one YAML document introduced by a `---` separator line. Split on the
+// separators instead of on blank lines, which a formatter is free to collapse. Comment
+// lines directly above a separator describe the rule below it, so they move with it.
+function splitRuleDocuments(yaml: string): string[] {
+  const lines = yaml.split('\n');
+  const documents: string[] = [];
+  let start = 0;
+  for (const [index, line] of lines.entries()) {
+    if (line.trimEnd() !== '---') {
+      continue;
+    }
+    let documentStart = index;
+    while (documentStart > start && lines[documentStart - 1].trimStart().startsWith('#')) {
+      documentStart--;
+    }
+    if (documentStart > start) {
+      documents.push(lines.slice(start, documentStart).join('\n'));
+      start = documentStart;
+    }
+  }
+  documents.push(lines.slice(start).join('\n'));
+  return documents;
+}
+
 export function getScriptRulesYaml(skipStagedMigration?: boolean): string {
   const yaml = readRulesYaml();
   if (!skipStagedMigration) {
     return yaml;
   }
-  cachedRulesYamlNoLintStaged ??= yaml
-    .split('\n\n\n')
-    .filter((block) => !block.includes('id: replace-lint-staged'))
-    .join('\n\n\n');
+  cachedRulesYamlNoLintStaged ??= splitRuleDocuments(yaml)
+    .filter((document) => !document.includes('id: replace-lint-staged'))
+    .join('\n');
   return cachedRulesYamlNoLintStaged;
 }
 

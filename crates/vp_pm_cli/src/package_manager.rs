@@ -882,23 +882,29 @@ pub async fn download_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
-    download_and_extract_tgz_with_hash(&tgz_url, &target_dir_tmp, expected_hash).await.map_err(
-        |err| {
-            // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
-            if let Error::Reqwest(e) = &err
-                && let Some(status) = e.status()
-                && status == reqwest::StatusCode::NOT_FOUND
-            {
-                Error::PackageManagerVersionNotFound {
-                    name: package_manager_type.to_string().into(),
-                    version: version.clone(),
-                    url: tgz_url.into(),
-                }
-            } else {
-                err
+    let download_message = format!("Downloading {package_manager_type} v{version}...");
+    download_and_extract_tgz_with_hash(
+        &tgz_url,
+        &target_dir_tmp,
+        expected_hash,
+        Some(&download_message),
+    )
+    .await
+    .map_err(|err| {
+        // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
+        if let Error::Reqwest(e) = &err
+            && let Some(status) = e.status()
+            && status == reqwest::StatusCode::NOT_FOUND
+        {
+            Error::PackageManagerVersionNotFound {
+                name: package_manager_type.to_string().into(),
+                version: version.clone(),
+                url: tgz_url.into(),
             }
-        },
-    )?;
+        } else {
+            err
+        }
+    })?;
 
     // Normalize the package root to $target_dir_tmp/{bin_name}. Most npm
     // tarballs use `package/`, but the directory name is not guaranteed.
@@ -1019,10 +1025,12 @@ async fn download_bun_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
+    let download_message = format!("Downloading bun v{version}...");
     download_and_extract_tgz_with_hash(
         &platform_tgz_url,
         &target_dir_tmp,
         platform_hash.as_deref(),
+        Some(&download_message),
     )
     .await
     .map_err(|err| {
@@ -1191,8 +1199,14 @@ async fn download_pnpm_native_package_manager(
     if let Some(expected_hash) = expected_hash {
         let main_tgz_url = get_npm_package_tgz_url("pnpm", version);
         let verify_dir = tempfile::tempdir()?;
-        download_and_extract_tgz_with_hash(&main_tgz_url, verify_dir.path(), Some(expected_hash))
-            .await?;
+        let verify_message = format!("Verifying pnpm v{version}...");
+        download_and_extract_tgz_with_hash(
+            &main_tgz_url,
+            verify_dir.path(),
+            Some(expected_hash),
+            Some(&verify_message),
+        )
+        .await?;
     }
 
     // The declared hash never covers the platform tarball, so verify it
@@ -1208,10 +1222,12 @@ async fn download_pnpm_native_package_manager(
     let tmp_dir = tempfile::tempdir_in(parent_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
+    let download_message = format!("Downloading pnpm v{version}...");
     download_and_extract_tgz_with_hash(
         &platform_tgz_url,
         &target_dir_tmp,
         platform_hash.as_deref(),
+        Some(&download_message),
     )
     .await
     .map_err(|err| {

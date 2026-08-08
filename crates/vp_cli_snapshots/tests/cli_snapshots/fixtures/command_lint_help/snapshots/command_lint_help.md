@@ -29,7 +29,7 @@ Allowing / Denying Multiple Lints:
   * `nursery`     - New lints that are still under development
   * `all`         - All categories listed above except `nursery`. Does not enable plugins automatically.
   -A, --allow=NAME  Allow the rule or category (suppress the lint)
-  -W, --warn=NAME   Deny the rule or category (emit a warning)
+  -W, --warn=NAME   Warn on the rule or category (emit a warning)
   -D, --deny=NAME   Deny the rule or category (emit an error)
 
 Enable/Disable Plugins:
@@ -122,7 +122,7 @@ Allowing / Denying Multiple Lints:
   * `nursery`     - New lints that are still under development
   * `all`         - All categories listed above except `nursery`. Does not enable plugins automatically.
   -A, --allow=NAME  Allow the rule or category (suppress the lint)
-  -W, --warn=NAME   Deny the rule or category (emit a warning)
+  -W, --warn=NAME   Warn on the rule or category (emit a warning)
   -D, --deny=NAME   Deny the rule or category (emit an error)
 
 Enable/Disable Plugins:
@@ -215,7 +215,7 @@ Allowing / Denying Multiple Lints:
   * `nursery`     - New lints that are still under development
   * `all`         - All categories listed above except `nursery`. Does not enable plugins automatically.
   -A, --allow=NAME  Allow the rule or category (suppress the lint)
-  -W, --warn=NAME   Deny the rule or category (emit a warning)
+  -W, --warn=NAME   Warn on the rule or category (emit a warning)
   -D, --deny=NAME   Deny the rule or category (emit an error)
 
 Enable/Disable Plugins:
