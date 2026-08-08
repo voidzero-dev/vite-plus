@@ -8,10 +8,7 @@ ignored = [
   "css-module-lexer",
   "html5gum",
   "prettyplease",
-  "proc-macro2",
-  "quote",
   "string_cache",
-  "syn",
 ]
 
 [workspace.package]
@@ -312,7 +309,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.142.0", features = [
+oxc = { version = "0.143.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -324,17 +321,17 @@ oxc = { version = "0.142.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.142.0", features = ["pool"] }
-oxc_ast = "0.142.0"
-oxc_ecmascript = "0.142.0"
-oxc_parser = "0.142.0"
-oxc_span = "0.142.0"
-oxc_napi = "0.142.0"
-oxc_str = "0.142.0"
-oxc_minify_napi = "0.142.0"
-oxc_parser_napi = "0.142.0"
-oxc_transform_napi = "0.142.0"
-oxc_traverse = "0.142.0"
+oxc_allocator = { version = "0.143.0", features = ["pool"] }
+oxc_ast = "0.143.0"
+oxc_ecmascript = "0.143.0"
+oxc_parser = "0.143.0"
+oxc_span = "0.143.0"
+oxc_napi = "0.143.0"
+oxc_str = "0.143.0"
+oxc_minify_napi = "0.143.0"
+oxc_parser_napi = "0.143.0"
+oxc_transform_napi = "0.143.0"
+oxc_traverse = "0.143.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }

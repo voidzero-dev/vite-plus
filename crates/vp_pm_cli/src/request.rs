@@ -3,6 +3,7 @@ use std::{path::Path, time::Duration};
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
 use futures_util::stream::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Response, StatusCode};
 use serde::de::DeserializeOwned;
 use sha1::Sha1;
@@ -136,10 +137,16 @@ impl HttpClient {
 
     /// Download a file to a specified path
     ///
+    /// The optional `message` is displayed above a progress bar (e.g. "Downloading
+    /// pnpm v10.0.0..."), shown only on a TTY and outside CI so piped/non-interactive
+    /// output stays clean. Pass `None` for downloads that shouldn't surface progress
+    /// (e.g. small metadata probes).
+    ///
     /// # Arguments
     ///
     /// * `url` - The URL of the file to download
     /// * `target_path` - The path where the file will be saved
+    /// * `message` - Optional message shown above the progress bar
     ///
     /// # Returns
     ///
@@ -149,19 +156,58 @@ impl HttpClient {
         &self,
         url: &str,
         target_path: impl AsRef<Path>,
+        message: Option<&str>,
     ) -> Result<(), Error> {
         let target_path = target_path.as_ref();
         tracing::debug!("Downloading {} to {:?}", url, target_path);
 
         let client = vp_shared::shared_http_client()?;
 
+        // Progress bar (only in TTY and not in CI). Built once and reused across
+        // retry attempts; its position is reset at the start of every attempt so
+        // a retried download doesn't double-count bytes.
+        let is_ci = vp_shared::EnvConfig::get().is_ci;
+        let progress = if let Some(message) = message
+            && vp_shared::is_stderr_terminal()
+            && !is_ci
+        {
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template(
+                        "{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})",
+                    )
+                    .expect("valid spinner template"),
+            );
+            pb.enable_steady_tick(Duration::from_millis(100));
+            pb.set_message(message.to_string());
+            Some(pb)
+        } else {
+            None
+        };
+
         // Make the request *and* the body stream a single retried unit. Doing
         // the request inline (instead of calling `self.get`) avoids a double
         // retry layer. A truncated download (bytes written != advertised
         // Content-Length) returns an error so the retry re-downloads.
-        (|| async {
+        let result = (|| async {
             let response = client.get(url).send().await?.error_for_status()?;
-            Self::write_response_to_file(response, target_path).await
+            if let Some(ref pb) = progress {
+                pb.set_position(0);
+                if let Some(size) = response.content_length() {
+                    pb.set_length(size);
+                    pb.set_style(
+                        ProgressStyle::default_bar()
+                            .template(
+                                "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
+                                 {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
+                            )
+                            .expect("valid progress bar template")
+                            .progress_chars("#>-"),
+                    );
+                }
+            }
+            Self::write_response_to_file(response, target_path, progress.as_ref()).await
         })
         .retry(
             ExponentialBuilder::default()
@@ -169,7 +215,12 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
-        .await?;
+        .await;
+
+        if let Some(pb) = progress {
+            pb.finish_and_clear();
+        }
+        result?;
 
         tracing::debug!("Download completed: {:?}", target_path);
         Ok(())
@@ -180,7 +231,11 @@ impl HttpClient {
     /// Captures the advertised `Content-Length` before streaming and verifies
     /// the number of bytes written matches it, so a truncated/short read
     /// surfaces as an error that the caller's retry can re-download.
-    async fn write_response_to_file(response: Response, target_path: &Path) -> Result<(), Error> {
+    async fn write_response_to_file(
+        response: Response,
+        target_path: &Path,
+        progress: Option<&ProgressBar>,
+    ) -> Result<(), Error> {
         let content_length = response.content_length();
 
         // Create the target file
@@ -192,6 +247,9 @@ impl HttpClient {
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
             bytes_written += chunk.len() as u64;
+            if let Some(pb) = progress {
+                pb.inc(chunk.len() as u64);
+            }
             file.write_all(&chunk).await?;
         }
 
@@ -237,6 +295,7 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
 /// * `url` - The URL of the tgz file to download.
 /// * `target_dir` - The directory to extract the tgz file to.
 /// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
+/// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
 ///
 /// # Returns
 /// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
@@ -245,6 +304,7 @@ pub(crate) async fn download_and_extract_tgz_with_hash(
     url: &str,
     target_dir: impl AsRef<Path>,
     expected_hash: Option<&str>,
+    message: Option<&str>,
 ) -> Result<(), Error> {
     let target_dir = target_dir.as_ref().to_path_buf();
     tracing::debug!(
@@ -261,15 +321,17 @@ pub(crate) async fn download_and_extract_tgz_with_hash(
     // attempt. A 404 (version not found) and permanent config errors fail fast
     // and propagate unchanged so the caller in `package_manager.rs` can map a
     // 404 to `PackageManagerVersionNotFound`.
-    (|| async { download_and_extract_tgz_with_hash_once(url, &target_dir, expected_hash).await })
-        .retry(
-            ExponentialBuilder::default()
-                .with_jitter()
-                .with_min_delay(Duration::from_millis(500))
-                .with_max_times(3),
-        )
-        .when(is_retryable_download_error)
-        .await
+    (|| async {
+        download_and_extract_tgz_with_hash_once(url, &target_dir, expected_hash, message).await
+    })
+    .retry(
+        ExponentialBuilder::default()
+            .with_jitter()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_times(3),
+    )
+    .when(is_retryable_download_error)
+    .await
 }
 
 /// A single download → verify → extract attempt.
@@ -280,6 +342,7 @@ async fn download_and_extract_tgz_with_hash_once(
     url: &str,
     target_dir: &Path,
     expected_hash: Option<&str>,
+    message: Option<&str>,
 ) -> Result<(), Error> {
     // Reset target directory so a partial prior attempt can't interfere.
     if fs::try_exists(target_dir).await.unwrap_or(false) {
@@ -293,7 +356,7 @@ async fn download_and_extract_tgz_with_hash_once(
     // multiply attempts (up to N×M downloads) for a persistent failure.
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::with_config(0, 0);
-    client.download_file(url, &tgz_file).await?;
+    client.download_file(url, &tgz_file, message).await?;
 
     // Verify hash if provided
     if let Some(expected_hash) = expected_hash {
@@ -620,7 +683,7 @@ mod tests {
         let client = HttpClient::new();
         let url = vt_str::format!("{}/file.txt", server.base_url());
 
-        let result = client.download_file(&url, &target_file).await;
+        let result = client.download_file(&url, &target_file, None).await;
         assert!(result.is_ok(), "Failed to download file: {result:?}");
 
         // Verify file exists and has correct content
@@ -645,7 +708,7 @@ mod tests {
         let url = vt_str::format!("{}/server_error", server.base_url());
 
         // Should fail after retries
-        let result = client.download_file(&url, &target_file).await;
+        let result = client.download_file(&url, &target_file, None).await;
         // println!("result: {:?}", result);
         assert!(result.is_err(), "Expected download to fail with 500 after retries");
     }
@@ -665,7 +728,7 @@ mod tests {
         });
 
         let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None).await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
         assert!(target_dir.join("package/bin/yarn").exists());
@@ -697,7 +760,7 @@ mod tests {
         let target_dir = temp_dir.path().join("extracted");
         let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None).await;
         assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
         assert!(
             mock.hits() > 1,
@@ -724,7 +787,8 @@ mod tests {
         let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
              0000000000000000000000000000000000000000000000000000000000000000";
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, Some(wrong_hash)).await;
+        let result =
+            download_and_extract_tgz_with_hash(&url, &target_dir, Some(wrong_hash), None).await;
         assert!(result.is_err(), "hash mismatch should fail: {result:?}");
         assert!(
             mock.hits() > 1,
@@ -900,7 +964,7 @@ mod tests {
         let url = vt_str::format!("{}/nonexistent", server.base_url());
 
         // Should fail with 404
-        let result = client.download_file(&url, &target_file).await;
+        let result = client.download_file(&url, &target_file, None).await;
         assert!(result.is_err(), "Expected download to fail with 404");
 
         // Should try 4 times, 1 for first request, 3 for retries
