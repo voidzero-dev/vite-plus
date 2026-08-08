@@ -69,6 +69,40 @@ After running the migration:
 - Run `vp test`
 - Run `vp build`
 
+## Manual Installation & Migration
+
+If you are manually migrating a project to Vite+, install these dev dependencies first:
+
+```bash
+vp install -D vite-plus
+```
+
+You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+
+```json
+"overrides": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "4.1.10"
+}
+```
+
+If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
+
+```yaml
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: 4.1.10
+```
+
+Or, if you are using Yarn:
+
+```json
+"resolutions": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "4.1.10"
+}
+```
+
 ## Migration Prompt
 
 If you want to hand this work to a coding agent (or the reader is a coding agent!), use this migration prompt:
