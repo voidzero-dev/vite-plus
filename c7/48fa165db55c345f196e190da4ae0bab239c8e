@@ -1,0 +1,49 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/shared-config.ts
+  s_09c28b62987691::t_581ddc4640e95b 1-9
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/src/config-surface.ts
+  s_09c28b62987691::t_e5998ce2554c92 1-6
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/no-foo.js
+  s_09c28b62987691::t_a3944c73faed6c 1-14
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/plugin.js
+  s_09c28b62987691::t_84588a8545e89e 1-8
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/src/legacy-imports.ts
+  s_09c28b62987691::t_76d63a48b5496f 1-5
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/snapshots/migration_oxlint_js_plugin_imports.md
+  s_09c28b62987691::t_515dbc21f9e2aa 1-140
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/package.json
+  s_09c28b62987691::t_2639ca8315c88f 1-11
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/snapshots/lint_oxlint_plugin_api.md
+  s_09c28b62987691::t_98e0092b6dfea1 1-92
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/snapshots.toml
+  s_09c28b62987691::t_2ebecfabd576bd 1-40
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/.oxlintrc.json
+  s_09c28b62987691::t_660794ecdac95e 1-6
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/snapshots.toml
+  s_09c28b62987691::t_28fb7d5eac4562 1-37
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/vite.config.ts
+  s_09c28b62987691::t_b4ce97395b5b6d 1-14
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/lint/plugin.js
+  s_09c28b62987691::t_5a4108e84b462b 1-21
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/src/uses-foo.ts
+  s_09c28b62987691::t_15338b4b8ce745 1-2
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/lint/no-foo.test.ts
+  s_09c28b62987691::t_c75128799729cf 1-11
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/lint_oxlint_plugin_api/package.json
+  s_09c28b62987691::t_7f4504b5d67807 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c748fa165db55c345f196e190da4ae0bab239c8e",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
