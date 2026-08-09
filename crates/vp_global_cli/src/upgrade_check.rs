@@ -348,6 +348,7 @@ mod tests {
         try_acquire_lock(&dir_path).expect("lock should be reusable after owner exits");
     }
 
+    #[cfg(unix)]
     #[test]
     fn locked_cache_write_does_not_recreate_a_moved_install() {
         let dir = tempfile::tempdir().unwrap();
