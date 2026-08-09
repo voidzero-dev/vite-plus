@@ -107,25 +107,25 @@ jobs:
 Add one job:
 
 ```yaml
-  deploy-docs:
-    name: Deploy docs
-    runs-on: ubuntu-latest
-    needs: [check, Release]
-    if: >-
-      needs.check.outputs.version_changed == 'true' &&
-      !contains(needs.check.outputs.version, '-')
-    concurrency:
-      group: deploy-docs
-      cancel-in-progress: false
-    permissions:
-      contents: read
-    steps:
-      - uses: taiki-e/checkout-action@... # v1.4.2
+deploy-docs:
+  name: Deploy docs
+  runs-on: ubuntu-latest
+  needs: [check, Release]
+  if: >-
+    needs.check.outputs.version_changed == 'true' &&
+    !contains(needs.check.outputs.version, '-')
+  concurrency:
+    group: deploy-docs
+    cancel-in-progress: false
+  permissions:
+    contents: read
+  steps:
+    - uses: taiki-e/checkout-action@... # v1.4.2
 
-      - uses: ./.github/actions/deploy-docs
-        with:
-          void-project: viteplus
-          void-token: ${{ secrets.VOID_TOKEN }}
+    - uses: ./.github/actions/deploy-docs
+      with:
+        void-project: viteplus
+        void-token: ${{ secrets.VOID_TOKEN }}
 ```
 
 - The job checks out `github.sha`, which in the release run is the release
@@ -239,13 +239,13 @@ after the deploy get the new script together with the new binaries.
 
 ## Behavior changes
 
-| Event | Before | After |
-| --- | --- | --- |
-| Docs change merges to `main` | Production deploy | Preview deploy to `main.viteplus.dev` |
-| `install.sh` / `install.ps1` change merges to `main` | Production deploy | Preview deploy to `main.viteplus.dev` |
-| Stable release published | No docs deploy | Production deploy from the release commit |
-| Prerelease published | No docs deploy | No docs deploy (`main` preview already current) |
-| Manual dispatch | Redundant with push deploys | The escape hatch for urgent production updates |
+| Event                                                | Before                      | After                                           |
+| ---------------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| Docs change merges to `main`                         | Production deploy           | Preview deploy to `main.viteplus.dev`           |
+| `install.sh` / `install.ps1` change merges to `main` | Production deploy           | Preview deploy to `main.viteplus.dev`           |
+| Stable release published                             | No docs deploy              | Production deploy from the release commit       |
+| Prerelease published                                 | No docs deploy              | No docs deploy (`main` preview already current) |
+| Manual dispatch                                      | Redundant with push deploys | The escape hatch for urgent production updates  |
 
 ## Drawbacks
 
