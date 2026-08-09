@@ -213,6 +213,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
+  # Deploy viteplus.dev from the release commit after the npm packages and the
+  # GitHub release are published, so the site and the install scripts always
+  # match the released vp. Skipped for prereleases: production docs must keep
+  # describing the latest stable release. See rfcs/deploy-docs-on-release.md.
+  deploy-docs:
+    name: Deploy docs
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy-docs.yml
+    secrets:
+      VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
+
   # Build and push the official toolchain Docker image to GHCR after the npm
   # release is published (the image installs vp from npm, so the version must
   # exist first). See docker/Dockerfile and docs/guide/docker.md.

@@ -1,18 +1,23 @@
-name: Deploy Docs
+name: Deploy Docs Main Preview
 
 permissions: {}
 
-# Deploys viteplus.dev, which also serves install.sh / install.ps1 behind
-# https://vite.plus. Runs from release.yml after a stable release is published,
-# or manually via workflow_dispatch for urgent updates. Pushes to main deploy
-# to main.viteplus.dev via deploy-docs-main.yml instead.
+# Deploys the docs at the head of main to main.viteplus.dev (the viteplus-main
+# void.app project) so developers can preview unreleased docs. Production
+# viteplus.dev deploys from release.yml instead.
 # See rfcs/deploy-docs-on-release.md.
 on:
-  workflow_dispatch:
-  workflow_call:
-    secrets:
-      VOID_TOKEN:
-        required: true
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'packages/cli/install.sh'
+      - 'packages/cli/install.ps1'
+      - '.github/workflows/deploy-docs-main.yml'
+
+concurrency:
+  group: deploy-docs-main
+  cancel-in-progress: true
 
 defaults:
   run:
@@ -22,15 +27,10 @@ jobs:
   deploy:
     if: github.repository == 'voidzero-dev/vite-plus'
     runs-on: ubuntu-latest
-    # Job-level so it also applies when release.yml calls this workflow
-    # (workflow-level concurrency in a called workflow has no effect).
-    concurrency:
-      group: deploy-docs
-      cancel-in-progress: false
     permissions:
       contents: read
     env:
-      VOID_PROJECT: viteplus
+      VOID_PROJECT: viteplus-main
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
