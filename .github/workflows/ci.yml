@@ -75,7 +75,9 @@ jobs:
     # Docs-only changes skip the full CI matrix, so nothing else format-checks
     # them (code changes get `vp check` in cli-e2e-test). Non-blocking:
     # intentionally not listed in the `done` job's needs.
-    if: needs.detect-changes.outputs.code-changed == 'false'
+    # TEMPORARY, revert before merge: lifted so this PR runs the job. ci.yml is
+    # a code change, so detect-changes reports code-changed == 'true' here.
+    # if: needs.detect-changes.outputs.code-changed == 'false'
     runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: read
