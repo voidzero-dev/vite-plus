@@ -49,6 +49,8 @@ export default defineConfig([
       'define-config': './src/define-config.ts',
       fmt: './src/fmt.ts',
       lint: './src/lint.ts',
+      'lint-plugins': './src/lint-plugins.ts',
+      'lint-plugins-dev': './src/lint-plugins-dev.ts',
       'oxlint-plugin': './src/oxlint-plugin.ts',
       'tsgolint-path': './src/utils/tsgolint-path.ts',
       pack: './src/pack.ts',

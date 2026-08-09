@@ -216,7 +216,7 @@ fix: $NEW_IMPORT
 /// ast-grep rules for rewriting vitest imports.
 ///
 /// This rewrites (the canonical mapping shared with the `oxlint-plugin.ts`
-/// `rewriteVitePlusImportSpecifier` autofix — both implementations MUST stay
+/// `rewriteVitePlusImportSpecifier` autofix; both implementations MUST stay
 /// in sync and only produce targets that exist in the `vite-plus` package
 /// `exports` map, otherwise Node fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`):
 /// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
@@ -1567,6 +1567,218 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
+/// ast-grep rules for rewriting Oxlint JS-plugin authoring imports.
+///
+/// The mapping:
+/// - `import { defineRule } from '@oxlint/plugins'` → `'vite-plus/lint/plugins'`
+/// - `import { RuleTester } from 'oxlint/plugins-dev'` → `'vite-plus/lint/plugins-dev'`
+/// - `import { defineRule } from 'oxlint'` → `'vite-plus/lint/plugins'`
+///
+/// `rewriteVitePlusImportSpecifier` in `oxlint-plugin.ts` repeats this mapping
+/// for the lint autofix. Both implementations MUST stay in sync.
+///
+/// Why this exists: vite-plus bundles Oxlint, so the migration strips `oxlint`
+/// from the project. A JS plugin that imports the authoring API by either name
+/// then stops resolving, and `vp lint` fails to load the plugin.
+///
+/// The rewrite points those imports at `vite-plus` rather than re-adding
+/// `@oxlint/plugins` as a direct dependency. This locks the API to the bundled
+/// linter, so the user pins nothing. It also resolves from any package that
+/// already has `vite-plus`. A direct `@oxlint/plugins` import does not:
+/// `@oxlint/plugins` is only a transitive dependency, which pnpm's strict
+/// layout hides from a user's plugin file.
+///
+/// The bare `oxlint` specifier is ambiguous. It still serves the CONFIG surface
+/// (`defineConfig`, `OxlintConfig`, `OxlintOverride`, and so on), which must
+/// keep resolving against the standalone package. So the rewrite applies only
+/// to an `import` statement that names a specifier outside that config surface.
+/// The check is therefore a small, stable denylist, not an ever-growing list of
+/// plugin type names. An unrecognized name falls on the side of fixing the
+/// breakage.
+///
+/// These forms name no specifier, so the rewrite skips them: namespace imports
+/// (`import * as`), default imports, bare side-effect imports,
+/// `require('oxlint')`, and `import('oxlint')`.
+///
+/// `@oxlint/plugins` and `oxlint/plugins-dev` are unambiguous. They expose only
+/// the plugin API and the dev-time utilities, so every statement form rewrites.
+///
+/// The rewrite skips a package that declares `oxlint` or `@oxlint/plugins` in
+/// `dependencies` or `peerDependencies`. Those are published Oxlint plugins,
+/// and their consumers may not have Vite+. See `SkipPackages::skip_oxlint`.
+const REWRITE_OXLINT_PLUGIN_RULES: &str = r#"---
+id: rewrite-oxlint-plugins-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugin-api-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: import_statement
+    has:
+      kind: import_specifier
+      stopBy: end
+      not:
+        has:
+          field: name
+          regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+"#;
+
 static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_VITE_RULES).expect("failed to parse vite rewrite rules")
 });
@@ -1611,6 +1823,11 @@ static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang
 
 static PARSED_TSDOWN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_TSDOWN_RULES).expect("failed to parse tsdown rewrite rules")
+});
+
+static PARSED_OXLINT_PLUGIN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_OXLINT_PLUGIN_RULES)
+        .expect("failed to parse oxlint plugin rewrite rules")
 });
 
 // Regex patterns for rewriting `/// <reference types="..." />` directives.
@@ -1954,6 +2171,13 @@ struct SkipPackages {
     skip_vitest: bool,
     /// Skip rewriting tsdown imports (tsdown is in peerDependencies or dependencies)
     skip_tsdown: bool,
+    /// Skip rewriting Oxlint JS-plugin API imports (`oxlint` or `@oxlint/plugins`
+    /// is in peerDependencies or dependencies). A package that declares either
+    /// as a runtime/peer edge is a published Oxlint plugin: its consumers may be
+    /// running plain Oxlint, so redirecting the authoring API at `vite-plus`
+    /// would break them. A devDependency is not a signal: it is just how a
+    /// project's own in-repo plugin gets its types.
+    skip_oxlint: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1973,7 +2197,7 @@ pub struct RewriteImportsOptions {
 impl SkipPackages {
     /// Check if all packages should be skipped (file can be skipped entirely)
     const fn all_skipped(&self) -> bool {
-        self.skip_vite && self.skip_vitest && self.skip_tsdown
+        self.skip_vite && self.skip_vitest && self.skip_tsdown && self.skip_oxlint
     }
 }
 
@@ -2094,6 +2318,10 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
                 || has_package("dependencies", "vitest"),
             skip_tsdown: has_package("peerDependencies", "tsdown")
                 || has_package("dependencies", "tsdown"),
+            skip_oxlint: has_package("peerDependencies", "oxlint")
+                || has_package("dependencies", "oxlint")
+                || has_package("peerDependencies", "@oxlint/plugins")
+                || has_package("dependencies", "@oxlint/plugins"),
         },
         uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
             .into_iter()
@@ -2325,6 +2553,11 @@ fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bo
     if !skip_packages.skip_tsdown && content.contains("tsdown") {
         return true;
     }
+    // Covers the bare `oxlint` specifier plus `@oxlint/plugins` and
+    // `oxlint/plugins-dev`, which all contain it as a substring.
+    if !skip_packages.skip_oxlint && content.contains("oxlint") {
+        return true;
+    }
     false
 }
 
@@ -2403,6 +2636,18 @@ fn rewrite_import_content_full(
         let tsdown_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_TSDOWN_RULES);
         if tsdown_content != new_content {
             new_content = tsdown_content;
+            updated = true;
+        }
+    }
+
+    // Apply Oxlint JS-plugin API rules if not skipped (using pre-parsed rules).
+    // Unlike `vite`, these are NOT scoped to config entry files: the imports
+    // that break live in the plugin and rule sources themselves.
+    if !skip_packages.skip_oxlint {
+        let oxlint_content =
+            ast_grep::apply_loaded_rules(&new_content, &PARSED_OXLINT_PLUGIN_RULES);
+        if oxlint_content != new_content {
+            new_content = oxlint_content;
             updated = true;
         }
     }
@@ -3767,6 +4012,109 @@ export default defineConfig({
     }
 
     #[test]
+    fn test_rewrite_import_content_oxlint_plugins_scoped() {
+        let plugin = r#"import { definePlugin, defineRule } from "@oxlint/plugins";
+import type { Context, ESTree } from '@oxlint/plugins';"#;
+
+        let result = rewrite_import_content(plugin, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { definePlugin, defineRule } from "vite-plus/lint/plugins";
+import type { Context, ESTree } from 'vite-plus/lint/plugins';"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_plugin_api_bare_specifier() {
+        // The pre-`@oxlint/plugins` authoring API, which is what projects
+        // migrating off a standalone `oxlint` dependency actually have.
+        let rule = r#"import { defineRule } from 'oxlint';
+
+export const noFoo = defineRule({ create: () => ({}) });"#;
+
+        let result = rewrite_import_content(rule, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineRule } from 'vite-plus/lint/plugins';
+
+export const noFoo = defineRule({ create: () => ({}) });"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_plugin_api_type_only_and_aliased() {
+        let rule = r#"import type { Context } from 'oxlint';
+import { defineRule as rule } from "oxlint";"#;
+
+        let result = rewrite_import_content(rule, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import type { Context } from 'vite-plus/lint/plugins';
+import { defineRule as rule } from "vite-plus/lint/plugins";"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_config_surface_is_preserved() {
+        // `oxlint` still owns the config surface; only the plugin authoring API
+        // moved. Redirecting these at `vite-plus/lint/plugins` would break them.
+        let config = r#"import { defineConfig } from 'oxlint';
+import type { OxlintConfig, OxlintOverride } from 'oxlint';
+
+export default defineConfig({});"#;
+
+        let result = rewrite_import_content(config, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, config);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_ambiguous_forms_are_left_alone() {
+        // No named specifier means no way to tell the config surface from the
+        // plugin API, so these stay put rather than risk a wrong rewrite.
+        let content = r#"import oxlint from 'oxlint';
+import * as everything from 'oxlint';
+import 'oxlint';
+const lazy = require('oxlint');"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_plugins_dev_rule_tester() {
+        let test_file = r#"import { RuleTester } from 'oxlint/plugins-dev';
+
+new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#;
+
+        let result = rewrite_import_content(test_file, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { RuleTester } from 'vite-plus/lint/plugins-dev';
+
+new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_skipped_for_published_plugins() {
+        let plugin = r#"import { defineRule } from '@oxlint/plugins';"#;
+
+        let result = rewrite_import_content(
+            plugin,
+            &SkipPackages { skip_oxlint: true, ..SkipPackages::default() },
+        )
+        .unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, plugin);
+    }
+
+    #[test]
     fn test_rewrite_declare_module_tsdown() {
         let content = r#"declare module 'tsdown' {
   interface BuildConfig {
@@ -3876,8 +4224,12 @@ import { describe } from 'vitest';
 
 export default defineConfig({});"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
@@ -3899,8 +4251,12 @@ import { describe } from 'vitest';
 
 export default defineConfig({});"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
@@ -3923,7 +4279,12 @@ import { build } from 'tsdown';
 
 export default defineConfig({});"#;
 
-        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            skip_oxlint: true,
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
@@ -3932,10 +4293,20 @@ export default defineConfig({});"#;
 
     #[test]
     fn test_skip_packages_all_skipped() {
-        let skip_all = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_all = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            skip_oxlint: true,
+        };
         assert!(skip_all.all_skipped());
 
-        let skip_some = SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: true };
+        let skip_some = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: true,
+            skip_oxlint: false,
+        };
         assert!(!skip_some.all_skipped());
 
         let skip_none = SkipPackages::default();
@@ -3975,7 +4346,8 @@ export default defineConfig({});"#;
   "peerDependencies": {
     "vite": "^5.0.0",
     "vitest": "^1.0.0",
-    "tsdown": "^1.0.0"
+    "tsdown": "^1.0.0",
+    "oxlint": "^1.0.0"
   }
 }"#;
         let package_json_path = temp.path().join("package.json");
@@ -3985,7 +4357,53 @@ export default defineConfig({});"#;
         assert!(skip.skip_vite);
         assert!(skip.skip_vitest);
         assert!(skip.skip_tsdown);
+        assert!(skip.skip_oxlint);
         assert!(skip.all_skipped());
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_with_oxlint_plugins_peer_dependency() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A published Oxlint plugin declares the authoring API as a peer so its
+        // consumers supply it. Redirecting those imports at `vite-plus` would
+        // break consumers running plain Oxlint.
+        let pkg_json = r#"{
+  "name": "oxlint-plugin-example",
+  "peerDependencies": {
+    "@oxlint/plugins": "^1.0.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_oxlint);
+        assert!(!skip.skip_vite);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_oxlint_dev_dependency_is_not_a_skip_signal() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A devDependency is how a project's own in-repo plugin gets its types;
+        // it does not make the package a published Oxlint plugin.
+        let pkg_json = r#"{
+  "name": "my-app",
+  "devDependencies": {
+    "@oxlint/plugins": "^1.0.0",
+    "oxlint": "^1.0.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_oxlint);
     }
 
     #[test]
@@ -4768,8 +5186,12 @@ module.exports = defineConfig({});"#
         // also be skipped (parity with the import-shape rule).
         let content = r#"const vi = require('vitest');
 const { defineConfig } = require('vite');"#;
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         // vitest require is NOT rewritten; vite require IS rewritten.
@@ -5235,8 +5657,12 @@ export default defineConfig({});"#
         let content = r#"/// <reference types="vite/client" />
 /// <reference types="vitest" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5252,8 +5678,12 @@ export default defineConfig({});"#
 /// <reference types="vitest" />
 /// <reference types="@vitest/browser/matchers" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5269,8 +5699,12 @@ export default defineConfig({});"#
         let content = r#"/// <reference types="tsdown/client" />
 /// <reference types="vite/client" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: false, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: false,
+            skip_tsdown: true,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5286,7 +5720,12 @@ export default defineConfig({});"#
 /// <reference types="vitest" />
 /// <reference types="tsdown/client" />"#;
 
-        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            skip_oxlint: true,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);

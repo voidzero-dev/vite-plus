@@ -118,6 +118,42 @@ describe('package.json exports map', () => {
 });
 
 /**
+ * Migration rewrites Oxlint JS-plugin authoring imports to
+ * `vite-plus/lint/plugins` and `vite-plus/lint/plugins-dev`. See the
+ * `rewrite-oxlint-plugin-*` rules in `import_rewriter.rs` and
+ * `rewriteVitePlusImportSpecifier` in `oxlint-plugin.ts`.
+ *
+ * That rewrite exists so a user's plugin file reaches the API through
+ * `vite-plus` instead of pinning its own `@oxlint/plugins`. These entrypoints
+ * MUST therefore stay resolvable, and they MUST keep re-exporting the upstream
+ * surface. If either breaks, every migrated plugin fails when `vp lint` loads
+ * it.
+ */
+describe('Oxlint JS-plugin authoring entrypoints', () => {
+  it('re-exports the full @oxlint/plugins value surface', async () => {
+    const [lintPlugins, oxlintPlugins] = await Promise.all([
+      import('vite-plus/lint/plugins'),
+      import('@oxlint/plugins'),
+    ]);
+    const expected = namedValueExports(oxlintPlugins);
+    expect(expected.length, 'sanity: @oxlint/plugins should expose value exports').toBeGreaterThan(
+      0,
+    );
+    const missing = expected.filter(
+      (key) => !(key in lintPlugins) || (lintPlugins as Record<string, unknown>)[key] === undefined,
+    );
+    expect(missing, '@oxlint/plugins value exports missing from vite-plus/lint/plugins').toEqual(
+      [],
+    );
+  });
+
+  it('exposes RuleTester from vite-plus/lint/plugins-dev', async () => {
+    const ruleTester = await import('vite-plus/lint/plugins-dev');
+    expect(ruleTester.RuleTester).toBeTypeOf('function');
+  });
+});
+
+/**
  * Migration rewrites the `vitest/config` specifier to bare `vite-plus` (see the
  * Rust `import_rewriter.rs` rule and the `prefer-vite-plus-imports` oxlint rule
  * in `oxlint-plugin.ts`). After that rewrite a user's
