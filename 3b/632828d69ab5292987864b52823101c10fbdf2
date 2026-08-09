@@ -1,0 +1,49 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/cli_helper_message/snapshots/cli_helper_message.md
+  s_431aa2d8c58680::t_93cde804cb6169 54-56
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_old_local_routing.md
+  s_431aa2d8c58680::t_bf2e1d6adba705 25-51
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_why_hint_yarn.global.md
+  s_431aa2d8c58680::t_898dd1b34d9784 1-18
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots/toolchain_why_hint_yarn.local.md
+  s_431aa2d8c58680::t_bc781f02602909 1-18
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/vp_help/snapshots/help.global.md
+  s_431aa2d8c58680::t_f7a5859d25a4c4 54-56
+crates/vp_global_cli/src/commands/toolchain.rs
+  s_431aa2d8c58680::t_a1dc24ebc46464 14,50-51
+crates/vp_global_cli/src/commands/version.rs
+  s_431aa2d8c58680::t_0abe190282feee 4,21-22,31-59,89-123,184,186-188,234-235,308-343
+crates/vp_global_cli/src/js_executor.rs
+  s_431aa2d8c58680::t_105b1b9e2ca928 402
+crates/vp_pm_cli/src/cli.rs
+  s_431aa2d8c58680::t_dac042b24eaf52 11,322,324-330,631-650
+crates/vp_pm_cli/src/dispatch.rs
+  s_431aa2d8c58680::t_caee8a5c0b0f7d 11,18-23,35-41,59,61-62,69,72,74-75,78-80
+crates/vp_pm_cli/src/lib.rs
+  s_431aa2d8c58680::t_531846f13fd396 22
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_toolchain/snapshots.toml
+  s_431aa2d8c58680::t_393d82861b8e92 52-53,64-72
+crates/vp_global_cli/src/cli.rs
+  s_431aa2d8c58680::t_90d0ed4c7d608e 630-633,635,637
+crates/vp_global_cli/src/help.rs
+  s_431aa2d8c58680::t_f1325502a27e91 455
+crates/vp_toolchain/src/lib.rs
+  s_431aa2d8c58680::t_68ee9c7959990e 340,551
+packages/cli/binding/src/cli/mod.rs
+  s_431aa2d8c58680::t_9926b77904eaeb 322,410-412,422-423,425,427
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3b632828d69ab5292987864b52823101c10fbdf2",
+  "prompts": {},
+  "sessions": {
+    "s_431aa2d8c58680": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4690-cc8f-7d22-9259-a63dbc7145ec",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
