@@ -100,8 +100,8 @@ pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 /// Override the per-request timeout (in seconds) for large file downloads
 /// (Node.js runtimes, package-manager tarballs).
 ///
-/// Must be a positive integer; an invalid value warns and is ignored.
-/// Default: 600 (10 minutes).
+/// Must be a positive integer no larger than 86400 (24 hours); an invalid
+/// value warns and is ignored. Default: 600 (10 minutes).
 pub const VP_DOWNLOAD_TIMEOUT_SECS: &str = "VP_DOWNLOAD_TIMEOUT_SECS";
 
 /// Path to a PEM bundle of extra CA certificates to trust for HTTPS.

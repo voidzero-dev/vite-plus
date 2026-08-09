@@ -103,6 +103,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 ### `VP_DOWNLOAD_TIMEOUT_SECS`
 
 - **Purpose**: Per-request timeout, in seconds, for large downloads such as Node.js runtimes and package-manager tarballs
+- **Values**: Positive integer, at most `86400` (24 hours); invalid values are ignored with a warning
 - **Default**: `600` (10 minutes)
 - **Example**:
   ```bash
