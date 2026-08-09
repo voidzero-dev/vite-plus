@@ -1,0 +1,40 @@
+[[case]]
+name = "migration_oxlint_js_plugin_imports"
+vp = "global"
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+  ], comment = "the standalone oxlint dependency goes away, so the JS plugin's authoring imports must move to vite-plus", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "oxlint is removed and nothing replaces it. The API now comes from vite-plus. @oxlint/plugins stays on purpose: it is inert once the imports are rewritten, and removing it would also remove the peer dependency of a published Oxlint plugin", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "lint/no-foo.js",
+  ], comment = "legacy `defineRule` from 'oxlint' -> 'vite-plus/lint/plugins'", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "lint/plugin.js",
+  ], comment = "'@oxlint/plugins' -> 'vite-plus/lint/plugins'", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "lint/no-foo.test.ts",
+  ], comment = "RuleTester lives in 'oxlint/plugins-dev' upstream and breaks the same way, so it maps to 'vite-plus/lint/plugins-dev'. The plugin type import follows the runtime API", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "lint/shared-config.ts",
+  ], comment = "the config surface is NOT redirected. vite-plus/lint/plugins has no defineConfig or OxlintOverride", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "vite.config.ts",
+  ], comment = "the jsPlugins entry survives the .oxlintrc.json merge. It still points at the plugin file, which is now rewritten. KNOWN PRE-EXISTING GAP, unrelated to the import rewrite: the merge drops `local/no-foo`. sanitizeMigratedOxlintConfig derives a plugin's rule namespace from its package name, and a relative-path plugin has no package name. Its namespace comes from `meta.name` at load time instead. Recorded here so a fix shows up as a snapshot diff", continue-on-failure = true },
+]
