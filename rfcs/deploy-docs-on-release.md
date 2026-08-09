@@ -136,8 +136,12 @@ Add one job:
   out, in parallel with `publish-docker`. Docs do not depend on the image.
 - The `!contains(version, '-')` guard skips prereleases. An alpha publish must
   not overwrite the production site with docs for unreleased behavior.
-- A docs-deploy failure does not undo the release. Re-run the job or dispatch
-  the workflow manually.
+- `discord-notify` adds `deploy-docs` to its `needs` and gates on
+  `result == 'success' || result == 'skipped'`, so a stable release announces
+  only after the site is updated, while prereleases (where `deploy-docs` is
+  skipped) still announce.
+- A docs-deploy failure does not undo the release; it holds back the Discord
+  announcement. Re-run the job or dispatch the workflow manually.
 
 ### `deploy-docs-main.yml`: standing preview of `main`
 

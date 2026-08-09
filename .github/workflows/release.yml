@@ -292,15 +292,22 @@ jobs:
             VP_VERSION=${{ env.VERSION }}
           provenance: false
 
-  # Announce the release on Discord last, after the Docker images are published,
-  # so the message can include the GHCR image. Runs after the npm release
-  # (Release) and the images (publish-docker).
+  # Announce the release on Discord last, after the Docker images and the docs
+  # are published, so the message never points at a missing image or a site
+  # that still shows the previous release.
   discord-notify:
     name: Notify Discord
     runs-on: ubuntu-latest
     # publish-docker already needs Release, so depending on it orders this last.
-    needs: [check, publish-docker]
-    if: needs.check.outputs.version_changed == 'true'
+    # deploy-docs is skipped for prereleases; gate on its result explicitly so
+    # prerelease announcements still go out, while a failed docs deploy on a
+    # stable release holds the announcement back.
+    needs: [check, publish-docker, deploy-docs]
+    if: >-
+      !cancelled() &&
+      needs.check.outputs.version_changed == 'true' &&
+      needs.publish-docker.result == 'success' &&
+      (needs.deploy-docs.result == 'success' || needs.deploy-docs.result == 'skipped')
     env:
       VERSION: ${{ needs.check.outputs.version }}
       IMAGE: ghcr.io/voidzero-dev/vite-plus
