@@ -44,43 +44,62 @@ This creates two failure modes:
 
 ## Proposal
 
-Three parts:
+Four parts:
 
-1. Change `deploy-docs.yml` from a push-triggered workflow into a reusable one.
-2. Call it from `release.yml` after the release is published.
-3. Add `deploy-docs-main.yml`, which takes over the push trigger and deploys
+1. Extract the docs build and deploy steps into a
+   `.github/actions/deploy-docs` composite action, the repo convention for
+   shared step sequences (see `.github/actions/clone`, `build-windows-cli`).
+2. Reduce `deploy-docs.yml` to a manual (`workflow_dispatch`) production
+   deploy that runs the composite.
+3. Add a `deploy-docs` job to `release.yml` that runs the composite after the
+   release is published.
+4. Add `deploy-docs-main.yml`, which takes over the push trigger and deploys
    `main` to the `viteplus-main` preview project.
+5. Switch `deploy-docs-preview.yml` to the composite; its trigger, staging
+   target, and PR comment step stay as they are.
+
+### `.github/actions/deploy-docs`
+
+The composite action holds the steps shared by every docs deploy: `setup-vp`,
+the Vite Task cache restore/save, `vp run build`, and `vpx void deploy`. Its
+inputs:
+
+- `void-project`: the deploy target.
+- `void-token`: composite actions cannot read secrets, so the caller passes
+  `secrets.VOID_TOKEN`.
+- `cache-ref` / `cache-sha` (optional, default `main` / `github.sha`): scope
+  the Vite Task cache key. PR previews pass `pr-<number>` and the head sha,
+  which reproduces their current per-PR keys with a fallback to the `main`
+  cache.
+
+Callers check out the repo first, then run the action.
 
 ### `deploy-docs.yml`
 
-1. Remove the `push` trigger. Keep `workflow_dispatch`. Add `workflow_call`
-   with `VOID_TOKEN` declared as a required secret.
-2. Move the `deploy-docs` concurrency group from the workflow level to the
-   `deploy` job. Jobs of a called workflow run inside the caller's run, so
-   workflow-level concurrency in the called file does not apply there.
-   Job-level concurrency serializes production deploys across both entry
-   paths (`cancel-in-progress: false` as today).
+Remove the `push` trigger; keep `workflow_dispatch` only. The build and
+deploy steps move to the composite:
 
 ```yaml
 on:
   workflow_dispatch:
-  workflow_call:
-    secrets:
-      VOID_TOKEN:
-        required: true
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
 
 jobs:
   deploy:
     if: github.repository == 'voidzero-dev/vite-plus'
     runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-docs
-      cancel-in-progress: false
     permissions:
       contents: read
-    env:
-      VOID_PROJECT: viteplus
-    # ... existing steps unchanged
+    steps:
+      - uses: taiki-e/checkout-action@... # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}
 ```
 
 ### `release.yml`
@@ -90,19 +109,29 @@ Add one job:
 ```yaml
   deploy-docs:
     name: Deploy docs
+    runs-on: ubuntu-latest
     needs: [check, Release]
     if: >-
       needs.check.outputs.version_changed == 'true' &&
       !contains(needs.check.outputs.version, '-')
+    concurrency:
+      group: deploy-docs
+      cancel-in-progress: false
     permissions:
       contents: read
-    uses: ./.github/workflows/deploy-docs.yml
-    secrets:
-      VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
+    steps:
+      - uses: taiki-e/checkout-action@... # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}
 ```
 
-- The called workflow checks out `github.sha`, which in the release run is the
-  release commit. The deployed site matches the released version.
+- The job checks out `github.sha`, which in the release run is the release
+  commit. The deployed site matches the released version.
+- The job-level `deploy-docs` concurrency group is shared with
+  `deploy-docs.yml`, so production deploys serialize across both entry paths.
 - `needs: [check, Release]` runs the deploy once npm and the GitHub release are
   out, in parallel with `publish-docker`. Docs do not depend on the image.
 - The `!contains(version, '-')` guard skips prereleases. An alpha publish must
@@ -113,7 +142,7 @@ Add one job:
 ### `deploy-docs-main.yml`: standing preview of `main`
 
 A new workflow takes over the push trigger that `deploy-docs.yml` loses. It
-runs the same build steps and deploys to a dedicated `viteplus-main` void.app
+runs the same composite and deploys to a dedicated `viteplus-main` void.app
 project instead of production:
 
 ```yaml
@@ -129,6 +158,7 @@ on:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - '.github/workflows/deploy-docs-main.yml'
+      - '.github/actions/deploy-docs/**'
 
 concurrency:
   group: deploy-docs-main
@@ -140,9 +170,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      VOID_PROJECT: viteplus-main
-    # ... same build and deploy steps as deploy-docs.yml
+    steps:
+      - uses: taiki-e/checkout-action@... # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus-main
+          void-token: ${{ secrets.VOID_TOKEN }}
 ```
 
 - `https://main.viteplus.dev` always shows the docs at the head of `main`,
@@ -160,9 +194,9 @@ jobs:
   CNAME `main.viteplus.dev` -> `viteplus-main.void.app`, and attach the
   custom domain to the project.
 
-`deploy-docs-preview.yml` stays unchanged. Per-PR staging deploys to
-`viteplus-staging.void.app` remain the place to review docs changes before
-merge.
+`deploy-docs-preview.yml` keeps its trigger, its `viteplus-staging.void.app`
+target, and its PR comment step, and now runs the same composite. Per-PR
+staging deploys remain the place to review docs changes before merge.
 
 ### Manual deploys
 
@@ -185,7 +219,7 @@ fetches the install script currently deployed on viteplus.dev. The run builds
 the site with the previous script, then the deploy replaces it. Fresh installs
 after the deploy get the new script together with the new binaries.
 
-## Why `workflow_call` and not another trigger
+## Why a job in the release run and not another trigger
 
 - `on: release: types: [published]` does not fire. `release.yml` publishes the
   release with the default `GITHUB_TOKEN` (`gh release edit --draft=false`),
@@ -196,8 +230,8 @@ after the deploy get the new script together with the new binaries.
   with it, which reintroduces problem 1.
 - `gh workflow run` at the end of the Release job works (`workflow_dispatch`
   is exempt from the `GITHUB_TOKEN` restriction) but needs `actions: write`
-  and detaches the deploy from the release run in the Actions UI.
-  `workflow_call` keeps the deploy visible and gated inside the release run.
+  and detaches the deploy from the release run in the Actions UI. A job in
+  the release run keeps the deploy visible and gated inside it.
 
 ## Behavior changes
 
@@ -230,21 +264,22 @@ after the deploy get the new script together with the new binaries.
   script it documents. Two freshness channels on one site.
 - **Versioned docs.** Publish `main` but hide unreleased sections until their
   release. Needs authoring conventions and theme/tooling support; out of scope.
+- **A reusable workflow (`workflow_call`) called from `release.yml`, instead
+  of a composite action.** `reusable-release-build.yml` sets a precedent, but
+  it reuses a whole job matrix; the docs deploy reuses a step sequence inside
+  jobs with different triggers, gates, and concurrency, which is what the
+  `.github/actions` composites are for. `workflow_call` also carries
+  subtleties: the called workflow inherits the caller's `github` context and
+  event, its workflow-level concurrency has no effect, and secrets must be
+  declared and forwarded. The composite avoids all three and also serves
+  `deploy-docs-preview.yml`.
 - **One workflow file for production and the `main` preview, with the project
-  chosen by trigger.** Selecting `VOID_PROJECT` from `github.event_name` does
-  not work: a called workflow inherits the caller's event, and `release.yml`
-  itself runs on `push`, so the release-run deploy would look like a push and
-  target the preview project. A `workflow_call` input can disambiguate, but
-  the fallback logic for the direct-push case is easy to get wrong. Two small
-  files with explicit projects read clearer.
+  chosen by trigger.** Selecting `VOID_PROJECT` from `github.event_name` is
+  implicit and fragile, and `release.yml` still needs its own release-gated
+  job. Thin wrappers with explicit projects read clearer.
 - **Deploy `main` preview to the existing `viteplus-staging` project.** PR
   previews deploy there and would overwrite the `main` preview on every PR
   push.
-- **Factor the shared build and deploy steps into one reusable workflow with a
-  `project` input**, called by the production, `main`-preview, and PR-preview
-  workflows. Removes the step duplication that already exists between
-  `deploy-docs.yml` and `deploy-docs-preview.yml`. Reasonable follow-up
-  cleanup; kept out of this change to keep the diff reviewable.
 
 ## Open questions
 

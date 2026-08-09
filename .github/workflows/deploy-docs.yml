@@ -2,17 +2,19 @@ name: Deploy Docs
 
 permissions: {}
 
-# Deploys viteplus.dev, which also serves install.sh / install.ps1 behind
-# https://vite.plus. Runs from release.yml after a stable release is published,
-# or manually via workflow_dispatch for urgent updates. Pushes to main deploy
-# to main.viteplus.dev via deploy-docs-main.yml instead.
+# Deploys production viteplus.dev, which also serves install.sh / install.ps1
+# behind https://vite.plus. Runs from release.yml after a stable release is
+# published, or manually here for urgent updates. Pushes to main deploy to
+# main.viteplus.dev via deploy-docs-main.yml instead.
 # See rfcs/deploy-docs-on-release.md.
 on:
   workflow_dispatch:
-  workflow_call:
-    secrets:
-      VOID_TOKEN:
-        required: true
+
+# Shared with the deploy-docs job in release.yml so production deploys
+# serialize across both entry paths.
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -22,44 +24,12 @@ jobs:
   deploy:
     if: github.repository == 'voidzero-dev/vite-plus'
     runs-on: ubuntu-latest
-    # Job-level so it also applies when release.yml calls this workflow
-    # (workflow-level concurrency in a called workflow has no effect).
-    concurrency:
-      group: deploy-docs
-      cancel-in-progress: false
     permissions:
       contents: read
-    env:
-      VOID_PROJECT: viteplus
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # main
+      - uses: ./.github/actions/deploy-docs
         with:
-          cache: true
-          working-directory: docs
-          cache-dependency-path: docs/pnpm-lock.yaml
-
-      - name: Restore docs Vite Task cache
-        id: vite-task-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: docs/node_modules/.vite/task-cache
-          key: vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-${{ github.sha }}
-          # Restore the latest main cache; Vite Task fingerprints decide reuse.
-          restore-keys: |
-            vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-
-
-      - run: vp run build
-        working-directory: docs
-
-      - name: Save docs Vite Task cache
-        if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: docs/node_modules/.vite/task-cache
-          key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
-
-      - run: vpx void deploy --dir docs/.vitepress/dist
-        env:
-          VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}

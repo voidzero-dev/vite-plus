@@ -219,15 +219,25 @@ jobs:
   # describing the latest stable release. See rfcs/deploy-docs-on-release.md.
   deploy-docs:
     name: Deploy docs
+    runs-on: ubuntu-latest
     needs: [check, Release]
     if: >-
       needs.check.outputs.version_changed == 'true' &&
       !contains(needs.check.outputs.version, '-')
+    # Shared with deploy-docs.yml so production deploys serialize across both
+    # entry paths.
+    concurrency:
+      group: deploy-docs
+      cancel-in-progress: false
     permissions:
       contents: read
-    uses: ./.github/workflows/deploy-docs.yml
-    secrets:
-      VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}
 
   # Build and push the official toolchain Docker image to GHCR after the npm
   # release is published (the image installs vp from npm, so the version must
