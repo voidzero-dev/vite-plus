@@ -3379,6 +3379,16 @@ export interface CliOptions {
   cwd?: string;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;
+  /**
+   * Host Node.js version (`process.version`), used for the package-manager
+   * lifecycle env user agent.
+   */
+  nodeVersion?: string;
+  /**
+   * Host Node.js executable path (`process.execPath`), used for the
+   * package-manager lifecycle env (`npm_node_execpath`/`NODE`).
+   */
+  nodeExecPath?: string;
   /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */
   resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
 }

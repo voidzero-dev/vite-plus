@@ -138,6 +138,8 @@ if (maybePrintCommandHelp(args)) {
       test,
       doc,
       resolveUniversalViteConfig,
+      nodeVersion: process.version,
+      nodeExecPath: process.execPath,
       args: rustCliArgs,
     });
 

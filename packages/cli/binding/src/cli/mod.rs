@@ -7,6 +7,7 @@ mod app_target;
 mod execution;
 mod handler;
 mod help;
+mod lifecycle_env;
 mod resolver;
 mod script_note;
 mod types;
@@ -238,6 +239,9 @@ async fn execute_vite_task_command(
     let (workspace_root, _) = vt_workspace::find_workspace_root(&cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
+    let node_version = options.as_ref().and_then(|o| o.node_version.clone());
+    let node_exec_path = options.as_ref().and_then(|o| o.node_exec_path.clone());
+
     let resolve_vite_config_fn = options
         .as_ref()
         .map(|o| Arc::clone(&o.resolve_universal_vite_config))
@@ -260,6 +264,22 @@ async fn execute_vite_task_command(
     if let Ok(pm) = vp_pm_cli::PackageManager::builder(&cwd).build().await {
         let bin_prefix = pm.get_bin_prefix();
         let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+
+        // Stamp the package-manager lifecycle env (`npm_execpath`,
+        // `npm_config_user_agent`, …) like pnpm/npm/yarn would, so child
+        // runners inside scripts can detect the package manager (#2317).
+        // Session::init snapshots the process env, so this must also happen
+        // before it.
+        lifecycle_env::stamp_package_manager_lifecycle_env(
+            &pm,
+            &cwd,
+            node_version.as_deref(),
+            node_exec_path.as_deref(),
+        );
+    } else {
+        tracing::debug!(
+            "Package manager resolution failed; skipping lifecycle env stamping for {cwd:?}"
+        );
     }
 
     let session = Session::init(SessionConfig {
