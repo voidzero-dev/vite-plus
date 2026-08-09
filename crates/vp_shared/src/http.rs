@@ -66,6 +66,42 @@ const REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
 /// retries (multiple minutes).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Default per-request timeout for large file downloads (Node.js runtimes,
+/// package-manager tarballs). Those archives are tens of megabytes, so on
+/// slow or flaky connections the shared [`REQUEST_TIMEOUT`] aborts an
+/// otherwise healthy transfer; this budget is far more forgiving while still
+/// bounding a stuck stream. Overridable via `VP_DOWNLOAD_TIMEOUT_SECS`.
+const DEFAULT_DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
+
+/// Per-request timeout for large file downloads.
+///
+/// Returns [`DEFAULT_DOWNLOAD_TIMEOUT`] unless `VP_DOWNLOAD_TIMEOUT_SECS` is
+/// set to a positive integer number of seconds. A set-but-invalid value
+/// (non-numeric, zero, negative) warns and falls back to the default.
+///
+/// Call sites apply this per request rather than raising the shared client's
+/// [`REQUEST_TIMEOUT`], which stays short so a single stuck metadata fetch
+/// cannot hang a build.
+#[must_use]
+pub fn download_timeout() -> Duration {
+    let Some(value) = std::env::var_os(env_vars::VP_DOWNLOAD_TIMEOUT_SECS) else {
+        return DEFAULT_DOWNLOAD_TIMEOUT;
+    };
+    if os_str_is_blank(&value) {
+        return DEFAULT_DOWNLOAD_TIMEOUT;
+    }
+    match value.to_str().and_then(|s| s.trim().parse::<u64>().ok()) {
+        Some(secs) if secs > 0 => Duration::from_secs(secs),
+        _ => {
+            output::warn(&vt_str::format!(
+                "ignoring invalid {}={value:?}: expected a positive integer number of seconds",
+                env_vars::VP_DOWNLOAD_TIMEOUT_SECS
+            ));
+            DEFAULT_DOWNLOAD_TIMEOUT
+        }
+    }
+}
+
 /// Get the process-wide `reqwest::Client`.
 ///
 /// The client is built on first call and reused thereafter. See module docs
@@ -301,6 +337,47 @@ mod tests {
         assert!(message.contains(cause), "{message}");
         assert!(message.contains("HTTPS_PROXY"), "{message}");
         assert!(message.contains(env_vars::NODE_EXTRA_CA_CERTS), "{message}");
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn download_timeout_defaults_to_ten_minutes() {
+        // SAFETY: tests are run serially within this module for env vars.
+        unsafe {
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS);
+        }
+        assert_eq!(download_timeout(), DEFAULT_DOWNLOAD_TIMEOUT);
+        assert_eq!(download_timeout(), Duration::from_mins(10));
+        // The download budget must stay more forgiving than the shared
+        // per-request default, or slow tarball downloads keep timing out.
+        assert!(DEFAULT_DOWNLOAD_TIMEOUT > REQUEST_TIMEOUT);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn download_timeout_honors_override_and_rejects_invalid_values() {
+        // SAFETY: tests are run serially within this module for env vars.
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, "1800");
+        }
+        assert_eq!(download_timeout(), Duration::from_mins(30));
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, " 120 ");
+        }
+        assert_eq!(download_timeout(), Duration::from_secs(120));
+        for invalid in ["0", "-1", "abc", "1.5", "", "  "] {
+            unsafe {
+                std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, invalid);
+            }
+            assert_eq!(
+                download_timeout(),
+                DEFAULT_DOWNLOAD_TIMEOUT,
+                "should fall back to the default: {invalid:?}"
+            );
+        }
+        unsafe {
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS);
+        }
     }
 
     #[test]

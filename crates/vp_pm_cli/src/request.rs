@@ -190,8 +190,13 @@ impl HttpClient {
         // the request inline (instead of calling `self.get`) avoids a double
         // retry layer. A truncated download (bytes written != advertised
         // Content-Length) returns an error so the retry re-downloads.
+        //
+        // Tarballs are large, so the request gets the longer, configurable
+        // download budget instead of the shared client's 2-minute default —
+        // a slow-but-steady transfer must be allowed to finish.
+        let timeout = vp_shared::download_timeout();
         let result = (|| async {
-            let response = client.get(url).send().await?.error_for_status()?;
+            let response = client.get(url).timeout(timeout).send().await?.error_for_status()?;
             if let Some(ref pb) = progress {
                 pb.set_position(0);
                 if let Some(size) = response.content_length() {
