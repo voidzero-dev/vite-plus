@@ -7,7 +7,7 @@
 
 use std::{
     fs::{File, OpenOptions},
-    io::{Seek, SeekFrom, Write},
+    io::Write,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -54,14 +54,13 @@ impl UpgradeCheckCache {
 struct UpgradeCheckLock {
     _file: File,
     cache_dir: vt_path::AbsolutePathBuf,
-    #[expect(clippy::disallowed_types)] // UUID token is persisted in the lock file
-    token: String,
+    identity: same_file::Handle,
 }
 
 impl UpgradeCheckLock {
     fn is_current(&self) -> bool {
-        std::fs::read_to_string(self.cache_dir.join(LOCK_FILE_NAME).as_path())
-            .is_ok_and(|token| token == self.token)
+        same_file::Handle::from_path(self.cache_dir.join(LOCK_FILE_NAME).as_path())
+            .is_ok_and(|identity| identity == self.identity)
     }
 
     fn write_cache(&self, cache: &UpgradeCheckCache) -> std::io::Result<()> {
@@ -117,21 +116,16 @@ fn try_acquire_lock(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckL
         return None;
     }
     let path = cache_dir.join(LOCK_FILE_NAME);
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .open(path.as_path())
         .ok()?;
+    let identity = same_file::Handle::from_file(file.try_clone().ok()?).ok()?;
     file.try_lock().ok()?;
-
-    let token = uuid::Uuid::new_v4().to_string();
-    file.set_len(0).ok()?;
-    file.seek(SeekFrom::Start(0)).ok()?;
-    file.write_all(token.as_bytes()).ok()?;
-    file.sync_all().ok()?;
-    Some(UpgradeCheckLock { _file: file, cache_dir, token })
+    Some(UpgradeCheckLock { _file: file, cache_dir, identity })
 }
 
 fn now_secs() -> u64 {
@@ -348,12 +342,10 @@ mod tests {
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
 
         let lock = try_acquire_lock(&dir_path).expect("first process should acquire the lock");
-        let first_token = lock.token.clone();
         assert!(try_acquire_lock(&dir_path).is_none(), "second process must not acquire the lock");
         drop(lock);
 
-        let next = try_acquire_lock(&dir_path).expect("lock should be reusable after owner exits");
-        assert_ne!(next.token, first_token, "each owner should write a new generation token");
+        try_acquire_lock(&dir_path).expect("lock should be reusable after owner exits");
     }
 
     #[test]

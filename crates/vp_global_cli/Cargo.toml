@@ -28,6 +28,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 owo-colors = { workspace = true }
+same-file = { workspace = true }
 oxc_resolver = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }

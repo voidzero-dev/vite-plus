@@ -8445,6 +8445,7 @@ dependencies = [
  "node-semver",
  "owo-colors",
  "oxc_resolver",
+ "same-file",
  "serde",
  "serde_json",
  "serial_test",
