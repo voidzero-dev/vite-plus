@@ -5,7 +5,8 @@
 //! checkout package's JS bin directory from inside that same case home.
 //!
 //! Each flavor gets one runner bin directory per run (created under the run
-//! temp root) for runner-owned helpers. Only `vpt` lives there.
+//! temp root) for runner-owned helpers. `vpt` always lives there; optional
+//! external tools such as Nushell are linked there when available.
 
 use std::path::{Path, PathBuf};
 
@@ -29,6 +30,9 @@ impl Flavor {
 pub struct FlavorRuntime {
     pub runner_bin_dir: PathBuf,
     pub vpt: PathBuf,
+    /// Runner-owned Nushell binary used by fixtures that execute generated
+    /// `env.nu` files. CI supplies it through `VP_SNAP_NU_BIN`.
+    pub nu: Option<PathBuf>,
     /// Source global `vp` binary to install into each case's `VP_HOME/current`.
     pub global_vp: PathBuf,
     /// Source package installed into each case's `VP_HOME/current/node_modules`.
@@ -189,6 +193,23 @@ fn vpt_path() -> Result<PathBuf, String> {
     })
 }
 
+/// Resolves an optional Nushell binary for fixtures that exercise generated
+/// `env.nu` files. The explicit override keeps CI deterministic; a developer's
+/// PATH is the local fallback.
+pub fn nushell_path() -> Result<Option<PathBuf>, String> {
+    if let Some(nu) = std::env::var_os("VP_SNAP_NU_BIN") {
+        let nu = PathBuf::from(nu);
+        if nu.is_file() {
+            return std::fs::canonicalize(&nu).map(Some).map_err(|e| {
+                format!("failed to canonicalize VP_SNAP_NU_BIN {}: {e}", nu.display())
+            });
+        }
+        return Err(format!("VP_SNAP_NU_BIN is set but {} does not exist", nu.display()));
+    }
+
+    Ok(which::which("nu").ok())
+}
+
 /// Home-layout names, shared with `CaseHome` in main.rs so the product's
 /// `~/.vite-plus/js_runtime` layout is spelled once.
 pub const VP_HOME_DIR: &str = ".vite-plus";
@@ -286,10 +307,13 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
         .map_err(|e| format!("failed to create bin dir: {e}"))?;
 
     let vpt = install_runner_tool(&runner_bin_dir, "vpt", &vpt_path()?)?;
+    let nu = nushell_path()?
+        .map(|path| install_runner_tool(&runner_bin_dir, "nu", &path))
+        .transpose()?;
     let global_vp = global_vp_path()?;
     let cli_package_dir = match flavor {
         Flavor::Local => local_cli_package_dir()?,
         Flavor::Global => repo_root().join("packages/cli"),
     };
-    Ok(FlavorRuntime { runner_bin_dir, vpt, global_vp, cli_package_dir })
+    Ok(FlavorRuntime { runner_bin_dir, vpt, nu, global_vp, cli_package_dir })
 }
