@@ -157,7 +157,7 @@ jobs:
       - name: Pack packages for the registry bridge
         # TODO: repoint to a main SHA once voidzero-dev/pkg-pr-registry-bridge#86
         # merges. Pinned to that PR's head so this can be tested end to end first.
-        uses: voidzero-dev/pkg-pr-registry-bridge@4b0fcc21193c00de1ba2f0693eedc789892f9494 # oidc branch
+        uses: voidzero-dev/pkg-pr-registry-bridge@fd9ad0e5878ecbd6fd525bc01ac706838795ee90 # oidc branch
         with:
           mode: pack
           # The PR head commit, not the merge commit github.sha. Advisory here;
