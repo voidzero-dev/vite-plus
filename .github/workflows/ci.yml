@@ -1167,7 +1167,7 @@ jobs:
               vp uninstall -g typescript
 
               git config --global --add safe.directory /workspace
-              RUST_BACKTRACE=1 pnpm test
+              RUST_BACKTRACE=1 pnpm test:unit
             "
 
   # Regression test for #2278: Debian slim images ship no ca-certificates

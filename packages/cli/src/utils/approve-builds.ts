@@ -136,6 +136,50 @@ export function parseBunUntrusted(output: string): string[] {
   });
 }
 
+/**
+ * npm >= 12 skips dependency install scripts that the `allowScripts` allowlist
+ * in package.json does not cover, and reports them on stderr:
+ *
+ * ```
+ * npm warn install-scripts 2 packages had install scripts blocked because they are not covered by allowScripts:
+ * npm warn install-scripts   core-js@3.49.0 (postinstall: node -e "try{require('./postinstall')}catch(e){}")
+ * npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)
+ * ```
+ *
+ * npm 11.16 - 11.x print a similar warning ("install scripts not yet covered by
+ * allowScripts") but still run the scripts, so only the npm 12 "blocked" wording
+ * is parsed.
+ */
+const NPM_BLOCKED_SCRIPTS_MARKER =
+  'install scripts blocked because they are not covered by allowScripts';
+
+/**
+ * A blocked-package entry line: `npm warn install-scripts   <spec> (<lifecycle>:
+ * <command>)`. Anchoring on the lifecycle name keeps the count line ("2 packages
+ * had install scripts blocked ...") and the trailing hint line from matching.
+ */
+const NPM_BLOCKED_ENTRY = /^npm warn install-scripts\s+(\S+) \((?:pre|post)?install:/u;
+
+/**
+ * Parse the package names npm >= 12 reports as having blocked install scripts
+ * from captured `npm install` / `npm ci` output. Strips version suffixes and
+ * dedupes while preserving first-seen order. Returns `[]` when the warning is
+ * absent (including the npm 11.x advisory variant, where scripts still run).
+ */
+export function parseNpmBlockedScripts(output: string): string[] {
+  if (!output) {
+    return [];
+  }
+  const clean = stripVTControlCharacters(output);
+  if (!clean.includes(NPM_BLOCKED_SCRIPTS_MARKER)) {
+    return [];
+  }
+  return dedupeNames(clean.split('\n'), (rawLine) => {
+    const match = rawLine.trim().match(NPM_BLOCKED_ENTRY);
+    return match ? stripPackageVersion(match[1]) : null;
+  });
+}
+
 const YARN_DISABLED_BUILDS_MARKER = 'lists build scripts, but all build scripts have been disabled';
 
 /**
@@ -181,8 +225,9 @@ function yarnDescriptorName(descriptor: string): string {
 /**
  * Parse the gated build-script package names from an install log, dispatching on
  * the package manager: pnpm prints `Ignored build scripts:`, yarn prints
- * `... build scripts have been disabled`. bun is not parsed here (its blocked
- * packages are queried separately via `bun pm untrusted`).
+ * `... build scripts have been disabled`, npm >= 12 prints `... install scripts
+ * blocked ...`. bun is not parsed here (its blocked packages are queried
+ * separately via `bun pm untrusted`).
  */
 export function parseInstallGatedBuilds(
   output: string,
@@ -193,6 +238,9 @@ export function parseInstallGatedBuilds(
   }
   if (packageManager === PackageManager.yarn) {
     return parseYarnDisabledBuilds(output);
+  }
+  if (packageManager === PackageManager.npm) {
+    return parseNpmBlockedScripts(output);
   }
   return [];
 }
@@ -252,6 +300,7 @@ const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
   PackageManager.pnpm,
   PackageManager.bun,
   PackageManager.yarn,
+  PackageManager.npm,
 ]);
 
 /**
@@ -259,7 +308,7 @@ const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
  * during `vp create`: packages the generated project depends on directly.
  * Transitive gated builds (e.g. `esbuild` pulled in by Vite) are noise the user
  * did not choose, so they are dropped. Returns `[]` for package managers that
- * do not gate build scripts (npm, yarn classic), since there is nothing to
+ * do not gate build scripts (npm < 12, yarn classic), since there is nothing to
  * approve.
  */
 export function resolveApproveBuildTargets(
@@ -290,8 +339,8 @@ export function resolveApproveBuildTargets(
  * Enumerate the packages whose build scripts a package manager gated during the
  * install, as raw names (still unfiltered by direct dependency).
  *
- * - pnpm and yarn report them in their install output, so the names are parsed
- *   there (see {@link parseInstallGatedBuilds}) and passed in via
+ * - pnpm, yarn, and npm >= 12 report them in their install output, so the names
+ *   are parsed there (see {@link parseInstallGatedBuilds}) and passed in via
  *   `pendingBuildsFromInstall`.
  * - bun exits 0 and only prints a count, so `bun pm untrusted` is queried here.
  *
@@ -302,7 +351,11 @@ export async function detectGatedBuilds(
   packageManager: PackageManager | undefined,
   pendingBuildsFromInstall: string[] | undefined,
 ): Promise<string[]> {
-  if (packageManager === PackageManager.pnpm || packageManager === PackageManager.yarn) {
+  if (
+    packageManager === PackageManager.pnpm ||
+    packageManager === PackageManager.yarn ||
+    packageManager === PackageManager.npm
+  ) {
     return pendingBuildsFromInstall ?? [];
   }
   if (packageManager === PackageManager.bun) {
@@ -340,10 +393,11 @@ function printApproveBuildsGuidance(
     return;
   }
   // bun's `pm approve-builds` is a no-op without explicit names (it just prints
-  // "requires package names"), so spell them out. pnpm's runs an interactive
-  // picker when called bare, so it doesn't need them.
+  // "requires package names"), and npm's bare form only lists what is pending,
+  // so spell them out. pnpm's runs an interactive picker when called bare, so it
+  // doesn't need them.
   const command =
-    packageManager === PackageManager.bun
+    packageManager === PackageManager.bun || packageManager === PackageManager.npm
       ? `vp pm approve-builds ${targets.join(' ')}`
       : 'vp pm approve-builds';
   prompts.log.info(
@@ -354,8 +408,9 @@ function printApproveBuildsGuidance(
 
 /**
  * Run a `vp` build/approval command and report the outcome through a spinner.
- * On failure the approval has still been recorded (pnpm/bun config or yarn's
- * `dependenciesMeta`), so the retry hint points back at `vp install`. Returns
+ * On failure the approval has still been recorded (pnpm/bun/npm config or
+ * yarn's `dependenciesMeta`), so the retry hint points back at `retryCommand`
+ * (`vp install` unless the package manager needs an explicit rebuild). Returns
  * `true` when the command succeeded, `false` when the build exited non-zero.
  */
 async function runBuildAndReport(
@@ -365,6 +420,7 @@ async function runBuildAndReport(
   interactive: boolean,
   silent: boolean,
   extraEnv?: Record<string, string>,
+  retryCommand = 'vp install',
 ): Promise<boolean> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`Building ${packages.join(', ')}...`);
@@ -385,9 +441,52 @@ async function runBuildAndReport(
   }
   prompts.log.warn(
     `Build scripts failed for ${accent(packages.join(', '))}. They were approved; fix the ` +
-      `build toolchain and run ${accent('vp install')} to retry.`,
+      `build toolchain and run ${accent(retryCommand)} to retry.`,
   );
   return false;
+}
+
+/**
+ * Approve gated install scripts for npm >= 12, then run them. npm's approval
+ * (`npm approve-scripts`, via `vp pm approve-builds`) only records the
+ * `allowScripts` allowlist in package.json: scripts the install already skipped
+ * do not run on approval, and a plain reinstall short-circuits on the
+ * up-to-date tree without running them either. `npm rebuild` is what executes
+ * the newly approved scripts, so approval and rebuild are two steps.
+ */
+async function approveNpmScripts(
+  installCwd: string,
+  packages: string[],
+  interactive: boolean,
+  silent: boolean,
+): Promise<boolean> {
+  const approveCommand = `vp pm approve-builds ${packages.join(' ')}`;
+  const { exitCode, stdout, stderr } = await runCommandSilently({
+    command: process.env.VP_CLI_BIN ?? 'vp',
+    args: ['pm', 'approve-builds', ...packages],
+    cwd: installCwd,
+    envs: process.env,
+  });
+  if (exitCode !== 0) {
+    const output = `${stdout.toString()}\n${stderr.toString()}`.trim();
+    if (output) {
+      prompts.log.info(lastLines(output, 20));
+    }
+    prompts.log.warn(
+      `Approving build scripts failed for ${accent(packages.join(', '))}. Run ` +
+        `${accent(approveCommand)} in the project to retry.`,
+    );
+    return false;
+  }
+  return runBuildAndReport(
+    ['pm', 'rebuild', ...packages],
+    installCwd,
+    packages,
+    interactive,
+    silent,
+    undefined,
+    `vp pm rebuild ${packages.join(' ')}`,
+  );
 }
 
 /**
@@ -467,8 +566,8 @@ export interface ApproveBuildsOptions {
 }
 
 /**
- * Surface pnpm's gated build scripts after a `vp create` install and let the
- * user act on them:
+ * Surface the package manager's gated build scripts after a `vp create` install
+ * and let the user act on them:
  * - `--approve-builds`: approve + build every target, no prompt.
  * - interactive: a default-off multiselect so each package is approved
  *   individually (pnpm gates them for security, so nothing is opt-in by
@@ -518,6 +617,9 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<bool
 
   if (packageManager === PackageManager.yarn) {
     return approveYarnBuilds(cwd, selected, interactive, silent);
+  }
+  if (packageManager === PackageManager.npm) {
+    return approveNpmScripts(cwd, selected, interactive, silent);
   }
   if (
     packageManager === PackageManager.pnpm &&

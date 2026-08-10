@@ -2,7 +2,15 @@ use std::ffi::OsString;
 
 use semver::Version;
 
-use crate::resolution::{Bun, Npm, Pnpm, Yarn};
+use crate::resolution::{Bun, CommandResolution, Npm, Pnpm, Yarn, command::ResolvedCommand};
+
+#[track_caller]
+pub(crate) fn expect_run(outcome: CommandResolution) -> ResolvedCommand {
+    match outcome {
+        CommandResolution::Run(command) => command,
+        other => panic!("expected command resolution, got {other:?}"),
+    }
+}
 
 pub(crate) fn npm(version: &str) -> Npm {
     Npm::new(parse_version(version))
