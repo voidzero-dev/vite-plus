@@ -20,7 +20,24 @@ name: Register preview build
 # matching `name:` to trigger this one. `authorize` below is what makes the
 # label mean anything.
 
-on:
+# zizmor's dangerous-triggers audit warns that workflow_run is "almost always
+# used insecurely", and the danger it names is real here: this file runs in
+# base-repo context and is triggered by a run a fork PR can cause.
+#
+# Suppressed rather than heeded because the trigger is unavoidable and the
+# danger is answered directly. Fork pull_request runs are denied both secrets
+# and id-token, so publishing a fork's build REQUIRES a second workflow in
+# base-repo context; there is no variant of this that keeps the publish in the
+# build leg. See RFC 0002 in voidzero-dev/pkg-pr-registry-bridge.
+#
+# What makes it safe, and what a reviewer must not remove:
+#   - `authorize` re-derives authorization from the API and fails closed, so the
+#     label gate cannot be bypassed by editing the build leg's own check
+#   - nothing from the triggering run is trusted except fields GitHub signs into
+#     the event payload (head_sha, conclusion, event, path)
+#   - the artifact download pins run-id to the triggering run
+#   - no job that installs or executes preview content holds id-token
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Publish preview build']
     types: [completed]
