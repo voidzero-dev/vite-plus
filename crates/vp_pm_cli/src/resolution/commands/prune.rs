@@ -71,16 +71,12 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
     fn test_pnpm_prune() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PruneArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), PruneArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["prune"]);
@@ -88,11 +84,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_prune_prod() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PruneArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), PruneArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["prune", "--prod"]);
@@ -100,10 +94,7 @@ mod tests {
 
     #[test]
     fn test_npm_prune() {
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), PruneArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), PruneArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["prune"]);
@@ -111,11 +102,9 @@ mod tests {
 
     #[test]
     fn test_npm_prune_prod() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PruneArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), PruneArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["prune", "--omit=dev"]);
@@ -123,11 +112,9 @@ mod tests {
 
     #[test]
     fn test_npm_prune_no_optional() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PruneArgs { no_optional: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), PruneArgs { no_optional: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["prune", "--omit=optional"]);
@@ -135,14 +122,13 @@ mod tests {
 
     #[test]
     fn test_npm_prune_both_flags() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PruneArgs { prod: true, no_optional: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PruneArgs { prod: true, no_optional: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["prune", "--omit=dev", "--omit=optional"]);
@@ -150,18 +136,17 @@ mod tests {
 
     #[test]
     fn test_npm_prune_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PruneArgs {
-                prod: true,
-                pass_through_args: vec!["--registry".to_string(), "x".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PruneArgs {
+                    prod: true,
+                    pass_through_args: vec!["--registry".to_string(), "x".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["prune", "--omit=dev", "--registry", "x"]);
@@ -204,17 +189,16 @@ mod tests {
 
     #[test]
     fn test_prune_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PruneArgs {
-                pass_through_args: vec!["--workspace-root".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PruneArgs {
+                    pass_through_args: vec!["--workspace-root".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["prune", "--workspace-root"]);

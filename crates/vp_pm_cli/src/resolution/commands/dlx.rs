@@ -176,7 +176,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn dlx_args(package_spec: &str, args: &[&str]) -> DlxArgs {
@@ -198,11 +198,8 @@ mod tests {
 
     #[test]
     fn test_pnpm_dlx_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), dlx_args("create-vue", &["my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&pnpm("10.0.0"), dlx_args("create-vue", &["my-app"])).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["dlx", "create-vue", "my-app"]);
@@ -210,11 +207,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_dlx_with_version() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["dlx", "typescript@5.5.4", "tsc", "--version"]);
@@ -224,9 +219,7 @@ mod tests {
     fn test_pnpm_dlx_with_packages() {
         let mut options = dlx_args("yo", &["webapp"]);
         options.package = vec!["yo".to_string(), "generator-webapp".to_string()];
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), options).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -240,9 +233,7 @@ mod tests {
         let mut options = dlx_args("echo hello | cowsay", &[]);
         options.package = vec!["cowsay".to_string()];
         options.shell_mode = true;
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), options).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert!(command.args.contains(&"-c".to_string()));
@@ -253,9 +244,7 @@ mod tests {
     fn test_pnpm_dlx_with_silent() {
         let mut options = dlx_args("create-vue", &["my-app"]);
         options.silent = true;
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), options).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert!(command.args.contains(&"--silent".to_string()));
@@ -263,11 +252,8 @@ mod tests {
 
     #[test]
     fn test_npm_exec_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), dlx_args("create-vue", &["my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&npm("11.0.0"), dlx_args("create-vue", &["my-app"])).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["exec", "--yes", "--", "create-vue", "my-app"]);
@@ -275,11 +261,9 @@ mod tests {
 
     #[test]
     fn test_npm_exec_with_version() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -300,9 +284,7 @@ mod tests {
     fn test_npm_exec_with_packages() {
         let mut options = dlx_args("yo", &["webapp"]);
         options.package = vec!["yo".to_string(), "generator-webapp".to_string()];
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -324,9 +306,7 @@ mod tests {
     fn test_npm_exec_with_silent() {
         let mut options = dlx_args("create-vue", &["my-app"]);
         options.silent = true;
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
 
         assert_eq!(command.program, "npm");
         assert!(command.args.contains(&"--loglevel".to_string()));
@@ -339,9 +319,7 @@ mod tests {
         let mut options = dlx_args("echo hello | cowsay | lolcatjs", &[]);
         options.package = vec!["cowsay".to_string(), "lolcatjs".to_string()];
         options.shell_mode = true;
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
 
         assert_eq!(
             command.args,
@@ -361,9 +339,7 @@ mod tests {
         let mut options = dlx_args("echo", &["hello world"]);
         options.shell_mode = true;
         options.silent = true;
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
 
         assert_eq!(
             command.args,
@@ -373,11 +349,9 @@ mod tests {
 
     #[test]
     fn test_npm_exec_scoped_package_with_version() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), dlx_args("@vue/cli@5.0.0", &["create", "my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), dlx_args("@vue/cli@5.0.0", &["create", "my-app"])).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -388,11 +362,9 @@ mod tests {
 
     #[test]
     fn test_npm_exec_scoped_package_without_version() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), dlx_args("@vue/cli", &["create", "my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), dlx_args("@vue/cli", &["create", "my-app"])).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -403,11 +375,8 @@ mod tests {
 
     #[test]
     fn test_npm_exec_version_requires_package_flag_and_extracted_command() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), dlx_args("create-vue@3.10.0", &["my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&npm("11.0.0"), dlx_args("create-vue@3.10.0", &["my-app"])).outcome);
 
         assert!(command.args.contains(&"--package=create-vue@3.10.0".to_string()));
         let separator_pos = command.args.iter().position(|arg| arg == "--").unwrap();
@@ -417,9 +386,7 @@ mod tests {
     #[test]
     fn test_yarn_v1_fallback_to_npx() {
         let resolution = resolve(&yarn("1.22.19"), dlx_args("create-vue", &["my-app"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npx");
         assert_eq!(command.args, vec!["--yes", "create-vue", "my-app"]);
@@ -429,9 +396,7 @@ mod tests {
     #[test]
     fn no_project_fallback_uses_npx_without_a_diagnostic() {
         let resolution = dlx_args("create-vue", &["my-app"]).resolve_npx_fallback();
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npx");
         assert_eq!(command.args, vec!["--yes", "create-vue", "my-app"]);
@@ -443,9 +408,7 @@ mod tests {
     fn test_yarn_v1_fallback_with_packages() {
         let mut options = dlx_args("yo", &["webapp"]);
         options.package = vec!["yo".to_string()];
-        let CommandResolution::Run(command) = resolve(&yarn("1.22.19"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.19"), options).outcome);
 
         assert_eq!(command.program, "npx");
         assert_eq!(command.args, vec!["--package", "yo", "--yes", "yo", "webapp"]);
@@ -457,9 +420,7 @@ mod tests {
         options.package = vec!["cowsay".to_string()];
         options.shell_mode = true;
         options.silent = true;
-        let CommandResolution::Run(command) = resolve(&yarn("1.22.19"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.19"), options).outcome);
 
         assert_eq!(
             command.args,
@@ -469,11 +430,8 @@ mod tests {
 
     #[test]
     fn test_yarn_v2_dlx_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), dlx_args("create-vue", &["my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&yarn("4.0.0"), dlx_args("create-vue", &["my-app"])).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dlx", "create-vue", "my-app"]);
@@ -483,9 +441,7 @@ mod tests {
     fn test_yarn_v2_dlx_with_packages() {
         let mut options = dlx_args("yo", &["webapp"]);
         options.package = vec!["yo".to_string(), "generator-webapp".to_string()];
-        let CommandResolution::Run(command) = resolve(&yarn("4.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), options).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dlx", "-p", "yo", "-p", "generator-webapp", "yo", "webapp"]);
@@ -495,9 +451,7 @@ mod tests {
     fn test_yarn_v2_dlx_with_quiet() {
         let mut options = dlx_args("create-vue", &["my-app"]);
         options.silent = true;
-        let CommandResolution::Run(command) = resolve(&yarn("4.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), options).outcome);
 
         assert_eq!(command.program, "yarn");
         assert!(command.args.contains(&"--quiet".to_string()));
@@ -505,11 +459,8 @@ mod tests {
 
     #[test]
     fn test_yarn_v3_dlx() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("3.6.0"), dlx_args("create-vue", &["my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&yarn("3.6.0"), dlx_args("create-vue", &["my-app"])).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dlx", "create-vue", "my-app"]);
@@ -517,11 +468,9 @@ mod tests {
 
     #[test]
     fn test_yarn_v2_dlx_with_version() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("4.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dlx", "typescript@5.5.4", "tsc", "--version"]);
@@ -532,9 +481,7 @@ mod tests {
         let mut options = dlx_args("echo", &["hello"]);
         options.shell_mode = true;
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dlx", "echo", "hello"]);
@@ -546,11 +493,8 @@ mod tests {
 
     #[test]
     fn test_bun_dlx_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), dlx_args("create-vue", &["my-app"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&bun("1.3.11"), dlx_args("create-vue", &["my-app"])).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["x", "create-vue", "my-app"]);
@@ -560,9 +504,7 @@ mod tests {
     fn test_bun_dlx_with_packages() {
         let mut options = dlx_args("yo", &["webapp"]);
         options.package = vec!["yo".to_string(), "generator-webapp".to_string()];
-        let CommandResolution::Run(command) = resolve(&bun("1.3.11"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), options).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(
@@ -576,9 +518,7 @@ mod tests {
         let mut options = dlx_args("echo", &["hello"]);
         options.shell_mode = true;
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["x", "echo", "hello"]);

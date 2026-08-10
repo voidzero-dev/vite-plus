@@ -13,6 +13,7 @@ import {
   parseBunUntrusted,
   parseIgnoredBuilds,
   parseInstallGatedBuilds,
+  parseNpmBlockedScripts,
   parseYarnDisabledBuilds,
   pnpmSupportsPositionalApprove,
   resolveApproveBuildTargets,
@@ -179,6 +180,62 @@ describe('parseYarnDisabledBuilds', () => {
   });
 });
 
+describe('parseNpmBlockedScripts', () => {
+  it('parses the npm 12 blocked-scripts warning from real install output', () => {
+    // Captured from `npm install esbuild core-js` with npm 12.0.2.
+    const output = [
+      '',
+      'added 3 packages in 466ms',
+      'npm warn install-scripts 2 packages had install scripts blocked because they are not covered by allowScripts:',
+      'npm warn install-scripts   core-js@3.49.0 (postinstall: node -e "try{require(\'./postinstall\')}catch(e){}")',
+      'npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)',
+      'npm warn install-scripts',
+      'npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.',
+    ].join('\n');
+    expect(parseNpmBlockedScripts(output)).toEqual(['core-js', 'esbuild']);
+  });
+
+  it('parses the singular one-package form', () => {
+    const output = [
+      'npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:',
+      'npm warn install-scripts   fsevents@2.3.3 (install: node-gyp rebuild)',
+    ].join('\n');
+    expect(parseNpmBlockedScripts(output)).toEqual(['fsevents']);
+  });
+
+  it('parses scoped packages and dedupes multiple versions', () => {
+    const output = [
+      'npm warn install-scripts 3 packages had install scripts blocked because they are not covered by allowScripts:',
+      'npm warn install-scripts   @scope/native@1.0.0 (preinstall: node setup.js)',
+      'npm warn install-scripts   esbuild@0.25.0 (postinstall: node install.js)',
+      'npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)',
+    ].join('\n');
+    expect(parseNpmBlockedScripts(output)).toEqual(['@scope/native', 'esbuild']);
+  });
+
+  it('returns [] for the npm 11.x advisory warning (scripts still ran)', () => {
+    // npm 11.16 - 11.x warn about unreviewed packages but run their scripts.
+    const output = [
+      'npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:',
+      'npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)',
+    ].join('\n');
+    expect(parseNpmBlockedScripts(output)).toEqual([]);
+  });
+
+  it('returns [] for the npm rebuild summary warning (no package list)', () => {
+    expect(
+      parseNpmBlockedScripts(
+        'npm warn rebuild 1 package had install scripts blocked because they are not covered by allowScripts. Run `npm install-scripts ls` to review.',
+      ),
+    ).toEqual([]);
+  });
+
+  it('returns [] for a clean install log', () => {
+    expect(parseNpmBlockedScripts('added 87 packages in 39s')).toEqual([]);
+    expect(parseNpmBlockedScripts('')).toEqual([]);
+  });
+});
+
 describe('parseInstallGatedBuilds', () => {
   it('dispatches to the pnpm parser for pnpm', () => {
     expect(
@@ -198,9 +255,18 @@ describe('parseInstallGatedBuilds', () => {
     ).toEqual(['core-js']);
   });
 
-  it('returns [] for bun/npm (not parsed from install output)', () => {
+  it('dispatches to the npm parser for npm', () => {
+    expect(
+      parseInstallGatedBuilds(
+        'npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:\n' +
+          'npm warn install-scripts   better-sqlite3@11.0.0 (install: node-gyp rebuild)',
+        PackageManager.npm,
+      ),
+    ).toEqual(['better-sqlite3']);
+  });
+
+  it('returns [] for bun (not parsed from install output)', () => {
     expect(parseInstallGatedBuilds('whatever', PackageManager.bun)).toEqual([]);
-    expect(parseInstallGatedBuilds('whatever', PackageManager.npm)).toEqual([]);
     expect(parseInstallGatedBuilds('whatever', undefined)).toEqual([]);
   });
 });
@@ -299,9 +365,16 @@ describe('resolveApproveBuildTargets', () => {
     ]);
   });
 
-  it('returns [] for package managers that do not gate builds', () => {
+  it('returns direct-dep build targets for npm', () => {
     writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
-    expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], PackageManager.npm)).toEqual([]);
+    expect(
+      resolveApproveBuildTargets(dir, ['better-sqlite3', 'esbuild'], PackageManager.npm),
+    ).toEqual(['better-sqlite3']);
+  });
+
+  it('returns [] when the package manager is unknown', () => {
+    writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
+    expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], undefined)).toEqual([]);
   });
 
   it('returns [] when there are no pending builds', () => {

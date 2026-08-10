@@ -729,6 +729,13 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset VP_HOME=%~dp0..\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
 fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
+    fn render_path(path: &std::path::Path) -> String {
+        let rendered = path.display().to_string();
+        // Windows: `C:\Users\xxx\.vite-plus` → `C:/Users/xxx/.vite-plus`
+        // Unix: `/tmp/vp\home` → `/tmp/vp\home` (the backslash is preserved)
+        if cfg!(windows) { rendered.replace('\\', "/") } else { rendered }
+    }
+
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
     // This makes the env file portable across sessions where HOME may differ.
     home_dir
@@ -738,10 +745,10 @@ fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path
                 "$HOME".to_string()
             } else {
                 // Normalize to forward slashes for $HOME/... paths (POSIX-style)
-                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
+                format!("$HOME/{}", render_path(s))
             }
         })
-        .unwrap_or_else(|| path.display().to_string().replace('\\', "/"))
+        .unwrap_or_else(|| render_path(path))
 }
 
 fn render_nu_path_ref(path_ref: &str) -> String {
@@ -750,6 +757,15 @@ fn render_nu_path_ref(path_ref: &str) -> String {
         Some(suffix) if suffix.starts_with('/') => format!("~{suffix}"),
         _ => path_ref.to_string(),
     }
+}
+
+/// Escapes a value so it can be safely embedded in a Nushell double-quoted string.
+///
+/// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
+/// https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
+fn escape_nu_double_quoted_string(value: &str) -> String {
+    // `vp "home\with spaces"` → `vp \"home\\with spaces\"`
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Render the env-file content for `shell` against `vite_plus_home`.
@@ -770,8 +786,10 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
-            let home_path_ref_nu = render_nu_path_ref(&home_path_ref);
-            let bin_path_ref_nu = render_nu_path_ref(&bin_path_ref);
+            let home_path_ref_nu =
+                escape_nu_double_quoted_string(&render_nu_path_ref(&home_path_ref));
+            let bin_path_ref_nu =
+                escape_nu_double_quoted_string(&render_nu_path_ref(&bin_path_ref));
             ENV_TEMPLATE_NU
                 .replace("__VP_HOME__", &home_path_ref_nu)
                 .replace("__VP_BIN__", &bin_path_ref_nu)
@@ -934,6 +952,35 @@ mod tests {
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
         assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
         assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
+    }
+
+    #[test]
+    fn test_escape_nu_double_quoted_string() {
+        assert_eq!(
+            escape_nu_double_quoted_string(r#"vp "home\with spaces""#),
+            r#"vp \"home\\with spaces\""#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_escapes_nu_paths() {
+        let _guard = home_guard("/nonexistent-home-dir");
+        let home = AbsolutePathBuf::new(std::path::PathBuf::from(r#"/tmp/vp "home\with spaces""#))
+            .unwrap();
+
+        let content = render_env_content(EnvShell::Nu, &home);
+
+        assert!(
+            content.contains(
+                r#"$env.VP_HOME = ("/tmp/vp \"home\\with spaces\"" | path expand --no-symlink)"#
+            ),
+            "env.nu should escape VP_HOME for a Nushell string literal, got: {content}"
+        );
+        assert!(
+            content.contains(r#"prepend "/tmp/vp \"home\\with spaces\"/bin")"#),
+            "env.nu should escape the bin path for a Nushell string literal, got: {content}"
+        );
     }
 
     #[tokio::test]

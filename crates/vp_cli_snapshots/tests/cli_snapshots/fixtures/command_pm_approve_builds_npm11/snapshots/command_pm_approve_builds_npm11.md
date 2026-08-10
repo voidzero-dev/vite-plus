@@ -37,7 +37,7 @@ No packages with unreviewed install scripts.
 **Exit code:** 1
 
 ```
-note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. Enforcement is planned for a future npm release.
+note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. npm 12 enforces the policy.
 npm error code ENOMATCH
 npm error No installed packages match: esbuild
 npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
@@ -50,7 +50,7 @@ deny-only -> npm deny-scripts core-js (advisory note)
 **Exit code:** 1
 
 ```
-note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. Enforcement is planned for a future npm release.
+note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. npm 12 enforces the policy.
 npm error code ENOMATCH
 npm error No installed packages match: core-js
 npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
@@ -81,6 +81,6 @@ Pass package names as positionals (`vp pm approve-builds <pkg>...`), not after `
 -> npm approve-scripts --all (advisory note)
 
 ```
-note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. Enforcement is planned for a future npm release.
+note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. npm 12 enforces the policy.
 No packages with unreviewed install scripts.
 ```

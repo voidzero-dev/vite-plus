@@ -81,7 +81,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn cache(subcommand: &str) -> CacheArgs {
@@ -99,9 +99,7 @@ mod tests {
     #[test]
     fn test_pnpm_cache_dir() {
         let resolution = resolve(&pnpm("10.0.0"), cache("dir"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["store", "path"]);
@@ -110,9 +108,7 @@ mod tests {
     #[test]
     fn test_npm_cache_dir() {
         let resolution = resolve(&npm("11.0.0"), cache("dir"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["config", "get", "cache"]);
@@ -121,9 +117,7 @@ mod tests {
     #[test]
     fn test_yarn1_cache_dir() {
         let resolution = resolve(&yarn("1.22.0"), cache("dir"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["cache", "dir"]);
@@ -132,9 +126,7 @@ mod tests {
     #[test]
     fn test_yarn2_cache_dir() {
         let resolution = resolve(&yarn("4.0.0"), cache("dir"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["config", "get", "cacheFolder"]);
@@ -143,9 +135,7 @@ mod tests {
     #[test]
     fn test_pnpm_cache_clean() {
         let resolution = resolve(&pnpm("10.0.0"), cache("clean"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["store", "prune"]);
@@ -154,9 +144,7 @@ mod tests {
     #[test]
     fn test_npm_cache_clean() {
         let resolution = resolve(&npm("11.0.0"), cache("clean"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["cache", "clean"]);
@@ -165,9 +153,7 @@ mod tests {
     #[test]
     fn test_yarn1_cache_clean() {
         let resolution = resolve(&yarn("1.22.0"), cache("clean"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["cache", "clean"]);
@@ -176,9 +162,7 @@ mod tests {
     #[test]
     fn test_yarn2_cache_clean() {
         let resolution = resolve(&yarn("4.0.0"), cache("clean"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["cache", "clean"]);
@@ -187,9 +171,7 @@ mod tests {
     #[test]
     fn test_bun_cache_dir() {
         let resolution = resolve(&bun("1.3.11"), cache("path"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "cache"]);
@@ -198,9 +180,7 @@ mod tests {
     #[test]
     fn test_bun_cache_clean() {
         let resolution = resolve(&bun("1.3.11"), cache("clean"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "cache", "rm"]);
@@ -227,9 +207,7 @@ mod tests {
                 pass_through_args: vec!["--force".to_string()],
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["cache", "clean", "--force"]);

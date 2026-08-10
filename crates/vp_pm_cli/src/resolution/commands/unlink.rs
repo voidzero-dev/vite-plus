@@ -68,16 +68,12 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
     fn test_pnpm_unlink_no_package() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), UnlinkArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), UnlinkArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["unlink"]);
@@ -85,14 +81,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_unlink_package() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["unlink", "react"]);
@@ -100,11 +95,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_unlink_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), UnlinkArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), UnlinkArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["unlink", "--recursive"]);
@@ -112,18 +105,17 @@ mod tests {
 
     #[test]
     fn test_pnpm_unlink_package_recursive() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            UnlinkArgs {
-                package: Some("react".to_string()),
-                recursive: true,
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                UnlinkArgs {
+                    package: Some("react".to_string()),
+                    recursive: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["unlink", "--recursive", "react"]);
@@ -131,11 +123,7 @@ mod tests {
 
     #[test]
     fn test_yarn_unlink_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), UnlinkArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), UnlinkArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["unlink"]);
@@ -143,14 +131,13 @@ mod tests {
 
     #[test]
     fn test_yarn_unlink_package() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["unlink", "react"]);
@@ -158,14 +145,13 @@ mod tests {
 
     #[test]
     fn test_yarn_classic_unlink_package() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["unlink", "react"]);
@@ -173,11 +159,9 @@ mod tests {
 
     #[test]
     fn test_yarn_unlink_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), UnlinkArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("4.0.0"), UnlinkArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["unlink", "--all"]);
@@ -185,11 +169,7 @@ mod tests {
 
     #[test]
     fn test_npm_unlink_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), UnlinkArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), UnlinkArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["unlink"]);
@@ -197,14 +177,13 @@ mod tests {
 
     #[test]
     fn test_npm_unlink_package() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["unlink", "react"]);
@@ -213,9 +192,7 @@ mod tests {
     #[test]
     fn test_npm_unlink_recursive_warns_and_drops_flag() {
         let result = resolve(&npm("11.0.0"), UnlinkArgs { recursive: true, ..Default::default() });
-        let CommandResolution::Run(command) = result.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(result.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["unlink"]);
@@ -224,14 +201,13 @@ mod tests {
 
     #[test]
     fn test_bun_unlink_package() {
-        let CommandResolution::Run(command) = resolve(
-            &bun("1.3.11"),
-            UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &bun("1.3.11"),
+                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["unlink", "react"]);
@@ -240,9 +216,7 @@ mod tests {
     #[test]
     fn test_bun_unlink_recursive_warns_and_drops_flag() {
         let result = resolve(&bun("1.3.11"), UnlinkArgs { recursive: true, ..Default::default() });
-        let CommandResolution::Run(command) = result.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(result.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["unlink"]);
@@ -251,18 +225,17 @@ mod tests {
 
     #[test]
     fn test_unlink_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            UnlinkArgs {
-                package: Some("react".to_string()),
-                args: vec!["--global".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                UnlinkArgs {
+                    package: Some("react".to_string()),
+                    args: vec!["--global".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["unlink", "react", "--global"]);

@@ -115,15 +115,12 @@ mod tests {
         DiagnosticKind,
         command::PreRunAction,
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
     fn test_pnpm_pack_basic() {
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), PackArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), PackArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["pack"]);
@@ -131,39 +128,35 @@ mod tests {
 
     #[test]
     fn test_pnpm_pack_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--recursive"]);
     }
 
     #[test]
     fn test_pnpm_pack_with_out() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--out", "./dist/package.tgz"]);
     }
 
     #[test]
     fn test_pnpm_pack_with_destination() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--pack-destination", "./dist"]);
     }
@@ -174,70 +167,62 @@ mod tests {
             &pnpm("10.0.0"),
             PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert!(command.pre_run.is_empty());
     }
 
     #[test]
     fn test_pnpm_pack_with_gzip_level() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), PackArgs { pack_gzip_level: Some(9), ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--pack-gzip-level", "9"]);
     }
 
     #[test]
     fn test_pnpm_pack_json() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PackArgs { json: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), PackArgs { json: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--json"]);
     }
 
     #[test]
     fn test_pnpm_pack_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PackArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PackArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["--filter", "app", "pack"]);
     }
 
     #[test]
     fn test_pnpm_pack_with_multiple_filters() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PackArgs { filter: vec!["app".to_string(), "web".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PackArgs {
+                    filter: vec!["app".to_string(), "web".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["--filter", "app", "--filter", "web", "pack"]);
     }
 
     #[test]
     fn test_npm_pack_basic() {
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), PackArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), PackArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["pack"]);
@@ -245,25 +230,22 @@ mod tests {
 
     #[test]
     fn test_npm_pack_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--workspaces"]);
     }
 
     #[test]
     fn test_npm_pack_with_destination() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--pack-destination", "./dist"]);
     }
@@ -274,48 +256,45 @@ mod tests {
             &npm("11.0.0"),
             PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.pre_run, vec![PreRunAction::CreateDir { path: "./dist".to_string() }]);
     }
 
     #[test]
     fn test_npm_pack_json() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PackArgs { json: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), PackArgs { json: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--json"]);
     }
 
     #[test]
     fn test_npm_pack_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PackArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PackArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--workspace", "app"]);
     }
 
     #[test]
     fn test_npm_pack_with_multiple_filters() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PackArgs { filter: vec!["app".to_string(), "web".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PackArgs {
+                    filter: vec!["app".to_string(), "web".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--workspace", "app", "--workspace", "web"]);
     }
@@ -330,9 +309,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["pack"]);
         assert_eq!(resolution.diagnostics.len(), 2);
@@ -344,10 +321,7 @@ mod tests {
 
     #[test]
     fn test_yarn1_pack_basic() {
-        let CommandResolution::Run(command) = resolve(&yarn("1.22.0"), PackArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), PackArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["pack"]);
@@ -357,9 +331,7 @@ mod tests {
     fn test_yarn1_pack_recursive_ignored() {
         let resolution =
             resolve(&yarn("1.22.0"), PackArgs { recursive: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["pack"]);
         assert_eq!(resolution.diagnostics.len(), 1);
@@ -367,25 +339,22 @@ mod tests {
 
     #[test]
     fn test_yarn1_pack_with_out() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--filename", "./dist/package.tgz"]);
     }
 
     #[test]
     fn test_yarn1_pack_json() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), PackArgs { json: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), PackArgs { json: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--json"]);
     }
@@ -396,9 +365,7 @@ mod tests {
             &yarn("1.22.0"),
             PackArgs { filter: vec!["app".to_string()], ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["pack"]);
         assert_eq!(resolution.diagnostics.len(), 1);
@@ -406,10 +373,7 @@ mod tests {
 
     #[test]
     fn test_yarn2_pack_basic() {
-        let CommandResolution::Run(command) = resolve(&yarn("4.0.0"), PackArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), PackArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["pack"]);
@@ -417,50 +381,44 @@ mod tests {
 
     #[test]
     fn test_yarn2_pack_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("4.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["workspaces", "foreach", "--all", "pack"]);
     }
 
     #[test]
     fn test_yarn2_pack_with_out() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--out", "./dist/package.tgz"]);
     }
 
     #[test]
     fn test_yarn2_pack_json() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), PackArgs { json: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("4.0.0"), PackArgs { json: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--json"]);
     }
 
     #[test]
     fn test_yarn2_pack_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            PackArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                PackArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,
@@ -470,14 +428,16 @@ mod tests {
 
     #[test]
     fn test_yarn2_pack_with_multiple_filters() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            PackArgs { filter: vec!["app".to_string(), "web".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                PackArgs {
+                    filter: vec!["app".to_string(), "web".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,
@@ -487,14 +447,13 @@ mod tests {
 
     #[test]
     fn test_yarn2_pack_with_filter_and_recursive() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            PackArgs { recursive: true, filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                PackArgs { recursive: true, filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,
@@ -512,9 +471,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["pack"]);
         assert_eq!(resolution.diagnostics.len(), 2);
@@ -526,10 +483,7 @@ mod tests {
 
     #[test]
     fn test_bun_pack_basic() {
-        let CommandResolution::Run(command) = resolve(&bun("1.3.11"), PackArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), PackArgs::default()).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "pack"]);
@@ -537,40 +491,36 @@ mod tests {
 
     #[test]
     fn test_bun_pack_with_out_maps_to_filename() {
-        let CommandResolution::Run(command) = resolve(
-            &bun("1.3.11"),
-            PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &bun("1.3.11"),
+                PackArgs { out: Some("./dist/package.tgz".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pm", "pack", "--filename", "./dist/package.tgz"]);
     }
 
     #[test]
     fn test_bun_pack_with_destination() {
-        let CommandResolution::Run(command) = resolve(
-            &bun("1.3.11"),
-            PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &bun("1.3.11"),
+                PackArgs { pack_destination: Some("./dist".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pm", "pack", "--destination", "./dist"]);
     }
 
     #[test]
     fn test_bun_pack_with_gzip_level() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&bun("1.3.11"), PackArgs { pack_gzip_level: Some(5), ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["pm", "pack", "--gzip-level", "5"]);
     }
@@ -586,9 +536,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["pm", "pack"]);
         assert_eq!(resolution.diagnostics.len(), 3);
@@ -602,17 +550,16 @@ mod tests {
 
     #[test]
     fn test_pack_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PackArgs {
-                pass_through_args: vec!["--report-summary".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PackArgs {
+                    pass_through_args: vec!["--report-summary".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["pack", "--report-summary"]);
     }

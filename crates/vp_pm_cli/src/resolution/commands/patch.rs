@@ -58,7 +58,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn patch_args(package: &str) -> PatchArgs {
@@ -67,11 +67,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_patch() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), patch_args("left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), patch_args("left-pad")).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["patch", "left-pad"]);
@@ -79,11 +75,7 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_patch() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), patch_args("left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), patch_args("left-pad")).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["patch", "left-pad"]);
@@ -91,11 +83,7 @@ mod tests {
 
     #[test]
     fn test_bun_patch() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), patch_args("left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), patch_args("left-pad")).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["patch", "left-pad"]);
@@ -123,17 +111,16 @@ mod tests {
 
     #[test]
     fn test_patch_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PatchArgs {
-                package: "left-pad".to_string(),
-                pass_through_args: vec!["--edit-dir".to_string(), ".patches".to_string()],
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PatchArgs {
+                    package: "left-pad".to_string(),
+                    pass_through_args: vec!["--edit-dir".to_string(), ".patches".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["patch", "left-pad", "--edit-dir", ".patches"]);
     }

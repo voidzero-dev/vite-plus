@@ -69,8 +69,8 @@ fn resolve_logout(program: &str, base_args: &[&str], args: &LogoutArgs) -> Comma
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -94,9 +94,7 @@ mod tests {
     #[test]
     fn test_npm_logout() {
         let resolution = resolve(&npm("11.0.0"), LogoutArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["logout"]);
@@ -105,9 +103,7 @@ mod tests {
     #[test]
     fn test_pnpm_logout_uses_npm() {
         let resolution = resolve(&pnpm("10.0.0"), LogoutArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["logout"]);
@@ -116,9 +112,7 @@ mod tests {
     #[test]
     fn test_yarn1_logout() {
         let resolution = resolve(&yarn("1.22.0"), LogoutArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["logout"]);
@@ -127,9 +121,7 @@ mod tests {
     #[test]
     fn test_yarn2_logout() {
         let resolution = resolve(&yarn("4.0.0"), LogoutArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "logout"]);
@@ -138,9 +130,7 @@ mod tests {
     #[test]
     fn test_bun_logout_uses_npm() {
         let resolution = resolve(&bun("1.3.11"), LogoutArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["logout"]);
@@ -155,9 +145,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["logout", "--registry", "https://registry.example.com"]);
@@ -169,9 +157,7 @@ mod tests {
             &npm("11.0.0"),
             LogoutArgs { scope: Some("@myorg".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["logout", "--scope", "@myorg"]);

@@ -292,16 +292,12 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, pnpm, yarn},
     };
 
     #[test]
     fn test_pnpm_basic_install() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), InstallArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), InstallArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["install"]);
@@ -309,11 +305,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_prod_install() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), InstallArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), InstallArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["install", "--prod"]);
@@ -321,73 +315,60 @@ mod tests {
 
     #[test]
     fn test_pnpm_frozen_lockfile() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), InstallArgs { frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--frozen-lockfile"]);
     }
 
     #[test]
     fn test_pnpm_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            InstallArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                InstallArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["--filter", "app", "install"]);
     }
 
     #[test]
     fn test_pnpm_fix_lockfile() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), InstallArgs { fix_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--fix-lockfile"]);
     }
 
     #[test]
     fn test_pnpm_resolution_only() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), InstallArgs { resolution_only: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--resolution-only"]);
     }
 
     #[test]
     fn test_pnpm_shamefully_hoist() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), InstallArgs { shamefully_hoist: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--shamefully-hoist"]);
     }
 
     #[test]
     fn test_npm_basic_install() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), InstallArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), InstallArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["install"]);
@@ -395,48 +376,39 @@ mod tests {
 
     #[test]
     fn test_npm_frozen_lockfile_uses_ci() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&npm("11.0.0"), InstallArgs { frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["ci"]);
     }
 
     #[test]
     fn test_npm_prod_install() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), InstallArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), InstallArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--omit=dev"]);
     }
 
     #[test]
     fn test_npm_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            InstallArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                InstallArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--workspace", "app"]);
     }
 
     #[test]
     fn test_yarn_classic_basic_install() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), InstallArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), InstallArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["install"]);
@@ -444,34 +416,26 @@ mod tests {
 
     #[test]
     fn test_yarn_classic_frozen_lockfile() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&yarn("1.22.0"), InstallArgs { frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--frozen-lockfile"]);
     }
 
     #[test]
     fn test_yarn_classic_prod_install() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), InstallArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), InstallArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--production"]);
     }
 
     #[test]
     fn test_yarn_berry_basic_install() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), InstallArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), InstallArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["install"]);
@@ -479,12 +443,10 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_frozen_lockfile() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&yarn("4.0.0"), InstallArgs { frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--immutable"]);
     }
@@ -493,9 +455,7 @@ mod tests {
     fn test_yarn_berry_fix_lockfile() {
         let resolution =
             resolve(&yarn("4.0.0"), InstallArgs { fix_lockfile: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install", "--refresh-lockfile"]);
         assert!(resolution.diagnostics.is_empty());
@@ -503,12 +463,10 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_ignore_scripts() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&yarn("4.0.0"), InstallArgs { ignore_scripts: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--mode", "skip-build"]);
     }
@@ -519,9 +477,7 @@ mod tests {
             &yarn("4.0.0"),
             InstallArgs { lockfile_only: true, ignore_scripts: true, ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install", "--mode", "update-lockfile"]);
         assert_eq!(resolution.diagnostics.len(), 1);
@@ -533,14 +489,13 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            InstallArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                InstallArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,
@@ -550,23 +505,22 @@ mod tests {
 
     #[test]
     fn test_pnpm_all_options() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            InstallArgs {
-                prod: true,
-                no_optional: true,
-                prefer_offline: true,
-                ignore_scripts: true,
-                filter: vec!["app".to_string()],
-                workspace_root: true,
-                pass_through_args: vec!["--use-stderr".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                InstallArgs {
+                    prod: true,
+                    no_optional: true,
+                    prefer_offline: true,
+                    ignore_scripts: true,
+                    filter: vec!["app".to_string()],
+                    workspace_root: true,
+                    pass_through_args: vec!["--use-stderr".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,
@@ -586,33 +540,27 @@ mod tests {
 
     #[test]
     fn test_pnpm_silent() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), InstallArgs { silent: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), InstallArgs { silent: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--silent"]);
     }
 
     #[test]
     fn test_yarn_classic_silent() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), InstallArgs { silent: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), InstallArgs { silent: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--silent"]);
     }
 
     #[test]
     fn test_npm_silent() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), InstallArgs { silent: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), InstallArgs { silent: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--loglevel", "silent"]);
     }
@@ -621,9 +569,7 @@ mod tests {
     fn test_yarn_berry_silent_warns_and_drops() {
         let resolution =
             resolve(&yarn("4.0.0"), InstallArgs { silent: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install"]);
         assert_eq!(resolution.diagnostics[0].message, "yarn >=2 does not support --silent.");
@@ -631,105 +577,104 @@ mod tests {
 
     #[test]
     fn test_pnpm_no_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            InstallArgs { no_frozen_lockfile: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                InstallArgs { no_frozen_lockfile: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--no-frozen-lockfile"]);
     }
 
     #[test]
     fn test_pnpm_no_frozen_lockfile_overrides_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            InstallArgs { frozen_lockfile: true, no_frozen_lockfile: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                InstallArgs {
+                    frozen_lockfile: true,
+                    no_frozen_lockfile: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--no-frozen-lockfile"]);
     }
 
     #[test]
     fn test_yarn_classic_no_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            InstallArgs { no_frozen_lockfile: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                InstallArgs { no_frozen_lockfile: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--no-frozen-lockfile"]);
     }
 
     #[test]
     fn test_yarn_classic_no_frozen_lockfile_overrides_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            InstallArgs { frozen_lockfile: true, no_frozen_lockfile: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                InstallArgs {
+                    frozen_lockfile: true,
+                    no_frozen_lockfile: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--no-frozen-lockfile"]);
     }
 
     #[test]
     fn test_yarn_berry_no_frozen_lockfile() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&yarn("4.0.0"), InstallArgs { no_frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--no-immutable"]);
     }
 
     #[test]
     fn test_yarn_berry_no_frozen_lockfile_overrides_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            InstallArgs { frozen_lockfile: true, no_frozen_lockfile: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                InstallArgs {
+                    frozen_lockfile: true,
+                    no_frozen_lockfile: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--no-immutable"]);
     }
 
     #[test]
     fn test_npm_no_frozen_lockfile_uses_install() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&npm("11.0.0"), InstallArgs { no_frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install"]);
     }
 
     #[test]
     fn test_bun_basic_install() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), InstallArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), InstallArgs::default()).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["install"]);
@@ -737,36 +682,30 @@ mod tests {
 
     #[test]
     fn test_bun_frozen_lockfile() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&bun("1.3.11"), InstallArgs { frozen_lockfile: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["install", "--frozen-lockfile"]);
     }
 
     #[test]
     fn test_bun_ignore_scripts() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&bun("1.3.11"), InstallArgs { ignore_scripts: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert!(command.args.contains(&"--ignore-scripts".to_string()));
     }
 
     #[test]
     fn test_bun_no_optional() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&bun("1.3.11"), InstallArgs { no_optional: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert!(command.args.contains(&"--omit".to_string()));
         assert!(command.args.contains(&"optional".to_string()));
@@ -774,46 +713,46 @@ mod tests {
 
     #[test]
     fn test_bun_prod_install() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), InstallArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&bun("1.3.11"), InstallArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert!(command.args.contains(&"--production".to_string()));
     }
 
     #[test]
     fn test_npm_no_frozen_lockfile_overrides_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            InstallArgs { frozen_lockfile: true, no_frozen_lockfile: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                InstallArgs {
+                    frozen_lockfile: true,
+                    no_frozen_lockfile: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["install"]);
     }
 
     #[test]
     fn resolve_install_npm_uses_ci_for_frozen_lockfile() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            InstallArgs {
-                frozen_lockfile: true,
-                dev: true,
-                force: true,
-                lockfile_only: true,
-                no_lockfile: true,
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                InstallArgs {
+                    frozen_lockfile: true,
+                    dev: true,
+                    force: true,
+                    lockfile_only: true,
+                    no_lockfile: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["ci"]);
     }
@@ -822,9 +761,7 @@ mod tests {
     fn drops_fix_lockfile_for_npm_with_warning() {
         let resolution =
             resolve(&npm("11.0.0"), InstallArgs { fix_lockfile: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install"]);
         assert_eq!(resolution.diagnostics.len(), 1);
@@ -837,9 +774,7 @@ mod tests {
             &yarn("4.1.0"),
             InstallArgs { prefer_offline: true, offline: true, ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install"]);
         assert!(resolution.diagnostics.is_empty());
@@ -848,9 +783,7 @@ mod tests {
     #[test]
     fn yarn_berry_prod_warns_without_dropping() {
         let resolution = resolve(&yarn("4.1.0"), InstallArgs { prod: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install"]);
         assert_eq!(
@@ -863,19 +796,13 @@ mod tests {
     fn resolution_only_warns_for_non_pnpm() {
         let npm_resolution =
             resolve(&npm("11.0.0"), InstallArgs { resolution_only: true, ..Default::default() });
-        let CommandResolution::Run(npm_command) = npm_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let npm_command = expect_run(npm_resolution.outcome);
         let yarn_resolution =
             resolve(&yarn("1.22.0"), InstallArgs { resolution_only: true, ..Default::default() });
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let yarn_command = expect_run(yarn_resolution.outcome);
         let berry_resolution =
             resolve(&yarn("4.1.0"), InstallArgs { resolution_only: true, ..Default::default() });
-        let CommandResolution::Run(berry_command) = berry_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let berry_command = expect_run(berry_resolution.outcome);
 
         assert_eq!(npm_command.args, vec!["install"]);
         assert_eq!(
@@ -908,9 +835,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["install"]);
         assert_eq!(
