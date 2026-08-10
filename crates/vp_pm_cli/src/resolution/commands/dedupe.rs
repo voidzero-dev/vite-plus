@@ -65,16 +65,14 @@ impl Resolve<DedupeArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, pnpm, yarn},
     };
 
     #[test]
     fn test_pnpm_dedupe_basic() {
         let resolution = resolve(&pnpm("10.0.0"), DedupeArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["dedupe"]);
@@ -83,9 +81,7 @@ mod tests {
     #[test]
     fn test_pnpm_dedupe_check() {
         let resolution = resolve(&pnpm("10.0.0"), DedupeArgs { check: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["dedupe", "--check"]);
@@ -94,9 +90,7 @@ mod tests {
     #[test]
     fn test_npm_dedupe_basic() {
         let resolution = resolve(&npm("11.0.0"), DedupeArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dedupe"]);
@@ -105,9 +99,7 @@ mod tests {
     #[test]
     fn test_npm_dedupe_check() {
         let resolution = resolve(&npm("11.0.0"), DedupeArgs { check: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dedupe", "--dry-run"]);
@@ -116,9 +108,7 @@ mod tests {
     #[test]
     fn test_yarn_dedupe_basic() {
         let resolution = resolve(&yarn("4.0.0"), DedupeArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dedupe"]);
@@ -127,9 +117,7 @@ mod tests {
     #[test]
     fn test_yarn_dedupe_check() {
         let resolution = resolve(&yarn("4.0.0"), DedupeArgs { check: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dedupe", "--check"]);
@@ -138,9 +126,7 @@ mod tests {
     #[test]
     fn test_yarn_classic_dedupe_falls_back_to_install() {
         let resolution = resolve(&yarn("1.22.0"), DedupeArgs { check: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["install"]);
@@ -155,9 +141,7 @@ mod tests {
     #[test]
     fn test_bun_dedupe_falls_back_to_install() {
         let resolution = resolve(&bun("1.3.11"), DedupeArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["install"]);
@@ -178,9 +162,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["dedupe", "--config.verify-store-integrity=false"]);

@@ -65,7 +65,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn patch_commit_args(patch_dir: &str) -> PatchCommitArgs {
@@ -74,11 +74,8 @@ mod tests {
 
     #[test]
     fn test_pnpm_patch_commit() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), patch_commit_args("patches/left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&pnpm("10.0.0"), patch_commit_args("patches/left-pad")).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["patch-commit", "patches/left-pad"]);
@@ -86,11 +83,8 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_patch_commit() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), patch_commit_args("patches/left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&yarn("4.0.0"), patch_commit_args("patches/left-pad")).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["patch-commit", "--save", "patches/left-pad"]);
@@ -98,11 +92,8 @@ mod tests {
 
     #[test]
     fn test_bun_patch_commit_uses_flag() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), patch_commit_args("patches/left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&bun("1.3.11"), patch_commit_args("patches/left-pad")).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["patch", "--commit", "patches/left-pad"]);
@@ -133,17 +124,16 @@ mod tests {
 
     #[test]
     fn test_patch_commit_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &bun("1.3.11"),
-            PatchCommitArgs {
-                patch_dir: "patches/left-pad".to_string(),
-                pass_through_args: vec!["--patches-dir".to_string(), ".patches".to_string()],
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &bun("1.3.11"),
+                PatchCommitArgs {
+                    patch_dir: "patches/left-pad".to_string(),
+                    pass_through_args: vec!["--patches-dir".to_string(), ".patches".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,

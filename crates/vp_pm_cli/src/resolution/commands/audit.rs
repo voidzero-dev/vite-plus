@@ -116,7 +116,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -142,9 +142,7 @@ mod tests {
     #[test]
     fn test_npm_audit() {
         let resolution = resolve(&npm("11.0.0"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["audit"]);
@@ -153,9 +151,7 @@ mod tests {
     #[test]
     fn test_npm_audit_fix() {
         let resolution = resolve(&npm("11.0.0"), AuditArgs { fix: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["audit", "fix"]);
@@ -164,9 +160,7 @@ mod tests {
     #[test]
     fn test_pnpm_audit_fix() {
         let resolution = resolve(&pnpm("10.0.0"), AuditArgs { fix: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["audit", "--fix"]);
@@ -175,9 +169,7 @@ mod tests {
     #[test]
     fn test_yarn1_audit() {
         let resolution = resolve(&yarn("1.22.0"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["audit"]);
@@ -194,9 +186,7 @@ mod tests {
     #[test]
     fn test_yarn2_audit() {
         let resolution = resolve(&yarn("4.0.0"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "audit"]);
@@ -216,9 +206,7 @@ mod tests {
             &npm("11.0.0"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["audit", "--audit-level", "high"]);
@@ -230,9 +218,7 @@ mod tests {
             &yarn("1.22.0"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["audit", "--level", "high"]);
@@ -241,9 +227,7 @@ mod tests {
     #[test]
     fn test_bun_audit_basic() {
         let resolution = resolve(&bun("1.3.11"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["audit"]);
@@ -255,9 +239,7 @@ mod tests {
             &bun("1.3.11"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["audit", "--audit-level", "high"]);
@@ -274,9 +256,7 @@ mod tests {
     #[test]
     fn test_bun_audit_json() {
         let resolution = resolve(&bun("1.3.11"), AuditArgs { json: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["audit", "--json"]);
@@ -288,9 +268,7 @@ mod tests {
             &yarn("4.0.0"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "audit", "--severity", "high"]);
@@ -308,21 +286,11 @@ mod tests {
             resolve(&yarn("4.0.0"), AuditArgs { production: true, ..Default::default() });
         let bun_resolution =
             resolve(&bun("1.3.11"), AuditArgs { production: true, ..Default::default() });
-        let CommandResolution::Run(npm_command) = npm_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(pnpm_command) = pnpm_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(yarn_berry_command) = yarn_berry_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(bun_command) = bun_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let npm_command = expect_run(npm_resolution.outcome);
+        let pnpm_command = expect_run(pnpm_resolution.outcome);
+        let yarn_command = expect_run(yarn_resolution.outcome);
+        let yarn_berry_command = expect_run(yarn_berry_resolution.outcome);
+        let bun_command = expect_run(bun_resolution.outcome);
 
         assert_eq!(npm_command.program, "npm");
         assert_eq!(npm_command.args, vec!["audit", "--omit=dev"]);

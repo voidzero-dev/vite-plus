@@ -11,7 +11,10 @@ use vp_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepen
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
-    commands::env::config::{self, ShimMode},
+    commands::{
+        self,
+        env::config::{self, ShimMode},
+    },
     error::Error,
     shim,
 };
@@ -30,6 +33,8 @@ pub struct JsExecutor {
     scripts_dir: Option<AbsolutePathBuf>,
     /// Subcommand as the user wrote it, forwarded to the CLI this one runs
     raw_subcommand: Option<String>,
+    /// Whether a project-local CLI miss should emit a warning before global fallback
+    warn_on_missing_local_cli: bool,
 }
 
 impl JsExecutor {
@@ -40,7 +45,13 @@ impl JsExecutor {
     ///   If not provided, will be auto-detected from the binary location.
     #[must_use]
     pub const fn new(scripts_dir: Option<AbsolutePathBuf>) -> Self {
-        Self { cli_runtime: None, project_runtime: None, scripts_dir, raw_subcommand: None }
+        Self {
+            cli_runtime: None,
+            project_runtime: None,
+            scripts_dir,
+            raw_subcommand: None,
+            warn_on_missing_local_cli: true,
+        }
     }
 
     /// Forward the subcommand as the user wrote it to the CLI this one runs.
@@ -49,6 +60,11 @@ impl JsExecutor {
     /// otherwise lost on the way down.
     pub fn with_raw_subcommand(mut self, raw_subcommand: Option<&str>) -> Self {
         self.raw_subcommand = raw_subcommand.map(ToOwned::to_owned);
+        self
+    }
+
+    pub(crate) fn without_missing_local_cli_warning(mut self) -> Self {
+        self.warn_on_missing_local_cli = false;
         self
     }
 
@@ -339,6 +355,9 @@ impl JsExecutor {
         let entry_point = match Self::resolve_local_vite_plus(project_path) {
             Some(path) => path,
             None => {
+                if self.warn_on_missing_local_cli {
+                    commands::warn_missing_local_cli_if_project(project_path);
+                }
                 // Fall back to the global installation's bin.js
                 let scripts_dir = self.get_scripts_dir()?;
                 scripts_dir.join("bin.js")

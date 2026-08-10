@@ -71,8 +71,8 @@ impl Resolve<DeprecateArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn deprecate(package: &str, message: &str) -> DeprecateArgs {
@@ -108,9 +108,7 @@ mod tests {
     fn test_deprecate_basic() {
         let resolution =
             resolve(&pnpm("10.0.0"), deprecate("my-package@1.0.0", "This version is deprecated"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -130,9 +128,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -152,9 +148,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -172,9 +166,7 @@ mod tests {
     #[test]
     fn test_yarn_classic_deprecate_uses_npm() {
         let resolution = resolve(&yarn("1.22.0"), deprecate("my-package", "Deprecated"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["deprecate", "my-package", "Deprecated"]);
@@ -183,9 +175,7 @@ mod tests {
     #[test]
     fn test_bun_deprecate_falls_back_to_npm() {
         let resolution = resolve(&bun("1.3.11"), deprecate("my-package", "Deprecated"));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["deprecate", "my-package", "Deprecated"]);
