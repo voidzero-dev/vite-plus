@@ -79,28 +79,58 @@ jobs:
         id: check
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         with:
           script: |
             const headSha = process.env.HEAD_SHA;
             const { owner, repo } = context.repo;
 
-            // Resolve the PR from the commit. workflow_run.pull_requests is
-            // empty for fork PRs, which is why this goes to the API.
-            const pulls = await github.paginate(
-              github.rest.repos.listPullRequestsAssociatedWithCommit,
-              { owner, repo, commit_sha: headSha },
-            );
+            // Resolve the PR by its HEAD BRANCH, not by commit association.
+            //
+            // This used listPullRequestsAssociatedWithCommit, which returns
+            // EMPTY for a fork PR's head commit -- the exact case this workflow
+            // exists for -- while working correctly for same-repo PRs. So it
+            // looked right until the first fork PR arrived (#2391) and failed
+            // with "no open PR has head <sha>" for a PR that was open with
+            // precisely that head. `workflow_run.pull_requests` is also empty
+            // for forks, which is what sent me to the commit endpoint in the
+            // first place; both are fork-blind.
+            //
+            // head_repository.owner.login and head_branch are GitHub-signed
+            // payload fields, so this stays as trustworthy as the sha.
+            const headOwner = process.env.HEAD_OWNER;
+            const headBranch = process.env.HEAD_BRANCH;
+            if (!headOwner || !headBranch) {
+              core.setFailed('workflow_run payload has no head repository or branch');
+              return;
+            }
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              head: `${headOwner}:${headBranch}`,
+            });
 
-            const candidates = pulls.filter(
-              (p) =>
-                p.state === 'open' &&
-                p.head.sha === headSha &&
-                p.base.repo.full_name === `${owner}/${repo}`,
+            const forBranch = pulls.filter(
+              (p) => p.state === 'open' && p.base.repo.full_name === `${owner}/${repo}`,
             );
+            if (forBranch.length === 0) {
+              core.setFailed(
+                `no open PR of ${owner}/${repo} from ${headOwner}:${headBranch}; refusing to publish`,
+              );
+              return;
+            }
+            // Separated from the branch lookup so the message says which of the
+            // two happened: no such PR, or the PR moved on since this build.
+            const candidates = forBranch.filter((p) => p.head.sha === headSha);
             if (candidates.length === 0) {
               core.setFailed(
-                `no open PR of ${owner}/${repo} has head ${headSha}; refusing to publish`,
+                `PR ${forBranch.map((p) => `#${p.number}`).join(', ')} for ` +
+                  `${headOwner}:${headBranch} now points at ` +
+                  `${forBranch[0].head.sha.slice(0, 7)}, but this run built ` +
+                  `${headSha.slice(0, 7)}; re-apply the label to build the current head`,
               );
               return;
             }
