@@ -114,6 +114,13 @@ export default defineConfig([
     entry: {
       'define-config': './src/define-config.ts',
       index: './src/index.cts',
+      // `@oxlint/plugins` ships CJS, so the shim can too. A `.cts` plugin, or
+      // a `.ts` one compiled with `module: commonjs`, emits its import as
+      // `require()`, which an ESM-only export would reject.
+      //
+      // `lint-plugins-dev` deliberately has no CJS build: `oxlint/plugins-dev`
+      // is ESM-only upstream, so the shim mirrors exactly what upstream can do.
+      'lint-plugins': './src/lint-plugins.ts',
     },
     outDir: 'dist',
     format: 'cjs',

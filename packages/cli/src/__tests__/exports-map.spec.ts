@@ -147,6 +147,15 @@ describe('Oxlint JS-plugin authoring entrypoints', () => {
     );
   });
 
+  it('serves the authoring API to CommonJS too', () => {
+    // A `.cts` plugin, or a `.ts` one compiled with `module: commonjs`, emits
+    // its import as `require()`. `@oxlint/plugins` ships CJS, so the shim does
+    // too. `plugins-dev` deliberately does not: it is ESM-only upstream.
+    const plugins = requireFromHere('vite-plus/lint/plugins') as Record<string, unknown>;
+    expect(plugins.defineRule).toBeTypeOf('function');
+    expect(plugins.definePlugin).toBeTypeOf('function');
+  });
+
   it('exposes RuleTester from vite-plus/lint/plugins-dev', async () => {
     const ruleTester = await import('vite-plus/lint/plugins-dev');
     expect(ruleTester.RuleTester).toBeTypeOf('function');

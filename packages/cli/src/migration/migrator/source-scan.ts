@@ -343,17 +343,22 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
 // project that still has one therefore needs its direct `@oxlint/plugins`
 // dependency: under pnpm's strict layout the transitive copy inside
 // `vite-plus` is not resolvable from the plugin file.
-// Matched with a tolerant regex rather than fixed substrings: `require (
-// '@oxlint/plugins' )`, a line break before the argument, and
-// `createRequire(...)('@oxlint/plugins')` are all valid and all survive the
-// rewrite. Whitespace (including newlines) is allowed around the callee and
-// the argument, and any callee ending in `require` counts, which covers
-// `createRequire(import.meta.url)` results assigned to a local name.
+// A CommonJS reach for the plugin API, matched loosely on purpose. `SEP` is
+// whitespace or a block comment, so `require /* compat */ ( '...' )` and a line
+// break before the argument both match.
 //
-// This errs toward retaining the dependency. A false positive leaves one
-// unused devDependency; a false negative breaks a plugin at load time.
-const OXLINT_PLUGIN_API_CJS_RE =
-  /\brequire\s*\(\s*['"](?:@oxlint\/plugins|oxlint\/plugins-dev)['"]\s*\)/;
+// This errs toward retaining the dependency: a false positive leaves one unused
+// devDependency, a false negative breaks a plugin at load time. The
+// `createRequire` indirection below is caught the same way, by looking for the
+// specifier in a file that also builds its own `require`.
+const SEP = String.raw`(?:\s|\/\*[\s\S]*?\*\/)*`;
+const OXLINT_PLUGIN_API_SPECIFIER = String.raw`['"](?:@oxlint\/plugins|oxlint\/plugins-dev)['"]`;
+const OXLINT_PLUGIN_API_CJS_RE = new RegExp(
+  String.raw`\brequire${SEP}\(${SEP}${OXLINT_PLUGIN_API_SPECIFIER}${SEP}\)`,
+);
+const OXLINT_PLUGIN_API_CREATE_REQUIRE_RE = new RegExp(
+  String.raw`createRequire[\s\S]*?${OXLINT_PLUGIN_API_SPECIFIER}`,
+);
 
 /**
  * True when the source tree still reaches the Oxlint plugin API through a
@@ -363,5 +368,9 @@ const OXLINT_PLUGIN_API_CJS_RE =
  * fact still load-bearing.
  */
 export function sourceTreeRequiresOxlintPluginApi(projectPath: string): boolean {
-  return sourceTreeMatches(projectPath, (content) => OXLINT_PLUGIN_API_CJS_RE.test(content));
+  return sourceTreeMatches(
+    projectPath,
+    (content) =>
+      OXLINT_PLUGIN_API_CJS_RE.test(content) || OXLINT_PLUGIN_API_CREATE_REQUIRE_RE.test(content),
+  );
 }

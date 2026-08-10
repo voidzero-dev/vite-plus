@@ -4214,6 +4214,20 @@ export * from 'oxlint';"#;
     }
 
     #[test]
+    fn test_rewrite_import_content_oxlint_export_const_literal_is_data() {
+        // `inside:` matches the immediate parent. In `export const x = '...'`
+        // the string sits under a lexical_declaration, not directly under the
+        // export_statement, so the re-export rules never see it. Pinned so a
+        // rule loosened to `stopBy: end` cannot start corrupting data.
+        let data = r#"export const pluginApi = '@oxlint/plugins';
+export const legacy = 'oxlint';"#;
+
+        let result = rewrite_import_content(data, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, data);
+    }
+
+    #[test]
     fn test_rewrite_import_content_oxlint_require_is_left_alone() {
         // `vite-plus/lint/plugins` is an ESM-only export, so a rewritten
         // `require()` would fail with ERR_PACKAGE_PATH_NOT_EXPORTED.
