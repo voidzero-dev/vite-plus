@@ -1,0 +1,53 @@
+packages/cli/package.json
+  s_2bd13baa8199ca::t_67cd79275be6ce 73-80
+docs/guide/lint.md
+  s_09c28b62987691::t_b2032a1c114a9e 54-104
+  s_09c28b62987691::t_cc857e89500b59 53,105-107
+packages/cli/src/lint-plugins.ts
+  s_09c28b62987691::t_72ce093c3c5391 1-20
+  s_09c28b62987691::t_ec0be594ff9778 21-22
+packages/cli/src/oxlint-plugin.ts
+  s_09c28b62987691::t_bf2146675b024c 47-77,146-159,163-186,251-264,287-302
+  s_09c28b62987691::t_ecdfb48ccc2ed6 303-304,330
+packages/cli/src/__tests__/exports-map.spec.ts
+  s_09c28b62987691::t_6f11ff1a4667c6 120-154
+  s_09c28b62987691::t_17dd8ad2701841 155
+packages/cli/src/__tests__/oxlint-plugin.spec.ts
+  s_09c28b62987691::t_b613e89aa5cb70 105-113,124-138,218-244
+  s_09c28b62987691::t_c6c691ab3fd067 245
+docs/guide/migrate-rules.md
+  s_09c28b62987691::t_f62225081b7508 199-226
+  s_09c28b62987691::t_2586e63ce29d11 227-231
+crates/vp_migration/src/import_rewriter.rs
+  s_09c28b62987691::t_d15d7e7f68f0be 219,1570-1781,1828-1832,2174-2180,2200,2321-2324,2530-2534,2616-2627,3941-4043,4154-4159,4181-4186,4209-4214,4223-4228,4231-4236,4276-4277,4287,4291-4335,5116-5121,5587-5592,5608-5613,5629-5634,5650,5652-5654
+  s_09c28b62987691::t_a134b4872d8472 5651,5655
+packages/cli/tsdown.config.ts
+  s_09c28b62987691::t_e311e85a216233 52
+  s_09c28b62987691::t_cbdcd609e93977 53
+packages/cli/src/lint-plugins-dev.ts
+  s_09c28b62987691::t_d2f0a4c894718d 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e565255f0dbac76eb2ce0ef2f47b525df68743f0",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    },
+    "s_2bd13baa8199ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e58e992-7909-4e0f-8306-0782d1a04c0e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
