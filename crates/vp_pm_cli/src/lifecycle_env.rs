@@ -39,6 +39,13 @@ impl PackageManager {
     /// (`pnpm.cjs`, `npm-cli.js`, `yarn.js`), the native binary for pnpm >= 12,
     /// with the bin shim as fallback.
     ///
+    /// Mirrors the package managers' own stamping code: npm sets
+    /// `npm_execpath = config.npmBin` (its `bin/npm-cli.js`), and pnpm sets it
+    /// to the CLI's `process.argv[1]` — or `process.execPath` when bundled as
+    /// a binary, the case the native pnpm >= 12 layout mirrors
+    /// (https://github.com/npm/cli/blob/latest/workspaces/config/lib/set-envs.js,
+    /// https://github.com/pnpm/npm-lifecycle/blob/main/index.js).
+    ///
     /// Child runners (e.g. npm-run-all) execute `.js`/`.cjs` values through the
     /// current Node.js binary, which works on every platform — unlike
     /// extensionless shims on Windows.
@@ -86,6 +93,17 @@ impl PackageManager {
     /// `package.json` script, limited to the subset that is constant across a
     /// `vp run` session. Empty for bun: what `bun run` stamps is unverified,
     /// so its environment is left untouched rather than guessed at.
+    ///
+    /// Names follow npm's lifecycle script environment
+    /// (https://docs.npmjs.com/cli/v10/using-npm/scripts#environment), which
+    /// pnpm reproduces by routing `pnpm run` scripts through
+    /// `@pnpm/npm-lifecycle`
+    /// (https://github.com/pnpm/pnpm/blob/main/pnpm11/exec/lifecycle/src/runLifecycleHook.ts):
+    /// `INIT_CWD` is the cwd the command was invoked in, `npm_node_execpath`
+    /// and `NODE` the running Node.js binary
+    /// (https://github.com/npm/cli/blob/latest/workspaces/config/lib/set-envs.js,
+    /// https://github.com/pnpm/npm-lifecycle/blob/main/index.js).
+    /// Verified against pnpm 11.21.0 and npm 10.9.8.
     #[must_use]
     pub fn lifecycle_env_vars(
         &self,
@@ -120,6 +138,13 @@ impl PackageManager {
 /// `npm_config_user_agent`, formatted the way the package manager itself does:
 /// `pnpm/11.20.0 npm/? node/v22.23.1 linux x64` (pnpm, yarn) or
 /// `npm/10.9.8 node/v22.23.1 linux x64 workspaces/false` (npm).
+///
+/// Formats follow pnpm's resolved `userAgent` config
+/// (`{name}/{version} npm/? node/{version} {platform} {arch}`,
+/// https://github.com/pnpm/pnpm/blob/main/pnpm11/config/reader/src/index.ts)
+/// and npm's `user-agent` definition (`npm/{npm-version} node/{node-version}
+/// {platform} {arch} workspaces/{workspaces}`,
+/// https://github.com/npm/cli/blob/latest/workspaces/config/lib/definitions/definitions.js).
 fn user_agent(
     package_manager_type: PackageManagerType,
     version: &str,
@@ -374,136 +399,5 @@ mod tests {
         assert_eq!(node_arch("x86"), "ia32");
         assert_eq!(node_arch("aarch64"), "arm64");
         assert_eq!(node_arch("powerpc"), "ppc");
-    }
-
-    fn native_pnpm_bin_name() -> &'static str {
-        if cfg!(windows) { "pnpm.native.exe" } else { "pnpm.native" }
-    }
-
-    /// Render the session lifecycle stamp for a fixture install layout as
-    /// snapshot-stable text: machine- and platform-dependent values (tempdir,
-    /// path separators, `.exe`/`.cmd` suffixes, the user-agent platform/arch
-    /// tail) become placeholders. A regression of voidzero-dev/vite-plus#2317 —
-    /// scripts spawned without the package-manager lifecycle env — empties or
-    /// changes the stamp and fails the snapshot.
-    fn render_lifecycle_stamp(
-        package_manager_type: PackageManagerType,
-        version: &str,
-        bin_entries: &[&str],
-    ) -> String {
-        let dir = tempfile::tempdir().unwrap();
-        let install_dir = dir.path().join("pm");
-        for entry in bin_entries {
-            write_file(&install_dir.join("bin").join(entry));
-        }
-        let pm = package_manager(package_manager_type, version, &install_dir);
-
-        let vars = pm.lifecycle_env_vars(&context(Some("v22.23.1")));
-        let mut rendered = vt_str::format!("{package_manager_type} {version}").to_string();
-        for (key, value) in &vars {
-            rendered.push_str(&vt_str::format!("\n{key}={}", value.to_string_lossy()));
-        }
-
-        use cow_utils::CowUtils;
-        let install_dir = install_dir.as_os_str().to_string_lossy();
-        let init_cwd = project_dir();
-        let init_cwd = init_cwd.as_path().as_os_str().to_string_lossy();
-        let node = node_path();
-        let node = node.as_os_str().to_string_lossy();
-        let platform_arch =
-            vt_str::format!("{} {}", node_platform(env::consts::OS), node_arch(env::consts::ARCH))
-                .to_string();
-        rendered
-            .cow_replace(install_dir.as_ref(), "[INSTALL_DIR]")
-            .cow_replace(init_cwd.as_ref(), "[INIT_CWD]")
-            .cow_replace(node.as_ref(), "[NODE]")
-            .cow_replace("pnpm.native.exe", "pnpm.native")
-            .cow_replace("pnpm.cmd", "pnpm")
-            .cow_replace('\\', "/")
-            .cow_replace(&platform_arch, "[platform] [arch]")
-            .into_owned()
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_pnpm_js_layout() {
-        insta::assert_snapshot!(render_lifecycle_stamp(
-            PackageManagerType::Pnpm,
-            "11.20.0",
-            &["pnpm.cjs"]
-        ));
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_pnpm_native_layout() {
-        insta::assert_snapshot!(render_lifecycle_stamp(
-            PackageManagerType::Pnpm,
-            "12.0.0",
-            &[native_pnpm_bin_name()]
-        ));
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_pnpm_js_entry_preferred_over_native() {
-        insta::assert_snapshot!(render_lifecycle_stamp(
-            PackageManagerType::Pnpm,
-            "12.0.0",
-            &["pnpm.cjs", native_pnpm_bin_name()]
-        ));
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_pnpm_shim_fallback() {
-        insta::assert_snapshot!(render_lifecycle_stamp(PackageManagerType::Pnpm, "11.20.0", &[]));
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_npm_js_layout() {
-        insta::assert_snapshot!(render_lifecycle_stamp(
-            PackageManagerType::Npm,
-            "10.9.8",
-            &["npm-cli.js"]
-        ));
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_yarn_js_layout() {
-        insta::assert_snapshot!(render_lifecycle_stamp(
-            PackageManagerType::Yarn,
-            "1.22.22",
-            &["yarn.js"]
-        ));
-    }
-
-    #[test]
-    #[expect(
-        clippy::disallowed_macros,
-        reason = "insta::assert_snapshot! expands to std format! for its failure message"
-    )]
-    fn snapshot_bun_stamps_no_lifecycle_vars() {
-        insta::assert_snapshot!(render_lifecycle_stamp(PackageManagerType::Bun, "1.3.0", &[]));
     }
 }

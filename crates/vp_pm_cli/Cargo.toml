@@ -49,7 +49,6 @@ doctest = false
 
 [dev-dependencies]
 httpmock = { workspace = true }
-insta = { workspace = true }
 test-log = { workspace = true }
 
 [lints]

@@ -8539,7 +8539,6 @@ dependencies = [
  "httpmock",
  "indicatif",
  "indoc",
- "insta",
  "node-semver",
  "pathdiff",
  "reqwest",
