@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { type WorkspacePackage } from '../../types/index.ts';
+import { editJsonFile } from '../../utils/json.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
+  OXLINT_PLUGIN_API_PACKAGES,
   PLAYWRIGHT_PROVIDER,
   WEBDRIVERIO_PROVIDER,
   readPackageJsonIfExists,
@@ -343,34 +346,56 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
 // project that still has one therefore needs its direct `@oxlint/plugins`
 // dependency: under pnpm's strict layout the transitive copy inside
 // `vite-plus` is not resolvable from the plugin file.
-// A CommonJS reach for the plugin API, matched loosely on purpose. `SEP` is
-// whitespace or a block comment, so `require /* compat */ ( '...' )` and a line
-// break before the argument both match.
-//
-// This errs toward retaining the dependency: a false positive leaves one unused
-// devDependency, a false negative breaks a plugin at load time. The
-// `createRequire` indirection below is caught the same way, by looking for the
-// specifier in a file that also builds its own `require`.
-const SEP = String.raw`(?:\s|\/\*[\s\S]*?\*\/)*`;
-const OXLINT_PLUGIN_API_SPECIFIER = String.raw`['"](?:@oxlint\/plugins|oxlint\/plugins-dev)['"]`;
-const OXLINT_PLUGIN_API_CJS_RE = new RegExp(
-  String.raw`\brequire${SEP}\(${SEP}${OXLINT_PLUGIN_API_SPECIFIER}${SEP}\)`,
-);
-const OXLINT_PLUGIN_API_CREATE_REQUIRE_RE = new RegExp(
-  String.raw`createRequire[\s\S]*?${OXLINT_PLUGIN_API_SPECIFIER}`,
-);
+/**
+ * True when the source tree still names `@oxlint/plugins` anywhere.
+ *
+ * Deliberately a plain substring scan over the FINAL source, run after the
+ * import rewrite. By then every form the rewrite handles has already become a
+ * `vite-plus/lint/*` specifier, so anything left is a form it preserves: a
+ * `require()`, an `import x = require()`, a JSDoc `@typedef {import(...)}`, a
+ * template-literal call, or a plain string.
+ *
+ * Enumerating those syntaxes ahead of the rewrite was the wrong shape. It meant
+ * predicting the rewriter with regexes, and each missed spelling silently
+ * deleted a dependency that was still load-bearing. Scanning afterwards asks
+ * the only question that matters: does anything still need this package?
+ */
+export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
+  return sourceTreeReferencesAny(projectPath, ['@oxlint/plugins']);
+}
 
 /**
- * True when the source tree still reaches the Oxlint plugin API through a
- * CommonJS form that the import rewrite does not touch.
+ * Drop `@oxlint/plugins` from devDependencies once nothing names it any more.
  *
- * Used to decide whether the dead-weight `@oxlint/plugins` devDependency is in
- * fact still load-bearing.
+ * Runs AFTER the import rewrite, so the scan sees final source. Skips a package
+ * that owns the API as a published contract (`dependencies` or
+ * `peerDependencies`), and skips any package whose source still names it
+ * through a form the rewrite preserves.
  */
-export function sourceTreeRequiresOxlintPluginApi(projectPath: string): boolean {
-  return sourceTreeMatches(
-    projectPath,
-    (content) =>
-      OXLINT_PLUGIN_API_CJS_RE.test(content) || OXLINT_PLUGIN_API_CREATE_REQUIRE_RE.test(content),
-  );
+export function dropDeadOxlintPluginsDependency(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): void {
+  const dirs = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  for (const dir of dirs) {
+    const packageJsonPath = path.join(dir, 'package.json');
+    const pkg = readPackageJsonIfExists(packageJsonPath);
+    if (!pkg?.devDependencies?.[OXLINT_PLUGINS_PACKAGE]) {
+      continue;
+    }
+    const ownsApi = OXLINT_PLUGIN_API_PACKAGES.some(
+      (name) =>
+        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+    );
+    if (ownsApi || sourceTreeReferencesOxlintPluginsPackage(dir)) {
+      continue;
+    }
+    editJsonFile<{ devDependencies?: Record<string, string> }>(packageJsonPath, (json) => {
+      if (!json.devDependencies?.[OXLINT_PLUGINS_PACKAGE]) {
+        return undefined;
+      }
+      delete json.devDependencies[OXLINT_PLUGINS_PACKAGE];
+      return json;
+    });
+  }
 }

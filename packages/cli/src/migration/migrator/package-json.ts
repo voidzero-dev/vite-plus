@@ -28,7 +28,6 @@ import {
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGIN_API_PACKAGES,
-  OXLINT_PLUGINS_PACKAGE,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
@@ -71,11 +70,6 @@ export function rewritePackageJson(
   // one only through source/a shim). An already-installed copy of such a provider
   // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
   providerCatalogAdditions: ReadonlySet<string> = new Set(),
-  // Whether the source tree still reaches the Oxlint plugin API through a
-  // CommonJS `require()`. Those forms survive the import rewrite untouched, so
-  // the direct `@oxlint/plugins` dependency stays load-bearing. Computed by the
-  // caller, which owns the project path (see `sourceTreeRequiresOxlintPluginApi`).
-  requiresOxlintPluginApiCjs = false,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -202,19 +196,11 @@ export function rewritePackageJson(
   const ownsOxlintApi = OXLINT_PLUGIN_API_PACKAGES.some(
     (name) => pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
   );
-  // `@oxlint/plugins` becomes dead weight once the import rewrite points the
-  // authoring API at `vite-plus/lint/plugins`, so drop it from devDependencies.
-  // Two exceptions: a published plugin owns the API (above), and a CommonJS
-  // `require()` of it survives the rewrite untouched, so the direct dependency
-  // is still the only resolvable copy under pnpm's strict layout.
-  if (
-    pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] &&
-    !ownsOxlintApi &&
-    !requiresOxlintPluginApiCjs
-  ) {
-    delete pkg.devDependencies[OXLINT_PLUGINS_PACKAGE];
-    needVitePlus = true;
-  }
+  // `@oxlint/plugins` often becomes dead weight once the import rewrite points
+  // the authoring API at `vite-plus/lint/plugins`, but not always: the rewrite
+  // preserves several forms. The deletion therefore happens AFTER the rewrite,
+  // in `dropDeadOxlintPluginsDependency`, where the question is simply whether
+  // anything still names the package.
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;

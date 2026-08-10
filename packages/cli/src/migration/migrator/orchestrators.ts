@@ -10,7 +10,7 @@ import {
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
   collectOxlintOwnerDirs,
-  sourceTreeRequiresOxlintPluginApi,
+  dropDeadOxlintPluginsDependency,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
@@ -81,7 +81,6 @@ export function rewriteStandaloneProject(
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
   const oxlintOwnerDirs = collectOxlintOwnerDirs(projectPath, workspaceInfo.packages);
-  const requiresOxlintPluginApiCjs = sourceTreeRequiresOxlintPluginApi(projectPath);
   // Source-tree scan signals are computed once here and reused below (and inside
   // projectUsesVitestDirectly / collectInjectedProviderNames) so the source tree
   // is traversed once each instead of repeatedly. They do not depend on
@@ -255,7 +254,6 @@ export function rewriteStandaloneProject(
       retainedVitestModule,
       requiredVitestPeer,
       providerCatalogAdditions,
-      requiresOxlintPluginApiCjs,
     );
 
     // ensure vite-plus is in devDependencies — but only when it isn't already a
@@ -341,6 +339,7 @@ export function rewriteStandaloneProject(
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs);
+  dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
@@ -474,6 +473,7 @@ export function rewriteMonorepo(
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(workspaceInfo.rootDir, silent, report, true, oxlintOwnerDirs);
+  dropDeadOxlintPluginsDependency(workspaceInfo.rootDir, workspaceInfo.packages);
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   for (const pkg of workspaceInfo.packages) {
     wrapLazyPluginsInViteConfig(path.join(workspaceInfo.rootDir, pkg.path), silent, report);
@@ -567,7 +567,6 @@ export function rewriteMonorepoProject(
       retainedVitestModule,
       requiredVitestPeer,
       providerCatalogAdditions,
-      sourceTreeRequiresOxlintPluginApi(projectPath),
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own
