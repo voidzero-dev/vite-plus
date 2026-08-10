@@ -165,7 +165,7 @@ jobs:
 
             ### Final validation (this step is complete ONLY when all pass)
             1. `just build` exits 0.
-            2. `pnpm bootstrap-cli:ci && pnpm test` exits 0.
+            2. `pnpm bootstrap-cli:ci && pnpm test:unit` exits 0.
             3. `just snapshot-test` exits 0. Snapshot mismatches fail the run with a
                unified diff. Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic
                drift from the upgrade (e.g. a bumped version string in help output);
@@ -181,7 +181,7 @@ jobs:
 
             ### Running long commands (IMPORTANT)
             Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
-            `pnpm test`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
+            `pnpm test:unit`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
             that blocks until the command exits. The Bash tool already gives you a 10-minute
             timeout per call, which is enough for these builds.
 
