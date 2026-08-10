@@ -89,8 +89,14 @@
       "default": "./dist/rolldown/plugins-index.mjs",
       "types": "./dist/rolldown/plugins-index.d.mts"
     },
-    "./rolldown/pluginutils": "./dist/pluginutils/index.mjs",
-    "./rolldown/pluginutils/filter": "./dist/pluginutils/filter/index.mjs",
+    "./rolldown/pluginutils": {
+      "default": "./dist/pluginutils/index.mjs",
+      "types": "./dist/pluginutils/index.d.mts"
+    },
+    "./rolldown/pluginutils/filter": {
+      "default": "./dist/pluginutils/filter/index.mjs",
+      "types": "./dist/pluginutils/filter/index.d.mts"
+    },
     "./rolldown/utils": {
       "default": "./dist/rolldown/utils-index.mjs",
       "types": "./dist/rolldown/utils-index.d.mts"
@@ -122,7 +128,7 @@
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@vitejs/devtools": "^0.4.10",
+    "@vitejs/devtools": "^0.4.12",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -220,8 +226,8 @@
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.2.0",
-    "rolldown": "1.2.2",
+    "vite": "8.2.1",
+    "rolldown": "1.2.3",
     "tsdown": "0.22.14"
   }
 }

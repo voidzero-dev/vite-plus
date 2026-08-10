@@ -226,7 +226,20 @@ fn extract_config_from_expr(
             match first_arg_expr.get_inner_expression() {
                 Expression::ObjectExpression(obj) => extract_object_fields(obj),
                 Expression::ArrowFunctionExpression(arrow) => {
-                    extract_config_from_function_body(&arrow.body)
+                    // As of oxc 0.143 an arrow body is an `ArrowFunctionBody`
+                    // enum: either a block body (`() => { ... }`) or a concise
+                    // expression body (`() => ({ ... })`).
+                    if let Some(body) = arrow.body.as_function_body() {
+                        extract_config_from_function_body(body)
+                    } else if let Some(expr) = arrow.body.as_expression() {
+                        if let Expression::ObjectExpression(obj) = expr.get_inner_expression() {
+                            extract_object_fields(obj)
+                        } else {
+                            FieldMap::unanalyzable()
+                        }
+                    } else {
+                        FieldMap::unanalyzable()
+                    }
                 }
                 Expression::FunctionExpression(func) => {
                     let Some(body) = func.body.as_ref() else {
@@ -242,11 +255,12 @@ fn extract_config_from_expr(
     }
 }
 
-/// Extract the config object from the body of a function passed to `defineConfig`.
+/// Extract the config object from the block body of a function passed to `defineConfig`.
 ///
-/// Handles two patterns:
-/// - Concise arrow body: `() => ({ ... })` — body has a single `ExpressionStatement`
-/// - Block body with exactly one return: `() => { ... return { ... }; }`
+/// Handles a block body with exactly one return: `() => { ... return { ... }; }`
+/// or `function() { return { ... }; }`. Concise arrow bodies (`() => ({ ... })`)
+/// are handled directly by the caller, since oxc represents them as an expression
+/// rather than a `FunctionBody`.
 ///
 /// Returns `FieldMap::unanalyzable()` if the body contains multiple `return` statements
 /// (at any nesting depth), since the returned config would depend on runtime control flow.
@@ -257,25 +271,14 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
     }
 
     for stmt in &body.statements {
-        match stmt {
-            Statement::ReturnStatement(ret) => {
-                let Some(arg) = ret.argument.as_ref() else {
-                    return FieldMap::unanalyzable();
-                };
-                if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
-                    return extract_object_fields(obj);
-                }
+        if let Statement::ReturnStatement(ret) = stmt {
+            let Some(arg) = ret.argument.as_ref() else {
                 return FieldMap::unanalyzable();
+            };
+            if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
+                return extract_object_fields(obj);
             }
-            Statement::ExpressionStatement(expr_stmt) => {
-                // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
-                if let Expression::ObjectExpression(obj) =
-                    expr_stmt.expression.get_inner_expression()
-                {
-                    return extract_object_fields(obj);
-                }
-            }
-            _ => {}
+            return FieldMap::unanalyzable();
         }
     }
     FieldMap::unanalyzable()
@@ -1256,13 +1259,30 @@ mod tests {
     fn define_config_arrow_no_return_object() {
         // Arrow function that doesn't return an object literal
         assert_non_static(
-            &parse_js_ts_config(
+            &parse(
                 r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 return someFunction();
             });
             ",
-                "ts",
+            ),
+            "run",
+        );
+    }
+
+    #[test]
+    fn define_config_arrow_expression_body_no_object() {
+        // Concise arrow body that is not an object literal. oxc represents it as an
+        // expression rather than a function body, so it takes its own extraction path.
+        assert_non_static(
+            &parse(
+                r"
+            import { defineConfig } from 'vite-plus';
+
+            export default defineConfig(() => someFunction());
+            ",
             ),
             "run",
         );
@@ -1272,8 +1292,10 @@ mod tests {
     fn define_config_arrow_multiple_returns() {
         // Multiple top-level returns → not analyzable
         assert_non_static(
-            &parse_js_ts_config(
+            &parse(
                 r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 if (mode === 'production') {
                     return { run: { cacheScripts: true } };
@@ -1281,7 +1303,6 @@ mod tests {
                 return { run: { cacheScripts: false } };
             });
             ",
-                "ts",
             ),
             "run",
         );
@@ -1290,7 +1311,9 @@ mod tests {
     #[test]
     fn define_config_arrow_empty_body() {
         assert_non_static(
-            &parse_js_ts_config("export default defineConfig(() => {});", "ts"),
+            &parse(
+                "import { defineConfig } from 'vite-plus';\nexport default defineConfig(() => {});",
+            ),
             "run",
         );
     }

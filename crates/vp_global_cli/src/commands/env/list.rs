@@ -2,7 +2,7 @@
 //!
 //! Handles `vp env list` to show Node.js versions installed in VP_HOME/js_runtime/node/.
 
-use std::{cmp::Ordering, process::ExitStatus};
+use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
@@ -38,16 +38,8 @@ pub(super) fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String>
         })
         .collect();
 
-    versions.sort_by(|a, b| compare_versions(a, b));
+    versions.sort_by_cached_key(|v| node_semver::Version::parse(v).ok());
     versions
-}
-
-/// Compare two version strings numerically (e.g., "20.18.0" vs "22.13.0").
-fn compare_versions(a: &str, b: &str) -> Ordering {
-    let parse = |v: &str| -> Vec<u64> { v.split('.').filter_map(|p| p.parse().ok()).collect() };
-    let a_parts = parse(a);
-    let b_parts = parse(b);
-    a_parts.cmp(&b_parts)
 }
 
 /// Execute the list command (local installed versions).
@@ -130,14 +122,6 @@ fn print_human(versions: &[String], current: Option<&str>, default: Option<&str>
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_version_cmp() {
-        assert_eq!(compare_versions("18.20.0", "20.18.0"), Ordering::Less);
-        assert_eq!(compare_versions("22.13.0", "20.18.0"), Ordering::Greater);
-        assert_eq!(compare_versions("20.18.0", "20.18.0"), Ordering::Equal);
-        assert_eq!(compare_versions("20.9.0", "20.18.0"), Ordering::Less);
-    }
 
     #[test]
     fn test_list_installed_versions_nonexistent_dir() {

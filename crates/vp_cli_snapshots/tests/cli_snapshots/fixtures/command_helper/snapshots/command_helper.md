@@ -24,6 +24,7 @@ Core Commands:
   preview        Preview production build
   cache          Manage the task cache
   config         Configure hooks and agent integration
+  hooks          Manage the Git hook dispatcher
   staged         Run linters on staged files
 
 Package Manager Commands:
@@ -170,7 +171,7 @@ Allowing / Denying Multiple Lints:
   * `nursery`     - New lints that are still under development
   * `all`         - All categories listed above except `nursery`. Does not enable plugins automatically.
   -A, --allow=NAME  Allow the rule or category (suppress the lint)
-  -W, --warn=NAME   Deny the rule or category (emit a warning)
+  -W, --warn=NAME   Warn on the rule or category (emit a warning)
   -D, --deny=NAME   Deny the rule or category (emit an error)
 
 Enable/Disable Plugins:

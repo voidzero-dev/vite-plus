@@ -1,6 +1,10 @@
 [[case]]
 name = "dev_engines_runtime_pnpm11"
 vp = "global"
+# The devEngines pin must stay on vp's default Node.js version: the CI seed
+# only carries the default, and any other pin makes this step download a
+# runtime from nodejs.org inside its 60s budget, which times out when the
+# Windows runner's connection stalls.
 steps = [
-  { argv = ["vp", "dlx", "-s", "print-current-version"], comment = "should print Node.js version 22.22.2 from devEngines.runtime", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "print-current-version"], comment = "should print Node.js version 22.18.0 from devEngines.runtime", continue-on-failure = true },
 ]
