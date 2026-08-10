@@ -70,10 +70,10 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// package-manager tarballs). Those archives are tens of megabytes, so on
 /// slow or flaky connections the shared [`REQUEST_TIMEOUT`] aborts an
 /// otherwise healthy transfer; this budget is far more forgiving while still
-/// bounding a stuck stream. Overridable via `VP_DOWNLOAD_TIMEOUT_SECS`.
+/// bounding a stuck stream. Overridable via `VP_DOWNLOAD_TIMEOUT`.
 const DEFAULT_DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
 
-/// Largest accepted `VP_DOWNLOAD_TIMEOUT_SECS` value. Longer budgets are
+/// Largest accepted `VP_DOWNLOAD_TIMEOUT` value. Longer budgets are
 /// absurd for a download — and extreme values (e.g. `u64::MAX`) overflow when
 /// reqwest computes the request deadline: `Instant + Duration` panics, which
 /// the release profile turns into an abort.
@@ -81,17 +81,19 @@ const MAX_DOWNLOAD_TIMEOUT: Duration = Duration::from_hours(24);
 
 /// Per-request timeout for large file downloads.
 ///
-/// Returns [`DEFAULT_DOWNLOAD_TIMEOUT`] unless `VP_DOWNLOAD_TIMEOUT_SECS` is
+/// Returns [`DEFAULT_DOWNLOAD_TIMEOUT`] unless `VP_DOWNLOAD_TIMEOUT` is
 /// set to a positive integer number of seconds no larger than
 /// [`MAX_DOWNLOAD_TIMEOUT`]. A set-but-invalid value (non-numeric, zero,
-/// negative, above the maximum) warns and falls back to the default.
+/// negative, above the maximum) warns and falls back to the default. The
+/// value is a plain number of seconds today; duration formats like `10m`
+/// may be supported later.
 ///
 /// Call sites apply this per request rather than raising the shared client's
 /// [`REQUEST_TIMEOUT`], which stays short so a single stuck metadata fetch
 /// cannot hang a build.
 #[must_use]
 pub fn download_timeout() -> Duration {
-    let Some(value) = std::env::var_os(env_vars::VP_DOWNLOAD_TIMEOUT_SECS) else {
+    let Some(value) = std::env::var_os(env_vars::VP_DOWNLOAD_TIMEOUT) else {
         return DEFAULT_DOWNLOAD_TIMEOUT;
     };
     if os_str_is_blank(&value) {
@@ -104,7 +106,7 @@ pub fn download_timeout() -> Duration {
         _ => {
             output::warn(&vt_str::format!(
                 "ignoring invalid {}={value:?}: expected a number of seconds between 1 and {}",
-                env_vars::VP_DOWNLOAD_TIMEOUT_SECS,
+                env_vars::VP_DOWNLOAD_TIMEOUT,
                 MAX_DOWNLOAD_TIMEOUT.as_secs()
             ));
             DEFAULT_DOWNLOAD_TIMEOUT
@@ -354,7 +356,7 @@ mod tests {
     fn download_timeout_defaults_to_ten_minutes() {
         // SAFETY: tests are run serially within this module for env vars.
         unsafe {
-            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS);
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT);
         }
         assert_eq!(download_timeout(), DEFAULT_DOWNLOAD_TIMEOUT);
         assert_eq!(download_timeout(), Duration::from_mins(10));
@@ -368,16 +370,16 @@ mod tests {
     fn download_timeout_honors_override_and_rejects_invalid_values() {
         // SAFETY: tests are run serially within this module for env vars.
         unsafe {
-            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, "1800");
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, "1800");
         }
         assert_eq!(download_timeout(), Duration::from_mins(30));
         unsafe {
-            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, " 120 ");
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, " 120 ");
         }
         assert_eq!(download_timeout(), Duration::from_secs(120));
         // Boundary: the maximum itself is accepted...
         unsafe {
-            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, "86400");
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, "86400");
         }
         assert_eq!(download_timeout(), MAX_DOWNLOAD_TIMEOUT);
         // ...anything beyond it is not. Regression for extreme parseable
@@ -386,7 +388,7 @@ mod tests {
         // crashed every download instead of falling back with a warning.
         for invalid in ["0", "-1", "abc", "1.5", "", "  ", "86401", "18446744073709551615"] {
             unsafe {
-                std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS, invalid);
+                std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, invalid);
             }
             assert_eq!(
                 download_timeout(),
@@ -395,7 +397,7 @@ mod tests {
             );
         }
         unsafe {
-            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT_SECS);
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT);
         }
     }
 

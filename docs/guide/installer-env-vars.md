@@ -100,7 +100,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 - **Default**: None (verification enabled)
 - **Details**: [Node.js Signature Verification](/guide/env#node-js-signature-verification)
 
-### `VP_DOWNLOAD_TIMEOUT_SECS`
+### `VP_DOWNLOAD_TIMEOUT`
 
 - **Purpose**: Per-request timeout, in seconds, for large downloads such as Node.js runtimes and package-manager tarballs
 - **Values**: Positive integer, at most `86400` (24 hours); invalid values are ignored with a warning
@@ -108,7 +108,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 - **Example**:
   ```bash
   # Allow up to 30 minutes per download on a slow connection
-  VP_DOWNLOAD_TIMEOUT_SECS=1800 vp env install 22
+  VP_DOWNLOAD_TIMEOUT=1800 vp env install 22
   ```
 
 ### `VP_SHELL`
