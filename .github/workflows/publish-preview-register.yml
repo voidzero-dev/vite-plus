@@ -67,7 +67,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read # list the triggering run's artifacts
     outputs:
+      eligible: ${{ steps.check.outputs.eligible }}
       pr: ${{ steps.check.outputs.pr }}
       pr-url: ${{ steps.check.outputs.pr_url }}
       is-fork: ${{ steps.check.outputs.is_fork }}
@@ -77,6 +79,7 @@ jobs:
         id: check
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         with:
           script: |
             const headSha = process.env.HEAD_SHA;
@@ -128,8 +131,34 @@ jobs:
               return;
             }
 
+            // The build leg triggers on EVERY `labeled` event but its jobs only
+            // run for `preview-build`, so an unrelated label produces a run in
+            // which everything skips — and an all-skipped run still concludes
+            // "success". The PR legitimately still carries the label, so every
+            // check above passes and this would queue an environment approval
+            // for a run that built nothing, which could only end in a failed
+            // download. Requiring the artifact is what separates "built
+            // something" from "did nothing", and it also catches a build leg
+            // that succeeded without uploading.
+            //
+            // Not a failure: adding an unrelated label to a labeled PR is a
+            // normal thing to do, and a red X on every one of them would be
+            // noise. Skip quietly instead.
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              { owner, repo, run_id: Number(process.env.RUN_ID) },
+            );
+            if (!artifacts.some((a) => a.name === 'bridge-packages' && !a.expired)) {
+              core.info(
+                `run ${process.env.RUN_ID} produced no bridge-packages artifact; nothing to publish`,
+              );
+              core.setOutput('eligible', 'false');
+              return;
+            }
+
             const headRepo = pr.head.repo?.full_name ?? '(deleted fork)';
             const isFork = headRepo !== `${owner}/${repo}`;
+            core.setOutput('eligible', 'true');
             core.setOutput('pr', String(pr.number));
             core.setOutput('pr_url', pr.html_url);
             core.setOutput('is_fork', String(isFork));
@@ -139,6 +168,7 @@ jobs:
   publish:
     name: Pkg Preview
     needs: authorize
+    if: needs.authorize.outputs.eligible == 'true'
     runs-on: ubuntu-latest
     # Required-reviewer gate on the ONE job that mints a publish credential.
     # The `authorize` job proves the PR is open and labeled; this proves a human
@@ -161,9 +191,47 @@ jobs:
     permissions:
       id-token: write # mint the bridge OIDC token
       actions: read # download the triggering run's artifact
+      pull-requests: read # re-check the PR after the approval wait
     outputs:
       version: ${{ steps.bridge.outputs.version }}
     steps:
+      # `authorize` ran BEFORE the approval gate, so its verdict is a snapshot
+      # from potentially days ago (the artifact is retained 7 days precisely to
+      # allow that). Re-assert it here, after the wait and before a token
+      # exists: the PR can have been closed, had the label removed (which is how
+      # a maintainer revokes consent), or advanced to a new head commit, in
+      # which case publishing this artifact would move the pr-<n> dist-tag
+      # BACKWARDS onto an older commit than the PR now points at.
+      - name: Re-check authorization after approval
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: Number(process.env.PR_NUMBER),
+            });
+            const reasons = [];
+            if (pr.state !== 'open') reasons.push(`PR is ${pr.state}`);
+            if (!pr.labels.some((l) => l.name === 'preview-build')) {
+              reasons.push('preview-build label was removed');
+            }
+            if (pr.head.sha !== process.env.HEAD_SHA) {
+              reasons.push(
+                `PR head moved to ${pr.head.sha.slice(0, 7)}, this build is ${process.env.HEAD_SHA.slice(0, 7)}`,
+              );
+            }
+            if (reasons.length) {
+              core.setFailed(
+                `PR #${pr.number} changed while waiting for approval (${reasons.join('; ')}); ` +
+                  'refusing to publish. Re-apply the label to build the current head.',
+              );
+            }
+
       - name: Download packed packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
