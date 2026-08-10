@@ -91,17 +91,4 @@ export default defineConfig({
       order: 'asc',
     },
   },
-  run: {
-    tasks: {
-      'build:src': {
-        command: [
-          'vp run rolldown#build-binding:release',
-          'vp run rolldown#build-node',
-          'vp run vite#build-types',
-          'vp run @voidzero-dev/vite-plus-core#build',
-          'vp run vite-plus#build',
-        ].join(' && '),
-      },
-    },
-  },
 });
