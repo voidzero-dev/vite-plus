@@ -155,9 +155,7 @@ jobs:
       # same-repo gate here existed only because fork runs cannot read the
       # admin token secret.
       - name: Pack packages for the registry bridge
-        # TODO: repoint to a main SHA once voidzero-dev/pkg-pr-registry-bridge#86
-        # merges. Pinned to that PR's head so this can be tested end to end first.
-        uses: voidzero-dev/pkg-pr-registry-bridge@fd9ad0e5878ecbd6fd525bc01ac706838795ee90 # oidc branch
+        uses: voidzero-dev/pkg-pr-registry-bridge@4ca2c31c250c7137ae191bf01a8bb106d30aa106 # main
         with:
           mode: pack
           # The PR head commit, not the merge commit github.sha. Advisory here;
