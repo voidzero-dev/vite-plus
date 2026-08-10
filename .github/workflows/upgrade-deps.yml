@@ -140,13 +140,15 @@ jobs:
                help documents. If it is `false`, do not modify help documents.
             5. Compare tsdown CLI options with `vp pack` and sync new/removed options per
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            6. Install the global CLI:
+            6. Follow `.claude/skills/sync-upstream-dependency-docs/SKILL.md` to
+               update version-specific documentation for dependencies changed in this run.
+            7. Install the global CLI:
                - `pnpm bootstrap-cli:ci`
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            7. If any Rust code or `Cargo.toml` was modified, run `cargo check
+            8. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            8. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
-            9. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+            9. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            10. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
             ### Generated artifacts and build diffs

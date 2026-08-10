@@ -1,0 +1,40 @@
+name: Deploy Docs Main Preview
+
+permissions: {}
+
+# Deploys the docs at the head of main to main.viteplus.dev (the viteplus-main
+# void.app project) so developers can preview unreleased docs. Production
+# viteplus.dev deploys from release.yml instead.
+# See rfcs/deploy-docs-on-release.md.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'packages/cli/install.sh'
+      - 'packages/cli/install.ps1'
+      - '.github/workflows/deploy-docs-main.yml'
+      - '.github/actions/deploy-docs/**'
+
+concurrency:
+  group: deploy-docs-main
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    if: github.repository == 'voidzero-dev/vite-plus'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus-main
+          void-token: ${{ secrets.VOID_TOKEN }}
+          site-origin: https://main.viteplus.dev

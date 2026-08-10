@@ -28,7 +28,7 @@ pub async fn execute_output(
     command: &str,
     args: &[String],
 ) -> Result<Output, Error> {
-    let mut executor = JsExecutor::new(None);
+    let mut executor = JsExecutor::new(None).without_missing_local_cli_warning();
     let mut full_args = vec![command.to_string()];
     full_args.extend(args.iter().cloned());
     executor.delegate_to_local_cli_output(&cwd, &full_args).await
