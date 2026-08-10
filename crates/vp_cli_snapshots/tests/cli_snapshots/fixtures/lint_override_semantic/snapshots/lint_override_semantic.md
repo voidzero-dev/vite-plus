@@ -1,8 +1,8 @@
 # lint_override_semantic
 
-## `vp lint src`
+## `vp lint src/example.js`
 
-extends rules are preserved when a file override adds Vue rules
+base lint rules apply to JavaScript
 
 **Exit code:** 1
 
@@ -14,6 +14,18 @@ extends rules are preserved when a file override adds Vue rules
    · ───────────
    ╰────
   help: Delete this console statement.
+
+Found 0 warnings and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
+```
+
+## `vp lint src/example.vue`
+
+base lint rules are preserved when a file override adds Vue rules
+
+**Exit code:** 1
+
+```
 
   × vue(no-export-in-script-setup): <script setup>` cannot contain ES module exports.
    ╭─[src/example.vue:8:16]
@@ -40,6 +52,6 @@ extends rules are preserved when a file override adds Vue rules
    ╰────
   help: Delete this console statement.
 
-Found 0 warnings and 4 errors.
-Finished in <duration> on 2 files with <n> rules using <n> threads.
+Found 0 warnings and 3 errors.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
