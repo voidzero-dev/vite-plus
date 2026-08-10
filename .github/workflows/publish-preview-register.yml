@@ -132,10 +132,15 @@ jobs:
     # the only defense here that does not depend on my own logic being right:
     # if `authorize` were ever weakened, this still stops an unattended publish.
     #
+    # Self-review is allowed: the `preview-build` label is already a maintainer
+    # action, so requiring a SECOND person for every external contributor's
+    # preview would cost more than the risk warrants. The value here is the
+    # deliberate confirmation and the audit trail, not two-person control.
+    #
     # The environment must exist with protection rules configured. A workflow
     # referencing a MISSING environment gets one created implicitly with no
     # rules, which looks like a gate and is not one.
-    environment: preview-publish
+    environment: preview-build-release
     # SR-5: this job mints the publish token, so it must never run anything out
     # of the artifact. It downloads bytes and hands them to the bridge action;
     # no install, no build, no scripts.
