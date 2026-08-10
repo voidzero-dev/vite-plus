@@ -17,12 +17,3 @@ pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus
     full_args.extend(args.iter().cloned());
     executor.delegate_migrate(&cwd, &full_args).await
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_migrate_command_module_exists() {
-        // Basic test to ensure the module compiles
-        assert!(true);
-    }
-}

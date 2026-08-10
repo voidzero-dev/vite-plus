@@ -140,6 +140,7 @@ pub mod global;
 // Category B: JS Script Commands
 pub mod config;
 pub mod create;
+pub mod hooks;
 pub mod migrate;
 pub mod staged;
 pub mod version;

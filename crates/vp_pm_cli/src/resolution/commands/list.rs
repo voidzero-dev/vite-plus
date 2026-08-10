@@ -175,7 +175,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn list_args(pattern: Option<&str>) -> ListArgs {
@@ -193,10 +193,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_basic() {
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), ListArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), ListArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list"]);
@@ -204,11 +201,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), ListArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), ListArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--recursive"]);
@@ -216,10 +211,7 @@ mod tests {
 
     #[test]
     fn test_npm_list_basic() {
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), ListArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), ListArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list"]);
@@ -227,11 +219,9 @@ mod tests {
 
     #[test]
     fn test_npm_list_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), ListArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), ListArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--workspaces"]);
@@ -239,10 +229,7 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_basic() {
-        let CommandResolution::Run(command) = resolve(&yarn("1.22.0"), ListArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), ListArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -252,9 +239,7 @@ mod tests {
     fn test_yarn1_list_recursive_ignored() {
         let resolution =
             resolve(&yarn("1.22.0"), ListArgs { recursive: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -273,11 +258,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_global_uses_npm() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), ListArgs { global: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), ListArgs { global: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "-g"]);
@@ -285,11 +268,9 @@ mod tests {
 
     #[test]
     fn test_npm_list_global() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), ListArgs { global: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), ListArgs { global: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "-g"]);
@@ -297,11 +278,9 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_global_uses_npm() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), ListArgs { global: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), ListArgs { global: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "-g"]);
@@ -316,11 +295,9 @@ mod tests {
 
     #[test]
     fn test_bun_list_global_uses_npm() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), ListArgs { global: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&bun("1.3.11"), ListArgs { global: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "-g"]);
@@ -328,14 +305,13 @@ mod tests {
 
     #[test]
     fn test_global_list_with_depth() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            ListArgs { global: true, depth: Some(0), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ListArgs { global: true, depth: Some(0), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--depth", "0", "-g"]);
@@ -343,14 +319,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            ListArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ListArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "list"]);
@@ -358,14 +333,16 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_with_multiple_filters() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            ListArgs { filter: vec!["app".to_string(), "web".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ListArgs {
+                    filter: vec!["app".to_string(), "web".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "--filter", "web", "list"]);
@@ -373,14 +350,13 @@ mod tests {
 
     #[test]
     fn test_npm_list_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            ListArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                ListArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--workspace", "app"]);
@@ -392,9 +368,7 @@ mod tests {
             &yarn("1.22.0"),
             ListArgs { filter: vec!["app".to_string()], ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -403,11 +377,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_prod() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), ListArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), ListArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--prod"]);
@@ -415,11 +387,9 @@ mod tests {
 
     #[test]
     fn test_npm_list_prod() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), ListArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), ListArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--include", "prod", "--include", "peer"]);
@@ -427,11 +397,9 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_prod_ignored() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), ListArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), ListArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -439,11 +407,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_dev() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), ListArgs { dev: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), ListArgs { dev: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--dev"]);
@@ -451,11 +417,9 @@ mod tests {
 
     #[test]
     fn test_npm_list_dev() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), ListArgs { dev: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), ListArgs { dev: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--include", "dev"]);
@@ -463,11 +427,9 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_dev_ignored() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), ListArgs { dev: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), ListArgs { dev: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -475,11 +437,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_no_optional() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), ListArgs { no_optional: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), ListArgs { no_optional: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--no-optional"]);
@@ -487,11 +447,9 @@ mod tests {
 
     #[test]
     fn test_npm_list_no_optional() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), ListArgs { no_optional: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), ListArgs { no_optional: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--omit", "optional"]);
@@ -499,11 +457,9 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_no_optional_ignored() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), ListArgs { no_optional: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("1.22.0"), ListArgs { no_optional: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -511,12 +467,10 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_only_projects() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), ListArgs { only_projects: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--only-projects"]);
@@ -526,9 +480,7 @@ mod tests {
     fn test_npm_list_only_projects_ignored() {
         let resolution =
             resolve(&npm("11.0.0"), ListArgs { only_projects: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list"]);
@@ -537,12 +489,10 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_only_projects_ignored() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&yarn("1.22.0"), ListArgs { only_projects: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -550,12 +500,10 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_exclude_peers() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), ListArgs { exclude_peers: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--exclude-peers"]);
@@ -563,11 +511,9 @@ mod tests {
 
     #[test]
     fn test_npm_list_exclude_peers() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), ListArgs { exclude_peers: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), ListArgs { exclude_peers: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list", "--omit", "peer"]);
@@ -575,12 +521,10 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_exclude_peers_ignored() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&yarn("1.22.0"), ListArgs { exclude_peers: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -588,14 +532,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_list_find_by() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--find-by", "customFinder"]);
@@ -607,9 +550,7 @@ mod tests {
             &npm("11.0.0"),
             ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["list"]);
@@ -618,14 +559,13 @@ mod tests {
 
     #[test]
     fn test_yarn1_list_find_by_ignored() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["list"]);
@@ -633,10 +573,7 @@ mod tests {
 
     #[test]
     fn test_bun_list_basic() {
-        let CommandResolution::Run(command) = resolve(&bun("1.3.11"), ListArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), ListArgs::default()).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "ls"]);
@@ -662,9 +599,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "ls"]);
@@ -675,21 +610,20 @@ mod tests {
 
     #[test]
     fn test_list_with_pattern_and_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            ListArgs {
-                pattern: Some("react".to_string()),
-                pass_through_args: vec![
-                    "--registry".to_string(),
-                    "https://registry.npmjs.org".to_string(),
-                ],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ListArgs {
+                    pattern: Some("react".to_string()),
+                    pass_through_args: vec![
+                        "--registry".to_string(),
+                        "https://registry.npmjs.org".to_string(),
+                    ],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "react", "--registry", "https://registry.npmjs.org"]);
@@ -697,14 +631,13 @@ mod tests {
 
     #[test]
     fn test_list_with_long_parseable_and_json() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            ListArgs { json: true, long: true, parseable: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ListArgs { json: true, long: true, parseable: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--json", "--long", "--parseable"]);

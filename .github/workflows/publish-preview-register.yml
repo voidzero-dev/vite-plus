@@ -1,0 +1,514 @@
+name: Register preview build
+
+# TRUSTED LEG. Publishes the artifact built by "Publish preview build" to the
+# registry bridge, then comments on the PR.
+#
+# Why a second workflow: GitHub denies fork pull_request runs both secrets and
+# `id-token: write`, so a fork PR cannot authenticate to the bridge from the
+# build leg. A workflow_run workflow executes the file from the DEFAULT BRANCH
+# in base-repo context, so it can mint an OIDC token no matter where the PR came
+# from. There is no variant of this that keeps the publish in the build leg.
+# See rfcs/0002-zero-trust-github-oidc-publishing.md in
+# voidzero-dev/pkg-pr-registry-bridge.
+#
+# What is NOT a boundary: the `preview-build` label check in the build leg. On
+# pull_request events GitHub runs the workflow file from the merge ref, so a PR
+# author can edit that file to delete the check, or add another workflow with a
+# matching `name:` to trigger this one.
+#
+# What IS load-bearing, and what a reviewer must not remove:
+#   - `authorize` re-derives authorization from the API and fails closed, which
+#     is what makes the label mean anything
+#   - nothing from the triggering run is trusted except the fields GitHub signs
+#     into the event payload (head_sha, conclusion, event, path)
+#   - the artifact is treated as hostile bytes, and its download pins run-id to
+#     the triggering run
+#   - no job that installs or executes preview content holds id-token
+#   - `publish` is gated on an environment with required reviewers
+#
+# zizmor's dangerous-triggers audit warns that workflow_run is "almost always
+# used insecurely". The danger it names is real here and the trigger is
+# unavoidable for the reason above, so it is suppressed inline, next to the
+# controls that answer it.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    # Matched by workflow NAME, so renaming the build leg silently stops preview
+    # publishing. The `workflow_run.path` check in `authorize` is the durable
+    # identity; this filter only avoids queueing a skipped run per workflow.
+    workflows: ['Publish preview build']
+    types: [completed]
+
+permissions: {}
+
+env:
+  IMAGE: ghcr.io/voidzero-dev/vite-plus
+
+concurrency:
+  # Keyed on the built commit, so a re-label or re-run coalesces.
+  group: register-preview-${{ github.event.workflow_run.head_sha }}
+  # NOT cancel-in-progress. Cancelling a publish part-way is what left the
+  # bridge with a packument/tarball mismatch on 2026-07-02; the action registers
+  # the ref last precisely so an interrupted run stays invisible, and cancelling
+  # mid-upload throws that away.
+  cancel-in-progress: false
+
+jobs:
+  # SR-1. Re-derive authorization from repository state rather than from
+  # anything the triggering run produced. Fails closed: no PR, no label, a
+  # closed PR, or an API error all stop the publish.
+  authorize:
+    name: Authorize
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.path == '.github/workflows/publish-preview.yml'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read # list the triggering run's artifacts
+    outputs:
+      eligible: ${{ steps.check.outputs.eligible }}
+      pr: ${{ steps.check.outputs.pr }}
+      pr-url: ${{ steps.check.outputs.pr_url }}
+      is-fork: ${{ steps.check.outputs.is_fork }}
+      head-repo: ${{ steps.check.outputs.head_repo }}
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        id: check
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        with:
+          script: |
+            const headSha = process.env.HEAD_SHA;
+            const { owner, repo } = context.repo;
+
+            // Resolve the PR from the commit. workflow_run.pull_requests is
+            // empty for fork PRs, which is why this goes to the API.
+            const pulls = await github.paginate(
+              github.rest.repos.listPullRequestsAssociatedWithCommit,
+              { owner, repo, commit_sha: headSha },
+            );
+
+            const candidates = pulls.filter(
+              (p) =>
+                p.state === 'open' &&
+                p.head.sha === headSha &&
+                p.base.repo.full_name === `${owner}/${repo}`,
+            );
+            if (candidates.length === 0) {
+              core.setFailed(
+                `no open PR of ${owner}/${repo} has head ${headSha}; refusing to publish`,
+              );
+              return;
+            }
+            // More than one open PR can share a head commit (the same branch
+            // opened against two bases, for instance). The workflow_run payload
+            // does not say which PR caused the run, and `pull_requests` is empty
+            // for forks, so there is no way to pick the right one. Taking the
+            // first would let an UNLABELED PR's run borrow a labeled PR's
+            // authorization and publish under that PR's tag, so refuse instead.
+            if (candidates.length > 1) {
+              core.setFailed(
+                `head ${headSha} is the head of ${candidates.length} open PRs (` +
+                  candidates.map((p) => `#${p.number}`).join(', ') +
+                  '); cannot tell which triggered this run, refusing to publish',
+              );
+              return;
+            }
+            const pr = candidates[0];
+
+            // The label is applied by a maintainer and cannot be set from a
+            // fork, which is what makes it the consent step. Read it fresh
+            // here rather than trusting the build leg's own check.
+            const labels = pr.labels.map((l) => l.name);
+            if (!labels.includes('preview-build')) {
+              core.setFailed(
+                `PR #${pr.number} is not labeled preview-build; refusing to publish`,
+              );
+              return;
+            }
+
+            // The build leg triggers on EVERY `labeled` event but its jobs only
+            // run for `preview-build`, so an unrelated label produces a run in
+            // which everything skips — and an all-skipped run still concludes
+            // "success". The PR legitimately still carries the label, so every
+            // check above passes and this would queue an environment approval
+            // for a run that built nothing, which could only end in a failed
+            // download. Requiring the artifact is what separates "built
+            // something" from "did nothing", and it also catches a build leg
+            // that succeeded without uploading.
+            //
+            // Not a failure: adding an unrelated label to a labeled PR is a
+            // normal thing to do, and a red X on every one of them would be
+            // noise. Skip quietly instead.
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              { owner, repo, run_id: Number(process.env.RUN_ID) },
+            );
+            if (!artifacts.some((a) => a.name === 'bridge-packages' && !a.expired)) {
+              core.info(
+                `run ${process.env.RUN_ID} produced no bridge-packages artifact; nothing to publish`,
+              );
+              core.setOutput('eligible', 'false');
+              return;
+            }
+
+            const headRepo = pr.head.repo?.full_name ?? '(deleted fork)';
+            const isFork = headRepo !== `${owner}/${repo}`;
+            core.setOutput('eligible', 'true');
+            core.setOutput('pr', String(pr.number));
+            core.setOutput('pr_url', pr.html_url);
+            core.setOutput('is_fork', String(isFork));
+            core.setOutput('head_repo', headRepo);
+            core.info(`authorized PR #${pr.number} from ${headRepo} (fork: ${isFork})`);
+
+  publish:
+    name: Pkg Preview
+    needs: authorize
+    if: needs.authorize.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    # Required-reviewer gate on the ONE job that mints a publish credential.
+    # The `authorize` job proves the PR is open and labeled; this proves a human
+    # looked at this specific run before a token existed, and records who. It is
+    # the only defense here that does not depend on my own logic being right:
+    # if `authorize` were ever weakened, this still stops an unattended publish.
+    #
+    # Self-review is allowed: the `preview-build` label is already a maintainer
+    # action, so requiring a SECOND person for every external contributor's
+    # preview would cost more than the risk warrants. The value here is the
+    # deliberate confirmation and the audit trail, not two-person control.
+    #
+    # The environment must exist with protection rules configured. A workflow
+    # referencing a MISSING environment gets one created implicitly with no
+    # rules, which looks like a gate and is not one.
+    environment: preview-build-release
+    # SR-5: this job mints the publish token, so it must never run anything out
+    # of the artifact. It downloads bytes and hands them to the bridge action;
+    # no install, no build, no scripts.
+    permissions:
+      id-token: write # mint the bridge OIDC token
+      actions: read # download the triggering run's artifact
+      pull-requests: read # re-check the PR after the approval wait
+    outputs:
+      version: ${{ steps.bridge.outputs.version }}
+    steps:
+      # `authorize` ran BEFORE the approval gate, so its verdict is a snapshot
+      # from potentially days ago (the artifact is retained 7 days precisely to
+      # allow that). Re-assert it here, after the wait and before a token
+      # exists: the PR can have been closed, had the label removed (which is how
+      # a maintainer revokes consent), or advanced to a new head commit, in
+      # which case publishing this artifact would move the pr-<n> dist-tag
+      # BACKWARDS onto an older commit than the PR now points at.
+      - name: Re-check authorization after approval
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: Number(process.env.PR_NUMBER),
+            });
+            const reasons = [];
+            if (pr.state !== 'open') reasons.push(`PR is ${pr.state}`);
+            if (!pr.labels.some((l) => l.name === 'preview-build')) {
+              reasons.push('preview-build label was removed');
+            }
+            if (pr.head.sha !== process.env.HEAD_SHA) {
+              reasons.push(
+                `PR head moved to ${pr.head.sha.slice(0, 7)}, this build is ${process.env.HEAD_SHA.slice(0, 7)}`,
+              );
+            }
+            if (reasons.length) {
+              core.setFailed(
+                `PR #${pr.number} changed while waiting for approval (${reasons.join('; ')}); ` +
+                  'refusing to publish. Re-apply the label to build the current head.',
+              );
+            }
+
+      - name: Download packed packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bridge-packages
+          path: bridge-packages
+          # Pinned to the run that triggered us. Resolving "latest artifact by
+          # name" instead would let any later run swap the bytes.
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # Validates every archive against the canonical policy, rebuilds each one
+      # under the commit version, uploads, and registers the ref last so the
+      # version flips visible atomically. Authenticates with an OIDC token
+      # minted here; no admin-token, so no bridge secret lives in this repo.
+      - name: Publish to the registry bridge
+        id: bridge
+        uses: voidzero-dev/pkg-pr-registry-bridge@4ca2c31c250c7137ae191bf01a8bb106d30aa106 # main
+        with:
+          mode: upload
+          # Trusted: GitHub signs this into the event payload. The published
+          # version derives from it, never from the artifact's own manifest.
+          sha: ${{ github.event.workflow_run.head_sha }}
+          input-dir: bridge-packages
+          # SR-2: derived from the API in `authorize`, never from the artifact.
+          # The bridge maps this to the pr-<n> dist-tag, which VP_PR_VERSION
+          # resolves, so an attacker-supplied value would change what installs
+          # for a different PR.
+          pr-url: ${{ needs.authorize.outputs.pr-url }}
+
+  # Sticky comment with the resolved versions and per-package-manager registry
+  # config. Separate job: it needs write permissions, and SR-5 keeps those away
+  # from the job holding id-token.
+  comment:
+    name: Comment bridge version
+    needs: [authorize, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      # issues:write as well as pull-requests:write, because createComment is
+      # the issues endpoint and the create path runs on a PR that has no comment
+      # yet. Kept deliberately: comment-docker-preview below gets away with only
+      # pull-requests:write because it always runs after this one.
+      issues: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRIDGE_VERSION: ${{ needs.publish.outputs.version }}
+          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          IS_FORK: ${{ needs.authorize.outputs.is-fork }}
+          HEAD_REPO: ${{ needs.authorize.outputs.head-repo }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        with:
+          script: |
+            const version = process.env.BRIDGE_VERSION;
+            const pr = Number(process.env.PR_NUMBER);
+            const shortSha = process.env.HEAD_SHA.slice(0, 7);
+            const isFork = process.env.IS_FORK === 'true';
+            const marker = '<!-- pkg-pr-bridge-version -->';
+            const bridge = 'https://registry-bridge.viteplus.dev/';
+            // Built as a line array (not a template literal) so the inline
+            // backticks and the fenced json block don't need backslash-escaping.
+            const body = [
+              marker,
+              '',
+              `### Registry bridge build (\`${shortSha}\`)`,
+              '',
+              // Fork builds carry unreviewed third-party code. The install
+              // lines below are official-looking, so say plainly where the
+              // code came from before anyone pipes it into a shell.
+              ...(isFork
+                ? [
+                    `> [!WARNING]`,
+                    `> This build is from the fork \`${process.env.HEAD_REPO}\` and has **not** been reviewed.`,
+                    `> Installing it runs that code on your machine. [Build log](${process.env.RUN_URL})`,
+                    '',
+                  ]
+                : []),
+              'This commit build is published to the [registry bridge](https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
+              '',
+              '| Package | Version |',
+              '| --- | --- |',
+              `| \`vite-plus\` | \`${version}\` |`,
+              `| \`@voidzero-dev/vite-plus-core\` | \`${version}\` |`,
+              '',
+              '**Install the Vite+ CLI built from this commit, then migrate a project:**',
+              '',
+              '```bash',
+              '# macOS / Linux',
+              `curl -fsSL https://vite.plus | VP_PR_VERSION=${pr} bash`,
+              '```',
+              '```powershell',
+              '# Windows (PowerShell)',
+              `$env:VP_PR_VERSION="${pr}"; irm https://vite.plus/ps1 | iex`,
+              '```',
+              '',
+              `After installing, upgrade the current project's \`vite-plus\` to this test build with:`,
+              '',
+              '```bash',
+              'vp migrate',
+              '```',
+              '',
+              `**Or** point your package manager at the bridge registry \`${bridge}\`:`,
+              '',
+              '| Package manager | Registry config |',
+              '| --- | --- |',
+              `| npm / pnpm / Bun | \`.npmrc\`: \`registry=${bridge}\` |`,
+              `| Yarn (v2+) | \`.yarnrc.yml\`: \`npmRegistryServer: "${bridge}"\` |`,
+              '',
+              'Then pin the build (`vite` aliases to vite-plus-core; pnpm can use a catalog, npm an `overrides` entry):',
+              '',
+              '```json',
+              '{',
+              '  "devDependencies": {',
+              `    "vite-plus": "${version}",`,
+              `    "vite": "npm:@voidzero-dev/vite-plus-core@${version}"`,
+              '  }',
+              '}',
+              '```',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
+
+  # Build and push a preview Docker image from the registry bridge build so the
+  # image can be verified before a real release. Tagged `pr-<number>`; never
+  # `latest`. See docker/Dockerfile and docs/guide/docker.md.
+  #
+  # Same-repo PRs only, for now. This job installs the preview package, which
+  # executes the PR's code, and pushes the result to the org's GHCR namespace as
+  # ghcr.io/voidzero-dev/vite-plus:pr-<n>. Before the split a fork PR did reach
+  # this job and failed at the push, because fork runs get a read-only
+  # GITHUB_TOKEN; running in base-repo context is what would make it succeed.
+  # Whether to publish unreviewed fork code under the org's name is a product
+  # decision, not a technical blocker: drop the `is-fork` condition to enable it.
+  publish-docker-preview:
+    name: Docker preview image
+    needs: [authorize, publish]
+    if: needs.authorize.outputs.is-fork == 'false'
+    runs-on: ubuntu-latest
+    # No id-token here (SR-5): this job runs the preview package's install
+    # scripts, so it must not be able to mint a bridge token.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # workflow_run jobs check out the DEFAULT BRANCH, so this is main's
+      # Dockerfile, not the PR's. That is what we want: only the installed
+      # package should come from the PR.
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Builds from this PR's registry bridge build (VP_PR_VERSION resolves it
+      # through the bridge).
+      # amd64-only: this throwaway preview avoids the slow arm64 QEMU leg; arm64
+      # is covered by the release build and the test-install-sh-arm64 job.
+      - name: Build and push preview image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
+          build-args: |
+            VP_PR_VERSION=${{ needs.authorize.outputs.pr }}
+          # The Dockerfile always comes from the default branch, so its apt layer
+          # is identical across previews. Only the final install layer varies.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Single-manifest image (no attestation index): simpler for consumers
+          # and lets the comment job read the size via `docker manifest inspect`.
+          provenance: false
+
+  comment-docker-preview:
+    name: Comment Docker preview
+    needs: [authorize, publish-docker-preview]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      pull-requests: write
+    env:
+      PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Compressed download size from the registry manifest (config + layers),
+      # without pulling the image. Matches what `docker pull` transfers and what
+      # the GHCR package page shows.
+      - name: Measure image size
+        id: size
+        run: |
+          bytes=$(docker manifest inspect "${IMAGE}:pr-${PR_NUMBER}" | jq '[.config.size] + [.layers[].size] | add')
+          echo "compressed=$(numfmt --to=si --suffix=B "$bytes")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          COMPRESSED_SIZE: ${{ steps.size.outputs.compressed }}
+        with:
+          script: |
+            const image = process.env.IMAGE;
+            const pr = Number(process.env.PR_NUMBER);
+            const marker = '<!-- docker-preview -->';
+            // Built as a line array (not a template literal) so the fenced code
+            // blocks don't collide with the YAML block-scalar indentation.
+            const body = [
+              marker,
+              '## 🐳 Docker preview image',
+              '',
+              "Built from this PR's registry bridge build:",
+              '',
+              '| Image | Compressed size |',
+              '| --- | --- |',
+              `| \`${image}:pr-${pr}\` | ${process.env.COMPRESSED_SIZE} |`,
+              '',
+              '```bash',
+              `# remove any stale local copy from a previous run, then pull fresh`,
+              `docker rmi ${image}:pr-${pr} 2>/dev/null; docker pull ${image}:pr-${pr}`,
+              '```',
+              '',
+              'Quick check:',
+              '',
+              '```bash',
+              `docker run --rm ${image}:pr-${pr} vp --version`,
+              '```',
+              '',
+              'See [docs/guide/docker.md](https://github.com/voidzero-dev/vite-plus/blob/main/docs/guide/docker.md) for usage.',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
