@@ -6,43 +6,42 @@ name: Register preview build
 # Why a second workflow: GitHub denies fork pull_request runs both secrets and
 # `id-token: write`, so a fork PR cannot authenticate to the bridge from the
 # build leg. A workflow_run workflow executes the file from the DEFAULT BRANCH
-# in base-repo context, so it can mint an OIDC token no matter where the PR
-# came from. See RFC 0002 in voidzero-dev/pkg-pr-registry-bridge.
-#
-# Security model, in one line: nothing this workflow reads from the triggering
-# run is trusted except the fields GitHub itself signs into the event payload
-# (head_sha, conclusion, event, path). Authorization is re-established from the
-# API in `authorize`, and the artifact is treated as hostile bytes.
+# in base-repo context, so it can mint an OIDC token no matter where the PR came
+# from. There is no variant of this that keeps the publish in the build leg.
+# See rfcs/0002-zero-trust-github-oidc-publishing.md in
+# voidzero-dev/pkg-pr-registry-bridge.
 #
 # What is NOT a boundary: the `preview-build` label check in the build leg. On
 # pull_request events GitHub runs the workflow file from the merge ref, so a PR
 # author can edit that file to delete the check, or add another workflow with a
-# matching `name:` to trigger this one. `authorize` below is what makes the
-# label mean anything.
-
-# zizmor's dangerous-triggers audit warns that workflow_run is "almost always
-# used insecurely", and the danger it names is real here: this file runs in
-# base-repo context and is triggered by a run a fork PR can cause.
+# matching `name:` to trigger this one.
 #
-# Suppressed rather than heeded because the trigger is unavoidable and the
-# danger is answered directly. Fork pull_request runs are denied both secrets
-# and id-token, so publishing a fork's build REQUIRES a second workflow in
-# base-repo context; there is no variant of this that keeps the publish in the
-# build leg. See RFC 0002 in voidzero-dev/pkg-pr-registry-bridge.
-#
-# What makes it safe, and what a reviewer must not remove:
-#   - `authorize` re-derives authorization from the API and fails closed, so the
-#     label gate cannot be bypassed by editing the build leg's own check
-#   - nothing from the triggering run is trusted except fields GitHub signs into
-#     the event payload (head_sha, conclusion, event, path)
-#   - the artifact download pins run-id to the triggering run
+# What IS load-bearing, and what a reviewer must not remove:
+#   - `authorize` re-derives authorization from the API and fails closed, which
+#     is what makes the label mean anything
+#   - nothing from the triggering run is trusted except the fields GitHub signs
+#     into the event payload (head_sha, conclusion, event, path)
+#   - the artifact is treated as hostile bytes, and its download pins run-id to
+#     the triggering run
 #   - no job that installs or executes preview content holds id-token
+#   - `publish` is gated on an environment with required reviewers
+#
+# zizmor's dangerous-triggers audit warns that workflow_run is "almost always
+# used insecurely". The danger it names is real here and the trigger is
+# unavoidable for the reason above, so it is suppressed inline, next to the
+# controls that answer it.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
+    # Matched by workflow NAME, so renaming the build leg silently stops preview
+    # publishing. The `workflow_run.path` check in `authorize` is the durable
+    # identity; this filter only avoids queueing a skipped run per workflow.
     workflows: ['Publish preview build']
     types: [completed]
 
 permissions: {}
+
+env:
+  IMAGE: ghcr.io/voidzero-dev/vite-plus
 
 concurrency:
   # Keyed on the built commit, so a re-label or re-run coalesces.
@@ -147,7 +146,6 @@ jobs:
     permissions:
       id-token: write # mint the bridge OIDC token
       actions: read # download the triggering run's artifact
-      contents: read
     outputs:
       version: ${{ steps.bridge.outputs.version }}
     steps:
@@ -187,9 +185,12 @@ jobs:
     name: Comment bridge version
     needs: [authorize, publish]
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       pull-requests: write
+      # issues:write as well as pull-requests:write, because createComment is
+      # the issues endpoint and the create path runs on a PR that has no comment
+      # yet. Kept deliberately: comment-docker-preview below gets away with only
+      # pull-requests:write because it always runs after this one.
       issues: write
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -296,11 +297,11 @@ jobs:
   #
   # Same-repo PRs only, for now. This job installs the preview package, which
   # executes the PR's code, and pushes the result to the org's GHCR namespace as
-  # ghcr.io/voidzero-dev/vite-plus:pr-<n>. Before the split a fork could not
-  # reach this at all (fork runs get a read-only GITHUB_TOKEN, so the push
-  # failed); running in base-repo context is what would make it succeed. Whether
-  # to publish unreviewed fork code under the org's name is a product decision,
-  # not a technical blocker: drop the `is-fork` condition to enable it.
+  # ghcr.io/voidzero-dev/vite-plus:pr-<n>. Before the split a fork PR did reach
+  # this job and failed at the push, because fork runs get a read-only
+  # GITHUB_TOKEN; running in base-repo context is what would make it succeed.
+  # Whether to publish unreviewed fork code under the org's name is a product
+  # decision, not a technical blocker: drop the `is-fork` condition to enable it.
   publish-docker-preview:
     name: Docker preview image
     needs: [authorize, publish]
@@ -311,9 +312,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      IMAGE: ghcr.io/voidzero-dev/vite-plus
-      TAG: pr-${{ needs.authorize.outputs.pr }}
     steps:
       # workflow_run jobs check out the DEFAULT BRANCH, so this is main's
       # Dockerfile, not the PR's. That is what we want: only the installed
@@ -340,9 +338,13 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE }}:${{ env.TAG }}
+          tags: ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
           build-args: |
             VP_PR_VERSION=${{ needs.authorize.outputs.pr }}
+          # The Dockerfile always comes from the default branch, so its apt layer
+          # is identical across previews. Only the final install layer varies.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           # Single-manifest image (no attestation index): simpler for consumers
           # and lets the comment job read the size via `docker manifest inspect`.
           provenance: false
@@ -355,7 +357,6 @@ jobs:
       packages: read
       pull-requests: write
     env:
-      IMAGE: ghcr.io/voidzero-dev/vite-plus
       PR_NUMBER: ${{ needs.authorize.outputs.pr }}
     steps:
       - name: Log in to GHCR
