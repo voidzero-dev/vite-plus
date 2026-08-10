@@ -1,0 +1,25 @@
+crates/vp_global_cli/src/cli.rs
+  s_431aa2d8c58680::t_a85473bbe2a908 591,642,647-657
+crates/vp_toolchain/src/lib.rs
+  s_431aa2d8c58680::t_47950410f45dc2 149,189,196,238-245,273-274,276-278,286,428
+packages/cli/binding/src/cli/mod.rs
+  s_431aa2d8c58680::t_29a9d98c06a09e 290-293,316,320,328-345,410,425
+packages/cli/build.ts
+  s_431aa2d8c58680::t_e6fc293c85af58 769,771,781,786-787,791,793,796,843,845,848
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3b60bf6c5112466957c4761c4976933980477fb6",
+  "prompts": {},
+  "sessions": {
+    "s_431aa2d8c58680": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4690-cc8f-7d22-9259-a63dbc7145ec",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
