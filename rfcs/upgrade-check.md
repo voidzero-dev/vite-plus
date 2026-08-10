@@ -83,7 +83,7 @@ The check fails silently. No notice, no error, no retry spam.
 ### Overview
 
 ```
-Shell session starts or vp() is called
+Shell session starts
        │
        ├── launch `vp upgrade --background-check` with the shell's native
        │   background mechanism (`&`, `job spawn`, or `Start-Process`)
@@ -166,7 +166,7 @@ The notice is **not shown** when:
 
 ### Check Triggers and Foreground Suppression
 
-The shell integration launches a worker once when a supported interactive shell starts and before every `vp()` wrapper invocation. Bash/Zsh and Fish use background jobs plus `disown`, Nushell uses `job spawn`, and PowerShell uses `Start-Process`. The shell only gates on interactivity; the hidden command owns opt-out, CI, cache, locking, and fetch policy. Redirected worker output is discarded. The worker's cache and lock checks make redundant processes exit without network access.
+The shell integration launches one worker when a supported interactive shell starts. Bash/Zsh and Fish use background jobs plus `disown`, Nushell uses `job spawn`, and PowerShell uses `Start-Process`. The shell only gates on interactivity; the hidden command owns opt-out, CI, cache, locking, and fetch policy. Redirected worker output is discarded. The worker's cache and lock checks coordinate checks from concurrently opened shells without adding work to each `vp` invocation.
 
 The cached notice is not displayed after:
 
