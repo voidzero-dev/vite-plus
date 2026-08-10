@@ -395,6 +395,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("create", "Create a new project from a template"),
                     row("migrate", "Migrate an existing project to Vite+"),
                     row("config", "Configure hooks and agent integration"),
+                    row("hooks", "Manage the Git hook dispatcher"),
                     row("staged", "Run linters on staged files"),
                     row(
                         "install, i",
@@ -562,6 +563,7 @@ fn skip_clap_unified_help(command: &str) -> bool {
         "create"
             | "migrate"
             | "config"
+            | "hooks"
             | "staged"
             | "dev"
             | "build"
