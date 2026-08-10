@@ -1,0 +1,6 @@
+[[case]]
+name = "lint_override_semantic"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "src"], comment = "extends rules are preserved when a file override adds Vue rules", continue-on-failure = true },
+]
