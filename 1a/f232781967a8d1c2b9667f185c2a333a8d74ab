@@ -1,0 +1,19 @@
+.github/workflows/reusable-release-build.yml
+  s_431aa2d8c58680::t_354c5016cb7043 72-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1af232781967a8d1c2b9667f185c2a333a8d74ab",
+  "prompts": {},
+  "sessions": {
+    "s_431aa2d8c58680": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4690-cc8f-7d22-9259-a63dbc7145ec",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
