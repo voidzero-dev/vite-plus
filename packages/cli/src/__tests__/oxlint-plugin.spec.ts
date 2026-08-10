@@ -20,6 +20,13 @@ const nuxtUnitTestFilename = path.join(
   import.meta.dirname,
   'fixtures/nuxt-test-utils/unit.spec.ts',
 );
+// A package that declares `@oxlint/plugins` as a peer is a published Oxlint
+// plugin. Its consumers may run plain Oxlint, so the autofix must not move its
+// authoring imports to `vite-plus`.
+const oxlintPluginPackageFilename = path.join(
+  import.meta.dirname,
+  'fixtures/oxlint-plugin-package/rule.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -136,6 +143,36 @@ new RuleTester({
     `import 'oxlint'`,
     `import { defineRule } from 'vite-plus/lint/plugins'`,
     `import { RuleTester } from 'vite-plus/lint/plugins-dev'`,
+    // A statement that mixes the two surfaces stays put: the autofix replaces
+    // the whole specifier, and vite-plus/lint/plugins exports no defineConfig.
+    `import { defineConfig, defineRule } from 'oxlint'`,
+    // A published Oxlint plugin keeps resolving the API from its own peer.
+    {
+      code: `import { defineRule } from '@oxlint/plugins'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    {
+      code: `import { defineRule } from 'oxlint'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    {
+      code: `import { RuleTester } from 'oxlint/plugins-dev'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    // `declare module` keeps the upstream module identity, so augmentations
+    // still merge with the upstream declarations.
+    {
+      code: `declare module '@oxlint/plugins' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module 'oxlint' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module 'oxlint/plugins-dev' {}`,
+      filename: 'types.ts',
+    },
     // `vitest/package.json` must NOT be autofixed — `vite-plus` has no
     // `./test/package.json` export, so a rewrite would break resolution.
     `import pkg from 'vitest/package.json'`,

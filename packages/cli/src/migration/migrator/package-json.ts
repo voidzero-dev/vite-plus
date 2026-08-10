@@ -27,6 +27,8 @@ import {
   findDeclaredSpec,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGIN_API_PACKAGES,
+  OXLINT_PLUGINS_PACKAGE,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
@@ -183,10 +185,35 @@ export function rewritePackageJson(
   const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
     dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
   );
+  // `@oxlint/plugins` becomes dead weight once the import rewrite points the
+  // authoring API at `vite-plus/lint/plugins`, so drop it. Only from
+  // devDependencies: a `dependencies` / `peerDependencies` edge marks a
+  // published Oxlint plugin, whose consumers supply the API themselves and
+  // whose source the rewrite deliberately leaves alone (`skip_oxlint`).
+  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE]) {
+    delete pkg.devDependencies[OXLINT_PLUGINS_PACKAGE];
+    needVitePlus = true;
+  }
+  // A `peerDependencies` entry on the Oxlint plugin API is a consumer contract,
+  // not a tool this package runs: it says "whoever installs me supplies the
+  // linter". That stays true for a published Oxlint plugin, whose source the
+  // import rewrite deliberately leaves on `oxlint` (`skip_oxlint`). Stripping
+  // the peer would leave the source importing a package the manifest no longer
+  // declares, so the peer entry is preserved.
+  const ownsOxlintApi = OXLINT_PLUGIN_API_PACKAGES.some(
+    (name) => pkg.peerDependencies?.[name] !== undefined,
+  );
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
-    for (const { dependencies } of dependencyGroups) {
+    for (const { dependencyField, dependencies } of dependencyGroups) {
+      if (
+        ownsOxlintApi &&
+        dependencyField === 'peerDependencies' &&
+        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(name)
+      ) {
+        continue;
+      }
       if (dependencies?.[name]) {
         delete dependencies[name];
         wasRemoved = true;

@@ -36,6 +36,19 @@ function isVitestFamilyDeclareModuleSpecifier(specifier: string): boolean {
 // (no migrate-resolved custom path). vitest/tsdown/@vitest are unaffected.
 const VITE_CONFIG_FILE_BASENAMES = new Set(viteConfigEntryBasenames);
 
+// `declare module '@oxlint/plugins'` (and the `oxlint` / `oxlint/plugins-dev`
+// forms) are preserved for the same reason as the vitest family above:
+// `vite-plus/lint/plugins*` re-exports the upstream types, so the module
+// identity a user augments stays `@oxlint/plugins`. Retargeting the
+// augmentation would stop it merging with the upstream declarations.
+function isOxlintFamilyDeclareModuleSpecifier(specifier: string): boolean {
+  return (
+    specifier === OXLINT_PACKAGE ||
+    specifier.startsWith(`${OXLINT_PACKAGE}/`) ||
+    specifier === OXLINT_PLUGINS_PACKAGE
+  );
+}
+
 function isViteSpecifier(specifier: string): boolean {
   return specifier === 'vite' || specifier.startsWith('vite/');
 }
@@ -169,18 +182,29 @@ function importedName(specifier: ESTree.ImportSpecifier): string | undefined {
 }
 
 /**
- * True when an `import ... from 'oxlint'` names at least one binding outside
- * Oxlint's config surface. Such an import reaches for the plugin authoring API.
+ * True when EVERY named binding of an `import ... from 'oxlint'` sits outside
+ * Oxlint's config surface. Such an import reaches only for the plugin
+ * authoring API.
  *
- * Default, namespace, and bare side-effect imports name no binding. They
+ * A statement that mixes the two surfaces returns `false`. The autofix replaces
+ * the whole specifier, and `vite-plus/lint/plugins` exports no `defineConfig`,
+ * so moving a mixed statement would leave the file invalid.
+ *
+ * Default, namespace, and bare side-effect imports name no binding. They also
  * return `false`, so the rule leaves them alone instead of risking a wrong
  * rewrite.
  */
 function importsOxlintPluginApi(node: ESTree.ImportDeclaration): boolean {
-  return node.specifiers.some(
-    (specifier) =>
-      specifier.type === 'ImportSpecifier' &&
-      !OXLINT_CONFIG_SURFACE_EXPORTS.has(importedName(specifier) ?? ''),
+  const named = node.specifiers.filter(
+    (specifier): specifier is ESTree.ImportSpecifier => specifier.type === 'ImportSpecifier',
+  );
+  if (named.length === 0) {
+    return false;
+  }
+  // A statement that mixes the two surfaces is left alone. The autofix replaces
+  // the whole specifier, so moving it would strip `defineConfig` of its module.
+  return named.every(
+    (specifier) => !OXLINT_CONFIG_SURFACE_EXPORTS.has(importedName(specifier) ?? ''),
   );
 }
 
@@ -248,6 +272,69 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   }
 }
 
+// Same mtime-keyed shape as `nuxtTestUtilsPackageCache`, for the same reason: a
+// long-lived lint process must re-read the manifest after the user edits it.
+const oxlintOwnerPackageCache = new Map<string, { mtimeMs: number; ownsOxlintApi: boolean }>();
+
+/**
+ * True when the nearest package.json declares `oxlint` or `@oxlint/plugins` in
+ * `dependencies` or `peerDependencies`.
+ *
+ * That shape marks a published Oxlint plugin, whose consumers may run plain
+ * Oxlint. Rewriting its source to import from `vite-plus` would break them, so
+ * the autofix must leave it alone. `vp migrate` skips the same package shape
+ * (`SkipPackages::skip_oxlint`); without this check `vp lint --fix` would
+ * immediately undo that exemption.
+ *
+ * A devDependency is deliberately NOT a signal: that is how a project's own
+ * in-repo plugin gets its types, and those imports SHOULD move to `vite-plus`.
+ */
+function nearestPackageOwnsOxlintApi(filename: string): boolean {
+  if (!path.isAbsolute(filename)) {
+    return false;
+  }
+  let directory = path.dirname(filename);
+  while (true) {
+    const packageJsonPath = path.join(directory, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      let mtimeMs: number | undefined;
+      try {
+        mtimeMs = fs.statSync(packageJsonPath).mtimeMs;
+      } catch {
+        // Unreadable manifest: bypass the cache, as above.
+      }
+      const cached =
+        mtimeMs === undefined ? undefined : oxlintOwnerPackageCache.get(packageJsonPath);
+      if (cached !== undefined && cached.mtimeMs === mtimeMs) {
+        return cached.ownsOxlintApi;
+      }
+      let ownsOxlintApi = false;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+          dependencies?: Record<string, string>;
+          peerDependencies?: Record<string, string>;
+        };
+        ownsOxlintApi = [pkg.dependencies, pkg.peerDependencies].some(
+          (dependencies) =>
+            dependencies?.[OXLINT_PACKAGE] !== undefined ||
+            dependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
+        );
+      } catch {
+        // Invalid or unreadable package metadata cannot opt into the exception.
+      }
+      if (mtimeMs !== undefined) {
+        oxlintOwnerPackageCache.set(packageJsonPath, { mtimeMs, ownsOxlintApi });
+      }
+      return ownsOxlintApi;
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      return false;
+    }
+    directory = parent;
+  }
+}
+
 function reportSpecifier(context: Context, literal: ESTree.StringLiteral, replacement: string) {
   context.report({
     node: literal,
@@ -262,11 +349,16 @@ function reportSpecifier(context: Context, literal: ESTree.StringLiteral, replac
   });
 }
 
+function isOxlintApiSpecifier(specifier: string): boolean {
+  return specifier === OXLINT_PLUGINS_PACKAGE || specifier === OXLINT_PLUGINS_DEV_SUBPATH;
+}
+
 function maybeReportLiteral(
   context: Context,
   literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
   preserveUpstreamVitest = false,
   fileIsViteConfig = false,
+  ownsOxlintApi = false,
 ) {
   if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
     return;
@@ -283,6 +375,11 @@ function maybeReportLiteral(
   if (!replacement) {
     return;
   }
+  // A published Oxlint plugin keeps resolving the authoring API from the
+  // package it declares. See `nearestPackageOwnsOxlintApi`.
+  if (ownsOxlintApi && isOxlintApiSpecifier(literal.value)) {
+    return;
+  }
 
   reportSpecifier(context, literal, replacement);
 }
@@ -296,9 +393,16 @@ function maybeReportLiteral(
  * tell the two surfaces apart. Re-export, `require`, and dynamic `import`
  * statements therefore do not get this rewrite.
  */
-function reportLegacyOxlintPluginApiImport(context: Context, node: ESTree.ImportDeclaration) {
+function reportLegacyOxlintPluginApiImport(
+  context: Context,
+  node: ESTree.ImportDeclaration,
+  ownsOxlintApi: boolean,
+) {
   const literal = node.source;
   if (literal.value !== OXLINT_PACKAGE || !importsOxlintPluginApi(node)) {
+    return;
+  }
+  if (ownsOxlintApi) {
     return;
   }
   reportSpecifier(context, literal, VITE_PLUS_LINT_PLUGINS);
@@ -320,29 +424,67 @@ export const preferVitePlusImportsRule = defineRule({
   createOnce(context: Context) {
     let preserveUpstreamVitest = false;
     let fileIsViteConfig = false;
+    let ownsOxlintApi = false;
     return {
       Program() {
         preserveUpstreamVitest = nearestPackageUsesNuxtTestUtils(context.filename);
         fileIsViteConfig = isViteConfigFile(context.filename);
+        ownsOxlintApi = nearestPackageOwnsOxlintApi(context.filename);
       },
       ImportDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
-        reportLegacyOxlintPluginApiImport(context, node);
+        maybeReportLiteral(
+          context,
+          node.source,
+          preserveUpstreamVitest,
+          fileIsViteConfig,
+          ownsOxlintApi,
+        );
+        reportLegacyOxlintPluginApiImport(context, node, ownsOxlintApi);
       },
       ExportAllDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(
+          context,
+          node.source,
+          preserveUpstreamVitest,
+          fileIsViteConfig,
+          ownsOxlintApi,
+        );
       },
       ExportNamedDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(
+          context,
+          node.source,
+          preserveUpstreamVitest,
+          fileIsViteConfig,
+          ownsOxlintApi,
+        );
       },
       ImportExpression(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(
+          context,
+          node.source,
+          preserveUpstreamVitest,
+          fileIsViteConfig,
+          ownsOxlintApi,
+        );
       },
       TSImportType(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(
+          context,
+          node.source,
+          preserveUpstreamVitest,
+          fileIsViteConfig,
+          ownsOxlintApi,
+        );
       },
       TSExternalModuleReference(node) {
-        maybeReportLiteral(context, node.expression, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(
+          context,
+          node.expression,
+          preserveUpstreamVitest,
+          fileIsViteConfig,
+          ownsOxlintApi,
+        );
       },
       TSModuleDeclaration(node) {
         if (node.global) {
@@ -352,11 +494,12 @@ export const preferVitePlusImportsRule = defineRule({
         if (
           id?.type === 'Literal' &&
           typeof id.value === 'string' &&
-          isVitestFamilyDeclareModuleSpecifier(id.value)
+          (isVitestFamilyDeclareModuleSpecifier(id.value) ||
+            isOxlintFamilyDeclareModuleSpecifier(id.value))
         ) {
           return;
         }
-        maybeReportLiteral(context, id, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, id, preserveUpstreamVitest, fileIsViteConfig, ownsOxlintApi);
       },
     };
   },

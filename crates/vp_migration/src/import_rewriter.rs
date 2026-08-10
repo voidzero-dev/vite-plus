@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -1596,12 +1596,20 @@ fix: $NEW_IMPORT
 /// plugin type names. An unrecognized name falls on the side of fixing the
 /// breakage.
 ///
+/// A statement that mixes the two surfaces, such as
+/// `import { defineConfig, defineRule } from 'oxlint'`, is left alone. The
+/// rewrite replaces the whole specifier, so moving it would strip
+/// `defineConfig` of its module. Splitting the statement is the user's call.
+///
 /// These forms name no specifier, so the rewrite skips them: namespace imports
 /// (`import * as`), default imports, bare side-effect imports,
 /// `require('oxlint')`, and `import('oxlint')`.
 ///
 /// `@oxlint/plugins` and `oxlint/plugins-dev` are unambiguous. They expose only
-/// the plugin API and the dev-time utilities, so every statement form rewrites.
+/// the plugin API and the dev-time utilities, so import, export, and dynamic
+/// `import()` statements all rewrite. `require()` does NOT: the
+/// `vite-plus/lint/*` exports are ESM-only, so a rewritten `require()` would
+/// fail to resolve with ERR_PACKAGE_PATH_NOT_EXPORTED.
 ///
 /// The rewrite skips a package that declares `oxlint` or `@oxlint/plugins` in
 /// `dependencies` or `peerDependencies`. Those are published Oxlint plugins,
@@ -1631,27 +1639,6 @@ rule:
   regex: ^['"]@oxlint/plugins['"]$
   inside:
     kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@oxlint/plugins"
-      by: "vite-plus/lint/plugins"
-fix: $NEW_IMPORT
----
-id: rewrite-oxlint-plugins-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@oxlint/plugins['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
 transform:
   NEW_IMPORT:
     replace:
@@ -1713,27 +1700,6 @@ transform:
       by: "vite-plus/lint/plugins-dev"
 fix: $NEW_IMPORT
 ---
-id: rewrite-oxlint-plugins-dev-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]oxlint/plugins-dev['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: oxlint/plugins-dev
-      by: "vite-plus/lint/plugins-dev"
-fix: $NEW_IMPORT
----
 id: rewrite-oxlint-plugins-dev-dynamic-import
 language: TypeScript
 rule:
@@ -1763,13 +1729,17 @@ rule:
   regex: ^['"]oxlint['"]$
   inside:
     kind: import_statement
-    has:
-      kind: import_specifier
-      stopBy: end
-      not:
-        has:
-          field: name
-          regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
+    all:
+      - has:
+          kind: import_specifier
+          stopBy: end
+      - not:
+          has:
+            kind: import_specifier
+            stopBy: end
+            has:
+              field: name
+              regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
 transform:
   NEW_IMPORT:
     replace:
@@ -2187,11 +2157,22 @@ struct PackageRewriteContext {
 }
 
 /// Options controlling directory-wide import rewriting.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RewriteImportsOptions {
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
+    /// Directories of packages that declared `oxlint` or `@oxlint/plugins` in
+    /// `dependencies` or `peerDependencies` BEFORE the migration edited their
+    /// manifests.
+    ///
+    /// `rewritePackageJson` strips `oxlint` (it is in `REMOVE_PACKAGES`) before
+    /// import rewriting reads the manifests, so `get_package_rewrite_context`
+    /// can no longer see that signal on disk. The caller captures it up front
+    /// and passes it here, otherwise a published Oxlint plugin that declared
+    /// the legacy `oxlint` package would lose its exemption and get rewritten
+    /// to depend on Vite+.
+    pub oxlint_owner_dirs: Vec<PathBuf>,
 }
 
 impl SkipPackages {
@@ -2410,15 +2391,26 @@ pub fn rewrite_imports_in_directory_with_options(
 
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
+    // Packages whose manifest declared `oxlint` / `@oxlint/plugins` before the
+    // migration edited it. Matched by the package DIRECTORY because the
+    // manifest itself no longer carries the signal (see `oxlint_owner_dirs`).
+    let oxlint_owner_dirs: HashSet<PathBuf> = options.oxlint_owner_dirs.iter().cloned().collect();
+
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
         .map(|file_path| {
             let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
-                    *package_context_cache
+                    let mut context = *package_context_cache
                         .entry(package_json_path.clone())
-                        .or_insert_with(|| get_package_rewrite_context(&package_json_path))
+                        .or_insert_with(|| get_package_rewrite_context(&package_json_path));
+                    if let Some(package_dir) = package_json_path.parent()
+                        && oxlint_owner_dirs.contains(package_dir)
+                    {
+                        context.skip_packages.skip_oxlint = true;
+                    }
+                    context
                 } else {
                     PackageRewriteContext::default()
                 };
@@ -3452,7 +3444,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+            RewriteImportsOptions {
+                preserve_vitest_in_nuxt_packages: true,
+                ..RewriteImportsOptions::default()
+            },
         )
         .unwrap();
 
@@ -3490,7 +3485,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+            RewriteImportsOptions {
+                preserve_vitest_in_nuxt_packages: true,
+                ..RewriteImportsOptions::default()
+            },
         )
         .unwrap();
 
@@ -4099,6 +4097,40 @@ new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#;
 
 new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#
         );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_mixed_surfaces_are_left_alone() {
+        // Replacing the specifier would move `defineConfig` to an entry that
+        // does not export it. Splitting the statement is the user's call.
+        let mixed = r#"import { defineConfig, defineRule } from 'oxlint';"#;
+
+        let result = rewrite_import_content(mixed, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, mixed);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_require_is_left_alone() {
+        // `vite-plus/lint/plugins` is an ESM-only export, so a rewritten
+        // `require()` would fail with ERR_PACKAGE_PATH_NOT_EXPORTED.
+        let cjs = r#"const { defineRule } = require('@oxlint/plugins');
+const { RuleTester } = require('oxlint/plugins-dev');"#;
+
+        let result = rewrite_import_content(cjs, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, cjs);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_dynamic_import_still_rewrites() {
+        // Dynamic `import()` resolves through the `import` condition, so the
+        // ESM-only export is reachable.
+        let dynamic = r#"const plugins = await import('@oxlint/plugins');"#;
+
+        let result = rewrite_import_content(dynamic, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const plugins = await import('vite-plus/lint/plugins');"#);
     }
 
     #[test]

@@ -14,7 +14,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file package.json`
 
-oxlint is removed and nothing replaces it. The API now comes from vite-plus. @oxlint/plugins stays on purpose: it is inert once the imports are rewritten, and removing it would also remove the peer dependency of a published Oxlint plugin
+oxlint and @oxlint/plugins are both gone from devDependencies, and nothing replaces them. The API now comes from vite-plus
 
 ```
 {
@@ -24,7 +24,6 @@ oxlint is removed and nothing replaces it. The API now comes from vite-plus. @ox
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@oxlint/plugins": "^1.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },

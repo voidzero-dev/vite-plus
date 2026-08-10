@@ -11,7 +11,7 @@ steps = [
     "vpt",
     "print-file",
     "package.json",
-  ], comment = "oxlint is removed and nothing replaces it. The API now comes from vite-plus. @oxlint/plugins stays on purpose: it is inert once the imports are rewritten, and removing it would also remove the peer dependency of a published Oxlint plugin", continue-on-failure = true },
+  ], comment = "oxlint and @oxlint/plugins are both gone from devDependencies, and nothing replaces them. The API now comes from vite-plus", continue-on-failure = true },
   { argv = [
     "vpt",
     "print-file",
