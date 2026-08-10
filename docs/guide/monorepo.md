@@ -24,7 +24,7 @@ export default defineConfig({
     overrides: [
       {
         files: ['apps/web/**', 'packages/ui/**'],
-        plugins: ['typescript', 'react'],
+        plugins: ['react'],
         rules: {
           'react/self-closing-comp': 'error',
         },
@@ -40,9 +40,9 @@ export default defineConfig({
       },
       {
         files: ['**/*.test.ts', '**/*.spec.ts'],
-        plugins: ['typescript', 'vitest'],
+        plugins: ['vitest'],
         rules: {
-          '@typescript-eslint/no-explicit-any': 'off',
+          'typescript/no-explicit-any': 'off',
           'vitest/no-disabled-tests': 'error',
         },
       },
@@ -54,7 +54,7 @@ export default defineConfig({
 Globs are resolved from the root `vite.config.ts`, so use workspace paths such as `apps/web/**`, `apps/api/**`, and `packages/ui/**`.
 
 ::: tip
-When a `lint.overrides` entry sets `plugins`, that list replaces the base `lint.plugins` list for matched files. Include every plugin needed by that file group, such as `['typescript', 'react']`. Omit `plugins` only when the override should inherit the base list unchanged.
+When a `lint.overrides` entry sets `plugins`, that list will be merged with the base `lint.plugins` list for matched files. Omit `plugins` only when the override should inherit the base list unchanged.
 :::
 
 ## Format Overrides

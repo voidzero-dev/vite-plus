@@ -1,0 +1,7 @@
+[[case]]
+name = "lint_override_semantic"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "src/example.js"], comment = "base lint rules apply to JavaScript", continue-on-failure = true },
+  { argv = ["vp", "lint", "src/example.vue"], comment = "base lint rules are preserved when a file override adds Vue rules", continue-on-failure = true },
+]

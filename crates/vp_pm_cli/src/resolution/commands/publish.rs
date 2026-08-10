@@ -135,7 +135,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -160,11 +160,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PublishArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), PublishArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish"]);
@@ -172,11 +168,7 @@ mod tests {
 
     #[test]
     fn test_npm_publish() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PublishArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), PublishArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -184,11 +176,7 @@ mod tests {
 
     #[test]
     fn test_yarn1_publish_uses_npm() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.0"), PublishArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), PublishArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -196,11 +184,7 @@ mod tests {
 
     #[test]
     fn test_yarn2_publish_uses_npm() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), PublishArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), PublishArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -208,14 +192,13 @@ mod tests {
 
     #[test]
     fn test_yarn_publish_with_tag() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            PublishArgs { tag: Some("beta".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                PublishArgs { tag: Some("beta".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--tag", "beta"]);
@@ -223,11 +206,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PublishArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), PublishArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish", "--recursive"]);
@@ -235,11 +216,9 @@ mod tests {
 
     #[test]
     fn test_npm_publish_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PublishArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), PublishArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--workspaces"]);
@@ -247,14 +226,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "publish"]);
@@ -262,14 +240,13 @@ mod tests {
 
     #[test]
     fn test_npm_publish_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--workspace", "app"]);
@@ -277,14 +254,13 @@ mod tests {
 
     #[test]
     fn test_yarn_publish_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--workspace", "app"]);
@@ -292,11 +268,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_json() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), PublishArgs { json: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), PublishArgs { json: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish", "--json"]);
@@ -305,9 +279,7 @@ mod tests {
     #[test]
     fn test_npm_publish_json_ignored() {
         let resolution = resolve(&npm("11.0.0"), PublishArgs { json: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -317,9 +289,7 @@ mod tests {
     #[test]
     fn test_yarn_publish_json_is_checked_against_current_dialect() {
         let resolution = resolve(&yarn("4.0.0"), PublishArgs { json: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -328,14 +298,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_branch() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PublishArgs { publish_branch: Some("main".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PublishArgs { publish_branch: Some("main".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish", "--publish-branch", "main"]);
@@ -347,9 +316,7 @@ mod tests {
             &npm("11.0.0"),
             PublishArgs { publish_branch: Some("main".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -358,12 +325,10 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_report_summary() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), PublishArgs { report_summary: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish", "--report-summary"]);
@@ -373,9 +338,7 @@ mod tests {
     fn test_npm_publish_report_summary_ignored() {
         let resolution =
             resolve(&npm("11.0.0"), PublishArgs { report_summary: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -384,12 +347,10 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_provenance() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), PublishArgs { provenance: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish", "--provenance"]);
@@ -397,11 +358,9 @@ mod tests {
 
     #[test]
     fn test_npm_publish_provenance() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), PublishArgs { provenance: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), PublishArgs { provenance: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--provenance"]);
@@ -409,11 +368,9 @@ mod tests {
 
     #[test]
     fn test_yarn_publish_provenance() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), PublishArgs { provenance: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&yarn("4.0.0"), PublishArgs { provenance: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--provenance"]);
@@ -423,9 +380,7 @@ mod tests {
     fn test_bun_publish_provenance_ignored() {
         let resolution =
             resolve(&bun("1.2.0"), PublishArgs { provenance: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["publish"]);
@@ -434,14 +389,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_publish_otp() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PublishArgs { otp: Some("123456".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PublishArgs { otp: Some("123456".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["publish", "--otp", "123456"]);
@@ -449,14 +403,13 @@ mod tests {
 
     #[test]
     fn test_npm_publish_otp() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            PublishArgs { otp: Some("654321".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                PublishArgs { otp: Some("654321".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--otp", "654321"]);
@@ -464,14 +417,13 @@ mod tests {
 
     #[test]
     fn test_yarn_publish_otp() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            PublishArgs { otp: Some("999999".to_string()), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                PublishArgs { otp: Some("999999".to_string()), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish", "--otp", "999999"]);
@@ -479,25 +431,24 @@ mod tests {
 
     #[test]
     fn test_publish_common_options() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PublishArgs {
-                target: Some("pkg.tgz".to_string()),
-                dry_run: true,
-                tag: Some("next".to_string()),
-                access: Some("public".to_string()),
-                force: true,
-                pass_through_args: vec![
-                    "--registry".to_string(),
-                    "https://registry.npmjs.org".to_string(),
-                ],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PublishArgs {
+                    target: Some("pkg.tgz".to_string()),
+                    dry_run: true,
+                    tag: Some("next".to_string()),
+                    access: Some("public".to_string()),
+                    force: true,
+                    pass_through_args: vec![
+                        "--registry".to_string(),
+                        "https://registry.npmjs.org".to_string(),
+                    ],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -521,9 +472,7 @@ mod tests {
     fn test_npm_silently_ignores_no_git_checks() {
         let resolution =
             resolve(&npm("11.0.0"), PublishArgs { no_git_checks: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
@@ -546,9 +495,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["publish"]);

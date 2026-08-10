@@ -255,7 +255,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn add_args(packages: &[&str]) -> AddArgs {
@@ -268,9 +268,7 @@ mod tests {
     #[test]
     fn test_pnpm_basic_add() {
         let resolution = resolve(&pnpm("10.0.0"), add_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["add", "react"]);
@@ -283,9 +281,7 @@ mod tests {
         options.pass_through_args =
             vec!["--registry".to_string(), "https://registry.example".to_string()];
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -299,9 +295,7 @@ mod tests {
         let mut options = add_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "add", "react"]);
@@ -313,9 +307,7 @@ mod tests {
         options.filter = vec!["app".to_string()];
         options.save_catalog_name = Some("react18".to_string());
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -330,9 +322,7 @@ mod tests {
         options.filter = vec!["app".to_string()];
         options.save_catalog_name = Some(String::new());
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "add", "--save-catalog", "react"]);
@@ -344,9 +334,7 @@ mod tests {
         options.filter = vec!["app".to_string()];
         options.save_catalog = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "add", "--save-catalog", "react"]);
@@ -358,9 +346,7 @@ mod tests {
         options.filter = vec!["app".to_string()];
         options.workspace_root = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "add", "--workspace-root", "react"]);
@@ -372,9 +358,7 @@ mod tests {
         options.save_dependency = SaveDependencyArgs::dev();
         options.workspace_root = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["add", "--workspace-root", "--save-dev", "typescript"]);
@@ -386,9 +370,7 @@ mod tests {
         options.filter = vec!["app".to_string()];
         options.workspace = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "add", "--workspace", "@myorg/utils"]);
@@ -428,9 +410,7 @@ mod tests {
     #[test]
     fn test_yarn_basic_add() {
         let resolution = resolve(&yarn("1.22.22"), add_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["add", "react"]);
@@ -441,9 +421,7 @@ mod tests {
         let mut options = add_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("1.22.22"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -458,9 +436,7 @@ mod tests {
         options.save_dependency = SaveDependencyArgs::dev();
         options.workspace_root = true;
         let resolution = resolve(&yarn("1.22.22"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["add", "--dev", "typescript"]);
@@ -470,9 +446,7 @@ mod tests {
     #[test]
     fn test_npm_basic_add() {
         let resolution = resolve(&npm("11.0.0"), add_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["install", "react"]);
@@ -483,9 +457,7 @@ mod tests {
         let mut options = add_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["install", "--workspace", "app", "react"]);
@@ -496,9 +468,7 @@ mod tests {
         let mut options = add_args(&["typescript"]);
         options.workspace_root = true;
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["install", "--include-workspace-root", "typescript"]);
@@ -509,9 +479,7 @@ mod tests {
         let mut options = add_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -526,9 +494,7 @@ mod tests {
         options.filter = vec!["app".to_string(), "web".to_string()];
         options.workspace_root = true;
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -550,9 +516,7 @@ mod tests {
         let mut options = add_args(&["react"]);
         options.allow_build = Some("react,napi".to_string());
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["add", "--allow-build=react,napi", "react"]);
@@ -561,9 +525,7 @@ mod tests {
     #[test]
     fn test_bun_basic_add() {
         let resolution = resolve(&bun("1.3.11"), add_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["add", "react"]);
@@ -575,13 +537,9 @@ mod tests {
         args.workspace_root = true;
 
         let classic = resolve(&yarn("1.22.22"), args.clone());
-        let CommandResolution::Run(classic_command) = classic.outcome else {
-            panic!("expected command resolution");
-        };
+        let classic_command = expect_run(classic.outcome);
         let berry = resolve(&yarn("4.1.0"), args);
-        let CommandResolution::Run(berry_command) = berry.outcome else {
-            panic!("expected command resolution");
-        };
+        let berry_command = expect_run(berry.outcome);
 
         assert_eq!(classic_command.program, "yarn");
         assert_eq!(classic_command.args, vec!["add", "react"]);
@@ -600,9 +558,7 @@ mod tests {
         options.save_catalog = true;
         options.allow_build = Some("react".to_string());
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["add", "react"]);
         assert_eq!(

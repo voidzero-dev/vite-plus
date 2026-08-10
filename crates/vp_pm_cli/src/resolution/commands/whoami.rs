@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -87,11 +87,7 @@ mod tests {
 
     #[test]
     fn test_npm_whoami() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), WhoamiArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), WhoamiArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["whoami"]);
@@ -99,11 +95,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_whoami_uses_npm() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), WhoamiArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), WhoamiArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["whoami"]);
@@ -120,11 +112,7 @@ mod tests {
 
     #[test]
     fn test_yarn2_whoami() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), WhoamiArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), WhoamiArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "whoami"]);
@@ -132,11 +120,7 @@ mod tests {
 
     #[test]
     fn test_bun_whoami() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), WhoamiArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), WhoamiArgs::default()).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "whoami"]);
@@ -144,17 +128,16 @@ mod tests {
 
     #[test]
     fn test_whoami_with_registry() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            WhoamiArgs {
-                registry: Some("https://registry.example.com".to_string()),
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                WhoamiArgs {
+                    registry: Some("https://registry.example.com".to_string()),
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["whoami", "--registry", "https://registry.example.com"]);

@@ -56,8 +56,8 @@ impl Resolve<FundArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -71,9 +71,7 @@ mod tests {
     #[test]
     fn test_fund_basic() {
         let resolution = resolve(&pnpm("10.0.0"), FundArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["fund"]);
@@ -82,9 +80,7 @@ mod tests {
     #[test]
     fn test_fund_with_json() {
         let resolution = resolve(&npm("11.0.0"), FundArgs { json: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["fund", "--json"]);
@@ -93,9 +89,7 @@ mod tests {
     #[test]
     fn test_yarn_fund_uses_npm() {
         let resolution = resolve(&yarn("4.0.0"), FundArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["fund"]);
@@ -104,9 +98,7 @@ mod tests {
     #[test]
     fn test_bun_fund_falls_back_to_npm() {
         let resolution = resolve(&bun("1.3.11"), FundArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["fund"]);

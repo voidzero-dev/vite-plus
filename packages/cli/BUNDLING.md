@@ -22,7 +22,7 @@ Bundles all CLI entry points using tsdown (configured in `tsdown.config.ts`). Th
 **ESM build** — bundles all entry points to `dist/`:
 
 - Public API entries: `bin`, `index`, `define-config`, `fmt`, `lint`, `pack`, `pack-bin`
-- Global command entries: `create`, `migrate`, `version`, `config`, `mcp`, `staged`
+- Global command entries: `create`, `migrate`, `version`, `config`, `hooks`, `mcp`, `staged`
 - All third-party dependencies are inlined at build time
 - Only packages that must be resolved at runtime stay external (NAPI binding, `@voidzero-dev/vite-plus-core`, `vitest`, `oxfmt`, `oxlint`)
 - Code splitting creates shared chunks for code used by multiple entries
@@ -130,6 +130,7 @@ packages/cli/
 │   ├── migrate.js            # Global command: vp migrate
 │   ├── version.js            # Global command: vp --version
 │   ├── config/bin.js         # Global command: vp config
+│   ├── hooks/bin.js          # Global command: vp hooks
 │   ├── mcp.js                # Global command: vp mcp
 │   ├── staged/bin.js         # Global command: vp staged
 │   ├── *-<hash>.js           # Shared chunks (code splitting)

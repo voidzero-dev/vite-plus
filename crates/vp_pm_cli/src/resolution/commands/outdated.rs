@@ -233,7 +233,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn outdated_args(packages: &[&str]) -> OutdatedArgs {
@@ -273,11 +273,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), OutdatedArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), OutdatedArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated"]);
@@ -285,11 +281,8 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_packages() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), outdated_args(&["*babel*", "eslint-*"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&pnpm("10.0.0"), outdated_args(&["*babel*", "eslint-*"])).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "*babel*", "eslint-*"]);
@@ -297,14 +290,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_json() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--format", "json"]);
@@ -312,11 +304,7 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), OutdatedArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), OutdatedArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated"]);
@@ -324,14 +312,13 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_json() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--json"]);
@@ -339,11 +326,7 @@ mod tests {
 
     #[test]
     fn test_yarn_outdated_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.19"), OutdatedArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.19"), OutdatedArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["outdated"]);
@@ -351,14 +334,17 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs { filter: vec!["app".to_string()], recursive: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs {
+                    filter: vec!["app".to_string()],
+                    recursive: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "outdated", "--recursive"]);
@@ -366,11 +352,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_prod_only() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), OutdatedArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), OutdatedArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--prod"]);
@@ -378,14 +362,13 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_list_format() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::List), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs { format: Some(OutdatedFormat::List), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--parseable"]);
@@ -393,11 +376,9 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), OutdatedArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.0.0"), OutdatedArgs { recursive: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--all"]);
@@ -405,14 +386,13 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_with_workspace() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--workspace", "app"]);
@@ -420,11 +400,9 @@ mod tests {
 
     #[test]
     fn test_global_outdated() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), OutdatedArgs { global: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), OutdatedArgs { global: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "-g"]);
@@ -444,17 +422,13 @@ mod tests {
         };
 
         let yarn_resolution = resolve(&yarn("1.22.19"), args.clone());
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let yarn_command = expect_run(yarn_resolution.outcome);
         assert_eq!(yarn_command.program, "npm");
         assert_eq!(yarn_command.args, vec!["outdated", "--parseable", "react", "-g"]);
         assert_eq!(yarn_resolution.diagnostics.len(), 4);
 
         let bun_resolution = resolve(&bun("1.3.11"), args);
-        let CommandResolution::Run(bun_command) = bun_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let bun_command = expect_run(bun_resolution.outcome);
         assert_eq!(bun_command.program, "npm");
         assert_eq!(
             bun_command.args,
@@ -465,12 +439,10 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_workspace_root() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), OutdatedArgs { workspace_root: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--workspace-root"]);
@@ -478,14 +450,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_workspace_root_and_recursive() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs { workspace_root: true, recursive: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs { workspace_root: true, recursive: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--workspace-root", "--recursive"]);
@@ -493,25 +464,24 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_all_flags() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs {
-                packages: vec!["react".to_string()],
-                long: true,
-                format: Some(OutdatedFormat::Json),
-                recursive: true,
-                filter: vec!["app".to_string()],
-                workspace_root: true,
-                prod: true,
-                compatible: true,
-                sort_by: Some("name".to_string()),
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs {
+                    packages: vec!["react".to_string()],
+                    long: true,
+                    format: Some(OutdatedFormat::Json),
+                    recursive: true,
+                    filter: vec!["app".to_string()],
+                    workspace_root: true,
+                    prod: true,
+                    compatible: true,
+                    sort_by: Some("name".to_string()),
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -536,12 +506,10 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_with_workspace_root() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&npm("11.0.0"), OutdatedArgs { workspace_root: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--include-workspace-root"]);
@@ -549,18 +517,17 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_with_workspace_root_and_workspace() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs {
-                filter: vec!["app".to_string()],
-                workspace_root: true,
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs {
+                    filter: vec!["app".to_string()],
+                    workspace_root: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -575,9 +542,7 @@ mod tests {
             &yarn("1.22.19"),
             OutdatedArgs { format: Some(OutdatedFormat::List), ..Default::default() },
         );
-        let CommandResolution::Run(list_command) = list_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let list_command = expect_run(list_resolution.outcome);
 
         assert_eq!(list_command.program, "yarn");
         assert_eq!(list_command.args, vec!["outdated"]);
@@ -587,9 +552,7 @@ mod tests {
             &yarn("1.22.19"),
             OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
         );
-        let CommandResolution::Run(json_command) = json_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let json_command = expect_run(json_resolution.outcome);
         assert_eq!(json_command.args, vec!["outdated", "--json"]);
         assert!(json_resolution.diagnostics.is_empty());
     }
@@ -600,9 +563,7 @@ mod tests {
             &yarn("4.0.0"),
             OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["upgrade-interactive"]);
@@ -627,9 +588,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(
@@ -668,9 +627,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let yarn_command = expect_run(yarn_resolution.outcome);
         assert_eq!(yarn_command.args, vec!["outdated"]);
         assert_eq!(yarn_resolution.diagnostics.len(), 9);
 
@@ -685,9 +642,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(bun_command) = bun_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let bun_command = expect_run(bun_resolution.outcome);
         assert_eq!(bun_command.args, vec!["outdated"]);
         assert_eq!(bun_resolution.diagnostics.len(), 5);
     }

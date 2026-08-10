@@ -98,7 +98,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         Resolution, resolve,
-        test_utils::{bun, npm, parse_subcommand, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
     };
 
     fn list(package: &str) -> DistTagCommand {
@@ -114,11 +114,7 @@ mod tests {
 
     #[test]
     fn test_npm_dist_tag_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&npm("11.0.0"), list("my-package"))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), list("my-package")).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dist-tag", "list", "my-package"]);
@@ -126,11 +122,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_dist_tag_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&pnpm("10.0.0"), list("my-package"))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), list("my-package")).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dist-tag", "list", "my-package"]);
@@ -138,11 +130,7 @@ mod tests {
 
     #[test]
     fn test_yarn1_dist_tag_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&yarn("1.22.0"), list("my-package"))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), list("my-package")).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["tag", "list", "my-package"]);
@@ -150,11 +138,7 @@ mod tests {
 
     #[test]
     fn test_yarn2_dist_tag_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&yarn("4.0.0"), list("my-package"))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), list("my-package")).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "tag", "list", "my-package"]);
@@ -162,11 +146,8 @@ mod tests {
 
     #[test]
     fn test_bun_dist_tag_list_falls_back_to_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } =
-            resolve(&bun("1.3.11"), list("my-package"))
-        else {
-            panic!("expected command resolution");
-        };
+        let Resolution { outcome, diagnostics } = resolve(&bun("1.3.11"), list("my-package"));
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dist-tag", "list", "my-package"]);
@@ -178,15 +159,16 @@ mod tests {
 
     #[test]
     fn test_dist_tag_add() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.0.0"),
-            DistTagCommand::Add {
-                package_at_version: "my-package@1.0.0".into(),
-                tag: "beta".into(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                DistTagCommand::Add {
+                    package_at_version: "my-package@1.0.0".into(),
+                    tag: "beta".into(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dist-tag", "add", "my-package@1.0.0", "beta"]);
@@ -194,12 +176,13 @@ mod tests {
 
     #[test]
     fn test_dist_tag_rm() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.0.0"),
-            DistTagCommand::Rm { package: "my-package".into(), tag: "beta".into() },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                DistTagCommand::Rm { package: "my-package".into(), tag: "beta".into() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dist-tag", "rm", "my-package", "beta"]);

@@ -120,7 +120,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         Resolution, resolve,
-        test_utils::{bun, npm, parse_subcommand, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
     };
 
     #[test]
@@ -139,12 +139,13 @@ mod tests {
 
     #[test]
     fn test_token_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            TokenCommand::List { json: false, registry: None, pass_through_args: Vec::new() },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                TokenCommand::List { json: false, registry: None, pass_through_args: Vec::new() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["token", "list"]);
@@ -152,18 +153,19 @@ mod tests {
 
     #[test]
     fn test_token_create() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.0.0"),
-            TokenCommand::Create {
-                json: false,
-                registry: None,
-                cidr: None,
-                readonly: false,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                TokenCommand::Create {
+                    json: false,
+                    registry: None,
+                    cidr: None,
+                    readonly: false,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["token", "create"]);
@@ -171,18 +173,19 @@ mod tests {
 
     #[test]
     fn test_token_create_with_flags() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            TokenCommand::Create {
-                json: true,
-                registry: Some("https://registry.npmjs.org".to_string()),
-                cidr: Some(vec!["192.168.1.0/24".to_string(), "10.0.0.0/8".to_string()]),
-                readonly: true,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                TokenCommand::Create {
+                    json: true,
+                    registry: Some("https://registry.npmjs.org".to_string()),
+                    cidr: Some(vec!["192.168.1.0/24".to_string(), "10.0.0.0/8".to_string()]),
+                    readonly: true,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -204,16 +207,17 @@ mod tests {
 
     #[test]
     fn test_token_revoke() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            TokenCommand::Revoke {
-                token: "abc123".to_string(),
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                TokenCommand::Revoke {
+                    token: "abc123".to_string(),
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["token", "revoke", "abc123"]);
@@ -221,12 +225,11 @@ mod tests {
 
     #[test]
     fn test_bun_token_uses_npm_without_warning() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } = resolve(
+        let Resolution { outcome, diagnostics } = resolve(
             &bun("1.3.11"),
             TokenCommand::List { json: false, registry: None, pass_through_args: Vec::new() },
-        ) else {
-            panic!("expected command resolution");
-        };
+        );
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["token", "list"]);
@@ -235,16 +238,17 @@ mod tests {
 
     #[test]
     fn test_token_revoke_with_registry_and_pass_through_args() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.0.0"),
-            TokenCommand::Revoke {
-                token: "abc123".to_string(),
-                registry: Some("https://registry.npmjs.org".to_string()),
-                pass_through_args: vec!["--otp".to_string(), "123456".to_string()],
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                TokenCommand::Revoke {
+                    token: "abc123".to_string(),
+                    registry: Some("https://registry.npmjs.org".to_string()),
+                    pass_through_args: vec!["--otp".to_string(), "123456".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
