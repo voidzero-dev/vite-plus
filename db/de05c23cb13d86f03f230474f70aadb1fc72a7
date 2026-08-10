@@ -1,0 +1,23 @@
+crates/vp_migration/src/import_rewriter.rs
+  s_09c28b62987691::t_2b600a7f9d9122 1650,1704,1742,4146-4158
+packages/cli/src/migration/migrator/package-json.ts
+  s_09c28b62987691::t_f8b7d4e15f08e5 30,205-212
+packages/cli/src/migration/migrator/source-scan.ts
+  s_09c28b62987691::t_453c3fae61a02f 221-226,237-241,374-380
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dbde05c23cb13d86f03f230474f70aadb1fc72a7",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
