@@ -167,6 +167,19 @@ vp rebuild -- --update-binary
 
 With pnpm v10+, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `pnpm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
 
+#### Dependency build scripts (npm v12+)
+
+npm v12 skips dependency install scripts (`preinstall` / `install` / `postinstall`, including implicit `node-gyp` builds) unless the `allowScripts` field in package.json covers them; the install succeeds and npm warns about what it skipped. `vp pm approve-builds` manages that allowlist:
+
+- `vp pm approve-builds <pkg...>` approves the named packages (`npm approve-scripts`)
+- `vp pm approve-builds !<pkg...>` denies them (`npm deny-scripts`)
+- `vp pm approve-builds --all` approves everything currently pending
+- `vp pm approve-builds` lists the packages whose scripts are not yet covered
+
+Approval only records the allowlist: scripts an earlier install skipped do not run until you run `vp rebuild <pkg>`. With npm 11.16 - 11.x the same commands work, but npm treats the allowlist as advisory and still runs scripts.
+
+npm v12 also stops resolving git dependencies (`github:`, `git+https:`) and remote tarball URLs by default; such installs fail with `EALLOWGIT` / `EALLOWREMOTE`. Opt back in per project with npm's `allow-git` / `allow-remote` config.
+
 #### Advanced
 
 Use these when you need lower-level package-manager behavior.

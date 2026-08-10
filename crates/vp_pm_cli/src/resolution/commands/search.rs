@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -83,14 +83,13 @@ mod tests {
 
     #[test]
     fn test_search_basic() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            SearchArgs { terms: vec!["react".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                SearchArgs { terms: vec!["react".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["search", "react"]);
@@ -98,14 +97,13 @@ mod tests {
 
     #[test]
     fn test_search_with_json() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            SearchArgs { terms: vec!["lodash".to_string()], json: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                SearchArgs { terms: vec!["lodash".to_string()], json: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["search", "lodash", "--json"]);
@@ -113,19 +111,18 @@ mod tests {
 
     #[test]
     fn test_search_multiple_terms() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("4.0.0"),
-            SearchArgs {
-                terms: vec!["react".to_string(), "hooks".to_string(), "state".to_string()],
-                long: true,
-                registry: Some("https://registry.npmjs.org".to_string()),
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                SearchArgs {
+                    terms: vec!["react".to_string(), "hooks".to_string(), "state".to_string()],
+                    long: true,
+                    registry: Some("https://registry.npmjs.org".to_string()),
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -148,9 +145,7 @@ mod tests {
             &bun("1.3.11"),
             SearchArgs { terms: vec!["react".to_string()], ..Default::default() },
         );
-        let CommandResolution::Run(command) = result.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(result.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["search", "react"]);
@@ -159,14 +154,13 @@ mod tests {
 
     #[test]
     fn test_yarn_classic_search_uses_npm() {
-        let CommandResolution::Run(command) = resolve(
-            &yarn("1.22.0"),
-            SearchArgs { terms: vec!["react".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                SearchArgs { terms: vec!["react".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["search", "react"]);

@@ -170,8 +170,8 @@ impl Resolve<UpdateArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn update_args(packages: &[&str]) -> UpdateArgs {
@@ -215,9 +215,7 @@ mod tests {
     #[test]
     fn test_pnpm_basic_update() {
         let resolution = resolve(&pnpm("10.0.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "react"]);
@@ -228,9 +226,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.latest = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--latest", "react"]);
@@ -239,9 +235,7 @@ mod tests {
     #[test]
     fn test_pnpm_update_all() {
         let resolution = resolve(&pnpm("10.0.0"), UpdateArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update"]);
@@ -252,9 +246,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "update", "react"]);
@@ -264,9 +256,7 @@ mod tests {
     fn test_pnpm_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--recursive"]);
@@ -276,9 +266,7 @@ mod tests {
     fn test_pnpm_update_interactive() {
         let options = UpdateArgs { interactive: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--interactive"]);
@@ -288,9 +276,7 @@ mod tests {
     fn test_pnpm_update_dev_only() {
         let options = UpdateArgs { dev: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--dev"]);
@@ -300,9 +286,7 @@ mod tests {
     fn test_pnpm_update_no_optional() {
         let options = UpdateArgs { no_optional: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--no-optional"]);
@@ -313,9 +297,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.no_save = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--no-save", "react"]);
@@ -327,9 +309,7 @@ mod tests {
         options.workspace = true;
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "update", "--workspace", "@myorg/utils"]);
@@ -338,9 +318,7 @@ mod tests {
     #[test]
     fn test_yarn_v1_basic_update() {
         let resolution = resolve(&yarn("1.22.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["upgrade", "react"]);
@@ -351,9 +329,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.latest = true;
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["upgrade", "--latest", "react"]);
@@ -364,9 +340,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["workspace", "app", "upgrade", "react"]);
@@ -375,9 +349,7 @@ mod tests {
     #[test]
     fn test_yarn_v4_basic_update() {
         let resolution = resolve(&yarn("4.0.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["up", "react"]);
@@ -387,9 +359,7 @@ mod tests {
     fn test_yarn_v4_update_interactive() {
         let options = UpdateArgs { interactive: true, ..Default::default() };
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["up", "--interactive"]);
@@ -400,9 +370,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -415,9 +383,7 @@ mod tests {
     fn test_yarn_v4_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["up", "--recursive"]);
@@ -426,9 +392,7 @@ mod tests {
     #[test]
     fn test_npm_basic_update() {
         let resolution = resolve(&npm("11.0.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "react"]);
@@ -437,9 +401,7 @@ mod tests {
     #[test]
     fn test_npm_update_all() {
         let resolution = resolve(&npm("11.0.0"), UpdateArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update"]);
@@ -450,9 +412,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--workspace", "app", "react"]);
@@ -462,9 +422,7 @@ mod tests {
     fn test_npm_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--include-workspace-root", "--workspaces"]);
@@ -474,9 +432,7 @@ mod tests {
     fn test_npm_update_dev_only() {
         let options = UpdateArgs { dev: true, ..Default::default() };
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--include=dev"]);
@@ -486,9 +442,7 @@ mod tests {
     fn test_npm_update_no_optional() {
         let options = UpdateArgs { no_optional: true, ..Default::default() };
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--no-optional"]);
@@ -499,9 +453,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.no_save = true;
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--no-save", "react"]);
@@ -513,9 +465,7 @@ mod tests {
         options.latest = true;
         options.interactive = true;
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "react"]);
@@ -532,9 +482,7 @@ mod tests {
         let mut options = update_args(&["react", "react-dom", "vite"]);
         options.latest = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--latest", "react", "react-dom", "vite"]);
@@ -549,9 +497,7 @@ mod tests {
         options.dev = true;
         options.interactive = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -576,9 +522,7 @@ mod tests {
         let mut options = update_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -600,9 +544,7 @@ mod tests {
     #[test]
     fn test_bun_basic_update() {
         let resolution = resolve(&bun("1.3.11"), UpdateArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update"]);
@@ -612,9 +554,7 @@ mod tests {
     fn test_bun_update_latest() {
         let options = UpdateArgs { latest: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--latest"]);
@@ -624,9 +564,7 @@ mod tests {
     fn test_bun_update_prod() {
         let options = UpdateArgs { prod: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--production"]);
@@ -636,9 +574,7 @@ mod tests {
     fn test_bun_update_no_optional() {
         let options = UpdateArgs { no_optional: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--omit", "optional"]);
@@ -648,9 +584,7 @@ mod tests {
     fn test_bun_update_no_save() {
         let options = UpdateArgs { no_save: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--no-save"]);
@@ -660,9 +594,7 @@ mod tests {
     fn test_bun_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--recursive"]);

@@ -60,6 +60,7 @@ export default defineConfig([
       'migration/compat/worker': './src/migration/compat/worker.ts',
       version: './src/version.ts',
       'config/bin': './src/config/bin.ts',
+      'hooks/bin': './src/hooks/bin.ts',
       'staged/bin': './src/staged/bin.ts',
     },
     outDir: 'dist',

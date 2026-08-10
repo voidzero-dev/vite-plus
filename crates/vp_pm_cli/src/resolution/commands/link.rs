@@ -54,16 +54,14 @@ fn resolve_link(program: &str, args: &LinkArgs) -> CommandResolution {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
     fn test_pnpm_link_no_package() {
         let resolution = resolve(&pnpm("10.0.0"), LinkArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["link"]);
@@ -75,9 +73,7 @@ mod tests {
             &pnpm("10.0.0"),
             LinkArgs { package: Some("react".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["link", "react"]);
@@ -89,9 +85,7 @@ mod tests {
             &pnpm("10.0.0"),
             LinkArgs { package: Some("./packages/utils".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["link", "./packages/utils"]);
@@ -106,9 +100,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["link", "/absolute/path/to/package"]);
@@ -117,9 +109,7 @@ mod tests {
     #[test]
     fn test_yarn_link_basic() {
         let resolution = resolve(&yarn("4.0.0"), LinkArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["link"]);
@@ -131,9 +121,7 @@ mod tests {
             &yarn("4.0.0"),
             LinkArgs { package: Some("react".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["link", "react"]);
@@ -145,9 +133,7 @@ mod tests {
             &yarn("1.22.0"),
             LinkArgs { package: Some("react".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["link", "react"]);
@@ -156,9 +142,7 @@ mod tests {
     #[test]
     fn test_npm_link_basic() {
         let resolution = resolve(&npm("11.0.0"), LinkArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["link"]);
@@ -170,9 +154,7 @@ mod tests {
             &npm("11.0.0"),
             LinkArgs { package: Some("react".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["link", "react"]);
@@ -184,9 +166,7 @@ mod tests {
             &bun("1.3.11"),
             LinkArgs { package: Some("react".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["link", "react"]);
@@ -198,9 +178,7 @@ mod tests {
             &pnpm("10.0.0"),
             LinkArgs { package: Some("react".to_string()), args: vec!["--global".to_string()] },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["link", "react", "--global"]);
