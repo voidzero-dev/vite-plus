@@ -22,6 +22,14 @@ inputs:
     description: 'Commit sha that scopes the primary cache key.'
     required: false
     default: ${{ github.sha }}
+  site-origin:
+    description: >-
+      Origin of this deploy when it is not production viteplus.dev
+      (e.g. https://main.viteplus.dev). When set, the docs build rewrites the
+      https://vite.plus installer URLs to this origin's install scripts.
+      Leave empty for production.
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -62,6 +70,8 @@ runs:
     - run: vp run build
       shell: bash
       working-directory: docs
+      env:
+        DOCS_SITE_ORIGIN: ${{ inputs.site-origin }}
 
     - name: Save docs Vite Task cache
       if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'

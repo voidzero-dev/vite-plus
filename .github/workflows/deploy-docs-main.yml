@@ -37,3 +37,4 @@ jobs:
         with:
           void-project: viteplus-main
           void-token: ${{ secrets.VOID_TOKEN }}
+          site-origin: https://main.viteplus.dev

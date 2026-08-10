@@ -39,6 +39,7 @@ jobs:
           void-token: ${{ secrets.VOID_TOKEN }}
           cache-ref: pr-${{ github.event.pull_request.number }}
           cache-sha: ${{ github.event.pull_request.head.sha }}
+          site-origin: https://viteplus-staging.void.app
 
       - name: Comment on PR
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

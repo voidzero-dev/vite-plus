@@ -208,6 +208,30 @@ jobs:
 target, and its PR comment step, and now runs the same composite. Per-PR
 staging deploys remain the place to review docs changes before merge.
 
+### Origin-aware install URLs in the docs
+
+The docs hardcode the production installer shortcuts (`https://vite.plus`,
+`https://vite.plus/ps1`) in markdown code blocks and in the homepage Vue
+components. A preview deploy must point them at its own install scripts
+instead (for example `https://main.viteplus.dev/install.sh`), or readers of
+unreleased install docs run the production installer.
+
+The composite action passes its `site-origin` input to the docs build as
+`DOCS_SITE_ORIGIN`. When the variable is set:
+
+- A markdown-it rule in `.vitepress/config.mts` rewrites the install URLs in
+  fenced code, inline code, text, and link hrefs. Other `viteplus.dev`
+  subdomains (`setup.`, `registry-bridge.`) stay untouched.
+- The Vue components (homepage install command, AI copy prompt) read
+  `__DOCS_*__` define constants computed from the same origin. The AI prompt
+  also points at the deploy's own `llms-full.txt`.
+- The `build:site` run task lists `DOCS_SITE_ORIGIN` in `env`, so each deploy
+  target keeps its own Vite Task cache entry.
+
+Production builds leave the content untouched: the variable is unset there.
+Known gap: the llms dumps (`llms.txt`, `llms-full.txt`, per-page `.md`) copy
+raw markdown, so on previews they keep the production install URLs.
+
 ### Manual deploys
 
 `workflow_dispatch` covers urgent updates outside the release cycle:
