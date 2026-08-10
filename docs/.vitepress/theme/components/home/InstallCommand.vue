@@ -12,12 +12,12 @@ const commandCards: CommandCard[] = [
   {
     id: 'unix',
     label: 'macOS / Linux',
-    command: 'curl -fsSL https://vite.plus | bash',
+    command: `curl -fsSL ${__DOCS_INSTALL_SH_URL__} | bash`,
   },
   {
     id: 'windows',
     label: 'Windows (PowerShell)',
-    command: 'irm https://vite.plus/ps1 | iex',
+    command: `irm ${__DOCS_INSTALL_PS1_URL__} | iex`,
   },
 ];
 

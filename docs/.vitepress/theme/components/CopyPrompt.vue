@@ -7,11 +7,11 @@ import { computed, onBeforeUnmount, ref, useId } from 'vue';
 // live llms-full.txt docs dump.
 const DEFAULT_PROMPT = `I want to use Vite+ in my project. Vite+ is the unified toolchain for the web behind the \`vp\` CLI — one tool combining Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task, plus runtime and package-manager management.
 
-First, read https://viteplus.dev/llms-full.txt to learn Vite+'s commands and configuration.
+First, read ${__DOCS_ORIGIN__}/llms-full.txt to learn Vite+'s commands and configuration.
 
 Install the \`vp\` CLI if it's not already on the system:
-- macOS / Linux: curl -fsSL https://vite.plus | bash
-- Windows (PowerShell): irm https://vite.plus/ps1 | iex
+- macOS / Linux: curl -fsSL ${__DOCS_INSTALL_SH_URL__} | bash
+- Windows (PowerShell): irm ${__DOCS_INSTALL_PS1_URL__} | iex
 
 Then open a new terminal and run \`vp help\`. To scaffold a new project run \`vp create\`; to move an existing Vite project onto Vite+ run \`vp migrate\`.
 
@@ -19,16 +19,21 @@ Day-to-day commands: \`vp install\` (dependencies), \`vp dev\` (dev server), \`v
 
 Help me get set up and explain anything I should know.`;
 
+// DEFAULT_PROMPT interpolates the __DOCS_*__ define constants, so it is not a
+// static literal and cannot be a withDefaults() default (defineProps is
+// hoisted out of setup). Resolve the fallback in promptText instead.
 const props = withDefaults(
   defineProps<{
     prompt?: string;
     label?: string;
   }>(),
   {
-    prompt: DEFAULT_PROMPT,
+    prompt: '',
     label: 'View Prompt',
   },
 );
+
+const promptText = computed(() => props.prompt || DEFAULT_PROMPT);
 
 const titleId = useId();
 const dialogEl = ref<HTMLDialogElement | null>(null);
@@ -71,7 +76,7 @@ const blurPointerTarget = (event: MouseEvent) => {
 const copyPrompt = async (event: MouseEvent) => {
   blurPointerTarget(event);
   try {
-    await navigator.clipboard.writeText(props.prompt);
+    await navigator.clipboard.writeText(promptText.value);
     flash('copied');
   } catch {
     flash('error');
@@ -132,7 +137,7 @@ onBeforeUnmount(() => {
         </header>
         <pre
           class="m-0 overflow-auto px-5 pb-4 font-mono text-sm leading-relaxed break-words whitespace-pre-wrap"
-          >{{ prompt }}</pre>
+          >{{ promptText }}</pre>
         <footer class="flex justify-end border-t border-stroke px-5 py-3 dark:border-nickel">
           <button type="button" class="button" @click="copyPrompt">
             <Icon :icon="copyIcon" class="size-4" aria-hidden="true" />

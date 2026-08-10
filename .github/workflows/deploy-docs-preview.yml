@@ -9,6 +9,7 @@ on:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - '.github/workflows/deploy-docs-preview.yml'
+      - '.github/actions/deploy-docs/**'
 
 concurrency:
   group: deploy-docs-preview-${{ github.event.pull_request.number }}
@@ -28,41 +29,17 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      VOID_PROJECT: viteplus-staging
       PREVIEW_URL: https://viteplus-staging.void.app/
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # main
+      - uses: ./.github/actions/deploy-docs
         with:
-          cache: true
-          working-directory: docs
-          cache-dependency-path: docs/pnpm-lock.yaml
-
-      - name: Restore docs Vite Task cache
-        id: vite-task-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: docs/node_modules/.vite/task-cache
-          key: vite-task-docs-${{ runner.os }}-${{ runner.arch }}-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
-          # Prefer this PR's newest cache, then fall back to main for new PRs.
-          restore-keys: |
-            vite-task-docs-${{ runner.os }}-${{ runner.arch }}-pr-${{ github.event.pull_request.number }}-
-            vite-task-docs-${{ runner.os }}-${{ runner.arch }}-main-
-
-      - run: vp run build
-        working-directory: docs
-
-      - name: Save docs Vite Task cache
-        if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: docs/node_modules/.vite/task-cache
-          key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
-
-      - run: vpx void deploy --dir docs/.vitepress/dist
-        env:
-          VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
+          void-project: viteplus-staging
+          void-token: ${{ secrets.VOID_TOKEN }}
+          cache-ref: pr-${{ github.event.pull_request.number }}
+          cache-sha: ${{ github.event.pull_request.head.sha }}
+          site-origin: https://viteplus-staging.void.app
 
       - name: Comment on PR
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
