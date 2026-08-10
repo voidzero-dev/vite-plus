@@ -1,0 +1,23 @@
+crates/vp_pm_cli/src/cli.rs
+  s_ac0df9aad508cc::t_0eb9f21611b493 287,324,617,652-663
+crates/vp_pm_cli/src/resolution/commands/why.rs
+  s_ac0df9aad508cc::t_c918d5c6d6b4da 67-77
+crates/vp_toolchain/src/lib.rs
+  s_ac0df9aad508cc::t_c55513b69e54f0 288-289,299-301,307-308,318-320,473,482,495,503-509,518,522-534,551,585-586,588-589
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95b3c52dc82200928e5ec5293356d77c4ccd71ba",
+  "prompts": {},
+  "sessions": {
+    "s_ac0df9aad508cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "164a4a1c-0404-4a47-a9b1-924789ac3bad",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
