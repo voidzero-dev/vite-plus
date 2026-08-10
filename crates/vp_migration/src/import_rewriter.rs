@@ -1647,6 +1647,7 @@ rule:
   regex: ^['"]@oxlint/plugins['"]$
   inside:
     kind: export_statement
+    field: source
 transform:
   NEW_IMPORT:
     replace:
@@ -1700,6 +1701,7 @@ rule:
   regex: ^['"]oxlint/plugins-dev['"]$
   inside:
     kind: export_statement
+    field: source
 transform:
   NEW_IMPORT:
     replace:
@@ -1737,6 +1739,7 @@ rule:
   regex: ^['"]oxlint['"]$
   inside:
     kind: export_statement
+    field: source
     all:
       - has:
           kind: export_specifier
@@ -4211,6 +4214,19 @@ export * from 'oxlint';"#;
         let result = rewrite_import_content(ty, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(result.content, r#"type C = import('vite-plus/lint/plugins').Context;"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_export_default_literal_is_data() {
+        // `export default '...'` puts the string directly under the
+        // export_statement, so an unconstrained `inside:` rewrote the exported
+        // DATA VALUE. The rules match the `source` field only.
+        let data = r#"export default '@oxlint/plugins';
+export = 'oxlint/plugins-dev';"#;
+
+        let result = rewrite_import_content(data, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, data);
     }
 
     #[test]

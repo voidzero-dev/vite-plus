@@ -218,6 +218,12 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 function sourceTreeMatches(
   projectPath: string,
   matchesContent: (content: string) => boolean,
+  // Cross nested package.json boundaries. Off by default, because most signals
+  // are per-package and a sub-package is scanned on its own pass. On for the
+  // dependency-retention check, where a nested example or fixture directory
+  // that is not a workspace member would otherwise go unscanned while still
+  // resolving the root's dependency.
+  crossPackageBoundaries = false,
 ): boolean {
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
@@ -228,7 +234,11 @@ function sourceTreeMatches(
     }
     // A nested package.json marks a separate workspace package — it is migrated
     // (and scanned) on its own pass, so don't let its files leak into this one.
-    if (!isRoot && entries.some((e) => e.isFile() && e.name === 'package.json')) {
+    if (
+      !crossPackageBoundaries &&
+      !isRoot &&
+      entries.some((e) => e.isFile() && e.name === 'package.json')
+    ) {
       return false;
     }
     for (const entry of entries) {
@@ -361,7 +371,13 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
  * the only question that matters: does anything still need this package?
  */
 export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
-  return sourceTreeReferencesAny(projectPath, ['@oxlint/plugins']);
+  return sourceTreeMatches(
+    projectPath,
+    (content) => content.includes('@oxlint/plugins'),
+    // Nested non-workspace packages (examples, fixtures) resolve the root's
+    // dependency by walking up, so they must be scanned before it is deleted.
+    true,
+  );
 }
 
 /**

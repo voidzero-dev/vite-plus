@@ -27,6 +27,7 @@ import {
   findDeclaredSpec,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
   OXLINT_PLUGIN_API_PACKAGES,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
@@ -201,6 +202,14 @@ export function rewritePackageJson(
   // preserves several forms. The deletion therefore happens AFTER the rewrite,
   // in `dropDeadOxlintPluginsDependency`, where the question is simply whether
   // anything still names the package.
+  //
+  // The `vite-plus` edge is still decided here, though. A leaf whose only
+  // migration signal is this dependency will have its imports repointed at
+  // `vite-plus/lint/plugins`, so it needs a direct `vite-plus` edge to resolve
+  // them under an isolated layout such as Yarn PnP.
+  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] && !ownsOxlintApi) {
+    needVitePlus = true;
+  }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
