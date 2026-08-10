@@ -48,12 +48,3 @@ pub async fn execute_global(
     full_args.extend(args.iter().cloned());
     executor.delegate_to_global_cli(&cwd, &full_args).await
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_delegate_command_module_exists() {
-        // Basic test to ensure the module compiles
-        assert!(true);
-    }
-}
