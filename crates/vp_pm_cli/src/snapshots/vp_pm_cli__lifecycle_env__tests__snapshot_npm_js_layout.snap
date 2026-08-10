@@ -1,0 +1,10 @@
+---
+source: crates/vp_pm_cli/src/lifecycle_env.rs
+expression: "render_lifecycle_stamp(PackageManagerType::Npm, \"10.9.8\", &[\"npm-cli.js\"])"
+---
+npm 10.9.8
+npm_execpath=[INSTALL_DIR]/bin/npm-cli.js
+npm_config_user_agent=npm/10.9.8 node/v22.23.1 [platform] [arch] workspaces/false
+INIT_CWD=[INIT_CWD]
+npm_node_execpath=[NODE]
+NODE=[NODE]

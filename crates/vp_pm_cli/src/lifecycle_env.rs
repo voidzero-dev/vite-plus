@@ -375,4 +375,135 @@ mod tests {
         assert_eq!(node_arch("aarch64"), "arm64");
         assert_eq!(node_arch("powerpc"), "ppc");
     }
+
+    fn native_pnpm_bin_name() -> &'static str {
+        if cfg!(windows) { "pnpm.native.exe" } else { "pnpm.native" }
+    }
+
+    /// Render the session lifecycle stamp for a fixture install layout as
+    /// snapshot-stable text: machine- and platform-dependent values (tempdir,
+    /// path separators, `.exe`/`.cmd` suffixes, the user-agent platform/arch
+    /// tail) become placeholders. A regression of voidzero-dev/vite-plus#2317 —
+    /// scripts spawned without the package-manager lifecycle env — empties or
+    /// changes the stamp and fails the snapshot.
+    fn render_lifecycle_stamp(
+        package_manager_type: PackageManagerType,
+        version: &str,
+        bin_entries: &[&str],
+    ) -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let install_dir = dir.path().join("pm");
+        for entry in bin_entries {
+            write_file(&install_dir.join("bin").join(entry));
+        }
+        let pm = package_manager(package_manager_type, version, &install_dir);
+
+        let vars = pm.lifecycle_env_vars(&context(Some("v22.23.1")));
+        let mut rendered = vt_str::format!("{package_manager_type} {version}").to_string();
+        for (key, value) in &vars {
+            rendered.push_str(&vt_str::format!("\n{key}={}", value.to_string_lossy()));
+        }
+
+        use cow_utils::CowUtils;
+        let install_dir = install_dir.as_os_str().to_string_lossy();
+        let init_cwd = project_dir();
+        let init_cwd = init_cwd.as_path().as_os_str().to_string_lossy();
+        let node = node_path();
+        let node = node.as_os_str().to_string_lossy();
+        let platform_arch =
+            vt_str::format!("{} {}", node_platform(env::consts::OS), node_arch(env::consts::ARCH))
+                .to_string();
+        rendered
+            .cow_replace(install_dir.as_ref(), "[INSTALL_DIR]")
+            .cow_replace(init_cwd.as_ref(), "[INIT_CWD]")
+            .cow_replace(node.as_ref(), "[NODE]")
+            .cow_replace("pnpm.native.exe", "pnpm.native")
+            .cow_replace("pnpm.cmd", "pnpm")
+            .cow_replace('\\', "/")
+            .cow_replace(&platform_arch, "[platform] [arch]")
+            .into_owned()
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_pnpm_js_layout() {
+        insta::assert_snapshot!(render_lifecycle_stamp(
+            PackageManagerType::Pnpm,
+            "11.20.0",
+            &["pnpm.cjs"]
+        ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_pnpm_native_layout() {
+        insta::assert_snapshot!(render_lifecycle_stamp(
+            PackageManagerType::Pnpm,
+            "12.0.0",
+            &[native_pnpm_bin_name()]
+        ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_pnpm_js_entry_preferred_over_native() {
+        insta::assert_snapshot!(render_lifecycle_stamp(
+            PackageManagerType::Pnpm,
+            "12.0.0",
+            &["pnpm.cjs", native_pnpm_bin_name()]
+        ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_pnpm_shim_fallback() {
+        insta::assert_snapshot!(render_lifecycle_stamp(PackageManagerType::Pnpm, "11.20.0", &[]));
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_npm_js_layout() {
+        insta::assert_snapshot!(render_lifecycle_stamp(
+            PackageManagerType::Npm,
+            "10.9.8",
+            &["npm-cli.js"]
+        ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_yarn_js_layout() {
+        insta::assert_snapshot!(render_lifecycle_stamp(
+            PackageManagerType::Yarn,
+            "1.22.22",
+            &["yarn.js"]
+        ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::disallowed_macros,
+        reason = "insta::assert_snapshot! expands to std format! for its failure message"
+    )]
+    fn snapshot_bun_stamps_no_lifecycle_vars() {
+        insta::assert_snapshot!(render_lifecycle_stamp(PackageManagerType::Bun, "1.3.0", &[]));
+    }
 }

@@ -1,0 +1,10 @@
+---
+source: crates/vp_pm_cli/src/lifecycle_env.rs
+expression: "render_lifecycle_stamp(PackageManagerType::Yarn, \"1.22.22\", &[\"yarn.js\"])"
+---
+yarn 1.22.22
+npm_execpath=[INSTALL_DIR]/bin/yarn.js
+npm_config_user_agent=yarn/1.22.22 npm/? node/v22.23.1 [platform] [arch]
+INIT_CWD=[INIT_CWD]
+npm_node_execpath=[NODE]
+NODE=[NODE]
