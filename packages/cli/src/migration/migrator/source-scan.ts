@@ -336,3 +336,27 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
   }
   return modes;
 }
+
+// CommonJS forms that reach the Oxlint plugin API. The rewrite deliberately
+// leaves these alone, because `vite-plus/lint/plugins*` is ESM-only and a
+// rewritten `require()` would fail with ERR_PACKAGE_PATH_NOT_EXPORTED. A
+// project that still has one therefore needs its direct `@oxlint/plugins`
+// dependency: under pnpm's strict layout the transitive copy inside
+// `vite-plus` is not resolvable from the plugin file.
+const OXLINT_PLUGIN_API_CJS_HINTS = [
+  "require('@oxlint/plugins')",
+  'require("@oxlint/plugins")',
+  "require('oxlint/plugins-dev')",
+  'require("oxlint/plugins-dev")',
+] as const;
+
+/**
+ * True when the source tree still reaches the Oxlint plugin API through a
+ * CommonJS form that the import rewrite does not touch.
+ *
+ * Used to decide whether the dead-weight `@oxlint/plugins` devDependency is in
+ * fact still load-bearing.
+ */
+export function sourceTreeRequiresOxlintPluginApi(projectPath: string): boolean {
+  return sourceTreeReferencesAny(projectPath, OXLINT_PLUGIN_API_CJS_HINTS);
+}

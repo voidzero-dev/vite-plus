@@ -195,6 +195,12 @@ function importedName(specifier: ESTree.ImportSpecifier): string | undefined {
  * rewrite.
  */
 function importsOxlintPluginApi(node: ESTree.ImportDeclaration): boolean {
+  // A default or namespace binding disqualifies the statement outright.
+  // `vite-plus/lint/plugins` has no default export, so redirecting
+  // `import oxlint, { defineRule } from 'oxlint'` would leave the file invalid.
+  if (node.specifiers.some((specifier) => specifier.type !== 'ImportSpecifier')) {
+    return false;
+  }
   const named = node.specifiers.filter(
     (specifier): specifier is ESTree.ImportSpecifier => specifier.type === 'ImportSpecifier',
   );
@@ -478,6 +484,16 @@ export const preferVitePlusImportsRule = defineRule({
         );
       },
       TSExternalModuleReference(node) {
+        // `import plugins = require('...')` has require semantics, and the
+        // `vite-plus/lint/*` subpaths are ESM-only, so they are skipped here
+        // for the same reason the migrate rewriter skips `require()`.
+        if (
+          node.expression.type === 'Literal' &&
+          typeof node.expression.value === 'string' &&
+          isOxlintApiSpecifier(node.expression.value)
+        ) {
+          return;
+        }
         maybeReportLiteral(
           context,
           node.expression,

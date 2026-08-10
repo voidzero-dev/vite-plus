@@ -1601,6 +1601,10 @@ fix: $NEW_IMPORT
 /// rewrite replaces the whole specifier, so moving it would strip
 /// `defineConfig` of its module. Splitting the statement is the user's call.
 ///
+/// A statement carrying a default or namespace binding alongside named ones,
+/// such as `import oxlint, { defineRule } from 'oxlint'`, is left alone for the
+/// same reason: `vite-plus/lint/plugins` has no default export.
+///
 /// These forms name no specifier, so the rewrite skips them: namespace imports
 /// (`import * as`), default imports, bare side-effect imports,
 /// `require('oxlint')`, and `import('oxlint')`.
@@ -1740,6 +1744,15 @@ rule:
             has:
               field: name
               regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
+      - not:
+          has:
+            kind: namespace_import
+            stopBy: end
+      - not:
+          has:
+            kind: import_clause
+            has:
+              kind: identifier
 transform:
   NEW_IMPORT:
     replace:
@@ -4104,6 +4117,18 @@ new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#
         // Replacing the specifier would move `defineConfig` to an entry that
         // does not export it. Splitting the statement is the user's call.
         let mixed = r#"import { defineConfig, defineRule } from 'oxlint';"#;
+
+        let result = rewrite_import_content(mixed, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, mixed);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_default_binding_is_left_alone() {
+        // `vite-plus/lint/plugins` has no default export, so redirecting a
+        // statement that carries one would leave the file invalid.
+        let mixed = r#"import oxlint, { defineRule } from 'oxlint';
+import * as everything2, { definePlugin } from 'oxlint';"#;
 
         let result = rewrite_import_content(mixed, &SkipPackages::default()).unwrap();
         assert!(!result.updated);

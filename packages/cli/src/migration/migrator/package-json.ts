@@ -71,6 +71,11 @@ export function rewritePackageJson(
   // one only through source/a shim). An already-installed copy of such a provider
   // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
   providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  // Whether the source tree still reaches the Oxlint plugin API through a
+  // CommonJS `require()`. Those forms survive the import rewrite untouched, so
+  // the direct `@oxlint/plugins` dependency stays load-bearing. Computed by the
+  // caller, which owns the project path (see `sourceTreeRequiresOxlintPluginApi`).
+  requiresOxlintPluginApiCjs = false,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -185,33 +190,50 @@ export function rewritePackageJson(
   const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
     dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
   );
+  // A `dependencies` / `peerDependencies` edge on the Oxlint plugin API marks a
+  // published Oxlint plugin: the API is part of what it ships against, not a
+  // tool it runs. The import rewrite leaves such a package's source on `oxlint`
+  // (`skip_oxlint`), so its manifest edge is preserved too. Stripping it would
+  // leave the source importing a package the manifest no longer declares.
+  //
+  // Both groups are checked, matching `collectOxlintOwnerDirs`. A peer-only
+  // check would preserve the source of a plugin that declares `oxlint` under
+  // `dependencies` while deleting the edge that provides it.
+  const ownsOxlintApi = OXLINT_PLUGIN_API_PACKAGES.some(
+    (name) => pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+  );
   // `@oxlint/plugins` becomes dead weight once the import rewrite points the
-  // authoring API at `vite-plus/lint/plugins`, so drop it. Only from
-  // devDependencies: a `dependencies` / `peerDependencies` edge marks a
-  // published Oxlint plugin, whose consumers supply the API themselves and
-  // whose source the rewrite deliberately leaves alone (`skip_oxlint`).
-  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE]) {
+  // authoring API at `vite-plus/lint/plugins`, so drop it from devDependencies.
+  // Two exceptions: a published plugin owns the API (above), and a CommonJS
+  // `require()` of it survives the rewrite untouched, so the direct dependency
+  // is still the only resolvable copy under pnpm's strict layout.
+  if (
+    pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] &&
+    !ownsOxlintApi &&
+    !requiresOxlintPluginApiCjs
+  ) {
     delete pkg.devDependencies[OXLINT_PLUGINS_PACKAGE];
     needVitePlus = true;
   }
-  // A `peerDependencies` entry on the Oxlint plugin API is a consumer contract,
-  // not a tool this package runs: it says "whoever installs me supplies the
-  // linter". That stays true for a published Oxlint plugin, whose source the
-  // import rewrite deliberately leaves on `oxlint` (`skip_oxlint`). Stripping
-  // the peer would leave the source importing a package the manifest no longer
-  // declares, so the peer entry is preserved.
-  const ownsOxlintApi = OXLINT_PLUGIN_API_PACKAGES.some(
-    (name) => pkg.peerDependencies?.[name] !== undefined,
-  );
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (
         ownsOxlintApi &&
-        dependencyField === 'peerDependencies' &&
+        (dependencyField === 'peerDependencies' || dependencyField === 'dependencies') &&
         (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(name)
       ) {
+        // A `catalog:` reference would dangle once the catalog entry for a
+        // REMOVE_PACKAGES name is dropped, and the next install fails. Resolve
+        // it to the concrete range the catalog currently points at.
+        const current = dependencies?.[name];
+        if (current?.startsWith('catalog:') && dependencies) {
+          const resolved = catalogDependencyResolver?.(current, name);
+          if (resolved) {
+            dependencies[name] = resolved;
+          }
+        }
         continue;
       }
       if (dependencies?.[name]) {

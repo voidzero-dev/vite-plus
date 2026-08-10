@@ -10,6 +10,7 @@ import {
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
   collectOxlintOwnerDirs,
+  sourceTreeRequiresOxlintPluginApi,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
@@ -80,6 +81,7 @@ export function rewriteStandaloneProject(
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
   const oxlintOwnerDirs = collectOxlintOwnerDirs(projectPath, workspaceInfo.packages);
+  const requiresOxlintPluginApiCjs = sourceTreeRequiresOxlintPluginApi(projectPath);
   // Source-tree scan signals are computed once here and reused below (and inside
   // projectUsesVitestDirectly / collectInjectedProviderNames) so the source tree
   // is traversed once each instead of repeatedly. They do not depend on
@@ -253,6 +255,7 @@ export function rewriteStandaloneProject(
       retainedVitestModule,
       requiredVitestPeer,
       providerCatalogAdditions,
+      requiresOxlintPluginApiCjs,
     );
 
     // ensure vite-plus is in devDependencies — but only when it isn't already a
@@ -564,6 +567,7 @@ export function rewriteMonorepoProject(
       retainedVitestModule,
       requiredVitestPeer,
       providerCatalogAdditions,
+      sourceTreeRequiresOxlintPluginApi(projectPath),
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own

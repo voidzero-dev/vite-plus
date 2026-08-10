@@ -146,6 +146,19 @@ new RuleTester({
     // A statement that mixes the two surfaces stays put: the autofix replaces
     // the whole specifier, and vite-plus/lint/plugins exports no defineConfig.
     `import { defineConfig, defineRule } from 'oxlint'`,
+    // A default or namespace binding disqualifies the statement too:
+    // vite-plus/lint/plugins has no default export.
+    `import oxlint, { defineRule } from 'oxlint'`,
+    // `import x = require(...)` has require semantics, and the vite-plus lint
+    // subpaths are ESM-only.
+    {
+      code: `import plugins = require('@oxlint/plugins')`,
+      filename: 'plugin.cts',
+    },
+    {
+      code: `import tester = require('oxlint/plugins-dev')`,
+      filename: 'plugin.cts',
+    },
     // A published Oxlint plugin keeps resolving the API from its own peer.
     {
       code: `import { defineRule } from '@oxlint/plugins'`,
