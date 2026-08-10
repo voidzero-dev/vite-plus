@@ -1,20 +1,21 @@
 name: Register preview build
 
-# TRUSTED LEG. Publishes the artifact built by "Publish preview build" to the
-# registry bridge, then comments on the PR.
+# PUBLISHING WORKFLOW. Takes the artifact built by "Publish preview build",
+# publishes it to the registry bridge, and comments on the PR. It is the only
+# place a bridge credential exists.
 #
-# Why a second workflow: GitHub denies fork pull_request runs both secrets and
+# Why it is separate: GitHub denies fork pull_request runs both secrets and
 # `id-token: write`, so a fork PR cannot authenticate to the bridge from the
-# build leg. A workflow_run workflow executes the file from the DEFAULT BRANCH
-# in base-repo context, so it can mint an OIDC token no matter where the PR came
-# from. There is no variant of this that keeps the publish in the build leg.
+# build workflow. A workflow_run workflow runs the file from the DEFAULT BRANCH
+# in base-repo context, so it can mint an OIDC token wherever the PR came from.
+# There is no variant of this that keeps the publish in the build workflow.
 # See rfcs/0002-zero-trust-github-oidc-publishing.md in
 # voidzero-dev/pkg-pr-registry-bridge.
 #
-# What is NOT a boundary: the `preview-build` label check in the build leg. On
-# pull_request events GitHub runs the workflow file from the merge ref, so a PR
-# author can edit that file to delete the check, or add another workflow with a
-# matching `name:` to trigger this one.
+# What is NOT a boundary: the `preview-build` label check in the build workflow.
+# On pull_request events GitHub runs the workflow file from the merge ref, so a
+# PR author can edit that file to delete the check, or add another workflow with
+# a matching `name:` to trigger this one.
 #
 # What IS load-bearing, and what a reviewer must not remove:
 #   - `authorize` re-derives authorization from the API and fails closed, which
@@ -32,7 +33,7 @@ name: Register preview build
 # controls that answer it.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
-    # Matched by workflow NAME, so renaming the build leg silently stops preview
+    # Matched by workflow NAME, so renaming the build workflow silently stops
     # publishing. The `workflow_run.path` check in `authorize` is the durable
     # identity; this filter only avoids queueing a skipped run per workflow.
     workflows: ['Publish preview build']
@@ -79,28 +80,58 @@ jobs:
         id: check
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         with:
           script: |
             const headSha = process.env.HEAD_SHA;
             const { owner, repo } = context.repo;
 
-            // Resolve the PR from the commit. workflow_run.pull_requests is
-            // empty for fork PRs, which is why this goes to the API.
-            const pulls = await github.paginate(
-              github.rest.repos.listPullRequestsAssociatedWithCommit,
-              { owner, repo, commit_sha: headSha },
-            );
+            // Resolve the PR by its HEAD BRANCH, not by commit association.
+            //
+            // This used listPullRequestsAssociatedWithCommit, which returns
+            // EMPTY for a fork PR's head commit -- the exact case this workflow
+            // exists for -- while working correctly for same-repo PRs. So it
+            // looked right until the first fork PR arrived (#2391) and failed
+            // with "no open PR has head <sha>" for a PR that was open with
+            // precisely that head. `workflow_run.pull_requests` is also empty
+            // for forks, which is what sent me to the commit endpoint in the
+            // first place; both are fork-blind.
+            //
+            // head_repository.owner.login and head_branch are GitHub-signed
+            // payload fields, so this stays as trustworthy as the sha.
+            const headOwner = process.env.HEAD_OWNER;
+            const headBranch = process.env.HEAD_BRANCH;
+            if (!headOwner || !headBranch) {
+              core.setFailed('workflow_run payload has no head repository or branch');
+              return;
+            }
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              head: `${headOwner}:${headBranch}`,
+            });
 
-            const candidates = pulls.filter(
-              (p) =>
-                p.state === 'open' &&
-                p.head.sha === headSha &&
-                p.base.repo.full_name === `${owner}/${repo}`,
+            const forBranch = pulls.filter(
+              (p) => p.state === 'open' && p.base.repo.full_name === `${owner}/${repo}`,
             );
+            if (forBranch.length === 0) {
+              core.setFailed(
+                `no open PR of ${owner}/${repo} from ${headOwner}:${headBranch}; refusing to publish`,
+              );
+              return;
+            }
+            // Separated from the branch lookup so the message says which of the
+            // two happened: no such PR, or the PR moved on since this build.
+            const candidates = forBranch.filter((p) => p.head.sha === headSha);
             if (candidates.length === 0) {
               core.setFailed(
-                `no open PR of ${owner}/${repo} has head ${headSha}; refusing to publish`,
+                `PR ${forBranch.map((p) => `#${p.number}`).join(', ')} for ` +
+                  `${headOwner}:${headBranch} now points at ` +
+                  `${forBranch[0].head.sha.slice(0, 7)}, but this run built ` +
+                  `${headSha.slice(0, 7)}; re-apply the label to build the current head`,
               );
               return;
             }
@@ -122,7 +153,7 @@ jobs:
 
             // The label is applied by a maintainer and cannot be set from a
             // fork, which is what makes it the consent step. Read it fresh
-            // here rather than trusting the build leg's own check.
+            // here rather than trusting the build workflow's own check.
             const labels = pr.labels.map((l) => l.name);
             if (!labels.includes('preview-build')) {
               core.setFailed(
@@ -131,14 +162,14 @@ jobs:
               return;
             }
 
-            // The build leg triggers on EVERY `labeled` event but its jobs only
+            // The build workflow triggers on EVERY `labeled` event but its jobs
             // run for `preview-build`, so an unrelated label produces a run in
             // which everything skips — and an all-skipped run still concludes
             // "success". The PR legitimately still carries the label, so every
             // check above passes and this would queue an environment approval
             // for a run that built nothing, which could only end in a failed
             // download. Requiring the artifact is what separates "built
-            // something" from "did nothing", and it also catches a build leg
+            // something" from "did nothing", and it also catches a build workflow
             // that succeeded without uploading.
             //
             // Not a failure: adding an unrelated label to a labeled PR is a
@@ -424,10 +455,6 @@ jobs:
           tags: ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
           build-args: |
             VP_PR_VERSION=${{ needs.authorize.outputs.pr }}
-          # The Dockerfile always comes from the default branch, so its apt layer
-          # is identical across previews. Only the final install layer varies.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           # Single-manifest image (no attestation index): simpler for consumers
           # and lets the comment job read the size via `docker manifest inspect`.
           provenance: false
