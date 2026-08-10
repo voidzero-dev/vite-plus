@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <dialog
       ref="dialogEl"
-      class="m-auto w-[min(40rem,calc(100vw-2rem))] max-h-[min(80vh,36rem)] rounded-xl border border-stroke bg-white p-0 text-primary shadow-xl backdrop:bg-black/40 dark:border-nickel dark:bg-slate dark:text-white"
+      class="m-auto w-[min(48rem,calc(100vw-2rem))] max-h-[min(80vh,36rem)] rounded-xl border border-stroke bg-white p-0 text-primary shadow-xl backdrop:bg-black/40 dark:border-nickel dark:bg-slate dark:text-white"
       :aria-labelledby="titleId"
       @click="onDialogClick"
     >
