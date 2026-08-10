@@ -1,0 +1,29 @@
+crates/vp_migration/src/import_rewriter.rs
+  s_09c28b62987691::t_f0a4a8d6e6eb94 1604-1607,1747-1755,4053-4064
+packages/cli/src/__tests__/oxlint-plugin.spec.ts
+  s_09c28b62987691::t_6d63588b9cf7aa 149-161
+packages/cli/src/migration/migrator/orchestrators.ts
+  s_09c28b62987691::t_106ad5dccedef3 13,83,258,570
+packages/cli/src/migration/migrator/package-json.ts
+  s_09c28b62987691::t_7916cd05bc0b37 74-78,193-204,206-214,224,227-236
+packages/cli/src/migration/migrator/source-scan.ts
+  s_09c28b62987691::t_59d27a546f71c3 339-362
+packages/cli/src/oxlint-plugin.ts
+  s_09c28b62987691::t_6e3e5855671978 198-203,487-496
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4f1f9a75781c8e8a92536f432911fc37b9682b8a",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
