@@ -89,18 +89,33 @@ jobs:
               { owner, repo, commit_sha: headSha },
             );
 
-            const pr = pulls.find(
+            const candidates = pulls.filter(
               (p) =>
                 p.state === 'open' &&
                 p.head.sha === headSha &&
                 p.base.repo.full_name === `${owner}/${repo}`,
             );
-            if (!pr) {
+            if (candidates.length === 0) {
               core.setFailed(
                 `no open PR of ${owner}/${repo} has head ${headSha}; refusing to publish`,
               );
               return;
             }
+            // More than one open PR can share a head commit (the same branch
+            // opened against two bases, for instance). The workflow_run payload
+            // does not say which PR caused the run, and `pull_requests` is empty
+            // for forks, so there is no way to pick the right one. Taking the
+            // first would let an UNLABELED PR's run borrow a labeled PR's
+            // authorization and publish under that PR's tag, so refuse instead.
+            if (candidates.length > 1) {
+              core.setFailed(
+                `head ${headSha} is the head of ${candidates.length} open PRs (` +
+                  candidates.map((p) => `#${p.number}`).join(', ') +
+                  '); cannot tell which triggered this run, refusing to publish',
+              );
+              return;
+            }
+            const pr = candidates[0];
 
             // The label is applied by a maintainer and cannot be set from a
             // fork, which is what makes it the consent step. Read it fresh

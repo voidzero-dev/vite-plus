@@ -181,8 +181,12 @@ jobs:
           # A silently empty artifact would make the trusted leg fail with a
           # confusing "no packed tarballs" instead of failing here.
           if-no-files-found: error
-          # Consumed minutes later by the workflow_run job; no reason to keep it.
-          retention-days: 1
+          # Must outlive the approval wait, not just the run. The trusted leg's
+          # publish job is gated on a required-reviewer environment, and GitHub
+          # keeps a pending deployment open far longer than a day, so a
+          # retention of 1 would let the artifact expire out from under an
+          # approval given the next morning.
+          retention-days: 7
           # The payload is already-gzipped .tgz files, so re-deflating them costs
           # time for no size gain.
           compression-level: 0
