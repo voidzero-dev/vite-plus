@@ -396,7 +396,13 @@ export function dropDeadOxlintPluginsDependency(
   for (const dir of dirs) {
     const packageJsonPath = path.join(dir, 'package.json');
     const pkg = readPackageJsonIfExists(packageJsonPath);
-    if (!pkg?.devDependencies?.[OXLINT_PLUGINS_PACKAGE]) {
+    if (!pkg) {
+      continue;
+    }
+    const declaredIn = (['devDependencies', 'optionalDependencies'] as const).filter(
+      (field) => pkg?.[field]?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
+    );
+    if (declaredIn.length === 0) {
       continue;
     }
     const ownsApi = OXLINT_PLUGIN_API_PACKAGES.some(
@@ -406,12 +412,18 @@ export function dropDeadOxlintPluginsDependency(
     if (ownsApi || sourceTreeReferencesOxlintPluginsPackage(dir)) {
       continue;
     }
-    editJsonFile<{ devDependencies?: Record<string, string> }>(packageJsonPath, (json) => {
-      if (!json.devDependencies?.[OXLINT_PLUGINS_PACKAGE]) {
-        return undefined;
+    editJsonFile<{
+      devDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+    }>(packageJsonPath, (json) => {
+      let changed = false;
+      for (const field of declaredIn) {
+        if (json[field]?.[OXLINT_PLUGINS_PACKAGE]) {
+          delete json[field][OXLINT_PLUGINS_PACKAGE];
+          changed = true;
+        }
       }
-      delete json.devDependencies[OXLINT_PLUGINS_PACKAGE];
-      return json;
+      return changed ? json : undefined;
     });
   }
 }

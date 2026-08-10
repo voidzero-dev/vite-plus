@@ -207,7 +207,13 @@ export function rewritePackageJson(
   // migration signal is this dependency will have its imports repointed at
   // `vite-plus/lint/plugins`, so it needs a direct `vite-plus` edge to resolve
   // them under an isolated layout such as Yarn PnP.
-  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] && !ownsOxlintApi) {
+  // An optional install edge provisions the API the same way a dev one does,
+  // so it is the same signal.
+  if (
+    (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+      pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined) &&
+    !ownsOxlintApi
+  ) {
     needVitePlus = true;
   }
   // remove packages that are replaced with vite-plus
