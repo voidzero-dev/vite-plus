@@ -1,0 +1,51 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/snapshots.toml
+  s_09c28b62987691::t_1d709ebf6b670a 14
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_js_plugin_imports/snapshots/migration_oxlint_js_plugin_imports.md
+  s_09c28b62987691::t_5e6d7cd6e6d2b2 17
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_published_plugin/lint/index.js
+  s_09c28b62987691::t_99f578c345acef 1-14
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_published_plugin/package.json
+  s_09c28b62987691::t_143c001dfa1761 1-13
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_published_plugin/snapshots.toml
+  s_09c28b62987691::t_b8fd73c6562cc7 1-20
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlint_published_plugin/snapshots/migration_oxlint_published_plugin.md
+  s_09c28b62987691::t_a715b33b298bcb 1-63
+crates/vp_migration/src/import_rewriter.rs
+  s_09c28b62987691::t_8df178504ea42a 2,1599-1603,1609-1612,1732-1742,2160,2165-2175,2390-2394,2401,2403-2409,3374-3377,3415-3418,4029-4062
+packages/cli/binding/index.d.cts
+  s_09c28b62987691::t_7bd5a01c0bd4b3 3624
+packages/cli/binding/src/migration.rs
+  s_09c28b62987691::t_42359fee78d925 293,299-303
+packages/cli/src/__tests__/fixtures/oxlint-plugin-package/package.json
+  s_09c28b62987691::t_92e374e6a3fefe 1-7
+packages/cli/src/__tests__/fixtures/oxlint-plugin-package/rule.ts
+  s_09c28b62987691::t_a4a90e3a954b26 1
+packages/cli/src/__tests__/oxlint-plugin.spec.ts
+  s_09c28b62987691::t_19be1d8b64c83f 23-29,146-175
+packages/cli/src/migration/migrator/orchestrators.ts
+  s_09c28b62987691::t_37ebc2af535410 12,79-81,340,360-362,473
+packages/cli/src/migration/migrator/package-json.ts
+  s_09c28b62987691::t_598997dd7d40ca 30-31,188-205,209-216
+packages/cli/src/migration/migrator/shared.ts
+  s_09c28b62987691::t_24a380c657505b 267-304
+packages/cli/src/migration/migrator/vite-config.ts
+  s_09c28b62987691::t_a7c65be0c0496e 525-528,530
+packages/cli/src/oxlint-plugin.ts
+  s_09c28b62987691::t_a9dc2bce978357 39-51,185-187,189-193,198-207,275-337,352-355,361,378-382,396-400,405-407,427,432,435-442,445-451,454-460,463-469,472-478,481-487,497-498,502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "43a9b870edb206da22a2d5250c9ae859e4121a17",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
