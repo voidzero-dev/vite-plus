@@ -11,7 +11,9 @@ on:
   workflow_dispatch:
 
 # Shared with the deploy-docs job in release.yml so production deploys
-# serialize across both entry paths.
+# serialize across both entry paths. GitHub keeps only the newest pending run
+# in the group (a queued deploy replaces a pending one), so production
+# converges to the newest queued content; the running deploy always completes.
 concurrency:
   group: deploy-docs
   cancel-in-progress: false

@@ -225,7 +225,9 @@ jobs:
       needs.check.outputs.version_changed == 'true' &&
       !contains(needs.check.outputs.version, '-')
     # Shared with deploy-docs.yml so production deploys serialize across both
-    # entry paths.
+    # entry paths. Only the newest pending run survives in the group; if this
+    # job's pending run is replaced by a manual dispatch, the canceled job
+    # holds back discord-notify and the deploy must be re-run.
     concurrency:
       group: deploy-docs
       cancel-in-progress: false

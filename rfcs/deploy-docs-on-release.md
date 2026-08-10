@@ -132,6 +132,12 @@ deploy-docs:
   commit. The deployed site matches the released version.
 - The job-level `deploy-docs` concurrency group is shared with
   `deploy-docs.yml`, so production deploys serialize across both entry paths.
+- GitHub keeps one pending run per concurrency group: a newer queued deploy
+  replaces a pending one, while the running deploy always completes. So
+  production converges to the newest queued deploy. If a release's pending
+  deploy is the one replaced, the canceled job shows in the release run and
+  holds back `discord-notify`; re-run it if the replacing deploy carried
+  older content.
 - `needs: [check, Release]` runs the deploy once npm and the GitHub release are
   out, in parallel with `publish-docker`. Docs do not depend on the image.
 - The `!contains(version, '-')` guard skips prereleases. An alpha publish must
