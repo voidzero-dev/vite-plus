@@ -454,10 +454,6 @@ jobs:
           tags: ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
           build-args: |
             VP_PR_VERSION=${{ needs.authorize.outputs.pr }}
-          # The Dockerfile always comes from the default branch, so its apt layer
-          # is identical across previews. Only the final install layer varies.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           # Single-manifest image (no attestation index): simpler for consumers
           # and lets the comment job read the size via `docker manifest inspect`.
           provenance: false
