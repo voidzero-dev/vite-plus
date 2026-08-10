@@ -1,0 +1,27 @@
+crates/vp_migration/src/import_rewriter.rs
+  s_09c28b62987691::t_4da11644b22929 4143-4156
+packages/cli/package.json
+  s_09c28b62987691::t_c8cb9b5319961d 75-76
+packages/cli/src/__tests__/exports-map.spec.ts
+  s_09c28b62987691::t_343accdb991245 150-158
+packages/cli/src/migration/migrator/source-scan.ts
+  s_09c28b62987691::t_a6aba425402649 346-348,350-361,371-375
+packages/cli/tsdown.config.ts
+  s_09c28b62987691::t_a7408cf47bb8b8 93-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "729e7b3a71fbc3b2c19303e7a8da03df8239f6f7",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
