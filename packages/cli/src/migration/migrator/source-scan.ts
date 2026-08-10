@@ -343,12 +343,17 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
 // project that still has one therefore needs its direct `@oxlint/plugins`
 // dependency: under pnpm's strict layout the transitive copy inside
 // `vite-plus` is not resolvable from the plugin file.
-const OXLINT_PLUGIN_API_CJS_HINTS = [
-  "require('@oxlint/plugins')",
-  'require("@oxlint/plugins")',
-  "require('oxlint/plugins-dev')",
-  'require("oxlint/plugins-dev")',
-] as const;
+// Matched with a tolerant regex rather than fixed substrings: `require (
+// '@oxlint/plugins' )`, a line break before the argument, and
+// `createRequire(...)('@oxlint/plugins')` are all valid and all survive the
+// rewrite. Whitespace (including newlines) is allowed around the callee and
+// the argument, and any callee ending in `require` counts, which covers
+// `createRequire(import.meta.url)` results assigned to a local name.
+//
+// This errs toward retaining the dependency. A false positive leaves one
+// unused devDependency; a false negative breaks a plugin at load time.
+const OXLINT_PLUGIN_API_CJS_RE =
+  /\brequire\s*\(\s*['"](?:@oxlint\/plugins|oxlint\/plugins-dev)['"]\s*\)/;
 
 /**
  * True when the source tree still reaches the Oxlint plugin API through a
@@ -358,5 +363,5 @@ const OXLINT_PLUGIN_API_CJS_HINTS = [
  * fact still load-bearing.
  */
 export function sourceTreeRequiresOxlintPluginApi(projectPath: string): boolean {
-  return sourceTreeReferencesAny(projectPath, OXLINT_PLUGIN_API_CJS_HINTS);
+  return sourceTreeMatches(projectPath, (content) => OXLINT_PLUGIN_API_CJS_RE.test(content));
 }

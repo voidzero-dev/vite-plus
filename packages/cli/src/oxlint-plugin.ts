@@ -399,6 +399,37 @@ function maybeReportLiteral(
  * tell the two surfaces apart. Re-export, `require`, and dynamic `import`
  * statements therefore do not get this rewrite.
  */
+/**
+ * `export { defineRule } from 'oxlint'` → `'vite-plus/lint/plugins'`.
+ *
+ * A named re-export identifies the surface exactly as an import does, so it
+ * follows the same rules. A bare `export * from 'oxlint'` names nothing and is
+ * left alone.
+ */
+function reportLegacyOxlintPluginApiExport(
+  context: Context,
+  node: ESTree.ExportNamedDeclaration,
+  ownsOxlintApi: boolean,
+) {
+  const literal = node.source;
+  if (!literal || literal.value !== OXLINT_PACKAGE || ownsOxlintApi) {
+    return;
+  }
+  const named = node.specifiers;
+  if (named.length === 0) {
+    return;
+  }
+  const allPluginApi = named.every((specifier) => {
+    const local = specifier.local;
+    const name = local.type === 'Identifier' ? local.name : undefined;
+    return name !== undefined && !OXLINT_CONFIG_SURFACE_EXPORTS.has(name);
+  });
+  if (!allPluginApi) {
+    return;
+  }
+  reportSpecifier(context, literal, VITE_PLUS_LINT_PLUGINS);
+}
+
 function reportLegacyOxlintPluginApiImport(
   context: Context,
   node: ESTree.ImportDeclaration,
@@ -464,6 +495,7 @@ export const preferVitePlusImportsRule = defineRule({
           fileIsViteConfig,
           ownsOxlintApi,
         );
+        reportLegacyOxlintPluginApiExport(context, node, ownsOxlintApi);
       },
       ImportExpression(node) {
         maybeReportLiteral(

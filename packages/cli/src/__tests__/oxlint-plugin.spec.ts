@@ -159,6 +159,9 @@ new RuleTester({
       code: `import tester = require('oxlint/plugins-dev')`,
       filename: 'plugin.cts',
     },
+    // `export *` names nothing, and a config-surface re-export is correct.
+    `export * from 'oxlint'`,
+    `export { defineConfig } from 'oxlint'`,
     // A published Oxlint plugin keeps resolving the API from its own peer.
     {
       code: `import { defineRule } from '@oxlint/plugins'`,
@@ -292,6 +295,12 @@ new RuleTester({
       code: `import { defineRule as rule } from "oxlint"`,
       errors: 1,
       output: `import { defineRule as rule } from "vite-plus/lint/plugins"`,
+    },
+    {
+      // A named re-export identifies the surface just as an import does.
+      code: `export { defineRule } from 'oxlint'`,
+      errors: 1,
+      output: `export { defineRule } from 'vite-plus/lint/plugins'`,
     },
     {
       code: `import { page } from '@vitest/browser/context'`,

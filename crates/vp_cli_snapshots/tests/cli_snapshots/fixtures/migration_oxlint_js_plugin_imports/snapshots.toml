@@ -31,7 +31,7 @@ steps = [
     "vpt",
     "print-file",
     "lint/shared-config.ts",
-  ], comment = "the config surface is NOT redirected. vite-plus/lint/plugins has no defineConfig or OxlintOverride", continue-on-failure = true },
+  ], comment = "the config surface is NOT redirected. vite-plus/lint/plugins has no defineConfig or OxlintOverride. KNOWN PRE-EXISTING GAP, wider than this PR: `oxlint` is in REMOVE_PACKAGES, so the migration deletes the dependency while this import survives. Under pnpm strict layout the import then fails to resolve. That predates the plugin-API rewrite, since config-surface imports were never rewritten and `oxlint` was always removed. Recorded so a fix shows up as a snapshot diff", continue-on-failure = true },
   { argv = [
     "vpt",
     "print-file",

@@ -93,7 +93,7 @@ new RuleTester().run('no-foo', noFoo, {
 
 ## `vpt print-file lint/shared-config.ts`
 
-the config surface is NOT redirected. vite-plus/lint/plugins has no defineConfig or OxlintOverride
+the config surface is NOT redirected. vite-plus/lint/plugins has no defineConfig or OxlintOverride. KNOWN PRE-EXISTING GAP, wider than this PR: `oxlint` is in REMOVE_PACKAGES, so the migration deletes the dependency while this import survives. Under pnpm strict layout the import then fails to resolve. That predates the plugin-API rewrite, since config-surface imports were never rewritten and `oxlint` was always removed. Recorded so a fix shows up as a snapshot diff
 
 ```
 import { defineConfig } from 'oxlint';

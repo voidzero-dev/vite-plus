@@ -1605,6 +1605,10 @@ fix: $NEW_IMPORT
 /// such as `import oxlint, { defineRule } from 'oxlint'`, is left alone for the
 /// same reason: `vite-plus/lint/plugins` has no default export.
 ///
+/// A named re-export, `export { defineRule } from 'oxlint'`, names the surface
+/// just as clearly as an import, so it rewrites under the same rules. A bare
+/// `export * from 'oxlint'` names nothing and is left alone.
+///
 /// These forms name no specifier, so the rewrite skips them: namespace imports
 /// (`import * as`), default imports, bare side-effect imports,
 /// `require('oxlint')`, and `import('oxlint')`.
@@ -1723,6 +1727,33 @@ transform:
       source: $STR
       replace: oxlint/plugins-dev
       by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugin-api-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: export_statement
+    all:
+      - has:
+          kind: export_specifier
+          stopBy: end
+      - not:
+          has:
+            kind: export_specifier
+            stopBy: end
+            has:
+              field: name
+              regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint/plugins"
 fix: $NEW_IMPORT
 ---
 id: rewrite-oxlint-plugin-api-import
@@ -4133,6 +4164,53 @@ import * as everything2, { definePlugin } from 'oxlint';"#;
         let result = rewrite_import_content(mixed, &SkipPackages::default()).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, mixed);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_named_reexport() {
+        let barrel = r#"export { defineRule } from 'oxlint';
+export type { Context } from 'oxlint';"#;
+
+        let result = rewrite_import_content(barrel, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"export { defineRule } from 'vite-plus/lint/plugins';
+export type { Context } from 'vite-plus/lint/plugins';"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_config_reexport_is_left_alone() {
+        let barrel = r#"export { defineConfig } from 'oxlint';
+export * from 'oxlint';"#;
+
+        let result = rewrite_import_content(barrel, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, barrel);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_import_equals_is_left_alone() {
+        // Verified against the parser, not assumed: tree-sitter does not treat
+        // `import x = require(...)` as a plain `import_statement` string, so
+        // the ESM rules never see it. Pinned so that stays true.
+        let cjs = r#"import plugins = require('@oxlint/plugins');"#;
+
+        let result = rewrite_import_content(cjs, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, cjs);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_import_type_rewrites() {
+        // A type-position `import(...)` resolves through the shim's re-exported
+        // types, so rewriting it is correct.
+        let ty = r#"type C = import('@oxlint/plugins').Context;"#;
+
+        let result = rewrite_import_content(ty, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"type C = import('vite-plus/lint/plugins').Context;"#);
     }
 
     #[test]
