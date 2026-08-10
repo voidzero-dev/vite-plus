@@ -400,8 +400,10 @@ impl JsExecutor {
         Ok(output)
     }
 
-    /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.
-    fn resolve_local_vite_plus(project_path: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    /// Resolve the local vite-plus package root from the project directory.
+    pub(crate) fn resolve_local_vite_plus_package_dir(
+        project_path: &AbsolutePath,
+    ) -> Option<AbsolutePathBuf> {
         use oxc_resolver::{ResolveOptions, Resolver};
 
         let resolver = Resolver::new(ResolveOptions {
@@ -412,11 +414,17 @@ impl JsExecutor {
         // Resolve vite-plus/package.json from the project directory to find the package root
         let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
         let pkg_dir = resolved.path().parent()?;
+        AbsolutePathBuf::new(pkg_dir.to_path_buf())
+    }
+
+    /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.
+    pub(crate) fn resolve_local_vite_plus(project_path: &AbsolutePath) -> Option<AbsolutePathBuf> {
+        let pkg_dir = Self::resolve_local_vite_plus_package_dir(project_path)?;
         let bin_js = pkg_dir.join("dist").join("bin.js");
 
-        if bin_js.exists() {
+        if bin_js.as_path().exists() {
             tracing::debug!("Found local vite-plus at {:?}", bin_js);
-            AbsolutePathBuf::new(bin_js)
+            Some(bin_js)
         } else {
             tracing::debug!("Local vite-plus found but dist/bin.js missing at {:?}", bin_js);
             None
@@ -426,14 +434,8 @@ impl JsExecutor {
 
 /// Resolve the version of the project-local `vite-plus`, if one is installed.
 fn resolve_local_vite_plus_version(project_path: &AbsolutePath) -> Option<String> {
-    use oxc_resolver::{ResolveOptions, Resolver};
-
-    let resolver = Resolver::new(ResolveOptions {
-        condition_names: vec!["import".into(), "node".into()],
-        ..ResolveOptions::default()
-    });
-    let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
-    read_package_json_version(resolved.path())
+    let package_dir = JsExecutor::resolve_local_vite_plus_package_dir(project_path)?;
+    read_package_json_version(package_dir.join("package.json"))
 }
 
 /// Read the top-level `version` string from a package.json. Returns `None` when

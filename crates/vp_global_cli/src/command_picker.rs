@@ -113,6 +113,12 @@ const COMMANDS: &[CommandEntry] = &[
         append_help: false,
     },
     CommandEntry {
+        label: "toolchain",
+        command: "toolchain",
+        summary: "Show Vite+ tool versions and relationships.",
+        append_help: false,
+    },
+    CommandEntry {
         label: "help",
         command: "help",
         summary: "View all commands and details",

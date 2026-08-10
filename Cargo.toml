@@ -295,6 +295,7 @@ vp_pm_cli_macros = { path = "crates/vp_pm_cli_macros" }
 vp_setup = { path = "crates/vp_setup" }
 vp_shared = { path = "crates/vp_shared" }
 vp_static_config = { path = "crates/vp_static_config" }
+vp_toolchain = { path = "crates/vp_toolchain" }
 vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
 vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }
 vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20" }

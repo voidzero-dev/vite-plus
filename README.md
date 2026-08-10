@@ -23,6 +23,7 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 - **`vp build`:** Build applications for production with Vite + Rolldown
 - **`vp run`:** Run `package.json` scripts and monorepo tasks with caching and dependency-aware scheduling
 - **`vp pack`:** Build libraries for npm publishing or standalone app binaries
+- **`vp toolchain`:** Show the versions of Vite+, Vite, Rolldown, Oxc, and other tools
 - **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
 
 All of this is configured from your project root and works across Vite's framework ecosystem.
@@ -145,6 +146,7 @@ Vite+ automatically wraps your package manager (pnpm, npm, Yarn, or Bun) based o
 
 #### Maintain
 
+- **toolchain** - Show Vite+ tool versions and their relationships
 - **upgrade** - Update `vp` itself to the latest version
 - **implode** - Remove `vp` and all related data
 
@@ -199,7 +201,7 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 vp install -D vite-plus
 ```
 
-You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+Add package-manager overrides so that other packages use the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`. Pin `vitest` to the version from `vp toolchain vitest`. The project and `vp test` then use the same Vitest copy. Without the pin, a dependency or workspace package can install a different Vitest version. The two versions can use separate mocks, `expect` functions, and runner states:
 
 ```json
 "overrides": {

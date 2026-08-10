@@ -26,6 +26,7 @@ Core Commands:
   config         Configure hooks and agent integration
   hooks          Manage the Git hook dispatcher
   staged         Run linters on staged files
+  toolchain      Show Vite+ tool versions and relationships
 
 Package Manager Commands:
   install    Install all dependencies, or add packages if package names are provided

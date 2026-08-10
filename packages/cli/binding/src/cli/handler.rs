@@ -100,7 +100,7 @@ impl CommandHandler for VitePlusCommandHandler {
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
-            CLIArgs::PackageManager(_) | CLIArgs::Exec(_) => {
+            CLIArgs::PackageManager(_) | CLIArgs::Exec(_) | CLIArgs::Toolchain(_) => {
                 // PM commands and exec in task scripts run as subprocesses
                 // — no caching, no synthesis through the resolver.
                 Ok(HandledCommand::Synthesized(
