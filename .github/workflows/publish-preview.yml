@@ -1,18 +1,20 @@
 name: Publish preview build
 
-# BUILD LEG (untrusted). Builds a labeled PR and packs its packages into a
-# workflow artifact. It holds no secrets and no OIDC permission, so it is safe
-# to run for a pull request from a fork.
+# BUILD WORKFLOW. Builds a labeled PR and packs its packages into a workflow
+# artifact. It holds no secrets and no OIDC permission, so it is safe to run
+# for a pull request from a fork.
 #
-# The publish itself happens in publish-preview-register.yml, which triggers on
-# this workflow completing and runs in base-repo context. That split exists
-# because GitHub denies fork pull_request runs both secrets and `id-token`, so
-# a fork PR cannot authenticate to the bridge from here at all.
+# Despite the name, it publishes nothing. Publishing happens in
+# publish-preview-register.yml, which triggers when this workflow completes and
+# runs from the default branch. The split exists because GitHub denies fork
+# pull_request runs both secrets and `id-token`, so a fork PR cannot
+# authenticate to the bridge from here at all.
 #
 # The `preview-build` label check below is a convenience gate that saves build
 # minutes. It is NOT the security boundary: on pull_request events GitHub runs
 # the workflow file from the merge ref, so a PR author can edit this file and
-# delete the check. The trusted leg re-establishes authorization from the API.
+# delete the check. publish-preview-register.yml re-establishes authorization
+# from the API.
 #
 # NOTE: the workflow NAME above is what publish-preview-register.yml matches on.
 # Renaming it silently stops preview publishing.
@@ -75,7 +77,8 @@ jobs:
       - build-rust
     # Read-only, and deliberately no `id-token`. Everything that needs a write
     # permission (the sticky comment, the Docker image) moved to the trusted
-    # leg, because fork pull_request runs are denied those permissions anyway.
+    # workflow, because fork pull_request runs are denied those permissions
+    # anyway.
     permissions:
       contents: read
     env:
@@ -149,7 +152,7 @@ jobs:
       # Pack the locally built package directories (the two preview packages
       # and every platform binary) into a workflow artifact. `mode: pack` runs
       # `pnpm pack` and nothing else: no network, no credentials. The trusted
-      # leg validates every archive, rewrites and re-packs it under the commit
+      # workflow validates every archive, rewrites and re-packs it under the commit
       # version, and uploads it.
       #
       # Runs for fork PRs too. That is the point of the split: the old
@@ -160,7 +163,7 @@ jobs:
         with:
           mode: pack
           # The PR head commit, not the merge commit github.sha. Advisory here;
-          # the trusted leg re-derives the version from workflow_run.head_sha.
+          # the publishing workflow re-derives it from workflow_run.head_sha.
           sha: ${{ github.event.pull_request.head.sha }}
           output-dir: bridge-packages
           # The locally built directories to pack. Listed here rather than left
@@ -178,10 +181,10 @@ jobs:
         with:
           name: bridge-packages
           path: bridge-packages
-          # A silently empty artifact would make the trusted leg fail with a
+          # A silently empty artifact would make the publishing workflow fail with a
           # confusing "no packed tarballs" instead of failing here.
           if-no-files-found: error
-          # Must outlive the approval wait, not just the run. The trusted leg's
+          # Must outlive the approval wait, not just the run. The publishing
           # publish job is gated on a required-reviewer environment, and GitHub
           # keeps a pending deployment open far longer than a day, so a
           # retention of 1 would let the artifact expire out from under an
