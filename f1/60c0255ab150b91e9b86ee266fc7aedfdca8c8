@@ -1,0 +1,23 @@
+packages/cli/src/migration/migrator/orchestrators.ts
+  s_09c28b62987691::t_ecf119b737f679 13,342,476
+packages/cli/src/migration/migrator/package-json.ts
+  s_09c28b62987691::t_21f227815d735e 199-203
+packages/cli/src/migration/migrator/source-scan.ts
+  s_09c28b62987691::t_147eda0ce2a032 5,10-11,349-365,368,370-373,375-400
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f160c0255ab150b91e9b86ee266fc7aedfdca8c8",
+  "prompts": {},
+  "sessions": {
+    "s_09c28b62987691": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc6727a3-9847-448f-af7c-6017ef3608ed",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
