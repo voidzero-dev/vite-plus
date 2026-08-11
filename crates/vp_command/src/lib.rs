@@ -545,7 +545,7 @@ mod tests {
                     .err()
                     .unwrap()
                     .to_string()
-                    .contains("could not resolve the full path of program '\"npm-not-exists\"'")
+                    .contains("could not resolve the full path of program 'npm-not-exists'")
             );
         }
     }
