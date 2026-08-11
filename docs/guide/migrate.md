@@ -22,6 +22,9 @@ The positional `PATH` argument is optional.
 
 - If omitted, `vp migrate` migrates the current directory
 - If provided, it migrates that target directory instead
+- For a monorepo, the target must be the workspace root. Vite+ cannot
+  migrate one workspace member, because migration updates the package-manager
+  configuration, the catalogs, and the lockfiles that all members share.
 
 ```bash
 vp migrate
