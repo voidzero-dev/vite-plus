@@ -35,6 +35,7 @@ vt_path = { workspace = true }
 vt_select = { workspace = true }
 vp_shared = { workspace = true }
 vp_static_config = { workspace = true }
+vp_toolchain = { workspace = true }
 vt_str = { workspace = true }
 vt = { workspace = true }
 vt_workspace = { workspace = true }

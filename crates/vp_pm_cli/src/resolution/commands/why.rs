@@ -64,6 +64,24 @@ pub struct WhyArgs {
     pub(crate) pass_through_args: Vec<String>,
 }
 
+impl WhyArgs {
+    pub(crate) fn is_machine_readable(&self) -> bool {
+        self.json
+            || self.parseable
+            || self.pass_through_args.iter().any(|arg| is_machine_readable_arg(arg))
+    }
+}
+
+fn is_machine_readable_arg(arg: &str) -> bool {
+    if matches!(arg, "--json" | "--parseable") {
+        return true;
+    }
+    let Some((flag, value)) = arg.split_once('=') else {
+        return false;
+    };
+    matches!(flag, "--json" | "--parseable") && !value.eq_ignore_ascii_case("false")
+}
+
 impl Resolve<WhyArgs> for Pnpm {
     fn resolve(&self, args: &WhyArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("pnpm");

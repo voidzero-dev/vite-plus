@@ -22,6 +22,11 @@ static DURATION_RE: LazyLock<regex::Regex> =
 static VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b").unwrap()
 });
+static TOOLCHAIN_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b").unwrap()
+});
+static TOOLCHAIN_REVISION_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\b[0-9a-f]{40}\b").unwrap());
 static THREAD_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\d+ threads").unwrap());
 // `vp pack`'s clean step reports how many stale files it removed from dist,
@@ -279,6 +284,15 @@ static START_AT_TIME_RE: LazyLock<regex::Regex> =
 // published-at timestamps in `vp view`) stay verbatim.
 static INSTALLED_DATE_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Installed:\s+)\d{4}-\d{2}-\d{2}").unwrap());
+// The toolchain manifest records the package build time for compiled tools
+// whose Cargo version is only a placeholder. Builds produce a fresh timestamp,
+// so mask it while preserving both the human `built` label and JSON field.
+static TOOLCHAIN_BUILD_TIME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"((?:vite-task \(built |"builtAt":\s*"))\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"#,
+    )
+    .unwrap()
+});
 
 #[expect(
     clippy::disallowed_types,
@@ -398,6 +412,18 @@ pub fn redact_output(
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
+
+    // Toolchain output is generated from the bundled manifest, so every
+    // version and compiled revision changes when that manifest is refreshed.
+    // Detect the command's human, hint, and JSON forms before masking bare
+    // semver values, which remain assertable in other snapshot output.
+    if output.contains("Vite+ toolchain (")
+        || output.contains("through its toolchain.")
+        || output.contains("\"vitePlusVersion\"")
+    {
+        output = TOOLCHAIN_VERSION_RE.replace_all(&output, "<version>").into_owned();
+        output = TOOLCHAIN_REVISION_RE.replace_all(&output, "<revision>").into_owned();
+    }
 
     // Redact bare runtime-tool versions by name context (see TOOL_VERSION_RE)
     output = TOOL_VERSION_RE.replace_all(&output, "$1$2<version>").into_owned();
@@ -532,6 +558,9 @@ pub fn redact_output(
 
     // Mask the calendar-dependent install date in `vp env which` output
     output = INSTALLED_DATE_RE.replace_all(&output, "${1}<date>").into_owned();
+
+    // Mask the generated toolchain build timestamp.
+    output = TOOLCHAIN_BUILD_TIME_RE.replace_all(&output, "${1}<build-time>").into_owned();
 
     // Remove ^C echo that Unix terminal drivers emit when ETX (0x03) is written
     // to the PTY. Windows ConPTY does not echo it.

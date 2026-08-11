@@ -30,32 +30,28 @@ struct LocalVitePlus {
 
 #[derive(Debug, Clone, Copy)]
 struct ToolSpec {
-    display_name: &'static str,
+    id: &'static str,
     package_name: &'static str,
     bundled_version_key: Option<&'static str>,
 }
 
 const TOOL_SPECS: [ToolSpec; 7] = [
     ToolSpec {
-        display_name: "vite",
+        id: "vite",
         package_name: "@voidzero-dev/vite-plus-core",
         bundled_version_key: Some("vite"),
     },
     ToolSpec {
-        display_name: "rolldown",
+        id: "rolldown",
         package_name: "@voidzero-dev/vite-plus-core",
         bundled_version_key: Some("rolldown"),
     },
-    ToolSpec { display_name: "vitest", package_name: "vitest", bundled_version_key: None },
-    ToolSpec { display_name: "oxfmt", package_name: "oxfmt", bundled_version_key: None },
-    ToolSpec { display_name: "oxlint", package_name: "oxlint", bundled_version_key: None },
+    ToolSpec { id: "vitest", package_name: "vitest", bundled_version_key: None },
+    ToolSpec { id: "oxfmt", package_name: "oxfmt", bundled_version_key: None },
+    ToolSpec { id: "oxlint", package_name: "oxlint", bundled_version_key: None },
+    ToolSpec { id: "oxlint-tsgolint", package_name: "oxlint-tsgolint", bundled_version_key: None },
     ToolSpec {
-        display_name: "oxlint-tsgolint",
-        package_name: "oxlint-tsgolint",
-        bundled_version_key: None,
-    },
-    ToolSpec {
-        display_name: "tsdown",
+        id: "tsdown",
         package_name: "@voidzero-dev/vite-plus-core",
         bundled_version_key: Some("tsdown"),
     },
@@ -84,6 +80,12 @@ fn find_local_vite_plus(start: &Path) -> Option<LocalVitePlus> {
     None
 }
 
+fn read_toolchain_manifest(local: &LocalVitePlus) -> Option<vp_toolchain::Manifest> {
+    let manifest_path = local.package_dir.join("dist").join("toolchain.json");
+    let manifest_path = vt_path::AbsolutePath::new(&manifest_path)?;
+    vp_toolchain::load_manifest(manifest_path).ok()
+}
+
 fn resolve_package_json(base_dir: &Path, package_name: &str) -> Option<PackageJson> {
     let mut current = Some(base_dir);
     while let Some(dir) = current {
@@ -96,7 +98,7 @@ fn resolve_package_json(base_dir: &Path, package_name: &str) -> Option<PackageJs
     None
 }
 
-fn resolve_tool_version(local: &LocalVitePlus, tool: ToolSpec) -> Option<String> {
+fn resolve_legacy_tool_version(local: &LocalVitePlus, tool: ToolSpec) -> Option<String> {
     let pkg = resolve_package_json(&local.package_dir, tool.package_name)?;
     if let Some(key) = tool.bundled_version_key
         && let Some(version) = pkg.bundled_versions.get(key)
@@ -104,6 +106,19 @@ fn resolve_tool_version(local: &LocalVitePlus, tool: ToolSpec) -> Option<String>
         return Some(version.clone());
     }
     Some(pkg.version)
+}
+
+fn resolve_tool_version(
+    local: Option<&LocalVitePlus>,
+    manifest: Option<&vp_toolchain::Manifest>,
+    tool: ToolSpec,
+) -> Option<String> {
+    match manifest {
+        Some(manifest) => vp_toolchain::node_by_id(manifest, tool.id)
+            .and_then(|node| node.version.as_deref())
+            .map(str::to_owned),
+        None => local.and_then(|local| resolve_legacy_tool_version(local, tool)),
+    }
 }
 
 fn print_rows(title: &str, rows: &[(&str, String)]) {
@@ -165,12 +180,12 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     );
     println!();
 
+    let manifest = local.as_ref().and_then(read_toolchain_manifest);
     let tool_rows = TOOL_SPECS
         .iter()
         .map(|tool| {
-            let version =
-                local.as_ref().and_then(|local_pkg| resolve_tool_version(local_pkg, *tool));
-            (tool.display_name, format_version(version))
+            let version = resolve_tool_version(local.as_ref(), manifest.as_ref(), *tool);
+            (tool.id, format_version(version))
         })
         .collect::<Vec<_>>();
     print_rows("Tools", &tool_rows);
@@ -216,7 +231,7 @@ mod tests {
     use serial_test::serial;
 
     #[cfg(unix)]
-    use super::{ToolSpec, find_local_vite_plus, resolve_tool_version};
+    use super::{TOOL_SPECS, find_local_vite_plus, read_toolchain_manifest, resolve_tool_version};
     use super::{detect_system_node_version, format_version};
 
     #[cfg(unix)]
@@ -245,7 +260,59 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn resolves_tool_versions_from_pnpm_symlink_layout() {
+    fn resolves_toolchain_manifest_from_pnpm_symlink_layout() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path();
+
+        let pnpm_pkg_dir =
+            project.join("node_modules/.pnpm/vite-plus@1.0.0/node_modules/vite-plus");
+        fs::create_dir_all(pnpm_pkg_dir.join("dist")).unwrap();
+        fs::write(pnpm_pkg_dir.join("package.json"), r#"{"version":"1.0.0"}"#).unwrap();
+        fs::write(
+            pnpm_pkg_dir.join("dist/toolchain.json"),
+            r#"{
+                "schemaVersion": 1,
+                "nodes": [
+                    {
+                        "id": "vite-plus",
+                        "name": "vite-plus",
+                        "version": "1.0.0",
+                        "kind": "package",
+                        "delivery": ["dependency"],
+                        "aliases": []
+                    },
+                    {
+                        "id": "vite",
+                        "name": "vite",
+                        "version": "8.0.0",
+                        "kind": "tool",
+                        "delivery": ["bundled"],
+                        "aliases": []
+                    }
+                ],
+                "edges": []
+            }"#,
+        )
+        .unwrap();
+
+        let node_modules_dir = project.join("node_modules");
+        fs::create_dir_all(&node_modules_dir).unwrap();
+        symlink_dir(
+            Path::new(".pnpm/vite-plus@1.0.0/node_modules/vite-plus"),
+            &node_modules_dir.join("vite-plus"),
+        );
+
+        let local = find_local_vite_plus(project).expect("expected local vite-plus to resolve");
+        let manifest = read_toolchain_manifest(&local).expect("expected manifest to resolve");
+        assert_eq!(
+            resolve_tool_version(Some(&local), Some(&manifest), TOOL_SPECS[0]).as_deref(),
+            Some("8.0.0"),
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolves_legacy_tool_versions_when_manifest_is_missing() {
         let temp = tempfile::tempdir().unwrap();
         let project = temp.path();
 
@@ -271,12 +338,9 @@ mod tests {
         );
 
         let local = find_local_vite_plus(project).expect("expected local vite-plus to resolve");
-        let tool = ToolSpec {
-            display_name: "vite",
-            package_name: "@voidzero-dev/vite-plus-core",
-            bundled_version_key: Some("vite"),
-        };
-        let resolved = resolve_tool_version(&local, tool);
-        assert_eq!(resolved.as_deref(), Some("8.0.0"));
+        assert_eq!(
+            resolve_tool_version(Some(&local), None, TOOL_SPECS[0]).as_deref(),
+            Some("8.0.0"),
+        );
     }
 }
