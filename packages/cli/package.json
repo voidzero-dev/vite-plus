@@ -85,6 +85,10 @@
     "./pack/client": {
       "types": "./dist/pack-client.d.ts"
     },
+    "./toolchain": {
+      "types": "./dist/toolchain.d.ts",
+      "default": "./dist/toolchain.js"
+    },
     "./versions": {
       "types": "./dist/versions.d.ts",
       "default": "./dist/versions.js"

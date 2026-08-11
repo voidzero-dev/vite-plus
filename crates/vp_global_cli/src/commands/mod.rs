@@ -143,6 +143,7 @@ pub mod create;
 pub mod hooks;
 pub mod migrate;
 pub mod staged;
+pub mod toolchain;
 pub mod version;
 
 // Category D: Environment Management

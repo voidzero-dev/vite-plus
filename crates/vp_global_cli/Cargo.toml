@@ -38,6 +38,7 @@ vt_path = { workspace = true }
 vp_command = { workspace = true }
 vp_setup = { workspace = true }
 vp_shared = { workspace = true }
+vp_toolchain = { workspace = true }
 vt_str = { workspace = true }
 vt_workspace = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }

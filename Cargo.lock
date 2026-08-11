@@ -8361,6 +8361,7 @@ dependencies = [
  "vp_pm_cli",
  "vp_shared",
  "vp_static_config",
+ "vp_toolchain",
  "vt",
  "vt_path",
  "vt_select",
@@ -8460,6 +8461,7 @@ dependencies = [
  "vp_pm_cli",
  "vp_setup",
  "vp_shared",
+ "vp_toolchain",
  "vt_path",
  "vt_str",
  "vt_workspace",
@@ -8629,6 +8631,20 @@ dependencies = [
  "serde_json",
  "tempfile",
  "vt_path",
+]
+
+[[package]]
+name = "vp_toolchain"
+version = "0.0.0"
+dependencies = [
+ "pretty_assertions",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "vt_path",
+ "vt_str",
 ]
 
 [[package]]

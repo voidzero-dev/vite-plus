@@ -74,6 +74,10 @@ pub struct CliOptions {
     pub cwd: Option<String>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
+    /// Generated toolchain manifest shipped with this vite-plus package.
+    pub toolchain_manifest_path: String,
+    /// Root directory of this vite-plus package.
+    pub vite_plus_package_path: String,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
 }
@@ -173,6 +177,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let doc_tsf = options.doc;
     let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
     let args = options.args;
+    let toolchain_manifest_path = options.toolchain_manifest_path;
+    let vite_plus_package_path = options.vite_plus_package_path;
 
     // Create a channel to receive the result from the worker thread
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -189,6 +195,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             test: create_resolver(test_tsf, "Failed to resolve test command"),
             pack: create_resolver(pack_tsf, "Failed to resolve pack command"),
             doc: create_resolver(doc_tsf, "Failed to resolve doc command"),
+            toolchain_manifest_path,
+            vite_plus_package_path,
             resolve_universal_vite_config: create_vite_config_resolver(
                 resolve_universal_vite_config_tsf,
             ),

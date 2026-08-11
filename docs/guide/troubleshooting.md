@@ -15,6 +15,9 @@ Vite+ expects modern upstream tool versions.
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 
+Run `vp toolchain` to show the versions from the local Vite+ package.
+Run `vp toolchain --global` to show the versions from the global Vite+ release.
+
 ## `vp check` does not run type-aware lint rules or type checks
 
 - Confirm that `lint.options.typeAware` and `lint.options.typeCheck` are enabled in `vite.config.ts`
@@ -111,7 +114,7 @@ If you are stuck, please reach out:
 
 When reporting a problem, please include:
 
-- The full output of `vp env current` and `vp --version`
+- The full output of `vp env current`, `vp --version`, and `vp toolchain`
 - The package manager used by the project
 - The exact steps needed to reproduce the problem and your `vite.config.ts`
 - A minimal reproduction repository or runnable sandbox

@@ -19,7 +19,7 @@ mod shim;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::npm_registry;
-pub use dispatch::dispatch;
+pub use dispatch::{DispatchResult, dispatch, dispatch_with_metadata};
 pub use error::Error;
 pub use package_manager::{
     PackageManager, PackageManagerBuilder, PackageManagerResolution, PackageManagerSource,
