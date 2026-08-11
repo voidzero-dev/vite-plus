@@ -653,6 +653,12 @@ impl CaseHome {
         env.insert("TERM".into(), "xterm-256color".into());
         env.insert("VP_CLI_TEST".into(), "1".into());
         env.insert("NODE_NO_WARNINGS".into(), "1".into());
+        // Cap download attempts far below vp's 10-minute default: a stalled
+        // runtime or package-manager download must fail fast enough for vp's
+        // retry (3 attempts, exponential backoff) to finish inside the 60s
+        // step budget. Healthy CI downloads take ~1s; Windows runners stall
+        // intermittently (see command_cache_bun in the #2390 stall class).
+        env.insert("VP_DOWNLOAD_TIMEOUT".into(), "30".into());
         env.insert("VP_HOME".into(), self.vp_home().into_os_string());
         if cfg!(windows) {
             env.insert("USERPROFILE".into(), self.home.clone().into_os_string());

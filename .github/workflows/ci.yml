@@ -970,6 +970,12 @@ jobs:
         run: |
           "$HOME/.vite-plus/bin/vp" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
+          # Warm the Node.js version index cache (~1h TTL) into the runtime
+          # seed. Cases without a version pin resolve "latest LTS" before
+          # their first output, and a stalled nodejs.org fetch there times
+          # out the 60s step budget (same stall class as #2390).
+          "$HOME/.vite-plus/bin/vp" env list-remote > /dev/null \
+            || echo "index prewarm failed; cases will fetch the version index on demand"
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install chromium
@@ -1059,6 +1065,12 @@ jobs:
         run: |
           "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
+          # Warm the Node.js version index cache (~1h TTL) into the runtime
+          # seed. Cases without a version pin resolve "latest LTS" before
+          # their first output, and a stalled nodejs.org fetch there times
+          # out the 60s step budget (same stall class as #2390).
+          "$USERPROFILE/.vite-plus/bin/vp.exe" env list-remote > /dev/null \
+            || echo "index prewarm failed; cases will fetch the version index on demand"
 
       - name: Install Playwright Chromium
         shell: bash
