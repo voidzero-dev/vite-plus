@@ -1,4 +1,7 @@
-use std::{path::Path, time::Duration};
+use std::{
+    path::{Component, Path},
+    time::Duration,
+};
 
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
@@ -294,11 +297,63 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     Ok(())
 }
 
+/// Extract exactly one regular file from a tgz archive.
+///
+/// Unlike [`extract_tgz`], this function never writes an archive-controlled
+/// path or link. Use it when an integrity pin covers one file inside an
+/// unauthenticated archive.
+fn extract_tgz_file(
+    tgz_file: impl AsRef<Path>,
+    archive_file: impl AsRef<Path>,
+    target_file: impl AsRef<Path>,
+) -> Result<(), Error> {
+    let tgz_file = tgz_file.as_ref();
+    let archive_file = archive_file.as_ref();
+    let target_file = target_file.as_ref();
+    tracing::debug!("Extract {:?} from tgz {:?} to {:?}", archive_file, tgz_file, target_file);
+
+    let file = std::fs::File::open(tgz_file)?;
+    let tar_stream = GzDecoder::new(file);
+    let mut archive = Archive::new(tar_stream);
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        if entry.path()?.as_ref() != archive_file {
+            continue;
+        }
+        if !entry.header().entry_type().is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "package archive CLI entry is not a regular file",
+            )
+            .into());
+        }
+
+        if let Some(parent) = target_file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut output =
+            std::fs::OpenOptions::new().write(true).create_new(true).open(target_file)?;
+        std::io::copy(&mut entry, &mut output)?;
+        tracing::debug!("Extract tgz file finished");
+        return Ok(());
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "package archive does not contain the expected CLI entry",
+    )
+    .into())
+}
+
 /// Download a tgz file from a URL and extract it to a target directory with optional hash verification.
 ///
 /// # Arguments
 /// * `url` - The URL of the tgz file to download.
 /// * `target_dir` - The directory to extract the tgz file to.
+/// * `archive_file` - Optional single entry to extract, as a relative path of
+///   normal components. vp ignores every other entry, and `expected_hash`
+///   covers that one file instead of the tgz.
 /// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
 /// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
 ///
@@ -308,16 +363,23 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
 pub(crate) async fn download_and_extract_tgz_with_hash(
     url: &str,
     target_dir: impl AsRef<Path>,
+    archive_file: Option<&Path>,
     expected_hash: Option<&str>,
     message: Option<&str>,
 ) -> Result<(), Error> {
+    if let Some(archive_file) = archive_file
+        && (archive_file.as_os_str().is_empty()
+            || !archive_file
+                .components()
+                .all(|component| matches!(component, Component::Normal(_))))
+    {
+        return Err(Error::InvalidArgument(
+            "archive file path must be a safe relative path".into(),
+        ));
+    }
+
     let target_dir = target_dir.as_ref().to_path_buf();
-    tracing::debug!(
-        "Start download and extract {} to {:?}, expected hash: {:?}",
-        url,
-        target_dir,
-        expected_hash
-    );
+    tracing::debug!("Start download and extract {} to {:?}", url, target_dir);
 
     // This is the single retry layer for the whole download → verify → extract
     // pipeline: each attempt does one download (no nested retry — see
@@ -327,7 +389,7 @@ pub(crate) async fn download_and_extract_tgz_with_hash(
     // and propagate unchanged so the caller in `package_manager.rs` can map a
     // 404 to `PackageManagerVersionNotFound`.
     (|| async {
-        download_and_extract_tgz_with_hash_once(url, &target_dir, expected_hash, message).await
+        download_and_extract_tgz_once(url, &target_dir, archive_file, expected_hash, message).await
     })
     .retry(
         ExponentialBuilder::default()
@@ -343,9 +405,10 @@ pub(crate) async fn download_and_extract_tgz_with_hash(
 ///
 /// Starts from clean state by removing and recreating `target_dir`, so a
 /// partially-extracted or corrupt prior attempt cannot interfere with a retry.
-async fn download_and_extract_tgz_with_hash_once(
+async fn download_and_extract_tgz_once(
     url: &str,
     target_dir: &Path,
+    archive_file: Option<&Path>,
     expected_hash: Option<&str>,
     message: Option<&str>,
 ) -> Result<(), Error> {
@@ -356,25 +419,44 @@ async fn download_and_extract_tgz_with_hash_once(
     fs::create_dir_all(target_dir).await?;
 
     // Download the tgz file with a single attempt (no internal retry). The
-    // pipeline retry in `download_and_extract_tgz_with_hash` owns all retries;
+    // pipeline retry in `download_and_extract_tgz` owns all retries;
     // letting `download_file` retry here too would nest two retry layers and
     // multiply attempts (up to N×M downloads) for a persistent failure.
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::with_config(0, 0);
     client.download_file(url, &tgz_file, message).await?;
 
-    // Verify hash if provided
-    if let Some(expected_hash) = expected_hash {
-        verify_file_hash(&tgz_file, expected_hash).await?;
-    }
+    if let Some(archive_file) = archive_file {
+        // The hash covers one entry. The rest of the archive is unauthenticated,
+        // so vp writes only that entry.
+        let target_file = target_dir.join(archive_file);
+        let tgz_file_for_extract = tgz_file.clone();
+        let archive_file_for_extract = archive_file.to_path_buf();
+        let target_file_for_extract = target_file.clone();
+        tokio::task::spawn_blocking(move || {
+            extract_tgz_file(
+                &tgz_file_for_extract,
+                &archive_file_for_extract,
+                &target_file_for_extract,
+            )
+        })
+        .await??;
 
-    // Extract the tgz file to the target directory
-    let tgz_file_for_extract = tgz_file.clone();
-    let target_dir_for_extract = target_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
-    })
-    .await??;
+        if let Some(expected_hash) = expected_hash {
+            verify_file_hash(&target_file, expected_hash).await?;
+        }
+    } else {
+        if let Some(expected_hash) = expected_hash {
+            verify_file_hash(&tgz_file, expected_hash).await?;
+        }
+
+        let tgz_file_for_extract = tgz_file.clone();
+        let target_dir_for_extract = target_dir.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
+        })
+        .await??;
+    }
 
     // Remove the temp file
     fs::remove_file(&tgz_file).await?;
@@ -383,7 +465,7 @@ async fn download_and_extract_tgz_with_hash_once(
 }
 
 /// Predicate for the single download → verify → extract retry in
-/// [`download_and_extract_tgz_with_hash`].
+/// [`download_and_extract_tgz`].
 ///
 /// Retries transient failures that a fresh re-download can fix; everything else
 /// fails fast:
@@ -403,11 +485,23 @@ fn is_retryable_download_error(err: &Error) -> bool {
     }
 }
 
-/// Computes the digest of the given content using the specified algorithm.
-fn compute_digest<D: Digest>(content: &[u8]) -> Vec<u8> {
+/// Compute the digest of a file in chunks.
+///
+/// A chunked read keeps peak memory flat, because it never holds the whole
+/// artifact. `bin/yarn.js` is about 3 MB, and vp hashes it on every command
+/// that resolves a hash-pinned Yarn.
+fn digest_file<D: Digest>(file_path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    let mut file = std::fs::File::open(file_path)?;
     let mut hasher = D::new();
-    hasher.update(content);
-    hasher.finalize().to_vec()
+    let mut buffer = vec![0u8; 64 * 1024];
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().to_vec())
 }
 
 /// Verify the hash of a file against an expected hash.
@@ -426,8 +520,7 @@ pub(crate) async fn verify_file_hash(
     file_path: impl AsRef<Path>,
     expected_hash: &str,
 ) -> Result<(), Error> {
-    let file_path = file_path.as_ref();
-    let content = fs::read(file_path).await?;
+    let file_path = file_path.as_ref().to_path_buf();
 
     // "algorithm.hex" carries the hash in hex, SRI "algorithm-base64" in
     // base64; hex never contains '-' and base64 never contains '.', so the
@@ -441,12 +534,19 @@ pub(crate) async fn verify_file_hash(
         return Err(Error::InvalidHashFormat(expected_hash.into()));
     };
 
-    let digest = match algorithm {
-        "sha512" => compute_digest::<Sha512>(&content),
-        "sha256" => compute_digest::<Sha256>(&content),
-        "sha224" => compute_digest::<Sha224>(&content),
-        "sha1" => compute_digest::<Sha1>(&content),
-        _ => return Err(Error::UnsupportedHashAlgorithm(algorithm.into())),
+    // Read and hash on the blocking pool. A hash of a multi-megabyte artifact
+    // is CPU-bound and stalls a runtime worker thread.
+    let algorithm_for_digest = algorithm.to_owned();
+    let digest = tokio::task::spawn_blocking(move || match algorithm_for_digest.as_str() {
+        "sha512" => digest_file::<Sha512>(&file_path).map(Some),
+        "sha256" => digest_file::<Sha256>(&file_path).map(Some),
+        "sha224" => digest_file::<Sha224>(&file_path).map(Some),
+        "sha1" => digest_file::<Sha1>(&file_path).map(Some),
+        _ => Ok(None),
+    })
+    .await??;
+    let Some(digest) = digest else {
+        return Err(Error::UnsupportedHashAlgorithm(algorithm.into()));
     };
     let actual = if separator == '-' {
         base64_simd::STANDARD.encode_to_string(&digest)
@@ -733,7 +833,7 @@ mod tests {
         });
 
         let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None).await;
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None, None).await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
         assert!(target_dir.join("package/bin/yarn").exists());
@@ -765,7 +865,7 @@ mod tests {
         let target_dir = temp_dir.path().join("extracted");
         let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None).await;
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None, None).await;
         assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
         assert!(
             mock.hits() > 1,
@@ -793,7 +893,8 @@ mod tests {
              0000000000000000000000000000000000000000000000000000000000000000";
 
         let result =
-            download_and_extract_tgz_with_hash(&url, &target_dir, Some(wrong_hash), None).await;
+            download_and_extract_tgz_with_hash(&url, &target_dir, None, Some(wrong_hash), None)
+                .await;
         assert!(result.is_err(), "hash mismatch should fail: {result:?}");
         assert!(
             mock.hits() > 1,

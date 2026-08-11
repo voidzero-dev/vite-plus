@@ -112,6 +112,13 @@ pub enum Error {
     #[error("Hash mismatch: expected {expected}, got {actual}")]
     HashMismatch { expected: Str, actual: Str },
 
+    /// A `packageManager` integrity pin does not match the artifact it covers.
+    ///
+    /// This variant boxes its payload. Without the box, it makes every
+    /// `Result<_, Error>` in the CLI larger (`clippy::result_large_err`).
+    #[error(transparent)]
+    PackageManagerHashMismatch(#[from] Box<PackageManagerHashMismatch>),
+
     #[error("Invalid hash format: {0}")]
     InvalidHashFormat(Str),
 
@@ -130,4 +137,34 @@ pub enum Error {
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+}
+
+impl Error {
+    /// Whether the error says that an artifact failed its integrity check.
+    ///
+    /// Some callers continue when a managed tool is missing. They must stop for
+    /// this error. The user must fix an unverified artifact, and a fallback
+    /// hides the cause behind a later, unrelated failure.
+    #[must_use]
+    pub const fn is_integrity_failure(&self) -> bool {
+        matches!(self, Self::PackageManagerHashMismatch(_) | Self::HashMismatch { .. })
+    }
+}
+
+/// Details of a failed `packageManager` integrity check.
+///
+/// `basis` names the artifact that vp hashed. Corepack hashes the extracted CLI
+/// for Yarn 2+, and the npm tarball for every other package manager. A message
+/// that says only "hash mismatch" reads like a corrupt download.
+#[derive(Error, Debug)]
+#[error(
+    "Hash mismatch for {name}@{version}: expected {expected}, got {actual}\n\
+     The `packageManager` hash covers {basis}. Corepack hashes the same artifact."
+)]
+pub struct PackageManagerHashMismatch {
+    pub name: Str,
+    pub version: Str,
+    pub expected: Str,
+    pub actual: Str,
+    pub basis: Str,
 }

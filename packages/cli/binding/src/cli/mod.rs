@@ -217,6 +217,11 @@ async fn envs_with_explicit_package_manager_path(
     .await
     {
         Ok(result) => result,
+        // A missing package manager has other causes, such as no network or an
+        // unknown version. The command still runs from PATH, so those causes
+        // stay a debug log. An integrity failure is different. If vp hides it,
+        // the user sees only "command not found" further down.
+        Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {
             tracing::debug!(
                 ?error,
@@ -257,9 +262,15 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    if let Ok(pm) = vp_pm_cli::PackageManager::builder(&cwd).build().await {
-        let bin_prefix = pm.get_bin_prefix();
-        let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+    match vp_pm_cli::PackageManager::builder(&cwd).build().await {
+        Ok(pm) => {
+            let bin_prefix = pm.get_bin_prefix();
+            let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+        }
+        Err(error) if error.is_integrity_failure() => return Err(error),
+        Err(error) => {
+            tracing::debug!(?error, "failed to resolve package manager for task PATH setup");
+        }
     }
 
     let session = Session::init(SessionConfig {
@@ -441,7 +452,7 @@ mod tests {
     use vt::config::UserRunConfig;
     use vt_path::AbsolutePathBuf;
 
-    use super::{envs_with_explicit_package_manager_path, prepend_to_env_path};
+    use super::{Error, envs_with_explicit_package_manager_path, prepend_to_env_path};
 
     fn envs_with_path(path: &std::ffi::OsStr) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
         Arc::new(FxHashMap::from_iter([(Arc::from(OsStr::new("PATH")), Arc::from(path))]))
@@ -530,6 +541,41 @@ mod tests {
             .expect("package manager preflight errors should not fail direct commands");
 
         assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+    }
+
+    #[tokio::test]
+    async fn stops_when_the_pinned_package_manager_fails_its_integrity_check() {
+        let suffix =
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
+        let vp_home = temp_dir.join("vp-home");
+        let bin_dir =
+            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
+        fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
+        for shim in ["yarn", "yarn.cmd", "yarn.ps1"] {
+            fs::write(bin_dir.join(shim), "shim").expect("shim should be written");
+        }
+        fs::write(bin_dir.join("yarn.js"), "corrupt").expect("CLI should be written");
+
+        let expected_hash = format!("sha512.{}", "0".repeat(128));
+        fs::write(
+            temp_dir.join("package.json"),
+            format!(r#"{{"name":"fixture","packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
+        )
+        .expect("package.json should be written");
+        let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
+        let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
+        let envs = envs_with_path(original_path.as_os_str());
+
+        let _guard =
+            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&vp_home));
+        let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+
+        assert!(
+            matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+            "an integrity failure must reach the user instead of a missing command: {result:?}"
+        );
         fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
     }
 

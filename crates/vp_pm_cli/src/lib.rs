@@ -23,8 +23,8 @@ pub use dispatch::{DispatchResult, dispatch, dispatch_with_metadata};
 pub use error::Error;
 pub use package_manager::{
     PackageManager, PackageManagerBuilder, PackageManagerResolution, PackageManagerSource,
-    PackageManagerType, download_package_manager, get_package_manager_type_and_version,
-    package_manager_bin_path, package_manager_install_dir,
+    PackageManagerType, download_package_manager, ensure_package_manager_bin,
+    get_package_manager_type_and_version, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
 pub use request::HttpClient;

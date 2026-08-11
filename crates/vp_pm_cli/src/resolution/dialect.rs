@@ -68,6 +68,6 @@ impl PackageManagerDialect for Npm {
 
 impl Yarn {
     pub(crate) fn is_berry(&self) -> bool {
-        self.version.major >= 2
+        crate::package_manager::is_yarn_berry(&self.version)
     }
 }

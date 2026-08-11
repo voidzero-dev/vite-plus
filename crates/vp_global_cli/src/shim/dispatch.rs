@@ -6,8 +6,7 @@
 //! 3. Tool execution (core tools and package binaries)
 
 use vp_pm_cli::{
-    PackageManagerType, download_package_manager, package_manager_bin_path,
-    package_manager_install_dir, resolve_package_manager_from_package_json,
+    PackageManagerType, ensure_package_manager_bin, resolve_package_manager_from_package_json,
 };
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
@@ -686,24 +685,14 @@ async fn resolve_matching_package_manager_tool(
     }
 
     let bin_name = expected_type.bin_name_for_tool(tool);
-
-    // Fast path: if the managed install already exists, skip download_package_manager
-    // entirely. The slow path stats three files (`bin`, `.cmd`, `.ps1`) on every
-    // invocation, which adds up on the shim hot path.
-    if let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) {
-        let bin_path = package_manager_bin_path(&install_dir, bin_name);
-        if bin_path.as_path().exists() {
-            return Ok(Some(bin_path));
-        }
-    }
-
-    let (install_dir, _, _) = download_package_manager(
-        resolution.package_manager_type,
+    let bin_path = ensure_package_manager_bin(
+        expected_type,
         &resolution.version,
         resolution.hash.as_deref(),
+        bin_name,
     )
     .await?;
-    Ok(Some(package_manager_bin_path(&install_dir, bin_name)))
+    Ok(Some(bin_path))
 }
 
 async fn prepend_js_child_process_path_env(
@@ -1493,6 +1482,43 @@ mod tests {
             source_path: source_path.map(|p| p.as_path().display().to_string()),
             is_range: false,
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_hash_pinned_modern_yarn_rechecks_cached_cli() {
+        let temp = TempDir::new().unwrap();
+        let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let expected_hash = format!("sha512.{}", "0".repeat(128));
+        std::fs::write(
+            cwd.join("package.json"),
+            format!(r#"{{"packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
+        )
+        .unwrap();
+
+        let bin_dir =
+            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("yarn"), "shim").unwrap();
+        std::fs::write(bin_dir.join("yarn.cmd"), "shim").unwrap();
+        std::fs::write(bin_dir.join("yarn.ps1"), "shim").unwrap();
+        std::fs::write(bin_dir.join("yarn.js"), "corrupt").unwrap();
+
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
+            vp_home.as_path(),
+        ));
+
+        let result = resolve_matching_package_manager_tool(&cwd, "yarn").await;
+        assert!(
+            matches!(
+                result,
+                Err(Error::Install(vp_error::Error::PackageManagerHashMismatch { .. }))
+            ),
+            "the global Yarn shim must reject a corrupted pinned cache: {result:?}"
+        );
     }
 
     #[tokio::test]

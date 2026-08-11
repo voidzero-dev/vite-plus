@@ -15,7 +15,7 @@ use crossterm::{
     style::{Color, Print, ResetColor, SetForegroundColor},
     terminal,
 };
-use semver::{Version, VersionReq};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_dir_all;
 use vp_error::Error;
@@ -28,7 +28,7 @@ use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::{get_npm_package_metadata_url, get_npm_package_tgz_url, get_npm_package_version_url},
-    request::{HttpClient, download_and_extract_tgz_with_hash},
+    request::{HttpClient, download_and_extract_tgz_with_hash, verify_file_hash},
     shim,
 };
 
@@ -105,6 +105,41 @@ impl PackageManagerType {
             (_, Self::Bun) => "bun",
         }
     }
+
+    /// Whether a Corepack pin for this version covers the extracted CLI binary
+    /// and not the npm tarball.
+    #[must_use]
+    pub fn uses_cli_binary_hash(self, version: &str) -> bool {
+        Version::parse(version).is_ok_and(|version| self.hashes_cli_binary_of(&version))
+    }
+
+    /// The same test as [`Self::uses_cli_binary_hash`], for a version that the
+    /// caller already parsed.
+    #[must_use]
+    pub fn hashes_cli_binary_of(self, version: &Version) -> bool {
+        matches!(self, Self::Yarn) && is_yarn_berry(version)
+    }
+}
+
+/// Name of the file that records the pin vp verified when it installed a
+/// package manager, relative to the version directory.
+const VERIFIED_PIN_RECORD: &str = ".verified-pin";
+
+/// Path of the Yarn CLI inside `@yarnpkg/cli-dist`, relative to the package root.
+///
+/// Corepack hashes this file to pin Yarn 2+. Three places must name the same
+/// path: the download, the cached-CLI check, and the error message.
+const YARN_CLI_ENTRY: &str = "bin/yarn.js";
+
+/// Whether a Yarn version is Berry (Yarn 2 and later).
+///
+/// Corepack splits Yarn at 2.0.0. It matches that range with
+/// `satisfiesWithPrereleases`, which drops the prerelease tag first. Every 2.x
+/// prerelease is therefore a Berry version, so this function compares the major
+/// number alone. `VersionReq(">=2.0.0")` excludes `4.0.0-rc.53` and sends it to
+/// the Yarn Classic package, which never published that version.
+pub(crate) fn is_yarn_berry(version: &Version) -> bool {
+    version.major >= 2
 }
 
 /// Package-manager resolution from an explicit project `packageManager` field.
@@ -835,12 +870,11 @@ pub async fn download_package_manager(
         )
     })?;
 
+    let is_modern_yarn = package_manager_type.hashes_cli_binary_of(&parsed_version);
     let mut package_name: Str = package_manager_type.to_string().into();
     // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
     // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
-    if matches!(package_manager_type, PackageManagerType::Yarn)
-        && VersionReq::parse(">=2.0.0")?.matches(&parsed_version)
-    {
+    if is_modern_yarn {
         package_name = "@yarnpkg/cli-dist".into();
     }
 
@@ -871,6 +905,14 @@ pub async fn download_package_manager(
     // If all shims already exist, return the target directory
     // $VP_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
+        verify_cached_cli_hash(
+            package_manager_type,
+            &target_dir,
+            &install_dir,
+            expected_hash,
+            &version,
+        )
+        .await?;
         return Ok((install_dir, package_name, version));
     }
 
@@ -883,9 +925,13 @@ pub async fn download_package_manager(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading {package_manager_type} v{version}...");
+    // A Corepack Yarn 2+ pin covers only the CLI. The rest of the archive stays
+    // unauthenticated, so vp never writes it to disk.
+    let archive_file = is_modern_yarn.then(|| PathBuf::from(format!("package/{YARN_CLI_ENTRY}")));
     download_and_extract_tgz_with_hash(
         &tgz_url,
         &target_dir_tmp,
+        archive_file.as_deref(),
         expected_hash,
         Some(&download_message),
     )
@@ -902,14 +948,15 @@ pub async fn download_package_manager(
                 url: tgz_url.into(),
             }
         } else {
-            err
+            name_hashed_artifact(err, package_manager_type, &version)
         }
     })?;
 
     // Normalize the package root to $target_dir_tmp/{bin_name}. Most npm
     // tarballs use `package/`, but the directory name is not guaranteed.
-    tracing::debug!("Rename package dir to {}", bin_name);
     let extracted_package_dir = find_extracted_package_dir(&target_dir_tmp)?;
+
+    tracing::debug!("Rename package dir to {}", bin_name);
     tokio::fs::rename(&extracted_package_dir, &target_dir_tmp.join(&bin_name)).await?;
 
     // Use a file-based lock to ensure atomicity of remove + rename operations
@@ -929,7 +976,24 @@ pub async fn download_package_manager(
     // the install is all-or-nothing)
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
         tracing::debug!("install already complete after lock acquisition, skip rename");
+        verify_cached_cli_hash(
+            package_manager_type,
+            &target_dir,
+            &install_dir,
+            expected_hash,
+            &version,
+        )
+        .await?;
         return Ok((install_dir, package_name, version));
+    }
+
+    // Record the pin this install was verified against. The record moves into
+    // place with the install, so a later command can trust the cache after one
+    // string comparison.
+    if let Some(expected_hash) = expected_hash
+        && is_modern_yarn
+    {
+        tokio::fs::write(target_dir_tmp.join(VERIFIED_PIN_RECORD), expected_hash).await?;
     }
 
     // rename $target_dir_tmp to $target_dir
@@ -942,6 +1006,110 @@ pub async fn download_package_manager(
     create_shim_files(package_manager_type, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version))
+}
+
+/// Resolve the executable path of a managed package manager. Install that
+/// package manager when the cache cannot serve it.
+///
+/// This function returns the cached path when the shim already exists. A pin
+/// that covers a file inside the install is the exception: it goes through
+/// [`verify_cached_cli_hash`], which compares the pin against the record vp
+/// wrote at install time. The rule stays here, so the shim hot path holds no
+/// package-manager specifics.
+pub async fn ensure_package_manager_bin(
+    package_manager_type: PackageManagerType,
+    version: &str,
+    expected_hash: Option<&str>,
+    bin_name: &str,
+) -> Result<AbsolutePathBuf, Error> {
+    let verifies_cached_cli =
+        expected_hash.is_some() && package_manager_type.uses_cli_binary_hash(version);
+    if !verifies_cached_cli
+        && let Some(install_dir) = package_manager_install_dir(package_manager_type, version)
+    {
+        let bin_path = package_manager_bin_path(&install_dir, bin_name);
+        if bin_path.as_path().exists() {
+            return Ok(bin_path);
+        }
+    }
+
+    let (install_dir, _, _) =
+        download_package_manager(package_manager_type, version, expected_hash).await?;
+    Ok(package_manager_bin_path(&install_dir, bin_name))
+}
+
+/// Verify a cached CLI against a pin that covers it.
+///
+/// vp hashes the CLI once, when it installs the package manager, and records
+/// the pin it verified. A later command compares its own pin against that
+/// record, so it never hashes the multi-megabyte CLI again.
+///
+/// The record is missing after an install by an older vp, and it differs after
+/// the project changes its pin. Both cases hash the CLI once more.
+///
+/// vp does not detect a CLI that changed on disk after the install, which is
+/// the guarantee Corepack gives its own cache. The record sits beside the file
+/// it describes, so a writer that can replace one can replace the other. The
+/// trust boundary is write access to `$VP_HOME`.
+///
+/// Only a Corepack Yarn 2+ pin covers a file that vp keeps. Every other pin
+/// names a tarball that vp deletes after it extracts it, so this function
+/// accepts those without a check.
+async fn verify_cached_cli_hash(
+    package_manager_type: PackageManagerType,
+    target_dir: &AbsolutePath,
+    install_dir: &AbsolutePath,
+    expected_hash: Option<&str>,
+    version: &str,
+) -> Result<(), Error> {
+    let Some(expected_hash) = expected_hash else {
+        return Ok(());
+    };
+    if !package_manager_type.uses_cli_binary_hash(version) {
+        return Ok(());
+    }
+
+    let record_path = target_dir.join(VERIFIED_PIN_RECORD);
+    if let Ok(recorded_pin) = tokio::fs::read_to_string(&record_path).await
+        && recorded_pin.trim() == expected_hash
+    {
+        tracing::debug!("cached {package_manager_type} matches the recorded pin");
+        return Ok(());
+    }
+
+    verify_file_hash(install_dir.join(YARN_CLI_ENTRY), expected_hash)
+        .await
+        .map_err(|error| name_hashed_artifact(error, package_manager_type, version))?;
+    // Best effort: a read-only cache still verifies, it just hashes every time.
+    let _ = tokio::fs::write(&record_path, expected_hash).await;
+    Ok(())
+}
+
+/// Name the artifact that a `packageManager` hash covers in an integrity
+/// failure.
+///
+/// `Error::HashMismatch` alone reads like a corrupt download. The reporter of
+/// #2209 looked for a network problem, not for a different hash basis.
+fn name_hashed_artifact(
+    error: Error,
+    package_manager_type: PackageManagerType,
+    version: &str,
+) -> Error {
+    let Error::HashMismatch { expected, actual } = error else {
+        return error;
+    };
+    let basis: Str = if package_manager_type.uses_cli_binary_hash(version) {
+        vt_str::format!("the extracted Yarn CLI ({YARN_CLI_ENTRY})").into()
+    } else {
+        "the npm package tarball".into()
+    };
+    Error::PackageManagerHashMismatch(Box::new(vp_error::PackageManagerHashMismatch {
+        name: package_manager_type.to_string().into(),
+        version: version.into(),
+        expected,
+        actual,
+        basis,
+    }))
 }
 
 /// Open a lock file without truncating it. This is required on Windows
@@ -1029,6 +1197,7 @@ async fn download_bun_package_manager(
     download_and_extract_tgz_with_hash(
         &platform_tgz_url,
         &target_dir_tmp,
+        None,
         platform_hash.as_deref(),
         Some(&download_message),
     )
@@ -1203,10 +1372,12 @@ async fn download_pnpm_native_package_manager(
         download_and_extract_tgz_with_hash(
             &main_tgz_url,
             verify_dir.path(),
+            None,
             Some(expected_hash),
             Some(&verify_message),
         )
-        .await?;
+        .await
+        .map_err(|error| name_hashed_artifact(error, PackageManagerType::Pnpm, version))?;
     }
 
     // The declared hash never covers the platform tarball, so verify it
@@ -1226,6 +1397,7 @@ async fn download_pnpm_native_package_manager(
     download_and_extract_tgz_with_hash(
         &platform_tgz_url,
         &target_dir_tmp,
+        None,
         platform_hash.as_deref(),
         Some(&download_message),
     )
@@ -1701,6 +1873,7 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
 mod tests {
     use std::fs;
 
+    use semver::VersionReq;
     use tempfile::{TempDir, tempdir};
     use vp_shared::EnvConfig;
 
@@ -1708,6 +1881,39 @@ mod tests {
 
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")
+    }
+
+    /// Build an `@yarnpkg/cli-dist` style tarball around `yarn_js`.
+    ///
+    /// `symlink_target` adds a `package/bin/yarn` symlink. An unauthenticated
+    /// tarball can use that entry to write outside the install directory.
+    fn create_yarn_package_tgz(yarn_js: &[u8], symlink_target: Option<&Path>) -> Vec<u8> {
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_js.len() as u64);
+        header.set_mode(0o755);
+        tar_builder
+            .append_data(&mut header, "package/bin/yarn.js", std::io::Cursor::new(yarn_js))
+            .unwrap();
+
+        if let Some(symlink_target) = symlink_target {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_mode(0o777);
+            header.set_link_name(symlink_target).unwrap();
+            header.set_cksum();
+            tar_builder.append_data(&mut header, "package/bin/yarn", std::io::empty()).unwrap();
+        }
+
+        let tar_data = tar_builder.into_inner().unwrap();
+        let mut gz_data = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz_data, flate2::Compression::default());
+            std::io::copy(&mut std::io::Cursor::new(tar_data), &mut encoder).unwrap();
+        }
+        gz_data
     }
 
     fn create_package_json(dir: &AbsolutePath, content: &str) {
@@ -1870,6 +2076,21 @@ mod tests {
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarnpkg"), "yarnpkg");
         assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bun"), "bun");
         assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bunx"), "bunx");
+    }
+
+    #[test]
+    fn test_uses_cli_binary_hash_only_for_modern_yarn() {
+        assert!(!PackageManagerType::Yarn.uses_cli_binary_hash("1.22.22"));
+        assert!(PackageManagerType::Yarn.uses_cli_binary_hash("2.0.0"));
+        assert!(PackageManagerType::Yarn.uses_cli_binary_hash("4.17.1"));
+        assert!(!PackageManagerType::Pnpm.uses_cli_binary_hash("10.0.0"));
+        assert!(!PackageManagerType::Yarn.uses_cli_binary_hash("latest"));
+
+        // Corepack drops the prerelease tag before it matches its `>=2.0.0`
+        // range. A 2.x prerelease pin is therefore a Berry pin there too.
+        // `corepack use yarn@4.0.0-rc.53` writes a hash of `bin/yarn.js`.
+        assert!(PackageManagerType::Yarn.uses_cli_binary_hash("2.0.0-rc.1"));
+        assert!(PackageManagerType::Yarn.uses_cli_binary_hash("4.0.0-rc.53"));
     }
 
     #[test]
@@ -3069,19 +3290,23 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let result = PackageManager::builder(temp_dir_path).build().await;
-        assert!(result.is_err());
         // Check if it's the expected error type
-        if let Err(Error::HashMismatch { expected, actual }) = result {
-            assert_eq!(
-                expected,
-                "sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
-            );
-            assert_eq!(
-                actual,
-                "sha512.ca75da26c00327d26267ce33536e5790f18ebd53266796fbb664d2a4a5116308042dd8ee7003b276a20eace7d3c5561c3577bdd71bcb67071187af124779620a"
-            );
-        } else {
-            panic!("Expected HashMismatch error");
+        match &result {
+            Err(Error::PackageManagerHashMismatch(mismatch)) => {
+                assert_eq!(mismatch.name, "yarn");
+                assert_eq!(mismatch.version, "1.22.21");
+                assert_eq!(
+                    mismatch.expected,
+                    "sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+                );
+                assert_eq!(
+                    mismatch.actual,
+                    "sha512.ca75da26c00327d26267ce33536e5790f18ebd53266796fbb664d2a4a5116308042dd8ee7003b276a20eace7d3c5561c3577bdd71bcb67071187af124779620a"
+                );
+                // Yarn Classic ships the CLI inside the tarball that Corepack pins.
+                assert_eq!(mismatch.basis, "the npm package tarball");
+            }
+            other => panic!("Expected PackageManagerHashMismatch error, got {other:?}"),
         }
     }
 
@@ -3382,6 +3607,193 @@ mod tests {
             download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
         assert!(result.is_ok(), "{result:?}");
         remove_dir_all_force(target_dir).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_download_modern_yarn_verifies_corepack_binary_hash() {
+        use httpmock::prelude::*;
+        use sha2::{Digest, Sha512};
+
+        let vp_home = create_temp_dir();
+        let server = MockServer::start();
+        let yarn_js = b"#!/usr/bin/env node\nconsole.log('mock yarn');\n";
+        let mock_tgz = create_yarn_package_tgz(yarn_js, None);
+        let mock = server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
+        });
+        let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
+
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            npm_registry: server.base_url().into(),
+            vite_plus_home: Some(vp_home.path().to_path_buf()),
+            ..EnvConfig::for_test()
+        });
+
+        let (install_dir, _, _) =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await
+                .expect("Corepack's Yarn binary hash should be accepted");
+        assert_eq!(mock.hits(), 1);
+        assert_eq!(
+            fs::read_to_string(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD)).unwrap(),
+            expected_hash,
+            "the install must record the pin it verified"
+        );
+
+        // The same pin on a warm cache reads the record instead of the CLI.
+        download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+            .await
+            .expect("a recorded pin should be accepted from the cache");
+        assert_eq!(mock.hits(), 1, "a cached install must not download again");
+
+        // A different pin does not match the record, so vp hashes the cached
+        // CLI and reports the mismatch.
+        let other_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
+        let result =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&other_hash)).await;
+        let Err(error @ Error::PackageManagerHashMismatch { .. }) = result else {
+            panic!("a pin the cached CLI does not match must fail: {result:?}");
+        };
+        let message = error.to_string();
+        assert!(message.contains("yarn@4.17.1"), "{message}");
+        assert!(message.contains("bin/yarn.js"), "{message}");
+        assert_eq!(mock.hits(), 1, "a cached install must be checked without downloading");
+    }
+
+    #[tokio::test]
+    async fn test_download_modern_yarn_hashes_a_cache_without_a_record() {
+        use httpmock::prelude::*;
+        use sha2::{Digest, Sha512};
+
+        let vp_home = create_temp_dir();
+        let server = MockServer::start();
+        let yarn_js = b"#!/usr/bin/env node\nconsole.log('mock yarn');\n";
+        let mock_tgz = create_yarn_package_tgz(yarn_js, None);
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
+        });
+        let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
+
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            npm_registry: server.base_url().into(),
+            vite_plus_home: Some(vp_home.path().to_path_buf()),
+            ..EnvConfig::for_test()
+        });
+
+        let (install_dir, _, _) =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await
+                .expect("Corepack's Yarn binary hash should be accepted");
+
+        // An install by an older vp has no record. vp falls back to the CLI.
+        fs::remove_file(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD)).unwrap();
+        fs::write(install_dir.join("bin/yarn.js"), "corrupt").unwrap();
+        let result =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await;
+        assert!(
+            matches!(result, Err(Error::PackageManagerHashMismatch { .. })),
+            "a cache without a record must be hashed: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_download_modern_yarn_extracts_only_authenticated_cli() {
+        use httpmock::prelude::*;
+        use sha2::{Digest, Sha512};
+
+        let vp_home = create_temp_dir();
+        let victim_dir = create_temp_dir();
+        let victim = victim_dir.path().join("victim");
+        fs::write(&victim, "original").unwrap();
+
+        let server = MockServer::start();
+        let yarn_js = b"#!/usr/bin/env node\nconsole.log('mock yarn');\n";
+        let mock_tgz = create_yarn_package_tgz(yarn_js, Some(&victim));
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
+        });
+        let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
+
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            npm_registry: server.base_url().into(),
+            vite_plus_home: Some(vp_home.path().to_path_buf()),
+            ..EnvConfig::for_test()
+        });
+
+        let (install_dir, _, _) =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await
+                .expect("the authenticated Yarn CLI should install");
+
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "original");
+        assert!(
+            fs::symlink_metadata(install_dir.join("bin/yarn")).unwrap().file_type().is_file(),
+            "the generated shim must not reuse an archive-provided symlink"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_download_modern_yarn_retries_binary_hash_mismatch() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        use sha2::{Digest, Sha512};
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let bad_tgz = create_yarn_package_tgz(b"corrupt", None);
+        let yarn_js = b"#!/usr/bin/env node\nconsole.log('mock yarn');\n";
+        let good_tgz = create_yarn_package_tgz(yarn_js, None);
+        let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let server_attempts = Arc::clone(&attempts);
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0u8; 2048];
+                let _ = socket.read(&mut request).await;
+
+                let attempt = server_attempts.fetch_add(1, Ordering::SeqCst);
+                let body = if attempt == 0 { &bad_tgz } else { &good_tgz };
+                let headers = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                socket.write_all(headers.as_bytes()).await.unwrap();
+                socket.write_all(body).await.unwrap();
+                socket.flush().await.unwrap();
+            }
+        });
+
+        let vp_home = create_temp_dir();
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            npm_registry: format!("http://{addr}").into(),
+            vite_plus_home: Some(vp_home.path().to_path_buf()),
+            ..EnvConfig::for_test()
+        });
+
+        let result =
+            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                .await;
+        server.abort();
+
+        assert!(result.is_ok(), "a fresh authenticated response should recover: {result:?}");
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            2,
+            "the bad CLI response should be retried exactly once"
+        );
     }
 
     #[tokio::test]
