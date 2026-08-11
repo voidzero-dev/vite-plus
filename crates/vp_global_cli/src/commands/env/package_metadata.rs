@@ -221,6 +221,8 @@ async fn list_packages_recursive(
 
 #[cfg(test)]
 mod tests {
+    use vp_shared::env_vars;
+
     use super::*;
 
     #[test]
@@ -304,34 +306,32 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp_dir.path())], |_| {
+            let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
+            let legacy_identified = PackageMetadata::installation_dir_for(
+                "@scope/pkg",
+                "#123e4567-e89b-42d3-a456-426614174000",
+            )
+            .unwrap();
+            let identified = PackageMetadata::installation_dir_for(
+                "@scope/pkg",
+                "987e6543-e21b-42d3-a456-426614174000",
+            )
+            .unwrap();
 
-        let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
-        let legacy_identified = PackageMetadata::installation_dir_for(
-            "@scope/pkg",
-            "#123e4567-e89b-42d3-a456-426614174000",
-        )
-        .unwrap();
-        let identified = PackageMetadata::installation_dir_for(
-            "@scope/pkg",
-            "987e6543-e21b-42d3-a456-426614174000",
-        )
-        .unwrap();
-
-        assert!(legacy.as_path().ends_with("packages/@scope/pkg"));
-        assert!(
-            legacy_identified
-                .as_path()
-                .ends_with("packages/@scope/pkg#123e4567-e89b-42d3-a456-426614174000")
-        );
-        assert!(
-            identified
-                .as_path()
-                .ends_with("packages/@scope/pkg/987e6543-e21b-42d3-a456-426614174000")
-        );
-        assert!(PackageMetadata::installation_dir_for("@scope/pkg", "invalid").is_err());
+            assert!(legacy.as_path().ends_with("packages/@scope/pkg"));
+            assert!(
+                legacy_identified
+                    .as_path()
+                    .ends_with("packages/@scope/pkg#123e4567-e89b-42d3-a456-426614174000")
+            );
+            assert!(
+                identified
+                    .as_path()
+                    .ends_with("packages/@scope/pkg/987e6543-e21b-42d3-a456-426614174000")
+            );
+            assert!(PackageMetadata::installation_dir_for("@scope/pkg", "invalid").is_err());
+        });
     }
 
     #[tokio::test]
@@ -339,28 +339,33 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let temp_path = temp_dir.path().to_path_buf();
-        let _guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
+        // VP_HOME pins <DATA> to the root, so packages live directly under it.
+        let packages_dir = AbsolutePathBuf::new(temp_dir.path().join("packages")).unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let metadata = PackageMetadata::new(
+                "@scope/test-pkg".to_string(),
+                "1.0.0".to_string(),
+                "20.18.0".to_string(),
+                None,
+                vec!["test-bin".to_string()],
+                HashSet::from(["test-bin".to_string()]),
+                "npm".to_string(),
+            );
 
-        let metadata = PackageMetadata::new(
-            "@scope/test-pkg".to_string(),
-            "1.0.0".to_string(),
-            "20.18.0".to_string(),
-            None,
-            vec!["test-bin".to_string()],
-            HashSet::from(["test-bin".to_string()]),
-            "npm".to_string(),
-        );
+            // This should not fail with "No such file or directory"
+            // because save() should create the @scope parent directory
+            let result = metadata.save().await;
+            assert!(result.is_ok(), "Failed to save scoped package metadata: {:?}", result.err());
 
-        // This should not fail with "No such file or directory"
-        // because save() should create the @scope parent directory
-        let result = metadata.save().await;
-        assert!(result.is_ok(), "Failed to save scoped package metadata: {:?}", result.err());
-
-        // Verify the file exists at the correct location
-        let expected_path = temp_path.join("packages").join("@scope").join("test-pkg.json");
-        assert!(expected_path.exists(), "Metadata file not found at {:?}", expected_path);
+            // Verify the file exists at the correct location
+            let expected_path = packages_dir.join("@scope").join("test-pkg.json");
+            assert!(
+                expected_path.as_path().exists(),
+                "Metadata file not found at {:?}",
+                expected_path
+            );
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -369,40 +374,40 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-        let _guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, &temp_path)], |_| async {
+            // Create regular package metadata
+            let regular = PackageMetadata::new(
+                "typescript".to_string(),
+                "5.0.0".to_string(),
+                "20.18.0".to_string(),
+                None,
+                vec!["tsc".to_string()],
+                HashSet::from(["tsc".to_string()]),
+                "npm".to_string(),
+            );
+            regular.save().await.unwrap();
 
-        // Create regular package metadata
-        let regular = PackageMetadata::new(
-            "typescript".to_string(),
-            "5.0.0".to_string(),
-            "20.18.0".to_string(),
-            None,
-            vec!["tsc".to_string()],
-            HashSet::from(["tsc".to_string()]),
-            "npm".to_string(),
-        );
-        regular.save().await.unwrap();
+            // Create scoped package metadata
+            let scoped = PackageMetadata::new(
+                "@types/node".to_string(),
+                "20.0.0".to_string(),
+                "20.18.0".to_string(),
+                None,
+                vec![],
+                HashSet::new(),
+                "npm".to_string(),
+            );
+            scoped.save().await.unwrap();
 
-        // Create scoped package metadata
-        let scoped = PackageMetadata::new(
-            "@types/node".to_string(),
-            "20.0.0".to_string(),
-            "20.18.0".to_string(),
-            None,
-            vec![],
-            HashSet::new(),
-            "npm".to_string(),
-        );
-        scoped.save().await.unwrap();
+            // list_all should find both
+            let all = PackageMetadata::list_all().await.unwrap();
+            assert_eq!(all.len(), 2, "Expected 2 packages, got {}", all.len());
 
-        // list_all should find both
-        let all = PackageMetadata::list_all().await.unwrap();
-        assert_eq!(all.len(), 2, "Expected 2 packages, got {}", all.len());
-
-        let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
-        assert!(names.contains(&"typescript"), "Missing typescript package");
-        assert!(names.contains(&"@types/node"), "Missing @types/node package");
+            let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
+            assert!(names.contains(&"typescript"), "Missing typescript package");
+            assert!(names.contains(&"@types/node"), "Missing @types/node package");
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -411,33 +416,33 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-        let _guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, &temp_path)], |_| async {
+            let zed = PackageMetadata::new(
+                "zed".to_string(),
+                "1.0.0".to_string(),
+                "20.18.0".to_string(),
+                None,
+                vec![],
+                HashSet::new(),
+                "npm".to_string(),
+            );
+            zed.save().await.unwrap();
 
-        let zed = PackageMetadata::new(
-            "zed".to_string(),
-            "1.0.0".to_string(),
-            "20.18.0".to_string(),
-            None,
-            vec![],
-            HashSet::new(),
-            "npm".to_string(),
-        );
-        zed.save().await.unwrap();
+            let alpha = PackageMetadata::new(
+                "alpha".to_string(),
+                "1.0.0".to_string(),
+                "20.18.0".to_string(),
+                None,
+                vec![],
+                HashSet::new(),
+                "npm".to_string(),
+            );
+            alpha.save().await.unwrap();
 
-        let alpha = PackageMetadata::new(
-            "alpha".to_string(),
-            "1.0.0".to_string(),
-            "20.18.0".to_string(),
-            None,
-            vec![],
-            HashSet::new(),
-            "npm".to_string(),
-        );
-        alpha.save().await.unwrap();
-
-        let all = PackageMetadata::list_all().await.unwrap();
-        let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["alpha", "zed"]);
+            let all = PackageMetadata::list_all().await.unwrap();
+            let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
+            assert_eq!(names, vec!["alpha", "zed"]);
+        })
+        .await;
     }
 }

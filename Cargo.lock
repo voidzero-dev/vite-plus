@@ -8508,6 +8508,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tar",
+ "temp-env",
  "tempfile",
  "thiserror 2.0.19",
  "tokio",

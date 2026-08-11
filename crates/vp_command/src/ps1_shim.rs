@@ -7,9 +7,9 @@
 //! `PowerShell` sidesteps the prompt and lets Ctrl+C propagate cleanly.
 //!
 //! The rewrite is scoped to two patterns:
-//!   - Inside `$VP_HOME` (`~/.vite-plus` by default) — vp's managed shims:
-//!     - `$VP_HOME/js_runtime/node/<ver>/{npm,npx}.cmd`,
-//!     - `$VP_HOME/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
+//!   - Inside vp's data root (`<DATA>`) — vp's managed shims:
+//!     - `<DATA>/js_runtime/node/<ver>/{npm,npx}.cmd`,
+//!     - `<DATA>/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
 //!   - Any `<...>/node_modules/.bin/*.cmd` — the canonical layout for
 //!     npm/pnpm/yarn-emitted shims (cmd-shim writes both `.cmd` and `.ps1`
 //!     so the wrappers stay equivalent).
@@ -46,8 +46,8 @@ use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powe
 /// - no `PowerShell` host (`pwsh.exe` or `powershell.exe`) is on PATH,
 /// - stdin is not a terminal (the `.ps1` wrappers hang on piped/null
 ///   stdin and the Ctrl+C concern doesn't apply without a TTY),
-/// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is
-///   unresolvable) AND not under any `node_modules/.bin/`,
+/// - the resolved path is outside vp's data root AND not under any
+///   `node_modules/.bin/`,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
@@ -58,23 +58,14 @@ pub fn rewrite_cmd_to_powershell(
     // our stdin means a TTY in the child too. `is_stdin_terminal` is shared with
     // `vt_plan::ps1_shim` via the `vt_powershell` crate.
     let host = powershell_host()?;
-    rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
-}
-
-/// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
-/// Returns `None` if `vp_shared::get_vp_home()` failed; the rewrite still
-/// applies to `node_modules/.bin/*.cmd` paths in that case (the two scopes
-/// are independent).
-fn vp_home() -> Option<&'static AbsolutePathBuf> {
-    use std::sync::LazyLock;
-
-    static VP_HOME: LazyLock<Option<AbsolutePathBuf>> =
-        LazyLock::new(|| vp_shared::get_vp_home().ok());
-    VP_HOME.as_ref()
+    // vp's managed shims all live under the data root (`<DATA>/js_runtime/…`,
+    // `<DATA>/package_manager/…`).
+    let config = vp_shared::EnvConfig::get();
+    rewrite_in_scope(resolved, Some(config.dirs.data.as_absolute_path()), host, is_stdin_terminal())
 }
 
 /// Pure rewrite logic. Factored out so tests can drive it on any platform
-/// without depending on a real `powershell.exe` or a real `$VP_HOME`.
+/// without depending on a real `powershell.exe` or a real vp data root.
 fn rewrite_in_scope(
     resolved: &AbsolutePath,
     vp_home: Option<&AbsolutePath>,
@@ -211,10 +202,9 @@ mod tests {
         );
     }
 
-    /// `vp_home` may be unresolvable in unusual environments (CI containers
-    /// missing $HOME, sandboxed shells); when that happens the
-    /// `node_modules/.bin` scope must still rewrite, since it is
-    /// architecturally independent from the `$VP_HOME` scope.
+    /// When no vp data root participates in the scope check (`None` here),
+    /// the `node_modules/.bin` scope must still rewrite, since it is
+    /// architecturally independent from the data-root scope.
     #[test]
     fn rewrites_cmd_in_node_modules_bin_when_vp_home_unresolved() {
         let dir = tempdir().unwrap();

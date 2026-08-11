@@ -1200,72 +1200,60 @@ async fn remove_package_shim(bin_dir: &vt_path::AbsolutePath, bin_name: &str) ->
 
 #[cfg(test)]
 mod tests {
+    use vp_shared::env_vars;
+
     use super::*;
     use crate::commands::global::is_local_package_spec;
 
-    /// RAII guard that sets `VP_TRAMPOLINE_PATH` to a fake binary on creation
-    /// and clears it on drop. Ensures cleanup even on test panics.
-    #[cfg(windows)]
-    struct FakeTrampolineGuard;
-
-    #[cfg(windows)]
-    impl FakeTrampolineGuard {
-        fn new(dir: &std::path::Path) -> Self {
-            let trampoline = dir.join("vp-shim.exe");
-            std::fs::write(&trampoline, b"fake-trampoline").unwrap();
-            unsafe {
-                std::env::set_var(vp_shared::env_vars::VP_TRAMPOLINE_PATH, &trampoline);
-            }
-            Self
-        }
-    }
-
-    #[cfg(windows)]
-    impl Drop for FakeTrampolineGuard {
-        fn drop(&mut self) {
-            unsafe {
-                std::env::remove_var(vp_shared::env_vars::VP_TRAMPOLINE_PATH);
-            }
-        }
+    /// Write a fake `vp-shim.exe` trampoline binary for shim-creation tests.
+    /// Pair with a `VP_TRAMPOLINE_PATH` pin via `EnvConfig::with_vars[_async]`.
+    fn write_fake_trampoline(dir: &std::path::Path) -> std::path::PathBuf {
+        let trampoline = dir.join("vp-shim.exe");
+        std::fs::write(&trampoline, b"fake-trampoline").unwrap();
+        trampoline
     }
 
     #[tokio::test]
-    #[cfg_attr(windows, serial_test::serial)]
     async fn test_create_package_shim_creates_bin_dir() {
         use tempfile::TempDir;
         use vt_path::AbsolutePathBuf;
 
         // Create a temp directory but don't create the bin subdirectory
         let temp_dir = TempDir::new().unwrap();
-        #[cfg(windows)]
-        let _guard = FakeTrampolineGuard::new(temp_dir.path());
+        let trampoline = write_fake_trampoline(temp_dir.path());
         let bin_dir = temp_dir.path().join("bin");
         let bin_dir = AbsolutePathBuf::new(bin_dir).unwrap();
 
-        // Verify bin directory doesn't exist
-        assert!(!bin_dir.as_path().exists());
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str())],
+            |_| async {
+                // Verify bin directory doesn't exist
+                assert!(!bin_dir.as_path().exists());
 
-        // Create a shim - this should create the bin directory
-        create_package_shim(&bin_dir, "test-shim", "test-package").await.unwrap();
+                // Create a shim - this should create the bin directory
+                create_package_shim(&bin_dir, "test-shim", "test-package").await.unwrap();
 
-        // Verify bin directory was created
-        assert!(bin_dir.as_path().exists());
+                // Verify bin directory was created
+                assert!(bin_dir.as_path().exists());
 
-        // Verify shim file was created (on Windows, shims have .exe extension)
-        // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
-        #[cfg(unix)]
-        {
-            let shim_path = bin_dir.join("test-shim");
-            assert!(
-                std::fs::symlink_metadata(shim_path.as_path()).is_ok(),
-                "Symlink shim should exist"
-            );
-        }
-        #[cfg(windows)]
-        {
-            let shim_path = bin_dir.join("test-shim.exe");
-            assert!(shim_path.as_path().exists());
-        }
+                // Verify shim file was created (on Windows, shims have .exe extension)
+                // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
+                #[cfg(unix)]
+                {
+                    let shim_path = bin_dir.join("test-shim");
+                    assert!(
+                        std::fs::symlink_metadata(shim_path.as_path()).is_ok(),
+                        "Symlink shim should exist"
+                    );
+                }
+                #[cfg(windows)]
+                {
+                    let shim_path = bin_dir.join("test-shim.exe");
+                    assert!(shim_path.as_path().exists());
+                }
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1330,49 +1318,53 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(windows, serial_test::serial)]
     async fn test_remove_package_shim_removes_shim() {
         use tempfile::TempDir;
         use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
-        #[cfg(windows)]
-        let _guard = FakeTrampolineGuard::new(temp_dir.path());
+        let trampoline = write_fake_trampoline(temp_dir.path());
         let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create a shim
-        create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str())],
+            |_| async {
+                // Create a shim
+                create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
 
-        // Verify the shim was created
-        // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
-        #[cfg(unix)]
-        {
-            let shim_path = bin_dir.join("tsc");
-            assert!(
-                std::fs::symlink_metadata(shim_path.as_path()).is_ok(),
-                "Shim should exist after creation"
-            );
+                // Verify the shim was created
+                // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
+                #[cfg(unix)]
+                {
+                    let shim_path = bin_dir.join("tsc");
+                    assert!(
+                        std::fs::symlink_metadata(shim_path.as_path()).is_ok(),
+                        "Shim should exist after creation"
+                    );
 
-            // Remove the shim
-            remove_package_shim(&bin_dir, "tsc").await.unwrap();
+                    // Remove the shim
+                    remove_package_shim(&bin_dir, "tsc").await.unwrap();
 
-            // Verify the shim was removed
-            assert!(
-                std::fs::symlink_metadata(shim_path.as_path()).is_err(),
-                "Shim should be removed"
-            );
-        }
-        #[cfg(windows)]
-        {
-            let shim_path = bin_dir.join("tsc.exe");
-            assert!(shim_path.as_path().exists(), "Shim should exist after creation");
+                    // Verify the shim was removed
+                    assert!(
+                        std::fs::symlink_metadata(shim_path.as_path()).is_err(),
+                        "Shim should be removed"
+                    );
+                }
+                #[cfg(windows)]
+                {
+                    let shim_path = bin_dir.join("tsc.exe");
+                    assert!(shim_path.as_path().exists(), "Shim should exist after creation");
 
-            // Remove the shim
-            remove_package_shim(&bin_dir, "tsc").await.unwrap();
+                    // Remove the shim
+                    remove_package_shim(&bin_dir, "tsc").await.unwrap();
 
-            // Verify the shim was removed
-            assert!(!shim_path.as_path().exists(), "Shim should be removed");
-        }
+                    // Verify the shim was removed
+                    assert!(!shim_path.as_path().exists(), "Shim should be removed");
+                }
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1388,92 +1380,105 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(windows, serial_test::serial)]
     async fn test_uninstall_removes_shims_from_metadata() {
         use tempfile::TempDir;
         use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-        #[cfg(windows)]
-        let _trampoline_guard = FakeTrampolineGuard::new(&temp_path);
-        let _env_guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
+        let trampoline = write_fake_trampoline(&temp_path);
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_path.as_os_str()),
+                (env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str()),
+            ],
+            |_| async {
+                // Create bin directory
+                let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
+                tokio::fs::create_dir_all(&bin_dir).await.unwrap();
 
-        // Create bin directory
-        let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
-        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+                // Create shims for "tsc" and "tsserver"
+                create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
+                create_package_shim(&bin_dir, "tsserver", "typescript").await.unwrap();
 
-        // Create shims for "tsc" and "tsserver"
-        create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
-        create_package_shim(&bin_dir, "tsserver", "typescript").await.unwrap();
+                // Verify shims exist
+                // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
+                #[cfg(unix)]
+                {
+                    assert!(
+                        std::fs::symlink_metadata(bin_dir.join("tsc").as_path()).is_ok(),
+                        "tsc shim should exist"
+                    );
+                    assert!(
+                        std::fs::symlink_metadata(bin_dir.join("tsserver").as_path()).is_ok(),
+                        "tsserver shim should exist"
+                    );
+                }
+                #[cfg(windows)]
+                {
+                    assert!(
+                        bin_dir.join("tsc.exe").as_path().exists(),
+                        "tsc.exe shim should exist"
+                    );
+                    assert!(
+                        bin_dir.join("tsserver.exe").as_path().exists(),
+                        "tsserver.exe shim should exist"
+                    );
+                }
 
-        // Verify shims exist
-        // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
-        #[cfg(unix)]
-        {
-            assert!(
-                std::fs::symlink_metadata(bin_dir.join("tsc").as_path()).is_ok(),
-                "tsc shim should exist"
-            );
-            assert!(
-                std::fs::symlink_metadata(bin_dir.join("tsserver").as_path()).is_ok(),
-                "tsserver shim should exist"
-            );
-        }
-        #[cfg(windows)]
-        {
-            assert!(bin_dir.join("tsc.exe").as_path().exists(), "tsc.exe shim should exist");
-            assert!(
-                bin_dir.join("tsserver.exe").as_path().exists(),
-                "tsserver.exe shim should exist"
-            );
-        }
+                // Create metadata with bins
+                let mut metadata = PackageMetadata::new(
+                    "typescript".to_string(),
+                    "5.9.3".to_string(),
+                    "20.18.0".to_string(),
+                    None,
+                    vec!["tsc".to_string(), "tsserver".to_string()],
+                    HashSet::from(["tsc".to_string(), "tsserver".to_string()]),
+                    "npm".to_string(),
+                );
+                metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
+                metadata.save().await.unwrap();
 
-        // Create metadata with bins
-        let mut metadata = PackageMetadata::new(
-            "typescript".to_string(),
-            "5.9.3".to_string(),
-            "20.18.0".to_string(),
-            None,
-            vec!["tsc".to_string(), "tsserver".to_string()],
-            HashSet::from(["tsc".to_string(), "tsserver".to_string()]),
-            "npm".to_string(),
-        );
-        metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
-        metadata.save().await.unwrap();
+                // Create identified package directory (needed for uninstall)
+                let package_dir = metadata.installation_dir().unwrap();
+                tokio::fs::create_dir_all(&package_dir).await.unwrap();
 
-        // Create identified package directory (needed for uninstall)
-        let package_dir = metadata.installation_dir().unwrap();
-        tokio::fs::create_dir_all(&package_dir).await.unwrap();
+                // Verify metadata was saved
+                let loaded = PackageMetadata::load("typescript").await.unwrap();
+                assert!(loaded.is_some(), "Metadata should be loaded");
+                let loaded = loaded.unwrap();
+                assert_eq!(loaded.bins, vec!["tsc", "tsserver"], "bins should match");
 
-        // Verify metadata was saved
-        let loaded = PackageMetadata::load("typescript").await.unwrap();
-        assert!(loaded.is_some(), "Metadata should be loaded");
-        let loaded = loaded.unwrap();
-        assert_eq!(loaded.bins, vec!["tsc", "tsserver"], "bins should match");
+                // Run uninstall
+                uninstall("typescript", false).await.unwrap();
 
-        // Run uninstall
-        uninstall("typescript", false).await.unwrap();
-
-        // Verify shims were removed
-        #[cfg(unix)]
-        {
-            assert!(!bin_dir.join("tsc").as_path().exists(), "tsc shim should be removed");
-            assert!(
-                !bin_dir.join("tsserver").as_path().exists(),
-                "tsserver shim should be removed"
-            );
-        }
-        #[cfg(windows)]
-        {
-            assert!(!bin_dir.join("tsc.exe").as_path().exists(), "tsc.exe shim should be removed");
-            assert!(
-                !bin_dir.join("tsserver.exe").as_path().exists(),
-                "tsserver.exe shim should be removed"
-            );
-        }
-        assert!(!package_dir.as_path().exists(), "identified package directory should be removed");
+                // Verify shims were removed
+                #[cfg(unix)]
+                {
+                    assert!(!bin_dir.join("tsc").as_path().exists(), "tsc shim should be removed");
+                    assert!(
+                        !bin_dir.join("tsserver").as_path().exists(),
+                        "tsserver shim should be removed"
+                    );
+                }
+                #[cfg(windows)]
+                {
+                    assert!(
+                        !bin_dir.join("tsc.exe").as_path().exists(),
+                        "tsc.exe shim should be removed"
+                    );
+                    assert!(
+                        !bin_dir.join("tsserver.exe").as_path().exists(),
+                        "tsserver.exe shim should be removed"
+                    );
+                }
+                assert!(
+                    !package_dir.as_path().exists(),
+                    "identified package directory should be removed"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1481,121 +1486,126 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-        let package_name = "test-package";
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let package_name = "test-package";
 
-        let metadata = PackageMetadata::new(
-            package_name.to_string(),
-            "1.0.0".to_string(),
-            "20.0.0".to_string(),
-            None,
-            Vec::new(),
-            HashSet::new(),
-            "npm".to_string(),
-        );
-        metadata.save().await.unwrap();
+            let metadata = PackageMetadata::new(
+                package_name.to_string(),
+                "1.0.0".to_string(),
+                "20.0.0".to_string(),
+                None,
+                Vec::new(),
+                HashSet::new(),
+                "npm".to_string(),
+            );
+            metadata.save().await.unwrap();
 
-        let legacy_dir = metadata.installation_dir().unwrap();
-        let legacy_package_json =
-            get_node_modules_dir(&legacy_dir, package_name).join("package.json");
-        tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
-        tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
+            let legacy_dir = metadata.installation_dir().unwrap();
+            let legacy_package_json =
+                get_node_modules_dir(&legacy_dir, package_name).join("package.json");
+            tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
+            tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
 
-        // Model uninstall starting after npm populated the replacement but before metadata changed.
-        let replacement_dir = PackageMetadata::installation_dir_for(
-            package_name,
-            "123e4567-e89b-42d3-a456-426614174000",
-        )
-        .unwrap();
-        let replacement_package_json =
-            get_node_modules_dir(&replacement_dir, package_name).join("package.json");
-        let replacement_lock = lock_install_dir(&replacement_dir).unwrap();
-        tokio::fs::create_dir_all(replacement_package_json.parent().unwrap()).await.unwrap();
-        tokio::fs::write(&replacement_package_json, "{}").await.unwrap();
+            // Model uninstall starting after npm populated the replacement but before metadata changed.
+            let replacement_dir = PackageMetadata::installation_dir_for(
+                package_name,
+                "123e4567-e89b-42d3-a456-426614174000",
+            )
+            .unwrap();
+            let replacement_package_json =
+                get_node_modules_dir(&replacement_dir, package_name).join("package.json");
+            let replacement_lock = lock_install_dir(&replacement_dir).unwrap();
+            tokio::fs::create_dir_all(replacement_package_json.parent().unwrap()).await.unwrap();
+            tokio::fs::write(&replacement_package_json, "{}").await.unwrap();
 
-        uninstall(package_name, false).await.unwrap();
+            uninstall(package_name, false).await.unwrap();
 
-        assert!(!legacy_package_json.as_path().exists());
-        assert!(replacement_package_json.as_path().exists());
-        assert!(install_dir_lock_path(&replacement_dir).unwrap().as_path().exists());
-        drop(replacement_lock);
+            assert!(!legacy_package_json.as_path().exists());
+            assert!(replacement_package_json.as_path().exists());
+            assert!(install_dir_lock_path(&replacement_dir).unwrap().as_path().exists());
+            drop(replacement_lock);
+        })
+        .await;
     }
 
     #[tokio::test]
-    #[cfg_attr(windows, serial_test::serial)]
     async fn test_restore_previous_install_state_removes_partial_new_bins() {
         use tempfile::TempDir;
         use vt_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-        #[cfg(windows)]
-        let _trampoline_guard = FakeTrampolineGuard::new(&temp_path);
-        let _env_guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&temp_path));
-        let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
+        let trampoline = write_fake_trampoline(&temp_path);
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_path.as_os_str()),
+                (env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str()),
+            ],
+            |_| async {
+                let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
 
-        let mut previous_metadata = PackageMetadata::new(
-            "test-package".to_string(),
-            "1.0.0".to_string(),
-            "20.0.0".to_string(),
-            None,
-            vec!["keep".to_string(), "drop".to_string()],
-            HashSet::from(["keep".to_string(), "drop".to_string()]),
-            "npm".to_string(),
-        );
-        previous_metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
+                let mut previous_metadata = PackageMetadata::new(
+                    "test-package".to_string(),
+                    "1.0.0".to_string(),
+                    "20.0.0".to_string(),
+                    None,
+                    vec!["keep".to_string(), "drop".to_string()],
+                    HashSet::from(["keep".to_string(), "drop".to_string()]),
+                    "npm".to_string(),
+                );
+                previous_metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
 
-        let mut new_metadata = PackageMetadata::new(
-            "test-package".to_string(),
-            "2.0.0".to_string(),
-            "22.0.0".to_string(),
-            None,
-            vec!["keep".to_string(), "new".to_string()],
-            HashSet::from(["keep".to_string(), "new".to_string()]),
-            "npm".to_string(),
-        );
-        new_metadata.install_id = "#987e6543-e21b-42d3-a456-426614174000".to_string();
-        new_metadata.save().await.unwrap();
+                let mut new_metadata = PackageMetadata::new(
+                    "test-package".to_string(),
+                    "2.0.0".to_string(),
+                    "22.0.0".to_string(),
+                    None,
+                    vec!["keep".to_string(), "new".to_string()],
+                    HashSet::from(["keep".to_string(), "new".to_string()]),
+                    "npm".to_string(),
+                );
+                new_metadata.install_id = "#987e6543-e21b-42d3-a456-426614174000".to_string();
+                new_metadata.save().await.unwrap();
 
-        for bin_name in ["keep", "new"] {
-            create_package_shim(&bin_dir, bin_name, "test-package").await.unwrap();
-            BinConfig::new(
-                bin_name.to_string(),
-                "test-package".to_string(),
-                "2.0.0".to_string(),
-                "22.0.0".to_string(),
-            )
-            .save()
-            .await
-            .unwrap();
-        }
+                for bin_name in ["keep", "new"] {
+                    create_package_shim(&bin_dir, bin_name, "test-package").await.unwrap();
+                    BinConfig::new(
+                        bin_name.to_string(),
+                        "test-package".to_string(),
+                        "2.0.0".to_string(),
+                        "22.0.0".to_string(),
+                    )
+                    .save()
+                    .await
+                    .unwrap();
+                }
 
-        restore_previous_install_state(
-            &bin_dir,
-            "test-package",
-            Some(&previous_metadata),
-            &new_metadata.bins,
+                restore_previous_install_state(
+                    &bin_dir,
+                    "test-package",
+                    Some(&previous_metadata),
+                    &new_metadata.bins,
+                )
+                .await;
+
+                let restored = PackageMetadata::load("test-package").await.unwrap().unwrap();
+                assert_eq!(restored.install_id, previous_metadata.install_id);
+                assert_eq!(BinConfig::load("keep").await.unwrap().unwrap().version, "1.0.0");
+                assert_eq!(BinConfig::load("drop").await.unwrap().unwrap().version, "1.0.0");
+                assert!(BinConfig::load("new").await.unwrap().is_none());
+                #[cfg(unix)]
+                {
+                    assert!(std::fs::symlink_metadata(bin_dir.join("drop").as_path()).is_ok());
+                    assert!(std::fs::symlink_metadata(bin_dir.join("new").as_path()).is_err());
+                }
+                #[cfg(windows)]
+                {
+                    assert!(bin_dir.join("drop.exe").as_path().exists());
+                    assert!(!bin_dir.join("new.exe").as_path().exists());
+                }
+            },
         )
         .await;
-
-        let restored = PackageMetadata::load("test-package").await.unwrap().unwrap();
-        assert_eq!(restored.install_id, previous_metadata.install_id);
-        assert_eq!(BinConfig::load("keep").await.unwrap().unwrap().version, "1.0.0");
-        assert_eq!(BinConfig::load("drop").await.unwrap().unwrap().version, "1.0.0");
-        assert!(BinConfig::load("new").await.unwrap().is_none());
-        #[cfg(unix)]
-        {
-            assert!(std::fs::symlink_metadata(bin_dir.join("drop").as_path()).is_ok());
-            assert!(std::fs::symlink_metadata(bin_dir.join("new").as_path()).is_err());
-        }
-        #[cfg(windows)]
-        {
-            assert!(bin_dir.join("drop.exe").as_path().exists());
-            assert!(!bin_dir.join("new.exe").as_path().exists());
-        }
     }
 
     #[tokio::test]
@@ -1603,35 +1613,37 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-        let package_name = "@scope/test-package";
-        let current_id = "123e4567-e89b-42d3-a456-426614174000";
-        let stale_id = "987e6543-e21b-42d3-a456-426614174000";
-        let legacy_id = "#2753e02c-9319-456f-bc0f-23d6d7b6fba5";
-        let package_dir = PackageMetadata::installation_dir_for(package_name, "").unwrap();
-        let current_dir = PackageMetadata::installation_dir_for(package_name, current_id).unwrap();
-        let stale_dir = PackageMetadata::installation_dir_for(package_name, stale_id).unwrap();
-        let legacy_dir = PackageMetadata::installation_dir_for(package_name, legacy_id).unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let package_name = "@scope/test-package";
+            let current_id = "123e4567-e89b-42d3-a456-426614174000";
+            let stale_id = "987e6543-e21b-42d3-a456-426614174000";
+            let legacy_id = "#2753e02c-9319-456f-bc0f-23d6d7b6fba5";
+            let package_dir = PackageMetadata::installation_dir_for(package_name, "").unwrap();
+            let current_dir =
+                PackageMetadata::installation_dir_for(package_name, current_id).unwrap();
+            let stale_dir = PackageMetadata::installation_dir_for(package_name, stale_id).unwrap();
+            let legacy_dir =
+                PackageMetadata::installation_dir_for(package_name, legacy_id).unwrap();
 
-        tokio::fs::create_dir_all(&current_dir).await.unwrap();
-        tokio::fs::create_dir_all(&stale_dir).await.unwrap();
-        tokio::fs::create_dir_all(&legacy_dir).await.unwrap();
-        tokio::fs::write(install_dir_lock_path(&current_dir).unwrap(), "").await.unwrap();
-        let legacy_package_json =
-            get_node_modules_dir(&package_dir, package_name).join("package.json");
-        tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
-        tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
+            tokio::fs::create_dir_all(&current_dir).await.unwrap();
+            tokio::fs::create_dir_all(&stale_dir).await.unwrap();
+            tokio::fs::create_dir_all(&legacy_dir).await.unwrap();
+            tokio::fs::write(install_dir_lock_path(&current_dir).unwrap(), "").await.unwrap();
+            let legacy_package_json =
+                get_node_modules_dir(&package_dir, package_name).join("package.json");
+            tokio::fs::create_dir_all(legacy_package_json.parent().unwrap()).await.unwrap();
+            tokio::fs::write(&legacy_package_json, "{}").await.unwrap();
 
-        cleanup_stale_installations(package_name, current_id).await;
+            cleanup_stale_installations(package_name, current_id).await;
 
-        assert!(current_dir.as_path().is_dir());
-        assert!(install_dir_lock_path(&current_dir).unwrap().as_path().is_file());
-        assert!(!stale_dir.as_path().exists());
-        assert!(!legacy_dir.as_path().exists());
-        assert!(!legacy_package_json.as_path().exists());
-        assert!(!install_dir_lock_path(&package_dir).unwrap().as_path().exists());
+            assert!(current_dir.as_path().is_dir());
+            assert!(install_dir_lock_path(&current_dir).unwrap().as_path().is_file());
+            assert!(!stale_dir.as_path().exists());
+            assert!(!legacy_dir.as_path().exists());
+            assert!(!legacy_package_json.as_path().exists());
+            assert!(!install_dir_lock_path(&package_dir).unwrap().as_path().exists());
+        })
+        .await;
     }
 
     #[test]

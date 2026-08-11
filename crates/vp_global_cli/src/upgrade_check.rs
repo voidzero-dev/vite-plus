@@ -1,7 +1,7 @@
 //! Background upgrade check for the vp CLI.
 //!
 //! Periodically queries the npm registry for the latest version and caches the
-//! result to `~/.vite-plus/.upgrade-check.json`. Displays a one-line notice on
+//! result to `<STATE>/.upgrade-check.json`. Displays a one-line notice on
 //! stderr when a newer version is available, at most once per 24 hours.
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -72,17 +72,18 @@ async fn resolve_version_string() -> Option<String> {
 }
 
 pub struct UpgradeCheckResult {
-    install_dir: vt_path::AbsolutePathBuf,
+    state_dir: vt_path::AbsolutePathBuf,
     cache: UpgradeCheckCache,
 }
 
 /// Returns an upgrade check result if a newer version is available and the user
 /// hasn't been prompted within the last 24 hours. Returns `None` otherwise.
 pub async fn check_for_update() -> Option<UpgradeCheckResult> {
-    let install_dir = vp_shared::get_vp_home().ok()?;
+    let config = vp_shared::EnvConfig::get();
+    let state_dir = &config.dirs.state;
     let current_version = env!("CARGO_PKG_VERSION");
     let now = now_secs();
-    let mut cache = read_cache(&install_dir);
+    let mut cache = read_cache(state_dir);
 
     if should_check(cache.as_ref(), now) {
         let prompted_at = cache.as_ref().map_or(0, |c| c.prompted_at);
@@ -90,7 +91,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         match resolve_version_string().await {
             Some(latest) => {
                 let new_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(&install_dir, &new_cache);
+                write_cache(state_dir, &new_cache);
                 cache = Some(new_cache);
             }
             None => {
@@ -98,7 +99,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
                 // retrying on every command when the registry is unreachable.
                 let latest = cache.as_ref().map(|c| c.latest.clone()).unwrap_or_default();
                 let failed_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(&install_dir, &failed_cache);
+                write_cache(state_dir, &failed_cache);
                 cache = Some(failed_cache);
             }
         }
@@ -114,7 +115,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         return None;
     }
 
-    Some(UpgradeCheckResult { install_dir, cache })
+    Some(UpgradeCheckResult { state_dir: state_dir.clone(), cache })
 }
 
 /// Print a one-line upgrade notice to stderr and record the prompt time.
@@ -133,7 +134,7 @@ pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
 
     let mut cache = result.cache.clone();
     cache.prompted_at = now_secs();
-    write_cache(&result.install_dir, &cache);
+    write_cache(&result.state_dir, &cache);
 }
 
 /// Whether the upgrade check should run for the given command args.
@@ -162,8 +163,6 @@ pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
-
     use super::*;
 
     #[test]
@@ -197,32 +196,10 @@ mod tests {
     }
 
     fn with_env_vars_cleared<F: FnOnce()>(f: F) {
-        let ci = std::env::var_os("CI");
-        let test = std::env::var_os("VP_CLI_TEST");
-        let no_check = std::env::var_os("VP_NO_UPDATE_CHECK");
-        unsafe {
-            std::env::remove_var("CI");
-            std::env::remove_var("VP_CLI_TEST");
-            std::env::remove_var("VP_NO_UPDATE_CHECK");
-        }
-
-        f();
-
-        unsafe {
-            if let Some(v) = ci {
-                std::env::set_var("CI", v);
-            }
-            if let Some(v) = test {
-                std::env::set_var("VP_CLI_TEST", v);
-            }
-            if let Some(v) = no_check {
-                std::env::set_var("VP_NO_UPDATE_CHECK", v);
-            }
-        }
+        temp_env::with_vars_unset(["CI", "VP_CLI_TEST", "VP_NO_UPDATE_CHECK"], f);
     }
 
     #[test]
-    #[serial]
     fn should_check_returns_true_when_no_cache() {
         with_env_vars_cleared(|| {
             assert!(should_check(None, now_secs()));
@@ -230,7 +207,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn should_check_returns_false_when_cache_fresh() {
         with_env_vars_cleared(|| {
             let now = now_secs();
@@ -241,7 +217,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn should_check_returns_true_when_cache_stale() {
         with_env_vars_cleared(|| {
             let now = now_secs();
@@ -256,13 +231,11 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn should_check_returns_false_when_disabled() {
         with_env_vars_cleared(|| {
-            unsafe {
-                std::env::set_var("VP_NO_UPDATE_CHECK", "1");
-            }
-            assert!(!should_check(None, now_secs()));
+            temp_env::with_var("VP_NO_UPDATE_CHECK", Some("1"), || {
+                assert!(!should_check(None, now_secs()));
+            });
         });
     }
 

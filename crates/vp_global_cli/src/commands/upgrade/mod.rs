@@ -11,7 +11,7 @@ use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
 
-use crate::{commands::env::config::get_vp_home, error::Error};
+use crate::error::Error;
 
 /// Options for the upgrade command.
 pub struct UpgradeOptions {
@@ -34,11 +34,12 @@ pub struct UpgradeOptions {
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
-    let install_dir = get_vp_home()?;
+    let config = vp_shared::EnvConfig::get();
+    let install_dir = &config.dirs.data;
 
     // Handle --rollback
     if options.rollback {
-        return execute_rollback(&install_dir, options.silent).await;
+        return execute_rollback(install_dir, options.silent).await;
     }
 
     // Step 1: Detect platform
@@ -113,7 +114,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // version directory on Windows because the running `vp.exe` is locked.
     // Install into a unique semver build-metadata directory instead, then
     // repoint `current` after the install has completed.
-    let active_install_dir = install::read_current_version(&install_dir).await;
+    let active_install_dir = install::read_current_version(install_dir).await;
     let install_dir_name = install::target_install_dir_name(
         &resolved.version,
         active_install_dir.as_deref(),
@@ -126,7 +127,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     let result = install_platform_and_main(
         &platform_data,
         &version_dir,
-        &install_dir,
+        install_dir,
         &install_dir_name,
         &resolved.version,
         current_version,

@@ -250,6 +250,8 @@ pub(crate) fn resolve_profile_path(
 
 #[cfg(test)]
 mod tests {
+    use vp_shared::env_vars;
+
     use super::*;
 
     #[test]
@@ -282,69 +284,87 @@ mod tests {
 
     #[test]
     fn test_detect_shell_vp_shell_explicit() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("nu".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::NuShell);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("nu")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::NuShell);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_vp_shell_case_insensitive() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("POWERSHELL".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::PowerShell);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("POWERSHELL")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::PowerShell);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_vp_shell_pwsh_alias() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("pwsh".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::PowerShell);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("pwsh")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::PowerShell);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_vp_shell_fish() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("fish".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::Fish);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("fish")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::Fish);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_defaults_without_vp_shell() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: None,
-            ..vp_shared::EnvConfig::for_test()
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
+            let shell = detect_shell();
+            if cfg!(windows) {
+                assert_eq!(shell, Shell::Cmd);
+            } else {
+                assert_eq!(shell, Shell::Posix);
+            }
         });
-        let shell = detect_shell();
-        if cfg!(windows) {
-            assert_eq!(shell, Shell::Cmd);
-        } else {
-            assert_eq!(shell, Shell::Posix);
-        }
     }
 
     #[test]
     fn test_detect_shell_invalid_vp_shell_falls_back_to_default() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("invalid".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        if cfg!(windows) {
-            assert_eq!(shell, Shell::Cmd);
-        } else {
-            assert_eq!(shell, Shell::Posix);
-        }
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("invalid")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                if cfg!(windows) {
+                    assert_eq!(shell, Shell::Cmd);
+                } else {
+                    assert_eq!(shell, Shell::Posix);
+                }
+            },
+        );
     }
 }

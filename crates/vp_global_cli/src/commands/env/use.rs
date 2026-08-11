@@ -2,7 +2,7 @@
 //!
 //! Outputs shell-appropriate commands to stdout that set (or unset)
 //! the `VP_NODE_VERSION` environment variable. The shell function
-//! wrapper in `~/.vite-plus/env` evals this output to modify the current
+//! wrapper in `<CONFIG>/env` evals this output to modify the current
 //! shell session.
 //!
 //! All user-facing status messages go to stderr so they don't interfere
@@ -57,11 +57,12 @@ fn can_use_session_file() -> bool {
 }
 
 fn print_windows_eval_wrapper_required() {
+    let env_ps1 = vp_shared::EnvConfig::get().dirs.config.join("env.ps1");
     eprintln!(
         "vp env use on Windows requires the Vite+ PowerShell wrapper to affect only the current shell session."
     );
     eprintln!("Add this line to your PowerShell $PROFILE:");
-    eprintln!("  . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"");
+    eprintln!("  . \"{}\"", env_ps1.as_path().display());
     eprintln!("Then dot-source it now (or open a new PowerShell session) to load the wrapper.");
 }
 
@@ -114,7 +115,8 @@ pub async fn execute(
 
     // Check if already active and suppress output if requested
     if silent_if_unchanged {
-        let current_env = vp_shared::EnvConfig::get().node_version.map(|v| v.trim().to_string());
+        let current_env =
+            vp_shared::EnvConfig::get().node_version.as_deref().map(|v| v.trim().to_string());
         let current = if !has_eval_wrapper() {
             current_env.or(config::read_session_version().await)
         } else {
@@ -137,8 +139,12 @@ pub async fn execute(
 
     // Ensure version is installed (unless --no-install)
     if !no_install {
-        let home_dir =
-            vp_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolved_version);
+        let home_dir = vp_shared::EnvConfig::get()
+            .dirs
+            .data
+            .join("js_runtime")
+            .join("node")
+            .join(&resolved_version);
 
         #[cfg(windows)]
         let binary_path = home_dir.join("node.exe");
@@ -172,46 +178,61 @@ pub async fn execute(
 
 #[cfg(test)]
 mod tests {
+    use vp_shared::env_vars;
+
     use super::*;
 
     #[test]
     fn test_detect_shell_vp_shell_powershell() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("powershell".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::PowerShell);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("powershell")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::PowerShell);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_vp_shell_fish() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("fish".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::Fish);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("fish")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::Fish);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_vp_shell_nu() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vp_shell: Some("nu".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert_eq!(shell, Shell::NuShell);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("nu")),
+            ],
+            |_| {
+                let shell = detect_shell();
+                assert_eq!(shell, Shell::NuShell);
+            },
+        );
     }
 
     #[test]
     fn test_detect_shell_posix_default() {
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test());
-        let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert_eq!(shell, Shell::Posix);
-        #[cfg(windows)]
-        assert_eq!(shell, Shell::Cmd);
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
+            let shell = detect_shell();
+            #[cfg(not(windows))]
+            assert_eq!(shell, Shell::Posix);
+            #[cfg(windows)]
+            assert_eq!(shell, Shell::Cmd);
+        });
     }
 
     #[test]
@@ -278,14 +299,20 @@ mod tests {
     async fn test_windows_direct_use_without_eval_wrapper_does_not_write_session_file() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        // CI runners export `CI` (GitHub Actions always does), and the
+        // direct-use guard keys off `is_ci` — the `None` pin unsets it to
+        // exercise the non-CI path.
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, Some(temp_dir.path())), ("CI", None)],
+            |_| async move {
+                let status =
+                    execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
 
-        let status = execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
-
-        assert_eq!(status.code(), Some(1));
-        assert!(config::read_session_version().await.is_none());
+                assert_eq!(status.code(), Some(1));
+                assert!(config::read_session_version().await.is_none());
+            },
+        )
+        .await;
     }
 
     #[cfg(windows)]
@@ -293,15 +320,17 @@ mod tests {
     async fn test_windows_ci_direct_use_writes_session_file() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            is_ci: true,
-            ..vp_shared::EnvConfig::for_test_with_home(temp_dir.path())
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, temp_dir.path().as_os_str()), ("CI", std::ffi::OsStr::new("1"))],
+            |_| async {
+                let status =
+                    execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
 
-        let status = execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
-
-        assert!(status.success());
-        assert_eq!(config::read_session_version().await.as_deref(), Some("20.18.0"));
+                assert!(status.success());
+                assert_eq!(config::read_session_version().await.as_deref(), Some("20.18.0"));
+            },
+        )
+        .await;
     }
 
     #[cfg(windows)]
@@ -309,17 +338,22 @@ mod tests {
     async fn test_windows_eval_wrapper_cleans_legacy_session_file() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            env_use_eval_enable: true,
-            vp_shell: Some("powershell".into()),
-            ..vp_shared::EnvConfig::for_test_with_home(temp_dir.path())
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_ENV_USE_EVAL_ENABLE, std::ffi::OsStr::new("1")),
+                (env_vars::VP_SHELL, std::ffi::OsStr::new("powershell")),
+            ],
+            |_| async {
+                config::write_session_version("22.0.0").await.unwrap();
 
-        config::write_session_version("22.0.0").await.unwrap();
+                let status =
+                    execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
 
-        let status = execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
-
-        assert!(status.success());
-        assert!(config::read_session_version().await.is_none());
+                assert!(status.success());
+                assert!(config::read_session_version().await.is_none());
+            },
+        )
+        .await;
     }
 }

@@ -472,7 +472,7 @@ fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn s
         let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
         AbsolutePathBuf::new(abs).ok_or_else(|| "Invalid installation directory".into())
     } else {
-        Ok(vp_shared::get_vp_home()?)
+        Ok(vp_shared::EnvConfig::get().dirs.data.clone())
     }
 }
 

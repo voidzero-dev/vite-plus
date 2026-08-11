@@ -217,7 +217,7 @@ fn format_install_failure_message(
 
 /// Write stdout and stderr from a failed install to `upgrade.log`.
 ///
-/// The log is written to the **parent** of `version_dir` (i.e. `~/.vite-plus/upgrade.log`)
+/// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
@@ -790,7 +790,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_upgrade_log_creates_log_in_parent_dir() {
         let temp = tempfile::tempdir().unwrap();
-        // Simulate ~/.vite-plus/0.1.15/ structure
+        // Simulate a `<DATA>/0.1.15/` install structure
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 

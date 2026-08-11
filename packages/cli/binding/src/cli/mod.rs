@@ -550,6 +550,7 @@ mod tests {
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
         let vp_home = temp_dir.join("vp-home");
+        // VP_HOME pins <DATA> to the root, so the cached install lands here.
         let bin_dir =
             vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
         fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
@@ -568,15 +569,16 @@ mod tests {
         let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        let _guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&vp_home));
-        let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+        vp_shared::EnvConfig::with_vars_async([(vp_shared::env_vars::VP_HOME, &vp_home)], |_| async {
+            let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
 
         assert!(
             matches!(result, Err(Error::PackageManagerHashMismatch(_))),
             "an integrity failure must reach the user instead of a missing command: {result:?}"
         );
         fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+            })
+        .await;
     }
 
     #[tokio::test]

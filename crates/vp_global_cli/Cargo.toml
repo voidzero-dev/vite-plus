@@ -45,6 +45,7 @@ uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 serial_test = { workspace = true }
+temp-env = { workspace = true }
 tempfile = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }
 
