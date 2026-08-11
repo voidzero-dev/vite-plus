@@ -4,7 +4,7 @@ Vite+ is the unified toolchain and entry point for web development. It manages y
 
 Vite+ ships in two parts: `vp`, the global command-line tool, and `vite-plus`, the local package installed in each project. If you already have a Vite project, use [`vp migrate`](/guide/migrate) to migrate it to Vite+, or paste our [migration prompt](/guide/migrate#migration-prompt) into your coding agent.
 
-Building with an AI assistant? Copy a ready-made setup prompt:
+Building with an AI assistant? View and copy a ready-made setup prompt:
 
 <CopyPrompt />
 
@@ -93,6 +93,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
 - [`vp config`](/guide/commit-hooks) installs the Git hook dispatcher and configures agent integration.
+- [`vp hooks`](/guide/commit-hooks) manages the Git hook dispatcher (`enable`, `disable`, `status`).
 - [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [`vp install`](/guide/install) installs dependencies with the right package manager.
 - [`vp env`](/guide/env) manages Node.js versions.

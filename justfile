@@ -81,14 +81,25 @@ test:
   $packages = Get-ChildItem -Path crates -Directory | Where-Object { $_.Name -ne 'vp_cli_snapshots' } | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
 # PTY-based CLI snapshot tests (crates/vp_cli_snapshots). Builds the global
-# binary and shim template first so the runner never tests a stale build.
+# binary and shim template first so the runner never tests a stale build, and
+# installs Playwright Chromium for the browser-mode cases (idempotent).
 # Filter by trial name substring: `just snapshot-test create`. Accept snapshot changes with
 # `UPDATE_SNAPSHOTS=1 just snapshot-test`. Local-flavor cases additionally
 # need a built packages/cli (`pnpm build`); the runner fails fast when dist
 # is missing or stale. Use snapshot-test-global on checkouts without one.
-snapshot-test *args='':
+snapshot-test *args='': _install_chromium
   cargo build -p vp_global_cli -p vp_trampoline
   cargo test -p vp_cli_snapshots -- {{args}}
+
+# Browser-mode snapshot cases run with PLAYWRIGHT_BROWSERS_PATH=0, so the
+# browser must be installed into node_modules with the same setting.
+[unix]
+_install_chromium:
+  PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium
+
+[windows]
+_install_chromium:
+  $Env:PLAYWRIGHT_BROWSERS_PATH='0'; pnpm exec playwright install chromium
 
 # Global flavor + vpt cases only: needs no JS build, for Rust-side work on
 # a checkout that never ran `pnpm build`.

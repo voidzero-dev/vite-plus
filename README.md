@@ -196,7 +196,7 @@ See [Automatic Version Updates](https://viteplus.dev/guide/ci#automatic-version-
 If you are manually migrating a project to Vite+, install these dev dependencies first:
 
 ```bash
-npm install -D vite-plus @voidzero-dev/vite-plus-core@latest
+vp install -D vite-plus
 ```
 
 You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):

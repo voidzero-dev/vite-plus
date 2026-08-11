@@ -5,7 +5,9 @@ use crate::resolution::{
     PackageManagerDialect, Pnpm, Resolve, Yarn,
 };
 
-const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. Enforcement is planned for a future npm release.";
+const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. npm 12 enforces the policy.";
+
+const NPM_ENFORCED_NOTE: &str = "npm records the approval in the `allowScripts` field of package.json but does not run scripts a previous install skipped. Run `vp pm rebuild <package>` to execute them.";
 
 #[pm_args]
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
@@ -150,7 +152,18 @@ impl Resolve<ApproveBuildsArgs> for Npm {
             }
         }
         if writes_policy {
-            diag.note(DiagnosticKind::BehaviorChange, NPM_ADVISORY_NOTE);
+            // npm 12 enforces allowScripts (skipped scripts stay skipped until a
+            // rebuild); 11.16 - 11.x only warn. An unknown version is treated as
+            // current, matching the version-gate default above.
+            if self.version().is_none_or(|version| version_satisfies(version, ">=12.0.0")) {
+                // An approval takes effect on the next rebuild; a denial keeps
+                // the enforced default and needs no follow-up.
+                if !has_denies {
+                    diag.note(DiagnosticKind::BehaviorChange, NPM_ENFORCED_NOTE);
+                }
+            } else {
+                diag.note(DiagnosticKind::BehaviorChange, NPM_ADVISORY_NOTE);
+            }
         }
         cmd.extend(args.pass_through_args.iter());
         cmd.into()
@@ -217,7 +230,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -238,11 +251,7 @@ mod tests {
 
     #[test]
     fn pnpm_no_args_interactive() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.32.0"), ApproveBuildsArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.32.0"), ApproveBuildsArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["approve-builds"]);
@@ -250,17 +259,16 @@ mod tests {
 
     #[test]
     fn pnpm_with_packages() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.32.0"),
-            ApproveBuildsArgs {
-                packages: vec!["esbuild".to_string(), "fsevents".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.32.0"),
+                ApproveBuildsArgs {
+                    packages: vec!["esbuild".to_string(), "fsevents".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["approve-builds", "esbuild", "fsevents"]);
@@ -268,17 +276,16 @@ mod tests {
 
     #[test]
     fn pnpm_v11_passes_deny_syntax_through() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("11.0.0"),
-            ApproveBuildsArgs {
-                packages: vec!["esbuild".to_string(), "!core-js".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.0.0"),
+                ApproveBuildsArgs {
+                    packages: vec!["esbuild".to_string(), "!core-js".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["approve-builds", "esbuild", "!core-js"]);
     }
@@ -311,12 +318,10 @@ mod tests {
 
     #[test]
     fn pnpm_all_flag() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.32.0"), ApproveBuildsArgs { all: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["approve-builds", "--all"]);
     }
@@ -345,30 +350,27 @@ mod tests {
 
     #[test]
     fn pnpm_all_accepts_newer_major_prerelease() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("11.0.0-rc.0"), ApproveBuildsArgs { all: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.args, vec!["approve-builds", "--all"]);
     }
 
     #[test]
     fn pnpm_appends_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.32.0"),
-            ApproveBuildsArgs {
-                all: true,
-                pass_through_args: vec!["--workspace-root".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.32.0"),
+                ApproveBuildsArgs {
+                    all: true,
+                    pass_through_args: vec!["--workspace-root".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["approve-builds", "--all", "--workspace-root"]);
     }
@@ -392,14 +394,13 @@ mod tests {
 
     #[test]
     fn bun_trust_by_name() {
-        let CommandResolution::Run(command) = resolve(
-            &bun("1.3.0"),
-            ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &bun("1.3.0"),
+                ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["pm", "trust", "esbuild"]);
@@ -407,11 +408,9 @@ mod tests {
 
     #[test]
     fn bun_trust_all() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.0"), ApproveBuildsArgs { all: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&bun("1.3.0"), ApproveBuildsArgs { all: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["pm", "trust", "--all"]);
     }
@@ -425,9 +424,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["pm", "trust", "esbuild"]);
         assert!(resolution.diagnostics[0].message.contains("Skipping: core-js"));
@@ -469,9 +466,7 @@ mod tests {
             &Npm::unknown_version(),
             ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["approve-scripts", "esbuild"]);
     }
@@ -496,9 +491,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["approve-scripts", "esbuild", "fsevents"]);
@@ -507,11 +500,9 @@ mod tests {
 
     #[test]
     fn npm_v11_16_all() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.16.0"), ApproveBuildsArgs { all: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&npm("11.16.0"), ApproveBuildsArgs { all: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.args, vec!["approve-scripts", "--all"]);
     }
@@ -519,9 +510,7 @@ mod tests {
     #[test]
     fn npm_v11_16_no_args_lists_pending() {
         let resolution = resolve(&npm("11.16.0"), ApproveBuildsArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, vec!["approve-scripts", "--allow-scripts-pending"]);
         assert!(resolution.diagnostics.is_empty());
@@ -529,17 +518,16 @@ mod tests {
 
     #[test]
     fn npm_v11_16_pending_forwards_flags() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.16.0"),
-            ApproveBuildsArgs {
-                pass_through_args: vec!["--json".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.16.0"),
+                ApproveBuildsArgs {
+                    pass_through_args: vec!["--json".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["approve-scripts", "--allow-scripts-pending", "--json"]);
     }
@@ -566,12 +554,60 @@ mod tests {
             &npm("11.16.0"),
             ApproveBuildsArgs { packages: vec!["!core-js".to_string()], ..Default::default() },
         );
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.args, vec!["deny-scripts", "core-js"]);
+        assert_eq!(resolution.diagnostics[0].message, NPM_ADVISORY_NOTE);
+    }
+
+    #[test]
+    fn npm_v12_approve_notes_rebuild() {
+        let resolution = resolve(
+            &npm("12.0.2"),
+            ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
+        );
+        let CommandResolution::Run(command) = resolution.outcome else {
+            panic!("expected command resolution");
+        };
+
+        assert_eq!(command.args, vec!["approve-scripts", "esbuild"]);
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
+    }
+
+    #[test]
+    fn npm_v12_all_notes_rebuild() {
+        let resolution =
+            resolve(&npm("12.0.2"), ApproveBuildsArgs { all: true, ..Default::default() });
+        let CommandResolution::Run(command) = resolution.outcome else {
+            panic!("expected command resolution");
+        };
+
+        assert_eq!(command.args, vec!["approve-scripts", "--all"]);
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
+    }
+
+    #[test]
+    fn npm_v12_deny_has_no_note() {
+        let resolution = resolve(
+            &npm("12.0.2"),
+            ApproveBuildsArgs { packages: vec!["!core-js".to_string()], ..Default::default() },
+        );
         let CommandResolution::Run(command) = resolution.outcome else {
             panic!("expected command resolution");
         };
 
         assert_eq!(command.args, vec!["deny-scripts", "core-js"]);
-        assert_eq!(resolution.diagnostics[0].message, NPM_ADVISORY_NOTE);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn npm_unknown_version_notes_rebuild() {
+        let resolution = resolve(
+            &Npm::unknown_version(),
+            ApproveBuildsArgs { packages: vec!["esbuild".to_string()], ..Default::default() },
+        );
+
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
     }
 
     #[test]

@@ -212,7 +212,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         Resolution, resolve,
-        test_utils::{bun, npm, parse_subcommand, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
     };
 
     fn set_config(location: Option<&str>) -> ConfigCommand {
@@ -242,11 +242,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_config_set() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&pnpm("10.0.0"), set_config(None))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), set_config(None)).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);
@@ -254,11 +250,7 @@ mod tests {
 
     #[test]
     fn test_npm_config_set() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&npm("11.0.0"), set_config(None))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), set_config(None)).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);
@@ -266,18 +258,19 @@ mod tests {
 
     #[test]
     fn test_config_set_with_json() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            ConfigCommand::Set {
-                key: "registry".to_string(),
-                value: "https://registry.npmjs.org".to_string(),
-                json: true,
-                global: false,
-                location: None,
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ConfigCommand::Set {
+                    key: "registry".to_string(),
+                    value: "https://registry.npmjs.org".to_string(),
+                    json: true,
+                    global: false,
+                    location: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -288,11 +281,7 @@ mod tests {
 
     #[test]
     fn test_config_set_with_location_global() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&pnpm("10.0.0"), set_config(Some("global")))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), set_config(Some("global"))).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -303,11 +292,7 @@ mod tests {
 
     #[test]
     fn test_yarn2_config_set_location_global() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&yarn("4.0.0"), set_config(Some("global")))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), set_config(Some("global"))).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -318,11 +303,7 @@ mod tests {
 
     #[test]
     fn test_yarn1_config_set() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&yarn("1.22.0"), set_config(None))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), set_config(None)).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);
@@ -330,18 +311,19 @@ mod tests {
 
     #[test]
     fn test_pnpm_config_set_global() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            ConfigCommand::Set {
-                key: "registry".to_string(),
-                value: "https://registry.npmjs.org".to_string(),
-                json: false,
-                global: true,
-                location: None,
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ConfigCommand::Set {
+                    key: "registry".to_string(),
+                    value: "https://registry.npmjs.org".to_string(),
+                    json: false,
+                    global: true,
+                    location: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -352,11 +334,7 @@ mod tests {
 
     #[test]
     fn test_npm_config_set_global() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&npm("11.0.0"), set_config(Some("global")))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), set_config(Some("global"))).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -367,11 +345,7 @@ mod tests {
 
     #[test]
     fn test_yarn1_config_set_global() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&yarn("1.22.0"), set_config(Some("global")))
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), set_config(Some("global"))).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -382,17 +356,18 @@ mod tests {
 
     #[test]
     fn test_pnpm_config_get() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            ConfigCommand::Get {
-                key: "registry".to_string(),
-                json: false,
-                global: false,
-                location: None,
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                ConfigCommand::Get {
+                    key: "registry".to_string(),
+                    json: false,
+                    global: false,
+                    location: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["config", "get", "registry"]);
@@ -400,12 +375,17 @@ mod tests {
 
     #[test]
     fn test_npm_config_delete() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.0.0"),
-            ConfigCommand::Delete { key: "registry".to_string(), global: false, location: None },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                ConfigCommand::Delete {
+                    key: "registry".to_string(),
+                    global: false,
+                    location: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["config", "delete", "registry"]);
@@ -413,12 +393,17 @@ mod tests {
 
     #[test]
     fn test_yarn2_config_delete() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            ConfigCommand::Delete { key: "registry".to_string(), global: false, location: None },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                ConfigCommand::Delete {
+                    key: "registry".to_string(),
+                    global: false,
+                    location: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["config", "unset", "registry"]);
@@ -426,12 +411,13 @@ mod tests {
 
     #[test]
     fn test_yarn2_config_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            ConfigCommand::List { json: false, global: false, location: None },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                ConfigCommand::List { json: false, global: false, location: None },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["config"]);
@@ -439,11 +425,9 @@ mod tests {
 
     #[test]
     fn test_yarn1_location_project_warns_and_drops() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } =
-            resolve(&yarn("1.22.0"), set_config(Some("project")))
-        else {
-            panic!("expected command resolution");
-        };
+        let Resolution { outcome, diagnostics } =
+            resolve(&yarn("1.22.0"), set_config(Some("project")));
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);
@@ -452,11 +436,9 @@ mod tests {
 
     #[test]
     fn test_yarn2_location_project_is_silently_ignored() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } =
-            resolve(&yarn("4.0.0"), set_config(Some("project")))
-        else {
-            panic!("expected command resolution");
-        };
+        let Resolution { outcome, diagnostics } =
+            resolve(&yarn("4.0.0"), set_config(Some("project")));
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);
@@ -465,11 +447,8 @@ mod tests {
 
     #[test]
     fn test_bun_config_fallback_keeps_bun_program() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } =
-            resolve(&bun("1.3.11"), set_config(None))
-        else {
-            panic!("expected command resolution");
-        };
+        let Resolution { outcome, diagnostics } = resolve(&bun("1.3.11"), set_config(None));
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);

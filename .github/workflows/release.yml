@@ -213,6 +213,34 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
+  # Deploy viteplus.dev from the release commit after the npm packages and the
+  # GitHub release are published, so the site and the install scripts always
+  # match the released vp. Skipped for prereleases: production docs must keep
+  # describing the latest stable release. See rfcs/deploy-docs-on-release.md.
+  deploy-docs:
+    name: Deploy docs
+    runs-on: ubuntu-latest
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    # Shared with deploy-docs.yml so production deploys serialize across both
+    # entry paths. Only the newest pending run survives in the group; if this
+    # job's pending run is replaced by a manual dispatch, the canceled job
+    # holds back discord-notify and the deploy must be re-run.
+    concurrency:
+      group: deploy-docs
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}
+
   # Build and push the official toolchain Docker image to GHCR after the npm
   # release is published (the image installs vp from npm, so the version must
   # exist first). See docker/Dockerfile and docs/guide/docker.md.
@@ -266,15 +294,22 @@ jobs:
             VP_VERSION=${{ env.VERSION }}
           provenance: false
 
-  # Announce the release on Discord last, after the Docker images are published,
-  # so the message can include the GHCR image. Runs after the npm release
-  # (Release) and the images (publish-docker).
+  # Announce the release on Discord last, after the Docker images and the docs
+  # are published, so the message never points at a missing image or a site
+  # that still shows the previous release.
   discord-notify:
     name: Notify Discord
     runs-on: ubuntu-latest
     # publish-docker already needs Release, so depending on it orders this last.
-    needs: [check, publish-docker]
-    if: needs.check.outputs.version_changed == 'true'
+    # deploy-docs is skipped for prereleases; gate on its result explicitly so
+    # prerelease announcements still go out, while a failed docs deploy on a
+    # stable release holds the announcement back.
+    needs: [check, publish-docker, deploy-docs]
+    if: >-
+      !cancelled() &&
+      needs.check.outputs.version_changed == 'true' &&
+      needs.publish-docker.result == 'success' &&
+      (needs.deploy-docs.result == 'success' || needs.deploy-docs.result == 'skipped')
     env:
       VERSION: ${{ needs.check.outputs.version }}
       IMAGE: ghcr.io/voidzero-dev/vite-plus

@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_nushell"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["nu"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "home\with spaces"']], snapshot = false },
+  { argv = ["vpt", "cp", "assert.nu", 'vp "home\with spaces"/assert.nu'], snapshot = false },
+  { argv = ["nu", "assert.nu"], cwd = 'vp "home\with spaces"', comment = "loads the generated env.nu and verifies the Nushell wrapper", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
+]

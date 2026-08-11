@@ -1,0 +1,87 @@
+name: 'Build and deploy docs'
+description: >-
+  Build the VitePress docs site (which bundles install.sh / install.ps1 into
+  its public assets) and deploy it to a void.app project. Run on a Linux
+  runner after checkout. See rfcs/deploy-docs-on-release.md for which
+  workflow deploys to which project.
+
+inputs:
+  void-project:
+    description: 'void.app project to deploy to (e.g. viteplus, viteplus-main).'
+    required: true
+  void-token:
+    description: 'void.app deploy token (pass secrets.VOID_TOKEN).'
+    required: true
+  cache-ref:
+    description: >-
+      Ref-scoped segment of the Vite Task cache key: main, or pr-<number> for
+      PR previews. Non-main refs fall back to the main cache on restore.
+    required: false
+    default: 'main'
+  cache-sha:
+    description: 'Commit sha that scopes the primary cache key.'
+    required: false
+    default: ${{ github.sha }}
+  site-origin:
+    description: >-
+      Origin of this deploy when it is not production viteplus.dev
+      (e.g. https://main.viteplus.dev). When set, the docs build rewrites the
+      https://vite.plus installer URLs to this origin's install scripts.
+      Leave empty for production.
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # main
+      with:
+        cache: true
+        working-directory: docs
+        cache-dependency-path: docs/pnpm-lock.yaml
+
+    - name: Compute Vite Task cache keys
+      id: cache-keys
+      shell: bash
+      env:
+        CACHE_REF: ${{ inputs.cache-ref }}
+        CACHE_SHA: ${{ inputs.cache-sha }}
+      run: |
+        prefix="vite-task-docs-${RUNNER_OS}-${RUNNER_ARCH}"
+        {
+          echo "key=${prefix}-${CACHE_REF}-${CACHE_SHA}"
+          echo 'restore-keys<<EOF'
+          echo "${prefix}-${CACHE_REF}-"
+          if [ "$CACHE_REF" != 'main' ]; then
+            echo "${prefix}-main-"
+          fi
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore docs Vite Task cache
+      id: vite-task-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: docs/node_modules/.vite/task-cache
+        key: ${{ steps.cache-keys.outputs.key }}
+        # Prefer this ref's newest cache; Vite Task fingerprints decide reuse.
+        restore-keys: ${{ steps.cache-keys.outputs.restore-keys }}
+
+    - run: vp run build
+      shell: bash
+      working-directory: docs
+      env:
+        DOCS_SITE_ORIGIN: ${{ inputs.site-origin }}
+
+    - name: Save docs Vite Task cache
+      if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: docs/node_modules/.vite/task-cache
+        key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
+
+    - run: vpx void deploy --dir docs/.vitepress/dist
+      shell: bash
+      env:
+        VOID_PROJECT: ${{ inputs.void-project }}
+        VOID_TOKEN: ${{ inputs.void-token }}

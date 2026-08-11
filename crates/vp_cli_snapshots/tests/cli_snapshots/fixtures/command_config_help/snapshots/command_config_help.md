@@ -10,7 +10,7 @@ Usage: vp config [OPTIONS]
 Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
-  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used in this clone)
   --no-hooks          Skip hook dispatcher installation
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
@@ -31,7 +31,7 @@ Usage: vp config [OPTIONS]
 Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
-  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used in this clone)
   --no-hooks          Skip hook dispatcher installation
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
@@ -52,7 +52,7 @@ Usage: vp config [OPTIONS]
 Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
-  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used in this clone)
   --no-hooks          Skip hook dispatcher installation
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
