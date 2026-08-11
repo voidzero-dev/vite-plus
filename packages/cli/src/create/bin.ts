@@ -922,8 +922,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   };
 
   // After a successful install, surface gated build scripts (native builds like
-  // better-sqlite3 the template added as a direct dependency) that pnpm or bun
-  // blocked, and let the user approve them. `projectPath` is the created package
+  // better-sqlite3 the template added as a direct dependency) that the package
+  // manager blocked, and let the user approve them. `projectPath` is the created package
   // whose direct deps decide what is worth prompting for; `installCwd` is where
   // the package manager (and `node_modules`) lives.
   // Gated builds reported by the ESLint/Prettier migration pre-install. yarn

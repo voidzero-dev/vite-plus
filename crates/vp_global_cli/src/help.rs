@@ -47,6 +47,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ] => Some("https://viteplus.dev/guide/install"),
         ["dlx"] => Some("https://viteplus.dev/guide/vpx"),
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
+        ["toolchain"] => Some("https://viteplus.dev/guide/upgrade"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
         ["implode"] => Some("https://viteplus.dev/guide/implode"),
         _ => None,
@@ -395,6 +396,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("create", "Create a new project from a template"),
                     row("migrate", "Migrate an existing project to Vite+"),
                     row("config", "Configure hooks and agent integration"),
+                    row("hooks", "Manage the Git hook dispatcher"),
                     row("staged", "Run linters on staged files"),
                     row(
                         "install, i",
@@ -451,6 +453,7 @@ pub fn top_level_help_doc() -> HelpDoc {
             section_rows(
                 "Maintain",
                 vec![
+                    row("toolchain", "Show active Vite+ tools, versions, and relationships"),
                     row("upgrade", "Update vp itself to the latest version"),
                     row("implode", "Remove vp and all related data"),
                 ],
@@ -562,6 +565,7 @@ fn skip_clap_unified_help(command: &str) -> bool {
         "create"
             | "migrate"
             | "config"
+            | "hooks"
             | "staged"
             | "dev"
             | "build"

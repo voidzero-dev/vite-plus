@@ -54,8 +54,8 @@ impl Resolve<PingArgs> for Npm {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -71,9 +71,7 @@ mod tests {
     #[test]
     fn test_ping_basic() {
         let resolution = resolve(&pnpm("10.0.0"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);
@@ -88,9 +86,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping", "--registry", "https://registry.npmjs.org"]);
@@ -99,9 +95,7 @@ mod tests {
     #[test]
     fn test_bun_ping_uses_npm_without_warning() {
         let resolution = resolve(&bun("1.3.11"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);
@@ -111,9 +105,7 @@ mod tests {
     #[test]
     fn test_yarn_ping_uses_npm() {
         let resolution = resolve(&yarn("4.0.0"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);
@@ -122,9 +114,7 @@ mod tests {
     #[test]
     fn test_yarn_classic_ping_uses_npm() {
         let resolution = resolve(&yarn("1.22.0"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);

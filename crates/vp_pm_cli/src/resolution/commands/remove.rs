@@ -131,8 +131,8 @@ impl Resolve<RemoveArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn remove_args(packages: &[&str]) -> RemoveArgs {
@@ -161,9 +161,7 @@ mod tests {
     #[test]
     fn test_pnpm_basic_remove() {
         let resolution = resolve(&pnpm("1.0.0"), remove_args(&["lodash"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "lodash"]);
@@ -174,9 +172,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "remove", "lodash"]);
@@ -187,9 +183,7 @@ mod tests {
         let mut options = remove_args(&["typescript"]);
         options.workspace_root = true;
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "--workspace-root", "typescript"]);
@@ -200,9 +194,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.recursive = true;
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "--recursive", "lodash"]);
@@ -213,9 +205,7 @@ mod tests {
         let mut options = remove_args(&["axios"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "--filter", "web", "remove", "axios"]);
@@ -224,9 +214,7 @@ mod tests {
     #[test]
     fn test_yarn_basic_remove() {
         let resolution = resolve(&yarn("1.22.0"), remove_args(&["lodash"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["remove", "lodash"]);
@@ -237,9 +225,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -253,9 +239,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.recursive = true;
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["remove", "--all", "lodash"]);
@@ -266,9 +250,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -280,9 +262,7 @@ mod tests {
     #[test]
     fn test_npm_basic_remove() {
         let resolution = resolve(&npm("1.0.0"), remove_args(&["lodash"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "lodash"]);
@@ -293,9 +273,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "--workspace", "app", "lodash"]);
@@ -306,9 +284,7 @@ mod tests {
         let mut options = remove_args(&["typescript"]);
         options.workspace_root = true;
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "--include-workspace-root", "typescript"]);
@@ -319,9 +295,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.recursive = true;
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -335,9 +309,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -349,9 +321,7 @@ mod tests {
     #[test]
     fn test_bun_basic_remove() {
         let resolution = resolve(&bun("1.0.0"), remove_args(&["lodash"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["remove", "lodash"]);
@@ -362,9 +332,7 @@ mod tests {
         let mut options = remove_args(&["typescript"]);
         options.global = true;
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "--global", "typescript"]);
@@ -373,9 +341,7 @@ mod tests {
     #[test]
     fn test_remove_multiple_packages() {
         let resolution = resolve(&pnpm("1.0.0"), remove_args(&["lodash", "axios", "underscore"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "lodash", "axios", "underscore"]);
@@ -386,9 +352,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.pass_through_args = vec!["--use-stderr".to_string()];
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "--use-stderr", "lodash"]);
@@ -400,9 +364,7 @@ mod tests {
         options.global = true;
         options.pass_through_args = vec!["--foreground-scripts".to_string()];
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -416,9 +378,7 @@ mod tests {
         let mut options = remove_args(&["typescript"]);
         options.save_dev = true;
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "--save-dev", "typescript"]);
@@ -429,9 +389,7 @@ mod tests {
         let mut options = remove_args(&["sharp"]);
         options.save_optional = true;
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "--save-optional", "sharp"]);
@@ -442,9 +400,7 @@ mod tests {
         let mut options = remove_args(&["react"]);
         options.save_prod = true;
         let resolution = resolve(&pnpm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["remove", "--save-prod", "react"]);
@@ -455,9 +411,7 @@ mod tests {
         let mut options = remove_args(&["typescript"]);
         options.save_dev = true;
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "typescript"]);
@@ -468,9 +422,7 @@ mod tests {
         let mut options = remove_args(&["sharp"]);
         options.save_optional = true;
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "sharp"]);
@@ -481,9 +433,7 @@ mod tests {
         let mut options = remove_args(&["react"]);
         options.save_prod = true;
         let resolution = resolve(&npm("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["uninstall", "react"]);
@@ -496,9 +446,7 @@ mod tests {
         options.save_optional = true;
         options.save_prod = true;
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["remove", "lodash"]);
@@ -509,9 +457,7 @@ mod tests {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -536,9 +482,7 @@ mod tests {
         options.filter = vec!["app".to_string(), "web".to_string()];
         options.recursive = true;
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["remove", "--all", "lodash"]);
@@ -550,9 +494,7 @@ mod tests {
         options.filter = vec!["app".to_string()];
         options.workspace_root = true;
         let resolution = resolve(&bun("1.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["remove", "lodash"]);

@@ -8,7 +8,7 @@
 use clap::Subcommand;
 
 use crate::{
-    Error, PackageManager,
+    Error, PackageManager, PackageManagerType,
     resolution::{
         AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, CiArgs, ConfigCommand, DedupeArgs,
         DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs,
@@ -284,7 +284,7 @@ impl PackageManagerCommand {
             Self::Outdated(args) => {
                 matches!(args.format, Some(OutdatedFormat::Json | OutdatedFormat::List))
             }
-            Self::Why(args) => args.json || args.parseable,
+            Self::Why(args) => args.is_machine_readable(),
             Self::Info(args) => args.json,
             Self::Pm(command) => command.is_quiet_or_machine_readable(),
             _ => false,
@@ -311,6 +311,23 @@ impl PackageManagerCommand {
     pub fn install_silent(&self) -> Option<bool> {
         match self {
             Self::Install(args) => Some(args.silent),
+            _ => None,
+        }
+    }
+
+    /// Package names for the Vite+ toolchain hint.
+    ///
+    /// Do not add the hint to JSON or parseable `why` output.
+    #[must_use]
+    pub fn why_hint_packages(&self, manager: PackageManagerType) -> Option<&[String]> {
+        match self {
+            Self::Why(args) if !args.is_machine_readable() => {
+                if manager == PackageManagerType::Yarn {
+                    args.packages.get(..1)
+                } else {
+                    Some(&args.packages)
+                }
+            }
             _ => None,
         }
     }
@@ -597,6 +614,9 @@ mod tests {
             &["dlx", "--silent", "tsx"][..],
             &["outdated", "--format", "json"][..],
             &["why", "react", "--parseable"][..],
+            &["why", "react", "--", "--json"][..],
+            &["why", "react", "--", "--json=true"][..],
+            &["why", "react", "--", "--json=0"][..],
             &["info", "react", "--json"][..],
             &["pm", "list", "--json"][..],
             &["pm", "version", "patch", "--json"][..],
@@ -606,7 +626,79 @@ mod tests {
         ] {
             assert!(parse(args).unwrap().is_quiet_or_machine_readable(), "{args:?}");
         }
+        for args in [
+            &["why", "react", "--", "--json=false"][..],
+            &["why", "react", "--", "--parseable=false"][..],
+        ] {
+            assert!(!parse(args).unwrap().is_quiet_or_machine_readable(), "{args:?}");
+        }
         assert!(!parse(&["install"]).unwrap().is_quiet_or_machine_readable());
+    }
+
+    #[test]
+    fn why_hint_packages_excludes_json_and_parseable_output() {
+        let readable = parse(&["why", "vite", "vitest"]).unwrap();
+        assert_eq!(
+            readable.why_hint_packages(PackageManagerType::Pnpm),
+            Some(["vite".to_string(), "vitest".to_string()].as_slice())
+        );
+        assert_eq!(
+            readable.why_hint_packages(PackageManagerType::Yarn),
+            Some(["vite".to_string()].as_slice())
+        );
+
+        assert_eq!(
+            parse(&["why", "vite", "--json"]).unwrap().why_hint_packages(PackageManagerType::Pnpm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--parseable"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--json"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--parseable"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--json=true"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--json=0"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Npm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--parseable=true"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            None
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--json=false"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            Some(["vite".to_string()].as_slice())
+        );
+        assert_eq!(
+            parse(&["why", "vite", "--", "--parseable=false"])
+                .unwrap()
+                .why_hint_packages(PackageManagerType::Pnpm),
+            Some(["vite".to_string()].as_slice())
+        );
     }
 
     #[test]

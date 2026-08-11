@@ -22,7 +22,7 @@ The highest-priority signal. If the root `package.json` contains a `packageManag
 
 - `name` must be one of: `pnpm`, `yarn`, `npm`, `bun`
 - `semver` must be valid (e.g., `10.19.0`, `4.0.0`)
-- Optional hash suffix: `pnpm@10.0.0+sha512.abc123...`
+- Optional integrity hash suffix: `pnpm@10.0.0+sha512.abc123...` (see [Integrity Hashes](#integrity-hashes))
 
 **Errors**:
 
@@ -180,8 +180,39 @@ This ensures:
 
 **Special cases**:
 
-- **yarn ≥ 2.0.0**: Downloads from `@yarnpkg/cli-dist` instead of `yarn` npm package
+- **yarn ≥ 2.0.0**: Downloads from `@yarnpkg/cli-dist` instead of the `yarn` npm package, and extracts only `bin/yarn.js`. Every 2.x prerelease counts as Yarn 2 or later; see [the Yarn 2 boundary](#the-yarn-2-boundary).
 - **bun**: Downloads platform-specific native binary from `@oven/bun-{os}-{arch}` (including musl variants for Alpine Linux)
+
+## Integrity Hashes
+
+A `packageManager` field can carry an integrity hash: `yarn@4.17.1+sha512.ccbf…`. `corepack use` writes that suffix. Vite+ hashes the same artifact as Corepack, so one pin works under both tools.
+
+| Package manager              | What the declared hash covers                       | What Vite+ also verifies                                   |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| Yarn 2 and later             | the extracted CLI, `bin/yarn.js`                    | —                                                          |
+| npm, pnpm ≤ 11, Yarn Classic | the npm package tarball                             | —                                                          |
+| pnpm ≥ 12                    | the main `pnpm` tarball                             | the platform package against the registry `dist.integrity` |
+| bun                          | the main `bun` tarball, which Vite+ never downloads | the platform package against the registry `dist.integrity` |
+
+Yarn 2 and later is the exception because Corepack installs Berry from a single file, `repo.yarnpkg.com/<version>/packages/yarnpkg-cli/bin/yarn.js`, and hashes that file. Vite+ downloads the `@yarnpkg/cli-dist` tarball instead, so it extracts `bin/yarn.js` and hashes that entry. The bytes are the same; only the basis differs. Vite+ hashed the tarball before, which made a pin written by `corepack use` fail (issue #2209).
+
+That pin covers one file inside an otherwise unauthenticated archive, so Vite+ writes only that entry to disk. No other archive entry reaches the install directory, and an archive-controlled path or symlink cannot escape it.
+
+### When Vite+ verifies a pin
+
+Vite+ hashes the artifact when it downloads it, and records the verified pin beside the install in `<version>/.verified-pin`. A later command compares its own pin against that record:
+
+- The pins match. The command uses the cache and reads no further.
+- The pins differ, or the record is missing. Vite+ hashes the cached CLI once, then rewrites the record.
+- The hash disagrees with the pin. The command stops with `Hash mismatch for <name>@<version>`, and the message names the artifact the hash covers.
+
+Vite+ does not read the CLI again on every command. Corepack gives the same guarantee: it reads its own `.corepack` record and returns. The trust boundary is write access to `$VP_HOME`, which also holds the `vp` binary, the generated shims, and the managed Node.js runtime.
+
+An integrity failure stops the command that needs the package manager, including `vp run` and `vp exec`. Those commands otherwise continue when the managed package manager is missing, for example with no network or an unknown version. A swallowed integrity failure would surface later as "command not found".
+
+### The Yarn 2 boundary
+
+Corepack splits Yarn at 2.0.0 and matches that range with `satisfiesWithPrereleases`, which drops the prerelease tag before it compares. Every 2.x prerelease is therefore a Berry version to Corepack. Vite+ compares the major number alone and agrees: `yarn@4.0.0-rc.53` resolves from `@yarnpkg/cli-dist`. A `>=2.0.0` semver range would exclude that version and send it to the Yarn Classic package, which never published it.
 
 ## Workspace and Monorepo Detection
 
@@ -226,6 +257,9 @@ Each package manager has specific files that trigger cache invalidation when cha
 - **File**: `crates/vp_pm_cli/src/package_manager.rs`
 - **Function**: `get_package_manager_type_and_version()` — priority-ordered detection
 - **Function**: `prompt_package_manager_selection()` — CI/TTY/interactive fallback
+- **Function**: `download_package_manager()` — download, hash, and record the verified pin
+- **Function**: `ensure_package_manager_bin()` — resolve the executable, shared with the global shim
+- **Function**: `verify_cached_cli_hash()` — compare a pin against the recorded pin
 - **Enum**: `PackageManagerType` — `Pnpm`, `Yarn`, `Npm`, `Bun`
 
 ### TypeScript (CLI integration)

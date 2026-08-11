@@ -5,7 +5,7 @@ import { hasConfigKey, mergeJsonConfig } from '../binding/index.js';
 import { createDefaultVitePlusLintConfig } from './oxlint-plugin-config.ts';
 import { fmt as resolveFmt } from './resolve-fmt.ts';
 import { runCommandSilently } from './utils/command.ts';
-import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.ts';
+import { BASEURL_TSCONFIG_WARNING, VITE_CONFIG_FILES, VITE_PLUS_NAME } from './utils/constants.ts';
 import { warnMsg } from './utils/terminal.ts';
 import { fixBaseUrlInTsconfig, hasBaseUrlInTsconfig } from './utils/tsconfig.ts';
 
@@ -31,15 +31,6 @@ const INIT_COMMAND_SPECS: Record<string, InitCommandSpec> = {
 function normalizeInitCommand(command: string | undefined): string | undefined {
   return command === 'format' ? 'fmt' : command;
 }
-
-const VITE_CONFIG_FILES = [
-  'vite.config.ts',
-  'vite.config.mts',
-  'vite.config.cts',
-  'vite.config.js',
-  'vite.config.mjs',
-  'vite.config.cjs',
-] as const;
 
 export interface InitCommandInspection {
   handled: boolean;

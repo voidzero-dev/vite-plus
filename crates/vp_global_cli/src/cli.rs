@@ -97,6 +97,13 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Manage the Vite+ Git hook dispatcher
+    #[command(disable_help_flag = true)]
+    Hooks {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Run vite-staged on Git staged files
     #[command(disable_help_flag = true, name = "staged")]
     Staged {
@@ -195,6 +202,21 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Show active Vite+ tools, versions, and relationships
+    Toolchain {
+        /// Tool or package names to show
+        #[arg(value_name = "TOOLS")]
+        tools: Vec<String>,
+
+        /// Print the graph as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Use the global Vite+ toolchain
+        #[arg(long)]
+        global: bool,
+    },
+
     /// Manage Node.js versions
     Env(EnvArgs),
 
@@ -246,6 +268,7 @@ impl Commands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::PackageManager(pm) => pm.is_quiet_or_machine_readable(),
+            Self::Toolchain { json, .. } => *json,
             Self::Upgrade { silent, .. } => *silent,
             Self::Env(args) => {
                 args.command.as_ref().is_some_and(|sub| sub.is_quiet_or_machine_readable())
@@ -611,7 +634,35 @@ async fn run_package_manager_command(
     }
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    Ok(vp_pm_cli::dispatch(&cwd, command).await?)
+    let hint_command = command.clone();
+    let result = vp_pm_cli::dispatch_with_metadata(&cwd, command).await?;
+    if result.status.success()
+        && let Some(packages) = hint_command.why_hint_packages(result.package_manager)
+    {
+        print_toolchain_why_hint(&cwd, packages);
+    }
+    Ok(result.status)
+}
+
+fn print_toolchain_why_hint(cwd: &vt_path::AbsolutePath, packages: &[String]) {
+    let Some(manifest) = active_toolchain_manifest(cwd) else {
+        return;
+    };
+    let Some(hint) = vp_toolchain::why_hint(&manifest, packages) else {
+        return;
+    };
+    output::raw_stderr("");
+    output::raw_stderr(&hint);
+}
+
+fn active_toolchain_manifest(cwd: &vt_path::AbsolutePath) -> Option<vp_toolchain::Manifest> {
+    let manifest_path =
+        if let Some(bin_js) = crate::js_executor::JsExecutor::resolve_local_vite_plus(cwd) {
+            bin_js.parent()?.join("toolchain.json")
+        } else {
+            crate::js_executor::JsExecutor::new(None).get_scripts_dir().ok()?.join("toolchain.json")
+        };
+    vp_toolchain::load_manifest(&manifest_path).ok()
 }
 
 async fn managed_install(
@@ -967,6 +1018,8 @@ pub async fn run_command_with_options(
 
         Commands::Config { args } => commands::config::execute(cwd, &args, raw_subcommand).await,
 
+        Commands::Hooks { args } => commands::hooks::execute(cwd, &args, raw_subcommand).await,
+
         Commands::Staged { args } => commands::staged::execute(cwd, &args, raw_subcommand).await,
 
         // Category C: Local CLI Delegation (forwarded to the local vite-plus CLI)
@@ -1031,6 +1084,10 @@ pub async fn run_command_with_options(
         Commands::Cache { args } => {
             maybe_print_runtime_header("cache", &args, render_options.show_header);
             commands::delegate::execute(cwd, "cache", &args, raw_subcommand).await
+        }
+
+        Commands::Toolchain { tools, json, global } => {
+            commands::toolchain::execute(cwd, tools, json, global, raw_subcommand).await
         }
 
         Commands::Env(args) => commands::env::execute(cwd, args).await,

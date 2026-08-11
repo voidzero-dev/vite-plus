@@ -1,0 +1,74 @@
+[[case]]
+name = "toolchain_full_local"
+vp = "local"
+comment = "The local CLI reads the manifest shipped in its vite-plus package."
+steps = [["vp", "toolchain"]]
+
+[[case]]
+name = "toolchain_full_global"
+vp = "global"
+comment = "The global flag reads the manifest paired with the global binary."
+steps = [["vp", "toolchain", "--global"]]
+
+[[case]]
+name = "toolchain_filters"
+vp = "local"
+steps = [
+  { argv = ["vp", "toolchain", "vite"], comment = "a tool filter keeps its ownership and engine chain" },
+  { argv = ["vp", "toolchain", "vite", "vitest"], comment = "multiple filters return a stable union" },
+  { argv = ["vp", "toolchain", "vite-plus-core", "tsgolint", "vite-task"], comment = "stable IDs and declared aliases resolve" },
+]
+
+[[case]]
+name = "toolchain_json"
+vp = "global"
+steps = [
+  { argv = ["vp", "toolchain", "vite", "--json", "--global"], tty = false, comment = "JSON contains one node per ID and no CLI header" },
+]
+
+[[case]]
+name = "toolchain_unknown"
+vp = "local"
+steps = [
+  { argv = ["vp", "toolchain", "rollup"], comment = "readable output points to the package graph", continue-on-failure = true },
+  { argv = ["vp", "toolchain", "rollup", "--json"], tty = false, comment = "JSON output does not include the readable hint", continue-on-failure = true },
+]
+
+[[case]]
+name = "toolchain_global_from_local_cli"
+vp = "local"
+steps = [
+  { argv = ["vp", "toolchain", "--global"], comment = "the local package leaves global selection to the global vp binary", continue-on-failure = true },
+]
+
+[[case]]
+name = "toolchain_old_local_routing"
+vp = "global"
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", "{\"name\":\"vite-plus\",\"version\":\"0.1.0\"}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/dist/bin.js", "console.error(\"error: Command 'toolchain' not found\");\nprocess.exitCode = 2;\n"], snapshot = false },
+  { argv = ["vp", "toolchain"], timeout = 120000, comment = "the global binary delegates and lets an old local CLI reject the command", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-f", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/dist/toolchain.json", "{\"schemaVersion\":1,\"nodes\":[{\"id\":\"vite-plus\",\"name\":\"vite-plus\",\"version\":\"0.1.0\",\"kind\":\"package\",\"delivery\":[\"dependency\"],\"aliases\":[]},{\"id\":\"vite\",\"name\":\"vite\",\"version\":\"0.1.0\",\"kind\":\"tool\",\"delivery\":[\"bundled\"],\"aliases\":[]}],\"edges\":[{\"from\":\"vite-plus\",\"to\":\"vite\",\"relationship\":\"bundles\"}]}\n"], snapshot = false },
+  { argv = ["vp", "toolchain"], comment = "a package without a runnable local CLI uses the global toolchain" },
+  { argv = ["vp", "why", "vite"], timeout = 120000, comment = "the hint uses the global manifest when the local CLI is not runnable" },
+  { argv = ["vp", "toolchain", "--global"], comment = "--global skips the old local package" },
+]
+
+[[case]]
+name = "toolchain_why_hint"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "why", "vite"], timeout = 120000, comment = "readable vp why output shows the toolchain hint" },
+  { argv = ["vp", "why", "vite", "--json"], tty = false, timeout = 120000, comment = "JSON package output does not include the hint" },
+]
+
+[[case]]
+name = "toolchain_why_hint_yarn"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
+  { argv = ["vp", "install", "--", "--mode=update-lockfile"], timeout = 120000, snapshot = false },
+  { argv = ["vp", "why", "vite", "vitest"], timeout = 120000, comment = "the hint only includes the package Yarn queried" },
+]

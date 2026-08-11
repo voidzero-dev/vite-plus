@@ -1,7 +1,7 @@
 /**
  * Unified entry point for both the local CLI (via bin/vp) and the global CLI (via Rust vp binary).
  *
- * Global commands (create, migrate, config, staged, --version) are handled by tsdown-bundled modules.
+ * Global commands (create, migrate, config, hooks, staged, --version) are handled by tsdown-bundled modules.
  * All other commands are delegated to the Rust core through NAPI bindings, which
  * uses JavaScript tool resolver functions to locate tool binaries.
  *
@@ -11,6 +11,7 @@
  */
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
@@ -101,6 +102,8 @@ if (args[0] === 'help' && args[1]) {
 }
 
 const command = args[0];
+const cliDistDir = path.dirname(fileURLToPath(import.meta.url));
+const vitePlusPackagePath = path.dirname(cliDistDir);
 
 if (maybePrintCommandHelp(args)) {
   // Help is rendered by the local CLI so it matches the installed toolchain.
@@ -110,6 +113,8 @@ if (maybePrintCommandHelp(args)) {
   await import('./migration/bin.js');
 } else if (command === 'config') {
   await import('./config/bin.js');
+} else if (command === 'hooks') {
+  await import('./hooks/bin.js');
 } else if (command === '--version' || command === '-V') {
   await import('./version.js');
 } else if (command === 'staged') {
@@ -137,6 +142,8 @@ if (maybePrintCommandHelp(args)) {
       vite,
       test,
       doc,
+      toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
+      vitePlusPackagePath,
       resolveUniversalViteConfig,
       nodeVersion: process.version,
       nodeExecPath: process.execPath,

@@ -80,6 +80,10 @@ pub struct CliOptions {
     /// Host Node.js executable path (`process.execPath`), used for the
     /// package-manager lifecycle env (`npm_node_execpath`/`NODE`).
     pub node_exec_path: Option<String>,
+    /// Generated toolchain manifest shipped with this vite-plus package.
+    pub toolchain_manifest_path: String,
+    /// Root directory of this vite-plus package.
+    pub vite_plus_package_path: String,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
 }
@@ -181,6 +185,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let args = options.args;
     let node_version = options.node_version;
     let node_exec_path = options.node_exec_path;
+    let toolchain_manifest_path = options.toolchain_manifest_path;
+    let vite_plus_package_path = options.vite_plus_package_path;
 
     // Create a channel to receive the result from the worker thread
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -197,6 +203,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             test: create_resolver(test_tsf, "Failed to resolve test command"),
             pack: create_resolver(pack_tsf, "Failed to resolve pack command"),
             doc: create_resolver(doc_tsf, "Failed to resolve doc command"),
+            toolchain_manifest_path,
+            vite_plus_package_path,
             resolve_universal_vite_config: create_vite_config_resolver(
                 resolve_universal_vite_config_tsf,
             ),

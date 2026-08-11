@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         Resolution, resolve,
-        test_utils::{bun, npm, parse_subcommand, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
     };
 
     #[test]
@@ -113,12 +113,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_owner_list_uses_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            OwnerCommand::List { package: "my-package".to_string(), otp: None },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OwnerCommand::List { package: "my-package".to_string(), otp: None },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["owner", "list", "my-package"]);
@@ -126,16 +127,17 @@ mod tests {
 
     #[test]
     fn test_npm_owner_add() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.0.0"),
-            OwnerCommand::Add {
-                user: "username".to_string(),
-                package: "my-package".to_string(),
-                otp: None,
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OwnerCommand::Add {
+                    user: "username".to_string(),
+                    package: "my-package".to_string(),
+                    otp: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["owner", "add", "username", "my-package"]);
@@ -143,16 +145,17 @@ mod tests {
 
     #[test]
     fn test_yarn_owner_rm_uses_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            OwnerCommand::Rm {
-                user: "username".to_string(),
-                package: "my-package".to_string(),
-                otp: None,
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                OwnerCommand::Rm {
+                    user: "username".to_string(),
+                    package: "my-package".to_string(),
+                    otp: None,
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["owner", "rm", "username", "my-package"]);
@@ -160,12 +163,13 @@ mod tests {
 
     #[test]
     fn test_yarn_classic_owner_uses_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("1.22.0"),
-            OwnerCommand::List { package: "my-package".to_string(), otp: None },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("1.22.0"),
+                OwnerCommand::List { package: "my-package".to_string(), otp: None },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["owner", "list", "my-package"]);
@@ -173,12 +177,11 @@ mod tests {
 
     #[test]
     fn test_bun_owner_uses_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } = resolve(
+        let Resolution { outcome, diagnostics } = resolve(
             &bun("1.3.11"),
             OwnerCommand::List { package: "my-package".to_string(), otp: None },
-        ) else {
-            panic!("expected command resolution");
-        };
+        );
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["owner", "list", "my-package"]);
@@ -187,16 +190,17 @@ mod tests {
 
     #[test]
     fn test_owner_with_otp() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("10.0.0"),
-            OwnerCommand::Add {
-                user: "username".to_string(),
-                package: "my-package".to_string(),
-                otp: Some("123456".to_string()),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OwnerCommand::Add {
+                    user: "username".to_string(),
+                    package: "my-package".to_string(),
+                    otp: Some("123456".to_string()),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["owner", "add", "username", "my-package", "--otp", "123456"]);

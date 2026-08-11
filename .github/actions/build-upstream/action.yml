@@ -57,6 +57,7 @@ runs:
           packages/cli/binding/index.d.ts
           packages/cli/binding/index.cjs
           packages/cli/binding/index.d.cts
+          packages/cli/binding/vite-plus.build-time
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
@@ -197,6 +198,7 @@ runs:
           packages/cli/binding/index.d.ts
           packages/cli/binding/index.cjs
           packages/cli/binding/index.d.cts
+          packages/cli/binding/vite-plus.build-time
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe

@@ -39,6 +39,13 @@ A range resolves to an already-downloaded satisfying version when possible, othe
 
 Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior); the other `onFail` values are accepted but not yet differentiated.
 
+A `packageManager` pin can carry an integrity hash (`yarn@4.17.1+sha512.…`). `corepack use` writes that hash. Vite+ hashes the same artifact as Corepack:
+
+- the extracted CLI binary (`bin/yarn.js`) for Yarn 2 and later
+- the npm package tarball for npm, pnpm, and Yarn Classic
+
+Vite+ hashes the CLI once, when it installs Yarn, and records the pin it verified. A later command compares its own pin against that record. A pin that does not match the record fails the check, and the command stops. Corepack keeps the same kind of record for its own cache.
+
 The explicit `packageManager` field (or the `devEngines.packageManager` declaration) also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
 ## Usage
@@ -149,6 +156,11 @@ Use these when you need to understand the current state of dependencies.
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
 
+These commands show the packages that the package manager installed. They do
+not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show
+these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why`
+shows a hint when Vite+ also provides the package.
+
 #### Rebuild
 
 Use `vp rebuild` when native modules need to be recompiled, for example after switching Node.js versions or when a C/C++ addon fails to load.
@@ -166,6 +178,19 @@ vp rebuild -- --update-binary
 `vp rebuild` is a shorthand for `vp pm rebuild`.
 
 With pnpm v10+, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `pnpm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
+
+#### Dependency build scripts (npm v12+)
+
+npm v12 skips dependency install scripts (`preinstall` / `install` / `postinstall`, including implicit `node-gyp` builds) unless the `allowScripts` field in package.json covers them; the install succeeds and npm warns about what it skipped. `vp pm approve-builds` manages that allowlist:
+
+- `vp pm approve-builds <pkg...>` approves the named packages (`npm approve-scripts`)
+- `vp pm approve-builds !<pkg...>` denies them (`npm deny-scripts`)
+- `vp pm approve-builds --all` approves everything currently pending
+- `vp pm approve-builds` lists the packages whose scripts are not yet covered
+
+Approval only records the allowlist: scripts an earlier install skipped do not run until you run `vp rebuild <pkg>`. With npm 11.16 - 11.x the same commands work, but npm treats the allowlist as advisory and still runs scripts.
+
+npm v12 also stops resolving git dependencies (`github:`, `git+https:`) and remote tarball URLs by default; such installs fail with `EALLOWGIT` / `EALLOWREMOTE`. Opt back in per project with npm's `allow-git` / `allow-remote` config.
 
 #### Advanced
 

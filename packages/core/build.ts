@@ -181,6 +181,13 @@ async function buildVite() {
                   `export const CLIENT_ENTRY = path.join(VITE_PACKAGE_DIR, 'dist/vite/client/client.mjs')`,
                 );
                 magicString.replace(
+                  `export const BUNDLED_DEV_CLIENT_ENTRY: string = resolve(
+  VITE_PACKAGE_DIR,
+  'dist/client/bundledDevClient.mjs',
+)`,
+                  `export const BUNDLED_DEV_CLIENT_ENTRY = path.join(VITE_PACKAGE_DIR, 'dist/vite/client/bundledDevClient.mjs')`,
+                );
+                magicString.replace(
                   `export const ENV_ENTRY: string = resolve(
   VITE_PACKAGE_DIR,
   'dist/client/env.mjs',

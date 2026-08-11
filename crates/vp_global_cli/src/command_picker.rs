@@ -95,6 +95,12 @@ const COMMANDS: &[CommandEntry] = &[
         append_help: false,
     },
     CommandEntry {
+        label: "hooks",
+        command: "hooks",
+        summary: "Manage the Git hook dispatcher.",
+        append_help: false,
+    },
+    CommandEntry {
         label: "outdated",
         command: "outdated",
         summary: "Check for outdated packages.",
@@ -104,6 +110,12 @@ const COMMANDS: &[CommandEntry] = &[
         label: "env",
         command: "env",
         summary: "Manage Node.js versions.",
+        append_help: false,
+    },
+    CommandEntry {
+        label: "toolchain",
+        command: "toolchain",
+        summary: "Show Vite+ tool versions and relationships.",
         append_help: false,
     },
     CommandEntry {

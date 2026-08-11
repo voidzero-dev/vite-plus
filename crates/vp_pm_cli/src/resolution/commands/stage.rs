@@ -401,7 +401,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         Resolution, resolve,
-        test_utils::{bun, npm, parse_subcommand, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
     };
 
     fn publish_sub_full(
@@ -464,11 +464,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_stage_publish() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&pnpm("11.3.0"), publish_sub())
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("11.3.0"), publish_sub()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["stage", "publish"]);
@@ -476,12 +472,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_stage_publish_with_tag_access() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("11.3.0"),
-            publish_sub_full(Some("next"), Some("public"), false, None, false),
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.3.0"),
+                publish_sub_full(Some("next"), Some("public"), false, None, false),
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["stage", "publish", "--tag", "next", "--access", "public"]);
@@ -489,12 +486,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_stage_publish_recursive_filter() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("11.3.0"),
-            publish_sub_full(None, None, true, Some(vec!["app".into()]), false),
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.3.0"),
+                publish_sub_full(None, None, true, Some(vec!["app".into()]), false),
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "stage", "publish", "--recursive"]);
@@ -502,11 +500,7 @@ mod tests {
 
     #[test]
     fn test_npm_stage_publish() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
-            resolve(&npm("11.15.0"), publish_sub())
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.15.0"), publish_sub()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "publish"]);
@@ -514,12 +508,11 @@ mod tests {
 
     #[test]
     fn test_npm_stage_publish_recursive_ignored() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } = resolve(
+        let Resolution { outcome, diagnostics } = resolve(
             &npm("11.15.0"),
             publish_sub_full(None, None, true, Some(vec!["app".into()]), false),
-        ) else {
-            panic!("expected command resolution");
-        };
+        );
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "publish"]);
@@ -536,17 +529,18 @@ mod tests {
 
     #[test]
     fn test_npm_stage_list_with_package_json() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.15.0"),
-            StageCommand::List {
-                package: Some("my-pkg".into()),
-                json: true,
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.15.0"),
+                StageCommand::List {
+                    package: Some("my-pkg".into()),
+                    json: true,
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "list", "my-pkg", "--json"]);
@@ -554,17 +548,18 @@ mod tests {
 
     #[test]
     fn test_npm_stage_view() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.15.0"),
-            StageCommand::View {
-                stage_id: "abc123".into(),
-                json: false,
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.15.0"),
+                StageCommand::View {
+                    stage_id: "abc123".into(),
+                    json: false,
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "view", "abc123"]);
@@ -572,16 +567,17 @@ mod tests {
 
     #[test]
     fn test_npm_stage_download() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.15.0"),
-            StageCommand::Download {
-                stage_id: "abc123".into(),
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.15.0"),
+                StageCommand::Download {
+                    stage_id: "abc123".into(),
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "download", "abc123"]);
@@ -589,17 +585,18 @@ mod tests {
 
     #[test]
     fn test_stage_approve_with_otp() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("11.3.0"),
-            StageCommand::Approve {
-                stage_id: "abc123".into(),
-                otp: Some("123456".into()),
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.3.0"),
+                StageCommand::Approve {
+                    stage_id: "abc123".into(),
+                    otp: Some("123456".into()),
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["stage", "approve", "abc123", "--otp", "123456"]);
@@ -607,17 +604,18 @@ mod tests {
 
     #[test]
     fn test_stage_reject() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &npm("11.15.0"),
-            StageCommand::Reject {
-                stage_id: "abc123".into(),
-                otp: None,
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.15.0"),
+                StageCommand::Reject {
+                    stage_id: "abc123".into(),
+                    otp: None,
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "reject", "abc123"]);
@@ -625,11 +623,10 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_publish_uses_npm_plugin() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } =
+        let command = expect_run(
             resolve(&yarn("4.0.0"), publish_sub_full(Some("next"), None, false, None, false))
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "publish", "--staged", "--tag", "next"]);
@@ -637,24 +634,25 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_publish_forwards_dry_run_json_provenance() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            StageCommand::Publish {
-                target: None,
-                tag: None,
-                access: None,
-                otp: None,
-                dry_run: true,
-                json: true,
-                recursive: false,
-                filter: None,
-                provenance: true,
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                StageCommand::Publish {
+                    target: None,
+                    tag: None,
+                    access: None,
+                    otp: None,
+                    dry_run: true,
+                    json: true,
+                    recursive: false,
+                    filter: None,
+                    provenance: true,
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(
@@ -665,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_publish_with_target_falls_back_to_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } = resolve(
+        let Resolution { outcome, diagnostics } = resolve(
             &yarn("4.0.0"),
             StageCommand::Publish {
                 target: Some("./pkg.tgz".into()),
@@ -680,9 +678,8 @@ mod tests {
                 registry: None,
                 pass_through_args: Vec::new(),
             },
-        ) else {
-            panic!("expected command resolution");
-        };
+        );
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "publish", "./pkg.tgz"]);
@@ -694,7 +691,7 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_registry_dropped() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } = resolve(
+        let Resolution { outcome, diagnostics } = resolve(
             &yarn("4.0.0"),
             StageCommand::List {
                 package: None,
@@ -702,9 +699,8 @@ mod tests {
                 registry: Some("https://registry.example.com".into()),
                 pass_through_args: Vec::new(),
             },
-        ) else {
-            panic!("expected command resolution");
-        };
+        );
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "stage", "list"]);
@@ -716,17 +712,18 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_list() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            StageCommand::List {
-                package: None,
-                json: false,
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                StageCommand::List {
+                    package: None,
+                    json: false,
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "stage", "list"]);
@@ -734,17 +731,18 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_approve() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &yarn("4.0.0"),
-            StageCommand::Approve {
-                stage_id: "abc123".into(),
-                otp: None,
-                registry: None,
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &yarn("4.0.0"),
+                StageCommand::Approve {
+                    stage_id: "abc123".into(),
+                    otp: None,
+                    registry: None,
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "stage", "approve", "abc123"]);
@@ -752,7 +750,7 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_stage_view_falls_back_to_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } = resolve(
+        let Resolution { outcome, diagnostics } = resolve(
             &yarn("4.0.0"),
             StageCommand::View {
                 stage_id: "abc123".into(),
@@ -760,9 +758,8 @@ mod tests {
                 registry: None,
                 pass_through_args: Vec::new(),
             },
-        ) else {
-            panic!("expected command resolution");
-        };
+        );
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "view", "abc123"]);
@@ -774,11 +771,8 @@ mod tests {
 
     #[test]
     fn test_yarn1_stage_falls_back_to_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } =
-            resolve(&yarn("1.22.0"), publish_sub())
-        else {
-            panic!("expected command resolution");
-        };
+        let Resolution { outcome, diagnostics } = resolve(&yarn("1.22.0"), publish_sub());
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "publish"]);
@@ -790,11 +784,8 @@ mod tests {
 
     #[test]
     fn test_bun_stage_falls_back_to_npm() {
-        let Resolution { outcome: CommandResolution::Run(command), diagnostics } =
-            resolve(&bun("1.2.0"), publish_sub())
-        else {
-            panic!("expected command resolution");
-        };
+        let Resolution { outcome, diagnostics } = resolve(&bun("1.2.0"), publish_sub());
+        let command = expect_run(outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["stage", "publish"]);
@@ -806,17 +797,18 @@ mod tests {
 
     #[test]
     fn test_stage_registry_appended() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("11.3.0"),
-            StageCommand::List {
-                package: None,
-                json: false,
-                registry: Some("https://registry.example.com".into()),
-                pass_through_args: Vec::new(),
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.3.0"),
+                StageCommand::List {
+                    package: None,
+                    json: false,
+                    registry: Some("https://registry.example.com".into()),
+                    pass_through_args: Vec::new(),
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -827,24 +819,25 @@ mod tests {
 
     #[test]
     fn test_stage_pass_through_args() {
-        let Resolution { outcome: CommandResolution::Run(command), .. } = resolve(
-            &pnpm("11.3.0"),
-            StageCommand::Publish {
-                target: None,
-                tag: None,
-                access: None,
-                otp: None,
-                dry_run: false,
-                json: false,
-                recursive: false,
-                filter: None,
-                provenance: false,
-                registry: None,
-                pass_through_args: vec!["--foo".to_string()],
-            },
-        ) else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.3.0"),
+                StageCommand::Publish {
+                    target: None,
+                    tag: None,
+                    access: None,
+                    otp: None,
+                    dry_run: false,
+                    json: false,
+                    recursive: false,
+                    filter: None,
+                    provenance: false,
+                    registry: None,
+                    pass_through_args: vec!["--foo".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["stage", "publish", "--foo"]);

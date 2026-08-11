@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { VITE_CONFIG_FILES } from '../utils/constants.ts';
+
 export interface ConfigFiles {
   viteConfig?: string;
   vitestConfig?: string;
@@ -44,17 +46,7 @@ export const PRETTIER_CONFIG_FILES = [
 export function detectConfigs(projectPath: string): ConfigFiles {
   const configs: ConfigFiles = {};
 
-  // Check for vite.config.*
-  // https://vite.dev/config/
-  const viteConfigs = [
-    'vite.config.ts',
-    'vite.config.mts',
-    'vite.config.cts',
-    'vite.config.js',
-    'vite.config.mjs',
-    'vite.config.cjs',
-  ];
-  for (const config of viteConfigs) {
+  for (const config of VITE_CONFIG_FILES) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.viteConfig = config;
       break;

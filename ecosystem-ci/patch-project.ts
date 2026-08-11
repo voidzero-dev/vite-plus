@@ -18,9 +18,10 @@ if (!projects.includes(project)) {
 
 const repoRoot = join(ecosystemCiDir, project);
 const repoConfig = repos[project as keyof typeof repos];
-const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
-const cwd = directory ? join(repoRoot, directory) : repoRoot;
-// run vp migrate
+// Migrate and install always run at the clone root: `vp migrate` rejects
+// workspace member targets (#2229). The workflow's `directory` matrix value
+// only steers where the later project commands run (e.g. dify's `vp run ...`
+// in web/).
 const cli = process.env.VP_CLI_BIN ?? 'vp';
 
 // The packed local build in tmp/tgz is served through a local npm registry
@@ -209,7 +210,7 @@ const migrateEnv: NodeJS.ProcessEnv = {
 };
 
 execSync(`${cli} migrate --no-agent --no-interactive`, {
-  cwd,
+  cwd: repoRoot,
   stdio: 'inherit',
   env: migrateEnv,
 });
@@ -218,7 +219,7 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
 // `vite-plus@<version>` in package.json exactly like a real migration, so no
 // manual package.json rewrite is needed.
 execSync(`${cli} install --no-frozen-lockfile`, {
-  cwd,
+  cwd: repoRoot,
   stdio: 'inherit',
   env: { ...process.env, ...registryInfo.env, ...releaseAgeEnv },
 });

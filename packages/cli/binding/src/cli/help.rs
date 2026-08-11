@@ -202,7 +202,9 @@ pub(super) fn print_help() {
   {bold}preview{reset}        Preview production build
   {bold}cache{reset}          Manage the task cache
   {bold}config{reset}         Configure hooks and agent integration
+  {bold}hooks{reset}          Manage the Git hook dispatcher
   {bold}staged{reset}         Run linters on staged files
+  {bold}toolchain{reset}      Show Vite+ tool versions and relationships
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
@@ -311,7 +313,7 @@ mod tests {
     fn global_subcommands_produce_invalid_subcommand_error() {
         use clap::error::ErrorKind;
 
-        for subcommand in ["config", "create", "env", "migrate"] {
+        for subcommand in ["config", "create", "env", "hooks", "migrate"] {
             let error = CLIArgs::try_parse_from(["vp", subcommand])
                 .expect_err(&format!("expected error for global subcommand '{subcommand}'"));
             assert_eq!(

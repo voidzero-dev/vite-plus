@@ -1044,6 +1044,15 @@ async function main() {
   printHeader();
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
+  if (
+    workspaceInfoOptional.isMonorepo &&
+    path.resolve(projectPath) !== path.resolve(workspaceInfoOptional.rootDir)
+  ) {
+    cancelAndExit(
+      `Vite+ cannot migrate a workspace member. Run \`vp migrate\` from the workspace root at ${workspaceInfoOptional.rootDir}.`,
+      1,
+    );
+  }
   const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
   const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';

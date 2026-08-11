@@ -72,7 +72,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, pnpm, yarn},
     };
 
     fn view_args(package: &str) -> ViewArgs {
@@ -81,10 +81,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_view_uses_pnpm() {
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), view_args("react")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), view_args("react")).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["view", "react"]);
@@ -94,9 +91,7 @@ mod tests {
     fn test_npm_view() {
         let mut options = view_args("react");
         options.field = Some("version".to_string());
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["view", "react", "version"]);
@@ -106,9 +101,7 @@ mod tests {
     fn test_yarn_view_uses_info() {
         let mut options = view_args("lodash");
         options.json = true;
-        let CommandResolution::Run(command) = resolve(&yarn("1.22.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.0"), options).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["info", "lodash", "--json"]);
@@ -118,9 +111,7 @@ mod tests {
     fn test_yarn_berry_view_uses_yarn_npm_info() {
         let mut options = view_args("lodash");
         options.json = true;
-        let CommandResolution::Run(command) = resolve(&yarn("4.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), options).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "info", "lodash", "--json"]);
@@ -130,9 +121,7 @@ mod tests {
     fn test_yarn_berry_view_uses_fields_option_for_view_field() {
         let mut options = view_args("lodash");
         options.field = Some("dist.tarball".to_string());
-        let CommandResolution::Run(command) = resolve(&yarn("4.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), options).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "info", "lodash", "--fields", "dist.tarball"]);
@@ -142,9 +131,7 @@ mod tests {
     fn test_view_with_nested_field() {
         let mut options = view_args("react");
         options.field = Some("dist.tarball".to_string());
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), options).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["view", "react", "dist.tarball"]);
@@ -155,9 +142,7 @@ mod tests {
         let mut options = view_args("react");
         options.field = Some("version".to_string());
         options.json = true;
-        let CommandResolution::Run(command) = resolve(&bun("1.3.11"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), options).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["info", "react", "version", "--json"]);
@@ -168,9 +153,7 @@ mod tests {
         let mut options = view_args("react");
         options.pass_through_args =
             vec!["--registry".to_string(), "https://registry.npmjs.org".to_string()];
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), options).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["view", "react", "--registry", "https://registry.npmjs.org"]);

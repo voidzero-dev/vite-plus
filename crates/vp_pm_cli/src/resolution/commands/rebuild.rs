@@ -60,7 +60,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -73,11 +73,7 @@ mod tests {
 
     #[test]
     fn test_npm_rebuild() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), RebuildArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), RebuildArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["rebuild"]);
@@ -85,11 +81,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_rebuild() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), RebuildArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), RebuildArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["rebuild"]);
@@ -124,17 +116,16 @@ mod tests {
 
     #[test]
     fn test_npm_rebuild_with_packages() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            RebuildArgs {
-                packages: vec!["better-sqlite3".to_string(), "sharp".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                RebuildArgs {
+                    packages: vec!["better-sqlite3".to_string(), "sharp".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["rebuild", "better-sqlite3", "sharp"]);
@@ -142,14 +133,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_rebuild_with_packages() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            RebuildArgs { packages: vec!["better-sqlite3".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                RebuildArgs { packages: vec!["better-sqlite3".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["rebuild", "better-sqlite3"]);
@@ -157,17 +147,16 @@ mod tests {
 
     #[test]
     fn test_pnpm_rebuild_with_packages_and_pass_through() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("11.0.6"),
-            RebuildArgs {
-                packages: vec!["better-sqlite3".to_string()],
-                pass_through_args: vec!["--recursive".to_string()],
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.0.6"),
+                RebuildArgs {
+                    packages: vec!["better-sqlite3".to_string()],
+                    pass_through_args: vec!["--recursive".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["rebuild", "--recursive", "better-sqlite3"]);

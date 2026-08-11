@@ -43,8 +43,10 @@ We recommend enabling both `typeAware` and `typeCheck` in the `lint` block:
 - `typeAware: true` enables rules that require TypeScript type information
 - `typeCheck: true` enables full type checking during linting
 
-This path is powered by [tsgolint](https://github.com/oxc-project/tsgolint) on top of the TypeScript Go toolchain. It gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
+This path is powered by [tsgolint](https://github.com/oxc-project/tsgolint) on top of the TypeScript 7 (aka TypeScript Go) toolchain. It gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
 
 ## JS Plugins
 
 If you are migrating from ESLint and still depend on a few critical JavaScript-based ESLint plugins, Oxlint has [JS plugin support](https://oxc.rs/docs/guide/usage/linter/js-plugins) that can help you keep those plugins running while you complete the migration.
+
+JS Plugins also enable [writing your own custom rules](https://oxc.rs/docs/guide/usage/linter/writing-js-plugins.html) for Oxlint.

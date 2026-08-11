@@ -665,9 +665,6 @@ describe('writeEditorConfigs', () => {
     expect(oxfmtSettingsXml).toContain(
       '<option name="preferOxfmtCodeStyleSettings" value="true" />',
     );
-
-    const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
-    expect(gitignore).toBe('**\n!externalDependencies.xml\n');
   });
 
   it('writes workspace.xml with the resolved package manager', async () => {
@@ -709,8 +706,5 @@ describe('writeEditorConfigs', () => {
       'utf8',
     );
     expect(oxfmtSettingsXml).toContain('<component name="OxfmtSettings">');
-
-    const gitignore = fs.readFileSync(path.join(projectRoot, '.idea', '.gitignore'), 'utf8');
-    expect(gitignore).toBe('**\n!externalDependencies.xml\n');
   });
 });

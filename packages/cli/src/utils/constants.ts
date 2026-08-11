@@ -5,6 +5,16 @@ import cliPkg from '../../package.json' with { type: 'json' };
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
 
+// Mirrors Vite's DEFAULT_CONFIG_FILES order so readers and writers target the same file.
+export const VITE_CONFIG_FILES = [
+  'vite.config.js',
+  'vite.config.mjs',
+  'vite.config.ts',
+  'vite.config.cjs',
+  'vite.config.mts',
+  'vite.config.cts',
+] as const;
+
 export const VITEST_VERSION = '4.1.10';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
