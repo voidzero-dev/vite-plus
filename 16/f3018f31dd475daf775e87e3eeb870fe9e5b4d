@@ -1,0 +1,19 @@
+packages/cli/binding/index.cjs
+  s_fdbdae8c09ca7c::t_9242a6ba88a843 84,89,107,112,142,147,165,170,189,194,212,217,238,243,261,266,284,289,311,316,334,339,362,367,385,390,410,415,433,438,458,463,481,486,506,511,529,534,554,559,577,582,601,606,624,629,651,656,674,679,697,702,847,849
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "16f3018f31dd475daf775e87e3eeb870fe9e5b4d",
+  "prompts": {},
+  "sessions": {
+    "s_fdbdae8c09ca7c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1202c2a1-3a3c-4672-9642-5e437556b1a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
