@@ -1200,11 +1200,15 @@ fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
 pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
     // Fast-path: VP_NODE_VERSION env var set by `vp env use`
     // Skip all disk I/O for cache when session override is active
-    if let Ok(env_version) = std::env::var(config::VERSION_ENV_VAR) {
-        let env_version = env_version.trim().to_string();
+    if let Some(env_version) = vp_shared::EnvConfig::get().node_version {
+        let env_version = env_version.trim();
         if !env_version.is_empty() {
+            let provider = vp_js_runtime::NodeProvider::new();
+            let version = config::resolve_version_alias(env_version, &provider)
+                .await
+                .map_err(|e| e.to_string())?;
             return Ok(ResolveCacheEntry {
-                version: env_version,
+                version,
                 source: config::VERSION_ENV_VAR.to_string(),
                 project_root: None,
                 resolved_at: cache::now_timestamp(),
@@ -1516,6 +1520,24 @@ mod tests {
 
         assert_eq!(resolved.version, "22.22.0");
         assert_eq!(resolved.source, "devEngines.runtime");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_with_cache_resolves_partial_env_version() {
+        let temp = TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
+        std::fs::create_dir(&cwd).unwrap();
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
+            vite_plus_home: Some(temp.path().join("vp-home")),
+            node_version: Some("22".into()),
+            ..vp_shared::EnvConfig::for_test()
+        });
+
+        let resolved = resolve_with_cache(&cwd).await.unwrap();
+
+        assert!(resolved.version.starts_with("22."));
+        assert!(vp_js_runtime::NodeProvider::is_exact_version(&resolved.version));
+        assert_eq!(resolved.source, config::VERSION_ENV_VAR);
     }
 
     #[test]
