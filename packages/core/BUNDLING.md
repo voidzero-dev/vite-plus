@@ -55,7 +55,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 
 1. **Filter externals** - Bundles `picomatch`, `tinyglobby`, `fdir`, `rolldown`, `yaml` instead of keeping them external
 2. **Add RewriteImportsPlugin** - Rewrites vite/rolldown imports at build time
-3. **Rewrite static paths** - Fixes `VITE_PACKAGE_DIR`, `CLIENT_ENTRY`, `ENV_ENTRY` constants
+3. **Rewrite static paths** - Fixes `VITE_PACKAGE_DIR`, `CLIENT_ENTRY`, `BUNDLED_DEV_CLIENT_ENTRY`, `ENV_ENTRY` constants
 4. **Copy additional files** - `misc/`, `.d.ts` files, `types/`, `client.d.ts`
 
 **Input**: `vite/packages/vite/`
@@ -219,6 +219,7 @@ dist/
 │   │   ├── module-runner.js
 │   │   └── chunks/
 │   ├── client/
+│   │   ├── bundledDevClient.mjs
 │   │   ├── client.mjs
 │   │   └── env.mjs
 │   ├── misc/

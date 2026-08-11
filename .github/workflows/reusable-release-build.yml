@@ -69,6 +69,9 @@ jobs:
           for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
           done
+          # Keep the workspace package entries in Cargo.lock consistent with
+          # the stamped versions before later commands use --locked.
+          cargo update --workspace
           # Stamp the package.json files too:
           # - packages/cli: the bundled JS dist inlines ${VERSION} as
           #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview

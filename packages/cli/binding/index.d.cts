@@ -3379,6 +3379,10 @@ export interface CliOptions {
   cwd?: string;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;
+  /** Generated toolchain manifest shipped with this vite-plus package. */
+  toolchainManifestPath: string;
+  /** Root directory of this vite-plus package. */
+  vitePlusPackagePath: string;
   /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */
   resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
 }

@@ -25,7 +25,9 @@ name: Register preview build
 #   - the artifact is treated as hostile bytes, and its download pins run-id to
 #     the triggering run
 #   - no job that installs or executes preview content holds id-token
-#   - `publish` is gated on an environment with required reviewers
+#   - `publish` of a fork PR is gated on an environment with required
+#     reviewers; a same-repo PR publishes without approval because the
+#     maintainer-applied label already binds consent to the exact built sha
 #
 # zizmor's dangerous-triggers audit warns that workflow_run is "almost always
 # used insecurely". The danger it names is real here and the trigger is
@@ -166,11 +168,11 @@ jobs:
             // run for `preview-build`, so an unrelated label produces a run in
             // which everything skips — and an all-skipped run still concludes
             // "success". The PR legitimately still carries the label, so every
-            // check above passes and this would queue an environment approval
-            // for a run that built nothing, which could only end in a failed
-            // download. Requiring the artifact is what separates "built
-            // something" from "did nothing", and it also catches a build workflow
-            // that succeeded without uploading.
+            // check above passes and a run that built nothing would reach the
+            // publish job: queued for approval on a fork, straight to a failed
+            // download on a same-repo PR. Requiring the artifact is what
+            // separates "built something" from "did nothing", and it also
+            // catches a build workflow that succeeded without uploading.
             //
             // Not a failure: adding an unrelated label to a labeled PR is a
             // normal thing to do, and a red X on every one of them would be
@@ -201,39 +203,51 @@ jobs:
     needs: authorize
     if: needs.authorize.outputs.eligible == 'true'
     runs-on: ubuntu-latest
-    # Required-reviewer gate on the ONE job that mints a publish credential.
-    # The `authorize` job proves the PR is open and labeled; this proves a human
-    # looked at this specific run before a token existed, and records who. It is
-    # the only defense here that does not depend on my own logic being right:
-    # if `authorize` were ever weakened, this still stops an unattended publish.
+    # Required-reviewer gate on the ONE job that mints a publish credential,
+    # applied to FORK PRs only. The `authorize` job proves the PR is open and
+    # labeled; for a fork, the gate proves a human looked at this specific run
+    # before a token existed, and records who. It is the only defense here that
+    # does not depend on my own logic being right: if `authorize` were ever
+    # weakened, it still stops an unattended publish of unreviewed external
+    # code.
     #
-    # Self-review is allowed: the `preview-build` label is already a maintainer
-    # action, so requiring a SECOND person for every external contributor's
-    # preview would cost more than the risk warrants. The value here is the
-    # deliberate confirmation and the audit trail, not two-person control.
+    # Same-repo PRs skip the gate. The label is already a deliberate maintainer
+    # action, the build runs only on `labeled` events, and `authorize` plus the
+    # re-check below pin the publish to the head sha the label was applied to,
+    # so approving a self-labeled run confirmed nothing the label had not. The
+    # approval wait was also easy to miss: reviewer notifications follow each
+    # reviewer's Actions notification settings.
     #
-    # The environment must exist with protection rules configured. A workflow
-    # referencing a MISSING environment gets one created implicitly with no
-    # rules, which looks like a gate and is not one.
-    environment: preview-build-release
+    # Self-review is allowed on the fork gate: requiring a SECOND person for
+    # every external contributor's preview would cost more than the risk
+    # warrants. The value is the deliberate confirmation and the audit trail,
+    # not two-person control.
+    #
+    # BOTH environments must exist: preview-build-release WITH required
+    # reviewers, preview-build-release-auto with NO protection rules. A
+    # workflow referencing a MISSING environment gets one created implicitly
+    # with no rules, which looks like a gate and is not one.
+    environment: ${{ needs.authorize.outputs.is-fork == 'true' && 'preview-build-release' || 'preview-build-release-auto' }}
     # SR-5: this job mints the publish token, so it must never run anything out
     # of the artifact. It downloads bytes and hands them to the bridge action;
     # no install, no build, no scripts.
     permissions:
       id-token: write # mint the bridge OIDC token
       actions: read # download the triggering run's artifact
-      pull-requests: read # re-check the PR after the approval wait
+      pull-requests: read # re-check the PR before a token exists
     outputs:
       version: ${{ steps.bridge.outputs.version }}
     steps:
-      # `authorize` ran BEFORE the approval gate, so its verdict is a snapshot
-      # from potentially days ago (the artifact is retained 7 days precisely to
-      # allow that). Re-assert it here, after the wait and before a token
-      # exists: the PR can have been closed, had the label removed (which is how
-      # a maintainer revokes consent), or advanced to a new head commit, in
-      # which case publishing this artifact would move the pr-<n> dist-tag
-      # BACKWARDS onto an older commit than the PR now points at.
-      - name: Re-check authorization after approval
+      # `authorize` ran BEFORE this job, so its verdict is a snapshot. On a
+      # fork run that waits for approval the snapshot can be days old (the
+      # artifact is retained 7 days precisely to allow that); on a same-repo
+      # run the window is seconds, but the check is cheap, so it runs for both.
+      # Re-assert the verdict here, before a token exists: the PR can have been
+      # closed, had the label removed (which is how a maintainer revokes
+      # consent), or advanced to a new head commit, in which case publishing
+      # this artifact would move the pr-<n> dist-tag BACKWARDS onto an older
+      # commit than the PR now points at.
+      - name: Re-check authorization before publish
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PR_NUMBER: ${{ needs.authorize.outputs.pr }}
@@ -258,7 +272,7 @@ jobs:
             }
             if (reasons.length) {
               core.setFailed(
-                `PR #${pr.number} changed while waiting for approval (${reasons.join('; ')}); ` +
+                `PR #${pr.number} changed between authorization and publish (${reasons.join('; ')}); ` +
                   'refusing to publish. Re-apply the label to build the current head.',
               );
             }

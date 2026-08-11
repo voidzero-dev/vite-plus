@@ -127,6 +127,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 ### Maintain
 
+- [`vp toolchain`](/guide/upgrade#show-the-toolchain) shows the versions and relationships in the active Vite+ toolchain.
 - [`vp upgrade`](/guide/upgrade) updates the `vp` installation itself.
 - [`vp implode`](/guide/implode) removes `vp` and related Vite+ data from your machine.
 
