@@ -112,6 +112,31 @@ describe('target directory helpers', () => {
     });
   });
 
+  it('removes a target symlink with a trailing separator without deleting linked files', async () => {
+    const cwd = makeTempDir();
+    const linkedDir = makeTempDir();
+    const targetDir = path.join(cwd, 'new-project');
+    const targetDirWithSeparator = `${targetDir}${path.sep}`;
+    const sentinel = path.join(linkedDir, 'keep.txt');
+    fs.writeFileSync(sentinel, 'keep');
+    fs.symlinkSync(linkedDir, targetDir, process.platform === 'win32' ? 'junction' : 'dir');
+    mockSelect.mockResolvedValue('yes');
+
+    expect(isTargetDirAvailable(targetDirWithSeparator)).toBe(false);
+
+    await checkProjectDirExists(targetDirWithSeparator, true);
+
+    expect(fs.existsSync(sentinel)).toBe(true);
+    expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
+    expect(mockSelect).toHaveBeenCalledWith({
+      message: `Target path "${targetDir}" is a symbolic link. Please choose how to proceed:`,
+      options: [
+        { label: 'Cancel operation', value: 'no' },
+        { label: 'Remove symbolic link and continue', value: 'yes' },
+      ],
+    });
+  });
+
   it('recognizes and removes a dangling target symlink', async () => {
     const cwd = makeTempDir();
     const targetDir = path.join(cwd, 'new-project');
