@@ -49,8 +49,11 @@ pub async fn execute(values: Vec<String>, unset: bool) -> Result<ExitStatus, Err
 
     let specs = EnvSpecs::parse(&values)?;
     let mut config = load_config().await?;
+    let mut updates = Vec::new();
     if let Some(version) = specs.node {
-        config.default_node_version = Some(resolve_node_default(&version).await?);
+        let (stored, display) = resolve_node_default(&version).await?;
+        config.default_node_version = Some(stored);
+        updates.push(format!("Default Node.js version set to {display}"));
     }
     if let Some((package_manager, version)) = specs.package_manager {
         let stored = if version == "latest" {
@@ -58,31 +61,60 @@ pub async fn execute(values: Vec<String>, unset: bool) -> Result<ExitStatus, Err
         } else {
             resolve_package_manager_version(package_manager, &version).await?.to_string()
         };
-        config.default_package_manager = Some(format!("{package_manager}@{stored}"));
+        let spec = format!("{package_manager}@{stored}");
+        config.default_package_manager = Some(spec.clone());
+        updates.push(format!("Default package manager set to {spec}"));
     }
     save_config(&config).await?;
     crate::shim::invalidate_cache();
-    println!("\u{2713} Environment defaults updated.");
+    for update in updates {
+        println!("\u{2713} {update}");
+    }
     Ok(ExitStatus::default())
 }
 
 async fn show_default(scope: EnvScope) -> Result<ExitStatus, Error> {
     let config = load_config().await?;
-    let config_path = get_config_path()?;
+    let mut has_configured_default = false;
     if scope.includes_node() {
-        match config.default_node_version {
-            Some(version) => println!("Default Node.js version: {version}"),
-            None => println!("Default Node.js version: latest LTS"),
+        match config.default_node_version.as_deref() {
+            Some(version) => {
+                has_configured_default = true;
+                println!("Default Node.js version: {version}");
+                if matches!(version, "lts" | "latest") {
+                    let provider = vp_js_runtime::NodeProvider::new();
+                    if let Ok(resolved) =
+                        super::config::resolve_version_alias(version, &provider).await
+                    {
+                        println!("  Currently resolves to: {resolved}");
+                    }
+                }
+            }
+            None => {
+                let provider = vp_js_runtime::NodeProvider::new();
+                match provider.resolve_latest_version().await {
+                    Ok(version) => {
+                        println!(
+                            "No default Node.js version configured. Using latest LTS ({version})."
+                        );
+                    }
+                    Err(_) => println!("No default Node.js version configured."),
+                }
+                println!("  Run 'vp env default <version>' to set a default.");
+            }
         }
     }
     if scope.includes_package_managers() {
-        let configured = config.default_package_manager.filter(|spec| match scope {
+        let configured = config.default_package_manager.as_deref().filter(|spec| match scope {
             EnvScope::PackageManager(expected) => super::spec::parse_package_manager_spec(spec)
                 .is_ok_and(|(kind, _)| kind == expected),
             _ => true,
         });
         match configured {
-            Some(spec) => println!("Default package manager: {spec}"),
+            Some(spec) => {
+                has_configured_default = true;
+                println!("Default package manager: {spec}");
+            }
             None => match scope {
                 EnvScope::PackageManager(kind) => {
                     println!("Default {kind} version: not configured")
@@ -91,14 +123,26 @@ async fn show_default(scope: EnvScope) -> Result<ExitStatus, Error> {
             },
         }
     }
-    println!("  Set via: {}", config_path.as_path().display());
+    if has_configured_default {
+        println!("  Set via: {}", get_config_path()?.as_path().display());
+    }
     Ok(ExitStatus::default())
 }
 
-async fn resolve_node_default(version: &str) -> Result<String, Error> {
+async fn resolve_node_default(version: &str) -> Result<(String, String), Error> {
     let provider = vp_js_runtime::NodeProvider::new();
     match version.to_lowercase().as_str() {
-        "lts" | "latest" => Ok(version.to_lowercase()),
-        _ => super::config::resolve_version_alias(version, &provider).await,
+        "lts" => {
+            let current = provider.resolve_latest_version().await?;
+            Ok(("lts".into(), format!("lts (currently {current})")))
+        }
+        "latest" => {
+            let current = provider.resolve_absolute_latest_version().await?;
+            Ok(("latest".into(), format!("latest (currently {current})")))
+        }
+        _ => {
+            let resolved = super::config::resolve_version_alias(version, &provider).await?;
+            Ok((resolved.clone(), resolved))
+        }
     }
 }

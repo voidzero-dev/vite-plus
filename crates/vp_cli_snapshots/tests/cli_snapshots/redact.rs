@@ -154,13 +154,14 @@ static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 // Environment-management output prints the resolving runtime as a labelled
 // `Node:` field, an installed-package table column, or the current `lts`
-// target. The npm shim also records the node it ran under into a BinConfig's
-// `"nodeVersion"` value. All track the environment's managed default (not a
-// fixture pin), so they churn with runtime upgrades; mask by context so
-// fixture-pinned versions elsewhere stay assertable.
+// target. Default inspection also prints the current target in its fallback
+// and alias-resolution messages. The npm shim records the node it ran under
+// into a BinConfig's `"nodeVersion"` value. All track the environment's managed
+// default (not a fixture pin), so they churn with runtime upgrades; mask by
+// context so fixture-pinned versions elsewhere stay assertable.
 static WHICH_NODE_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?m)(Node:\s+|"nodeVersion":\s*"|Default Node\.js version set to [^()\n]+ \(currently |^\S+@\S+\s{2,})\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+        r#"(?m)(Node:\s+|"nodeVersion":\s*"|Default Node\.js version set to [^()\n]+ \(currently |No default Node\.js version configured\. Using latest LTS \(|Currently resolves to:\s+|^\S+@\S+\s{2,})\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
 });
