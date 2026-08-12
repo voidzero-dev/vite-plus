@@ -104,12 +104,22 @@ function describeExistingTarget(projectDirFullPath: string, stats: fs.Stats) {
   };
 }
 
+function stripTrailingPathSeparators(targetPath: string) {
+  const root = path.parse(targetPath).root;
+  let end = targetPath.length;
+  while (end > root.length && targetPath[end - 1] === path.sep) {
+    end--;
+  }
+  return targetPath.slice(0, end);
+}
+
 export async function checkProjectDirExists(projectDirFullPath: string, interactive?: boolean) {
-  const stats = fs.lstatSync(projectDirFullPath, { throwIfNoEntry: false });
-  if (!stats || (stats.isDirectory() && isEmpty(projectDirFullPath))) {
+  const targetPath = stripTrailingPathSeparators(projectDirFullPath);
+  const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  if (!stats || (stats.isDirectory() && isEmpty(targetPath))) {
     return;
   }
-  const { description, removeLabel } = describeExistingTarget(projectDirFullPath, stats);
+  const { description, removeLabel } = describeExistingTarget(targetPath, stats);
   if (!interactive) {
     prompts.log.info(
       'Use --directory to specify a different location or remove the directory first',
@@ -138,7 +148,7 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
 
   switch (overwrite) {
     case 'yes':
-      clearTargetPath(projectDirFullPath);
+      clearTargetPath(targetPath);
       break;
     case 'no':
       cancelAndExit();
@@ -151,25 +161,27 @@ function isEmpty(path: string) {
 }
 
 function clearTargetPath(targetPath: string) {
-  const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  const strippedTargetPath = stripTrailingPathSeparators(targetPath);
+  const stats = fs.lstatSync(strippedTargetPath, { throwIfNoEntry: false });
   if (!stats) {
     return;
   }
   if (!stats.isDirectory()) {
-    fs.rmSync(targetPath, { force: true });
+    fs.rmSync(strippedTargetPath, { force: true });
     return;
   }
-  for (const file of fs.readdirSync(targetPath)) {
+  for (const file of fs.readdirSync(strippedTargetPath)) {
     if (file === '.git') {
       continue;
     }
-    fs.rmSync(path.resolve(targetPath, file), { recursive: true, force: true });
+    fs.rmSync(path.resolve(strippedTargetPath, file), { recursive: true, force: true });
   }
 }
 
 export function isTargetDirAvailable(projectDirFullPath: string) {
-  const stats = fs.lstatSync(projectDirFullPath, { throwIfNoEntry: false });
-  return !stats || (stats.isDirectory() && isEmpty(projectDirFullPath));
+  const targetPath = stripTrailingPathSeparators(projectDirFullPath);
+  const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  return !stats || (stats.isDirectory() && isEmpty(targetPath));
 }
 
 function validateTargetDir(input?: string, cwd?: string): { directory: string; error?: string } {
