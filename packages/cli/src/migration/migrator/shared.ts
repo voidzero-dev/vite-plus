@@ -173,13 +173,24 @@ export const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
  * catalog during resolution, and `pnpm update` then writes the resolved core
  * alias into that importer's package.json (issue #2309).
  *
- * The `@*` range keeps the override on every valid semver range. Transitive and
- * peer `vite` declarations always use such a range, and they are the reason this
- * override exists. The range also leaves `catalog:` specs alone, because `*` is
- * a valid semver range and `catalog:` is not, so pnpm's `isIntersectingRange`
- * never matches the two. The installed result does not change: an importer that
- * references the catalog already resolves to the aliased core through its
- * catalog entry.
+ * The `@*` range keeps the override on the declared semver ranges that
+ * transitive and peer `vite` declarations use, and those declarations are the
+ * reason this override exists. The range leaves `catalog:` specs alone, because
+ * `catalog:` is not a valid semver range, so pnpm's `isIntersectingRange`
+ * rejects it before it compares anything. The installed result does not change:
+ * an importer that references the catalog already resolves to the aliased core
+ * through its catalog entry.
+ *
+ * KNOWN GAP on pnpm 9 to 11. A declaration that pins an EXACT prerelease, such
+ * as `vite: "8.0.0-beta.18"`, escapes the override. pnpm compares with
+ * `semver.intersects(declaredSpec, keyRange)`, and that call is asymmetric for
+ * prereleases: it returns false for an exact prerelease against a wildcard
+ * range, even though the arguments in the other order return true. No range
+ * string avoids this, because node-semver only admits a prerelease when a
+ * comparator carries the same version tuple. A prerelease RANGE such as
+ * `^8.0.0-beta.1` still matches, and pnpm 12 matches the exact form too. A bare
+ * key would cover this case, but a bare key is what clobbers `catalog:`, so
+ * below pnpm 12 the two cannot both hold.
  *
  * This applies to pnpm only. npm and bun `overrides`, and yarn `resolutions`,
  * keep bare keys. Those package managers have no `catalog:` importer specs to
