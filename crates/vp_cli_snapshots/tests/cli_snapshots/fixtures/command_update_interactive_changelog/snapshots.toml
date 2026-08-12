@@ -1,0 +1,12 @@
+[[case]]
+name = "command_update_interactive_changelog"
+vp = "global"
+steps = [
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "up", "--interactive", "--latest"], comment = "interactive updates link directly to the selected version's npmx changelog", interactions = [
+    { "expect-milestone" = "multi-select:update:ready" },
+    { "write-key" = "space" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "package.json"] },
+]

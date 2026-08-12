@@ -7,6 +7,7 @@ use crate::{
     resolution::{
         CommandResolution, Resolution,
         command::{PreRunAction, ResolvedCommand},
+        interactive_update::run_pnpm_interactive_update,
     },
 };
 
@@ -21,6 +22,9 @@ pub(crate) async fn run_resolution(
 
     match resolution.outcome {
         CommandResolution::Run(command) => run_command(cwd, command).await,
+        CommandResolution::PnpmInteractiveUpdate(plan) => {
+            run_pnpm_interactive_update(cwd, plan).await
+        }
         CommandResolution::Noop => Ok(ExitStatus::default()),
         CommandResolution::InvalidArgument(message) => Err(Error::UserMessage(message.into())),
     }
