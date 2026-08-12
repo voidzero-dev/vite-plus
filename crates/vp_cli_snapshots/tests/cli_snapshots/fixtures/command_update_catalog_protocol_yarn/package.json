@@ -1,0 +1,7 @@
+{
+  "name": "command-update-catalog-protocol-yarn",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "yarn@4.12.0"
+}

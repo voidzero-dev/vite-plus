@@ -1,0 +1,37 @@
+[[case]]
+name = "command_update_catalog_protocol_yarn"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+    "--package-manager",
+    "yarn",
+  ], comment = "migrate pins the toolchain through the Yarn catalog", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "the migrated project references the catalog", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+    "vite",
+    "vite-plus",
+  ], comment = "#2309 Yarn variant: `yarn up` rewrites `catalog:` specs, so catalog-pinned names are skipped", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` and `vite-plus` stay `catalog:` instead of concrete ranges", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    ".yarnrc.yml",
+  ], comment = "the catalog keeps owning the resolved toolchain version", continue-on-failure = true },
+]
