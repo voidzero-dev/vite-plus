@@ -57,6 +57,15 @@ pub async fn dispatch_with_metadata(
     };
 
     let package_manager = manager.client;
+    let mut command = command;
+    if let PackageManagerCommand::Update(args) = &mut command
+        && !args.packages.is_empty()
+    {
+        // Resolution stays free of filesystem access, so the Yarn catalog
+        // context is read here and handed over as data. The berry update
+        // resolver uses it to keep `catalog:` references out of `yarn up`.
+        args.yarn_catalog_packages = crate::yarn_catalog::yarn_catalog_package_names(cwd, &manager);
+    }
     let resolution = command.resolve_for_manager(&manager)?;
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
     Ok(DispatchResult { status, package_manager })

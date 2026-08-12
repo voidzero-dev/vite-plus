@@ -73,6 +73,8 @@ If you migrated with `vp migrate`, your project pins `vitest` to an exact versio
 
 Under pnpm the managed keys use an explicit `@*` range (`vite@*`, `vitest@*`). pnpm applies an override by replacing the declared spec on every manifest, importer manifests included. A bare key matches any spec, including `catalog:`. The `@*` range keeps the override on the semver ranges that transitive and peer declarations use, and leaves `catalog:` references intact. `vp up` therefore no longer rewrites them to a concrete version.
 
+Under Yarn 4.10+ the toolchain pins live in the `.yarnrc.yml` catalog, and `package.json` references them with `catalog:`. `yarn up <name>` replaces such a reference with a concrete range, which destroys it. `vp up` therefore skips catalog-pinned names and prints a warning. To change a pinned version, edit the catalog entry in `.yarnrc.yml`, or run `vp migrate` for the pins Vite+ manages. A descriptor with an explicit range (`vp up vite@^8`) still passes through.
+
 A Vite+ release can bump the bundled Vitest. Because that pin also applies to `vite-plus`'s own `vitest` dependency, an out-of-date pin keeps installing the previous runner even after you upgrade `vite-plus` — splitting Vitest's internals (mocks, `expect`, runner state) between the pinned copy and the one `vp test` loads.
 
 After upgrading `vite-plus`, re-pin `vitest` to the version Vite+ now bundles. Check that version with:

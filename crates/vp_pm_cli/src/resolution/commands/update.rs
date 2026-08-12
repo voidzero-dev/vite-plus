@@ -2,7 +2,7 @@ use vp_pm_cli_macros::pm_args;
 
 use super::parse_positive_usize;
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
@@ -70,6 +70,14 @@ pub struct UpdateArgs {
     /// Additional arguments to pass through to the package manager
     #[arg(last = true, allow_hyphen_values = true)]
     pub(crate) pass_through_args: Vec<String>,
+
+    /// Package names the Yarn catalog pins (`catalog`/`catalogs` keys in
+    /// `.yarnrc.yml`). Dispatch fills this from the workspace root; it never
+    /// comes from the command line. `yarn up <name>` rewrites the manifest
+    /// spec of every named package and would replace a `catalog:` reference
+    /// with a concrete range, so the berry resolver skips these names.
+    #[arg(skip)]
+    pub(crate) yarn_catalog_packages: Vec<String>,
 }
 
 impl Resolve<UpdateArgs> for Pnpm {
@@ -111,9 +119,9 @@ impl Resolve<UpdateArgs> for Npm {
 }
 
 impl Resolve<UpdateArgs> for Yarn {
-    fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &UpdateArgs, diag: &mut Diagnostics) -> CommandResolution {
         if self.is_berry() {
-            Yarn::resolve_berry_update(args)
+            Yarn::resolve_berry_update(args, diag)
         } else {
             Yarn::resolve_v1_update(args)
         }
@@ -121,7 +129,23 @@ impl Resolve<UpdateArgs> for Yarn {
 }
 
 impl Yarn {
-    fn resolve_berry_update(args: &UpdateArgs) -> CommandResolution {
+    fn resolve_berry_update(args: &UpdateArgs, diag: &mut Diagnostics) -> CommandResolution {
+        // `yarn up <name>` rewrites the manifest spec of every named package.
+        // A `catalog:` reference would come back as a concrete range and lose
+        // its catalog provenance (issue #2309 under pnpm; Yarn has no
+        // upstream fix as of 4.18), so catalog-pinned bare names are skipped.
+        // A descriptor with an explicit range (`vite@^8`) states the user's
+        // intent to leave the catalog and passes through.
+        let packages: Vec<&String> = args
+            .packages
+            .iter()
+            .filter(|package| !Self::skip_yarn_catalog_pinned(package.as_str(), args, diag))
+            .collect();
+        if packages.is_empty() && !args.packages.is_empty() {
+            // Every requested package is catalog-pinned. A bare `yarn up`
+            // would re-resolve the whole project instead, so do not run one.
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("yarn");
         if !args.filter.is_empty() {
             cmd.arg("workspaces").arg("foreach").arg("--all");
@@ -131,8 +155,25 @@ impl Yarn {
             .arg_if("--recursive", args.recursive)
             .arg_if("--interactive", args.interactive)
             .extend(args.pass_through_args.iter())
-            .extend(args.packages.iter());
+            .extend(packages);
         cmd.into()
+    }
+
+    /// True when `package` is a bare name the Yarn catalog pins; also emits
+    /// the skip warning. Glob patterns and `name@range` descriptors never
+    /// match: they carry explicit user intent and pass through to `yarn up`.
+    fn skip_yarn_catalog_pinned(package: &str, args: &UpdateArgs, diag: &mut Diagnostics) -> bool {
+        let has_explicit_range = package.char_indices().any(|(index, ch)| ch == '@' && index > 0);
+        if has_explicit_range || !args.yarn_catalog_packages.iter().any(|name| name == package) {
+            return false;
+        }
+        diag.warn(
+            DiagnosticKind::BehaviorChange,
+            vt_str::format!(
+                "Skipped {package}: the Yarn catalog pins its version, and `yarn up` would overwrite the `catalog:` reference. Edit the catalog entry in .yarnrc.yml, or run `vp migrate` when Vite+ manages the pin."
+            ),
+        );
+        true
     }
 
     fn resolve_v1_update(args: &UpdateArgs) -> CommandResolution {
@@ -377,6 +418,65 @@ mod tests {
             command.args,
             vec!["workspaces", "foreach", "--all", "--include", "app", "up", "react"]
         );
+    }
+
+    #[test]
+    fn test_yarn_v4_update_skips_catalog_pinned_bare_names() {
+        let mut options = update_args(&["vite-plus", "react"]);
+        options.yarn_catalog_packages = vec!["vite".to_string(), "vite-plus".to_string()];
+        let resolution = resolve(&yarn("4.12.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["up", "react"]);
+        let messages =
+            resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].starts_with("Skipped vite-plus:"));
+    }
+
+    #[test]
+    fn test_yarn_v4_update_noop_when_all_names_catalog_pinned() {
+        let mut options = update_args(&["vite", "vite-plus"]);
+        options.yarn_catalog_packages = vec!["vite".to_string(), "vite-plus".to_string()];
+        let resolution = resolve(&yarn("4.12.0"), options);
+
+        assert_eq!(resolution.outcome, CommandResolution::Noop);
+        assert_eq!(resolution.diagnostics.len(), 2);
+    }
+
+    #[test]
+    fn test_yarn_v4_update_explicit_range_bypasses_catalog_pin() {
+        // `vite@^8` and `@scope/pkg@^1` carry an explicit range: the user
+        // chose to leave the catalog, so the descriptors pass through.
+        let mut options = update_args(&["vite@^8.0.0", "@scope/pkg@^1.0.0"]);
+        options.yarn_catalog_packages = vec!["vite".to_string(), "@scope/pkg".to_string()];
+        let resolution = resolve(&yarn("4.12.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.args, vec!["up", "vite@^8.0.0", "@scope/pkg@^1.0.0"]);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_yarn_v4_update_skips_catalog_pinned_scoped_bare_name() {
+        let mut options = update_args(&["@scope/pkg"]);
+        options.yarn_catalog_packages = vec!["@scope/pkg".to_string()];
+        let resolution = resolve(&yarn("4.12.0"), options);
+
+        assert_eq!(resolution.outcome, CommandResolution::Noop);
+        assert_eq!(resolution.diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn test_yarn_v1_update_ignores_catalog_context() {
+        let mut options = update_args(&["vite"]);
+        options.yarn_catalog_packages = vec!["vite".to_string()];
+        let resolution = resolve(&yarn("1.22.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.args, vec!["upgrade", "vite"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]

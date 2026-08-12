@@ -8595,6 +8595,7 @@ dependencies = [
  "semver 1.0.28",
  "serde",
  "serde_json",
+ "serde_yaml",
  "sha1",
  "sha2 0.10.9",
  "tar",

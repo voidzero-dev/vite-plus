@@ -16,6 +16,7 @@ mod package_manager;
 mod request;
 pub(crate) mod resolution;
 mod shim;
+mod yarn_catalog;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::npm_registry;

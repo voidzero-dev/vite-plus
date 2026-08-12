@@ -148,6 +148,8 @@ Use these commands to maintain the dependency graph over time.
 - `vp outdated` shows which packages have newer versions available
 - `vp dedupe` asks the package manager to collapse duplicates where possible
 
+Under a Yarn catalog, `vp update <name>` skips a name the catalog pins and prints a warning, because `yarn up` would overwrite the `catalog:` reference with a concrete range. Edit the catalog entry in `.yarnrc.yml` to change the version, or pass an explicit range (`vp update vite@^8`) to write a plain range on purpose.
+
 #### Inspect
 
 Use these when you need to understand the current state of dependencies.
