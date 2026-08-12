@@ -1,0 +1,27 @@
+packages/cli/src/migration/__tests__/migrator.spec.ts
+  s_46c59ad8b4f212::t_c06f8939eea807 4826-4934
+packages/cli/src/migration/migrator/catalog.ts
+  s_46c59ad8b4f212::t_9045840ab94341 314,840-841,854-884,1270,1278-1282
+packages/cli/src/migration/migrator/orchestrators.ts
+  s_46c59ad8b4f212::t_1c3017d96aecd7 24,189,195-197,201
+packages/cli/src/migration/migrator/vite-plus-bootstrap.ts
+  s_46c59ad8b4f212::t_3b6f9571f646fa 150,163-173,889
+packages/cli/src/migration/migrator/vitest-ecosystem.ts
+  s_46c59ad8b4f212::t_252eb8103b7841 30,552-561,567,576-582,591,599-604
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4321a19ebe95f610cf54b10f501a67a6369b9c64",
+  "prompts": {},
+  "sessions": {
+    "s_46c59ad8b4f212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4df4385-a979-41b2-a818-a8bc91292beb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
