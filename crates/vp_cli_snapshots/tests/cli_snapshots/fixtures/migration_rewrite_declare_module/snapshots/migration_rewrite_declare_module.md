@@ -83,8 +83,8 @@ catalog:
   vitest: <version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

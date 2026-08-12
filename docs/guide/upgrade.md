@@ -69,7 +69,9 @@ If you migrated with `vp migrate`, your project pins `vitest` to an exact versio
 
 - **npm / Bun:** a `vitest` entry under `overrides` in `package.json`
 - **Yarn:** a `vitest` entry under `resolutions` in `package.json`
-- **pnpm:** a `vitest` entry under `overrides` in `pnpm-workspace.yaml` — unless your `package.json` already had a `pnpm` field, in which case it lives under `pnpm.overrides` in `package.json` instead (pnpm ignores `pnpm-workspace.yaml` overrides when `package.json` defines `pnpm.overrides`)
+- **pnpm:** a `vitest@*` entry under `overrides` in `pnpm-workspace.yaml` — unless your `package.json` already had a `pnpm` field, in which case it lives under `pnpm.overrides` in `package.json` instead (pnpm ignores `pnpm-workspace.yaml` overrides when `package.json` defines `pnpm.overrides`)
+
+Under pnpm the managed keys carry an explicit `@*` range (`vite@*`, `vitest@*`). pnpm applies overrides by replacing the declared spec on every manifest, importers included, and a bare key matches any spec — including `catalog:`. The range keeps the override on the transitive and peer declarations it exists for while leaving `catalog:` references intact, so `vp up` no longer rewrites them to a concrete version.
 
 A Vite+ release can bump the bundled Vitest. Because that pin also applies to `vite-plus`'s own `vitest` dependency, an out-of-date pin keeps installing the previous runner even after you upgrade `vite-plus` — splitting Vitest's internals (mocks, `expect`, runner state) between the pinned copy and the one `vp test` loads.
 

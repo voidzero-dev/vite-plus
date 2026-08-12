@@ -56,6 +56,7 @@ import { type MigrationReport } from '../report.ts';
 import {
   PROVIDER_OVERRIDE_DROP_NAMES,
   pnpmMajor,
+  pnpmOverrideKey,
   type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
 } from './shared.ts';
@@ -190,12 +191,27 @@ export function rewriteStandaloneProject(
             removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
           }
         }
+        // Managed pnpm override keys are range-qualified (`vite@*`) so they never
+        // rewrite an importer's `catalog:` spec — see `pnpmOverrideKey`. Drop the
+        // pre-#2309 bare keys the user's config may still carry; keeping both
+        // would restore the clobbering match. `peerDependencyRules` below keys on
+        // plain package names and stays bare.
+        for (const key of overrideKeys) {
+          delete pkg.pnpm?.overrides?.[key];
+        }
         // Project already has pnpm config in package.json -- keep using it.
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: {
             ...pkg.pnpm?.overrides,
-            ...managed,
+            ...Object.fromEntries(
+              Object.entries(managed).map(([key, spec]) => [pnpmOverrideKey(key), spec]),
+            ),
+            // The force-override `vite-plus` pin keeps a BARE key: it only exists
+            // in `file:` tgz mode, where migration writes the tgz spec straight
+            // into every manifest instead of a `catalog:` reference, so there is
+            // no catalog provenance for a bare key to strip. This matches the
+            // workspace-yaml force-override path in `rewriteStandaloneProject`.
             ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
           },
           peerDependencyRules: {

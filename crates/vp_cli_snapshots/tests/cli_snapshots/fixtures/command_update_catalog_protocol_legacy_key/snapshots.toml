@@ -1,0 +1,38 @@
+[[case]]
+name = "command_update_catalog_protocol_legacy_key"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+comment = "#2309 repair path: a project migrated before the fix carries the bare `vite` override key, which `vp up` uses to clobber `catalog:`. One `vp migrate` re-keys it."
+steps = [
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "the bare override key resolves the catalog reference away", snapshot = false, continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` lost `catalog:`; `vite-plus` (no override) kept it", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+  ], comment = "migrate repairs both the override key and the clobbered spec", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "pnpm-workspace.yaml",
+  ], comment = "the bare key is replaced by the range-qualified one", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "update is now a no-op on the catalog reference", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` stays `catalog:` across the update", continue-on-failure = true },
+]

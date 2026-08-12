@@ -45,7 +45,7 @@ pnpm settings should be consolidated here
 
 ```
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

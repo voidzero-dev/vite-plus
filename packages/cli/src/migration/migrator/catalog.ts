@@ -36,6 +36,7 @@ import {
   REMOVE_PACKAGES,
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
+  pnpmOverrideKey,
   type CatalogDependencyResolver,
   type PackageJsonDependencyField,
   type PnpmPackageJsonSettings,
@@ -313,11 +314,20 @@ export function rewritePnpmWorkspaceYaml(
       removeYamlMapVitestEntry(doc.getIn(['overrides']));
     }
     for (const key of Object.keys(managed)) {
-      const currentVersion = getYamlMapScalarStringValue(overrides, key);
+      // Managed keys are range-qualified (`vite@*`) so the override never
+      // rewrites an importer's `catalog:` spec — see `pnpmOverrideKey`. Carry a
+      // pre-#2309 bare key's value over to the new key so a user's own
+      // `catalog:<name>` choice survives, then drop the bare key: leaving both
+      // in place would restore the clobbering match.
+      const overrideKey = pnpmOverrideKey(key);
+      const currentVersion =
+        getYamlMapScalarStringValue(overrides, overrideKey) ??
+        getYamlMapScalarStringValue(overrides, key);
       const version = getCatalogDependencySpec(currentVersion, managed[key], true, {
         preferredCatalogSpec,
       });
-      doc.setIn(['overrides', scalarString(key)], scalarString(version));
+      deleteYamlMapKey(overrides, key);
+      doc.setIn(['overrides', scalarString(overrideKey)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
     // Snapshot the keys before deleting (mirrors the `keysSnapshot` loop above):
@@ -575,14 +585,17 @@ export function getCatalogDependencySpec(
 
 /**
  * #1932: under pnpm, an importer that depends on `vite-plus` (which bundles
- * `vitest`) needs a DIRECT `vite` devDep so the `vite` override binds vitest's
- * required `vite` peer to @voidzero-dev/vite-plus-core. Without a direct edge,
- * pnpm's `autoInstallPeers` fabricates a separate upstream `vite` to satisfy the
+ * `vitest`) needs a DIRECT `vite` devDep pointing at @voidzero-dev/vite-plus-core
+ * so vitest's required `vite` peer binds to it. Without a direct edge, pnpm's
+ * `autoInstallPeers` fabricates a separate upstream `vite` to satisfy the
  * peer, splitting vite-plus / vite / vitest into duplicate instances (the extra
  * vite also lacks vite's `@voidzero-dev/vite-task-client` integration, breaking
- * the `vp test` cache). npm/yarn/bun redirect transitive/peer vite via root
- * overrides/resolutions (and drop the aliased vite), so this is pnpm-only,
- * mirroring the bun root-package branch in `rewriteRootWorkspacePackageJson`.
+ * the `vp test` cache). Under a catalog the edge is a `catalog:` reference and
+ * the catalog entry carries the alias; the `vite@*` workspace override covers
+ * transitive and peer declarations instead of this one (see `pnpmOverrideKey`).
+ * npm/yarn/bun redirect transitive/peer vite via root overrides/resolutions (and
+ * drop the aliased vite), so this is pnpm-only, mirroring the bun root-package
+ * branch in `rewriteRootWorkspacePackageJson`.
  *
  * A package that already declares `vite` in ANY dependency field, including
  * `peerDependencies` (e.g. a vite plugin pinning `vite ^6`), is left untouched
@@ -821,6 +834,21 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
     }
   }
   return undefined;
+}
+
+// Delete a key by its literal name. `YAMLMap.delete` compares the key NODE, so
+// the node has to be looked up in `.items` first — passing a fresh scalar would
+// silently no-op.
+function deleteYamlMapKey(map: unknown, key: string): void {
+  if (!(map instanceof YAMLMap)) {
+    return;
+  }
+  const target = map.items.find(
+    (item) => item.key instanceof Scalar && item.key.value === key,
+  )?.key;
+  if (target) {
+    map.delete(target);
+  }
 }
 
 function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
