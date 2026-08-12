@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { type WorkspacePackage } from '../../types/index.ts';
+import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -63,11 +63,12 @@ async function runTsdownMigrateStep(
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
   manualHint: string,
+  packageManager: PackageManager,
 ): Promise<boolean> {
   try {
     const result = await runCommandSilently({
       command: vpBin,
-      args: ['dlx', 'tsdown-migrate'],
+      args: ['dlx', 'tsdown-migrate@rc', '--yes', `--package-manager ${packageManager}`], // remove pin to rc tag once it graduates to main version
       cwd,
       envs: process.env,
     });
@@ -91,6 +92,7 @@ async function runTsdownMigrateStep(
 export async function migrateTsupToTsdown(
   projectPath: string,
   interactive: boolean,
+  packageManager: PackageManager,
   tsupConfigFile?: string,
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
@@ -118,6 +120,7 @@ export async function migrateTsupToTsdown(
         spinner,
         'tsup migration failed',
         `You can run \`vp dlx tsdown-migrate\` manually later in ${displayRelative(target)}`,
+        packageManager,
       );
       if (!migrateOk) {
         return false;
@@ -223,7 +226,7 @@ export async function confirmTsupMigration(interactive: boolean): Promise<boolea
         'Migrate tsup config to tsdown using tsdown-migrate?\n  ' +
         styleText(
           'gray',
-          "tsdown is Vite+'s built-in bundler (exposed via `vp pack`) — a drop-in tsup replacement powered by Rolldown. tsdown-migrate converts your existing config automatically.",
+          "tsdown is Vite+'s built-in bundler (exposed via `vp pack`) — a mostly drop-in tsup replacement powered by Rolldown. tsdown-migrate converts your existing config automatically.",
         ),
       initialValue: true,
     });
@@ -239,6 +242,7 @@ export async function confirmTsupMigration(interactive: boolean): Promise<boolea
 export async function promptTsupMigration(
   projectPath: string,
   interactive: boolean,
+  packageManager: PackageManager,
   packages?: WorkspacePackage[],
 ): Promise<boolean> {
   const tsupProject = detectTsupProject(projectPath, packages);
@@ -254,7 +258,7 @@ export async function promptTsupMigration(
   if (!confirmed) {
     return false;
   }
-  const ok = await migrateTsupToTsdown(projectPath, interactive, tsupProject.configFile, packages);
+  const ok = await migrateTsupToTsdown(projectPath, interactive, packageManager, tsupProject.configFile, packages);
   if (!ok) {
     cancelAndExit('tsup migration failed.', 1);
   }

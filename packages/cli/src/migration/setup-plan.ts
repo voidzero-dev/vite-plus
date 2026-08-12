@@ -37,8 +37,6 @@ export interface MigrationSetupPlan {
   editorConflictDecisions: Map<string, 'merge' | 'skip'>;
   migrateEslint: boolean;
   eslintConfigFile?: string;
-  migrateTsup: boolean;
-  tsupConfigFile?: string;
 }
 
 async function collectGitHooksDecision(
@@ -190,7 +188,10 @@ async function collectEslintMigrationDecision(
   return { migrateEslint, eslintConfigFile: eslintProject.configFile };
 }
 
-async function collectTsupMigrationDecision(
+// Collected separately from collectMigrationSetupPlan so callers can prompt
+// for it after the Prettier -> Oxfmt decision (tsup/tsdown is checked last
+// among the tool migrations).
+export async function collectTsupMigrationDecision(
   rootDir: string,
   options: MigrationOptions,
   packages?: WorkspacePackage[],
@@ -224,15 +225,11 @@ export async function collectMigrationSetupPlan(
   const eslintPlan = includeEslint
     ? await collectEslintMigrationDecision(rootDir, options, packages)
     : { migrateEslint: false };
-  const tsupPlan = includeEslint
-    ? await collectTsupMigrationDecision(rootDir, options, packages)
-    : { migrateTsup: false };
 
   return {
     shouldSetupHooks,
     ...agentPlan,
     ...editorPlan,
     ...eslintPlan,
-    ...tsupPlan,
   };
 }

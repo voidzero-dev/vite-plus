@@ -1297,11 +1297,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (installSummary.pendingBuilds && installSummary.pendingBuilds.length > 0) {
       migratePendingBuilds = installSummary.pendingBuilds;
     }
-    updateCreateProgress('Migrating lint and format tools');
+    updateCreateProgress('Migrating lint, format & pack tools');
     pauseCreateProgress();
     await promptEslintMigration(fullPath, /* interactive */ false);
     await promptPrettierMigration(fullPath, /* interactive */ false);
-    await promptTsupMigration(fullPath, /* interactive */ false);
+    await promptTsupMigration(fullPath, /* interactive */ false, packageManager);
     resumeCreateProgress();
   };
 

@@ -73,7 +73,11 @@ import {
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
-import { collectMigrationSetupPlan, type MigrationSetupPlan } from './setup-plan.ts';
+import {
+  collectMigrationSetupPlan,
+  collectTsupMigrationDecision,
+  type MigrationSetupPlan,
+} from './setup-plan.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -382,6 +386,8 @@ interface MigrationPlan extends MigrationSetupPlan {
   migratePrettier: boolean;
   hasPrettierDependency: boolean;
   prettierConfigFile?: string;
+  migrateTsup: boolean;
+  tsupConfigFile?: string;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
@@ -530,6 +536,13 @@ async function collectMigrationPlan(
     warnPackageLevelPrettier();
   }
 
+  // 3b. tsup detection + prompt (after Prettier so Prettier -> Oxfmt is checked first)
+  const { migrateTsup, tsupConfigFile } = await collectTsupMigrationDecision(
+    rootDir,
+    options,
+    packages,
+  );
+
   // 9. tsconfig baseUrl prompt
   const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
     ? await confirmBaseUrlFix(options.interactive)
@@ -555,6 +568,8 @@ async function collectMigrationPlan(
     migratePrettier,
     hasPrettierDependency: prettierProject.hasDependency,
     prettierConfigFile: prettierProject.configFile,
+    migrateTsup,
+    tsupConfigFile,
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
@@ -919,6 +934,7 @@ async function executeMigrationPlan(
     const tsupOk = await migrateTsupToTsdown(
       workspaceInfo.rootDir,
       interactive,
+      plan.packageManager,
       plan.tsupConfigFile,
       workspaceInfo.packages,
       { silent: true, report },
@@ -1331,24 +1347,6 @@ async function main() {
       eslintMigrated = true;
     }
 
-    let tsupMigrated = false;
-    if (plan.migrateTsup) {
-      await ensureExistingPackageManager();
-      updateMigrationProgress('Migrating tsup');
-      const tsupOk = await migrateTsupToTsdown(
-        workspaceInfoOptional.rootDir,
-        options.interactive,
-        plan.tsupConfigFile,
-        workspaceInfoOptional.packages,
-        { silent: true, report },
-      );
-      if (!tsupOk) {
-        clearMigrationProgress();
-        cancelAndExit('tsup migration failed. Fix the issue and re-run `vp migrate`.', 1);
-      }
-      tsupMigrated = true;
-    }
-
     // Detect Prettier unconditionally so the formatting gate below skips Oxfmt on
     // a project that still uses Prettier, even on a bare (non-`--full`) upgrade
     // that rewrites imports/scripts. The Prettier MIGRATION itself stays in the
@@ -1384,6 +1382,37 @@ async function main() {
         }
       } else if (prettierProject.hasDependency) {
         warnPackageLevelPrettier();
+      }
+    }
+
+    let tsupMigrated = false;
+    if (fullSetup) {
+      // Interactive only: stop any active spinner (e.g. "Migrating Prettier") so
+      // it does not animate beneath the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      const { migrateTsup, tsupConfigFile } = await collectTsupMigrationDecision(
+        workspaceInfoOptional.rootDir,
+        setupOptions,
+        workspaceInfoOptional.packages,
+      );
+      if (migrateTsup) {
+        await ensureExistingPackageManager();
+        updateMigrationProgress('Migrating tsup');
+        const tsupOk = await migrateTsupToTsdown(
+          workspaceInfoOptional.rootDir,
+          options.interactive,
+          packageManager!, // is it safe to do this?
+          tsupConfigFile,
+          workspaceInfoOptional.packages,
+          { silent: true, report },
+        );
+        if (!tsupOk) {
+          clearMigrationProgress();
+          cancelAndExit('tsup migration failed. Fix the issue and re-run `vp migrate`.', 1);
+        }
+        tsupMigrated = true;
       }
     }
 
