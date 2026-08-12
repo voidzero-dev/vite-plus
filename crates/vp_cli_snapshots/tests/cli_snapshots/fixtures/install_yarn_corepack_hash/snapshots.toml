@@ -23,7 +23,7 @@ steps = [
 [[case]]
 name = "env_package_manager_hash"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0" }
+env = { CI = "true", YARN_ENABLE_TELEMETRY = "0" }
 steps = [
   { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
   { argv = ["vp", "env", "install", "pm"], comment = "The explicit environment install accepts and verifies the project hash", timeout = 120000 },
