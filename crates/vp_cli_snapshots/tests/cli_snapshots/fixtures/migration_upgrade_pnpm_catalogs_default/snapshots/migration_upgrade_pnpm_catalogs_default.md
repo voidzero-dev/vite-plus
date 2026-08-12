@@ -51,7 +51,7 @@ catalogs:
   default:
     rari: ^0.14.12
 overrides:
-  vite: catalog:build
+  vite@*: catalog:build
 peerDependencyRules:
   allowAny:
     - vite
@@ -105,7 +105,7 @@ catalogs:
   default:
     rari: ^0.14.12
 overrides:
-  vite: catalog:build
+  vite@*: catalog:build
 peerDependencyRules:
   allowAny:
     - vite

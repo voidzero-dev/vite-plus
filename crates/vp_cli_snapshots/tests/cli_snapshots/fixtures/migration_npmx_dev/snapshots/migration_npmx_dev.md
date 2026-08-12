@@ -55,8 +55,8 @@ catalog:
   '@vitest/browser-playwright': <version>
   '@vitest/coverage-v8': <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
