@@ -41,11 +41,6 @@ pub struct PackageMetadata {
     /// Binary names that are JavaScript files (need Node.js to run).
     #[serde(default)]
     pub js_bins: HashSet<String>,
-    /// Whether `bins` was deliberately restricted to a subset of the bins the
-    /// package declares (e.g., the corepack shim auto-install links only
-    /// `corepack`). Updates keep the restriction; explicit installs reset it.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub bins_restricted: bool,
     /// Version spec the package was installed with (a dist-tag like
     /// `nightly`, a range, or an exact version), so `vp update -g` keeps
     /// resolving within it. `None` means the implicit `latest` tag.
@@ -85,7 +80,6 @@ impl PackageMetadata {
             platform: Platform { node: node_version, npm: npm_version },
             bins,
             js_bins,
-            bins_restricted: false,
             version_spec: None,
             manager,
             installed_at: Utc::now(),

@@ -377,7 +377,7 @@ fn env_help_doc() -> HelpDoc {
                 "Examples",
                 vec![
                     "  Setup:",
-                    "    vp env setup                  # Create shims for node, npm, npx, corepack",
+                    "    vp env setup                  # Create Node.js and package-manager shims",
                     "    vp env on                     # Use vite-plus managed Node.js",
                     "    vp env print                  # Print shell snippet for this session",
                     "",

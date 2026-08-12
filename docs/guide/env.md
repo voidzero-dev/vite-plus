@@ -19,7 +19,7 @@ latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
-When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
+When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Without a package-manager declaration, invoking `pnpm`, `yarn`, or `bun` uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
 A fresh install uses the split platform layout by default. On Unix, Vite+
 stores managed runtimes and related files in `~/.local/share/vite-plus`. It
@@ -48,7 +48,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 
 ### Setup
 
-- `vp env setup` creates or updates shims in the resolved bin directory. It writes shell setup scripts in the config directory.
+- `vp env setup` creates or updates the `node`, `npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`, `bun`, `bunx`, `vpx`, and `vpr` shims in the resolved bin directory. It writes shell setup scripts in the config directory.
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
@@ -98,7 +98,7 @@ use this file to select the Node.js version.
 - `vp env use` sets a Node.js version for the current shell session
 - `vp env install` installs a Node.js version
 - `vp env uninstall` removes an installed Node.js version
-- `vp env clean` removes unused managed Node.js runtimes, all downloaded package managers, and the Corepack cache.
+- `vp env clean` removes unused managed Node.js runtimes and all downloaded package managers.
 - `vp env exec` runs a command with a specific Node.js version
 - `vp node` runs a Node.js script — shorthand for `vp env exec node`
 
@@ -120,7 +120,7 @@ use this file to select the Node.js version.
 
 ```bash
 # Setup
-vp env setup                  # Create shims for node, npm, npx, corepack
+vp env setup                  # Create Node.js and package-manager shims
 vp env on                     # Use Vite+ managed Node.js
 vp env print                  # Print shell snippet for this session
 
@@ -145,29 +145,6 @@ vp env exec node -v           # Use shim mode with automatic version resolution
 vp node script.js             # Shorthand: run a Node.js script with the resolved version
 vp node -e "console.log(1+1)" # Shorthand: forward any node flag or argument
 ```
-
-## Corepack
-
-Vite+ creates a `corepack` shim by default, so corepack works without a system Node.js installation:
-
-- On Node.js 24 and earlier, the shim runs the corepack bundled with the resolved Node.js version.
-- On Node.js 25 and later, where corepack is no longer bundled, Vite+ installs corepack as a managed global package on first use. Only the `corepack` binary is linked; run `vp install -g corepack` yourself if you also want the package's pnpm/yarn launchers exposed directly.
-- If you install corepack explicitly with `vp install -g corepack`, that installation is always preferred.
-
-`corepack enable` normally creates `pnpm` and `yarn` launchers next to the
-corepack binary. Vite+ does not add that location to `PATH`. The shim sets
-`--install-directory` to the resolved bin directory by default. The launchers
-are then available on `PATH`. They still use the Node.js and package-manager
-versions for the project:
-
-```bash
-corepack enable               # pnpm and yarn now resolve via corepack
-corepack disable              # Remove the pnpm/yarn launchers again
-```
-
-The launchers reference the corepack copy that created them. If that copy is later removed (for example by uninstalling the Node.js version it shipped with), rerun `corepack enable` to recreate them.
-
-Shims owned by Vite+ (`npm`, `npx`, and binaries installed with `vp install -g`) are protected: if corepack removes or replaces them, Vite+ restores them and prints a warning.
 
 ## Custom Node.js Mirror
 

@@ -1,0 +1,7 @@
+[[case]]
+name = "shim_mismatched_package_managers"
+vp = "global"
+steps = [
+  { argv = ["yarn", "--version"], comment = "Yarn resolves independently of the project's pnpm declaration", snapshot = false },
+  { argv = ["bun", "--version"], comment = "Bun resolves independently of the project's pnpm declaration", snapshot = false },
+]
