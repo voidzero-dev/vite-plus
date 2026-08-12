@@ -19,12 +19,17 @@ mod shim;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::npm_registry;
-pub use dispatch::{DispatchResult, dispatch, dispatch_with_metadata};
+pub use dispatch::{
+    DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
+    dispatch_with_resolved_package_manager,
+};
 pub use error::Error;
 pub use package_manager::{
-    PackageManager, PackageManagerBuilder, PackageManagerResolution, PackageManagerSource,
-    PackageManagerType, download_package_manager, ensure_package_manager_bin,
+    EnvironmentPackageManagerResolution, PackageManager, PackageManagerBuilder,
+    PackageManagerResolution, PackageManagerSource, PackageManagerType, download_package_manager,
+    ensure_package_manager_bin, fetch_package_manager_versions,
     get_package_manager_type_and_version, package_manager_bin_path, package_manager_install_dir,
+    resolve_environment_package_manager, resolve_environment_package_manager_spec,
     resolve_package_manager_from_package_json, resolve_package_manager_version,
 };
 pub use request::HttpClient;

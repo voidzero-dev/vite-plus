@@ -18,12 +18,12 @@ Set it as the global default (stored as the `lts` alias)
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Default Node.js version set to lts (currently <version>)
+✓ Environment defaults updated.
 ```
 
-## `node -e 'const {execFileSync}=require('\''node:child_process'\''); const {versions}=JSON.parse(execFileSync('\''vp'\'',['\''env'\'','\''list-remote'\'','\''--lts'\'','\''--json'\''],{encoding:'\''utf8'\''})); console.log('\''installed marked:'\'', versions.some(v=>v.installed)); console.log('\''current marked:'\'', versions.some(v=>v.current)); console.log('\''default marked:'\'', versions.some(v=>v.default));'`
+## `node -e 'const {execFileSync}=require('\''node:child_process'\''); const {node}=JSON.parse(execFileSync('\''vp'\'',['\''env'\'','\''list-remote'\'','\''--lts'\'','\''--json'\''],{encoding:'\''utf8'\''})); console.log('\''installed marked:'\'', node.some(v=>v.installed)); console.log('\''current marked:'\'', node.some(v=>v.current)); console.log('\''default marked:'\'', node.some(v=>v.default));'`
 
-installed/current/default flags should all resolve, including the `lts` default alias
+the unified JSON node entries resolve installed/current/default flags, including the `lts` default alias
 
 ```
 installed marked: true

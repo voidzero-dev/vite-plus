@@ -5,9 +5,7 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core shims and package binaries)
 
-use vp_pm_cli::{
-    PackageManagerType, ensure_package_manager_bin, resolve_package_manager_from_package_json,
-};
+use vp_pm_cli::{PackageManagerType, ensure_package_manager_bin};
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
@@ -20,6 +18,7 @@ use crate::{
         env::{
             bin_config::{BinConfig, BinSource},
             config::{self, ShimMode},
+            package_manager,
             package_metadata::PackageMetadata,
         },
         global::install::is_protected_shim,
@@ -660,7 +659,8 @@ async fn resolve_package_manager_tool(
         return Ok(None);
     };
 
-    let (version, hash) = match resolve_package_manager_from_package_json(cwd)? {
+    let resolution = package_manager::resolve_current(cwd).await?;
+    let (version, hash) = match resolution {
         Some(resolution) if resolution.package_manager_type == expected_type => {
             (resolution.version, resolution.hash)
         }
@@ -737,11 +737,17 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Check shim mode from config
-    let shim_mode = load_shim_mode().await;
+    let shim_mode = load_shim_mode(tool).await;
     if shim_mode == ShimMode::SystemFirst {
         tracing::debug!("system-first mode enabled");
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
+            if PackageManagerType::from_tool(tool).is_some()
+                && let Err(error) = prepare_node_path_for_system_package_manager().await
+            {
+                eprintln!("vp: Failed to prepare Node.js for system package manager: {error}");
+                return 1;
+            }
             // Append current bin_dir to VP_BYPASS to prevent infinite loops
             // when multiple vite-plus installations exist in PATH.
             // The next installation will filter all accumulated paths.
@@ -897,6 +903,26 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // Execute the tool (normal path — exec replaces process on Unix)
     exec::exec_tool(&tool_path, args)
+}
+
+async fn prepare_node_path_for_system_package_manager() -> Result<(), Error> {
+    let config = config::load_config().await?;
+    if config.shim_mode == ShimMode::SystemFirst
+        && let Some(node) = find_system_tool("node")
+        && let Some(bin_dir) = node.parent()
+    {
+        let _ = prepend_to_path_env(bin_dir, PrependOptions::default());
+        return Ok(());
+    }
+
+    let cwd = current_dir()?;
+    let resolution = resolve_with_cache(&cwd).await.map_err(|error| Error::Other(error.into()))?;
+    let node =
+        ensure_installed(&resolution.version).await.map_err(|error| Error::Other(error.into()))?;
+    let bin_dir =
+        node.parent().ok_or_else(|| Error::Other("Node.js has no bin directory".into()))?;
+    let _ = prepend_to_path_env(bin_dir, PrependOptions::default());
+    Ok(())
 }
 
 /// Dispatch a package binary shim.
@@ -1232,8 +1258,17 @@ pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, 
 /// Load shim mode from config.
 ///
 /// Returns the default (Managed) if config cannot be read.
-async fn load_shim_mode() -> ShimMode {
-    config::load_config().await.map(|c| c.shim_mode).unwrap_or_default()
+async fn load_shim_mode(tool: &str) -> ShimMode {
+    config::load_config()
+        .await
+        .map(|config| {
+            if PackageManagerType::from_tool(tool).is_some() {
+                config.package_manager_shim_mode()
+            } else {
+                config.shim_mode
+            }
+        })
+        .unwrap_or_default()
 }
 
 /// Find a system tool in PATH, skipping the vite-plus bin directory and any

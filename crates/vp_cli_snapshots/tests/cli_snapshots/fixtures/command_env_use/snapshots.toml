@@ -9,4 +9,5 @@ steps = [
   { argv = ["vp", "env", "use", "--unset"], comment = "should output unset command to stdout", continue-on-failure = true },
   { argv = ["vp", "env", "use", "d"], comment = "should show friendly error for invalid version", continue-on-failure = true },
   { argv = ["vp", "env", "use", "abc"], comment = "should show friendly error for invalid version", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "--silent-if-unchanged", "--no-install"], comment = "an unchanged project environment emits no shell mutations", envs = [["VP_NODE_VERSION", "20.18.0"], ["VP_PACKAGE_MANAGER", "npm@10.9.4"]] },
 ]

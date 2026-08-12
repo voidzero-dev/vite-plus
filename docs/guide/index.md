@@ -96,7 +96,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 - [`vp hooks`](/guide/commit-hooks) manages the Git hook dispatcher (`enable`, `disable`, `status`).
 - [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [`vp install`](/guide/install) installs dependencies with the right package manager.
-- [`vp env`](/guide/env) manages Node.js versions.
+- [`vp env`](/guide/env) manages Node.js and package-manager environments.
 
 ### Develop
 

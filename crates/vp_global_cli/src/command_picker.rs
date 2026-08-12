@@ -109,7 +109,7 @@ const COMMANDS: &[CommandEntry] = &[
     CommandEntry {
         label: "env",
         command: "env",
-        summary: "Manage Node.js versions.",
+        summary: "Manage Node.js and package managers.",
         append_help: false,
     },
     CommandEntry {

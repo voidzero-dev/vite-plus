@@ -3,10 +3,15 @@
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
+use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
-use super::config::{self, ShimMode, get_bin_dir, load_config, resolve_version};
+use super::{
+    config::{self, ShimMode, get_bin_dir, load_config, resolve_version},
+    package_manager,
+    spec::EnvScope,
+};
 use crate::{
     commands::shell::{ALL_SHELL_PROFILES, IDE_SHELL_PROFILES, ShellProfile, resolve_profile_path},
     error::Error,
@@ -74,7 +79,8 @@ fn abbreviate_home(path: &str) -> String {
 }
 
 /// Execute the doctor command.
-pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitStatus, Error> {
+    let scope = EnvScope::parse(scope.as_deref())?;
     let mut has_errors = false;
 
     // Section: Installation
@@ -84,20 +90,33 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Section: Configuration
     print_section("Configuration");
-    let (shim_mode, system_node_path) = check_shim_mode().await;
+    let (shim_mode, system_node_path) = check_shim_mode(scope).await;
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
 
-    check_session_override();
+    if scope.includes_node() {
+        check_session_override();
+    }
+    if scope.includes_package_managers() {
+        check_package_manager_session_override().await;
+    }
 
     // Section: PATH
     print_section("PATH");
     has_errors |= !check_path().await;
 
     // Section: Version Resolution
-    print_section("Version Resolution");
-    let resolution = check_current_resolution(&cwd, shim_mode, system_node_path).await;
+    let resolution = if scope.includes_node() {
+        print_section("Node.js Resolution");
+        check_current_resolution(&cwd, shim_mode, system_node_path).await
+    } else {
+        None
+    };
+    if scope.includes_package_managers() {
+        print_section("Package Manager Resolution");
+        check_package_manager_resolution(&cwd, scope).await;
+    }
 
     // Section: devEngines (conditional, see rfcs/dev-engines.md)
     check_dev_engines(&cwd, resolution.as_ref()).await;
@@ -215,7 +234,7 @@ fn shim_filename(tool: &str) -> String {
 }
 
 /// Check and display shim mode. Returns the mode and any found system node path.
-async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
+async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>) {
     let config = match load_config().await {
         Ok(c) => c,
         Err(e) => {
@@ -230,32 +249,87 @@ async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
 
     let mut system_node_path = None;
 
-    match config.shim_mode {
-        ShimMode::Managed => {
-            print_check(&output::CHECK.green().to_string(), "Node.js mode", "managed");
-        }
-        ShimMode::SystemFirst => {
-            print_check(
-                &output::CHECK.green().to_string(),
-                "Node.js mode",
-                &"system-first".bright_blue().to_string(),
-            );
-
-            // Check if system Node.js is available
-            if let Some(system_node) = shim::find_system_tool("node") {
-                print_check(" ", "System Node.js", &system_node.as_path().display().to_string());
-                system_node_path = Some(system_node);
-            } else {
+    if scope.includes_node() {
+        match config.shim_mode {
+            ShimMode::Managed => {
+                print_check(&output::CHECK.green().to_string(), "Node.js mode", "managed");
+            }
+            ShimMode::SystemFirst => {
                 print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
-                    "System Node.js",
-                    &"not found (will fall back to managed)".yellow().to_string(),
+                    &output::CHECK.green().to_string(),
+                    "Node.js mode",
+                    &"system-first".bright_blue().to_string(),
                 );
+
+                // Check if system Node.js is available
+                if let Some(system_node) = shim::find_system_tool("node") {
+                    print_check(
+                        " ",
+                        "System Node.js",
+                        &system_node.as_path().display().to_string(),
+                    );
+                    system_node_path = Some(system_node);
+                } else {
+                    print_check(
+                        &output::WARN_SIGN.yellow().to_string(),
+                        "System Node.js",
+                        &"not found (will fall back to managed)".yellow().to_string(),
+                    );
+                }
             }
         }
     }
+    if scope.includes_package_managers() {
+        let mode = match config.package_manager_shim_mode() {
+            ShimMode::Managed => "managed",
+            ShimMode::SystemFirst => "system-first",
+        };
+        print_check(&output::CHECK.green().to_string(), "Package manager mode", mode);
+    }
 
     (config.shim_mode, system_node_path)
+}
+
+async fn check_package_manager_session_override() {
+    let environment = vp_shared::EnvConfig::get().package_manager;
+    let session = config::read_session_package_manager().await;
+    if let Some(value) = environment.or(session) {
+        print_check(" ", "PM session", &value);
+    }
+}
+
+async fn check_package_manager_resolution(cwd: &AbsolutePathBuf, scope: EnvScope) {
+    match package_manager::resolve_current(cwd).await {
+        Ok(Some(resolution)) if !matches!(scope, EnvScope::PackageManager(kind) if kind != resolution.package_manager_type) =>
+        {
+            print_check(" ", "Source", &resolution.source);
+            print_check(
+                " ",
+                "Version",
+                &format!("{}@{}", resolution.package_manager_type, resolution.version)
+                    .bright_green()
+                    .to_string(),
+            );
+            let installed =
+                package_manager_install_dir(resolution.package_manager_type, &resolution.version)
+                    .is_some_and(|directory| {
+                        resolution.package_manager_type.bin_names().iter().all(|name| {
+                            package_manager_bin_path(&directory, name).as_path().exists()
+                        })
+                    });
+            let status = if installed { "installed" } else { "not installed" };
+            let indicator = if installed {
+                output::CHECK.green().to_string()
+            } else {
+                output::WARN_SIGN.yellow().to_string()
+            };
+            print_check(&indicator, "PM binaries", status);
+        }
+        Ok(_) => print_check(" ", "Package manager", "not selected"),
+        Err(error) => {
+            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string())
+        }
+    }
 }
 
 /// Check profile files for env sourcing and classify where it was found.
@@ -1547,6 +1621,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_abbreviate_home() {
         if let Ok(home) = std::env::var("HOME") {
             let path = format!("{home}/.vite-plus");

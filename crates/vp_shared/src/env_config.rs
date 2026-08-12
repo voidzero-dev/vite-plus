@@ -160,6 +160,11 @@ pub struct EnvConfig {
     /// Env: `VP_NODE_VERSION`
     pub node_version: Option<String>,
 
+    /// Override package manager and version.
+    ///
+    /// Env: `VP_PACKAGE_MANAGER`
+    pub package_manager: Option<String>,
+
     /// User home directory.
     ///
     /// Resolved once from `HOME` or `USERPROFILE` in platform order. See
@@ -205,6 +210,7 @@ impl EnvConfig {
             is_ci: std::env::var("CI").is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
+            package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
         })

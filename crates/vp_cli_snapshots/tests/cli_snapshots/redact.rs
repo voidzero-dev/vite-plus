@@ -57,6 +57,25 @@ static TOOL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static BUN_BUILD_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(\bbun(?: [a-z-]+)* <version> )\([0-9a-f]{6,12}\)").unwrap()
 });
+// Environment diagnostics report executable paths using the platform's
+// distribution layout. Normalize Windows `.exe`/`.cmd` locations to the Unix
+// spelling used by the shared snapshots.
+static WINDOWS_MANAGED_NODE_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))/node\.exe\b",
+    )
+    .unwrap()
+});
+static WINDOWS_MANAGED_PM_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(<home>/.vite-plus/package_manager/[^"\r\n]+/bin/[A-Za-z0-9._-]+)\.cmd\b"#)
+        .unwrap()
+});
+static COMMAND_NOT_FOUND_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(Command execution failed: )(?:No such file or directory \(os error 2\)|program not found)",
+    )
+    .unwrap()
+});
 // The workspace's own vite-plus / @voidzero-dev/vite-plus-core version is
 // written verbatim into scaffolded catalogs and manifests (`vite-plus: 0.2.3`,
 // `"vite-plus": "0.2.3"`, `npm:@voidzero-dev/vite-plus-core@0.2.3`). Unlike
@@ -411,6 +430,12 @@ pub fn redact_output(
     let borrowed: Vec<(&str, &str)> =
         redactions.iter().map(|(from, to)| (from.as_str(), *to)).collect();
     redact_string(&mut output, &borrowed, normalize_separators);
+
+    // Normalize platform-specific managed executable paths and missing-command
+    // diagnostics before applying the general version redactions below.
+    output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/node").into_owned();
+    output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
+    output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 
     // Redact UUIDs to "<uuid>"
     output = UUID_RE.replace_all(&output, "<uuid>").into_owned();

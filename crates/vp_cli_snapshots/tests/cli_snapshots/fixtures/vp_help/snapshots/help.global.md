@@ -16,7 +16,7 @@ Start:
   hooks       Manage the Git hook dispatcher
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided
-  env         Manage Node.js versions
+  env         Manage Node.js and package managers
 
 Develop:
   dev          Run the development server

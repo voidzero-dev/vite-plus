@@ -12,17 +12,18 @@ use chrono::Local;
 use owo_colors::OwoColorize;
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_from_package_json,
+    resolve_package_manager_version,
 };
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{
     bin_config::{BinConfig, BinSource},
-    config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
+    config::{ShimMode, VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
+    package_manager,
     package_metadata::PackageMetadata,
 };
-use crate::{cli::exit_status, error::Error};
+use crate::{cli::exit_status, error::Error, shim};
 
 /// Core tools (node, npm, npx)
 const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
@@ -32,6 +33,18 @@ const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+    let config = super::config::load_config().await?;
+    let mode = if PackageManagerType::from_tool(tool).is_some() {
+        config.package_manager_shim_mode()
+    } else {
+        config.shim_mode
+    };
+    if mode == ShimMode::SystemFirst
+        && let Some(path) = shim::dispatch::find_system_tool(tool)
+    {
+        println!("{}", path.as_path().display());
+        return Ok(ExitStatus::default());
+    }
     if let Some(status) = execute_package_manager_tool(&cwd, tool).await? {
         return Ok(status);
     }
@@ -138,14 +151,23 @@ async fn execute_package_manager_tool(
     let Some(expected_type) = PackageManagerType::from_tool(tool) else {
         return Ok(None);
     };
-    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
-        return Ok(None);
+    let resolution = package_manager::resolve_current(cwd).await?;
+    let (version, source) = match &resolution {
+        Some(resolution) if resolution.package_manager_type == expected_type => (
+            resolution.version.to_string(),
+            resolution.source_path.as_ref().map_or_else(
+                || resolution.source.to_string(),
+                |path| path.as_path().display().to_string(),
+            ),
+        ),
+        Some(_) | None if expected_type == PackageManagerType::Npm => return Ok(None),
+        Some(_) | None => (
+            resolve_package_manager_version(expected_type, "latest").await?.to_string(),
+            "registry fallback".into(),
+        ),
     };
-    if resolution.package_manager_type != expected_type {
-        return Ok(None);
-    }
 
-    let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) else {
+    let Some(install_dir) = package_manager_install_dir(expected_type, &version) else {
         return Ok(None);
     };
     let bin_name = expected_type.bin_name_for_tool(tool);
@@ -153,7 +175,7 @@ async fn execute_package_manager_tool(
 
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
         output::error(&format!("{} not found", tool.bold()));
-        eprintln!("{expected_type} {} is not installed.", resolution.version);
+        eprintln!("{expected_type} {version} is not installed.");
         eprintln!("Run 'vp install' inside the project to download it.");
         return Ok(Some(exit_status(1)));
     }
@@ -162,13 +184,9 @@ async fn execute_package_manager_tool(
     println!(
         "  {:<LABEL_WIDTH$}  {}",
         "Package:".dimmed(),
-        format!("{}@{}", expected_type, resolution.version).bright_blue()
+        format!("{expected_type}@{version}").bright_blue()
     );
-    println!(
-        "  {:<LABEL_WIDTH$}  {}",
-        "Source:".dimmed(),
-        resolution.source_path.as_path().display().to_string().dimmed()
-    );
+    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), source.dimmed());
 
     Ok(Some(ExitStatus::default()))
 }
