@@ -26,7 +26,7 @@ use crate::{
             package_metadata::{PackageMetadata, is_legacy_install_id, is_nested_install_id},
         },
         global::{
-            CORE_SHIMS, LEGACY_PACKAGE_MANAGER_PACKAGES, is_local_package_spec, parse_package_spec,
+            LEGACY_PACKAGE_MANAGER_PACKAGES, is_local_package_spec, parse_package_spec,
             update_version_spec,
         },
     },
@@ -110,7 +110,7 @@ fn windows_regular_file_is_vp_shim(shim_path: &vt_path::AbsolutePath) -> bool {
 pub(crate) fn is_protected_shim(bin_name: &str, ignore_case: bool) -> bool {
     let bin_name =
         if cfg!(target_os = "linux") || !ignore_case { bin_name } else { &bin_name.to_lowercase() };
-    CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
+    bin_name == "vp" || crate::shim::DEFAULT_SHIM_TOOLS.contains(&bin_name)
 }
 
 /// Options for [`install`].
@@ -1229,7 +1229,7 @@ mod tests {
 
     #[test]
     fn test_default_shims_are_protected() {
-        for shim in CORE_SHIMS.iter().chain(crate::commands::env::setup::SHIM_TOOLS) {
+        for shim in crate::shim::DEFAULT_SHIM_TOOLS.iter().chain([&"vp"]) {
             assert!(is_protected_shim(shim, false), "{shim} should be protected");
         }
     }

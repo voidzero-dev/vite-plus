@@ -4,18 +4,27 @@ use vp_pm_cli::{
 };
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::{config, spec::parse_package_manager_spec};
+use super::{config, spec::parse_package_manager_spec_with_hash};
 use crate::error::Error;
 
 pub(crate) async fn resolve_current(
     cwd: &AbsolutePath,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs().await?;
+    resolve_current_for(cwd, None).await
+}
 
-    let mut resolution =
-        resolve_environment_package_manager(cwd, specs.session_spec(), specs.default_spec())
-            .await
-            .map_err(Error::from)?;
+pub(crate) async fn resolve_current_for(
+    cwd: &AbsolutePath,
+    expected: Option<PackageManagerType>,
+) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
+    let specs = current_specs().await?;
+    let mut resolution = resolve_environment_package_manager(
+        cwd,
+        specs.session_spec(),
+        specs.default_spec(),
+        expected,
+    )
+    .await?;
     specs.apply_session_source(&mut resolution);
     Ok(resolution)
 }
@@ -32,7 +41,7 @@ pub(crate) async fn resolve_current_spec(
     Ok(resolution)
 }
 
-type PackageManagerSpec = (PackageManagerType, String);
+type PackageManagerSpec = (PackageManagerType, String, Option<String>);
 
 struct CurrentSpecs {
     session: Option<PackageManagerSpec>,
@@ -42,12 +51,16 @@ struct CurrentSpecs {
 }
 
 impl CurrentSpecs {
-    fn session_spec(&self) -> Option<(PackageManagerType, &str)> {
-        self.session.as_ref().map(|(kind, version)| (*kind, version.as_str()))
+    fn session_spec(&self) -> Option<(PackageManagerType, &str, Option<&str>)> {
+        self.session
+            .as_ref()
+            .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref()))
     }
 
-    fn default_spec(&self) -> Option<(PackageManagerType, &str)> {
-        self.default.as_ref().map(|(kind, version)| (*kind, version.as_str()))
+    fn default_spec(&self) -> Option<(PackageManagerType, &str, Option<&str>)> {
+        self.default
+            .as_ref()
+            .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref()))
     }
 
     fn apply_session_source(&self, resolution: &mut Option<EnvironmentPackageManagerResolution>) {
@@ -62,13 +75,13 @@ async fn current_specs() -> Result<CurrentSpecs, Error> {
     let (session, session_source, session_source_path) =
         if let Some(spec) = vp_shared::EnvConfig::get().package_manager {
             (
-                Some(parse_package_manager_spec(spec.trim())?),
+                Some(parse_package_manager_spec_with_hash(spec.trim())?),
                 Some(config::PACKAGE_MANAGER_ENV_VAR),
                 None,
             )
         } else if let Some(spec) = config::read_session_package_manager().await {
             (
-                Some(parse_package_manager_spec(spec.trim())?),
+                Some(parse_package_manager_spec_with_hash(spec.trim())?),
                 Some(config::SESSION_PACKAGE_MANAGER_FILE),
                 config::get_session_package_manager_path().ok(),
             )
@@ -76,21 +89,29 @@ async fn current_specs() -> Result<CurrentSpecs, Error> {
             (None, None, None)
         };
     let config = config::load_config().await?;
-    let default =
-        config.default_package_manager.as_deref().map(parse_package_manager_spec).transpose()?;
+    let default = config
+        .default_package_manager
+        .as_deref()
+        .map(parse_package_manager_spec_with_hash)
+        .transpose()?;
     Ok(CurrentSpecs { session, session_source, session_source_path, default })
 }
 
-pub(crate) async fn resolve_from_files(
+pub(crate) async fn resolve_from_files_for(
     cwd: &AbsolutePath,
+    expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     let config = config::load_config().await?;
-    let default =
-        config.default_package_manager.as_deref().map(parse_package_manager_spec).transpose()?;
+    let default = config
+        .default_package_manager
+        .as_deref()
+        .map(parse_package_manager_spec_with_hash)
+        .transpose()?;
     resolve_environment_package_manager(
         cwd,
         None,
-        default.as_ref().map(|(kind, version)| (*kind, version.as_str())),
+        default.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
+        expected,
     )
     .await
     .map_err(Error::from)

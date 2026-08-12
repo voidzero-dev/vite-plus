@@ -102,12 +102,9 @@ pub async fn execute(
     };
 
     let package_manager = if scope.includes_package_managers() {
-        package_manager::resolve_current(&cwd).await?.and_then(|resolution| {
-            if let EnvScope::PackageManager(expected) = scope
-                && expected != resolution.package_manager_type
-            {
-                return None;
-            }
+        let resolution =
+            package_manager::resolve_current_for(&cwd, scope.package_manager()).await?;
+        resolution.and_then(|resolution| {
             let system_paths = (config.package_manager_shim_mode() == ShimMode::SystemFirst)
                 .then(|| {
                     resolution

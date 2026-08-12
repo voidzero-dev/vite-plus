@@ -253,7 +253,7 @@ fn check_npm_global_install_result(
             // the user for non-core names: npm installed the package, but the
             // binary stays unlinked.
             if is_protected_shim(&bin_name, false) {
-                if !crate::commands::global::CORE_SHIMS.contains(&bin_name.as_str()) {
+                if bin_name != "vp" && !crate::shim::is_core_shim_tool(&bin_name) {
                     output::note(&vt_str::format!(
                         "'{bin_name}' is a Vite+ default shim; the npm-installed copy is not \
                          linked."
@@ -659,13 +659,11 @@ async fn resolve_package_manager_tool(
         return Ok(None);
     };
 
-    let resolution = package_manager::resolve_current(cwd).await?;
+    let resolution = package_manager::resolve_current_for(cwd, Some(expected_type)).await?;
     let (version, hash) = match resolution {
-        Some(resolution) if resolution.package_manager_type == expected_type => {
-            (resolution.version, resolution.hash)
-        }
-        Some(_) | None if expected_type == PackageManagerType::Npm => return Ok(None),
-        Some(_) | None => ("latest".into(), None),
+        Some(resolution) => (resolution.version, resolution.hash),
+        None if expected_type == PackageManagerType::Npm => return Ok(None),
+        None => ("latest".into(), None),
     };
 
     let bin_name = expected_type.bin_name_for_tool(tool);

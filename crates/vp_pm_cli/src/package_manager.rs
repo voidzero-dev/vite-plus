@@ -453,14 +453,14 @@ pub fn resolve_package_manager_from_package_json(
 /// registry or managed installs, so callers can inspect the selection without network access.
 pub fn resolve_environment_package_manager_spec(
     cwd: impl AsRef<AbsolutePath>,
-    override_spec: Option<(PackageManagerType, &str)>,
-    default_spec: Option<(PackageManagerType, &str)>,
+    override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
+    default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    if let Some((package_manager_type, version)) = override_spec {
+    if let Some((package_manager_type, version, hash)) = override_spec {
         return Ok(Some(EnvironmentPackageManagerResolution {
             package_manager_type,
             version: version.into(),
-            hash: None,
+            hash: hash.map(Str::from),
             source: "session".into(),
             source_path: None,
             project_root: None,
@@ -519,12 +519,12 @@ pub fn resolve_environment_package_manager_spec(
 }
 
 fn environment_package_manager_default(
-    (package_manager_type, version): (PackageManagerType, &str),
+    (package_manager_type, version, hash): (PackageManagerType, &str, Option<&str>),
 ) -> EnvironmentPackageManagerResolution {
     EnvironmentPackageManagerResolution {
         package_manager_type,
         version: version.into(),
-        hash: None,
+        hash: hash.map(Str::from),
         source: "default".into(),
         source_path: None,
         project_root: None,
@@ -532,14 +532,20 @@ fn environment_package_manager_default(
 }
 
 /// Resolve an environment package-manager requirement to an exact version for managed-runtime
-/// operations such as `vp env install` and package-manager shims.
+/// operations such as `vp env install` and package-manager shims. When `expected` is set, a
+/// different selected family is discarded before any registry lookup.
 pub async fn resolve_environment_package_manager(
     cwd: impl AsRef<AbsolutePath>,
-    override_spec: Option<(PackageManagerType, &str)>,
-    default_spec: Option<(PackageManagerType, &str)>,
+    override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
+    default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
+    expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     let Some(mut resolution) =
-        resolve_environment_package_manager_spec(cwd, override_spec, default_spec)?
+        resolve_environment_package_manager_spec(cwd, override_spec, default_spec)?.filter(
+            |resolution| {
+                expected.is_none_or(|expected| expected == resolution.package_manager_type)
+            },
+        )
     else {
         return Ok(None);
     };
@@ -2185,8 +2191,9 @@ mod tests {
 
         let resolution = resolve_environment_package_manager(
             &cwd,
-            Some((PackageManagerType::Yarn, "1.22.22")),
-            Some((PackageManagerType::Bun, "1.2.0")),
+            Some((PackageManagerType::Yarn, "1.22.22", Some("sha512.example"))),
+            Some((PackageManagerType::Bun, "1.2.0", None)),
+            None,
         )
         .await
         .unwrap()
@@ -2194,6 +2201,7 @@ mod tests {
 
         assert_eq!(resolution.package_manager_type, PackageManagerType::Yarn);
         assert_eq!(resolution.version, "1.22.22");
+        assert_eq!(resolution.hash.as_deref(), Some("sha512.example"));
         assert_eq!(resolution.source, "session");
     }
 
@@ -2206,7 +2214,8 @@ mod tests {
         let resolution = resolve_environment_package_manager(
             &cwd,
             None,
-            Some((PackageManagerType::Bun, "1.2.0")),
+            Some((PackageManagerType::Bun, "1.2.0", None)),
+            None,
         )
         .await
         .unwrap()

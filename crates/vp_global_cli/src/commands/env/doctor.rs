@@ -38,8 +38,6 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("n", "N_PREFIX"),
 ];
 
-use super::setup::SHIM_TOOLS;
-
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
 
@@ -198,7 +196,7 @@ async fn check_shims() -> bool {
 
     let mut missing = Vec::new();
 
-    for tool in SHIM_TOOLS {
+    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
         let shim_path = bin_dir.join(shim_filename(tool));
         if !tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             missing.push(*tool);
@@ -206,7 +204,11 @@ async fn check_shims() -> bool {
     }
 
     if missing.is_empty() {
-        print_check(&output::CHECK.green().to_string(), "Shims", &SHIM_TOOLS.join(", "));
+        print_check(
+            &output::CHECK.green().to_string(),
+            "Shims",
+            &crate::shim::DEFAULT_SHIM_TOOLS.join(", "),
+        );
         true
     } else {
         print_check(
@@ -299,9 +301,8 @@ async fn check_package_manager_session_override() {
 }
 
 async fn check_package_manager_resolution(cwd: &AbsolutePathBuf, scope: EnvScope) {
-    match package_manager::resolve_current(cwd).await {
-        Ok(Some(resolution)) if !matches!(scope, EnvScope::PackageManager(kind) if kind != resolution.package_manager_type) =>
-        {
+    match package_manager::resolve_current_for(cwd, scope.package_manager()).await {
+        Ok(Some(resolution)) => {
             print_check(" ", "Source", &resolution.source);
             print_check(
                 " ",
@@ -429,7 +430,7 @@ async fn check_path() -> bool {
     }
 
     // Show which tool would be executed for each shim
-    for tool in SHIM_TOOLS {
+    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
         if let Some(tool_path) = find_in_path(tool) {
             let expected = bin_dir.join(shim_filename(tool));
             let display = abbreviate_home(&tool_path.display().to_string());

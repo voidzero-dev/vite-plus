@@ -58,7 +58,7 @@ pub async fn execute(
         None
     };
     let current_pm = if scope.includes_package_managers() {
-        package_manager::resolve_current(&cwd).await?
+        package_manager::resolve_current_for(&cwd, scope.package_manager()).await?
     } else {
         None
     };
@@ -78,7 +78,8 @@ pub async fn execute(
             .default_package_manager
             .as_deref()
             .map(parse_package_manager_spec)
-            .transpose()?;
+            .transpose()?
+            .filter(|(kind, _)| scope.includes_package_manager(*kind));
         match default {
             Some((kind, selector)) => {
                 Some((kind, resolve_package_manager_version(kind, &selector).await?.to_string()))

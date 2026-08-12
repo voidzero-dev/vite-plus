@@ -16,10 +16,6 @@ pub mod install;
 pub mod outdated;
 pub mod packages;
 
-/// Core shims that should not be overwritten by package binaries.
-pub(crate) const CORE_SHIMS: &[&str] =
-    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vp"];
-
 /// Legacy managed globals superseded by the default package-manager shims.
 pub(crate) const LEGACY_PACKAGE_MANAGER_PACKAGES: &[&str] = &["yarn", "pnpm", "bun", "corepack"];
 

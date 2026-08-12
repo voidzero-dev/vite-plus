@@ -58,24 +58,22 @@ pub(crate) async fn install(
     }
 
     if scope.includes_package_managers() {
-        let requested = if let Some(spec) = specs.package_manager {
-            Some(spec)
+        let requested = if let Some((kind, selector)) = specs.package_manager {
+            let version = resolve_package_manager_version(kind, &selector).await?;
+            Some((kind, version, None))
         } else if let EnvScope::PackageManager(kind) = scope {
-            match package_manager::resolve_current(&cwd).await? {
-                Some(current) if current.package_manager_type == kind => {
-                    Some((kind, current.version.to_string()))
-                }
-                _ => Some((kind, "latest".into())),
+            match package_manager::resolve_current_for(&cwd, Some(kind)).await? {
+                Some(current) => Some((kind, current.version, current.hash)),
+                None => Some((kind, resolve_package_manager_version(kind, "latest").await?, None)),
             }
         } else {
             package_manager::resolve_current(&cwd)
                 .await?
-                .map(|current| (current.package_manager_type, current.version.to_string()))
+                .map(|current| (current.package_manager_type, current.version, current.hash))
         };
-        if let Some((kind, selector)) = requested {
-            let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+        if let Some((kind, version, hash)) = requested {
             println!("Installing {kind} v{version}...");
-            download_package_manager(kind, &version, None).await?;
+            download_package_manager(kind, &version, hash.as_deref()).await?;
             println!("Installed {kind} v{version}");
         }
     }
