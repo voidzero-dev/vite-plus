@@ -1,0 +1,39 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_auto_create_vite_config/snapshots/migration_auto_create_vite_config.md
+  s_46c59ad8b4f212::t_59daac4dafe94b 100
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_baseurl_tsconfig/snapshots/migration_baseurl_tsconfig.md
+  s_46c59ad8b4f212::t_edceab4bc99f46 107
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_pnpm_exec_lint_staged/snapshots/migration_existing_pnpm_exec_lint_staged.md
+  s_46c59ad8b4f212::t_4535b7b89196a4 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_hooks_skip_on_existing_hookspath/snapshots/migration_hooks_skip_on_existing_hookspath.md
+  s_46c59ad8b4f212::t_e002cf9ed858ec 52
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_husky_catalog_version/snapshots/migration_husky_catalog_version.md
+  s_46c59ad8b4f212::t_0c2a0d72fae34e 62
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_husky_or_prepare/snapshots/migration_husky_or_prepare.md
+  s_46c59ad8b4f212::t_d4544644e6f609 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lint_staged_merge_fail/snapshots/migration_lint_staged_merge_fail.md
+  s_46c59ad8b4f212::t_f8350aa7ec2874 59
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_preserve_below_policy_node_pins/snapshots/migration_preserve_below_policy_node_pins.md
+  s_46c59ad8b4f212::t_7f89e47ce643dc 69
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_standalone_pnpm/snapshots/migration_standalone_pnpm.md
+  s_46c59ad8b4f212::t_a175f8401b1de7 43
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_vite_version/snapshots/migration_vite_version.md
+  s_46c59ad8b4f212::t_9f78f310fb1094 50
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_vitest_import_only/snapshots/migration_vitest_import_only.md
+  s_46c59ad8b4f212::t_4b78577f34eea0 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "222abf8a4cff4dd4bc6ed7167931bb869653fe0d",
+  "prompts": {},
+  "sessions": {
+    "s_46c59ad8b4f212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4df4385-a979-41b2-a818-a8bc91292beb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}

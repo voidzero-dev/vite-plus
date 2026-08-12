@@ -1,0 +1,203 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/snapshots/command_update_catalog_protocol_legacy_key.md
+  s_46c59ad8b4f212::t_677b07eb0bd6b9 1-84
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm/.gitignore
+  s_46c59ad8b4f212::t_d012d7ceac1b94 1
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm/package.json
+  s_46c59ad8b4f212::t_0ccc1db05aac6f 1-7
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm/snapshots.toml
+  s_46c59ad8b4f212::t_a7be0ea1ecff50 1-35
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm/snapshots/command_update_catalog_protocol_pnpm.md
+  s_46c59ad8b4f212::t_8edfe4a383899a 1-75
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/create_approve_builds_migrate_pnpm11/snapshots/create_approve_builds_migrate_pnpm11.md
+  s_46c59ad8b4f212::t_be48ff1fd4a0e3 27,63,90
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/create_approve_builds_pnpm11/snapshots/create_approve_builds_pnpm11.md
+  s_46c59ad8b4f212::t_0872bca63c8545 25,59,86
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/create_org_bundled_monorepo/snapshots/create_org_bundled_monorepo.md
+  s_46c59ad8b4f212::t_e3b84f0c47101c 47
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_add_git_hooks/snapshots/migration_add_git_hooks.md
+  s_46c59ad8b4f212::t_faf8e35e897b3e 52
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_chained_lint_staged_pre_commit/snapshots/migration_chained_lint_staged_pre_commit.md
+  s_46c59ad8b4f212::t_d52da8e9c2926d 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_composed_husky_custom_dir/snapshots/migration_composed_husky_custom_dir.md
+  s_46c59ad8b4f212::t_20870894347c11 66
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_composed_husky_prepare/snapshots/migration_composed_husky_prepare.md
+  s_46c59ad8b4f212::t_d9af98a008b746 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_env_prefix_lint_staged/snapshots/migration_env_prefix_lint_staged.md
+  s_46c59ad8b4f212::t_7481ffedf57550 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_eslint/snapshots/migration_eslint.md
+  s_46c59ad8b4f212::t_2535300459b557 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_eslint_lint_staged/snapshots/migration_eslint_lint_staged.md
+  s_46c59ad8b4f212::t_5a9c872fcd1d14 50
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_eslint_lintstagedrc/snapshots/migration_eslint_lintstagedrc.md
+  s_46c59ad8b4f212::t_1ce27f1f69be7f 50
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_eslint_npx_wrapper/snapshots/migration_eslint_npx_wrapper.md
+  s_46c59ad8b4f212::t_cae44d8d647501 55
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_husky/snapshots/migration_existing_husky.md
+  s_46c59ad8b4f212::t_3588d27d639698 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_husky_lint_staged/snapshots/migration_existing_husky_lint_staged.md
+  s_46c59ad8b4f212::t_6286d761a3e52d 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_husky_v8_hooks/snapshots/migration_existing_husky_v8_hooks.md
+  s_46c59ad8b4f212::t_6bccc3edb55722 54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_husky_v8_multi_hooks/snapshots/migration_existing_husky_v8_multi_hooks.md
+  s_46c59ad8b4f212::t_d2060168a8218b 54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_lint_staged_config/snapshots/migration_existing_lint_staged_config.md
+  s_46c59ad8b4f212::t_fae4e402dd6502 52
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_existing_prepare_script/snapshots/migration_existing_prepare_script.md
+  s_46c59ad8b4f212::t_955dd8885c3095 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_from_tsdown/snapshots/migration_from_tsdown.md
+  s_46c59ad8b4f212::t_0e7c2a627ac153 87
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_from_tsdown_json_config/snapshots/migration_from_tsdown_json_config.md
+  s_46c59ad8b4f212::t_8ff588e0b957a7 87
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_from_vitest_config/snapshots/migration_from_vitest_config.md
+  s_46c59ad8b4f212::t_66c39be968fac3 96-97
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_from_vitest_files/snapshots/migration_from_vitest_files.md
+  s_46c59ad8b4f212::t_0bd886caa5b781 58-59
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_husky_latest_dist_tag/snapshots/migration_husky_latest_dist_tag.md
+  s_46c59ad8b4f212::t_15688da6caf3e2 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_husky_latest_dist_tag_v9_installed/snapshots/migration_husky_latest_dist_tag_v9_installed.md
+  s_46c59ad8b4f212::t_59618c9aa41a00 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_husky_semicolon_prepare/snapshots/migration_husky_semicolon_prepare.md
+  s_46c59ad8b4f212::t_047e855d9dc10f 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_husky_v8_preserves_lint_staged/snapshots/migration_husky_v8_preserves_lint_staged.md
+  s_46c59ad8b4f212::t_517cc17b283523 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lazy_plugins_await/snapshots/migration_lazy_plugins_await.md
+  s_46c59ad8b4f212::t_00ed2f797437df 64
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lint_staged_in_scripts/snapshots/migration_lint_staged_in_scripts.md
+  s_46c59ad8b4f212::t_fca2e525cc6717 58
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lint_staged_ts_config/snapshots/migration_lint_staged_ts_config.md
+  s_46c59ad8b4f212::t_7925d43e555b50 55
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lintstagedrc_json/snapshots/migration_lintstagedrc_json.md
+  s_46c59ad8b4f212::t_7ae3968743690c 136
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lintstagedrc_merge_fail/snapshots/migration_lintstagedrc_merge_fail.md
+  s_46c59ad8b4f212::t_f8027fbf9f8e63 56
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lintstagedrc_not_support/snapshots/migration_lintstagedrc_not_support.md
+  s_46c59ad8b4f212::t_a96b7c4cc544b2 84
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_lintstagedrc_staged_exists/snapshots/migration_lintstagedrc_staged_exists.md
+  s_46c59ad8b4f212::t_4bb7fc1d43fb8b 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_merge_vite_config_js/snapshots/migration_merge_vite_config_js.md
+  s_46c59ad8b4f212::t_70ee2bd04322b0 93
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_merge_vite_config_ts/snapshots/migration_merge_vite_config_ts.md
+  s_46c59ad8b4f212::t_3de0e9fbbc81a9 136-137
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_monorepo_pnpm/snapshots/migration_monorepo_pnpm.md
+  s_46c59ad8b4f212::t_f6fb810771185b 127-128
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_monorepo_pnpm_overrides_dependency_selector/snapshots/migration_monorepo_pnpm_overrides_dependency_selector.md
+  s_46c59ad8b4f212::t_bd37ffd7eadefa 70
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_no_git_repo/snapshots/migration_no_git_repo.md
+  s_46c59ad8b4f212::t_4b2a8f38289592 48
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_no_hooks/snapshots/migration_no_hooks.md
+  s_46c59ad8b4f212::t_9ccde854b09e86 48
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_no_hooks_with_husky/snapshots/migration_no_hooks_with_husky.md
+  s_46c59ad8b4f212::t_56af523ef1abbf 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_npmx_dev/snapshots/migration_npmx_dev.md
+  s_46c59ad8b4f212::t_29b2e806897e7a 58-59
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_other_hook_tool/snapshots/migration_other_hook_tool.md
+  s_46c59ad8b4f212::t_0d4488f2ded65f 57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlintrc_json_with_comments/snapshots/migration_oxlintrc_json_with_comments.md
+  s_46c59ad8b4f212::t_9c202c8bcd0bad 91
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_oxlintrc_jsonc/snapshots/migration_oxlintrc_jsonc.md
+  s_46c59ad8b4f212::t_83cd30804b8038 100
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_partially_installed_vite_plus/snapshots/migration_partially_installed_vite_plus.md
+  s_46c59ad8b4f212::t_f03c14b44516c9 68
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_partially_migrated_pre_commit/snapshots/migration_partially_migrated_pre_commit.md
+  s_46c59ad8b4f212::t_d626a54cc58500 54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_prettier/snapshots/migration_prettier.md
+  s_46c59ad8b4f212::t_4fe7242195cd86 54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_prettier_eslint_combo/snapshots/migration_prettier_eslint_combo.md
+  s_46c59ad8b4f212::t_7178a4ee2207a9 56
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_prettier_ignore_unknown/snapshots/migration_prettier_ignore_unknown.md
+  s_46c59ad8b4f212::t_2fff02147f03f7 54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_prettier_lint_staged/snapshots/migration_prettier_lint_staged.md
+  s_46c59ad8b4f212::t_9abbc44c507c5b 51
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_prettier_pkg_json/snapshots/migration_prettier_pkg_json.md
+  s_46c59ad8b4f212::t_de27e8cc82d709 52
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_rewrite_declare_module/snapshots/migration_rewrite_declare_module.md
+  s_46c59ad8b4f212::t_ad847e3ee26a68 86-87
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_skip_vite_dependency/snapshots/migration_skip_vite_dependency.md
+  s_46c59ad8b4f212::t_4d60696ef962ba 78
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_skip_vite_peer_dependency/snapshots/migration_skip_vite_peer_dependency.md
+  s_46c59ad8b4f212::t_cca78df4d44b49 78
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_subpath/snapshots/migration_subpath.md
+  s_46c59ad8b4f212::t_c5b800747ead59 79
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_tsconfig_esmoduleinterop/snapshots/migration_tsconfig_esmoduleinterop.md
+  s_46c59ad8b4f212::t_c4917d8a0dd669 80
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_browser_peer_only_pnpm/snapshots/migration_upgrade_browser_peer_only_pnpm.md
+  s_46c59ad8b4f212::t_ee085e8246e3a9 56-57
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_browser_source_only_pnpm/snapshots/migration_upgrade_browser_source_only_pnpm.md
+  s_46c59ad8b4f212::t_29f199b76be1fd 54-55
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_browser_webdriverio_pnpm/snapshots/migration_upgrade_browser_webdriverio_pnpm.md
+  s_46c59ad8b4f212::t_c1527904c2dceb 53-54
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_monorepo_vitest_localized_pnpm/snapshots/migration_upgrade_monorepo_vitest_localized_pnpm.md
+  s_46c59ad8b4f212::t_4b3a2e1468032a 69-70
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_nuxt_test_utils_monorepo/snapshots/migration_upgrade_nuxt_test_utils_monorepo.md
+  s_46c59ad8b4f212::t_2bd2e5bb4403f5 61-62
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_peer_vitest_catalog_pnpm/snapshots/migration_upgrade_peer_vitest_catalog_pnpm.md
+  s_46c59ad8b4f212::t_a907b4c8a80e3a 53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_pkg_pr_new_pnpm/snapshots/migration_upgrade_pkg_pr_new_pnpm.md
+  s_46c59ad8b4f212::t_a228278b2241d9 54-55,110-111
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_pnpm9_overrides/snapshots/migration_upgrade_pnpm9_overrides.md
+  s_46c59ad8b4f212::t_df6cd3bec37e0d 36-37
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_pnpm_bundled_catalog_dep/snapshots/migration_upgrade_pnpm_bundled_catalog_dep.md
+  s_46c59ad8b4f212::t_2bbef618df960b 51
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_pnpm_catalogs_default/snapshots/migration_upgrade_pnpm_catalogs_default.md
+  s_46c59ad8b4f212::t_327ab37030b77b 54,108
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_pnpm_named_catalog/snapshots/migration_upgrade_pnpm_named_catalog.md
+  s_46c59ad8b4f212::t_0b424434fa294c 55,110
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_setup_skipped_default_pnpm/snapshots/migration_upgrade_setup_skipped_default_pnpm.md
+  s_46c59ad8b4f212::t_cbaf03110c602e 46
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_stale_local_pnpm/snapshots/migration_upgrade_stale_local_pnpm.md
+  s_46c59ad8b4f212::t_e7d0fab66e22a9 48
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_upgrade_vitest_reference_whitespace_pnpm/snapshots/migration_upgrade_vitest_reference_whitespace_pnpm.md
+  s_46c59ad8b4f212::t_a6d85555198c30 56
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_vite_plus_in_dependencies_pnpm/snapshots/migration_vite_plus_in_dependencies_pnpm.md
+  s_46c59ad8b4f212::t_56522d976c3c54 50
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_vitest_peer_dep/snapshots/migration_vitest_peer_dep.md
+  s_46c59ad8b4f212::t_2567b0ebf3011f 52-53
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_vitest_unmanaged_override/snapshots/migration_vitest_unmanaged_override.md
+  s_46c59ad8b4f212::t_2e162730ba1a97 51
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/new_vite_monorepo/snapshots/new_vite_monorepo.md
+  s_46c59ad8b4f212::t_cead6b195e7dcd 96
+docs/guide/migrate-rules.md
+  s_46c59ad8b4f212::t_ccfd566f3c6cd5 85-92
+docs/guide/upgrade.md
+  s_46c59ad8b4f212::t_9f760a1e930622 72-74
+packages/cli/src/create/templates/monorepo.ts
+  s_46c59ad8b4f212::t_682da0ca2feb75 234-241,247-248
+packages/cli/src/migration/__tests__/migrator.spec.ts
+  s_46c59ad8b4f212::t_4404e6961ec603 63,67-72,2880,3463,3650,3652,3727,3850-3852,4710,4713,4759,4766-4825,4865-4868,4873,4946,4997,5051,5615,6355-6356,6359,6403-6404,6407
+packages/cli/src/migration/migrator/catalog.ts
+  s_46c59ad8b4f212::t_098000eec625c4 39,317-325,329-330,588-590,593-598,839-853
+packages/cli/src/migration/migrator/shared.ts
+  s_46c59ad8b4f212::t_1a3cc70d3660b2 164-204
+packages/cli/src/migration/migrator/vite-plus-bootstrap.ts
+  s_46c59ad8b4f212::t_876e70859a7b6e 62,65,148,151-159,165,756-761,767,774-779,873,884-894,896-897,1081,1181
+packages/cli/src/migration/migrator/vitest-ecosystem.ts
+  s_46c59ad8b4f212::t_16e24bf584d4f1 28,550-553,555-563,565,574-582,587-593
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/.gitignore
+  s_46c59ad8b4f212::t_f3a03ff583a0c8 1
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/package.json
+  s_46c59ad8b4f212::t_d4060b87e9243f 1-9
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/pnpm-workspace.yaml
+  s_46c59ad8b4f212::t_092e3ed4bb3930 1-10
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/snapshots.toml
+  s_46c59ad8b4f212::t_531196edbb2c77 1-38
+crates/vp_cli_snapshots/tests/cli_snapshots/redact.rs
+  s_46c59ad8b4f212::t_2572e33c90d374 59-62,65
+packages/cli/src/migration/migrator/orchestrators.ts
+  s_46c59ad8b4f212::t_55a69397d25e72 59,194-201,207-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9090d8a6d380922d9370ba911c5e4cd3393d1421",
+  "prompts": {},
+  "sessions": {
+    "s_46c59ad8b4f212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4df4385-a979-41b2-a818-a8bc91292beb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}

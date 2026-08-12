@@ -1,0 +1,25 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/snapshots/command_update_catalog_protocol_legacy_key.md
+  s_46c59ad8b4f212::t_a8b8c0bb97dcba 3-41,45,47-52,56,63,72
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/package.json
+  s_46c59ad8b4f212::t_5e826b04c64f7d 5
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_legacy_key/snapshots.toml
+  s_46c59ad8b4f212::t_f82e2e5b927953 7,9-28,32,37,43
+crates/vp_cli_snapshots/tests/cli_snapshots/redact.rs
+  s_46c59ad8b4f212::t_9880c83e025d73 59,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "51f90114a2672a7cb441952cb62ce69471a91d57",
+  "prompts": {},
+  "sessions": {
+    "s_46c59ad8b4f212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4df4385-a979-41b2-a818-a8bc91292beb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm12/snapshots/command_update_catalog_protocol_pnpm12.md
+  s_46c59ad8b4f212::t_047ddd67324b01 1-56
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm12/.gitignore
+  s_46c59ad8b4f212::t_e81201bd8b5f53 1
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm12/package.json
+  s_46c59ad8b4f212::t_d9047734e8c9cd 1-7
+crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_update_catalog_protocol_pnpm12/snapshots.toml
+  s_46c59ad8b4f212::t_61b92e257c5414 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3d8f17baf272a2380c6b175c6c30d7c5b3defa8f",
+  "prompts": {},
+  "sessions": {
+    "s_46c59ad8b4f212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4df4385-a979-41b2-a818-a8bc91292beb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
