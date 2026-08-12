@@ -52,10 +52,6 @@ impl EnvShell {
     }
 }
 
-/// Tools to create shims for during setup.
-pub(crate) const SHIM_TOOLS: &[&str] =
-    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vpx", "vpr"];
-
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
     let config = vp_shared::EnvConfig::get();
@@ -100,7 +96,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     let mut created = Vec::new();
     let mut skipped = Vec::new();
 
-    for tool in SHIM_TOOLS {
+    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
         let result = create_shim(&current_exe, bin_dir, tool, refresh).await?;
         if result {
             created.push(*tool);
@@ -433,8 +429,8 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
     let trampoline_src = get_trampoline_path()?;
 
     for bin_name in &package_bins {
-        // Core shims (SHIM_TOOLS + vp) are already refreshed by the main loop.
-        if bin_name == "vp" || SHIM_TOOLS.contains(&bin_name.as_str()) {
+        // Default shims and vp are already refreshed by the main loop.
+        if bin_name == "vp" || crate::shim::DEFAULT_SHIM_TOOLS.contains(&bin_name.as_str()) {
             continue;
         }
 

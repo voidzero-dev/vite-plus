@@ -177,8 +177,8 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
         }
     }
     if scope.includes_package_managers()
-        && let Some(resolution) = package_manager::resolve_current(&cwd).await?
-        && !matches!(scope, spec::EnvScope::PackageManager(kind) if kind != resolution.package_manager_type)
+        && let Some(resolution) =
+            package_manager::resolve_current_for(&cwd, scope.package_manager()).await?
     {
         if modes.package_manager_shim_mode() == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(

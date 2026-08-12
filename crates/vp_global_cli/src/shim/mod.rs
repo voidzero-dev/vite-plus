@@ -21,9 +21,9 @@ use vp_shared::env_vars;
 
 use crate::commands::env::config::get_bin_dir;
 
-/// Core shim tools managed directly by the main dispatch path.
-pub const CORE_SHIM_TOOLS: &[&str] =
-    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
+/// Default shims created by `vp env setup`.
+pub const DEFAULT_SHIM_TOOLS: &[&str] =
+    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vpx", "vpr"];
 
 /// Extract the tool name from argv[0].
 /// We hope all bins should be put under $VP_HOME/bin
@@ -67,7 +67,7 @@ pub fn extract_tool_name(argv0: &str) -> String {
 /// Check if the given tool name is managed directly by the core shim path.
 #[must_use]
 pub fn is_core_shim_tool(tool: &str) -> bool {
-    CORE_SHIM_TOOLS.contains(&tool)
+    tool == "node" || vp_pm_cli::PackageManagerType::from_tool(tool).is_some()
 }
 
 /// Check if the given tool name is a shim tool (core or package binary).

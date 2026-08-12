@@ -151,17 +151,17 @@ async fn execute_package_manager_tool(
     let Some(expected_type) = PackageManagerType::from_tool(tool) else {
         return Ok(None);
     };
-    let resolution = package_manager::resolve_current(cwd).await?;
+    let resolution = package_manager::resolve_current_for(cwd, Some(expected_type)).await?;
     let (version, source) = match &resolution {
-        Some(resolution) if resolution.package_manager_type == expected_type => (
+        Some(resolution) => (
             resolution.version.to_string(),
             resolution.source_path.as_ref().map_or_else(
                 || resolution.source.to_string(),
                 |path| path.as_path().display().to_string(),
             ),
         ),
-        Some(_) | None if expected_type == PackageManagerType::Npm => return Ok(None),
-        Some(_) | None => (
+        None if expected_type == PackageManagerType::Npm => return Ok(None),
+        None => (
             resolve_package_manager_version(expected_type, "latest").await?.to_string(),
             "registry fallback".into(),
         ),

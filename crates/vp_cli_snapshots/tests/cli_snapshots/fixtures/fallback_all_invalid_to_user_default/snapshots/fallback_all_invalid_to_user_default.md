@@ -7,7 +7,7 @@ Set user default
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Environment defaults updated.
+✓ Default Node.js version set to 22.18.0
 ```
 
 ## `vp exec node -e console.log(process.version)`

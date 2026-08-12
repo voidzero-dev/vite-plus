@@ -21,6 +21,20 @@ steps = [
 ]
 
 [[case]]
+name = "env_package_manager_hash"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0" }
+steps = [
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
+  { argv = ["vp", "env", "install", "pm"], comment = "The explicit environment install accepts and verifies the project hash", timeout = 120000 },
+  { argv = ["vpt", "replace-file-content", "package.json", "b7ad4697", "b7ad4698"], comment = "Change the project pin to a hash that the cached CLI does not match", snapshot = false },
+  { argv = ["vp", "env", "install", "pm"], comment = "The explicit environment install rejects the mismatched project hash", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "pm", "--no-install"], comment = "The session override preserves the project hash for first use" },
+  { argv = ["yarn", "--version"], comment = "The package-manager shim enforces the hash retained by env use", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "pm", "--unset"], snapshot = false },
+]
+
+[[case]]
 name = "run_yarn_corepack_hash"
 vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0" }

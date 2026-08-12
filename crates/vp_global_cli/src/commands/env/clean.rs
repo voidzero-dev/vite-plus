@@ -31,7 +31,7 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     }
 
     if scope.includes_package_managers() {
-        let protected = match protected_package_manager(&cwd).await {
+        let protected = match protected_package_manager(&cwd, scope).await {
             Ok(protected) => protected,
             Err(error) => {
                 output::warn(&format!(
@@ -54,11 +54,16 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
 async fn protected_package_manager(
     cwd: &AbsolutePath,
+    scope: EnvScope,
 ) -> Result<Vec<(PackageManagerType, Vec<String>)>, Error> {
-    let current = package_manager::resolve_current(cwd).await?;
+    let current = package_manager::resolve_current_for(cwd, scope.package_manager()).await?;
     let config = config::load_config().await?;
-    let default =
-        config.default_package_manager.as_deref().map(parse_package_manager_spec).transpose()?;
+    let default = config
+        .default_package_manager
+        .as_deref()
+        .map(parse_package_manager_spec)
+        .transpose()?
+        .filter(|(kind, _)| scope.includes_package_manager(*kind));
     let mut protected = Vec::new();
     if let Some(current) = current {
         protected.push((current.package_manager_type, vec![current.version.to_string()]));

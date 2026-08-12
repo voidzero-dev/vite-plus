@@ -31,6 +31,18 @@ impl EnvScope {
     pub(crate) fn includes_package_managers(self) -> bool {
         !matches!(self, Self::Node)
     }
+
+    pub(crate) fn package_manager(self) -> Option<PackageManagerType> {
+        match self {
+            Self::PackageManager(kind) => Some(kind),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn includes_package_manager(self, kind: PackageManagerType) -> bool {
+        self.includes_package_managers()
+            && self.package_manager().is_none_or(|selected| selected == kind)
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -93,6 +105,13 @@ impl EnvSpecs {
 pub(crate) fn parse_package_manager_spec(
     value: &str,
 ) -> Result<(PackageManagerType, String), Error> {
+    let (package_manager, version, _) = parse_package_manager_spec_with_hash(value)?;
+    Ok((package_manager, version))
+}
+
+pub(crate) fn parse_package_manager_spec_with_hash(
+    value: &str,
+) -> Result<(PackageManagerType, String, Option<String>), Error> {
     let Some((name, version)) = value.split_once('@') else {
         return Err(invalid_spec(value));
     };
@@ -100,7 +119,13 @@ pub(crate) fn parse_package_manager_spec(
     if version.is_empty() {
         return Err(invalid_spec(value));
     }
-    Ok((package_manager, version.to_string()))
+    let (version, hash) = version
+        .split_once('+')
+        .map_or((version, None), |(version, hash)| (version, Some(hash.to_string())));
+    if version.is_empty() || hash.as_deref() == Some("") {
+        return Err(invalid_spec(value));
+    }
+    Ok((package_manager, version.to_string(), hash))
 }
 
 fn invalid_scope(value: &str) -> Error {
@@ -139,5 +164,15 @@ mod tests {
         let (scope, specs) = EnvSpecs::parse_requests(&["22.0.0".into()]).unwrap();
         assert_eq!(scope, EnvScope::Node);
         assert_eq!(specs.node.as_deref(), Some("22.0.0"));
+    }
+
+    #[test]
+    fn package_manager_session_spec_preserves_hash() {
+        let parsed =
+            parse_package_manager_spec_with_hash("yarn@4.17.1+sha512.0123456789abcdef").unwrap();
+        assert_eq!(
+            parsed,
+            (PackageManagerType::Yarn, "4.17.1".into(), Some("sha512.0123456789abcdef".into()))
+        );
     }
 }

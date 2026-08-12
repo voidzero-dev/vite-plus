@@ -10,7 +10,7 @@
 
 use std::process::ExitStatus;
 
-use vp_pm_cli::{download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{PackageManagerType, download_package_manager, resolve_package_manager_version};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -69,6 +69,19 @@ fn print_windows_eval_wrapper_required() {
     eprintln!("Add this line to your PowerShell $PROFILE:");
     eprintln!("  . \"{}\"", env_ps1.as_path().display());
     eprintln!("Then dot-source it now (or open a new PowerShell session) to load the wrapper.");
+}
+
+fn package_manager_spec(
+    package_manager: PackageManagerType,
+    version: &str,
+    hash: Option<&str>,
+) -> String {
+    let mut spec = format!("{package_manager}@{version}");
+    if let Some(hash) = hash {
+        spec.push('+');
+        spec.push_str(hash);
+    }
+    spec
 }
 
 /// Execute the `vp env use` command.
@@ -133,28 +146,27 @@ pub async fn execute(
         let resolved = if let Some((kind, selector)) = specs.package_manager {
             let version = resolve_package_manager_version(kind, &selector).await?.to_string();
             package_manager::warn_if_target_differs(&cwd, kind).await;
-            Some((kind, version, selector))
+            Some((kind, version, selector, None))
         } else {
             if let EnvScope::PackageManager(kind) = scope {
                 package_manager::warn_if_target_differs(&cwd, kind).await;
             }
-            package_manager::resolve_from_files(&cwd).await?.and_then(|resolution| {
-                if matches!(scope, EnvScope::PackageManager(kind) if kind != resolution.package_manager_type) {
-                    None
-                } else {
-                    Some((
+            package_manager::resolve_from_files_for(&cwd, scope.package_manager()).await?.map(
+                |resolution| {
+                    (
                         resolution.package_manager_type,
                         resolution.version.to_string(),
                         resolution.source.to_string(),
-                    ))
-                }
-            })
+                        resolution.hash.map(|hash| hash.to_string()),
+                    )
+                },
+            )
         };
         if let EnvScope::PackageManager(kind) = scope
             && resolved.is_none()
         {
             let version = resolve_package_manager_version(kind, "latest").await?.to_string();
-            Some((kind, version, "latest".into()))
+            Some((kind, version, "latest".into(), None))
         } else {
             resolved
         }
@@ -176,13 +188,13 @@ pub async fn execute(
             None => true,
         };
         let package_manager_unchanged = match &package_manager {
-            Some((kind, version, _)) => {
+            Some((kind, version, _, hash)) => {
                 current_override(
                     config::read_session_package_manager().await,
                     vp_shared::EnvConfig::get().package_manager,
                 )
                 .as_deref()
-                    == Some(format!("{kind}@{version}").as_str())
+                    == Some(package_manager_spec(*kind, version, hash.as_deref()).as_str())
             }
             None => true,
         };
@@ -223,8 +235,8 @@ pub async fn execute(
                 .await?;
         }
     }
-    if !no_install && let Some((kind, version, _)) = &package_manager {
-        download_package_manager(*kind, version, None).await?;
+    if !no_install && let Some((kind, version, _, hash)) = &package_manager {
+        download_package_manager(*kind, version, hash.as_deref()).await?;
     }
 
     if has_eval_wrapper() {
@@ -232,11 +244,15 @@ pub async fn execute(
             config::delete_session_version().await?;
             println!("{}", format_export(&shell, VERSION_ENV_VAR, version));
         }
-        if let Some((kind, version, _)) = &package_manager {
+        if let Some((kind, version, _, hash)) = &package_manager {
             config::delete_session_package_manager().await?;
             println!(
                 "{}",
-                format_export(&shell, PACKAGE_MANAGER_ENV_VAR, &format!("{kind}@{version}"))
+                format_export(
+                    &shell,
+                    PACKAGE_MANAGER_ENV_VAR,
+                    &package_manager_spec(*kind, version, hash.as_deref())
+                )
             );
         }
     } else if !can_use_session_file() {
@@ -247,15 +263,20 @@ pub async fn execute(
         if let Some((version, _)) = &node {
             config::write_session_version(version).await?;
         }
-        if let Some((kind, version, _)) = &package_manager {
-            config::write_session_package_manager(&format!("{kind}@{version}")).await?;
+        if let Some((kind, version, _, hash)) = &package_manager {
+            config::write_session_package_manager(&package_manager_spec(
+                *kind,
+                version,
+                hash.as_deref(),
+            ))
+            .await?;
         }
     }
 
     if let Some((version, source)) = node {
         eprintln!("Using Node.js v{version} (resolved from {source})");
     }
-    if let Some((kind, version, source)) = package_manager {
+    if let Some((kind, version, source, _)) = package_manager {
         eprintln!("Using {kind} v{version} (resolved from {source})");
     }
 
