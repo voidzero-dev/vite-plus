@@ -4,5 +4,5 @@ vp = "global"
 skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
-  { argv = ["vp", "env", "install"], comment = "No project declaration - install the resolved fallback environment", continue-on-failure = true },
+  { argv = ["vp", "env", "install"], comment = "No version config - should error", continue-on-failure = true },
 ]
