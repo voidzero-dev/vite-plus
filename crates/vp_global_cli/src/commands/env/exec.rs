@@ -85,7 +85,14 @@ pub async fn execute(
         return Ok(exit_status(exit_code));
     }
 
-    execute_with_version(cwd, None, None, &command).await
+    eprintln!("vp env exec: --node is required when running non-shim commands");
+    eprintln!("Usage: vp env exec --node <version> <command> [args...]");
+    eprintln!();
+    eprintln!("For shim tools, --node is optional (version resolved automatically):");
+    eprintln!("  vp env exec node script.js    # Core tool");
+    eprintln!("  vp env exec npm install       # Core tool");
+    eprintln!("  vp env exec tsc --version     # Global package");
+    Ok(exit_status(1))
 }
 
 /// Normalize arguments when invoked via Windows shim wrappers.

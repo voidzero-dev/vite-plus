@@ -7,7 +7,19 @@ use super::{
     config, package_manager,
     spec::{EnvScope, EnvSpecs},
 };
-use crate::error::Error;
+use crate::{cli::exit_status, error::Error};
+
+fn is_installable_node_source(source: &str) -> bool {
+    matches!(
+        source,
+        ".node-version"
+            | ".nvmrc"
+            | "engines.node"
+            | "devEngines.runtime"
+            | config::VERSION_ENV_VAR
+            | config::SESSION_VERSION_FILE
+    )
+}
 
 pub(crate) async fn install(
     cwd: AbsolutePathBuf,
@@ -16,16 +28,33 @@ pub(crate) async fn install(
     let (scope, specs) = EnvSpecs::parse_requests(&requests)?;
 
     if scope.includes_node() {
-        let version = match specs.node {
+        let (version, from_session_override) = match specs.node {
             Some(version) => {
                 let provider = vp_js_runtime::NodeProvider::new();
-                config::resolve_version_alias(&version, &provider).await?
+                (config::resolve_version_alias(&version, &provider).await?, false)
             }
-            None => config::resolve_version(&cwd).await?.version,
+            None => {
+                let resolution = config::resolve_version(&cwd).await?;
+                if !is_installable_node_source(&resolution.source) {
+                    eprintln!("No Node.js version found in current project.");
+                    eprintln!("Specify a version: vp env install <VERSION>");
+                    eprintln!("Or pin one:       vp env pin <VERSION>");
+                    return Ok(exit_status(1));
+                }
+                let from_session_override = matches!(
+                    resolution.source.as_str(),
+                    config::VERSION_ENV_VAR | config::SESSION_VERSION_FILE
+                );
+                (resolution.version, from_session_override)
+            }
         };
         println!("Installing Node.js v{version}...");
         vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &version).await?;
         println!("Installed Node.js v{version}");
+        if from_session_override {
+            eprintln!("Note: Installed from session override.");
+            eprintln!("Run `vp env use --unset` to revert to project version resolution.");
+        }
     }
 
     if scope.includes_package_managers() {
@@ -56,16 +85,6 @@ pub(crate) async fn install(
 
 pub(crate) async fn uninstall(specs: Vec<String>) -> Result<ExitStatus, Error> {
     let specs = EnvSpecs::parse(&specs)?;
-    let node = specs
-        .node
-        .map(|version| {
-            if vp_js_runtime::NodeProvider::is_exact_version(&version) {
-                Ok(version.strip_prefix('v').unwrap_or(&version).to_string())
-            } else {
-                Err(Error::Other("uninstall requires exact Node.js versions".into()))
-            }
-        })
-        .transpose()?;
     let package_manager = specs
         .package_manager
         .map(|(kind, version)| {
@@ -76,6 +95,13 @@ pub(crate) async fn uninstall(specs: Vec<String>) -> Result<ExitStatus, Error> {
                 })
         })
         .transpose()?;
+    let node = match specs.node {
+        Some(version) => {
+            let provider = vp_js_runtime::NodeProvider::new();
+            Some(config::resolve_version_alias(&version, &provider).await?)
+        }
+        None => None,
+    };
 
     let home = vp_shared::EnvConfig::get().dirs.data.clone();
     let mut targets = Vec::new();

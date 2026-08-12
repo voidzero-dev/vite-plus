@@ -5,4 +5,7 @@ skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
   { argv = ["vp", "env", "install"], comment = "Install version from .node-version (22.x)", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "22", "--no-install"], snapshot = false },
+  { argv = ["vp", "env", "install"], comment = "An implicit install identifies an active session override", continue-on-failure = true },
+  { argv = ["vp", "env", "uninstall", "22"], comment = "Node.js uninstall accepts the same major-version selectors as install", continue-on-failure = true },
 ]

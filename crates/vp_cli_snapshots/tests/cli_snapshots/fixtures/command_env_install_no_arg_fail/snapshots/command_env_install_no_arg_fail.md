@@ -2,11 +2,14 @@
 
 ## `vp env install`
 
-No project declaration - install the resolved fallback environment
+No version config - should error
+
+**Exit code:** 1
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Installing Node.js <version>...
-Installed Node.js <version>
+No Node.js version found in current project.
+Specify a version: vp env install <VERSION>
+Or pin one:       vp env pin <VERSION>
 ```
