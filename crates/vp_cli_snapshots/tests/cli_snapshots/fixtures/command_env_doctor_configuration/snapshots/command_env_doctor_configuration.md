@@ -1,8 +1,8 @@
 # command_env_doctor_configuration
 
-## `vp env doctor pm`
+## `vp env doctor`
 
-long configuration labels stay separated from their values
+configuration modes read naturally without extending their labels
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -13,7 +13,8 @@ Installation
   ✓ Shims             node, npm, npx, pnpm, pnpx, yarn, yarnpkg, bun, bunx, vpx, vpr
 
 Configuration
-  ✓ Package manager mode managed
+  ✓ Node.js           managed mode
+  ✓ Package manager   managed mode
 
 PATH
   ✓ vp                in PATH
@@ -28,6 +29,13 @@ PATH
   ✓ bunx              ~/.vite-plus/bin/bunx (vp shim)
   ✓ vpx               ~/.vite-plus/bin/vpx (vp shim)
   ✓ vpr               ~/.vite-plus/bin/vpr (vp shim)
+
+Node.js Resolution
+  Directory         <workspace>
+  Source            <workspace>/.node-version
+  Version           20.18.0
+  ⚠ Node binary       not installed
+  note: Version will be downloaded on first use.
 
 Package Manager Resolution
   Package manager   not selected

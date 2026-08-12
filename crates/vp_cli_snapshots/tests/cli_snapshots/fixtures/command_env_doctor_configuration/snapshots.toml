@@ -3,5 +3,5 @@ name = "command_env_doctor_configuration"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "env", "doctor", "pm"], comment = "long configuration labels stay separated from their values" },
+  { argv = ["vp", "env", "doctor"], comment = "configuration modes read naturally without extending their labels" },
 ]

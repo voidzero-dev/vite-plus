@@ -864,7 +864,7 @@ Installation
   ✓ Shims             node, npm, npx
 
 Configuration
-  ✓ Node.js mode      managed
+  ✓ Node.js           managed mode
 
 PATH
   ✗ vp                not in PATH
@@ -962,7 +962,7 @@ Installation
   ✓ Shims             node, npm, npx
 
 Configuration
-  ✓ Node.js mode      managed
+  ✓ Node.js           managed mode
   ✓ IDE integration   env sourced in ~/.zshenv
 
 PATH
@@ -987,7 +987,7 @@ $ vp env doctor
 ...
 
 Configuration
-  ✓ Node.js mode      managed
+  ✓ Node.js           managed mode
   ✓ IDE integration   env sourced in ~/.zshenv
   ⚠ Session override  VP_NODE_VERSION=20.18.0
                       Overrides all file-based resolution.
@@ -1005,7 +1005,7 @@ $ vp env doctor
 ...
 
 Configuration
-  ✓ Node.js mode      system-first
+  ✓ Node.js           system-first mode
     System Node.js    /usr/local/bin/node
   ✓ IDE integration   env sourced in ~/.zshenv
 
@@ -1027,7 +1027,7 @@ $ vp env doctor
 ...
 
 Configuration
-  ✓ Node.js mode      system-first
+  ✓ Node.js           system-first mode
   ⚠ System Node.js    not found (will fall back to managed)
 
 ...
@@ -1044,7 +1044,7 @@ Installation
                       Run 'vp env setup' to create bin directory and shims.
 
 Configuration
-  ✓ Node.js mode      managed
+  ✓ Node.js           managed mode
 
 PATH
   ✗ vp                not in PATH
