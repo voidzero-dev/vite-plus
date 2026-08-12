@@ -1,0 +1,23 @@
+docs/guide/migrate-rules.md
+  s_46c59ad8b4f212::t_dd021ceb177502 89-96
+docs/guide/upgrade.md
+  s_46c59ad8b4f212::t_4691fddefd6df9 74
+packages/cli/src/migration/migrator/shared.ts
+  s_46c59ad8b4f212::t_3e4a240cac7c55 176-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "47cc4bbd8b785299746171face0b6394be59ab26",
+  "prompts": {},
+  "sessions": {
+    "s_46c59ad8b4f212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4df4385-a979-41b2-a818-a8bc91292beb",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
