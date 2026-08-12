@@ -1,0 +1,31 @@
+docs/guide/migrate-rules.md
+  s_fdbdae8c09ca7c::t_3c3db0ad47b60c 85-92
+docs/guide/upgrade.md
+  s_fdbdae8c09ca7c::t_ca63ef95499c0b 74
+packages/cli/src/migration/migrator/catalog.ts
+  s_fdbdae8c09ca7c::t_be131a322767da 317-321
+packages/cli/src/migration/migrator/orchestrators.ts
+  s_fdbdae8c09ca7c::t_558977f51fef03 194-199
+packages/cli/src/migration/migrator/shared.ts
+  s_fdbdae8c09ca7c::t_015511dbe262f9 165-166,168-174,176-187,194-199
+packages/cli/src/migration/migrator/vite-plus-bootstrap.ts
+  s_fdbdae8c09ca7c::t_296cd77a6116c5 150-153,885-888
+packages/cli/src/migration/migrator/vitest-ecosystem.ts
+  s_fdbdae8c09ca7c::t_43a02bc9461736 551-553,587-589
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "08eb26ec5e0bac6ee9884d9a015f4ca5b5077ce1",
+  "prompts": {},
+  "sessions": {
+    "s_fdbdae8c09ca7c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1202c2a1-3a3c-4672-9642-5e437556b1a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
