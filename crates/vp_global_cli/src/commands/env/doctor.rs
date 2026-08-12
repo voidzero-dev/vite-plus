@@ -38,8 +38,8 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("n", "N_PREFIX"),
 ];
 
-/// Column width for left-side keys before the value separator.
-const KEY_WIDTH: usize = 17;
+/// Column width for left-side keys in aligned output
+const KEY_WIDTH: usize = 18;
 
 /// Print a section header (bold, with blank line before).
 fn print_section(name: &str) {
@@ -53,11 +53,11 @@ fn print_section(name: &str) {
 /// Use `" "` for informational lines with no status.
 fn print_check(status: &str, key: &str, value: &str) {
     if status.trim().is_empty() {
-        println!("  {key:<KEY_WIDTH$} {value}");
+        println!("  {key:<KEY_WIDTH$}{value}");
     } else if key.trim().is_empty() {
         println!("  {status} {value}");
     } else {
-        println!("  {status} {key:<KEY_WIDTH$} {value}");
+        println!("  {status} {key:<KEY_WIDTH$}{value}");
     }
 }
 
@@ -242,7 +242,7 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
         Err(e) => {
             print_check(
                 &output::WARN_SIGN.yellow().to_string(),
-                "Node.js mode",
+                "Node.js",
                 &format!("config error: {e}").yellow().to_string(),
             );
             return (ShimMode::default(), None);
@@ -254,13 +254,13 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
     if scope.includes_node() {
         match config.shim_mode {
             ShimMode::Managed => {
-                print_check(&output::CHECK.green().to_string(), "Node.js mode", "managed");
+                print_check(&output::CHECK.green().to_string(), "Node.js", "managed mode");
             }
             ShimMode::SystemFirst => {
                 print_check(
                     &output::CHECK.green().to_string(),
-                    "Node.js mode",
-                    &"system-first".bright_blue().to_string(),
+                    "Node.js",
+                    &"system-first mode".bright_blue().to_string(),
                 );
 
                 // Check if system Node.js is available
@@ -283,10 +283,10 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
     }
     if scope.includes_package_managers() {
         let mode = match config.package_manager_shim_mode() {
-            ShimMode::Managed => "managed",
-            ShimMode::SystemFirst => "system-first",
+            ShimMode::Managed => "managed mode",
+            ShimMode::SystemFirst => "system-first mode",
         };
-        print_check(&output::CHECK.green().to_string(), "Package manager mode", mode);
+        print_check(&output::CHECK.green().to_string(), "Package manager", mode);
     }
 
     (config.shim_mode, system_node_path)
