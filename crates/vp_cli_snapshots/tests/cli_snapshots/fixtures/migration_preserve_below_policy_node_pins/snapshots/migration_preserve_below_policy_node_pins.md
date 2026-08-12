@@ -66,7 +66,7 @@ catalogs:
     vite: npm:@voidzero-dev/vite-plus-core@<version>
     vite-plus: <version>
 overrides:
-  vite: catalog:vite-stack
+  vite@*: catalog:vite-stack
 peerDependencyRules:
   allowAny:
     - vite
