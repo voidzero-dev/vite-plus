@@ -191,11 +191,12 @@ export function rewriteStandaloneProject(
             removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
           }
         }
-        // Managed pnpm override keys are range-qualified (`vite@*`) so they never
-        // rewrite an importer's `catalog:` spec — see `pnpmOverrideKey`. Drop the
-        // pre-#2309 bare keys the user's config may still carry; keeping both
-        // would restore the clobbering match. `peerDependencyRules` below keys on
-        // plain package names and stays bare.
+        // Managed pnpm override keys are range-qualified (`vite@*`), so they
+        // never rewrite an importer's `catalog:` spec. See `pnpmOverrideKey`.
+        // Delete the pre-#2309 bare keys that the user's config can still hold.
+        // Two keys for one package would restore the match that clobbers
+        // `catalog:`. `peerDependencyRules` below keys on plain package names,
+        // so it stays bare.
         for (const key of overrideKeys) {
           delete pkg.pnpm?.overrides?.[key];
         }

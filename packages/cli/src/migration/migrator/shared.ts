@@ -162,36 +162,41 @@ export const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
 };
 
 /**
- * Managed pnpm override keys carry an explicit `@*` range instead of being bare
- * package names (`vite@*`, not `vite`).
+ * Managed pnpm override keys use an explicit `@*` range, not a bare package
+ * name: `vite@*`, not `vite`.
  *
- * pnpm applies overrides through a read-package hook that REPLACES the declared
- * spec on every manifest, importers included, before resolution runs. A BARE
- * override key has no range, and pnpm treats "no range" as "matches every
- * declared spec" — `catalog:` included. An importer that declares
- * `vite: "catalog:"` therefore loses its catalog provenance during resolution,
- * and `pnpm update` writes the resolved core alias back into its package.json
- * (issue #2309). Qualifying the key with `@*` keeps the override on every real
- * semver range — which is what the transitive and peer `vite` declarations this
- * override exists for always use — while leaving `catalog:` specs alone: `*` is
- * a valid range and `catalog:` is not, so pnpm's `isIntersectingRange` never
- * matches the two. Nothing changes about what gets installed, because an
- * importer that references the catalog already resolves to the aliased core
- * through its catalog entry.
+ * pnpm applies overrides through a read-package hook. The hook replaces the
+ * declared spec on every manifest, importer manifests included, before
+ * resolution runs. A bare override key has no range, and pnpm treats a key with
+ * no range as a match for every declared spec. That includes `catalog:`. An
+ * importer that declares `vite: "catalog:"` therefore loses its link to the
+ * catalog during resolution, and `pnpm update` then writes the resolved core
+ * alias into that importer's package.json (issue #2309).
  *
- * This is pnpm-only. npm/bun `overrides` and yarn `resolutions` keep bare keys:
- * those managers have no `catalog:` importer specs to lose (bun catalogs live in
- * package.json and are resolved before overrides apply).
+ * The `@*` range keeps the override on every valid semver range. Transitive and
+ * peer `vite` declarations always use such a range, and they are the reason this
+ * override exists. The range also leaves `catalog:` specs alone, because `*` is
+ * a valid semver range and `catalog:` is not, so pnpm's `isIntersectingRange`
+ * never matches the two. The installed result does not change: an importer that
+ * references the catalog already resolves to the aliased core through its
+ * catalog entry.
+ *
+ * This applies to pnpm only. npm and bun `overrides`, and yarn `resolutions`,
+ * keep bare keys. Those package managers have no `catalog:` importer specs to
+ * lose. Bun catalogs live in package.json, and bun resolves them before it
+ * applies overrides.
  */
 export function pnpmOverrideKey(dependencyName: string): string {
   return `${dependencyName}@*`;
 }
 
 /**
- * How a sink spells its managed override keys: pnpm's `overrides` use the
- * range-qualified form ({@link pnpmOverrideKey}), every other sink uses the bare
- * package name. A pnpm sink still carrying a bare managed key predates the
- * #2309 fix, so it deliberately reads as UNSATISFIED and gets rewritten.
+ * How a sink spells its managed override keys. pnpm's `overrides` use the
+ * range-qualified form ({@link pnpmOverrideKey}). Every other sink uses the bare
+ * package name.
+ *
+ * A pnpm sink that still holds a bare managed key predates the #2309 fix. Such a
+ * key reads as unsatisfied on purpose, so the next migration rewrites it.
  */
 export type ManagedOverrideKeyStyle = 'bare' | 'pnpm-ranged';
 

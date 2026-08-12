@@ -548,9 +548,9 @@ export function projectUsesVitestDirectly(
 // is a user override scoped under `vitest` and must be left intact. Returns true
 // iff an entry was removed.
 //
-// pnpm override sinks spell the managed key `vitest@*` (see `pnpmOverrideKey`),
-// so both spellings are swept: which one a project carries depends on whether it
-// was last migrated before or after the #2309 fix.
+// pnpm override sinks spell the managed key `vitest@*`. See `pnpmOverrideKey`.
+// This function removes both spellings. A project holds the bare key if it was
+// last migrated before the #2309 fix, and the ranged key if after.
 export function removeManagedVitestEntry(record: Record<string, string> | undefined): boolean {
   if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
     return false;
@@ -584,9 +584,9 @@ export function removeYamlMapVitestEntry(map: unknown): void {
   }
 }
 
-// `vitest` itself, or the range-qualified pnpm override spelling of it. A
-// selector-scoped key (`some-app>vitest`) constrains that parent's subtree only
-// and is never a managed key, so the `>`-bearing forms stay out.
+// True for `vitest` itself, and for the range-qualified pnpm override spelling.
+// A selector-scoped key (`some-app>vitest`) constrains only that parent's
+// subtree. Such a key is never a managed key, so forms with `>` stay out.
 function isManagedVitestOverrideKey(key: string): boolean {
   return key === 'vitest' || key === pnpmOverrideKey('vitest');
 }

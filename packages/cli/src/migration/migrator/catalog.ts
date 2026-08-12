@@ -314,11 +314,11 @@ export function rewritePnpmWorkspaceYaml(
       removeYamlMapVitestEntry(doc.getIn(['overrides']));
     }
     for (const key of Object.keys(managed)) {
-      // Managed keys are range-qualified (`vite@*`) so the override never
-      // rewrites an importer's `catalog:` spec — see `pnpmOverrideKey`. Carry a
-      // pre-#2309 bare key's value over to the new key so a user's own
-      // `catalog:<name>` choice survives, then drop the bare key: leaving both
-      // in place would restore the clobbering match.
+      // Managed keys are range-qualified (`vite@*`), so the override never
+      // rewrites an importer's `catalog:` spec. See `pnpmOverrideKey`.
+      // Move a pre-#2309 bare key's value to the new key, so a user's own
+      // `catalog:<name>` choice survives. Then delete the bare key. Two keys
+      // for one package would restore the match that clobbers `catalog:`.
       const overrideKey = pnpmOverrideKey(key);
       const currentVersion =
         getYamlMapScalarStringValue(overrides, overrideKey) ??

@@ -82,14 +82,14 @@ Related rules:
 - A direct `vite` declaration is never removed merely because a root override
   exists.
 - Plain or stale aliases are normalized; named catalog references are kept.
-- Under pnpm the managed override keys carry an explicit `@*` range (`vite@*`,
-  `vitest@*`). pnpm applies overrides by replacing the declared spec on every
-  manifest, importers included, and a bare key matches any spec — including
-  `catalog:`, which would make `vp up` rewrite the reference to a concrete
-  version. The range keeps the override on the transitive and peer declarations
-  it exists for and leaves `catalog:` references to the catalog, which already
-  resolves them to Vite+ core. Migration re-keys a project still carrying the
-  bare key and preserves its named-catalog choice.
+- Under pnpm the managed override keys use an explicit `@*` range (`vite@*`,
+  `vitest@*`). pnpm applies an override by replacing the declared spec on every
+  manifest, importer manifests included. A bare key matches any spec, including
+  `catalog:`, and `vp up` then rewrites that reference to a concrete version.
+  The `@*` range keeps the override on the transitive and peer declarations it
+  exists for. It leaves `catalog:` references to the catalog, which already
+  resolves them to Vite+ core. Migration re-keys a project that still holds the
+  bare key, and keeps its named-catalog choice.
 - The direct-entry rule above is pnpm-specific. Bun mirrors its core alias as
   a direct dependency for its peer resolver, and npm browser-provider layouts
   may need a top-level `vite` edge so nested Vitest packages can resolve

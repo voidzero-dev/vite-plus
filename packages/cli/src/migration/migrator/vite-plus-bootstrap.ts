@@ -147,10 +147,10 @@ export function overridesSatisfyVitePlus(
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): boolean {
-  // Common case: a lingering managed `vitest` override is NOT satisfied — it
-  // must be removed, so the bootstrap stays pending until it is. Both key
-  // spellings count: a pnpm sink migrated before #2309 still carries the bare
-  // one (see `managedOverrideKey`).
+  // Common case: a lingering managed `vitest` override is not satisfied. It
+  // must be removed, so the bootstrap stays pending until then. Both key
+  // spellings count. A pnpm sink migrated before #2309 still holds the bare
+  // one. See `managedOverrideKey`.
   if (
     !usesVitest &&
     VITEST_IS_MANAGED_OVERRIDE &&
@@ -882,9 +882,10 @@ function ensureOverrideEntries(
     managedOverridePackages(usesVitest),
   )) {
     const overrideKey = managedOverrideKey(dependencyName, keyStyle);
-    // Carry a pre-#2309 bare key's value over to the range-qualified key so the
-    // user's own `catalog:<name>` choice survives, then drop the bare key —
-    // keeping both would restore the match that clobbers `catalog:` importers.
+    // Move a pre-#2309 bare key's value to the range-qualified key, so the
+    // user's own `catalog:<name>` choice survives. Then delete the bare key.
+    // Two keys for one package would restore the match that clobbers
+    // `catalog:` importers.
     const currentSpec = next[overrideKey] ?? next[dependencyName];
     if (overrideKey !== dependencyName && next[dependencyName] !== undefined) {
       delete next[dependencyName];
