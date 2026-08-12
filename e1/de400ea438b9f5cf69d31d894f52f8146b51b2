@@ -1,0 +1,19 @@
+rfcs/doc-command.md
+  s_1cef8c5afacf54::t_9e2c7f8940782b 1-837
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e1de400ea438b9f5cf69d31d894f52f8146b51b2",
+  "prompts": {},
+  "sessions": {
+    "s_1cef8c5afacf54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc7c7-de45-7903-bac0-495e69a20f44",
+        "model": "unknown"
+      },
+      "human_author": "MK <fengmk2@gmail.com>"
+    }
+  }
+}
