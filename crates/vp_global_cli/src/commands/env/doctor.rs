@@ -38,8 +38,8 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("n", "N_PREFIX"),
 ];
 
-/// Column width for left-side keys in aligned output
-const KEY_WIDTH: usize = 18;
+/// Column width for left-side keys before the value separator.
+const KEY_WIDTH: usize = 17;
 
 /// Print a section header (bold, with blank line before).
 fn print_section(name: &str) {
@@ -53,11 +53,11 @@ fn print_section(name: &str) {
 /// Use `" "` for informational lines with no status.
 fn print_check(status: &str, key: &str, value: &str) {
     if status.trim().is_empty() {
-        println!("  {key:<KEY_WIDTH$}{value}");
+        println!("  {key:<KEY_WIDTH$} {value}");
     } else if key.trim().is_empty() {
         println!("  {status} {value}");
     } else {
-        println!("  {status} {key:<KEY_WIDTH$}{value}");
+        println!("  {status} {key:<KEY_WIDTH$} {value}");
     }
 }
 
