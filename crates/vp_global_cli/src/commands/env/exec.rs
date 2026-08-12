@@ -147,7 +147,7 @@ async fn execute_with_version(
     let (cmd, args) = command.split_first().unwrap();
 
     let mut child = tokio::process::Command::new(cmd);
-    child.args(args).env("PATH", new_path);
+    child.args(args).env("PATH", new_path).env(env_vars::VP_NODE_VERSION, &resolved_version);
     // The child runs in the inherited cwd, which a leading `-C <dir>` changes
     // without touching our own environment; align its `PWD` accordingly.
     if let Ok(cwd) = vt_path::current_dir() {

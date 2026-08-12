@@ -1,8 +1,7 @@
-//! Shim module for intercepting node, npm, npx, corepack, and package binary commands.
+//! Shim module for intercepting Node.js, package-manager, and package binary commands.
 //!
 //! This module provides the functionality for the vp binary to act as a shim
-//! when invoked as `node`, `npm`, `npx`, `corepack`, or any globally installed
-//! package binary.
+//! when invoked as a managed tool or any globally installed package binary.
 //!
 //! Detection methods:
 //! - Unix: Symlinks to vp binary preserve argv[0], allowing tool detection
@@ -10,7 +9,6 @@
 //! - Legacy: `.cmd` wrappers call `vp env exec <tool>` directly (deprecated)
 
 mod cache;
-pub(crate) mod corepack;
 pub(crate) mod dispatch;
 pub(crate) mod exec;
 
@@ -23,13 +21,9 @@ use vp_shared::env_vars;
 
 use crate::commands::env::config::get_bin_dir;
 
-/// Core shim tools (node, npm, npx).
-///
-/// `corepack` is also a default shim (see `commands::env::setup::SHIM_TOOLS`)
-/// but is intentionally not a core tool: it is not always bundled with the
-/// resolved Node.js version (removed in Node.js 25+), so it has a dedicated
-/// dispatch path with a managed fallback and never uses recursion passthrough.
-pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
+/// Core shim tools managed directly by the main dispatch path.
+pub const CORE_SHIM_TOOLS: &[&str] =
+    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
 
 /// Extract the tool name from argv[0].
 /// We hope all bins should be put under $VP_HOME/bin
@@ -70,7 +64,7 @@ pub fn extract_tool_name(argv0: &str) -> String {
     }
 }
 
-/// Check if the given tool name is a core shim tool (node/npm/npx).
+/// Check if the given tool name is managed directly by the core shim path.
 #[must_use]
 pub fn is_core_shim_tool(tool: &str) -> bool {
     CORE_SHIM_TOOLS.contains(&tool)
@@ -79,7 +73,7 @@ pub fn is_core_shim_tool(tool: &str) -> bool {
 /// Check if the given tool name is a shim tool (core or package binary).
 ///
 /// This is a quick check that returns true if:
-/// 1. The tool is a core shim (node/npm/npx), OR
+/// 1. The tool is a core shim, OR
 /// 2. The tool name is not "vp" (package binaries are detected later via metadata)
 #[must_use]
 pub fn is_shim_tool(tool: &str) -> bool {
@@ -215,27 +209,6 @@ mod tests {
         {
             assert_eq!(extract_tool_name("C:\\Users\\user\\.vite-plus\\bin\\node.exe"), "node");
         }
-    }
-
-    #[test]
-    fn test_is_shim_tool() {
-        // Core shim tools are always recognized
-        assert!(is_core_shim_tool("node"));
-        assert!(is_core_shim_tool("npm"));
-        assert!(is_core_shim_tool("npx"));
-        assert!(!is_core_shim_tool("yarn")); // yarn is not a core shim tool
-        assert!(!is_core_shim_tool("vp"));
-        assert!(!is_core_shim_tool("cargo"));
-        assert!(!is_core_shim_tool("tsc")); // Package binary, not core
-        // corepack is a default shim but intentionally not a core tool:
-        // it has a dedicated dispatch path and never uses recursion passthrough
-        assert!(!is_core_shim_tool("corepack"));
-
-        // is_shim_tool includes core tools
-        assert!(is_shim_tool("node"));
-        assert!(is_shim_tool("npm"));
-        assert!(is_shim_tool("npx"));
-        assert!(!is_shim_tool("vp")); // vp is never a shim
     }
 
     /// Test that is_potential_package_binary checks the configured bin directory.

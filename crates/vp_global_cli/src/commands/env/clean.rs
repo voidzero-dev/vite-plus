@@ -1,11 +1,11 @@
 //! Clean command for removing managed caches.
 //!
-//! Handles `vp env clean` by removing unused Node.js runtimes, all managed
-//! package manager installs, and the underlying Corepack cache.
+//! Handles `vp env clean` by removing unused Node.js runtimes and all managed
+//! package manager installs.
 
 use std::{path::Path, process::ExitStatus};
 
-use vp_shared::{env_vars, output};
+use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{config, list::list_installed_versions};
@@ -18,11 +18,6 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let node_dir = data_dir.join("js_runtime").join("node");
     let package_manager_dir = data_dir.join("package_manager");
     let protected_versions = protected_node_versions(&cwd).await?;
-
-    let corepack_cleaned = run_corepack_cache_clean(&cwd).await?;
-    if corepack_cleaned {
-        output::success("Cleaned Corepack cache");
-    }
 
     let node_runtimes_removed =
         clean_node_runtimes(node_dir.as_path(), &protected_versions).await?;
@@ -108,89 +103,6 @@ async fn remove_dir_all_if_exists(path: &Path) -> Result<bool, Error> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e.into()),
     }
-}
-
-async fn run_corepack_cache_clean(cwd: &AbsolutePathBuf) -> Result<bool, Error> {
-    let corepack_path = match resolve_corepack_from_path(cwd) {
-        Some(path) => path,
-        None => return Ok(false),
-    };
-
-    if corepack_cache_clean_would_auto_install(cwd, &corepack_path).await? {
-        return Ok(false);
-    }
-
-    let result = tokio::process::Command::new(corepack_path.as_path())
-        .args(["cache", "clean"])
-        .current_dir(cwd.as_path())
-        .env_remove(env_vars::VP_TOOL_RECURSION)
-        .output()
-        .await;
-
-    match result {
-        Ok(command_output) if command_output.status.success() => Ok(true),
-        Ok(command_output) => Err(Error::Other(corepack_failure_message(&command_output).into())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(e.into()),
-    }
-}
-
-async fn corepack_cache_clean_would_auto_install(
-    cwd: &AbsolutePathBuf,
-    corepack_path: &AbsolutePath,
-) -> Result<bool, Error> {
-    let bin_dir = config::get_bin_dir()?;
-    if corepack_path.parent() != Some(&bin_dir) {
-        return Ok(false);
-    }
-
-    if config::load_config().await?.shim_mode == config::ShimMode::SystemFirst
-        && crate::shim::dispatch::find_system_tool("corepack").is_some()
-    {
-        return Ok(false);
-    }
-
-    if has_usable_managed_corepack().await {
-        return Ok(false);
-    }
-
-    let resolution =
-        crate::shim::dispatch::resolve_with_cache(cwd).await.map_err(|e| Error::Other(e.into()))?;
-    Ok(crate::shim::dispatch::locate_tool(&resolution.version, "corepack").is_err())
-}
-
-fn resolve_corepack_from_path(cwd: &AbsolutePathBuf) -> Option<AbsolutePathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    let paths = std::env::split_paths(&path_var).map(|path| {
-        if path.is_absolute() || path.starts_with("~") {
-            path
-        } else {
-            cwd.as_absolute_path().as_path().join(path)
-        }
-    });
-    let search_path = std::env::join_paths(paths).ok()?;
-    vp_command::resolve_bin("corepack", Some(&search_path), cwd).ok()
-}
-
-async fn has_usable_managed_corepack() -> bool {
-    let Ok(Some(metadata)) = crate::shim::dispatch::find_package_for_binary("corepack").await
-    else {
-        return false;
-    };
-    crate::shim::dispatch::locate_package_binary(&metadata, "corepack").is_ok()
-        && crate::shim::dispatch::locate_tool(&metadata.platform.node, "node").is_ok()
-}
-
-fn corepack_failure_message(command_output: &std::process::Output) -> String {
-    let stderr = String::from_utf8_lossy(&command_output.stderr);
-    let stdout = String::from_utf8_lossy(&command_output.stdout);
-    let stderr = stderr.trim();
-    let stdout = stdout.trim();
-    let details = if stderr.is_empty() { stdout } else { stderr };
-    if details.is_empty() {
-        return "corepack cache clean failed".to_string();
-    }
-    format!("corepack cache clean failed: {details}")
 }
 
 fn push_unique_version(versions: &mut Vec<String>, version: String) {
