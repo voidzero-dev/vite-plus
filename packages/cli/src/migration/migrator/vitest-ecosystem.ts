@@ -25,6 +25,7 @@ import {
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
+  pnpmOverrideKey,
   type CatalogDependencyResolver,
   type PackageJsonDependencyField,
 } from './shared.ts';
@@ -546,12 +547,22 @@ export function projectUsesVitestDirectly(
 // alias is always a string, whereas a nested object value (npm/bun `overrides`)
 // is a user override scoped under `vitest` and must be left intact. Returns true
 // iff an entry was removed.
+//
+// pnpm override sinks spell the managed key `vitest@*` (see `pnpmOverrideKey`),
+// so both spellings are swept: which one a project carries depends on whether it
+// was last migrated before or after the #2309 fix.
 export function removeManagedVitestEntry(record: Record<string, string> | undefined): boolean {
-  if (VITEST_IS_MANAGED_OVERRIDE && typeof record?.vitest === 'string') {
-    delete record.vitest;
-    return true;
+  if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
+    return false;
   }
-  return false;
+  let removed = false;
+  for (const key of Object.keys(record)) {
+    if (isManagedVitestOverrideKey(key) && typeof record[key] === 'string') {
+      delete record[key];
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 // Remove a managed `vitest` scalar key from a YAMLMap (pnpm-workspace.yaml
@@ -560,12 +571,24 @@ export function removeYamlMapVitestEntry(map: unknown): void {
   if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
     return;
   }
-  const target = map.items.find(
-    (item) => item.key instanceof Scalar && item.key.value === 'vitest',
-  )?.key;
-  if (target) {
+  const targets = map.items
+    .filter(
+      (item) =>
+        item.key instanceof Scalar &&
+        typeof item.key.value === 'string' &&
+        isManagedVitestOverrideKey(item.key.value),
+    )
+    .map((item) => item.key);
+  for (const target of targets) {
     map.delete(target);
   }
+}
+
+// `vitest` itself, or the range-qualified pnpm override spelling of it. A
+// selector-scoped key (`some-app>vitest`) constrains that parent's subtree only
+// and is never a managed key, so the `>`-bearing forms stay out.
+function isManagedVitestOverrideKey(key: string): boolean {
+  return key === 'vitest' || key === pnpmOverrideKey('vitest');
 }
 
 // Remove the managed `vitest` entry from pnpm peerDependencyRules (its

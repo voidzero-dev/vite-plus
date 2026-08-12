@@ -161,6 +161,47 @@ export const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
   vitest: VITEST_VERSION,
 };
 
+/**
+ * Managed pnpm override keys carry an explicit `@*` range instead of being bare
+ * package names (`vite@*`, not `vite`).
+ *
+ * pnpm applies overrides through a read-package hook that REPLACES the declared
+ * spec on every manifest, importers included, before resolution runs. A BARE
+ * override key has no range, and pnpm treats "no range" as "matches every
+ * declared spec" — `catalog:` included. An importer that declares
+ * `vite: "catalog:"` therefore loses its catalog provenance during resolution,
+ * and `pnpm update` writes the resolved core alias back into its package.json
+ * (issue #2309). Qualifying the key with `@*` keeps the override on every real
+ * semver range — which is what the transitive and peer `vite` declarations this
+ * override exists for always use — while leaving `catalog:` specs alone: `*` is
+ * a valid range and `catalog:` is not, so pnpm's `isIntersectingRange` never
+ * matches the two. Nothing changes about what gets installed, because an
+ * importer that references the catalog already resolves to the aliased core
+ * through its catalog entry.
+ *
+ * This is pnpm-only. npm/bun `overrides` and yarn `resolutions` keep bare keys:
+ * those managers have no `catalog:` importer specs to lose (bun catalogs live in
+ * package.json and are resolved before overrides apply).
+ */
+export function pnpmOverrideKey(dependencyName: string): string {
+  return `${dependencyName}@*`;
+}
+
+/**
+ * How a sink spells its managed override keys: pnpm's `overrides` use the
+ * range-qualified form ({@link pnpmOverrideKey}), every other sink uses the bare
+ * package name. A pnpm sink still carrying a bare managed key predates the
+ * #2309 fix, so it deliberately reads as UNSATISFIED and gets rewritten.
+ */
+export type ManagedOverrideKeyStyle = 'bare' | 'pnpm-ranged';
+
+export function managedOverrideKey(
+  dependencyName: string,
+  keyStyle: ManagedOverrideKeyStyle,
+): string {
+  return keyStyle === 'pnpm-ranged' ? pnpmOverrideKey(dependencyName) : dependencyName;
+}
+
 export type PackageJsonDependencyField =
   | 'devDependencies'
   | 'dependencies'

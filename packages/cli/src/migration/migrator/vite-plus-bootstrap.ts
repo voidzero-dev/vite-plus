@@ -59,8 +59,10 @@ import {
   OPT_IN_BROWSER_PROVIDERS,
   REMOVE_PACKAGES,
   VITEST_IS_MANAGED_OVERRIDE,
+  managedOverrideKey,
   pnpmMajor,
   type CatalogDependencyResolver,
+  type ManagedOverrideKeyStyle,
   type PnpmPackageJsonSettings,
 } from './shared.ts';
 
@@ -143,16 +145,24 @@ export function overridesSatisfyVitePlus(
   overrides: Record<string, string> | undefined,
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): boolean {
   // Common case: a lingering managed `vitest` override is NOT satisfied — it
-  // must be removed, so the bootstrap stays pending until it is.
-  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE && typeof overrides?.vitest === 'string') {
+  // must be removed, so the bootstrap stays pending until it is. Both key
+  // spellings count: a pnpm sink migrated before #2309 still carries the bare
+  // one (see `managedOverrideKey`).
+  if (
+    !usesVitest &&
+    VITEST_IS_MANAGED_OVERRIDE &&
+    (typeof overrides?.[managedOverrideKey('vitest', keyStyle)] === 'string' ||
+      typeof overrides?.vitest === 'string')
+  ) {
     return false;
   }
   return Object.keys(managedOverridePackages(usesVitest)).every((dependencyName) =>
     overrideSpecSatisfiesVitePlus(
       dependencyName,
-      overrides?.[dependencyName],
+      overrides?.[managedOverrideKey(dependencyName, keyStyle)],
       catalogDependencyResolver,
     ),
   );
@@ -743,20 +753,30 @@ export function detectVitePlusBootstrapPending(
       if (supportCatalog) {
         return (
           catalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
-          !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest, catalogDependencyResolver) ||
+          !overridesSatisfyVitePlus(
+            pkg.pnpm?.overrides,
+            usesVitest,
+            catalogDependencyResolver,
+            'pnpm-ranged',
+          ) ||
           !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
         );
       }
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
-        !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest) ||
+        !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest, undefined, 'pnpm-ranged') ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
       );
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
     return (
       workspaceCatalogVitePlusDependencyPending(projectPath, packages, resolver) ||
-      !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), usesVitest, resolver) ||
+      !overridesSatisfyVitePlus(
+        readPnpmWorkspaceOverrides(projectPath),
+        usesVitest,
+        resolver,
+        'pnpm-ranged',
+      ) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
         usesVitest,
@@ -850,6 +870,7 @@ function ensureOverrideEntries(
   overrides: Record<string, string> | undefined,
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): { overrides: Record<string, string>; changed: boolean } {
   const next = { ...overrides };
   let changed = false;
@@ -860,15 +881,20 @@ function ensureOverrideEntries(
   for (const [dependencyName, overrideSpec] of Object.entries(
     managedOverridePackages(usesVitest),
   )) {
-    if (
-      !overrideSpecSatisfiesVitePlus(
-        dependencyName,
-        next[dependencyName],
-        catalogDependencyResolver,
-      )
-    ) {
-      next[dependencyName] = overrideSpec;
+    const overrideKey = managedOverrideKey(dependencyName, keyStyle);
+    // Carry a pre-#2309 bare key's value over to the range-qualified key so the
+    // user's own `catalog:<name>` choice survives, then drop the bare key —
+    // keeping both would restore the match that clobbers `catalog:` importers.
+    const currentSpec = next[overrideKey] ?? next[dependencyName];
+    if (overrideKey !== dependencyName && next[dependencyName] !== undefined) {
+      delete next[dependencyName];
       changed = true;
+    }
+    if (!overrideSpecSatisfiesVitePlus(dependencyName, currentSpec, catalogDependencyResolver)) {
+      next[overrideKey] = overrideSpec;
+      changed = true;
+    } else if (next[overrideKey] !== currentSpec) {
+      next[overrideKey] = currentSpec;
     }
   }
   return { overrides: next, changed };
@@ -1052,6 +1078,7 @@ export function ensureVitePlusBootstrap(
         pkg.pnpm.overrides,
         usesVitest,
         supportCatalog ? readPnpmWorkspaceCatalogDependencyResolver(projectPath) : undefined,
+        'pnpm-ranged',
       );
       if (ensured.changed) {
         pkg.pnpm.overrides = ensured.overrides;
@@ -1151,6 +1178,7 @@ export function ensureVitePlusBootstrap(
           readPnpmWorkspaceOverrides(projectPath),
           usesVitest,
           catalogDependencyResolver,
+          'pnpm-ranged',
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(
           readPnpmWorkspacePeerDependencyRules(projectPath),
