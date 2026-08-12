@@ -4,23 +4,43 @@ vp = "global"
 skip-platforms = ["windows"]
 unset-env = ["CI", "VP_SKIP_INSTALL"]
 local-registry = true
-comment = "#2309 repair path: a project migrated before the fix carries the bare `vite` override key, which `vp up` uses to clobber `catalog:`. One `vp migrate` re-keys it."
+comment = "#2309 repair path. Migrate first so the catalog holds a real PINNED toolchain version (the reporter's shape), then downgrade the override key to the pre-fix bare spelling a project migrated by an older Vite+ still carries."
 steps = [
-  { argv = [
-    "vp",
-    "up",
-  ], comment = "the bare override key resolves the catalog reference away", snapshot = false, continue-on-failure = true },
-  { argv = [
-    "vpt",
-    "print-file",
-    "package.json",
-  ], comment = "`vite` lost `catalog:`; `vite-plus` (no override) kept it", continue-on-failure = true },
   { argv = [
     "vp",
     "migrate",
     "--no-interactive",
     "--no-hooks",
-  ], comment = "migrate repairs both the override key and the clobbered spec", continue-on-failure = true },
+    "--package-manager",
+    "pnpm",
+  ], comment = "migrate pins the toolchain through the workspace catalog", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "replace-file-content",
+    "pnpm-workspace.yaml",
+    "vite@*:",
+    "vite:",
+  ], comment = "rewind the override key to the pre-#2309 bare spelling (fails if migrate stopped writing the ranged key)", snapshot = false, continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "pnpm-workspace.yaml",
+  ], comment = "the pre-fix shape: bare override key over an exactly pinned catalog alias", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "nothing to update, yet the bare key still resolves the catalog reference away", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` lost `catalog:` for the pinned alias; `vite-plus` (no override) kept it", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+  ], comment = "the bare key reads as pending, so one migrate repairs it", continue-on-failure = true },
   { argv = [
     "vpt",
     "print-file",

@@ -56,13 +56,10 @@ static TOOL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // context while leaving other dep versions (core-js, typescript, ...)
 // assertable. The `vite-plus` key form requires a line-leading key so package
 // NAME values like `"vite-plus-application"` are untouched, and it needs a
-// digit after the separator so `vite-plus: catalog:` stays verbatim. The core
-// alias also accepts a leading `^`/`~`: a package manager that resolves the
-// alias itself writes back a RANGE (`npm:@voidzero-dev/vite-plus-core@^0.2.8`),
-// which churns per release exactly like the exact form.
+// digit after the separator so `vite-plus: catalog:` stays verbatim.
 static VP_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?m)(^\s*"?vite-plus"?\s*:\s*"?|@voidzero-dev/vite-plus-core@[\^~]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+        r#"(?m)(^\s*"?vite-plus"?\s*:\s*"?|@voidzero-dev/vite-plus-core@)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
 });
