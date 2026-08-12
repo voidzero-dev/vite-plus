@@ -1,6 +1,14 @@
-use std::{collections::HashMap, process::ExitStatus};
+use std::{
+    collections::HashMap,
+    fmt,
+    process::ExitStatus,
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+};
 
-use dialoguer::{MultiSelect, theme::ColorfulTheme};
+use dialoguer::{
+    MultiSelect,
+    theme::{ColorfulTheme, Theme},
+};
 use serde::Deserialize;
 use vt_path::AbsolutePath;
 
@@ -50,8 +58,8 @@ pub(super) async fn run_pnpm_interactive_update(
         return Ok(ExitStatus::default());
     }
 
-    emit_prompt_milestone();
-    let selected = MultiSelect::with_theme(&ColorfulTheme::default())
+    let theme = InteractiveUpdateTheme::new(choices.len());
+    let selected = MultiSelect::with_theme(&theme)
         .with_prompt("Choose which dependencies to update")
         .items(choices.iter().map(|choice| choice.label.as_str()).collect::<Vec<_>>())
         .interact()
@@ -141,26 +149,83 @@ fn npmx_changelog_url(package: &str, version: &str) -> vt_str::Str {
     vt_str::format!("https://npmx.dev/package-changelog/{package}/v/{version}")
 }
 
-/// Let the PTY snapshot runner synchronize keystrokes before `dialoguer`
-/// takes over the terminal. The marker is an invisible window-title update
-/// and is emitted only in the runner's controlled environment.
-fn emit_prompt_milestone() {
-    use std::{
-        io::Write as _,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+/// A `dialoguer` theme that lets the PTY runner synchronize only after the
+/// first complete multi-select frame has been written.
+struct InteractiveUpdateTheme {
+    inner: ColorfulTheme,
+    items_before_milestone: AtomicUsize,
+}
 
+impl InteractiveUpdateTheme {
+    fn new(item_count: usize) -> Self {
+        Self {
+            inner: ColorfulTheme::default(),
+            items_before_milestone: AtomicUsize::new(item_count),
+        }
+    }
+
+    fn rendered_last_initial_item(&self) -> bool {
+        let mut remaining = self.items_before_milestone.load(Ordering::Relaxed);
+        loop {
+            if remaining == 0 {
+                return false;
+            }
+            match self.items_before_milestone.compare_exchange_weak(
+                remaining,
+                remaining - 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return remaining == 1,
+                Err(actual) => remaining = actual,
+            }
+        }
+    }
+}
+
+impl Theme for InteractiveUpdateTheme {
+    fn format_multi_select_prompt(&self, f: &mut dyn fmt::Write, prompt: &str) -> fmt::Result {
+        self.inner.format_multi_select_prompt(f, prompt)
+    }
+
+    fn format_multi_select_prompt_selection(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        selections: &[&str],
+    ) -> fmt::Result {
+        self.inner.format_multi_select_prompt_selection(f, prompt, selections)
+    }
+
+    fn format_multi_select_prompt_item(
+        &self,
+        f: &mut dyn fmt::Write,
+        text: &str,
+        checked: bool,
+        active: bool,
+    ) -> fmt::Result {
+        self.inner.format_multi_select_prompt_item(f, text, checked, active)?;
+
+        if self.rendered_last_initial_item() {
+            write_prompt_milestone(f)?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Write an invisible window-title marker into the rendered frame. Dialoguer
+/// flushes the frame before reading a key, so the runner cannot race the prompt.
+fn write_prompt_milestone(f: &mut dyn fmt::Write) -> fmt::Result {
     if std::env::var_os(vp_shared::env_vars::VP_EMIT_MILESTONES).is_none_or(|value| value != "1") {
-        return;
+        return Ok(());
     }
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let id = (u128::from(std::process::id()) << 64)
         | u128::from(COUNTER.fetch_add(1, Ordering::Relaxed));
     let encoded = base64_simd::URL_SAFE_NO_PAD.encode_to_string(b"multi-select:update:ready");
-    let mut stdout = std::io::stdout().lock();
-    let _ = write!(stdout, "\x1b]2;pty-terminal-test:{id:032x}:{encoded}\x1b\\");
-    let _ = stdout.flush();
+    write!(f, "\x1b]2;pty-terminal-test:{id:032x}:{encoded}\x1b\\")
 }
 
 #[cfg(test)]

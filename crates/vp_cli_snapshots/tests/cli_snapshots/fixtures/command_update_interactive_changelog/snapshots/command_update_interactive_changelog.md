@@ -10,6 +10,8 @@ interactive updates link directly to the selected version's npmx changelog
 **→ expect-milestone:** `multi-select:update:ready`
 
 ```
+? Choose which dependencies to update ›
+⬚ [dependencies] testnpm2 1.0.0 ❯ 1.0.1 https://npmx.dev/package-changelog/testnpm2/v/1.0.1
 ```
 
 **← write-key:** `space`
@@ -17,7 +19,6 @@ interactive updates link directly to the selected version's npmx changelog
 **← write-key:** `enter`
 
 ```
-? Choose which dependencies to update ›
 ✔ Choose which dependencies to update · [dependencies] testnpm2 1.0.0 ❯ 1.0.1 https://npmx.dev/package-changelog/testnpm2/v/1.0.1
  -1
 -
