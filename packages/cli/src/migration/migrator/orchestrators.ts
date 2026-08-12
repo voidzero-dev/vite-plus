@@ -21,6 +21,7 @@ import {
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
   managedOverridePackages,
+  mergeManagedPnpmOverrides,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
   mergeViteConfigFiles,
@@ -56,7 +57,6 @@ import { type MigrationReport } from '../report.ts';
 import {
   PROVIDER_OVERRIDE_DROP_NAMES,
   pnpmMajor,
-  pnpmOverrideKey,
   type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
 } from './shared.ts';
@@ -186,28 +186,19 @@ export function rewriteStandaloneProject(
         // Common case: drop a lingering managed `vitest` override + its peer
         // rules before re-merging.
         if (!usesVitest) {
-          removeManagedVitestEntry(pkg.pnpm?.overrides);
+          removeManagedVitestEntry(pkg.pnpm?.overrides, 'pnpm-ranged');
           if (pkg.pnpm?.peerDependencyRules) {
             removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
           }
         }
-        // Managed pnpm override keys are range-qualified (`vite@*`), so they
-        // never rewrite an importer's `catalog:` spec. See `pnpmOverrideKey`.
-        // Delete the pre-#2309 bare keys that the user's config can still hold.
-        // Two keys for one package would restore the match that clobbers
-        // `catalog:`. `peerDependencyRules` below keys on plain package names,
-        // so it stays bare.
-        for (const key of overrideKeys) {
-          delete pkg.pnpm?.overrides?.[key];
-        }
         // Project already has pnpm config in package.json -- keep using it.
+        // `mergeManagedPnpmOverrides` writes the range-qualified keys and drops
+        // any pre-#2309 bare key. `peerDependencyRules` below keys on plain
+        // package names, so it stays bare.
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: {
-            ...pkg.pnpm?.overrides,
-            ...Object.fromEntries(
-              Object.entries(managed).map(([key, spec]) => [pnpmOverrideKey(key), spec]),
-            ),
+            ...mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
             // The force-override `vite-plus` pin keeps a BARE key: it only exists
             // in `file:` tgz mode, where migration writes the tgz spec straight
             // into every manifest instead of a `catalog:` reference, so there is

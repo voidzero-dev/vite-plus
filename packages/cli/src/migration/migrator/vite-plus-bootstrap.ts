@@ -147,6 +147,7 @@ export function overridesSatisfyVitePlus(
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): boolean {
+  const managed = managedOverridePackages(usesVitest);
   // Common case: a lingering managed `vitest` override is not satisfied. It
   // must be removed, so the bootstrap stays pending until then. Both key
   // spellings count. A pnpm sink migrated before #2309 still holds the bare
@@ -159,7 +160,17 @@ export function overridesSatisfyVitePlus(
   ) {
     return false;
   }
-  return Object.keys(managedOverridePackages(usesVitest)).every((dependencyName) =>
+  // A pnpm sink can hold BOTH spellings, for example after a hand edit or a
+  // partial repair. The leftover bare key still matches `catalog:` importer
+  // specs, so it must be re-keyed even when the ranged key is already correct.
+  // Report unsatisfied so the rewrite runs and deletes it.
+  if (
+    keyStyle === 'pnpm-ranged' &&
+    Object.keys(managed).some((dependencyName) => typeof overrides?.[dependencyName] === 'string')
+  ) {
+    return false;
+  }
+  return Object.keys(managed).every((dependencyName) =>
     overrideSpecSatisfiesVitePlus(
       dependencyName,
       overrides?.[managedOverrideKey(dependencyName, keyStyle)],
@@ -875,7 +886,7 @@ function ensureOverrideEntries(
   const next = { ...overrides };
   let changed = false;
   // Common case: drop a lingering managed `vitest` override.
-  if (!usesVitest && removeManagedVitestEntry(next)) {
+  if (!usesVitest && removeManagedVitestEntry(next, keyStyle)) {
     changed = true;
   }
   for (const [dependencyName, overrideSpec] of Object.entries(

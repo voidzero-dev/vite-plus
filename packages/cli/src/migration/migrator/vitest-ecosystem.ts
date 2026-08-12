@@ -27,6 +27,7 @@ import {
   VITEST_IS_MANAGED_OVERRIDE,
   pnpmOverrideKey,
   type CatalogDependencyResolver,
+  type ManagedOverrideKeyStyle,
   type PackageJsonDependencyField,
 } from './shared.ts';
 
@@ -548,16 +549,22 @@ export function projectUsesVitestDirectly(
 // is a user override scoped under `vitest` and must be left intact. Returns true
 // iff an entry was removed.
 //
-// pnpm override sinks spell the managed key `vitest@*`. See `pnpmOverrideKey`.
-// This function removes both spellings. A project holds the bare key if it was
-// last migrated before the #2309 fix, and the ranged key if after.
-export function removeManagedVitestEntry(record: Record<string, string> | undefined): boolean {
+// `keyStyle` selects which spellings count as managed. Only a pnpm override sink
+// spells the managed key `vitest@*` (see `pnpmOverrideKey`), and such a sink can
+// hold either spelling: the bare one if the project was last migrated before the
+// #2309 fix, the ranged one if after. Every other sink stays `bare`. npm also
+// accepts a range in an override key, so a user-authored `"vitest@*"` there is
+// the user's own entry and must not be deleted.
+export function removeManagedVitestEntry(
+  record: Record<string, string> | undefined,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
+): boolean {
   if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
     return false;
   }
   let removed = false;
   for (const key of Object.keys(record)) {
-    if (isManagedVitestOverrideKey(key) && typeof record[key] === 'string') {
+    if (isManagedVitestOverrideKey(key, keyStyle) && typeof record[key] === 'string') {
       delete record[key];
       removed = true;
     }
@@ -566,8 +573,13 @@ export function removeManagedVitestEntry(record: Record<string, string> | undefi
 }
 
 // Remove a managed `vitest` scalar key from a YAMLMap (pnpm-workspace.yaml
-// `overrides`, `catalog`, and each named `catalogs` entry).
-export function removeYamlMapVitestEntry(map: unknown): void {
+// `overrides`, `catalog`, and each named `catalogs` entry). Only the `overrides`
+// map uses the range-qualified spelling; `catalog`/`catalogs` and
+// `allowedVersions` key on plain package names, so they stay `bare`.
+export function removeYamlMapVitestEntry(
+  map: unknown,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
+): void {
   if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
     return;
   }
@@ -576,7 +588,7 @@ export function removeYamlMapVitestEntry(map: unknown): void {
       (item) =>
         item.key instanceof Scalar &&
         typeof item.key.value === 'string' &&
-        isManagedVitestOverrideKey(item.key.value),
+        isManagedVitestOverrideKey(item.key.value, keyStyle),
     )
     .map((item) => item.key);
   for (const target of targets) {
@@ -584,11 +596,12 @@ export function removeYamlMapVitestEntry(map: unknown): void {
   }
 }
 
-// True for `vitest` itself, and for the range-qualified pnpm override spelling.
-// A selector-scoped key (`some-app>vitest`) constrains only that parent's
-// subtree. Such a key is never a managed key, so forms with `>` stay out.
-function isManagedVitestOverrideKey(key: string): boolean {
-  return key === 'vitest' || key === pnpmOverrideKey('vitest');
+// True for `vitest` itself, and, in a pnpm override sink, for the
+// range-qualified spelling. A selector-scoped key (`some-app>vitest`) constrains
+// only that parent's subtree. Such a key is never a managed key, so forms with
+// `>` stay out.
+function isManagedVitestOverrideKey(key: string, keyStyle: ManagedOverrideKeyStyle): boolean {
+  return key === 'vitest' || (keyStyle === 'pnpm-ranged' && key === pnpmOverrideKey('vitest'));
 }
 
 // Remove the managed `vitest` entry from pnpm peerDependencyRules (its

@@ -4823,6 +4823,115 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
+  it('re-keys pnpm.overrides in a monorepo root below pnpm 10.6.2 (#2309 review P1)', () => {
+    // `rewriteMonorepo` routes root settings through `rewriteRootWorkspacePackageJson`,
+    // a different writer from the standalone path. A bare key left there keeps
+    // matching child `catalog:` declarations workspace-wide.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'pnpm9-monorepo',
+        workspaces: ['packages/*'],
+        devDependencies: { vite: 'catalog:' },
+        pnpm: { overrides: { vite: 'catalog:', react: '^18.0.0' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['packages:', '  - packages/*', 'catalog:', '  vite: ^7.0.0', ''].join('\n'),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '9.15.9'), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: { overrides: Record<string, string> };
+    };
+    expect(pkg.pnpm.overrides[PNPM_VITE_OVERRIDE_KEY]).toBeDefined();
+    expect(pkg.pnpm.overrides).not.toHaveProperty('vite');
+    expect(pkg.pnpm.overrides.react).toBe('^18.0.0');
+  });
+
+  it('carries a legacy named-catalog override value onto the ranged key (#2309 review P2)', () => {
+    // The re-keying must not silently disconnect the override from the user's
+    // named catalog by replacing it with the concrete managed alias.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'pnpm9-standalone',
+        devDependencies: { vite: 'catalog:toolchain' },
+        pnpm: { overrides: { vite: 'catalog:toolchain' } },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['catalogs:', '  toolchain:', '    vite: ^7.0.0', ''].join('\n'),
+    );
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '9.15.9'),
+      true,
+      true,
+    );
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: { overrides: Record<string, string> };
+    };
+    expect(pkg.pnpm.overrides[PNPM_VITE_OVERRIDE_KEY]).toBe('catalog:toolchain');
+    expect(pkg.pnpm.overrides).not.toHaveProperty('vite');
+  });
+
+  it('treats a leftover bare key as pending beside a valid ranged key (#2309 review P2)', () => {
+    // A hand-edited or partially repaired project can hold both spellings. The
+    // bare one still matches `catalog:` importer specs, so the already-migrated
+    // fast path must not skip the rewrite that deletes it.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+
+    // Re-introduce the pre-#2309 key next to the correct one.
+    const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+    fs.writeFileSync(
+      workspacePath,
+      fs
+        .readFileSync(workspacePath, 'utf8')
+        .replace('overrides:\n', "overrides:\n  vite: 'catalog:'\n"),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+
+    // One more migrate converges again by dropping the bare key.
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    expect(workspace.overrides).not.toHaveProperty('vite');
+    expect(workspace.overrides[PNPM_VITE_OVERRIDE_KEY]).toBe('catalog:');
+  });
+
+  it('leaves a user-authored ranged npm override alone (#2309 review P2)', () => {
+    // npm accepts a range in an override key too, but vite-plus only ever
+    // manages the BARE key there. A `vitest@*` entry in npm `overrides` is the
+    // user's own and must survive the managed-vitest sweep.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'npm-project',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: { 'vitest@*': '3.2.4' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+    };
+    expect(pkg.overrides['vitest@*']).toBe('3.2.4');
+  });
+
   it('rewrites named catalogs in pnpm-workspace.yaml without adding new entries', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),

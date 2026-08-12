@@ -311,7 +311,7 @@ export function rewritePnpmWorkspaceYaml(
     // Common case (no direct vitest): actively strip any lingering managed
     // `vitest` override so it arrives transitively through vite-plus.
     if (!usesVitest) {
-      removeYamlMapVitestEntry(doc.getIn(['overrides']));
+      removeYamlMapVitestEntry(doc.getIn(['overrides']), 'pnpm-ranged');
     }
     for (const key of Object.keys(managed)) {
       // Managed keys are range-qualified (`vite@*`), so the override never
@@ -837,8 +837,8 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
 }
 
 // Delete a key by its literal name. `YAMLMap.delete` compares the key NODE, so
-// the node has to be looked up in `.items` first — passing a fresh scalar would
-// silently no-op.
+// the node has to be looked up in `.items` first. A fresh scalar would silently
+// no-op.
 function deleteYamlMapKey(map: unknown, key: string): void {
   if (!(map instanceof YAMLMap)) {
     return;
@@ -849,6 +849,37 @@ function deleteYamlMapKey(map: unknown, key: string): void {
   if (target) {
     map.delete(target);
   }
+}
+
+/**
+ * Merge the managed override entries into a pnpm `overrides` record, under the
+ * range-qualified keys (see `pnpmOverrideKey`).
+ *
+ * Every pnpm sink goes through this helper: the package.json `pnpm.overrides`
+ * written for pnpm 9.5 to 10.6.1, from both the standalone and the monorepo-root
+ * writer. A bare managed key left by a pre-#2309 migration is deleted, because
+ * two keys for one package would restore the match that clobbers `catalog:`
+ * importer specs.
+ *
+ * A bare key's `catalog:` value moves to the ranged key, so a user's own
+ * `catalog:<name>` choice survives the re-keying. This mirrors
+ * `getCatalogDependencySpec`, which keeps a `catalog:` reference in the
+ * pnpm-workspace.yaml sink. A `file:` managed spec (force-override mode) always
+ * wins, because there is no catalog to resolve against in that mode.
+ */
+export function mergeManagedPnpmOverrides(
+  overrides: Record<string, string> | undefined,
+  managed: Record<string, string>,
+): Record<string, string> {
+  const next = { ...overrides };
+  for (const [dependencyName, managedSpec] of Object.entries(managed)) {
+    const overrideKey = pnpmOverrideKey(dependencyName);
+    const existing = next[overrideKey] ?? next[dependencyName];
+    delete next[dependencyName];
+    next[overrideKey] =
+      existing?.startsWith('catalog:') && !managedSpec.startsWith('file:') ? existing : managedSpec;
+  }
+  return next;
 }
 
 function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
@@ -1236,7 +1267,7 @@ export function rewriteRootWorkspacePackageJson(
         dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
         // Common case: drop a lingering managed `vitest` override before merging.
         if (!workspaceUsesVitest) {
-          removeManagedVitestEntry(pkg.pnpm?.overrides);
+          removeManagedVitestEntry(pkg.pnpm?.overrides, 'pnpm-ranged');
         }
         if (!workspaceUsesVitest && pkg.pnpm?.peerDependencyRules) {
           removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
@@ -1244,8 +1275,11 @@ export function rewriteRootWorkspacePackageJson(
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: {
-            ...pkg.pnpm?.overrides,
-            ...managed,
+            ...mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
+            // The force-override `vite-plus` pin keeps a BARE key: it only exists
+            // in `file:` tgz mode, where migration writes the tgz spec straight
+            // into every manifest instead of a `catalog:` reference, so there is
+            // no catalog provenance for a bare key to strip.
             ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
           },
           peerDependencyRules: {
