@@ -4,7 +4,12 @@ vp = "global"
 skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
+  { argv = ["vp", "env", "default", "node"], comment = "An unconfigured Node.js default explains the effective fallback without claiming it was set in config", continue-on-failure = true },
   { argv = ["vp", "env", "install", "lts"], comment = "Install an LTS Node.js version locally", continue-on-failure = true },
   { argv = ["vp", "env", "default", "lts"], comment = "Set it as the global default (stored as the `lts` alias)", continue-on-failure = true },
+  { argv = ["vp", "env", "default", "node"], comment = "A configured Node.js alias shows its current resolution and config source", continue-on-failure = true },
+  { argv = ["vp", "env", "default", "pnpm@10.18.0"], comment = "Package-manager default updates identify the selected package and version", continue-on-failure = true },
   { argv = ["node", "-e", "const {execFileSync}=require('node:child_process'); const {node}=JSON.parse(execFileSync('vp',['env','list-remote','--lts','--json'],{encoding:'utf8'})); console.log('installed marked:', node.some(v=>v.installed)); console.log('current marked:', node.some(v=>v.current)); console.log('default marked:', node.some(v=>v.default));"], comment = "the unified JSON node entries resolve installed/current/default flags, including the `lts` default alias", continue-on-failure = true },
+  { argv = ["vp", "env", "list-remote", "node", "22.11.0"], comment = "Human-readable Node.js results keep the v prefix and LTS codename", continue-on-failure = true },
+  { argv = ["vp", "env", "list-remote", "node", "999"], comment = "An empty Node.js result includes actionable feedback", continue-on-failure = true },
 ]

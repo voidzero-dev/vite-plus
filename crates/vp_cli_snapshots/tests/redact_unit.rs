@@ -115,6 +115,8 @@ fn masks_managed_node_versions_in_environment_output() {
         "Node: 24.18.1\n",
         "\"nodeVersion\": \"24.18.1\"\n",
         "✓ Default Node.js version set to lts (currently 24.18.1)\n",
+        "No default Node.js version configured. Using latest LTS (24.18.1).\n",
+        "  Currently resolves to: 24.18.1\n",
         "just-a-normal-package@0.0.0   24.18.1        just-a-normal-package\n",
         "fixture pin: 22.18.0\n",
     )
@@ -125,6 +127,8 @@ fn masks_managed_node_versions_in_environment_output() {
             "Node: <version>\n",
             "\"nodeVersion\": \"<version>\"\n",
             "✓ Default Node.js version set to lts (currently <version>)\n",
+            "No default Node.js version configured. Using latest LTS (<version>).\n",
+            "  Currently resolves to: <version>\n",
             "just-a-normal-package@0.0.0   <version>        just-a-normal-package\n",
             "fixture pin: 22.18.0\n",
         )

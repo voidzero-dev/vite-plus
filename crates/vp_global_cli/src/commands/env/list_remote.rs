@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
 use futures::future::try_join_all;
+use owo_colors::OwoColorize;
 use serde::Serialize;
 use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry};
 use vp_pm_cli::{fetch_package_manager_versions, resolve_package_manager_version};
@@ -162,13 +163,7 @@ pub async fn execute(
     }
     if let Some(node) = node {
         println!("Node.js");
-        for entry in node {
-            println!(
-                "  {}{}",
-                entry.version,
-                marker(entry.installed, entry.current, entry.default)
-            );
-        }
+        print_node_versions(&node);
     }
     if let Some(mut package_managers) = package_managers {
         for kind in package_manager::selected(scope) {
@@ -186,6 +181,47 @@ pub async fn execute(
         }
     }
     Ok(ExitStatus::default())
+}
+
+fn print_node_versions(versions: &[NodeVersionJson]) {
+    if versions.is_empty() {
+        eprintln!("  {}", "No versions were found!".red());
+        return;
+    }
+
+    let colorize = vp_shared::is_stdout_terminal() && std::env::var_os("NO_COLOR").is_none();
+    for entry in versions {
+        println!("  {}", format_node_version(entry, colorize));
+    }
+}
+
+fn format_node_version(entry: &NodeVersionJson, colorize: bool) -> String {
+    let display = format!("v{}", entry.version);
+    let lts = entry.lts.as_ref().map(|name| format!(" ({name})")).unwrap_or_default();
+    let mut labels = Vec::new();
+    if entry.current {
+        labels.push("current");
+    }
+    if entry.default {
+        labels.push("default");
+    }
+    let labels = if labels.is_empty() { String::new() } else { format!(" {}", labels.join(" ")) };
+
+    if colorize {
+        let display = if entry.current {
+            display.bright_blue().to_string()
+        } else if entry.installed {
+            display.green().to_string()
+        } else {
+            display
+        };
+        let lts = if lts.is_empty() { lts } else { lts.bright_blue().to_string() };
+        let labels = if labels.is_empty() { labels } else { labels.dimmed().to_string() };
+        format!("{display}{lts}{labels}")
+    } else {
+        let marker = if entry.installed { "* " } else { "  " };
+        format!("{marker}{display}{lts}{labels}")
+    }
 }
 
 fn parse_scope_and_pattern(values: &[String]) -> Result<(EnvScope, Option<String>), Error> {
@@ -339,6 +375,21 @@ fn marker(installed: bool, current: bool, default: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn human_node_version_keeps_prefix_and_lts_codename() {
+        let entry = NodeVersionJson {
+            version: "22.11.0".into(),
+            lts: Some("Jod".into()),
+            latest: false,
+            latest_lts: false,
+            installed: false,
+            current: false,
+            default: false,
+        };
+
+        assert_eq!(format_node_version(&entry, false), "  v22.11.0 (Jod)");
+    }
 
     #[test]
     fn legacy_pattern_keeps_all_components_selected() {
