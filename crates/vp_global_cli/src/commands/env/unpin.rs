@@ -8,9 +8,14 @@ use std::process::ExitStatus;
 
 use vt_path::AbsolutePathBuf;
 
+use super::spec::EnvScope;
 use crate::{cli::PinTarget, error::Error};
 
 /// Execute the unpin command.
-pub async fn execute(cwd: AbsolutePathBuf, target: Option<PinTarget>) -> Result<ExitStatus, Error> {
-    super::pin::do_unpin(&cwd, target).await
+pub async fn execute(
+    cwd: AbsolutePathBuf,
+    scope: Option<String>,
+    target: Option<PinTarget>,
+) -> Result<ExitStatus, Error> {
+    super::pin::do_unpin_scope(&cwd, EnvScope::parse(scope.as_deref())?, target).await
 }

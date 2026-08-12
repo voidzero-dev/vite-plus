@@ -26,16 +26,10 @@ Hello from shim mode
 
 ## `vp env exec nonexistent-tool --version`
 
-expected error: non-shim command requires --node
+automatic mode resolves the environment before reporting a missing command
 
 **Exit code:** 1
 
 ```
-vp env exec: --node is required when running non-shim commands
-Usage: vp env exec --node <version> <command> [args...]
-
-For shim tools, --node is optional (version resolved automatically):
-  vp env exec node script.js    # Core tool
-  vp env exec npm install       # Core tool
-  vp env exec tsc --version     # Global package
+error: Command execution failed: program not found
 ```

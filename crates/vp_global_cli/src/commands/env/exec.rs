@@ -10,8 +10,13 @@
 use std::process::ExitStatus;
 
 use vp_js_runtime::NodeProvider;
-use vp_shared::{env_vars, format_path_prepended};
+use vp_pm_cli::{download_package_manager, resolve_package_manager_version};
+use vp_shared::env_vars;
+use vt_path::AbsolutePath;
 
+use super::{
+    config, package_manager as package_manager_resolution, spec::parse_package_manager_spec,
+};
 use crate::{
     cli::exit_status,
     error::Error,
@@ -24,8 +29,10 @@ use crate::{
 /// When `--node` is not provided and the command is a shim tool (node/npm/npx or global package),
 /// uses the same shim dispatch logic as Unix symlinks.
 pub async fn execute(
+    cwd: &AbsolutePath,
     node_version: Option<&str>,
     npm_version: Option<&str>,
+    package_manager: Option<&str>,
     command: &[String],
 ) -> Result<ExitStatus, Error> {
     let command = normalize_wrapper_command(command);
@@ -37,8 +44,15 @@ pub async fn execute(
     }
 
     // If --node is provided, use explicit version mode (existing behavior)
-    if let Some(version) = node_version {
-        return execute_with_version(version, npm_version, &command).await;
+    if npm_version.is_some() && package_manager.is_some() {
+        return Err(Error::Other("--npm and --package-manager cannot be used together".into()));
+    }
+    let package_manager = package_manager
+        .map(str::to_string)
+        .or_else(|| npm_version.map(|version| format!("npm@{version}")));
+
+    if node_version.is_some() || package_manager.is_some() {
+        return execute_with_version(cwd, node_version, package_manager.as_deref(), &command).await;
     }
 
     // No --node provided - check if first command is a shim tool
@@ -71,15 +85,7 @@ pub async fn execute(
         return Ok(exit_status(exit_code));
     }
 
-    // Not a shim tool and no --node - error
-    eprintln!("vp env exec: --node is required when running non-shim commands");
-    eprintln!("Usage: vp env exec --node <version> <command> [args...]");
-    eprintln!();
-    eprintln!("For shim tools, --node is optional (version resolved automatically):");
-    eprintln!("  vp env exec node script.js    # Core tool");
-    eprintln!("  vp env exec npm install       # Core tool");
-    eprintln!("  vp env exec tsc --version     # Global package");
-    Ok(exit_status(1))
+    execute_with_version(cwd, None, None, &command).await
 }
 
 /// Normalize arguments when invoked via Windows shim wrappers.
@@ -112,23 +118,61 @@ fn normalize_wrapper_command_inner(command: &[String], from_wrapper: bool) -> Ve
 
 /// Execute a command with an explicitly specified Node.js version.
 async fn execute_with_version(
-    node_version: &str,
-    npm_version: Option<&str>,
+    cwd: &AbsolutePath,
+    node_version: Option<&str>,
+    package_manager: Option<&str>,
     command: &[String],
 ) -> Result<ExitStatus, Error> {
-    // Warn about unsupported --npm flag
-    if npm_version.is_some() {
-        eprintln!("Warning: --npm flag is not yet implemented, using bundled npm");
+    let mut path_prefixes = Vec::new();
+    let modes = config::load_config().await?;
+    let (resolved_node, system_node_bin) = if let Some(node_version) = node_version {
+        (resolve_version(node_version, &NodeProvider::new()).await?, None)
+    } else if modes.shim_mode == config::ShimMode::SystemFirst
+        && let Some(path) = crate::shim::dispatch::find_system_tool("node")
+    {
+        (
+            read_tool_version(&path).await.unwrap_or_else(|| "unknown".into()),
+            path.parent().map(vt_path::AbsolutePath::to_absolute_path_buf),
+        )
+    } else {
+        (config::resolve_version(cwd).await?.version, None)
+    };
+    if let Some(bin_dir) = system_node_bin {
+        path_prefixes.push(bin_dir.into_path_buf());
+    } else {
+        let runtime =
+            vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &resolved_node)
+                .await?;
+        path_prefixes.push(runtime.get_bin_prefix().as_path().to_path_buf());
     }
-
-    // 1. Resolve version
-    let provider = NodeProvider::new();
-    let resolved_version = resolve_version(node_version, &provider).await?;
-
-    // 2. Ensure installed (download if needed)
-    let runtime =
-        vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &resolved_version)
-            .await?;
+    let explicit_package_manager = package_manager.is_some();
+    let selected_package_manager = if let Some(package_manager) = package_manager {
+        let (kind, selector) = parse_package_manager_spec(package_manager)?;
+        let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+        Some((kind, version, None))
+    } else {
+        package_manager_resolution::resolve_current(cwd).await?.map(|resolution| {
+            (resolution.package_manager_type, resolution.version.to_string(), resolution.hash)
+        })
+    };
+    let resolved_package_manager = if let Some((kind, version, hash)) = selected_package_manager {
+        if !explicit_package_manager
+            && modes.package_manager_shim_mode() == config::ShimMode::SystemFirst
+            && let Some(path) = crate::shim::dispatch::find_system_tool(&kind.to_string())
+            && let Some(bin_dir) = path.parent()
+        {
+            let system_version = read_tool_version(&path).await.unwrap_or(version);
+            path_prefixes.insert(0, bin_dir.as_path().to_path_buf());
+            Some(format!("{kind}@{system_version}"))
+        } else {
+            let (install_dir, _, _) =
+                download_package_manager(kind, &version, hash.as_deref()).await?;
+            path_prefixes.insert(0, install_dir.join("bin").into_path_buf());
+            Some(format!("{kind}@{version}"))
+        }
+    } else {
+        None
+    };
 
     // 3. Clear recursion env var to force re-evaluation in child processes
     // SAFETY: This is safe because we're about to spawn a child process and we want
@@ -138,16 +182,19 @@ async fn execute_with_version(
         std::env::remove_var(env_vars::VP_TOOL_RECURSION);
     }
 
-    // 4. Build PATH with node bin dir first (uses platform-specific separator)
-    // Always prepend to ensure the requested Node version is first in PATH
-    let node_bin_dir = runtime.get_bin_prefix();
-    let new_path = format_path_prepended(node_bin_dir.as_path());
+    let mut paths = path_prefixes;
+    paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+    let new_path = std::env::join_paths(paths)
+        .map_err(|error| Error::Other(format!("failed to construct PATH: {error}").into()))?;
 
     // 5. Execute command
     let (cmd, args) = command.split_first().unwrap();
 
     let mut child = tokio::process::Command::new(cmd);
-    child.args(args).env("PATH", new_path).env(env_vars::VP_NODE_VERSION, &resolved_version);
+    child.args(args).env("PATH", new_path).env(env_vars::VP_NODE_VERSION, &resolved_node);
+    if let Some(package_manager) = resolved_package_manager {
+        child.env(env_vars::VP_PACKAGE_MANAGER, package_manager);
+    }
     // The child runs in the inherited cwd, which a leading `-C <dir>` changes
     // without touching our own environment; align its `PWD` accordingly.
     if let Ok(cwd) = vt_path::current_dir() {
@@ -156,6 +203,15 @@ async fn execute_with_version(
     let status = child.status().await?;
 
     Ok(status)
+}
+
+async fn read_tool_version(path: &AbsolutePath) -> Option<String> {
+    let output =
+        tokio::process::Command::new(path.as_path()).arg("--version").output().await.ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
 }
 
 /// Resolve version to an exact version.
@@ -214,7 +270,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_missing_command() {
-        let result = execute(Some("20.18.0"), None, &[]).await;
+        let cwd = vt_path::current_dir().unwrap();
+        let result = execute(&cwd, Some("20.18.0"), None, None, &[]).await;
         assert!(result.is_ok());
         let status = result.unwrap();
         assert!(!status.success());
@@ -229,7 +286,8 @@ mod tests {
             |_| async {
                 // Run 'node --version' with a specific Node.js version
                 let command = vec!["node".to_string(), "--version".to_string()];
-                let result = execute(Some("20.18.0"), None, &command).await;
+                let cwd = vt_path::current_dir().unwrap();
+                let result = execute(&cwd, Some("20.18.0"), None, None, &command).await;
                 assert!(result.is_ok());
                 let status = result.unwrap();
                 assert!(status.success());
@@ -267,17 +325,6 @@ mod tests {
         assert_eq!(classify_version("lts"), VersionSelector::LatestLts);
         assert_eq!(classify_version("LTS"), VersionSelector::LatestLts);
         assert_eq!(classify_version("latest"), VersionSelector::AbsoluteLatest);
-    }
-
-    #[tokio::test]
-    async fn test_shim_mode_error_for_non_shim_command() {
-        // Running a non-shim command without --node should error
-        let command = vec!["python".to_string(), "--version".to_string()];
-        let result = execute(None, None, &command).await;
-        assert!(result.is_ok());
-        let status = result.unwrap();
-        // Should fail because python is not a shim tool and --node was not provided
-        assert!(!status.success(), "Non-shim command without --node should fail");
     }
 
     #[test]

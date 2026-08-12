@@ -85,6 +85,9 @@ pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
+/// Override package manager and version (for example, `pnpm@10.18.0`).
+pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";
+
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 

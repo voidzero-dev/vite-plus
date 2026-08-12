@@ -1,0 +1,16 @@
+[[case]]
+name = "command_env_unified"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "pin", "22.0.0", "--no-install", "--force"], comment = "legacy unqualified versions still pin only Node.js" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the Node.js pin preserves the package manifest structure" },
+  { argv = ["vp", "env", "pin", "pnpm@10.18.0", "--no-install"], comment = "a qualified spec pins only the package manager" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the PM pin is written beside the runtime declaration" },
+  { argv = ["vp", "env", "current", "--json"], comment = "current JSON exposes peer Node.js and package-manager objects" },
+  { argv = ["vp", "env", "list", "--json"], comment = "bare list JSON includes Node.js and every PM family" },
+  { argv = ["vp", "env", "list", "node", "--json"], comment = "the node selector omits package managers" },
+  { argv = ["vp", "env", "list", "pm", "--json"], comment = "the pm selector omits Node.js" },
+  { argv = ["vp", "env", "unpin"], comment = "bare unpin removes both effective project pins" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "both devEngines declarations were removed" },
+]

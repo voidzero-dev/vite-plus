@@ -5,34 +5,73 @@
 
 use std::{path::Path, process::ExitStatus};
 
+use vp_pm_cli::{PackageManagerType, resolve_package_manager_version};
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::{config, list::list_installed_versions};
+use super::{
+    config,
+    list::list_installed_versions,
+    package_manager::{self, ALL_PACKAGE_MANAGERS},
+    spec::{EnvScope, parse_package_manager_spec},
+};
 use crate::error::Error;
 
 /// Execute the clean command.
-pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitStatus, Error> {
+    let scope = EnvScope::parse(scope.as_deref())?;
     let config = vp_shared::EnvConfig::get();
     let data_dir = &config.dirs.data;
     let node_dir = data_dir.join("js_runtime").join("node");
     let package_manager_dir = data_dir.join("package_manager");
-    let protected_versions = protected_node_versions(&cwd).await?;
+    if scope.includes_node() {
+        let protected_versions = protected_node_versions(&cwd).await?;
+        let removed = clean_node_runtimes(node_dir.as_path(), &protected_versions).await?;
+        output::success(&format!("Removed {removed} Node.js runtime{}", plural(removed)));
+    }
 
-    let node_runtimes_removed =
-        clean_node_runtimes(node_dir.as_path(), &protected_versions).await?;
-    output::success(&format!(
-        "Removed {node_runtimes_removed} Node.js runtime{}",
-        plural(node_runtimes_removed)
-    ));
-
-    let package_managers_removed = clean_package_managers(package_manager_dir.as_path()).await?;
-    output::success(&format!(
-        "Removed {package_managers_removed} package manager install{}",
-        plural(package_managers_removed)
-    ));
+    if scope.includes_package_managers() {
+        let protected = match protected_package_manager(&cwd).await {
+            Ok(protected) => protected,
+            Err(error) => {
+                output::warn(&format!(
+                    "Could not resolve the protected package manager; package-manager cleanup was skipped: {error}"
+                ));
+                return Ok(ExitStatus::default());
+            }
+        };
+        let selected = match scope {
+            EnvScope::PackageManager(kind) => vec![kind],
+            _ => ALL_PACKAGE_MANAGERS.to_vec(),
+        };
+        let removed =
+            clean_package_managers(package_manager_dir.as_path(), &selected, &protected).await?;
+        output::success(&format!("Removed {removed} package manager install{}", plural(removed)));
+    }
 
     Ok(ExitStatus::default())
+}
+
+async fn protected_package_manager(
+    cwd: &AbsolutePath,
+) -> Result<Vec<(PackageManagerType, Vec<String>)>, Error> {
+    let current = package_manager::resolve_current(cwd).await?;
+    let config = config::load_config().await?;
+    let default =
+        config.default_package_manager.as_deref().map(parse_package_manager_spec).transpose()?;
+    let mut protected = Vec::new();
+    if let Some(current) = current {
+        protected.push((current.package_manager_type, vec![current.version.to_string()]));
+    }
+    if let Some((kind, version)) = default {
+        let version = resolve_package_manager_version(kind, &version).await?.to_string();
+        if let Some((_, versions)) = protected.iter_mut().find(|(current, _)| *current == kind) {
+            push_unique_version(versions, version);
+        } else {
+            protected.push((kind, vec![version]));
+        }
+    }
+    Ok(protected)
 }
 
 async fn protected_node_versions(cwd: &AbsolutePath) -> Result<Vec<String>, Error> {
@@ -65,36 +104,29 @@ async fn clean_node_runtimes(
     Ok(removed)
 }
 
-async fn clean_package_managers(package_manager_dir: &Path) -> Result<usize, Error> {
-    let installs = count_package_manager_installs(package_manager_dir).await?;
-    if installs > 0 {
-        remove_dir_all_if_exists(package_manager_dir).await?;
-    }
-    Ok(installs)
-}
-
-async fn count_package_manager_installs(package_manager_dir: &Path) -> Result<usize, Error> {
-    let mut package_manager_entries = match tokio::fs::read_dir(package_manager_dir).await {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
-        Err(e) => return Err(e.into()),
-    };
-
-    let mut count = 0;
-    while let Some(package_manager_entry) = package_manager_entries.next_entry().await? {
-        if !package_manager_entry.file_type().await?.is_dir() {
-            continue;
-        }
-
-        let mut version_entries = tokio::fs::read_dir(package_manager_entry.path()).await?;
-        while let Some(version_entry) = version_entries.next_entry().await? {
-            if version_entry.file_type().await?.is_dir() {
-                count += 1;
+async fn clean_package_managers(
+    package_manager_dir: &Path,
+    selected: &[PackageManagerType],
+    protected: &[(PackageManagerType, Vec<String>)],
+) -> Result<usize, Error> {
+    let mut removed = 0;
+    for kind in selected {
+        let family = package_manager_dir.join(kind.to_string());
+        let protected_versions = protected
+            .iter()
+            .find(|(protected_kind, _)| protected_kind == kind)
+            .map(|(_, versions)| versions.as_slice())
+            .unwrap_or_default();
+        for version in list_installed_versions(&family) {
+            if protected_versions.contains(&version) {
+                continue;
+            }
+            if remove_dir_all_if_exists(&family.join(version)).await? {
+                removed += 1;
             }
         }
     }
-
-    Ok(count)
+    Ok(removed)
 }
 
 async fn remove_dir_all_if_exists(path: &Path) -> Result<bool, Error> {
@@ -144,16 +176,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clean_package_managers_removes_all_cached_installs() {
+    async fn clean_package_managers_preserves_selected_version() {
         let temp_dir = TempDir::new().unwrap();
         let package_manager_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         tokio::fs::create_dir_all(package_manager_dir.join("pnpm").join("10.0.0")).await.unwrap();
         tokio::fs::create_dir_all(package_manager_dir.join("npm").join("11.0.0")).await.unwrap();
         tokio::fs::write(package_manager_dir.join("pnpm").join("10.0.0.lock"), "").await.unwrap();
 
-        let removed = clean_package_managers(package_manager_dir.as_path()).await.unwrap();
+        let removed = clean_package_managers(
+            package_manager_dir.as_path(),
+            &[PackageManagerType::Npm, PackageManagerType::Pnpm],
+            &[(PackageManagerType::Pnpm, vec!["10.0.0".into()])],
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(removed, 2);
-        assert!(!package_manager_dir.as_path().exists());
+        assert_eq!(removed, 1);
+        assert!(package_manager_dir.join("pnpm").join("10.0.0").as_path().exists());
+        assert!(!package_manager_dir.join("npm").join("11.0.0").as_path().exists());
     }
 }

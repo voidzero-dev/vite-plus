@@ -1436,13 +1436,13 @@ WRAPPER_EOF
   echo ""
   echo -e "  ${BOLD}Get started:${NC}"
   echo -e "    ${BRIGHT_BLUE}vp create${NC}       Create a new project"
-  echo -e "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js versions"
+  echo -e "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js and package managers"
   echo -e "    ${BRIGHT_BLUE}vp install${NC}      Install dependencies"
   echo -e "    ${BRIGHT_BLUE}vp migrate${NC}      Migrate to Vite+"
 
   if [ "$NODE_MANAGER_ENABLED" = "true" ] || [ "$NODE_MANAGER_ENABLED" = "already" ]; then
     echo ""
-    echo -e "  Vite+ is now managing Node.js via ${BRIGHT_BLUE}vp env${NC}."
+    echo -e "  Vite+ is now managing Node.js and package managers via ${BRIGHT_BLUE}vp env${NC}."
     echo -e "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup, or ${BRIGHT_BLUE}vp env off${NC} to opt out."
   fi
 

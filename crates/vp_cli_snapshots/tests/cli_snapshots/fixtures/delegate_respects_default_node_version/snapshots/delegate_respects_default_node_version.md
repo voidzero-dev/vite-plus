@@ -7,7 +7,7 @@ Set global default to 22.18.0
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Default Node.js version set to 22.18.0
+✓ Environment defaults updated.
 ```
 
 ## `vp run check-node`

@@ -130,6 +130,30 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     if prepend_to_path_env(&node_bin_prefix, options) {
         tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
     }
+    if let Some(package_manager) = env::package_manager::resolve_current(project_path).await? {
+        let config = env::config::load_config().await?;
+        if config.package_manager_shim_mode() == env::config::ShimMode::SystemFirst
+            && let Some(system_path) = crate::shim::dispatch::find_system_tool(
+                &package_manager.package_manager_type.to_string(),
+            )
+            && let Some(bin_dir) = system_path.parent()
+        {
+            if prepend_to_path_env(bin_dir, PrependOptions { dedupe_anywhere: true }) {
+                tracing::debug!("Set PATH to include system package manager {:?}", bin_dir);
+            }
+            return Ok(());
+        }
+        let (install_dir, _, _) = vp_pm_cli::download_package_manager(
+            package_manager.package_manager_type,
+            &package_manager.version,
+            package_manager.hash.as_deref(),
+        )
+        .await?;
+        let bin_dir = install_dir.join("bin");
+        if prepend_to_path_env(&bin_dir, PrependOptions { dedupe_anywhere: true }) {
+            tracing::debug!("Set PATH to include {:?}", bin_dir);
+        }
+    }
 
     Ok(())
 }
