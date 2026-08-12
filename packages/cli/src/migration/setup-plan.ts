@@ -17,12 +17,15 @@ import {
 import { cancelAndExit, promptGitHooks } from '../utils/prompts.ts';
 import {
   confirmEslintMigration,
+  confirmTsupMigration,
   detectEslintProject,
   detectIncompatibleEslintIntegration,
+  detectTsupProject,
   preflightGitHooksSetup,
   warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
   warnPackageLevelEslint,
+  warnPackageLevelTsup,
 } from './migrator.ts';
 import type { MigrationOptions } from './options.ts';
 
@@ -34,6 +37,8 @@ export interface MigrationSetupPlan {
   editorConflictDecisions: Map<string, 'merge' | 'skip'>;
   migrateEslint: boolean;
   eslintConfigFile?: string;
+  migrateTsup: boolean;
+  tsupConfigFile?: string;
 }
 
 async function collectGitHooksDecision(
@@ -185,6 +190,22 @@ async function collectEslintMigrationDecision(
   return { migrateEslint, eslintConfigFile: eslintProject.configFile };
 }
 
+async function collectTsupMigrationDecision(
+  rootDir: string,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<{ migrateTsup: boolean; tsupConfigFile?: string }> {
+  const tsupProject = detectTsupProject(rootDir, packages);
+  let migrateTsup = false;
+  if (tsupProject.hasDependency && tsupProject.configFile) {
+    migrateTsup = await confirmTsupMigration(options.interactive);
+  } else if (tsupProject.hasDependency) {
+    warnPackageLevelTsup();
+  }
+
+  return { migrateTsup, tsupConfigFile: tsupProject.configFile };
+}
+
 export async function collectMigrationSetupPlan(
   rootDir: string,
   packageManager: PackageManager | undefined,
@@ -203,11 +224,15 @@ export async function collectMigrationSetupPlan(
   const eslintPlan = includeEslint
     ? await collectEslintMigrationDecision(rootDir, options, packages)
     : { migrateEslint: false };
+  const tsupPlan = includeEslint
+    ? await collectTsupMigrationDecision(rootDir, options, packages)
+    : { migrateTsup: false };
 
   return {
     shouldSetupHooks,
     ...agentPlan,
     ...editorPlan,
     ...eslintPlan,
+    ...tsupPlan,
   };
 }

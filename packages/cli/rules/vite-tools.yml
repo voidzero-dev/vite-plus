@@ -84,3 +84,12 @@ rule:
   kind: command_name
   regex: '^tsdown$'
 fix: vp pack
+
+# tsup => vp pack
+---
+id: replace-tsup
+language: bash
+rule:
+  kind: command_name
+  regex: '^tsup$'
+fix: vp pack
