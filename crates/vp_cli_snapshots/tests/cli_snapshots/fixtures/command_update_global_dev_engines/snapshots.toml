@@ -1,7 +1,6 @@
 [[case]]
 name = "command_update_global_dev_engines"
 vp = "global"
-skip-platforms = ["windows"]
 comment = "Global updates ignore the current project's package-manager requirement."
 steps = [
   { argv = ["vp", "install", "-g", "testnpm2@1.0.0"], snapshot = false, continue-on-failure = true },
