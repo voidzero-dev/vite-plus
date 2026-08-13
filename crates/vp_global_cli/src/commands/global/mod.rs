@@ -60,10 +60,8 @@ async fn npm_view(
     package_spec: &str,
     field: &str,
 ) -> Result<Vec<u8>, Error> {
-    let vp_home = vp_shared::get_vp_home()?;
     let output = Command::new(npm_path.as_path())
-        .args(["view", package_spec, field, "--json"])
-        .current_dir(vp_home.as_path())
+        .args(["view", "-g", package_spec, field, "--json"])
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
