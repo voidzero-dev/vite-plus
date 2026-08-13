@@ -258,7 +258,13 @@ export async function promptTsupMigration(
   if (!confirmed) {
     return false;
   }
-  const ok = await migrateTsupToTsdown(projectPath, interactive, packageManager, tsupProject.configFile, packages);
+  const ok = await migrateTsupToTsdown(
+    projectPath,
+    interactive,
+    packageManager,
+    tsupProject.configFile,
+    packages,
+  );
   if (!ok) {
     cancelAndExit('tsup migration failed.', 1);
   }
