@@ -1244,50 +1244,58 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
         let temp_dir = TempDir::new().unwrap();
         let cache_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
 
-        // Initially, no cache exists
-        let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
-        assert!(result.is_none());
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, Some(vp_home.as_os_str())), (env_vars::VP_NODE_DIST_MIRROR, None)],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // Create mock cached versions
-        let node_cache = cache_dir.join("node");
-        tokio::fs::create_dir_all(&node_cache).await.unwrap();
+                // Initially, no cache exists
+                let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
+                assert!(result.is_none());
 
-        // Create version directories with mock binary
-        let platform = Platform::current();
-        let binary_path = provider.binary_relative_path(platform);
+                // Create mock cached versions
+                let node_cache = cache_dir.join("node");
+                tokio::fs::create_dir_all(&node_cache).await.unwrap();
 
-        for version in ["20.17.0", "20.18.0", "20.19.0", "21.0.0"] {
-            let version_dir = node_cache.join(version);
-            let binary_full_path = version_dir.join(&binary_path);
-            tokio::fs::create_dir_all(binary_full_path.parent().unwrap()).await.unwrap();
-            tokio::fs::write(&binary_full_path, "mock binary").await.unwrap();
-        }
+                // Create version directories with mock binary
+                let platform = Platform::current();
+                let binary_path = provider.binary_relative_path(platform);
 
-        // Create incomplete installation (no binary)
-        let incomplete_dir = node_cache.join("20.20.0");
-        tokio::fs::create_dir_all(&incomplete_dir).await.unwrap();
+                for version in ["20.17.0", "20.18.0", "20.19.0", "21.0.0"] {
+                    let version_dir = node_cache.join(version);
+                    let binary_full_path = version_dir.join(&binary_path);
+                    tokio::fs::create_dir_all(binary_full_path.parent().unwrap()).await.unwrap();
+                    tokio::fs::write(&binary_full_path, "mock binary").await.unwrap();
+                }
 
-        // Test: ^20.18.0 should find highest matching version (20.19.0)
-        let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
-        assert_eq!(result, Some("20.19.0".into()));
+                // Create incomplete installation (no binary)
+                let incomplete_dir = node_cache.join("20.20.0");
+                tokio::fs::create_dir_all(&incomplete_dir).await.unwrap();
 
-        // Test: ~20.18.0 should find highest 20.18.x (only 20.18.0)
-        let result = provider.find_cached_version("~20.18.0", &cache_dir).await.unwrap();
-        assert_eq!(result, Some("20.18.0".into()));
+                // Test: ^20.18.0 should find highest matching version (20.19.0)
+                let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
+                assert_eq!(result, Some("20.19.0".into()));
 
-        // Test: ^21.0.0 should find 21.0.0
-        let result = provider.find_cached_version("^21.0.0", &cache_dir).await.unwrap();
-        assert_eq!(result, Some("21.0.0".into()));
+                // Test: ~20.18.0 should find highest 20.18.x (only 20.18.0)
+                let result = provider.find_cached_version("~20.18.0", &cache_dir).await.unwrap();
+                assert_eq!(result, Some("20.18.0".into()));
 
-        // Test: ^22.0.0 should find nothing
-        let result = provider.find_cached_version("^22.0.0", &cache_dir).await.unwrap();
-        assert!(result.is_none());
+                // Test: ^21.0.0 should find 21.0.0
+                let result = provider.find_cached_version("^21.0.0", &cache_dir).await.unwrap();
+                assert_eq!(result, Some("21.0.0".into()));
 
-        // Test: ^20.20.0 should find nothing (20.20.0 exists but no binary)
-        let result = provider.find_cached_version("^20.20.0", &cache_dir).await.unwrap();
-        assert!(result.is_none());
+                // Test: ^22.0.0 should find nothing
+                let result = provider.find_cached_version("^22.0.0", &cache_dir).await.unwrap();
+                assert!(result.is_none());
+
+                // Test: ^20.20.0 should find nothing (20.20.0 exists but no binary)
+                let result = provider.find_cached_version("^20.20.0", &cache_dir).await.unwrap();
+                assert!(result.is_none());
+            },
+        )
+        .await;
     }
 
     #[test]
