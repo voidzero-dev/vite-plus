@@ -7,7 +7,11 @@
 #
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
-#   VP_HOME - Installation directory (default: ~/.vite-plus)
+#   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
+#             ~/.vite-plus is reused; otherwise data/bin/config follow
+#             VP_*_DIR / XDG_* / platform defaults.
+#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
+#   XDG_BIN_HOME / XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -19,15 +23,8 @@
 set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
-INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
-# Use $HOME-relative path for shell config references (portable across sessions)
-if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
-  INSTALL_DIR_REF_POSIX="\$HOME${INSTALL_DIR#"$HOME"}"
-  INSTALL_DIR_REF_NU="~${INSTALL_DIR#"$HOME"}"
-else
-  INSTALL_DIR_REF_POSIX="$INSTALL_DIR"
-  INSTALL_DIR_REF_NU="$INSTALL_DIR"
-fi
+# INSTALL_DIR (data), SHIM_DIR (bin), and CONFIG_DIR are resolved after the
+# helper functions are defined — see resolve_install_layout.
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
@@ -130,6 +127,127 @@ write_release_age_override() {
   if [ ! -f "$VERSION_DIR/.npmrc" ] || ! grep -q '^minimum-release-age=' "$VERSION_DIR/.npmrc" 2>/dev/null; then
     printf 'minimum-release-age=0\n' >> "$VERSION_DIR/.npmrc"
   fi
+}
+
+is_absolute_path() {
+  case "$1" in
+    /*) return 0 ;;
+    [A-Za-z]:[\\/]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Print $1 when it is a non-empty absolute path; otherwise print nothing.
+absolute_override() {
+  local val="$1"
+  if [ -n "$val" ] && is_absolute_path "$val"; then
+    printf '%s\n' "$val"
+  fi
+}
+
+is_windows_uname() {
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+user_home_dir() {
+  if is_windows_uname; then
+    printf '%s\n' "${USERPROFILE:-$HOME}"
+  else
+    printf '%s\n' "${HOME:-$USERPROFILE}"
+  fi
+}
+
+xdg_data_sibling_bin() {
+  local data_home="${1%/}"
+  local parent="${data_home%/*}"
+  if [ -z "$parent" ] || [ "$parent" = "$data_home" ]; then
+    printf '/bin\n'
+  else
+    printf '%s/bin\n' "$parent"
+  fi
+}
+
+set_config_dir_refs() {
+  local dir="$1"
+  local home="$2"
+  if [ -n "$home" ] && case "$dir" in "$home"/*) true;; *) false;; esac; then
+    CONFIG_DIR_REF_POSIX="\$HOME${dir#"$home"}"
+    CONFIG_DIR_REF_NU="~${dir#"$home"}"
+  else
+    CONFIG_DIR_REF_POSIX="$dir"
+    CONFIG_DIR_REF_NU="$dir"
+  fi
+}
+
+# Mirror crates/vp_shared/src/dirs/resolution.rs:
+#   VP_HOME → existing ~/.vite-plus → VP_*_DIR / XDG_* / platform defaults
+resolve_install_layout() {
+  local home legacy vp_home data_override bin_override
+  home="$(user_home_dir)"
+  [ -n "$home" ] || error "Could not resolve user home directory"
+
+  legacy="$home/.vite-plus"
+  vp_home="$(absolute_override "${VP_HOME:-}")"
+  if [ -n "$vp_home" ]; then
+    INSTALL_DIR="$vp_home"
+    SHIM_DIR="$vp_home/bin"
+    CONFIG_DIR="$vp_home"
+  elif [ -d "$legacy" ]; then
+    INSTALL_DIR="$legacy"
+    SHIM_DIR="$legacy/bin"
+    CONFIG_DIR="$legacy"
+  else
+    data_override="$(absolute_override "${VP_DATA_DIR:-}")"
+    bin_override="$(absolute_override "${VP_BIN_DIR:-}")"
+
+    if [ -n "$data_override" ]; then
+      INSTALL_DIR="$data_override"
+    elif is_windows_uname; then
+      INSTALL_DIR="${LOCALAPPDATA:-$home/AppData/Local}/vite-plus/data"
+    else
+      local xdg_data
+      xdg_data="$(absolute_override "${XDG_DATA_HOME:-}")"
+      if [ -n "$xdg_data" ]; then
+        INSTALL_DIR="$xdg_data/vite-plus"
+      else
+        INSTALL_DIR="$home/.local/share/vite-plus"
+      fi
+    fi
+
+    if [ -n "$bin_override" ]; then
+      SHIM_DIR="$bin_override"
+    elif is_windows_uname; then
+      SHIM_DIR="${LOCALAPPDATA:-$home/AppData/Local}/vite-plus/bin"
+    else
+      local xdg_bin xdg_data
+      xdg_bin="$(absolute_override "${XDG_BIN_HOME:-}")"
+      xdg_data="$(absolute_override "${XDG_DATA_HOME:-}")"
+      if [ -n "$xdg_bin" ]; then
+        SHIM_DIR="$xdg_bin"
+      elif [ -n "$xdg_data" ]; then
+        SHIM_DIR="$(xdg_data_sibling_bin "$xdg_data")"
+      else
+        SHIM_DIR="$home/.local/bin"
+      fi
+    fi
+
+    if is_windows_uname; then
+      CONFIG_DIR="${APPDATA:-$home/AppData/Roaming}/vite-plus"
+    else
+      local xdg_config
+      xdg_config="$(absolute_override "${XDG_CONFIG_HOME:-}")"
+      if [ -n "$xdg_config" ]; then
+        CONFIG_DIR="$xdg_config/vite-plus"
+      else
+        CONFIG_DIR="$home/.config/vite-plus"
+      fi
+    fi
+  fi
+
+  set_config_dir_refs "$CONFIG_DIR" "$home"
 }
 
 normalize_existing_dir() {
@@ -688,7 +806,7 @@ configure_zsh_path() {
   fi
 
   result=0
-  append_source_to_file "$zshenv" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+  append_source_to_file "$zshenv" ". \"$CONFIG_DIR_REF_POSIX/env\"" "$CONFIG_DIR/env" "$CONFIG_DIR_REF_POSIX/env" || result=$?
   case "$result" in
     0) updated+=("$(abbreviate_path "$zshenv")") ;;
     2) already+=("$(abbreviate_path "$zshenv")") ;;
@@ -697,7 +815,7 @@ configure_zsh_path() {
 
   if [ -f "$zshrc" ]; then
     result=0
-    append_source_to_file "$zshrc" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    append_source_to_file "$zshrc" ". \"$CONFIG_DIR_REF_POSIX/env\"" "$CONFIG_DIR/env" "$CONFIG_DIR_REF_POSIX/env" || result=$?
     case "$result" in
       0) updated+=("$(abbreviate_path "$zshrc")") ;;
       2) already+=("$(abbreviate_path "$zshrc")") ;;
@@ -741,7 +859,7 @@ configure_bash_path() {
     fi
     existing=1
     result=0
-    append_source_to_file "$file" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    append_source_to_file "$file" ". \"$CONFIG_DIR_REF_POSIX/env\"" "$CONFIG_DIR/env" "$CONFIG_DIR_REF_POSIX/env" || result=$?
     case "$result" in
       0) updated+=("$(abbreviate_path "$file")") ;;
       2) already+=("$(abbreviate_path "$file")") ;;
@@ -776,7 +894,7 @@ configure_bash_path() {
 configure_fish_path() {
   local fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish"
   local fish_content="# Vite+ bin (https://viteplus.dev)
-source \"$INSTALL_DIR_REF_POSIX/env.fish\"
+source \"$CONFIG_DIR_REF_POSIX/env.fish\"
 "
 
   local result=0
@@ -811,7 +929,7 @@ configure_nushell_path() {
 
   local nushell_autoload="$nushell_dir/vite-plus.nu"
   local nushell_content="# Vite+ bin (https://viteplus.dev)
-source '$INSTALL_DIR_REF_NU/env.nu'
+source '$CONFIG_DIR_REF_NU/env.nu'
 "
 
   local result=0
@@ -883,7 +1001,7 @@ refresh_shims() {
 # Arguments: bin_dir - path to the version's bin directory containing vp
 setup_node_manager() {
   local bin_dir="$1"
-  local bin_path="$INSTALL_DIR/bin"
+  local bin_path="$SHIM_DIR"
   NODE_MANAGER_ENABLED="false"
 
   # Resolve vp binary name (vp on Unix, vp.exe on Windows)
@@ -937,7 +1055,7 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$INSTALL_DIR")/bin/ and automatically uses the right version."
+    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_DIR") and automatically uses the right version."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
@@ -1172,16 +1290,19 @@ WRAPPER_EOF
   # Create/update current symlink (use relative path for portability)
   ln -sfn "$VP_VERSION" "$CURRENT_LINK"
 
-  # Create bin directory and vp entrypoint (always done)
-  mkdir -p "$INSTALL_DIR/bin"
+  # Create user bin directory and vp entrypoint (always done)
+  mkdir -p "$SHIM_DIR"
   if [[ "$platform" == win32* ]]; then
     # Windows: copy trampoline as vp.exe (matching install.ps1)
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
-      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$INSTALL_DIR/bin/vp.exe"
+      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
     fi
+  elif [ "$SHIM_DIR" = "$INSTALL_DIR/bin" ]; then
+    # Monolithic: relative link next to `<DATA>/current`
+    ln -sfn "../current/bin/vp" "$SHIM_DIR/vp"
   else
-    # Unix: symlink to current/bin/vp
-    ln -sf "../current/bin/vp" "$INSTALL_DIR/bin/vp"
+    # Split: bin is not a sibling of current (e.g. ~/.local/bin)
+    ln -sfn "$INSTALL_DIR/current/bin/vp" "$SHIM_DIR/vp"
   fi
 
   # Cleanup old versions
@@ -1204,9 +1325,9 @@ WRAPPER_EOF
   # Configure shell PATH after the install is otherwise complete.
   configure_shell_path
 
-  # Use ~ shorthand if install dir is under HOME, otherwise show full path
-  local display_dir="${INSTALL_DIR/#$HOME/~}"
-  local display_location="${display_dir}/bin"
+  # Use ~ shorthand if the shim dir is under HOME, otherwise show full path
+  local display_location
+  display_location="$(abbreviate_path "$SHIM_DIR")"
 
   # Print success message
   echo ""
@@ -1251,11 +1372,11 @@ WRAPPER_EOF
     echo ""
     echo "  Manual setup instructions:"
     echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
-    echo "        . \"$INSTALL_DIR_REF_POSIX/env\""
+    echo "        . \"$CONFIG_DIR_REF_POSIX/env\""
     echo "    - Fish: create ${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish with:"
-    echo "        source \"$INSTALL_DIR_REF_POSIX/env.fish\""
+    echo "        source \"$CONFIG_DIR_REF_POSIX/env.fish\""
     echo "    - Nushell: create a vendor autoload file with:"
-    echo "        source '$INSTALL_DIR_REF_NU/env.nu'"
+    echo "        source '$CONFIG_DIR_REF_NU/env.nu'"
     echo ""
     echo "  Or run vp directly:"
     echo ""
@@ -1265,4 +1386,20 @@ WRAPPER_EOF
   echo ""
 }
 
+apply_dirs_from_vp() {
+  local vp="$1"
+  local out
+  out="$(VP_DUMP_DIRS=1 "$vp")" || return 1
+  INSTALL_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "data" { print $2; exit }')"
+  SHIM_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "bin" { print $2; exit }')"
+  CONFIG_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "config" { print $2; exit }')"
+  [ -n "$INSTALL_DIR" ] && [ -n "$SHIM_DIR" ] && [ -n "$CONFIG_DIR" ] || return 1
+  set_config_dir_refs "$CONFIG_DIR" "$(user_home_dir)"
+}
+
+if [ -n "${VP_LOCAL_BINARY:-}" ] && [ -f "$VP_LOCAL_BINARY" ] && apply_dirs_from_vp "$VP_LOCAL_BINARY"; then
+  :
+else
+  resolve_install_layout
+fi
 main "$@"

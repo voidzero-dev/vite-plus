@@ -25,8 +25,8 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_HOME`
 
-- **Purpose**: Installation directory; the installed CLI reads the same variable as the Vite+ home directory (see [Environment](/guide/env))
-- **Default**: `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows)
+- **Purpose**: Optional single-root pin. When set to an absolute path, every category (bin, data, cache, config, state) lives under that directory. The installed CLI reads the same variable (see [Environment](/guide/env)).
+- **Default**: unset. If `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows) already exists, that tree is reused. Otherwise a fresh install uses the split platform layout (`~/.local/share/vite-plus` + `~/.local/bin` on Unix; `%LOCALAPPDATA%\vite-plus\data` + `%LOCALAPPDATA%\vite-plus\bin` on Windows).
 - **CLI equivalent**: `--install-dir`
 - **Example**:
 
@@ -38,6 +38,16 @@ These variables control the installer scripts and the standalone Windows install
   ```powershell
   # PowerShell
   $env:VP_HOME = "D:\vite-plus"; irm https://vite.plus/ps1 | iex
+  ```
+
+### `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
+
+- **Purpose**: Absolute per-category overrides for a split install. Ignored when `VP_HOME` is set or an existing `~/.vite-plus` is being reused.
+- **Default**: unset (XDG / platform defaults)
+- **Example**:
+
+  ```bash
+  curl -fsSL https://vite.plus | VP_DATA_DIR=$HOME/vite-plus-data bash
   ```
 
 ### `NPM_CONFIG_REGISTRY`
@@ -71,7 +81,7 @@ These variables control the installer scripts and the standalone Windows install
 
 ### Development variables
 
-When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) and `VP_LOCAL_BINARY` (path to a local `vp` binary) feed the installer a local build. The installers also set `VP_INSTALL_STOP` themselves; do not set it manually.
+When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) and `VP_LOCAL_BINARY` (path to a local `vp` binary) feed the installer a local build. With a local `vp` binary, installers ask that binary (via `VP_DUMP_DIRS=1`) for the `EnvConfig` data/bin/config roots instead of resolving directory env vars themselves. The installers also set `VP_INSTALL_STOP` themselves; do not set it manually.
 
 ## Runtime Variables
 
@@ -195,7 +205,7 @@ Vite+ also respects these standard environment variables:
 ### `HOME` / `USERPROFILE`
 
 - **Purpose**: User home directory
-- **Effect**: Base for the default `~/.vite-plus` path
+- **Effect**: Base for the existing-install probe (`~/.vite-plus`) and for split platform defaults
 
 ## Precedence
 

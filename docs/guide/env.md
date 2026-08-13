@@ -21,7 +21,7 @@ latest LTS.
 
 When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
-By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VP_HOME`.
+By default, a fresh install stores managed runtimes and related files in the split platform layout (`~/.local/share/vite-plus` on Unix, `%LOCALAPPDATA%\vite-plus\data` on Windows). An existing `~/.vite-plus` tree is kept in place. `VP_HOME` still pins every category under one custom root.
 
 If you want to keep that behavior, run:
 
@@ -43,7 +43,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 
 ### Setup
 
-- `vp env setup` creates or updates shims in `VP_HOME/bin` (and writes the per-shell setup scripts under `VP_HOME`)
+- `vp env setup` creates or updates shims in the resolved bin directory (and writes the per-shell setup scripts under the config directory)
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
@@ -51,8 +51,10 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
 
 ```powershell
-. "$env:USERPROFILE\.vite-plus\env.ps1"
+. "$env:APPDATA\vite-plus\env.ps1"
 ```
+
+If Vite+ was installed into `%USERPROFILE%\.vite-plus` before the split layout, source that directory's `env.ps1` instead.
 
 Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
 
@@ -76,7 +78,7 @@ node --version
 vp-use --unset
 ```
 
-Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the bin directory on Windows.
 
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 

@@ -8533,6 +8533,7 @@ dependencies = [
  "clap",
  "indicatif",
  "owo-colors",
+ "tempfile",
  "tokio",
  "vp_pm_cli",
  "vp_setup",

@@ -6,7 +6,10 @@
 #
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
-#   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
+#             %USERPROFILE%\.vite-plus is reused; otherwise data/bin/config
+#             follow VP_*_DIR / %LOCALAPPDATA% / %APPDATA%.
+#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
 #   VP_PR_VERSION - PR number or commit SHA to install from the registry bridge
@@ -17,9 +20,8 @@
 $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
-$InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
-# Use ~ shorthand if install dir is under USERPROFILE, matching the final summary output
-$NodeManagerBinDisplay = (Join-Path $InstallDir.TrimEnd('\', '/') "bin") -replace [regex]::Escape($env:USERPROFILE), '~'
+# $InstallDir (data), $ShimDir (bin), and $ConfigDir are resolved after the
+# helper functions are defined — see Resolve-InstallLayout.
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
@@ -198,6 +200,80 @@ function Write-ReleaseAgeOverride {
     $npmrc = Join-Path $VersionDir ".npmrc"
     if ((-not (Test-Path $npmrc)) -or (-not (Select-String -Path $npmrc -Pattern '^minimum-release-age=' -Quiet))) {
         Add-Content -Path $npmrc -Value "minimum-release-age=0"
+    }
+}
+
+function Test-AbsoluteOverridePath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+    return [System.IO.Path]::IsPathRooted($Path)
+}
+
+function Get-UserHomeDir {
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        return $env:USERPROFILE
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:HOME)) {
+        return $env:HOME
+    }
+    return [Environment]::GetFolderPath('UserProfile')
+}
+
+# Mirror crates/vp_shared/src/dirs/resolution.rs (Windows):
+#   VP_HOME → existing %USERPROFILE%\.vite-plus → VP_*_DIR / Local+Roaming defaults
+function Resolve-InstallLayout {
+    $userHome = Get-UserHomeDir
+    if ([string]::IsNullOrWhiteSpace($userHome)) {
+        Write-Error-Exit "Could not resolve user home directory"
+    }
+
+    $legacyRoot = Join-Path $userHome ".vite-plus"
+
+    if (Test-AbsoluteOverridePath $env:VP_HOME) {
+        return [pscustomobject]@{
+            DataDir = $env:VP_HOME
+            ShimDir = Join-Path $env:VP_HOME "bin"
+            ConfigDir = $env:VP_HOME
+        }
+    }
+
+    if (Test-Path -LiteralPath $legacyRoot -PathType Container) {
+        return [pscustomobject]@{
+            DataDir = $legacyRoot
+            ShimDir = Join-Path $legacyRoot "bin"
+            ConfigDir = $legacyRoot
+        }
+    }
+
+    $localApp = if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $env:LOCALAPPDATA
+    } else {
+        Join-Path $userHome "AppData\Local"
+    }
+    $roamingApp = if (-not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
+        $env:APPDATA
+    } else {
+        Join-Path $userHome "AppData\Roaming"
+    }
+
+    $dataDir = if (Test-AbsoluteOverridePath $env:VP_DATA_DIR) {
+        $env:VP_DATA_DIR
+    } else {
+        Join-Path (Join-Path $localApp "vite-plus") "data"
+    }
+
+    $shimDir = if (Test-AbsoluteOverridePath $env:VP_BIN_DIR) {
+        $env:VP_BIN_DIR
+    } else {
+        Join-Path (Join-Path $localApp "vite-plus") "bin"
+    }
+
+    return [pscustomobject]@{
+        DataDir = $dataDir
+        ShimDir = $shimDir
+        ConfigDir = Join-Path $roamingApp "vite-plus"
     }
 }
 
@@ -573,10 +649,10 @@ function Remove-CurrentLink {
     }
 }
 
-# Configure user PATH for ~/.vite-plus/bin
+# Configure user PATH for the resolved shim directory
 # Returns: "true" = added, "already" = already configured
 function Configure-UserPath {
-    $binPath = "$InstallDir\bin"
+    $binPath = $ShimDir
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
     if ($userPath -like "*$binPath*") {
@@ -632,7 +708,7 @@ function Configure-Nushell {
     }
 
     $autoloadFile = Join-Path $autoloadDir "vite-plus.nu"
-    $nuEnvRef= (Join-Path $InstallDir "env.nu") -replace [regex]::Escape($env:USERPROFILE), '~'
+    $nuEnvRef= (Join-Path $ConfigDir "env.nu") -replace [regex]::Escape($env:USERPROFILE), '~'
     $content = "# Vite+ bin (https://viteplus.dev)`n" + ("source '"+ $nuEnvRef +"'") + "`n"
 
     try {
@@ -676,7 +752,7 @@ function Refresh-Shims {
 function Setup-NodeManager {
     param([string]$BinDir)
 
-    $binPath = "$InstallDir\bin"
+    $binPath = $ShimDir
 
     # Explicit override via environment variable
     if ($env:VP_NODE_MANAGER -eq "yes") {
@@ -918,14 +994,14 @@ function Main {
     # Create new junction pointing to the version directory
     cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 
-    # Create bin directory and vp wrapper (always done)
-    New-Item -ItemType Directory -Force -Path "$InstallDir\bin" | Out-Null
+    # Create user bin directory and vp wrapper (always done)
+    New-Item -ItemType Directory -Force -Path $ShimDir | Out-Null
     $trampolineSrc = "$VersionDir\bin\vp-shim.exe"
     if (Test-Path $trampolineSrc) {
         # New versions: use trampoline exe to avoid "Terminate batch job (Y/N)?" on Ctrl+C
-        Copy-Item -Path $trampolineSrc -Destination "$InstallDir\bin\vp.exe" -Force
+        Copy-Item -Path $trampolineSrc -Destination (Join-Path $ShimDir "vp.exe") -Force
         # Remove legacy .cmd and shell script wrappers from previous versions
-        foreach ($legacy in @("$InstallDir\bin\vp.cmd", "$InstallDir\bin\vp")) {
+        foreach ($legacy in @((Join-Path $ShimDir "vp.cmd"), (Join-Path $ShimDir "vp"))) {
             if (Test-Path $legacy) {
                 Remove-Item -Path $legacy -Force -ErrorAction SilentlyContinue
             }
@@ -935,7 +1011,7 @@ function Main {
         # Remove any stale trampoline .exe shims left by a newer install — .exe wins
         # over .cmd on Windows PATH, so leftover trampolines would bypass the wrappers.
         foreach ($stale in @("vp.exe", "node.exe", "npm.exe", "npx.exe", "corepack.exe", "vpx.exe", "vpr.exe")) {
-            $stalePath = Join-Path "$InstallDir\bin" $stale
+            $stalePath = Join-Path $ShimDir $stale
             if (Test-Path $stalePath) {
                 Remove-Item -Path $stalePath -Force -ErrorAction SilentlyContinue
             }
@@ -947,7 +1023,7 @@ set VP_HOME=%~dp0..
 "%VP_HOME%\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 "@
-        Set-Content -Path "$InstallDir\bin\vp.cmd" -Value $wrapperContent -NoNewline
+        Set-Content -Path (Join-Path $ShimDir "vp.cmd") -Value $wrapperContent -NoNewline
 
         # Also create shell script wrapper for Git Bash/MSYS
         $shContent = @"
@@ -956,11 +1032,19 @@ VP_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")
 export VP_HOME
 exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 "@
-        Set-Content -Path "$InstallDir\bin\vp" -Value $shContent -NoNewline
+        Set-Content -Path (Join-Path $ShimDir "vp") -Value $shContent -NoNewline
     }
 
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
+
+    # Create env files under the resolved config dir (matches install.sh).
+    # Use current\bin\vp.exe directly instead of the trampoline so a Windows
+    # refresh cannot overwrite the running wrapper.
+    $vpBin = Join-Path $InstallDir "current\bin\vp.exe"
+    if (Test-Path -LiteralPath $vpBin) {
+        & $vpBin env setup --env-only | Out-Null
+    }
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
@@ -971,8 +1055,9 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     $pathResult = Configure-UserPath
     $nushellResult = Configure-Nushell
 
-    # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
-    $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
+    # Use ~ shorthand if the shim dir is under USERPROFILE, otherwise show full path
+    $displayDir = $ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
+    $displayConfigDir = $ConfigDir -replace [regex]::Escape($env:USERPROFILE), '~'
 
     # ANSI color codes for consistent output
     $e = [char]27
@@ -1030,27 +1115,68 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
         Write-Host ""
         Write-Host "  ${YELLOW}note${NC}: Some shells still need manual setup."
         Write-Host ""
-        Write-Host "  vp was installed to: ${BOLD}${displayDir}\bin${NC}"
+        Write-Host "  vp was installed to: ${BOLD}${displayDir}${NC}"
         Write-Host ""
         if ($pathResult -eq "failed") {
             Write-Host "  To use vp in Powershell/cmd, manually add it to your PATH:"
             Write-Host ""
-            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$InstallDir\bin;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
+            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$ShimDir;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
             Write-Host ""
         }
         if ($nushellResult.Status -eq "failed") {
             Write-Host "  To use vp in Nushell, create a vite-plus.nu file in your preferred vendor autoload directory with:"
             Write-Host ""
-            Write-Host "    source '$displayDir\env.nu'"
+            Write-Host "    source '$displayConfigDir\env.nu'"
             Write-Host ""
         }
         Write-Host "  Or run vp directly:"
         Write-Host ""
-        Write-Host "    & `"$InstallDir\bin\vp.exe`""
+        Write-Host "    & `"$(Join-Path $ShimDir 'vp.exe')`""
     }
 
     Write-Host ""
 }
+
+function Apply-DirsFromVp {
+    param([string]$VpBinary)
+    $previous = $env:VP_DUMP_DIRS
+    $env:VP_DUMP_DIRS = "1"
+    try {
+        $out = & $VpBinary 2>$null
+    } finally {
+        if ($null -eq $previous) {
+            Remove-Item Env:VP_DUMP_DIRS -ErrorAction SilentlyContinue
+        } else {
+            $env:VP_DUMP_DIRS = $previous
+        }
+    }
+    $map = @{}
+    foreach ($line in @($out)) {
+        $text = "$line"
+        $sep = $text.IndexOf("`t")
+        if ($sep -lt 1) {
+            continue
+        }
+        $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
+    }
+    if (-not $map['data'] -or -not $map['bin'] -or -not $map['config']) {
+        return $false
+    }
+    $script:Layout = [pscustomobject]@{
+        DataDir = $map['data']
+        ShimDir = $map['bin']
+        ConfigDir = $map['config']
+    }
+    return $true
+}
+
+if (-not ($env:VP_LOCAL_BINARY -and (Test-Path -LiteralPath $env:VP_LOCAL_BINARY) -and (Apply-DirsFromVp $env:VP_LOCAL_BINARY))) {
+    $script:Layout = Resolve-InstallLayout
+}
+$InstallDir = $script:Layout.DataDir
+$ShimDir = $script:Layout.ShimDir
+$ConfigDir = $script:Layout.ConfigDir
+$NodeManagerBinDisplay = $ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
 
 try {
     Main

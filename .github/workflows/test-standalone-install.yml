@@ -8,7 +8,11 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'packages/tools/src/install-global-cli.ts'
       - 'crates/vp_installer/**'
+      - 'crates/vp_trampoline/**'
+      - 'crates/vp_global_cli/**'
+      - 'crates/vp_shared/**'
       - 'crates/vp_pm_cli/**'
       - 'crates/vp_setup/**'
       - '.github/workflows/test-standalone-install.yml'
@@ -39,6 +43,12 @@ jobs:
             name: macOS ARM64
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        # This job installs the npm-published CLI, which does not yet resolve
+        # the split layout. Pin VP_HOME so the new installer still writes a
+        # single-root tree the released binary understands.
+        run: echo "VP_HOME=$HOME/.vite-plus" >> $GITHUB_ENV
 
       - name: Run install.sh
         run: cat packages/cli/install.sh | bash
@@ -114,6 +124,70 @@ jobs:
           vp upgrade --rollback
           vp --version
 
+  test-install-sh-layout:
+    name: Test install.sh layout (fresh split + grandfather)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+
+      - name: Build local vp
+        run: cargo build --release -p vp_global_cli
+
+      - name: Fresh home uses split layout
+        env:
+          VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
+        run: |
+          set -euo pipefail
+          FRESH=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$FRESH"
+          export USERPROFILE="$FRESH"
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" \
+            VP_SKIP_DEPS_INSTALL=1 \
+            VP_VERSION=local-test \
+            CI=true \
+            VP_NODE_MANAGER=yes \
+            bash packages/cli/install.sh
+
+          test ! -d "$FRESH/.vite-plus"
+          test -e "$FRESH/.local/share/vite-plus/current"
+          test -e "$FRESH/.local/bin/vp"
+          test -f "$FRESH/.config/vite-plus/env"
+          test "$(readlink "$FRESH/.local/bin/vp")" = "$FRESH/.local/share/vite-plus/current/bin/vp"
+          "$FRESH/.local/bin/vp" --version
+
+      - name: Existing ~/.vite-plus is reused
+        env:
+          VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
+        run: |
+          set -euo pipefail
+          GRAND=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          mkdir -p "$GRAND/.vite-plus"
+          echo keep > "$GRAND/.vite-plus/.keep"
+          export HOME="$GRAND"
+          export USERPROFILE="$GRAND"
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" \
+            VP_SKIP_DEPS_INSTALL=1 \
+            VP_VERSION=local-test \
+            CI=true \
+            VP_NODE_MANAGER=yes \
+            bash packages/cli/install.sh
+
+          test -f "$GRAND/.vite-plus/.keep"
+          test -e "$GRAND/.vite-plus/current"
+          test -e "$GRAND/.vite-plus/bin/vp"
+          test ! -d "$GRAND/.local/share/vite-plus"
+          test "$(readlink "$GRAND/.vite-plus/bin/vp")" = "../current/bin/vp"
+          "$GRAND/.vite-plus/bin/vp" --version
+
   test-install-sh-readonly-config:
     name: Test install.sh (readonly shell config)
     runs-on: ubuntu-latest
@@ -121,6 +195,9 @@ jobs:
       contents: read
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        run: echo "VP_HOME=$HOME/.vite-plus" >> $GITHUB_ENV
 
       - name: Make shell config files read-only
         run: |
@@ -169,6 +246,7 @@ jobs:
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
+              export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | bash
               if [ -f ~/.profile ]; then
                 source ~/.profile
@@ -228,6 +306,7 @@ jobs:
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
+              export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -285,6 +364,7 @@ jobs:
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
+              export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -419,6 +499,10 @@ jobs:
       contents: read
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
 
       - name: Run install.ps1
         shell: pwsh
@@ -663,6 +747,10 @@ jobs:
       contents: read
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
 
       - name: Run install.ps1
         shell: pwsh

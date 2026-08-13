@@ -25,5 +25,9 @@ which = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 winreg = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
+
 [lints]
 workspace = true

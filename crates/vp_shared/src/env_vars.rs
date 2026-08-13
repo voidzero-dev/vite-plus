@@ -168,6 +168,12 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 
 // ── Testing / Development ───────────────────────────────────────────────
 
+/// When set to `1`, the global CLI prints `<DATA>`, `<BIN>`, and `<CONFIG>`
+/// (one per line) from [`crate::EnvConfig`] and exits. Used by installers
+/// that already have a `vp` binary and must not re-implement directory
+/// resolution.
+pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
+
 /// Override the trampoline binary path for tests.
 ///
 /// When set, `get_trampoline_path()` uses this path instead of resolving

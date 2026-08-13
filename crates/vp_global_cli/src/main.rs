@@ -336,12 +336,28 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
     true
 }
 
+fn dump_dirs_from_env_config() -> bool {
+    if env::var_os(vp_shared::env_vars::VP_DUMP_DIRS).as_deref() != Some(std::ffi::OsStr::new("1"))
+    {
+        return false;
+    }
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    println!("data\t{}", dirs.data.as_path().display());
+    println!("bin\t{}", dirs.bin.as_path().display());
+    println!("config\t{}", dirs.config.as_path().display());
+    true
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     vp_shared::ensure_blocking_stdio();
 
     // Initialize tracing
     vp_shared::init_tracing();
+
+    if dump_dirs_from_env_config() {
+        return ExitCode::SUCCESS;
+    }
 
     let mut args: Vec<String> = std::env::args().collect();
 

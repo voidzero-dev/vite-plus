@@ -1130,9 +1130,13 @@ pub(crate) async fn create_package_shim(
             tokio::fs::remove_file(&shim_path).await?;
         }
 
-        // Create symlink to ../current/bin/vp
-        tokio::fs::symlink(PACKAGE_SHIM_TARGET, &shim_path).await?;
-        tracing::debug!("Created package shim symlink {:?} -> ../current/bin/vp", shim_path);
+        // Point at the active vp the same way `vp env setup` does so a split
+        // `<BIN>` (e.g. ~/.local/bin) does not use `../current/bin/vp`.
+        let current_exe = std::env::current_exe()?;
+        let target =
+            crate::commands::env::setup::resolve_unix_vp_shim_target(&current_exe, bin_dir).await?;
+        tokio::fs::symlink(&target, &shim_path).await?;
+        tracing::debug!("Created package shim symlink {:?} -> {:?}", shim_path, target);
     }
 
     #[cfg(windows)]

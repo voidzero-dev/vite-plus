@@ -22,7 +22,11 @@ pub struct Options {
     #[arg(long = "tag", default_value = "latest")]
     pub tag: String,
 
-    /// Custom installation directory (default: ~/.vite-plus)
+    /// Custom single-root installation directory (sets `VP_HOME`).
+    ///
+    /// Default: reuse an existing `~/.vite-plus` if present, otherwise the
+    /// platform data directory (`~/.local/share/vite-plus` on Unix,
+    /// `%LOCALAPPDATA%\vite-plus\data` on Windows).
     #[arg(long = "install-dir")]
     pub install_dir: Option<String>,
 
@@ -48,9 +52,8 @@ pub fn parse() -> Options {
     if opts.version.is_none() {
         opts.version = std::env::var("VP_VERSION").ok();
     }
-    if opts.install_dir.is_none() {
-        opts.install_dir = std::env::var("VP_HOME").ok();
-    }
+    // `VP_HOME` / `VP_*_DIR` / `XDG_*` are owned by [`vp_shared::EnvConfig`].
+    // Do not promote them to `--install-dir` here.
     if opts.registry.is_none() {
         opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok();
     }

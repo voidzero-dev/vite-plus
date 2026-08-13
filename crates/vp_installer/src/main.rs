@@ -28,6 +28,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use vp_pm_cli::HttpClient;
 use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
+use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
 /// Restrict DLL search to system32 only to prevent DLL hijacking
@@ -105,48 +106,48 @@ fn main() {
 
     let opts = cli::parse();
 
-    // Resolve install dir and set VP_HOME before starting the tokio runtime,
-    // so the unsafe set_var runs while we're still single-threaded.
-    let install_dir = match resolve_install_dir(&opts) {
-        Ok(dir) => dir,
+    // Resolve category roots (and pin VP_HOME only for --install-dir / VP_HOME)
+    // before starting the tokio runtime, so the unsafe set_var runs while
+    // we're still single-threaded.
+    let dirs = match prepare_dirs(&opts) {
+        Ok(dirs) => dirs,
         Err(e) => {
             print_error(&format!("Failed to resolve install directory: {e}"));
             std::process::exit(1);
         }
     };
-    // Safety: called in main() before any threads are spawned.
-    unsafe { std::env::set_var("VP_HOME", install_dir.as_path()) };
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap_or_else(|e| {
         print_error(&format!("Failed to create async runtime: {e}"));
         std::process::exit(1);
     });
 
-    let code = rt.block_on(run(opts, install_dir));
+    let code = rt.block_on(run(opts, dirs));
     std::process::exit(code);
 }
 
 #[allow(clippy::print_stdout, clippy::print_stderr)]
-async fn run(mut opts: cli::Options, install_dir: AbsolutePathBuf) -> i32 {
-    let install_dir_display = install_dir.as_path().to_string_lossy().to_string();
+async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
+    let data_dir_display = dirs.data.as_path().to_string_lossy().to_string();
+    let bin_dir_display = dirs.bin.as_path().to_string_lossy().to_string();
 
     // Pre-compute Node.js manager default before showing the menu,
     // so the user sees the resolved value and can override it.
     if !opts.no_node_manager {
-        opts.no_node_manager = !auto_detect_node_manager(&install_dir, !opts.yes);
+        opts.no_node_manager = !auto_detect_node_manager(&dirs.bin, !opts.yes);
     }
 
     if !opts.yes {
-        let proceed = show_interactive_menu(&mut opts, &install_dir_display);
+        let proceed = show_interactive_menu(&mut opts, &data_dir_display, &bin_dir_display);
         if !proceed {
             println!("Installation cancelled.");
             return 0;
         }
     }
 
-    let code = match do_install(&opts, &install_dir).await {
+    let code = match do_install(&opts, &dirs).await {
         Ok(()) => {
-            print_success(&opts, &install_dir_display);
+            print_success(&opts, &data_dir_display, &bin_dir_display);
             0
         }
         Err(e) => {
@@ -165,10 +166,8 @@ async fn run(mut opts: cli::Options, install_dir: AbsolutePathBuf) -> i32 {
 }
 
 #[allow(clippy::print_stdout)]
-async fn do_install(
-    opts: &cli::Options,
-    install_dir: &AbsolutePathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
+    let install_dir = &dirs.data;
     let platform_suffix = platform::detect_platform_suffix()?;
     if !opts.quiet {
         print_info(&format!("detected platform: {platform_suffix}"));
@@ -257,7 +256,7 @@ async fn do_install(
     if !opts.quiet {
         print_info("setting up shims...");
     }
-    if let Err(e) = setup_bin_shims(install_dir).await {
+    if let Err(e) = setup_bin_shims(dirs).await {
         print_warn(&format!("Shim setup failed (non-fatal): {e}"));
     }
 
@@ -273,7 +272,7 @@ async fn do_install(
     }
 
     if !opts.no_modify_path {
-        let bin_dir_str = install_dir.join("bin").as_path().to_string_lossy().to_string();
+        let bin_dir_str = dirs.bin.as_path().to_string_lossy().to_string();
         if let Err(e) = modify_path(&bin_dir_str, opts.quiet) {
             print_warn(&format!("PATH modification failed (non-fatal): {e}"));
         }
@@ -295,7 +294,7 @@ async fn do_install(
 /// 5. System node present, interactive → enable (matching install.ps1's default-Y prompt;
 ///    user can disable via customize menu before proceeding)
 /// 6. System node present, silent → disable (don't silently take over)
-fn auto_detect_node_manager(install_dir: &vt_path::AbsolutePath, interactive: bool) -> bool {
+fn auto_detect_node_manager(bin_dir: &vt_path::AbsolutePath, interactive: bool) -> bool {
     // VP_NODE_MANAGER env var: only "yes" and "no" are recognized;
     // unrecognized values fall through to normal auto-detection
     // (matching install.ps1/install.sh behavior).
@@ -309,7 +308,7 @@ fn auto_detect_node_manager(install_dir: &vt_path::AbsolutePath, interactive: bo
     }
 
     // Already managing Node (shims exist from a previous install)
-    let node_shim = install_dir.join("bin").join(if cfg!(windows) { "node.exe" } else { "node" });
+    let node_shim = bin_dir.join(if cfg!(windows) { "node.exe" } else { "node" });
     if node_shim.as_path().exists() {
         return true;
     }
@@ -399,23 +398,21 @@ async fn replace_windows_exe(
     Ok(())
 }
 
-/// Set up the `bin/vp` entry point (trampoline copy on Windows, symlink on Unix).
-async fn setup_bin_shims(
-    install_dir: &vt_path::AbsolutePath,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let bin_dir = install_dir.join("bin");
-    tokio::fs::create_dir_all(&bin_dir).await?;
+/// Set up the `<BIN>/vp` entry point (trampoline copy on Windows, symlink on Unix).
+async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
+    let bin_dir = &dirs.bin;
+    tokio::fs::create_dir_all(bin_dir).await?;
 
     #[cfg(windows)]
     {
-        let shim_src = install_dir.join("current").join("bin").join("vp-shim.exe");
+        let shim_src = dirs.data.join("current").join("bin").join("vp-shim.exe");
         let shim_dst = bin_dir.join("vp.exe");
 
         // Prefer vp-shim.exe (trampoline); fall back to vp.exe for pre-trampoline releases
         let src = if tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
             shim_src
         } else {
-            install_dir.join("current").join("bin").join("vp.exe")
+            dirs.data.join("current").join("bin").join("vp.exe")
         };
 
         if tokio::fs::try_exists(&src).await.unwrap_or(false) {
@@ -434,7 +431,16 @@ async fn setup_bin_shims(
 
     #[cfg(unix)]
     {
-        let link_target = std::path::PathBuf::from("../current/bin/vp");
+        let current_vp = dirs.data.join("current").join("bin").join("vp");
+        let link_target = match bin_dir.parent() {
+            Some(parent)
+                if parent.join("current").join("bin").join("vp").as_path()
+                    == current_vp.as_path() =>
+            {
+                std::path::PathBuf::from("../current/bin/vp")
+            }
+            _ => current_vp.as_path().to_path_buf(),
+        };
         let link_path = bin_dir.join("vp");
         let _ = tokio::fs::remove_file(&link_path).await;
         tokio::fs::symlink(&link_target, &link_path).await?;
@@ -466,14 +472,21 @@ async fn download_with_progress(
     Ok(data)
 }
 
-fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
+/// Resolve install category roots from [`vp_shared::EnvConfig`].
+///
+/// `--install-dir` is the only installer-owned override: it pins `VP_HOME`
+/// so EnvConfig's existing chain produces a single-root layout. Directory
+/// env vars (`VP_HOME`, `VP_*_DIR`, `XDG_*`) are never read here.
+fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
         let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
-        AbsolutePathBuf::new(abs).ok_or_else(|| "Invalid installation directory".into())
-    } else {
-        Ok(vp_shared::EnvConfig::get().dirs.data.clone())
+        let abs = AbsolutePathBuf::new(abs).ok_or("Invalid installation directory")?;
+        // Safety: called in main() before any threads are spawned (or under
+        // EnvConfig::with_vars in tests, which serializes env mutation).
+        unsafe { std::env::set_var("VP_HOME", abs.as_path()) };
     }
+    Ok(vp_shared::EnvConfig::get().dirs.clone())
 }
 
 #[allow(clippy::print_stdout)]
@@ -497,17 +510,17 @@ fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Err
 }
 
 #[allow(clippy::print_stdout)]
-fn show_interactive_menu(opts: &mut cli::Options, install_dir: &str) -> bool {
+fn show_interactive_menu(opts: &mut cli::Options, data_dir: &str, bin_dir: &str) -> bool {
     loop {
         let version = opts.version.as_deref().unwrap_or(&opts.tag);
-        let bin_dir = format!("{install_dir}{sep}bin", sep = std::path::MAIN_SEPARATOR);
 
         println!();
         println!("  {}", "Welcome to Vite+ Installer!".bold());
         println!();
         println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
         println!();
-        println!("    Install directory: {}", install_dir.cyan());
+        println!("    Data directory:    {}", data_dir.cyan());
+        println!("    Bin directory:     {}", bin_dir.cyan());
         println!(
             "    PATH modification: {}",
             if opts.no_modify_path {
@@ -594,7 +607,7 @@ fn read_input(prompt: &str) -> String {
 }
 
 #[allow(clippy::print_stdout)]
-fn print_success(opts: &cli::Options, install_dir: &str) {
+fn print_success(opts: &cli::Options, data_dir: &str, bin_dir: &str) {
     if opts.quiet {
         return;
     }
@@ -606,8 +619,9 @@ fn print_success(opts: &cli::Options, install_dir: &str) {
     println!();
     println!("    {}", "vp --help".cyan());
     println!();
-    println!("  Install directory: {install_dir}");
-    println!("  Documentation:     {}", "https://viteplus.dev/guide/");
+    println!("  Data directory: {data_dir}");
+    println!("  Bin directory:  {bin_dir}");
+    println!("  Documentation:  {}", "https://viteplus.dev/guide/");
     println!();
 }
 
@@ -627,4 +641,120 @@ fn print_warn(msg: &str) {
 fn print_error(msg: &str) {
     eprint!("{}", "error: ".red());
     eprintln!("{msg}");
+}
+
+#[cfg(test)]
+mod tests {
+    use vp_shared::{EnvConfig, env_vars};
+
+    use super::*;
+
+    fn opts(install_dir: Option<String>) -> cli::Options {
+        cli::Options {
+            yes: true,
+            quiet: true,
+            version: None,
+            tag: "latest".into(),
+            install_dir,
+            registry: None,
+            no_node_manager: true,
+            no_modify_path: true,
+        }
+    }
+
+    fn with_clean_home<R>(home: &std::path::Path, f: impl FnOnce() -> R) -> R {
+        EnvConfig::with_vars(
+            [
+                ("HOME", Some(home.as_os_str())),
+                ("USERPROFILE", Some(home.as_os_str())),
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, None),
+                (env_vars::VP_DATA_DIR, None),
+                (env_vars::VP_CACHE_DIR, None),
+                (env_vars::XDG_BIN_HOME, None),
+                (env_vars::XDG_DATA_HOME, None),
+                (env_vars::XDG_CACHE_HOME, None),
+                (env_vars::XDG_CONFIG_HOME, None),
+                (env_vars::XDG_STATE_HOME, None),
+            ],
+            |_| f(),
+        )
+    }
+
+    #[test]
+    fn fresh_home_uses_resolved_split_dirs_and_does_not_set_vp_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        with_clean_home(tmp.path(), || {
+            let expected = EnvConfig::get().dirs.clone();
+            let dirs = prepare_dirs(&opts(None)).unwrap();
+            assert_eq!(dirs, expected);
+            assert!(std::env::var_os(env_vars::VP_HOME).is_none());
+            assert_ne!(
+                dirs.bin.as_path(),
+                dirs.data.join("bin").as_path(),
+                "fresh install must not collapse bin under the data root"
+            );
+        });
+    }
+
+    #[test]
+    fn existing_vite_plus_reuses_single_root_without_setting_vp_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let legacy = tmp.path().join(".vite-plus");
+        std::fs::create_dir_all(&legacy).unwrap();
+
+        with_clean_home(tmp.path(), || {
+            let dirs = prepare_dirs(&opts(None)).unwrap();
+            assert_eq!(dirs.data.as_path(), legacy.as_path());
+            assert_eq!(dirs.bin.as_path(), legacy.join("bin").as_path());
+            assert_eq!(dirs.config.as_path(), legacy.as_path());
+            assert_eq!(dirs.state.as_path(), legacy.as_path());
+            assert_eq!(dirs.cache.as_path(), legacy.join("cache").as_path());
+            assert!(std::env::var_os(env_vars::VP_HOME).is_none());
+        });
+    }
+
+    #[test]
+    fn custom_install_dir_pins_vp_home_to_single_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let custom = tmp.path().join("custom");
+        std::fs::create_dir_all(&custom).unwrap();
+
+        with_clean_home(tmp.path(), || {
+            let dirs = prepare_dirs(&opts(Some(custom.to_string_lossy().into_owned()))).unwrap();
+            assert_eq!(std::env::var_os(env_vars::VP_HOME).as_deref(), Some(custom.as_os_str()));
+            assert_eq!(dirs.data.as_path(), custom.as_path());
+            assert_eq!(dirs.bin.as_path(), custom.join("bin").as_path());
+            assert_eq!(dirs.config.as_path(), custom.as_path());
+        });
+    }
+
+    #[test]
+    fn vp_data_dir_override_is_used_when_fresh() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = tmp.path().join("data");
+        std::fs::create_dir_all(&data).unwrap();
+
+        EnvConfig::with_vars(
+            [
+                ("HOME", Some(tmp.path().as_os_str())),
+                ("USERPROFILE", Some(tmp.path().as_os_str())),
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, None),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_CACHE_DIR, None),
+                (env_vars::XDG_BIN_HOME, None),
+                (env_vars::XDG_DATA_HOME, None),
+                (env_vars::XDG_CACHE_HOME, None),
+                (env_vars::XDG_CONFIG_HOME, None),
+                (env_vars::XDG_STATE_HOME, None),
+            ],
+            |config| {
+                let dirs = prepare_dirs(&opts(None)).unwrap();
+                assert_eq!(dirs.data.as_path(), data.as_path());
+                assert_eq!(dirs, config.dirs);
+                assert!(std::env::var_os(env_vars::VP_HOME).is_none());
+            },
+        );
+    }
 }

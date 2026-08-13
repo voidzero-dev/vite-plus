@@ -219,14 +219,18 @@ pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
     bin_dir: &vt_path::AbsolutePath,
 ) -> Result<std::path::PathBuf, Error> {
-    if let Some(vite_plus_home) = bin_dir.parent() {
-        let standalone_vp = vite_plus_home.join("current").join("bin").join("vp");
-        if tokio::fs::try_exists(&standalone_vp).await.unwrap_or(false) {
-            let standalone_vp = tokio::fs::canonicalize(&standalone_vp).await.ok();
-            let current_exe = tokio::fs::canonicalize(current_exe).await.ok();
-            if standalone_vp.is_some() && standalone_vp == current_exe {
+    let data = &vp_shared::EnvConfig::get().dirs.data;
+    let current_vp = data.join("current").join("bin").join("vp");
+    if tokio::fs::try_exists(&current_vp).await.unwrap_or(false) {
+        let current_vp_canon = tokio::fs::canonicalize(&current_vp).await.ok();
+        let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
+        if current_vp_canon.is_some() && current_vp_canon == current_exe_canon {
+            // Relative only when `<BIN>` is `<DATA>/bin` (monolithic). Split
+            // bins such as `~/.local/bin` must point at `<DATA>/current/bin/vp`.
+            if bin_dir.parent().is_some_and(|parent| parent.as_path() == data.as_path()) {
                 return Ok(std::path::PathBuf::from("../current/bin/vp"));
             }
+            return Ok(current_vp.as_path().to_path_buf());
         }
     }
 
@@ -1460,9 +1464,15 @@ mod tests {
         tokio::fs::create_dir_all(&bin_dir).await.unwrap();
         tokio::fs::write(&standalone_vp, b"vp").await.unwrap();
 
-        let target = resolve_unix_vp_shim_target(standalone_vp.as_path(), &bin_dir).await.unwrap();
-
-        assert_eq!(target, std::path::Path::new("../current/bin/vp"));
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let target =
+                    resolve_unix_vp_shim_target(standalone_vp.as_path(), &bin_dir).await.unwrap();
+                assert_eq!(target, std::path::Path::new("../current/bin/vp"));
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1479,9 +1489,14 @@ mod tests {
         tokio::fs::write(&standalone_vp, b"stale-vp").await.unwrap();
         tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
 
-        let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
-
-        assert_eq!(target, external_vp);
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1495,9 +1510,47 @@ mod tests {
         tokio::fs::create_dir_all(&bin_dir).await.unwrap();
         tokio::fs::write(&external_vp, b"vp").await.unwrap();
 
-        let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
+    }
 
-        assert_eq!(target, external_vp);
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_vp_shim_target_split_bin_uses_data_current() {
+        let temp_dir = TempDir::new().unwrap();
+        let user_home = temp_dir.path();
+        let data = user_home.join(".local/share/vite-plus");
+        let bin_dir = AbsolutePathBuf::new(user_home.join(".local/bin")).unwrap();
+        let version_vp = data.join("0.1.0").join("bin").join("vp");
+        let current = data.join("current");
+
+        tokio::fs::create_dir_all(version_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&version_vp, b"vp").await.unwrap();
+        tokio::fs::symlink("0.1.0", &current).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, None),
+                (vp_shared::env_vars::VP_DATA_DIR, None),
+                (vp_shared::env_vars::XDG_BIN_HOME, None),
+                (vp_shared::env_vars::XDG_DATA_HOME, None),
+                ("HOME", Some(user_home.as_os_str())),
+                ("USERPROFILE", Some(user_home.as_os_str())),
+            ],
+            |_| async {
+                let target = resolve_unix_vp_shim_target(&version_vp, &bin_dir).await.unwrap();
+                assert_eq!(target, data.join("current").join("bin").join("vp").as_path());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1516,11 +1569,17 @@ mod tests {
         tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &node_shim).await.unwrap();
 
-        let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
-        let target = tokio::fs::read_link(&node_shim).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
+                let target = tokio::fs::read_link(&node_shim).await.unwrap();
 
-        assert!(created, "stale shims should be recreated");
-        assert_eq!(target, external_vp);
+                assert!(created, "stale shims should be recreated");
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1536,11 +1595,17 @@ mod tests {
         tokio::fs::write(&external_vp, b"vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &node_shim).await.unwrap();
 
-        let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
-        let target = tokio::fs::read_link(&node_shim).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
+                let target = tokio::fs::read_link(&node_shim).await.unwrap();
 
-        assert!(created, "broken shims should be recreated");
-        assert_eq!(target, external_vp);
+                assert!(created, "broken shims should be recreated");
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1559,10 +1624,15 @@ mod tests {
         tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &vp_shim).await.unwrap();
 
-        setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
-        let target = tokio::fs::read_link(&vp_shim).await.unwrap();
-
-        assert_eq!(target, external_vp);
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
+                let target = tokio::fs::read_link(&vp_shim).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1578,10 +1648,15 @@ mod tests {
         tokio::fs::write(&external_vp, b"vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &vp_shim).await.unwrap();
 
-        setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
-        let target = tokio::fs::read_link(&vp_shim).await.unwrap();
-
-        assert_eq!(target, external_vp);
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
+                let target = tokio::fs::read_link(&vp_shim).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
