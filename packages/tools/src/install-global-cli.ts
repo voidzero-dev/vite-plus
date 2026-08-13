@@ -21,6 +21,16 @@ const isWindows = process.platform === 'win32';
 const LOCAL_DEV_PREFIX = 'local-dev';
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 
+function seedCiLegacyHome() {
+  // CI workflows still look for `~/.vite-plus/bin/vp` (#2371). Creating the
+  // directory engages EnvConfig's existing-install probe so bootstrap stays
+  // on the monolithic root without setting VP_HOME.
+  if (process.env.CI == null) {
+    return;
+  }
+  mkdirSync(path.join(os.homedir(), '.vite-plus'), { recursive: true });
+}
+
 function readDataDirFromVp(vpBinary: string): string {
   const output = execFileSync(vpBinary, [], {
     encoding: 'utf8',
@@ -122,6 +132,7 @@ export function installGlobalCli() {
     }
 
     const localDevVer = localDevVersion();
+    seedCiLegacyHome();
     const installDir = readDataDirFromVp(binaryPath);
 
     // Clean up old local-dev directories under the EnvConfig data root.
