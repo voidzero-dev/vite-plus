@@ -61,7 +61,7 @@ async fn npm_view(
     field: &str,
 ) -> Result<Vec<u8>, Error> {
     let output = Command::new(npm_path.as_path())
-        .args(["view", package_spec, field, "--json"])
+        .args(["view", "-g", package_spec, field, "--json"])
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
