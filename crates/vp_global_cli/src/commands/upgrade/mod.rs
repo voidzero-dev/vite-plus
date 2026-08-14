@@ -29,7 +29,7 @@ pub struct UpgradeOptions {
     pub silent: bool,
     /// Custom npm registry URL
     pub registry: Option<String>,
-    /// Refresh cached update status for shell integrations
+    /// Refresh cached update status in a background helper
     pub background_check: bool,
 }
 

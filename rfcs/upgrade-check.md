@@ -29,7 +29,6 @@ The upgrade-command RFC explicitly listed "auto-update on every command invocati
 1. Auto-installing updates (user must explicitly run `vp upgrade`)
 2. Checking local `vite-plus` package versions (only the global CLI)
 3. Showing notices for pre-release/test channel versions
-4. Triggering checks from cmd.exe, which has no shell-function integration
 
 ## User Stories
 
@@ -83,22 +82,25 @@ The check fails silently. No notice, no error, no retry spam.
 ### Overview
 
 ```
-Shell session starts
+Foreground `vp` starts
        │
-       ├── launch `vp upgrade --background-check` with the shell's native
-       │   background mechanism (`&`, `job spawn`, or `Start-Process`)
+       ├── parse the requested command and read the local cache
        │          │
-       │          ├── fresh cache or lock held → exit silently
-       │          └── acquire OS file lock → atomically write `unknown` cooldown
-       │                              → query registry
-       │                              → atomically write final status
+       │          ├── ineligible command or fresh cache → spawn nothing
+       │          └── stale/missing cache → launch detached
+       │                         `vp upgrade --background-check`
+       │                                  │
+       │                                  ├── fresh cache or lock held → exit silently
+       │                                  └── acquire OS file lock → atomically write
+       │                                      `unknown` cooldown → query registry
+       │                                      → atomically write final status
        │
-       └── foreground `vp` runs the requested command with no network work
+       └── run the requested command without waiting for registry I/O
                   │
                   └── after completion, read cache and optionally print notice
 ```
 
-The Rust check command runs normally in its own process. The shell owns backgrounding and process lifecycle, so the foreground command never waits for the check. If the check is still running when the command finishes, the notice can appear after a later command.
+The foreground process performs only argument and cache checks before launching the helper, avoiding a new process while the cache is fresh. The helper is placed in a separate process group with standard streams disconnected, so it can finish after the foreground command and its shell prompt return. If the check is still running when the command finishes, the notice can appear after a later command.
 
 ### Cache File
 
@@ -166,7 +168,7 @@ The notice is **not shown** when:
 
 ### Check Triggers and Foreground Suppression
 
-The shell integration launches one worker when a supported interactive shell starts. Bash/Zsh and Fish use background jobs plus `disown`, Nushell uses `job spawn`, and PowerShell uses `Start-Process`. The shell only gates on interactivity; the hidden command owns opt-out, CI, cache, locking, and fetch policy. Redirected worker output is discarded. The worker's cache and lock checks coordinate checks from concurrently opened shells without adding work to each `vp` invocation.
+After parsing an eligible foreground command, `vp` checks opt-out and CI state plus the local cache. It launches a detached worker only when that cache is stale or missing. The worker repeats the cache check after startup, then uses the cross-process lock and another cache check to coordinate concurrent invocations. Its standard streams are discarded, and foreground commands never wait for its registry request.
 
 The cached notice is not displayed after:
 
@@ -177,16 +179,15 @@ The cached notice is not displayed after:
 - Any command with quiet/machine-readable flags (`--silent`, `-s`, `--json`, `--parseable`, `--format json/list`)
 - Shim invocations (`node`, `npm`, `npx` via vp)
 
-Shim invocations do not pass through the shell wrapper or foreground notice path.
+Shim invocations do not pass through the foreground notice path.
 
 ### File Structure
 
 ```
 crates/vp_global_cli/src/
 ├── upgrade_check.rs        # New: cache read/write, background check, display
-├── main.rs                # Modified: display cached result after command
-├── cli.rs                 # Modified: hidden background-check option
-└── commands/env/setup.rs  # Modified: shell-native background launchers
+├── main.rs                # Modified: conditionally launch helper and display cached result
+└── cli.rs                 # Modified: hidden background-check option
 ```
 
 No new crate — this is a small, focused module in the existing `vp_global_cli` crate. It imports `resolve_version` from the existing `commands/upgrade/registry.rs`.
@@ -202,7 +203,7 @@ if options.background_check {
 }
 ```
 
-`--background-check` is hidden because it is an implementation detail of the generated shell integrations. It deliberately does not detach itself or manage an in-process worker. This keeps OS-specific lifecycle behavior in the shells' native process mechanisms.
+`--background-check` is hidden because it is an implementation detail of the foreground launcher. The foreground `vp` process configures and spawns this command as a detached child before running the requested command. The hidden command repeats the cheap policy and cache checks to close races between concurrent foreground invocations.
 
 Foreground commands call `display_cached_upgrade_notice` after completing. This path performs no network work and only acquires the lock when an available, unprompted cached result exists.
 
@@ -219,17 +220,18 @@ Foreground commands call `display_cached_upgrade_notice` after completing. This 
 
 **Rationale**: Deterministic behavior, no surprises. The cache file is tiny and cheap to read. 24 hours is long enough to not annoy, short enough to be useful.
 
-### 2. Shell-Native Background Process (Not an In-Process Task)
+### 2. Detached Background Process (Not an In-Process Task)
 
-**Decision**: Let each supported shell launch the hidden Rust check command in the background.
+**Decision**: Let eligible foreground `vp` commands launch the hidden Rust check command as a detached process, but only after determining that the cache is stale.
 
 **Alternatives considered**:
 
 - Check after the command finishes — adds visible latency
+- Let shell integrations launch a worker — excludes shells without an integration and starts unnecessary processes while the cache is fresh
 - Spawn a Tokio task inside the foreground CLI — its runtime must wait or cancel the request when the CLI exits
 - Separate background daemon — heavyweight, harder to manage
 
-**Rationale**: The foreground process has no relationship to the registry request and therefore no timeout tail. Native shell jobs provide the expected platform lifecycle behavior without maintaining a daemon or custom detachment layer in Rust.
+**Rationale**: The foreground process can avoid almost all helper launches with a cheap cache read, while the detached process has no registry-request latency tail. Keeping the launcher in `vp` also provides consistent behavior across shells without maintaining a daemon.
 
 ### 3. Stderr for the Notice
 
@@ -269,7 +271,7 @@ Foreground commands call `display_cached_upgrade_notice` after completing. This 
 - Verify no notice when cache is fresh
 - Verify no notice in CI mode
 - Start concurrent checks against a slow mock registry; verify exactly one request and that the cooldown is persisted before the response
-- Verify generated shell integrations launch at startup and before each wrapper call
+- Verify an eligible foreground command launches a detached check only when the cache is stale
 
 ### Manual Testing
 
@@ -277,7 +279,7 @@ Foreground commands call `display_cached_upgrade_notice` after completing. This 
 # Clear cache to force a fresh check
 rm ~/.vite-plus/cache/upgrade-check.json
 
-# Start a new shell or run any wrapped command to launch the check
+# Run an eligible foreground command to launch the check
 vp build
 
 # Run again after the background request completes — should not re-query (cached)

@@ -537,17 +537,6 @@ case ":${PATH}:" in
 esac
 unset __vp_bin
 
-# Start the Rust update checker once for each interactive shell. The checker
-# uses a cross-process lock and returns immediately when the cache is fresh.
-case $- in
-    *i*)
-        (
-            command vp upgrade --background-check </dev/null >/dev/null 2>&1 &
-            disown 2>/dev/null || true
-        )
-        ;;
-esac
-
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 vp() {
@@ -583,11 +572,6 @@ set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
 
-if status is-interactive
-    command vp upgrade --background-check </dev/null >/dev/null 2>&1 &
-    disown 2>/dev/null
-end
-
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
@@ -621,10 +605,6 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 $env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
-
-if $nu.is-interactive {
-    job spawn { ^vp upgrade --background-check | complete | ignore } | ignore
-}
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -688,16 +668,6 @@ $env:VP_HOME = "__VP_HOME_WIN__"
 $__vp_bin = "__VP_BIN_WIN__"
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
-}
-
-& {
-    if (-not [Environment]::UserInteractive -or [Console]::IsInputRedirected) { return }
-    $__vp_args = [Environment]::GetCommandLineArgs()
-    if ($__vp_args -match '^-(NonInteractive|noni|File|f|Command(WithArgs)?|c(wa)?|EncodedCommand|e(c)?)$' -or $__vp_args -match '\.ps1$') { return }
-    try {
-        $__vp_null = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { "NUL" } else { "/dev/null" }
-        Start-Process -FilePath (Join-Path $__vp_bin "vp") -ArgumentList "upgrade", "--background-check" -NoNewWindow -RedirectStandardError $__vp_null -ErrorAction SilentlyContinue | Out-Null
-    } catch {}
 }
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
@@ -1285,92 +1255,6 @@ mod tests {
             !ps1_content.contains("__VP_BIN_WIN__"),
             "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
         );
-    }
-
-    #[tokio::test]
-    async fn test_create_env_files_launch_one_background_upgrade_check() {
-        let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
-
-        create_env_files(&home).await.unwrap();
-
-        let posix = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-        let nu = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
-        let powershell = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
-
-        #[cfg(unix)]
-        assert!(
-            std::process::Command::new("sh")
-                .arg("-n")
-                .arg(home.join("env").as_path())
-                .status()
-                .unwrap()
-                .success(),
-            "POSIX integration should parse as a shell script"
-        );
-
-        for (shell, content) in [
-            ("POSIX", posix.as_str()),
-            ("Fish", fish.as_str()),
-            ("Nushell", nu.as_str()),
-            ("PowerShell", powershell.as_str()),
-        ] {
-            assert_eq!(
-                content.matches("--background-check").count(),
-                1,
-                "{shell} integration should check once when the shell starts"
-            );
-            assert!(
-                !content.contains("__vp_background_upgrade_check"),
-                "{shell} integration should not check before each vp command"
-            );
-        }
-
-        assert!(
-            posix.contains("(\n            command vp upgrade --background-check")
-                && posix.contains("&\n            disown"),
-            "POSIX should detach in a subshell without replacing the caller's last background PID"
-        );
-        assert!(fish.contains("&\n    disown"), "Fish should detach with shell job control");
-        assert!(nu.contains("job spawn"), "Nushell should use its native job API");
-        assert!(
-            posix.contains("case $- in") && posix.contains("*i*)"),
-            "POSIX should require an interactive shell"
-        );
-        assert!(fish.contains("status is-interactive"), "Fish should require an interactive shell");
-        assert!(
-            nu.contains("if $nu.is-interactive"),
-            "Nushell should require an interactive shell"
-        );
-        for expected in [
-            "--background-check",
-            "Start-Process",
-            "-NoNewWindow",
-            "[Environment]::UserInteractive",
-            "[Console]::IsInputRedirected",
-            "[Environment]::GetCommandLineArgs()",
-            "Command(WithArgs)?",
-            "e(c)?",
-            "\\.ps1$",
-        ] {
-            assert!(
-                powershell.contains(expected),
-                "PowerShell integration should contain `{expected}`"
-            );
-        }
-        for (shell, content) in [
-            ("POSIX", posix.as_str()),
-            ("Fish", fish.as_str()),
-            ("Nushell", nu.as_str()),
-            ("PowerShell", powershell.as_str()),
-        ] {
-            assert!(
-                !content.contains("VP_NO_UPDATE_CHECK") && !content.contains("CI"),
-                "{shell} should leave update-check policy to the hidden command"
-            );
-        }
     }
 
     #[tokio::test]

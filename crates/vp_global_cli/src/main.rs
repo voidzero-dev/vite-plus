@@ -436,8 +436,11 @@ async fn main() -> ExitCode {
     // Parse CLI arguments (using custom help formatting)
     let parse_result = try_parse_args_from(normalized_args);
 
-    let should_display_upgrade_notice =
-        parse_result.as_ref().is_ok_and(upgrade_check::should_display_for_command);
+    let should_run_upgrade_check =
+        parse_result.as_ref().is_ok_and(upgrade_check::should_run_for_command);
+    if should_run_upgrade_check {
+        upgrade_check::spawn_background_check_if_needed();
+    }
 
     let exit_code = match parse_result {
         Err(e) => {
@@ -505,7 +508,7 @@ async fn main() -> ExitCode {
         },
     };
 
-    if should_display_upgrade_notice {
+    if should_run_upgrade_check {
         upgrade_check::display_cached_upgrade_notice();
     }
 

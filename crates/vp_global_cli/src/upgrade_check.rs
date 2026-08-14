@@ -1,13 +1,14 @@
 //! Background upgrade check state for the vp CLI.
 //!
-//! Shell integrations launch `vp upgrade --background-check` as an OS-native
-//! background process. That command records a retry cooldown before touching
-//! the network, then queries the npm registry and caches only whether an update
-//! is available. Foreground commands only read this cache.
+//! Eligible foreground commands launch `vp upgrade --background-check` as a
+//! detached process when the cache is stale. That command records a retry
+//! cooldown before touching the network, then queries the npm registry and
+//! caches only whether an update is available.
 
 use std::{
     fs::{File, OpenOptions},
     io::Write,
+    process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -174,9 +175,55 @@ async fn resolve_version_string() -> Option<String> {
     registry::resolve_version_string("latest", None).await.ok()
 }
 
+pub(crate) fn spawn_background_check_if_needed() {
+    let Ok(install_dir) = vp_shared::get_vp_home() else {
+        return;
+    };
+    let current_version = env!("CARGO_PKG_VERSION");
+    if !should_check(read_cache(&install_dir).as_ref(), current_version, now_secs()) {
+        return;
+    }
+
+    let Ok(current_exe) = std::env::current_exe() else {
+        return;
+    };
+    let mut command = Command::new(current_exe);
+    command
+        .args(["upgrade", "--background-check"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    configure_background_process(&mut command);
+
+    if let Ok(mut child) = command.spawn() {
+        // A long-running foreground command must still reap a helper that exits first.
+        let _ = std::thread::spawn(move || child.wait());
+    }
+}
+
+fn configure_background_process(command: &mut Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt as _;
+
+        command.process_group(0);
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    let _ = command;
+}
+
 /// Refresh the cached update status. This function intentionally runs in the
-/// current process; shell integrations decide how to run that process in the
-/// background.
+/// helper process so the foreground command never waits for registry I/O.
 pub async fn run_background_check() {
     let Ok(install_dir) = vp_shared::get_vp_home() else {
         return;
@@ -253,10 +300,10 @@ pub fn display_cached_upgrade_notice() {
     let _ = lock.write_cache(&cache);
 }
 
-/// Whether a foreground command may display a cached upgrade notice.
+/// Whether a foreground command may run the upgrade check and display its cached notice.
 /// Returns `false` for commands excluded by design, quiet modes, and
 /// machine-readable output flags (--silent, -s, --json, --parseable, --format json).
-pub fn should_display_for_command(args: &crate::cli::Args) -> bool {
+pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
     if !cfg!(test) && !vp_shared::is_stderr_terminal() {
         return false;
     }
@@ -579,57 +626,57 @@ mod tests {
 
     #[test]
     fn should_run_for_normal_command() {
-        assert!(should_display_for_command(&parse_args(&["build"])));
+        assert!(should_run_for_command(&parse_args(&["build"])));
     }
 
     #[test]
     fn should_not_run_for_upgrade() {
-        assert!(!should_display_for_command(&parse_args(&["upgrade"])));
+        assert!(!should_run_for_command(&parse_args(&["upgrade"])));
     }
 
     #[test]
     fn should_not_run_for_install_silent() {
-        assert!(!should_display_for_command(&parse_args(&["install", "--silent"])));
+        assert!(!should_run_for_command(&parse_args(&["install", "--silent"])));
     }
 
     #[test]
     fn should_not_run_for_dlx_short_silent() {
-        assert!(!should_display_for_command(&parse_args(&["dlx", "-s", "pkg"])));
+        assert!(!should_run_for_command(&parse_args(&["dlx", "-s", "pkg"])));
     }
 
     #[test]
     fn should_not_run_for_why_json() {
-        assert!(!should_display_for_command(&parse_args(&["why", "lodash", "--json"])));
+        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--json"])));
     }
 
     #[test]
     fn should_not_run_for_why_parseable() {
-        assert!(!should_display_for_command(&parse_args(&["why", "lodash", "--parseable"])));
+        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--parseable"])));
     }
 
     #[test]
     fn should_not_run_for_outdated_format_json() {
-        assert!(!should_display_for_command(&parse_args(&["outdated", "--format", "json"])));
+        assert!(!should_run_for_command(&parse_args(&["outdated", "--format", "json"])));
     }
 
     #[test]
     fn should_not_run_for_pm_list_parseable() {
-        assert!(!should_display_for_command(&parse_args(&["pm", "list", "--parseable"])));
+        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--parseable"])));
     }
 
     #[test]
     fn should_not_run_for_pm_list_json() {
-        assert!(!should_display_for_command(&parse_args(&["pm", "list", "--json"])));
+        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--json"])));
     }
 
     #[test]
     fn should_not_run_for_env_current_json() {
-        assert!(!should_display_for_command(&parse_args(&["env", "current", "--json"])));
+        assert!(!should_run_for_command(&parse_args(&["env", "current", "--json"])));
     }
 
     #[test]
     fn should_run_for_outdated_without_format() {
-        assert!(should_display_for_command(&parse_args(&["outdated"])));
+        assert!(should_run_for_command(&parse_args(&["outdated"])));
     }
 
     #[tokio::test(flavor = "current_thread")]

@@ -1,8 +1,13 @@
 # command_upgrade_background_notice
 
-A background check records an available update without contaminating machine output, then the foreground CLI shows the generic notice at most once per prompt interval.
+A foreground command launches a detached update check without waiting for it, then later commands show the cached notice at most once per prompt interval.
 
-## `vp upgrade --background-check`
+## `vp env list`
+
+The foreground command launches the detached checker and returns without waiting for registry I/O.
+
+
+## `node -e '(async()=>{const fs=require('\''node:fs'\'');const path=require('\''node:path'\'');const file=path.join(process.env.VP_HOME,'\''cache'\'','\''upgrade-check.json'\'');const deadline=Date.now()+5000;for(;;){try{if(JSON.parse(fs.readFileSync(file,'\''utf8'\'')).status==='\''available'\'')return}catch{}if(Date.now()>=deadline)process.exit(1);await new Promise(resolve=>setTimeout(resolve,25))}})()'`
 
 
 ## `vpt grep-file $VP_HOME/cache/upgrade-check.json '"status":"available"'`
