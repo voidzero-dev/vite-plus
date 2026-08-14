@@ -8,7 +8,7 @@
 error: Formatting could not complete
 Failed to load configuration file.
 <workspace>/vite.config.ts
-Error: The `fmt` field in the default export must be an object.
+The `fmt` field in the default export must be an object.
 Ensure the file has a valid default export of a JSON-serializable configuration object.
 
 Formatting failed during fix
@@ -22,7 +22,7 @@ Formatting failed during fix
 error: Formatting could not start
 Failed to load configuration file.
 <workspace>/vite.config.ts
-Error: The `fmt` field in the default export must be an object.
+The `fmt` field in the default export must be an object.
 Ensure the file has a valid default export of a JSON-serializable configuration object.
 
 Formatting failed before analysis started
