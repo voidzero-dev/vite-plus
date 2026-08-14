@@ -1,10 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Boshen/renovate"],
-  "description": "Skip lockfile artifact updates (npm and cargo): they fail in Renovate's clone because vite/ and rolldown/ are gitignored. The renovate-lockfiles workflow regenerates lockfiles on renovate/** pushes; gitIgnoredAuthors keeps Renovate managing branches with its commits.",
+  "description": "Skip lockfile artifact updates (npm and cargo): they fail in Renovate's clone because vite/ and rolldown/ are gitignored. The renovate-lockfiles workflow regenerates lockfiles on renovate/** pushes; gitIgnoredAuthors keeps Renovate managing branches with its commits. ignorePaths excludes test fixtures: their deps are test data, and the migration_monorepo_pnpm_overrides_dependency_selector fixture's multi-level pnpm override selector aborts the whole Renovate scan with ERR_PNPM_INVALID_SELECTOR.",
   "gitIgnoredAuthors": ["278573678+voidzero-guard[bot]@users.noreply.github.com"],
   "skipArtifactsUpdate": true,
-  "ignorePaths": ["bench/fixtures/**", "rolldown/**", "vite/**"],
+  "ignorePaths": [
+    "bench/fixtures/**",
+    "crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**",
+    "packages/cli/src/__tests__/fixtures/**",
+    "rolldown/**",
+    "vite/**"
+  ],
   "packageRules": [
     {
       "description": "Ignore upstream toolchain npm packages (vendored via sync-remote or bumped by the proactive catalog workflow); everything else stays enabled so security alerts get fixed.",
