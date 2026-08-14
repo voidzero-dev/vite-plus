@@ -837,8 +837,7 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
 }
 
 // Delete a key by its literal name. `YAMLMap.delete` compares the key NODE, so
-// the node has to be looked up in `.items` first. A fresh scalar would silently
-// no-op.
+// find the node in `.items` first. A fresh scalar would silently no-op.
 function deleteYamlMapKey(map: unknown, key: string): void {
   if (!(map instanceof YAMLMap)) {
     return;
@@ -855,11 +854,11 @@ function deleteYamlMapKey(map: unknown, key: string): void {
  * Merge the managed override entries into a pnpm `overrides` record, under the
  * range-qualified keys (see `pnpmOverrideKey`).
  *
- * Every pnpm sink goes through this helper: the package.json `pnpm.overrides`
- * written for pnpm 9.5 to 10.6.1, from both the standalone and the monorepo-root
- * writer. A bare managed key left by a pre-#2309 migration is deleted, because
- * two keys for one package would restore the match that clobbers `catalog:`
- * importer specs.
+ * Both writers of the package.json `pnpm.overrides` sink go through this
+ * helper: the standalone writer and the monorepo-root writer. That sink serves
+ * pnpm 9.5 to 10.6.1. The helper deletes a bare managed key that a pre-#2309
+ * migration left. Two keys for one package would restore the match that
+ * clobbers `catalog:` importer specs.
  *
  * A bare key's `catalog:` value moves to the ranged key, so a user's own
  * `catalog:<name>` choice survives the re-keying. This mirrors

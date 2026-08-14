@@ -90,10 +90,6 @@ Related rules:
   peer declarations use. It leaves `catalog:` references to the catalog, which
   already resolves them to Vite+ core. Migration re-keys a project that still
   holds the bare key, and keeps its named-catalog choice.
-- On pnpm 9 to 11 that range does not match a declaration that pins an exact
-  prerelease, such as `vite: "8.0.0-beta.18"`, so the override skips it and pnpm
-  can install a separate upstream Vite. A prerelease range such as
-  `^8.0.0-beta.1` still matches, and pnpm 12 matches the exact form as well.
 - The direct-entry rule above is pnpm-specific. Bun mirrors its core alias as
   a direct dependency for its peer resolver, and npm browser-provider layouts
   may need a top-level `vite` edge so nested Vitest packages can resolve

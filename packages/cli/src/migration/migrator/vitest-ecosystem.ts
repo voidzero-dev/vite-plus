@@ -551,10 +551,10 @@ export function projectUsesVitestDirectly(
 //
 // `keyStyle` selects which spellings count as managed. Only a pnpm override sink
 // spells the managed key `vitest@*` (see `pnpmOverrideKey`), and such a sink can
-// hold either spelling: the bare one if the project was last migrated before the
-// #2309 fix, the ranged one if after. Every other sink stays `bare`. npm also
-// accepts a range in an override key, so a user-authored `"vitest@*"` there is
-// the user's own entry and must not be deleted.
+// hold either spelling. A project migrated before the #2309 fix holds the bare
+// key. A project migrated after it holds the ranged key. Every other sink stays
+// `bare`. npm also accepts a range in an override key, so a user-authored
+// `"vitest@*"` in npm `overrides` belongs to the user. Do not delete it.
 export function removeManagedVitestEntry(
   record: Record<string, string> | undefined,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
@@ -574,7 +574,7 @@ export function removeManagedVitestEntry(
 
 // Remove a managed `vitest` scalar key from a YAMLMap (pnpm-workspace.yaml
 // `overrides`, `catalog`, and each named `catalogs` entry). Only the `overrides`
-// map uses the range-qualified spelling; `catalog`/`catalogs` and
+// map uses the range-qualified spelling. `catalog`, `catalogs`, and
 // `allowedVersions` key on plain package names, so they stay `bare`.
 export function removeYamlMapVitestEntry(
   map: unknown,

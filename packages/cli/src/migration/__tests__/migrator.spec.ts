@@ -4825,8 +4825,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
   it('re-keys pnpm.overrides in a monorepo root below pnpm 10.6.2 (#2309 review P1)', () => {
     // `rewriteMonorepo` routes root settings through `rewriteRootWorkspacePackageJson`,
-    // a different writer from the standalone path. A bare key left there keeps
-    // matching child `catalog:` declarations workspace-wide.
+    // a different writer from the standalone path. A bare key left there still
+    // matches child `catalog:` declarations workspace-wide.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -4852,8 +4852,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   });
 
   it('carries a legacy named-catalog override value onto the ranged key (#2309 review P2)', () => {
-    // The re-keying must not silently disconnect the override from the user's
-    // named catalog by replacing it with the concrete managed alias.
+    // The re-key step must keep the override on the user's named catalog. It
+    // must not write the concrete managed alias instead.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -4883,7 +4883,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
   it('treats a leftover bare key as pending beside a valid ranged key (#2309 review P2)', () => {
     // A hand-edited or partially repaired project can hold both spellings. The
-    // bare one still matches `catalog:` importer specs, so the already-migrated
+    // bare key still matches `catalog:` importer specs, so the already-migrated
     // fast path must not skip the rewrite that deletes it.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -4892,7 +4892,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
 
-    // Re-introduce the pre-#2309 key next to the correct one.
+    // Re-introduce the pre-#2309 bare key next to the ranged key.
     const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
     fs.writeFileSync(
       workspacePath,
@@ -4903,7 +4903,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
 
-    // One more migrate converges again by dropping the bare key.
+    // One more migrate run drops the bare key and converges again.
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       overrides: Record<string, string>;
@@ -4913,9 +4913,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   });
 
   it('leaves a user-authored ranged npm override alone (#2309 review P2)', () => {
-    // npm accepts a range in an override key too, but vite-plus only ever
-    // manages the BARE key there. A `vitest@*` entry in npm `overrides` is the
-    // user's own and must survive the managed-vitest sweep.
+    // npm accepts a range in an override key too, but vite-plus manages only
+    // the BARE key there. A `vitest@*` entry in npm `overrides` is the user's
+    // own and must survive the managed-vitest sweep.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({

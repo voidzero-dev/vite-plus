@@ -162,8 +162,8 @@ export function overridesSatisfyVitePlus(
   }
   // A pnpm sink can hold BOTH spellings, for example after a hand edit or a
   // partial repair. The leftover bare key still matches `catalog:` importer
-  // specs, so it must be re-keyed even when the ranged key is already correct.
-  // Report unsatisfied so the rewrite runs and deletes it.
+  // specs. Report unsatisfied, so the rewrite runs and deletes the bare key
+  // even when the ranged key is already correct.
   if (
     keyStyle === 'pnpm-ranged' &&
     Object.keys(managed).some((dependencyName) => typeof overrides?.[dependencyName] === 'string')
