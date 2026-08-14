@@ -52,8 +52,9 @@ Manage Dependencies:
   pm                         Forward a command to the package manager
 
 Maintain:
-  upgrade  Update vp itself to the latest version
-  implode  Remove vp and all related data
+  toolchain  Show active Vite+ tools, versions, and relationships
+  upgrade    Update vp itself to the latest version
+  implode    Remove vp and all related data
 
 Documentation: https://viteplus.dev/guide/
 

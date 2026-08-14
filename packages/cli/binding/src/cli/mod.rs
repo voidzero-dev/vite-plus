@@ -21,7 +21,7 @@ pub use resolver::SubcommandResolver;
 use rustc_hash::FxHashMap;
 pub(crate) use types::CapturedCommandOutput;
 pub use types::{
-    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand,
+    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
     ViteConfigResolverFn,
 };
 use vp_error::Error;
@@ -217,6 +217,11 @@ async fn envs_with_explicit_package_manager_path(
     .await
     {
         Ok(result) => result,
+        // A missing package manager has other causes, such as no network or an
+        // unknown version. The command still runs from PATH, so those causes
+        // stay a debug log. An integrity failure is different. If vp hides it,
+        // the user sees only "command not found" further down.
+        Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {
             tracing::debug!(
                 ?error,
@@ -257,9 +262,15 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    if let Ok(pm) = vp_pm_cli::PackageManager::builder(&cwd).build().await {
-        let bin_prefix = pm.get_bin_prefix();
-        let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+    match vp_pm_cli::PackageManager::builder(&cwd).build().await {
+        Ok(pm) => {
+            let bin_prefix = pm.get_bin_prefix();
+            let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+        }
+        Err(error) if error.is_integrity_failure() => return Err(error),
+        Err(error) => {
+            tracing::debug!(?error, "failed to resolve package manager for task PATH setup");
+        }
     }
 
     let session = Session::init(SessionConfig {
@@ -273,6 +284,74 @@ async fn execute_vite_task_command(
     let status = session.main(command).await;
 
     Ok(status)
+}
+
+fn execute_toolchain_command(
+    args: ToolchainArgs,
+    options: Option<&CliOptions>,
+) -> Result<ExitStatus, Error> {
+    if args.global {
+        vp_shared::output::error("The `--global` option requires the global `vp` CLI");
+        return Ok(ExitStatus(1));
+    }
+
+    let options = options.ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("this CLI does not include toolchain metadata"))
+    })?;
+    let manifest_path = toolchain_manifest_path(options).ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("the toolchain manifest path must be absolute"))
+    })?;
+    let manifest = vp_toolchain::load_manifest(&manifest_path).map_err(anyhow::Error::new)?;
+    let version = vp_toolchain::root_version(&manifest).ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("toolchain manifest does not contain vite-plus"))
+    })?;
+    let source = vp_toolchain::Source {
+        scope: vp_toolchain::Scope::Local,
+        path: options.vite_plus_package_path.clone().into(),
+        vite_plus_version: version.into(),
+    };
+    let report = match vp_toolchain::build_report(&manifest, &args.tools, source) {
+        Ok(report) => report,
+        Err(vp_toolchain::ToolchainError::UnknownFilter(filter)) => {
+            let message = format!("`{filter}` is not in the Vite+ toolchain");
+            if args.json {
+                vp_shared::output::raw_stderr(&format!("error: {message}"));
+            } else {
+                vp_shared::output::error(&message);
+                vp_shared::output::raw_stderr(&format!(
+                    "hint: run `vp why {filter}` to show project dependencies"
+                ));
+            }
+            return Ok(ExitStatus(1));
+        }
+        Err(error) => return Err(anyhow::Error::new(error).into()),
+    };
+
+    let rendered = if args.json {
+        vp_toolchain::render_json(&report).map_err(anyhow::Error::new)?
+    } else {
+        vp_toolchain::render(&report)
+    };
+    vp_shared::output::raw_inline(&rendered);
+    Ok(ExitStatus::SUCCESS)
+}
+
+fn toolchain_manifest_path(options: &CliOptions) -> Option<AbsolutePathBuf> {
+    AbsolutePathBuf::new(options.toolchain_manifest_path.clone().into())
+}
+
+fn print_toolchain_why_hint(options: Option<&CliOptions>, packages: &[String]) {
+    let Some(manifest) = options
+        .and_then(toolchain_manifest_path)
+        .and_then(|path| vp_toolchain::load_manifest(&path).ok())
+    else {
+        return;
+    };
+    let Some(hint) = vp_toolchain::why_hint(&manifest, packages) else {
+        return;
+    };
+    vp_shared::output::raw_stderr("");
+    vp_shared::output::raw_stderr(&hint);
 }
 
 /// Main entry point for vite-plus CLI.
@@ -317,8 +396,9 @@ pub async fn main(
             execute_direct_subcommand(subcmd, &cwd, options).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
-        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd).await,
+        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
         CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
+        CLIArgs::Toolchain(args) => execute_toolchain_command(args, options.as_ref()),
     }
 }
 
@@ -327,6 +407,7 @@ pub async fn main(
 async fn execute_pm_command(
     command: vp_pm_cli::PackageManagerCommand,
     cwd: &AbsolutePath,
+    options: Option<&CliOptions>,
 ) -> Result<ExitStatus, Error> {
     // Commands projected into the vite-plus-managed package store only work
     // in the global CLI. The local CLI has no such store, so refuse rather
@@ -337,8 +418,9 @@ async fn execute_pm_command(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
         )));
     }
-    let status = match vp_pm_cli::dispatch(cwd, command).await {
-        Ok(status) => status,
+    let hint_command = command.clone();
+    let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {
+        Ok(result) => result,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
         // matches the global CLI's `is_user_message()` branch in main.rs so the
         // friendly version-gate / usage errors look the same on both surfaces.
@@ -348,7 +430,12 @@ async fn execute_pm_command(
         }
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
     };
-    Ok(types::exit_status_from(status))
+    if result.status.success()
+        && let Some(packages) = hint_command.why_hint_packages(result.package_manager)
+    {
+        print_toolchain_why_hint(options, packages);
+    }
+    Ok(types::exit_status_from(result.status))
 }
 
 #[cfg(test)]
@@ -365,7 +452,7 @@ mod tests {
     use vt::config::UserRunConfig;
     use vt_path::AbsolutePathBuf;
 
-    use super::{envs_with_explicit_package_manager_path, prepend_to_env_path};
+    use super::{Error, envs_with_explicit_package_manager_path, prepend_to_env_path};
 
     fn envs_with_path(path: &std::ffi::OsStr) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
         Arc::new(FxHashMap::from_iter([(Arc::from(OsStr::new("PATH")), Arc::from(path))]))
@@ -454,6 +541,41 @@ mod tests {
             .expect("package manager preflight errors should not fail direct commands");
 
         assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+    }
+
+    #[tokio::test]
+    async fn stops_when_the_pinned_package_manager_fails_its_integrity_check() {
+        let suffix =
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
+        let vp_home = temp_dir.join("vp-home");
+        let bin_dir =
+            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
+        fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
+        for shim in ["yarn", "yarn.cmd", "yarn.ps1"] {
+            fs::write(bin_dir.join(shim), "shim").expect("shim should be written");
+        }
+        fs::write(bin_dir.join("yarn.js"), "corrupt").expect("CLI should be written");
+
+        let expected_hash = format!("sha512.{}", "0".repeat(128));
+        fs::write(
+            temp_dir.join("package.json"),
+            format!(r#"{{"name":"fixture","packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
+        )
+        .expect("package.json should be written");
+        let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
+        let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
+        let envs = envs_with_path(original_path.as_os_str());
+
+        let _guard =
+            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&vp_home));
+        let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+
+        assert!(
+            matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+            "an integrity failure must reach the user instead of a missing command: {result:?}"
+        );
         fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
     }
 

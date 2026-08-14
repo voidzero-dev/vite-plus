@@ -6,7 +6,7 @@
  * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
  * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
  * 4. syncTestPackageExports() - Creates shim files to re-export from vitest
- * 5. syncVersionsExport() - Generates ./versions module with bundled tool versions
+ * 5. syncToolchainExports() - Generates the toolchain manifest and ./versions module
  * 6. copyBundledDocs() - Copies docs into docs/ for bundled package access
  * 7. syncReadmeFromRoot() - Keeps package README in sync
  *
@@ -18,7 +18,7 @@
  * Native binding is built first because TypeScript may depend on generated binding types.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -35,6 +35,8 @@ import corePkg from '../core/package.json' with { type: 'json' };
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = 'vitest';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const NATIVE_BUILD_TIME_PATH = join(projectDir, 'binding', 'vite-plus.build-time');
+const UTC_BUILD_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
 // Browser providers projected under ./test/* and ./test/browser/providers/* so the
 // public surface matches what the deleted `@voidzero-dev/vite-plus-test` wrapper exposed.
@@ -137,7 +139,7 @@ if (!skipNative) {
 if (!skipTs) {
   await syncCorePackageExports();
   await syncTestPackageExports();
-  await syncVersionsExport();
+  await syncToolchainExports();
 }
 await copyBundledDocs();
 await syncReadmeFromRoot();
@@ -166,6 +168,7 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
+  await writeFile(NATIVE_BUILD_TIME_PATH, `${resolveBuildTime()}\n`);
   // --skip-format: importing the repo vite config pulls in the built
   // vite-plus dist, which doesn't exist in CI jobs that cross-compile only
   // the native binding (build-windows-cli); formatting the generated
@@ -602,71 +605,308 @@ async function createBrowserCompatExport(testDistDir: string): Promise<ExportVal
   };
 }
 
-/**
- * Read version from a dependency's package.json in node_modules.
- * Uses readFile because these packages don't export ./package.json.
- *
- * TODO: Once https://github.com/oxc-project/oxc/pull/20784 lands and oxlint/oxfmt/oxlint-tsgolint
- * export ./package.json, this function can be removed and replaced with static imports:
- * ```js
- * import oxlintPkg from 'oxlint/package.json' with { type: 'json' };
- * import oxfmtPkg from 'oxfmt/package.json' with { type: 'json' };
- * import oxlintTsgolintPkg from 'oxlint-tsgolint/package.json' with { type: 'json' };
- * ```
- */
-async function readDepVersion(packageName: string): Promise<string | null> {
-  try {
-    const pkgPath = join(projectDir, 'node_modules', packageName, 'package.json');
-    const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
-    return pkg.version ?? null;
-  } catch {
-    return null;
-  }
+type ToolchainKind = 'package' | 'tool' | 'engine';
+type ToolchainDelivery = 'dependency' | 'bundled' | 'compiled';
+type ToolchainRelationship = 'depends-on' | 'bundles' | 'uses' | 'compiles';
+
+type ToolchainVersionSource =
+  | { type: 'cli-package' }
+  | { type: 'core-package' }
+  | { type: 'core-bundled'; key: string }
+  | { type: 'npm-dependency'; package: string }
+  | { type: 'cargo'; package: string; revision?: boolean; builtAt?: boolean };
+
+interface ToolchainConfigNode {
+  id: string;
+  name: string;
+  kind: ToolchainKind;
+  delivery: ToolchainDelivery[];
+  aliases: string[];
+  versionSource: ToolchainVersionSource;
 }
 
-/**
- * Generate ./versions export module with bundled tool versions.
- *
- * Collects versions from:
- * - core package.json bundledVersions (vite, rolldown, tsdown)
- * - CLI dependency package.json (oxlint, oxfmt, oxlint-tsgolint, vitest)
- *
- * Generates dist/versions.js and dist/versions.d.ts with inlined constants.
- */
-async function syncVersionsExport() {
-  console.log('\nSyncing versions export...');
-  const distDir = join(projectDir, 'dist');
+interface ToolchainConfig {
+  schemaVersion: number;
+  versionExportIds: string[];
+  nodes: ToolchainConfigNode[];
+  edges: Array<{
+    from: string;
+    to: string;
+    relationship: ToolchainRelationship;
+  }>;
+}
 
-  // Collect bundled versions from the core package
-  const versions: Record<string, string> = {
-    ...(corePkg as Record<string, any>).bundledVersions,
-  };
+interface CargoMetadata {
+  packages: Array<{
+    name: string;
+    version: string;
+    source: string | null;
+  }>;
+}
 
-  // Read versions from CLI dependencies' installed package.json files
-  // (these packages don't export ./package.json, so node_modules is the source of truth)
-  const depTools = ['oxlint', 'oxfmt', 'oxlint-tsgolint', 'vitest'] as const;
-  for (const name of depTools) {
-    const version = await readDepVersion(name);
-    if (version) {
-      versions[name] = version;
+interface ResolvedToolchainNode {
+  id: string;
+  name: string;
+  version?: string;
+  revision?: string;
+  builtAt?: string;
+  kind: ToolchainKind;
+  delivery: ToolchainDelivery[];
+  aliases: string[];
+}
+
+async function readPackageVersion(packageJsonPath: string, label: string): Promise<string> {
+  const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as { version?: unknown };
+  if (typeof pkg.version !== 'string' || pkg.version.length === 0) {
+    throw new Error(`Expected an exact version in ${label}`);
+  }
+  return pkg.version;
+}
+
+function readCargoMetadata(): CargoMetadata {
+  const repoDir = join(projectDir, '..', '..');
+  const stdout = execFileSync('cargo', ['metadata', '--locked', '--format-version', '1'], {
+    cwd: repoDir,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return JSON.parse(stdout) as CargoMetadata;
+}
+
+function resolveCargoPackage(metadata: CargoMetadata, packageName: string) {
+  const matches = metadata.packages.filter((pkg) => pkg.name === packageName);
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected one Cargo package named ${JSON.stringify(packageName)}, found ${matches.length}`,
+    );
+  }
+  return matches[0];
+}
+
+function sourceRevision(source: string | null): string | undefined {
+  return source?.match(/#([0-9a-f]{40})$/)?.[1];
+}
+
+function resolveBuildTime(): string {
+  const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH;
+  if (sourceDateEpoch !== undefined && !/^(?:0|[1-9]\d*)$/.test(sourceDateEpoch)) {
+    throw new Error(`Invalid SOURCE_DATE_EPOCH: ${JSON.stringify(sourceDateEpoch)}`);
+  }
+  const seconds = sourceDateEpoch === undefined ? undefined : Number(sourceDateEpoch);
+  if (seconds !== undefined && !Number.isSafeInteger(seconds)) {
+    throw new Error(`Invalid SOURCE_DATE_EPOCH: ${JSON.stringify(sourceDateEpoch)}`);
+  }
+  const date = seconds === undefined ? new Date() : new Date(seconds * 1_000);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid SOURCE_DATE_EPOCH: ${JSON.stringify(sourceDateEpoch)}`);
+  }
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+async function resolveNativeBuildTime(): Promise<string | undefined> {
+  if (process.env.SOURCE_DATE_EPOCH !== undefined) {
+    return resolveBuildTime();
+  }
+  if (!existsSync(NATIVE_BUILD_TIME_PATH)) {
+    return undefined;
+  }
+  const buildTime = (await readFile(NATIVE_BUILD_TIME_PATH, 'utf8')).trim();
+  if (!UTC_BUILD_TIME_RE.test(buildTime)) {
+    throw new Error(`Invalid native build time in ${NATIVE_BUILD_TIME_PATH}`);
+  }
+  return buildTime;
+}
+
+function validateToolchainConfig(config: ToolchainConfig) {
+  if (config.schemaVersion !== 1) {
+    throw new Error(`Unsupported toolchain schema version: ${config.schemaVersion}`);
+  }
+
+  const ids = new Set<string>();
+  const labels = new Map<string, string>();
+  for (const node of config.nodes) {
+    if (!node.id || !node.name) {
+      throw new Error('Toolchain node IDs and names must not be empty');
+    }
+    if (ids.has(node.id)) {
+      throw new Error(`Duplicate toolchain node ID: ${node.id}`);
+    }
+    ids.add(node.id);
+
+    for (const label of [node.id, node.name, ...node.aliases]) {
+      if (!label) {
+        throw new Error(`Toolchain node ${node.id} has an empty name or alias`);
+      }
+      const existingNode = labels.get(label);
+      if (existingNode && existingNode !== node.id) {
+        throw new Error(
+          `Toolchain filter label ${JSON.stringify(label)} is shared by ${existingNode} and ${node.id}`,
+        );
+      }
+      labels.set(label, node.id);
     }
   }
 
-  // dist/versions.js — inlined constants (no runtime I/O)
+  for (const edge of config.edges) {
+    if (!ids.has(edge.from) || !ids.has(edge.to)) {
+      throw new Error(`Toolchain edge references an unknown node: ${edge.from} -> ${edge.to}`);
+    }
+  }
+
+  for (const id of config.versionExportIds) {
+    if (!ids.has(id)) {
+      throw new Error(`versions export references an unknown toolchain node: ${id}`);
+    }
+  }
+}
+
+async function resolveToolchainNode(
+  node: ToolchainConfigNode,
+  cargoMetadata: CargoMetadata,
+  cliVersion: string,
+  buildTime: string | undefined,
+): Promise<ResolvedToolchainNode> {
+  let version: string | undefined;
+  let revision: string | undefined;
+  let builtAt: string | undefined;
+  const source = node.versionSource;
+
+  switch (source.type) {
+    case 'cli-package':
+      version = cliVersion;
+      break;
+    case 'core-package':
+      version = corePkg.version;
+      break;
+    case 'core-bundled': {
+      const bundledVersions = (corePkg as { bundledVersions?: Record<string, string> })
+        .bundledVersions;
+      version = bundledVersions?.[source.key];
+      break;
+    }
+    case 'npm-dependency':
+      version = await readPackageVersion(
+        join(projectDir, 'node_modules', source.package, 'package.json'),
+        `${source.package}/package.json`,
+      );
+      break;
+    case 'cargo': {
+      const pkg = resolveCargoPackage(cargoMetadata, source.package);
+      revision = sourceRevision(pkg.source);
+      if (source.revision && !revision) {
+        throw new Error(`Expected an exact source revision for Cargo package ${pkg.name}`);
+      }
+      if (source.builtAt) {
+        builtAt = buildTime;
+      } else {
+        version = pkg.version;
+      }
+      break;
+    }
+  }
+
+  if (!version && !builtAt && !revision) {
+    throw new Error(`Could not resolve identity for toolchain node ${node.id}`);
+  }
+
+  return {
+    id: node.id,
+    name: node.name,
+    ...(version ? { version } : {}),
+    ...(revision ? { revision } : {}),
+    ...(builtAt ? { builtAt } : {}),
+    kind: node.kind,
+    delivery: node.delivery,
+    aliases: node.aliases,
+  };
+}
+
+/**
+ * Generate the published toolchain manifest and derive the existing versions export from it.
+ */
+async function syncToolchainExports() {
+  console.log('\nSyncing toolchain exports...');
+  const distDir = join(projectDir, 'dist');
+  const config = JSON.parse(
+    await readFile(join(projectDir, 'toolchain.config.json'), 'utf8'),
+  ) as ToolchainConfig;
+  validateToolchainConfig(config);
+
+  const cliVersion = await readPackageVersion(join(projectDir, 'package.json'), 'vite-plus');
+  const cargoMetadata = readCargoMetadata();
+  const buildTime = await resolveNativeBuildTime();
+  const nodes = await Promise.all(
+    config.nodes.map((node) => resolveToolchainNode(node, cargoMetadata, cliVersion, buildTime)),
+  );
+  const toolchain = {
+    schemaVersion: config.schemaVersion,
+    nodes,
+    edges: config.edges,
+  };
+  const serializedToolchain = JSON.stringify(toolchain, null, 2);
+
+  await writeFile(join(distDir, 'toolchain.json'), `${serializedToolchain}\n`);
+  await writeFile(
+    join(distDir, 'toolchain.js'),
+    `export const toolchain = ${serializedToolchain};\nexport default toolchain;\n`,
+  );
+  await writeFile(
+    join(distDir, 'toolchain.d.ts'),
+    `export type ToolchainNodeKind = 'package' | 'tool' | 'engine';
+export type ToolchainDelivery = 'dependency' | 'bundled' | 'compiled';
+export type ToolchainRelationship = 'depends-on' | 'bundles' | 'uses' | 'compiles';
+export interface ToolchainNode {
+  readonly id: string;
+  readonly name: string;
+  readonly version?: string;
+  readonly revision?: string;
+  readonly builtAt?: string;
+  readonly kind: ToolchainNodeKind;
+  readonly delivery: readonly ToolchainDelivery[];
+  readonly aliases: readonly string[];
+}
+export interface ToolchainEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly relationship: ToolchainRelationship;
+}
+export interface ToolchainManifest {
+  readonly schemaVersion: 1;
+  readonly nodes: readonly ToolchainNode[];
+  readonly edges: readonly ToolchainEdge[];
+}
+export declare const toolchain: ToolchainManifest;
+export default toolchain;
+`,
+  );
+
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const versions = Object.fromEntries(
+    config.versionExportIds.map((id) => {
+      const node = nodesById.get(id);
+      if (!node) {
+        throw new Error(`Missing generated toolchain node for versions export: ${id}`);
+      }
+      if (!node.version) {
+        throw new Error(`Toolchain node ${id} has no version for the versions export`);
+      }
+      return [node.name, node.version];
+    }),
+  );
+
   await writeFile(
     join(distDir, 'versions.js'),
     `export const versions = ${JSON.stringify(versions, null, 2)};\n`,
   );
-
-  // dist/versions.d.ts — type declarations
   const typeFields = Object.keys(versions)
-    .map((k) => `  readonly '${k}': string;`)
+    .map((key) => `  readonly '${key}': string;`)
     .join('\n');
   await writeFile(
     join(distDir, 'versions.d.ts'),
     `export declare const versions: {\n${typeFields}\n};\n`,
   );
 
+  console.log(`  Created ./toolchain (${nodes.length} components)`);
   console.log(`  Created ./versions (${Object.keys(versions).length} tools)`);
 }
 

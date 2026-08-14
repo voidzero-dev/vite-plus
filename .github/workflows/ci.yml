@@ -1445,6 +1445,7 @@ jobs:
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
       # `contains(needs.*.result, 'failure')` ignores "skipped" results.
+      - install-e2e-test
       - install-e2e-test-sfw
     steps:
       - run: exit 1

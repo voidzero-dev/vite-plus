@@ -204,6 +204,7 @@ pub(super) fn print_help() {
   {bold}config{reset}         Configure hooks and agent integration
   {bold}hooks{reset}          Manage the Git hook dispatcher
   {bold}staged{reset}         Run linters on staged files
+  {bold}toolchain{reset}      Show Vite+ tool versions and relationships
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided

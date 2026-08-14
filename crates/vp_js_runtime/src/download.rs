@@ -62,8 +62,13 @@ pub async fn download_file(
     // Make the request *and* the body stream a single retried unit, so a
     // truncated download (bytes written != advertised Content-Length) triggers
     // a re-download instead of surfacing as a corrupt archive later.
+    //
+    // Runtime archives are tens of megabytes, so the request gets the longer,
+    // configurable download budget instead of the shared client's 2-minute
+    // default — a slow-but-steady transfer must be allowed to finish.
+    let timeout = vp_shared::download_timeout();
     let result = (|| async {
-        let response = client.get(url).send().await?.error_for_status()?;
+        let response = client.get(url).timeout(timeout).send().await?.error_for_status()?;
 
         // Advertised length, used both for the progress bar and the
         // truncation check below.

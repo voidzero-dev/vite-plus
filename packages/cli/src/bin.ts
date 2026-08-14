@@ -11,6 +11,7 @@
  */
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
@@ -101,6 +102,8 @@ if (args[0] === 'help' && args[1]) {
 }
 
 const command = args[0];
+const cliDistDir = path.dirname(fileURLToPath(import.meta.url));
+const vitePlusPackagePath = path.dirname(cliDistDir);
 
 if (maybePrintCommandHelp(args)) {
   // Help is rendered by the local CLI so it matches the installed toolchain.
@@ -139,6 +142,8 @@ if (maybePrintCommandHelp(args)) {
       vite,
       test,
       doc,
+      toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
+      vitePlusPackagePath,
       resolveUniversalViteConfig,
       args: rustCliArgs,
     });
