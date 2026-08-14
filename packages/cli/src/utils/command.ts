@@ -39,6 +39,9 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: options.cwd,
     env: options.envs,
+    // Own process group (POSIX) so the timeout can kill the whole tree: the
+    // child runs arbitrary project code that may spawn its own children.
+    detached: process.platform !== 'win32',
   });
   const promise = new Promise<RunCommandResult>((resolve, reject) => {
     const stdout: Buffer[] = [];
@@ -51,7 +54,21 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
         ? undefined
         : setTimeout(() => {
             timedOut = true;
-            child.kill('SIGKILL');
+            if (process.platform !== 'win32' && child.pid) {
+              try {
+                process.kill(-child.pid, 'SIGKILL');
+              } catch {
+                child.kill('SIGKILL');
+              }
+            } else {
+              child.kill('SIGKILL');
+            }
+            // A descendant that inherited the pipes can hold them open past
+            // the kill (a Windows child tree, or a POSIX process that left
+            // the group). Release our ends so `close` always fires; the
+            // timeout path rejects without reading the output anyway.
+            child.stdout?.destroy();
+            child.stderr?.destroy();
           }, options.timeoutMs);
     timer?.unref();
     child.stdout?.on('data', (data) => {

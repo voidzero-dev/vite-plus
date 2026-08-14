@@ -27,6 +27,34 @@ describe('command runners', () => {
     ).rejects.toThrow(/timed out after 200ms/);
   });
 
+  it(
+    'times out even when a grandchild inherits the stdio pipes',
+    { timeout: 10_000 },
+    async () => {
+      // Arbitrary project code run by a config worker can spawn its own
+      // children. This child spawns a grandchild that inherits the piped
+      // stdio, then wedges like a blocking plugin factory. Without a tree
+      // kill the SIGKILL reaches only the direct child, the grandchild
+      // keeps the stdout pipe open, `close` never fires, and the promise
+      // never settles. The grandchild self-terminates after 15s so a
+      // failing run leaves nothing behind.
+      await expect(
+        runCommandSilently({
+          command: process.execPath,
+          args: [
+            '-e',
+            `const { spawn } = require('node:child_process');
+             spawn(process.execPath, ['-e', 'setTimeout(() => {}, 15_000)'], { stdio: 'inherit' });
+             setInterval(() => {}, 1000);`,
+          ],
+          cwd: process.cwd(),
+          envs: process.env,
+          timeoutMs: 500,
+        }),
+      ).rejects.toThrow(/timed out after 500ms/);
+    },
+  );
+
   it('does not reject a fast child because a timeout is configured', async () => {
     const result = await runCommandSilently({
       command: process.execPath,
