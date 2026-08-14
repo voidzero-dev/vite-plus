@@ -206,7 +206,7 @@ catalogs:
       version: 1.1.1
     playwright:
       specifier: ^1.57.0
-      version: 1.57.0
+      version: 1.62.1
     react:
       specifier: ^19.1.0
       version: 19.2.0
@@ -313,7 +313,7 @@ importers:
         version: 16.4.0
       playwright:
         specifier: 'catalog:'
-        version: 1.57.0
+        version: 1.62.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -769,21 +769,6 @@ importers:
       '@napi-rs/wasm-runtime':
         specifier: 'catalog:'
         version: 1.2.2(@emnapi/core@2.0.0-alpha.4)(@emnapi/runtime@2.0.0-alpha.4)
-
-  rolldown/packages/browser-tests:
-    devDependencies:
-      '@vitest/browser-playwright':
-        specifier: ^4.1.6
-        version: 4.1.10(playwright@1.62.1)(vite@packages+core)(vitest@4.1.10)
-      '@webcontainer/test':
-        specifier: ^0.3.0
-        version: 0.3.0(vitest@4.1.10)
-      playwright:
-        specifier: ^1.62.0
-        version: 1.62.1
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
 
   rolldown/packages/debug:
     devDependencies:
@@ -2421,10 +2406,6 @@ packages:
 
   '@loaderkit/resolve@1.0.4':
     resolution: {integrity: sha512-rJzYKVcV4dxJv+vW6jlvagF8zvGxHJ2+HTr1e2qOejfmGhAApgJHl8Aog4mMszxceTRiKTTbnpgmTO1bEZHV/A==}
-
-  '@msgpack/msgpack@3.1.3':
-    resolution: {integrity: sha512-47XIizs9XZXvuJgoaJUIE2lFoID8ugvc0jzSHP+Ptfk8nTbnR8g788wv48N03Kx0UkAv559HWRQ3yzOgzlRNUA==}
-    engines: {node: '>= 18'}
 
   '@napi-rs/cli@3.8.2':
     resolution: {integrity: sha512-iFmp3Lo/ipXoJI1I/6V/xU4hQV42bXS3A7j8C+Wt3LOtYY7HFCilkhyUkN1igLJFXWMICq95kNxhNcwzNRd+Kw==}
@@ -4614,18 +4595,6 @@ packages:
   '@wdio/utils@9.20.1':
     resolution: {integrity: sha512-C/Gsy5NAatsGUF1eT9Ks/ErR52/X4YI7MSm7BtwNOw8v2Ko+SiCA5qXts61J0A7QYwOn4gfXfBZZnzSAng6G/w==}
     engines: {node: '>=18.20.0'}
-
-  '@webcontainer/api@1.6.4':
-    resolution: {integrity: sha512-r9sHCXg1FcC1AMgppGwAc0vYWaQhqvg282cnsuPbJEzYnWifAdCVvg+8ngJUEHyHcomhJJp+/zuytite4ITHLw==}
-
-  '@webcontainer/snapshot@0.1.0':
-    resolution: {integrity: sha512-PTIGQ3osUpTbK/dqB8RYbcZGv8IK+DJACx709z5sFbeIlngB3hUFpTEYFYs1SbUvr/AEQqvd0/bhc4ectrPRRw==}
-    engines: {node: '>=16'}
-
-  '@webcontainer/test@0.3.0':
-    resolution: {integrity: sha512-Apl27MWndoSKLNWg1dTVa8QjDJbIXBbCP3eLO27xs7g+LyijAktOFqb+CFSJQo8DIdQDjRjvMm7o9B/5behYzw==}
-    peerDependencies:
-      vitest: ^4
 
   '@yuku-codegen/binding-android-arm64@0.8.3':
     resolution: {integrity: sha512-/EKnnqwvN7xYoVDhQEIEJTdPDwGW1wkFz/2Eku3ES/IJd4lcQh/OaIDFBmoJKvpe12enrb1TIoYh1fxasGXolA==}
@@ -7055,19 +7024,9 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  playwright-core@1.57.0:
-    resolution: {integrity: sha512-agTcKlMw/mjBWOnD6kFZttAAGHgi/Nw0CZ2o6JqWSbMlI219lAFLZZCyqByTsvVAJq5XA5H8cA6PrvBRpBWEuQ==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   playwright-core@1.62.1:
     resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
     engines: {node: '>=20'}
-    hasBin: true
-
-  playwright@1.57.0:
-    resolution: {integrity: sha512-ilYQj1s8sr2ppEJ2YVadYBN0Mb3mdo9J0wQ+UuDhzYqURwSoW4n1Xs5vs7ORwgDGmyEh33tRMeS8KhdkMoLXQw==}
-    engines: {node: '>=18'}
     hasBin: true
 
   playwright@1.62.1:
@@ -9759,8 +9718,6 @@ snapshots:
     dependencies:
       '@braidai/lang': 1.1.2
 
-  '@msgpack/msgpack@3.1.3': {}
-
   '@napi-rs/cli@3.8.2(@emnapi/core@2.0.0-alpha.4)(@emnapi/runtime@2.0.0-alpha.4)(@types/node@24.10.3)(node-addon-api@7.1.1)(supports-color@8.1.1)':
     dependencies:
       '@inquirer/prompts': 8.5.2(@types/node@24.10.3)
@@ -11337,20 +11294,6 @@ snapshots:
     transitivePeerDependencies:
       - conventional-commits-filter
 
-  '@vitest/browser-playwright@4.1.10(playwright@1.57.0)(vite@packages+core)(vitest@4.1.10)':
-    dependencies:
-      '@vitest/browser': 4.1.10(vite@packages+core)(vitest@4.1.10)
-      '@vitest/mocker': 4.1.10(vite@packages+core)
-      playwright: 1.57.0
-      tinyrainbow: 3.1.0
-      vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-    optional: true
-
   '@vitest/browser-playwright@4.1.10(playwright@1.62.1)(vite@packages+core)(vitest@4.1.10)':
     dependencies:
       '@vitest/browser': 4.1.10(vite@packages+core)(vitest@4.1.10)
@@ -11582,18 +11525,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
       - supports-color
-
-  '@webcontainer/api@1.6.4': {}
-
-  '@webcontainer/snapshot@0.1.0':
-    dependencies:
-      '@msgpack/msgpack': 3.1.3
-
-  '@webcontainer/test@0.3.0(vitest@4.1.10)':
-    dependencies:
-      '@webcontainer/api': 1.6.4
-      '@webcontainer/snapshot': 0.1.0
-      vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/browser-webdriverio@4.1.10)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
 
   '@yuku-codegen/binding-android-arm64@0.8.3':
     optional: true
@@ -13907,15 +13838,7 @@ snapshots:
     dependencies:
       playwright-core: 1.62.1
 
-  playwright-core@1.57.0: {}
-
   playwright-core@1.62.1: {}
-
-  playwright@1.57.0:
-    dependencies:
-      playwright-core: 1.57.0
-    optionalDependencies:
-      fsevents: 2.3.2
 
   playwright@1.62.1:
     dependencies:
@@ -14984,7 +14907,7 @@ snapshots:
       '@edge-runtime/vm': 5.0.0
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.10.3
-      '@vitest/browser-playwright': 4.1.10(playwright@1.57.0)(vite@packages+core)(vitest@4.1.10)
+      '@vitest/browser-playwright': 4.1.10(playwright@1.62.1)(vite@packages+core)(vitest@4.1.10)
       '@vitest/browser-preview': 4.1.10(vite@packages+core)(vitest@4.1.10)
       '@vitest/browser-webdriverio': 4.1.10(vite@packages+core)(vitest@4.1.10)(webdriverio@9.20.1(supports-color@8.1.1))
       happy-dom: 20.0.10
