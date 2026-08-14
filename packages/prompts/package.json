@@ -27,7 +27,7 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@clack/core": "^1.0.0",
+    "@clack/core": "catalog:",
     "picocolors": "^1.0.0",
     "sisteransi": "^1.0.5"
   },

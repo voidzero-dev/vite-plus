@@ -53,6 +53,10 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
+## Git Hooks (optional)
+
+Pre-commit checks are opt-in. Run `vp config` after a build to install the hook dispatcher; each commit then runs `vp staged` on staged files. `vp staged` loads its config from `vite.config.ts` and needs the built JS packages, so build first. Opt out with `vp hooks disable`, or skip one run with `VP_GIT_HOOKS=0`. If husky was active in your clone before, run `git config --unset core.hooksPath` once first.
+
 ## Install the Vite+ Global CLI from source code
 
 ```bash

@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    '*.@(js|ts|tsx|md|yaml|yml)': 'vp check --fix',
+    '*.rs': 'cargo fmt --',
+  },
   lint: {
     options: {
       typeAware: true,
