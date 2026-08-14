@@ -15,6 +15,9 @@ catalogs:
     '@babel/preset-typescript':
       specifier: ^7.29.7
       version: 7.29.7
+    '@clack/core':
+      specifier: ^1.0.0
+      version: 1.4.3
     '@emnapi/core':
       specifier: 2.0.0-alpha.4
       version: 2.0.0-alpha.4
@@ -204,6 +207,9 @@ catalogs:
     picocolors:
       specifier: ^1.1.1
       version: 1.1.1
+    picomatch:
+      specifier: ^4.0.2
+      version: 4.0.5
     playwright:
       specifier: ^1.57.0
       version: 1.62.1
@@ -581,10 +587,10 @@ importers:
         specifier: 'catalog:'
         version: 0.63.0(vite-plus@packages+cli)
       picocolors:
-        specifier: ^1.1.1
+        specifier: 'catalog:'
         version: 1.1.1
       picomatch:
-        specifier: ^4.0.3
+        specifier: 'catalog:'
         version: 4.0.5
       pkg-types:
         specifier: ^2.3.0
@@ -596,13 +602,13 @@ importers:
         specifier: 'catalog:'
         version: 0.28.0(@typescript/native-preview@7.0.0-dev.20260605.1)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@6.0.3)
       rollup:
-        specifier: ^4.18.0
+        specifier: 'catalog:'
         version: 4.60.4
       rollup-plugin-license:
         specifier: ^3.6.0
         version: 3.7.1(picomatch@4.0.5)(rollup@4.60.4)
       semver:
-        specifier: ^7.7.3
+        specifier: 'catalog:'
         version: 7.8.5
       tinyglobby:
         specifier: ^0.2.15
@@ -624,7 +630,7 @@ importers:
   packages/prompts:
     dependencies:
       '@clack/core':
-        specifier: ^1.0.0
+        specifier: 'catalog:'
         version: 1.4.3
       picocolors:
         specifier: ^1.0.0
