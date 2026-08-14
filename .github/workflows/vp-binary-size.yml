@@ -17,7 +17,6 @@ defaults:
 jobs:
   inputs:
     name: Detect native input changes
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -237,8 +236,9 @@ jobs:
   comment:
     name: Report binary size
     needs: build
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    # Fork runs get a read-only token regardless of this block; the script
+    # then keeps the report in the job summary and skips the PR comment.
     permissions:
       contents: read
       issues: write
@@ -256,6 +256,7 @@ jobs:
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           SIZE_DIR: ${{ runner.temp }}/native-size
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         with:
           script: |
             const fs = require('node:fs');
@@ -367,6 +368,11 @@ jobs:
             ].join('\n');
 
             await core.summary.addRaw(body.replace(marker, '')).write();
+
+            if (process.env.SAME_REPO !== 'true') {
+              core.info('Fork PR: the report stays in the job summary above.');
+              return;
+            }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
