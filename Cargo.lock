@@ -8540,6 +8540,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "hex",
+ "httpmock",
  "indicatif",
  "node-semver",
  "pgp",
