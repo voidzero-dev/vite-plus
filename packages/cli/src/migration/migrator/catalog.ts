@@ -326,7 +326,9 @@ export function rewritePnpmWorkspaceYaml(
       const version = getCatalogDependencySpec(currentVersion, managed[key], true, {
         preferredCatalogSpec,
       });
-      deleteYamlMapKey(overrides, key);
+      if (overrides instanceof YAMLMap) {
+        overrides.delete(key);
+      }
       doc.setIn(['overrides', scalarString(overrideKey)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
@@ -836,20 +838,6 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
   return undefined;
 }
 
-// Delete a key by its literal name. `YAMLMap.delete` compares the key NODE, so
-// find the node in `.items` first. A fresh scalar would silently no-op.
-function deleteYamlMapKey(map: unknown, key: string): void {
-  if (!(map instanceof YAMLMap)) {
-    return;
-  }
-  const target = map.items.find(
-    (item) => item.key instanceof Scalar && item.key.value === key,
-  )?.key;
-  if (target) {
-    map.delete(target);
-  }
-}
-
 /**
  * Merge the managed override entries into a pnpm `overrides` record, under the
  * range-qualified keys (see `pnpmOverrideKey`).
@@ -865,6 +853,12 @@ function deleteYamlMapKey(map: unknown, key: string): void {
  * `getCatalogDependencySpec`, which keeps a `catalog:` reference in the
  * pnpm-workspace.yaml sink. A `file:` managed spec (force-override mode) always
  * wins, because there is no catalog to resolve against in that mode.
+ *
+ * Force-override mode also appends the `vite-plus` pin, under a BARE key. The
+ * pin only exists in `file:` tgz mode, where migration writes the tgz spec
+ * straight into every manifest instead of a `catalog:` reference. In that mode
+ * there is no catalog provenance for a bare key to strip. This matches the
+ * workspace-yaml force-override path in `rewriteStandaloneProject`.
  */
 export function mergeManagedPnpmOverrides(
   overrides: Record<string, string> | undefined,
@@ -877,6 +871,9 @@ export function mergeManagedPnpmOverrides(
     delete next[dependencyName];
     next[overrideKey] =
       existing?.startsWith('catalog:') && !managedSpec.startsWith('file:') ? existing : managedSpec;
+  }
+  if (isForceOverrideMode()) {
+    next[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
   }
   return next;
 }
@@ -1273,14 +1270,7 @@ export function rewriteRootWorkspacePackageJson(
         }
         pkg.pnpm = {
           ...pkg.pnpm,
-          overrides: {
-            ...mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
-            // The force-override `vite-plus` pin keeps a BARE key: it only exists
-            // in `file:` tgz mode, where migration writes the tgz spec straight
-            // into every manifest instead of a `catalog:` reference, so there is
-            // no catalog provenance for a bare key to strip.
-            ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
-          },
+          overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
           peerDependencyRules: {
             ...pkg.pnpm?.peerDependencyRules,
             allowAny: [

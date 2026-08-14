@@ -61,6 +61,7 @@ import {
   VITEST_IS_MANAGED_OVERRIDE,
   managedOverrideKey,
   pnpmMajor,
+  pnpmOverrideKey,
   type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PnpmPackageJsonSettings,
@@ -155,8 +156,8 @@ export function overridesSatisfyVitePlus(
   if (
     !usesVitest &&
     VITEST_IS_MANAGED_OVERRIDE &&
-    (typeof overrides?.[managedOverrideKey('vitest', keyStyle)] === 'string' ||
-      typeof overrides?.vitest === 'string')
+    (typeof overrides?.vitest === 'string' ||
+      (keyStyle === 'pnpm-ranged' && typeof overrides?.[pnpmOverrideKey('vitest')] === 'string'))
   ) {
     return false;
   }
@@ -897,16 +898,16 @@ function ensureOverrideEntries(
     // user's own `catalog:<name>` choice survives. Then delete the bare key.
     // Two keys for one package would restore the match that clobbers
     // `catalog:` importers.
-    const currentSpec = next[overrideKey] ?? next[dependencyName];
     if (overrideKey !== dependencyName && next[dependencyName] !== undefined) {
+      next[overrideKey] ??= next[dependencyName];
       delete next[dependencyName];
       changed = true;
     }
-    if (!overrideSpecSatisfiesVitePlus(dependencyName, currentSpec, catalogDependencyResolver)) {
+    if (
+      !overrideSpecSatisfiesVitePlus(dependencyName, next[overrideKey], catalogDependencyResolver)
+    ) {
       next[overrideKey] = overrideSpec;
       changed = true;
-    } else if (next[overrideKey] !== currentSpec) {
-      next[overrideKey] = currentSpec;
     }
   }
   return { overrides: next, changed };

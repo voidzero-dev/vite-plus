@@ -197,16 +197,7 @@ export function rewriteStandaloneProject(
         // package names, so it stays bare.
         pkg.pnpm = {
           ...pkg.pnpm,
-          overrides: {
-            ...mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
-            // The force-override `vite-plus` pin keeps a BARE key. The pin only
-            // exists in `file:` tgz mode, where migration writes the tgz spec
-            // straight into every manifest instead of a `catalog:` reference.
-            // In that mode there is no catalog provenance for a bare key to
-            // strip. This matches the workspace-yaml force-override path in
-            // `rewriteStandaloneProject`.
-            ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
-          },
+          overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
           peerDependencyRules: {
             ...pkg.pnpm?.peerDependencyRules,
             allowAny: [

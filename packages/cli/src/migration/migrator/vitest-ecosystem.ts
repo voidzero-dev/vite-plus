@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { Scalar, YAMLMap } from 'yaml';
+import { YAMLMap } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import {
@@ -563,8 +563,8 @@ export function removeManagedVitestEntry(
     return false;
   }
   let removed = false;
-  for (const key of Object.keys(record)) {
-    if (isManagedVitestOverrideKey(key, keyStyle) && typeof record[key] === 'string') {
+  for (const key of managedVitestOverrideKeys(keyStyle)) {
+    if (typeof record[key] === 'string') {
       delete record[key];
       removed = true;
     }
@@ -583,25 +583,17 @@ export function removeYamlMapVitestEntry(
   if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
     return;
   }
-  const targets = map.items
-    .filter(
-      (item) =>
-        item.key instanceof Scalar &&
-        typeof item.key.value === 'string' &&
-        isManagedVitestOverrideKey(item.key.value, keyStyle),
-    )
-    .map((item) => item.key);
-  for (const target of targets) {
-    map.delete(target);
+  for (const key of managedVitestOverrideKeys(keyStyle)) {
+    map.delete(key);
   }
 }
 
-// True for `vitest` itself, and, in a pnpm override sink, for the
-// range-qualified spelling. A selector-scoped key (`some-app>vitest`) constrains
-// only that parent's subtree. Such a key is never a managed key, so forms with
-// `>` stay out.
-function isManagedVitestOverrideKey(key: string, keyStyle: ManagedOverrideKeyStyle): boolean {
-  return key === 'vitest' || (keyStyle === 'pnpm-ranged' && key === pnpmOverrideKey('vitest'));
+// The managed spellings of the `vitest` override key: `vitest` everywhere, plus
+// `vitest@*` in a pnpm override sink (see `pnpmOverrideKey`). Exact key
+// equality keeps selector-scoped keys such as `some-app>vitest` out, and, in
+// bare sinks, a user-authored ranged key too.
+function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] {
+  return keyStyle === 'pnpm-ranged' ? ['vitest', pnpmOverrideKey('vitest')] : ['vitest'];
 }
 
 // Remove the managed `vitest` entry from pnpm peerDependencyRules (its
