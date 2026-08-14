@@ -1297,11 +1297,7 @@ WRAPPER_EOF
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
       cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
     fi
-  elif [ "$SHIM_DIR" = "$INSTALL_DIR/bin" ]; then
-    # Monolithic: relative link next to `<DATA>/current`
-    ln -sfn "../current/bin/vp" "$SHIM_DIR/vp"
   else
-    # Split: bin is not a sibling of current (e.g. ~/.local/bin)
     ln -sfn "$INSTALL_DIR/current/bin/vp" "$SHIM_DIR/vp"
   fi
 

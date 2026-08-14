@@ -3,6 +3,7 @@
 use std::{io::Write, process::ExitStatus};
 
 use owo_colors::OwoColorize;
+use rustc_hash::FxHashSet;
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
 use vt_str::Str;
@@ -11,6 +12,7 @@ use crate::{
     cli::exit_status,
     commands::{
         env::setup::{SHIM_TOOLS, shim_filename},
+        global::install::is_vp_shim_target,
         shell::{ALL_SHELL_PROFILES, ShellProfileKind, abbreviate_home_path, resolve_profile_path},
     },
     error::Error,
@@ -89,30 +91,25 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 /// Remove the shim files vite-plus owns from the bin directory.
 ///
 /// The bin directory itself is never touched: it may be shared with other
-/// tools (e.g. `~/.local/bin`). Under a single-root mapping this is a
-/// harmless no-op subset of the root removal that follows.
+/// tools (e.g. `~/.local/bin`). Package shims are taken from
+/// `<DATA>/bins/*.json`; `vp` and the default env shims are also
+/// considered because they are not recorded there. A candidate is deleted
+/// only when it is a symlink to this install's `vp` (Unix) or a trampoline
+/// we wrote (Windows).
 fn remove_shim_files(dirs: &vp_shared::VpDirs) {
-    let mut names: Vec<String> = SHIM_TOOLS.iter().map(|tool| shim_filename(tool)).collect();
-    names.push(shim_filename("vp"));
+    let mut names = recorded_bin_shim_names(dirs);
+    names.insert(shim_filename("vp"));
+    names.extend(SHIM_TOOLS.iter().map(|tool| shim_filename(tool)));
     #[cfg(windows)]
-    names.push("vp-use.cmd".to_string());
-
-    // Package shims recorded in `<DATA>/bins/*.json` (best-effort; the data
-    // root itself is removed right after).
-    if let Ok(entries) = std::fs::read_dir(dirs.data.join("bins").as_path()) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json")
-                && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
-            {
-                names.push(shim_filename(stem));
-            }
-        }
-    }
+    names.insert("vp-use.cmd".to_string());
 
     let mut removed = 0;
     for name in names {
-        match std::fs::remove_file(dirs.bin.join(&name).as_path()) {
+        let path = dirs.bin.join(&name);
+        if !is_vp_shim_target(&path) {
+            continue;
+        }
+        match std::fs::remove_file(path.as_path()) {
             Ok(()) => removed += 1,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
@@ -127,6 +124,23 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
             dirs.bin.as_path().display()
         ));
     }
+}
+
+/// Binary names recorded in `<DATA>/bins/*.json`.
+fn recorded_bin_shim_names(dirs: &vp_shared::VpDirs) -> FxHashSet<String> {
+    let mut names = FxHashSet::default();
+    let Ok(entries) = std::fs::read_dir(dirs.data.join("bins").as_path()) else {
+        return names;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "json")
+            && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
+        {
+            names.insert(shim_filename(stem));
+        }
+    }
+    names
 }
 
 /// A shell profile that contains Vite+ sourcing lines.
@@ -816,6 +830,50 @@ mod tests {
             let result = execute(true);
             assert!(result.is_ok());
             assert!(result.unwrap().success());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remove_shim_files_deletes_only_vp_symlinks() {
+        vp_shared::EnvConfig::scoped(|config| {
+            let bin = &config.dirs.bin;
+            let bins_dir = config.dirs.data.join("bins");
+            std::fs::create_dir_all(bin).unwrap();
+            std::fs::create_dir_all(&bins_dir).unwrap();
+
+            std::fs::write(bin.join("node").as_path(), b"system-node").unwrap();
+            let vp_target = crate::commands::global::install::package_shim_target();
+            std::os::unix::fs::symlink(vp_target.as_path(), bin.join("vp").as_path()).unwrap();
+            // Leftover relative link from a monolithic `<DATA>/bin` must still
+            // resolve to `<DATA>/current/bin/vp` and be removed.
+            std::os::unix::fs::symlink("../current/bin/vp", bin.join("npm").as_path()).unwrap();
+
+            std::fs::write(bins_dir.join("tsc.json").as_path(), "{}").unwrap();
+            std::os::unix::fs::symlink(vp_target.as_path(), bin.join("tsc").as_path()).unwrap();
+
+            std::fs::write(bins_dir.join("eslint.json").as_path(), "{}").unwrap();
+            std::os::unix::fs::symlink("/usr/bin/eslint", bin.join("eslint").as_path()).unwrap();
+
+            remove_shim_files(&config.dirs);
+
+            assert!(bin.join("node").as_path().is_file(), "unrelated node binary must be kept");
+            assert!(
+                std::fs::symlink_metadata(bin.join("eslint").as_path()).is_ok(),
+                "recorded shim that does not point at vp must be kept"
+            );
+            assert!(
+                std::fs::symlink_metadata(bin.join("vp").as_path()).is_err(),
+                "vp symlink must be removed"
+            );
+            assert!(
+                std::fs::symlink_metadata(bin.join("npm").as_path()).is_err(),
+                "default env shim that points at vp must be removed"
+            );
+            assert!(
+                std::fs::symlink_metadata(bin.join("tsc").as_path()).is_err(),
+                "recorded package shim that points at vp must be removed"
+            );
         });
     }
 }

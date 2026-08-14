@@ -3476,6 +3476,14 @@ export interface DownloadPackageManagerResult {
 export declare function ensureBlockingStdio(): void;
 
 /**
+ * Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+ *
+ * JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
+ * this is the JS surface of the same `EnvConfig::get().dirs` Rust uses.
+ */
+export declare function getVpDirs(): VpDirsJs;
+
+/**
  * Whether `config_key` is already declared as a top-level property in the
  * vite config's `defineConfig({...})` (or equivalent) object literal.
  *
@@ -3792,6 +3800,15 @@ export declare function upsertJsonConfig(
 
 /** Render the Vite+ header using the Rust implementation. */
 export declare function vitePlusHeader(): string;
+
+/** Resolved on-disk category roots from [`vp_shared::EnvConfig`]. */
+export interface VpDirsJs {
+  bin: string;
+  data: string;
+  cache: string;
+  config: string;
+  state: string;
+}
 
 /**
  * Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects

@@ -41,7 +41,7 @@ pub struct VpDirs {
     pub cache: AbsolutePathBuf,
     /// User configuration (`<CONFIG>/env`, `<CONFIG>/config.json`, …).
     pub config: AbsolutePathBuf,
-    /// State files (session version, upgrade-check cache, …).
+    /// State files (session version, …).
     pub state: AbsolutePathBuf,
 }
 

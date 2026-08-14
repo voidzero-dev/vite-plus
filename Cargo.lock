@@ -8504,6 +8504,7 @@ dependencies = [
  "node-semver",
  "owo-colors",
  "oxc_resolver",
+ "rustc-hash",
  "serde",
  "serde_json",
  "serial_test",

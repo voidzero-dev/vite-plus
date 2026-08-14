@@ -1016,19 +1016,21 @@ function Main {
                 Remove-Item -Path $stalePath -Force -ErrorAction SilentlyContinue
             }
         }
-        # Keep consistent with the original install.ps1 wrapper format
+        # Pin VP_HOME to the data root. On a split install $ShimDir is not
+        # `$InstallDir\bin`, so `%~dp0..` would miss `<data>\current`.
         $wrapperContent = @"
 @echo off
-set VP_HOME=%~dp0..
+set VP_HOME=$InstallDir
 "%VP_HOME%\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 "@
         Set-Content -Path (Join-Path $ShimDir "vp.cmd") -Value $wrapperContent -NoNewline
 
         # Also create shell script wrapper for Git Bash/MSYS
+        $installDirUnix = $InstallDir -replace '\\', '/'
         $shContent = @"
 #!/bin/sh
-VP_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")")")"
+VP_HOME="$installDirUnix"
 export VP_HOME
 exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 "@

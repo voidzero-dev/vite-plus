@@ -49,21 +49,40 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> InstallError {
     (Some(package_name.to_string()), Box::new(error.into()))
 }
 
-/// Symlink target used for package shims on Unix (relative to the bin dir).
-#[cfg(unix)]
-pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
+/// Absolute path of the `vp` binary package shims should link to:
+/// `<DATA>/current/bin/vp` (or `vp.exe` on Windows).
+pub(crate) fn package_shim_target() -> AbsolutePathBuf {
+    vp_shared::EnvConfig::get()
+        .dirs
+        .data
+        .join("current")
+        .join("bin")
+        .join(vp_shared::VP_BINARY_NAME)
+}
 
-/// Check whether a bin symlink target points at the vp binary: the standard
-/// relative package-shim target, or a resolvable link to a binary named `vp`
-/// (absolute paths in external/dev layouts created by `vp env setup`).
-#[cfg(unix)]
-pub(crate) fn is_vp_shim_target(
-    target: &std::path::Path,
-    shim_path: &vt_path::AbsolutePath,
-) -> bool {
-    target == std::path::Path::new(PACKAGE_SHIM_TARGET)
-        || (target.file_name().is_some_and(|file_name| file_name == "vp")
-            && std::fs::exists(shim_path.as_path()).unwrap_or(false))
+/// Whether `shim_path` is a Vite+ shim for this install's `vp`.
+///
+/// Unix: a symlink whose target (relative links resolved against the shim
+/// parent) is [`package_shim_target`], or a working link to a `vp` binary
+/// (dev / `vp env setup` layouts). Windows: a symlink to `vp`/`vp.exe`, or
+/// a regular file (trampoline copy / `vp-use.cmd`).
+pub(crate) fn is_vp_shim_target(shim_path: &vt_path::AbsolutePath) -> bool {
+    match std::fs::read_link(shim_path.as_path()) {
+        Ok(target) => {
+            if cfg!(windows) {
+                target
+                    .file_name()
+                    .is_some_and(|name| name == vp_shared::VP_BINARY_NAME || name == "vp")
+            } else {
+                let expected = package_shim_target();
+                let resolved = shim_path.parent().map(|parent| parent.join(&target).clean());
+                resolved.as_ref().is_some_and(|path| path.as_path() == expected.as_path())
+                    || (target.file_name().is_some_and(|name| name == "vp")
+                        && std::fs::exists(shim_path.as_path()).unwrap_or(false))
+            }
+        }
+        Err(_) => cfg!(windows) && shim_path.as_path().is_file(),
+    }
 }
 
 /// Check whether a binary name is a shim Vite+ owns unconditionally: core
@@ -1095,7 +1114,7 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
 
 /// Create a shim for a package binary.
 ///
-/// On Unix: Creates a symlink to ../current/bin/vp
+/// On Unix: Creates a symlink to `<DATA>/current/bin/vp`
 /// On Windows: Creates a trampoline .exe that forwards to vp.exe
 pub(crate) async fn create_package_shim(
     bin_dir: &vt_path::AbsolutePath,
@@ -1122,19 +1141,17 @@ pub(crate) async fn create_package_shim(
 
         // Keep an existing Vite+ shim: replacing an external/dev-layout link
         // with the relative target would dangle when VP_HOME/current is absent.
-        if let Ok(target) = tokio::fs::read_link(&shim_path).await {
-            if is_vp_shim_target(&target, &shim_path) {
+        if tokio::fs::read_link(&shim_path).await.is_ok() {
+            if is_vp_shim_target(&shim_path) {
                 return Ok(());
             }
             // Exists but points elsewhere (e.g., npm-installed direct symlink) — replace it
             tokio::fs::remove_file(&shim_path).await?;
         }
 
-        // Point at the active vp the same way `vp env setup` does so a split
-        // `<BIN>` (e.g. ~/.local/bin) does not use `../current/bin/vp`.
+        // Point at the active vp the same way `vp env setup` does.
         let current_exe = std::env::current_exe()?;
-        let target =
-            crate::commands::env::setup::resolve_unix_vp_shim_target(&current_exe, bin_dir).await?;
+        let target = crate::commands::env::setup::resolve_unix_vp_shim_target(&current_exe).await?;
         tokio::fs::symlink(&target, &shim_path).await?;
         tracing::debug!("Created package shim symlink {:?} -> {:?}", shim_path, target);
     }

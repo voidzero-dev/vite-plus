@@ -87,25 +87,22 @@ fn user_home_path() -> Option<AbsolutePathBuf> {
     BaseDirs::new().and_then(|dirs| AbsolutePathBuf::new(dirs.home_dir().to_path_buf()))
 }
 
-/// Capture the layout override variables that are set in the process
-/// environment, verbatim, so persisted shell context can re-export them.
+/// Layout variables to re-export in persisted shell context.
 ///
-/// Mirrors the resolution chain's precedence: a set `VP_HOME` pins every
-/// category, making the per-category `VP_*_DIR` overrides dead letters, so
-/// the two are never captured together.
-fn dir_envs_from_process_env() -> HashMap<&'static str, String> {
-    /// The variable's value when set.
-    fn present(name: &'static str) -> Option<String> {
-        std::env::var(name).ok()
-    }
-
-    if let Some(home) = present(env_vars::VP_HOME) {
+/// A set `VP_HOME` pins every category, so it is captured alone (verbatim
+/// from the process environment). Otherwise the *resolved* `bin` / `data` /
+/// `cache` roots are stored as `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`.
+/// That pins this install for later shells without re-exporting `XDG_*`
+/// (those are user/session policy for every tool, not Vite+ overrides).
+fn dir_envs_from_resolved(dirs: &VpDirs) -> HashMap<&'static str, String> {
+    if let Ok(home) = std::env::var(env_vars::VP_HOME) {
         return HashMap::from([(env_vars::VP_HOME, home)]);
     }
-    [env_vars::VP_BIN_DIR, env_vars::VP_DATA_DIR, env_vars::VP_CACHE_DIR]
-        .into_iter()
-        .filter_map(|name| Some((name, present(name)?)))
-        .collect()
+    HashMap::from([
+        (env_vars::VP_BIN_DIR, dirs.bin.as_path().to_string_lossy().into_owned()),
+        (env_vars::VP_DATA_DIR, dirs.data.as_path().to_string_lossy().into_owned()),
+        (env_vars::VP_CACHE_DIR, dirs.cache.as_path().to_string_lossy().into_owned()),
+    ])
 }
 
 /// Centralized configuration read from environment variables.
@@ -122,17 +119,14 @@ pub struct EnvConfig {
     /// hoc.
     pub dirs: VpDirs,
 
-    /// Layout override variables captured verbatim from the process
-    /// environment, for re-export to persisted shell context.
+    /// Layout variables to re-export to persisted shell context.
     ///
-    /// Contains either `VP_HOME` alone or the `VP_BIN_DIR` / `VP_DATA_DIR`
-    /// / `VP_CACHE_DIR` overrides that are set — never both: `VP_HOME`
-    /// precedes the per-category overrides in the resolution chain for
-    /// every category, so when it is set they are dead letters. Consumers
-    /// that write shell context (`vp env setup` scripts, the Windows
-    /// `vp-use.cmd` wrapper) render these so child processes resolve the
-    /// identical roots. Empty when no overrides are set: children then fall
-    /// through to the same defaults.
+    /// Contains either `VP_HOME` alone (when that override is set) or the
+    /// resolved `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR` roots — never
+    /// both, and never `XDG_*`. Consumers that write shell context
+    /// (`vp env setup` scripts, the Windows `vp-use.cmd` wrapper) render
+    /// these so child processes resolve the identical roots even when the
+    /// later session has different XDG variables.
     pub dir_envs: HashMap<&'static str, String>,
 
     /// NPM registry URL.
@@ -198,9 +192,11 @@ impl EnvConfig {
     fn from_env() -> Arc<EnvConfig> {
         let user_home = user_home_path()
             .expect("vite-plus could not resolve a user home directory: no home available");
+        let dirs =
+            VpDirs::resolve(&user_home).expect("vite-plus directories could not be resolved");
         Arc::new(Self {
-            dirs: VpDirs::resolve(&user_home).expect("vite-plus directories could not be resolved"),
-            dir_envs: dir_envs_from_process_env(),
+            dir_envs: dir_envs_from_resolved(&dirs),
+            dirs,
             npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
                 .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into())
@@ -484,21 +480,61 @@ mod tests {
         });
     }
 
-    /// `dir_envs` mirrors the declared layout overrides so persisted shell
-    /// context can re-export them.
+    /// Without `VP_HOME`, `dir_envs` pins the resolved roots as `VP_*_DIR`
+    /// so persisted shell context reproduces this install. Relative
+    /// `VP_BIN_DIR` is ignored by resolution and is not captured raw.
     #[test]
     fn with_vars_populates_dir_envs() {
         let root = tempfile::tempdir().unwrap();
         let cache = root.path().join("cache");
         EnvConfig::with_vars(
             [
-                (env_vars::VP_BIN_DIR, OsStr::new("relative/bin")),
-                (env_vars::VP_CACHE_DIR, cache.as_os_str()),
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, Some(OsStr::new("relative/bin"))),
+                (env_vars::VP_CACHE_DIR, Some(cache.as_os_str())),
+                ("HOME", Some(root.path().as_os_str())),
+                ("USERPROFILE", Some(root.path().as_os_str())),
             ],
             |config| {
-                assert_eq!(config.dir_envs.len(), 2);
-                assert_eq!(config.dir_envs[env_vars::VP_BIN_DIR], "relative/bin");
+                assert_eq!(config.dir_envs.len(), 3);
+                assert_eq!(
+                    config.dir_envs[env_vars::VP_BIN_DIR],
+                    config.dirs.bin.as_path().to_string_lossy()
+                );
+                assert_eq!(
+                    config.dir_envs[env_vars::VP_DATA_DIR],
+                    config.dirs.data.as_path().to_string_lossy()
+                );
                 assert_eq!(config.dir_envs[env_vars::VP_CACHE_DIR], cache.to_string_lossy());
+                assert_ne!(config.dir_envs[env_vars::VP_BIN_DIR], "relative/bin");
+            },
+        );
+    }
+
+    /// XDG inputs affect resolution but are not re-exported; the resolved
+    /// `VP_*_DIR` values are what later shells need.
+    #[test]
+    fn dir_envs_pins_resolved_roots_not_xdg() {
+        let root = tempfile::tempdir().unwrap();
+        let xdg_data = root.path().join("xdg-data");
+        EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, None),
+                (env_vars::VP_DATA_DIR, None),
+                (env_vars::VP_CACHE_DIR, None),
+                (env_vars::XDG_DATA_HOME, Some(xdg_data.as_os_str())),
+                ("HOME", Some(root.path().as_os_str())),
+                ("USERPROFILE", Some(root.path().as_os_str())),
+            ],
+            |config| {
+                assert!(!config.dir_envs.keys().any(|name| name.starts_with("XDG_")));
+                assert_eq!(
+                    config.dir_envs[env_vars::VP_DATA_DIR],
+                    config.dirs.data.as_path().to_string_lossy()
+                );
+                #[cfg(not(target_os = "windows"))]
+                assert_eq!(config.dirs.data.as_path(), xdg_data.join("vite-plus").as_path());
             },
         );
     }

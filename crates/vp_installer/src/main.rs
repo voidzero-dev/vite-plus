@@ -432,18 +432,9 @@ async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>
     #[cfg(unix)]
     {
         let current_vp = dirs.data.join("current").join("bin").join("vp");
-        let link_target = match bin_dir.parent() {
-            Some(parent)
-                if parent.join("current").join("bin").join("vp").as_path()
-                    == current_vp.as_path() =>
-            {
-                std::path::PathBuf::from("../current/bin/vp")
-            }
-            _ => current_vp.as_path().to_path_buf(),
-        };
         let link_path = bin_dir.join("vp");
         let _ = tokio::fs::remove_file(&link_path).await;
-        tokio::fs::symlink(&link_target, &link_path).await?;
+        tokio::fs::symlink(current_vp.as_path(), &link_path).await?;
     }
 
     Ok(())

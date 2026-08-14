@@ -59,9 +59,9 @@ That layout is simple to install and document, but it conflicts with platform co
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bin`    | Executables and shims (`<BIN>/vp`, `<BIN>/node`, …)                                                                                                  |
 | `data`   | CLI versions, managed runtimes, package managers (`<DATA>/current`, `<DATA>/js_runtime`, `<DATA>/package_manager`, `<DATA>/packages`, `<DATA>/bins`) |
-| `cache`  | Disposable caches                                                                                                                                    |
+| `cache`  | Disposable caches (`resolve_cache.json`, `.upgrade-check.json`, create-org tarballs)                                                                 |
 | `config` | User configuration (`<CONFIG>/env*`, `<CONFIG>/config.json`)                                                                                         |
-| `state`  | State files (session version, upgrade-check cache)                                                                                                   |
+| `state`  | State files (session version)                                                                                                                        |
 
 `VpDirs` is a **stateful value**: the strategy chain runs once at
 construction (`VpDirs::resolve()`), the five roots are stored as public
@@ -246,9 +246,9 @@ After the split layout ships, stop grandfathering forever: on `vp upgrade` (and 
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Version dirs, `current`, runtimes, package managers, packages, bins metadata | data dir (`~/.local/share/vite-plus`, …)                                        |
 | `config.json` (and durable user config)                                      | config dir                                                                      |
-| Session / upgrade-check state                                                | state dir                                                                       |
+| Session state                                                                | state dir                                                                       |
 | Shims / env scripts                                                          | **regenerate** into bin + config (do not copy relative links or stale env text) |
-| Resolve cache                                                                | **drop** (rebuild on next use)                                                  |
+| Resolve cache, upgrade-check cache, create-org tarballs                      | cache dir                                                                       |
 
 Custom `VP_HOME` roots are **out of auto-migrate** (they stay a manual full-root pin).
 

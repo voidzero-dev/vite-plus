@@ -28,6 +28,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 owo-colors = { workspace = true }
 oxc_resolver = { workspace = true }
+rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }

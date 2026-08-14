@@ -158,7 +158,7 @@ async fn setup_vp_wrapper(
     #[cfg(unix)]
     {
         let bin_vp = bin_dir.join("vp");
-        let target = resolve_unix_vp_shim_target(current_exe, bin_dir).await?;
+        let target = resolve_unix_vp_shim_target(current_exe).await?;
         let existing = tokio::fs::symlink_metadata(&bin_vp).await.ok();
 
         let should_create_symlink = match existing.as_ref() {
@@ -217,19 +217,12 @@ async fn setup_vp_wrapper(
 #[cfg(unix)]
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
-    bin_dir: &vt_path::AbsolutePath,
 ) -> Result<std::path::PathBuf, Error> {
-    let data = &vp_shared::EnvConfig::get().dirs.data;
-    let current_vp = data.join("current").join("bin").join("vp");
+    let current_vp = crate::commands::global::install::package_shim_target();
     if tokio::fs::try_exists(&current_vp).await.unwrap_or(false) {
         let current_vp_canon = tokio::fs::canonicalize(&current_vp).await.ok();
         let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
         if current_vp_canon.is_some() && current_vp_canon == current_exe_canon {
-            // Relative only when `<BIN>` is `<DATA>/bin` (monolithic). Split
-            // bins such as `~/.local/bin` must point at `<DATA>/current/bin/vp`.
-            if bin_dir.parent().is_some_and(|parent| parent.as_path() == data.as_path()) {
-                return Ok(std::path::PathBuf::from("../current/bin/vp"));
-            }
             return Ok(current_vp.as_path().to_path_buf());
         }
     }
@@ -249,7 +242,7 @@ pub(crate) async fn create_shim(
     let shim_path = bin_dir.join(shim_filename(tool));
 
     #[cfg(unix)]
-    let desired_target = resolve_unix_vp_shim_target(source, bin_dir).await?;
+    let desired_target = resolve_unix_vp_shim_target(source).await?;
 
     let existing = tokio::fs::symlink_metadata(&shim_path).await.ok();
     if existing.is_some() {
@@ -320,12 +313,9 @@ async fn create_unix_shim(
     shim_path: &vt_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
-    let bin_dir = shim_path.parent().ok_or_else(|| {
-        Error::Other(format!("Cannot find parent directory for {tool} shim").into())
-    })?;
-    let target = resolve_unix_vp_shim_target(source, bin_dir).await?;
+    let target = resolve_unix_vp_shim_target(source).await?;
     tokio::fs::symlink(&target, shim_path).await?;
-    tracing::debug!("Created symlink shim at {:?} -> {:?}", shim_path, target);
+    tracing::debug!("Created {tool} symlink shim at {:?} -> {:?}", shim_path, target);
 
     Ok(())
 }
@@ -780,9 +770,8 @@ fn escape_nu_double_quoted_string(value: &str) -> String {
 
 /// Render the re-export lines for the captured layout overrides
 /// ([`EnvConfig::dir_envs`]), sorted by variable name for deterministic
-/// output. Empty when no overrides were captured: children then resolve the
-/// same roots from the defaults (an existing `~/.vite-plus` or the split
-/// platform roots).
+/// output. Always contains either `VP_HOME` or the resolved `VP_*_DIR`
+/// roots so later shells reproduce this install.
 fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     let home_dir = config.user_home.as_path();
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
@@ -818,8 +807,7 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
 ///
 /// PATH is pointed at the resolved bin directory. The layout overrides
 /// captured in [`EnvConfig::dir_envs`] are re-exported so child shells
-/// resolve the identical roots; with no overrides captured the file carries
-/// no export lines at all.
+/// resolve the identical roots.
 fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
@@ -966,10 +954,11 @@ mod tests {
         let custom_data = temp_dir.path().join("custom-data");
         vp_shared::EnvConfig::with_vars(
             [
-                (vp_shared::env_vars::VP_BIN_DIR, custom_bin.as_os_str()),
-                (vp_shared::env_vars::VP_DATA_DIR, custom_data.as_os_str()),
-                ("HOME", temp_dir.path().as_os_str()),
-                ("USERPROFILE", temp_dir.path().as_os_str()),
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, Some(custom_bin.as_os_str())),
+                (vp_shared::env_vars::VP_DATA_DIR, Some(custom_data.as_os_str())),
+                ("HOME", Some(temp_dir.path().as_os_str())),
+                ("USERPROFILE", Some(temp_dir.path().as_os_str())),
             ],
             |_| {
                 // dir_envs is captured from the overlaid environment.
@@ -995,18 +984,38 @@ mod tests {
     }
 
     #[test]
-    fn test_render_env_content_omits_exports_without_overrides() {
+    fn test_render_env_content_pins_resolved_dirs_without_vp_home() {
         let temp_dir = TempDir::new().unwrap();
-        vp_shared::EnvConfig::with_vars([("HOME", temp_dir.path())], |_| {
-            let config = vp_shared::EnvConfig::get();
-            for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-                let content = render_env_content(shell, &config);
-                assert!(
-                    !content.contains("VP_HOME"),
-                    "{shell:?} env file should not mention VP_HOME without overrides, got: {content}"
-                );
-            }
-        });
+        vp_shared::EnvConfig::with_vars(
+            [
+                ("HOME", Some(temp_dir.path().as_os_str())),
+                ("USERPROFILE", Some(temp_dir.path().as_os_str())),
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, None),
+                (vp_shared::env_vars::VP_DATA_DIR, None),
+                (vp_shared::env_vars::VP_CACHE_DIR, None),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
+                    let content = render_env_content(shell, &config);
+                    assert!(
+                        !content.contains("VP_HOME="),
+                        "{shell:?} env file should not pin VP_HOME when unset, got: {content}"
+                    );
+                    assert!(
+                        !content.contains("XDG_"),
+                        "{shell:?} env file should not re-export XDG_*, got: {content}"
+                    );
+                    assert!(
+                        content.contains("VP_BIN_DIR")
+                            && content.contains("VP_DATA_DIR")
+                            && content.contains("VP_CACHE_DIR"),
+                        "{shell:?} env file should pin resolved VP_*_DIR roots, got: {content}"
+                    );
+                }
+            },
+        );
     }
 
     #[tokio::test]
@@ -1467,9 +1476,8 @@ mod tests {
         vp_shared::EnvConfig::with_vars_async(
             test_env_vars(home.as_path(), temp_dir.path()),
             |_| async {
-                let target =
-                    resolve_unix_vp_shim_target(standalone_vp.as_path(), &bin_dir).await.unwrap();
-                assert_eq!(target, std::path::Path::new("../current/bin/vp"));
+                let target = resolve_unix_vp_shim_target(standalone_vp.as_path()).await.unwrap();
+                assert_eq!(target, standalone_vp.as_path());
             },
         )
         .await;
@@ -1492,7 +1500,7 @@ mod tests {
         vp_shared::EnvConfig::with_vars_async(
             test_env_vars(home.as_path(), temp_dir.path()),
             |_| async {
-                let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+                let target = resolve_unix_vp_shim_target(&external_vp).await.unwrap();
                 assert_eq!(target, external_vp);
             },
         )
@@ -1513,7 +1521,7 @@ mod tests {
         vp_shared::EnvConfig::with_vars_async(
             test_env_vars(home.as_path(), temp_dir.path()),
             |_| async {
-                let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+                let target = resolve_unix_vp_shim_target(&external_vp).await.unwrap();
                 assert_eq!(target, external_vp);
             },
         )
@@ -1546,7 +1554,7 @@ mod tests {
                 ("USERPROFILE", Some(user_home.as_os_str())),
             ],
             |_| async {
-                let target = resolve_unix_vp_shim_target(&version_vp, &bin_dir).await.unwrap();
+                let target = resolve_unix_vp_shim_target(&version_vp).await.unwrap();
                 assert_eq!(target, data.join("current").join("bin").join("vp").as_path());
             },
         )

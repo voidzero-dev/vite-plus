@@ -1,7 +1,7 @@
 //! Background upgrade check for the vp CLI.
 //!
 //! Periodically queries the npm registry for the latest version and caches the
-//! result to `<STATE>/.upgrade-check.json`. Displays a one-line notice on
+//! result to `<CACHE>/.upgrade-check.json`. Displays a one-line notice on
 //! stderr when a newer version is available, at most once per 24 hours.
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,15 +22,16 @@ struct UpgradeCheckCache {
     prompted_at: u64,
 }
 
-fn read_cache(install_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> {
-    let cache_path = install_dir.join(CACHE_FILE_NAME);
+fn read_cache(cache_dir: &vt_path::AbsolutePath) -> Option<UpgradeCheckCache> {
+    let cache_path = cache_dir.join(CACHE_FILE_NAME);
     let data = std::fs::read_to_string(cache_path.as_path()).ok()?;
     serde_json::from_str(&data).ok()
 }
 
-fn write_cache(install_dir: &vt_path::AbsolutePath, cache: &UpgradeCheckCache) {
-    let cache_path = install_dir.join(CACHE_FILE_NAME);
+fn write_cache(cache_dir: &vt_path::AbsolutePath, cache: &UpgradeCheckCache) {
+    let cache_path = cache_dir.join(CACHE_FILE_NAME);
     if let Ok(data) = serde_json::to_string(cache) {
+        let _ = std::fs::create_dir_all(cache_dir.as_path());
         let _ = std::fs::write(cache_path.as_path(), &data);
     }
 }
@@ -72,7 +73,7 @@ async fn resolve_version_string() -> Option<String> {
 }
 
 pub struct UpgradeCheckResult {
-    state_dir: vt_path::AbsolutePathBuf,
+    cache_dir: vt_path::AbsolutePathBuf,
     cache: UpgradeCheckCache,
 }
 
@@ -80,10 +81,10 @@ pub struct UpgradeCheckResult {
 /// hasn't been prompted within the last 24 hours. Returns `None` otherwise.
 pub async fn check_for_update() -> Option<UpgradeCheckResult> {
     let config = vp_shared::EnvConfig::get();
-    let state_dir = &config.dirs.state;
+    let cache_dir = &config.dirs.cache;
     let current_version = env!("CARGO_PKG_VERSION");
     let now = now_secs();
-    let mut cache = read_cache(state_dir);
+    let mut cache = read_cache(cache_dir);
 
     if should_check(cache.as_ref(), now) {
         let prompted_at = cache.as_ref().map_or(0, |c| c.prompted_at);
@@ -91,7 +92,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         match resolve_version_string().await {
             Some(latest) => {
                 let new_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(state_dir, &new_cache);
+                write_cache(cache_dir, &new_cache);
                 cache = Some(new_cache);
             }
             None => {
@@ -99,7 +100,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
                 // retrying on every command when the registry is unreachable.
                 let latest = cache.as_ref().map(|c| c.latest.clone()).unwrap_or_default();
                 let failed_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
-                write_cache(state_dir, &failed_cache);
+                write_cache(cache_dir, &failed_cache);
                 cache = Some(failed_cache);
             }
         }
@@ -115,7 +116,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         return None;
     }
 
-    Some(UpgradeCheckResult { state_dir: state_dir.clone(), cache })
+    Some(UpgradeCheckResult { cache_dir: cache_dir.clone(), cache })
 }
 
 /// Print a one-line upgrade notice to stderr and record the prompt time.
@@ -134,7 +135,7 @@ pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
 
     let mut cache = result.cache.clone();
     cache.prompted_at = now_secs();
-    write_cache(&result.state_dir, &cache);
+    write_cache(&result.cache_dir, &cache);
 }
 
 /// Whether the upgrade check should run for the given command args.
@@ -178,6 +179,21 @@ mod tests {
         assert_eq!(loaded.latest, "1.2.3");
         assert_eq!(loaded.checked_at, 1000);
         assert_eq!(loaded.prompted_at, 900);
+    }
+
+    #[test]
+    fn write_cache_creates_missing_parent() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path =
+            vt_path::AbsolutePathBuf::new(dir.path().join("missing").join("cache")).unwrap();
+        assert!(!dir_path.as_path().exists());
+
+        let cache =
+            UpgradeCheckCache { latest: "1.2.3".to_owned(), checked_at: 1000, prompted_at: 900 };
+        write_cache(&dir_path, &cache);
+
+        let loaded = read_cache(&dir_path).expect("should create parent and write cache");
+        assert_eq!(loaded.latest, "1.2.3");
     }
 
     #[test]
