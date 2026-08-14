@@ -8,12 +8,18 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    PackageManager,
+    PackageManager, PackageManagerType,
     cli::{PackageManagerCommand, PmCommand},
     error::Error,
     helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
     resolution::{DlxArgs, StageCommand, run_resolution},
 };
+
+#[derive(Debug)]
+pub struct DispatchResult {
+    pub status: ExitStatus,
+    pub package_manager: PackageManagerType,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ManagerPolicy {
@@ -26,6 +32,13 @@ pub async fn dispatch(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
+    Ok(dispatch_with_metadata(cwd, command).await?.status)
+}
+
+pub async fn dispatch_with_metadata(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let command = match command {
         PackageManagerCommand::Dlx(args) => {
@@ -43,22 +56,28 @@ pub async fn dispatch(
         ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
     };
 
+    let package_manager = manager.client;
     let resolution = command.resolve_for_manager(&manager)?;
-    run_resolution(cwd, resolution, render_diagnostics).await
+    let status = run_resolution(cwd, resolution, render_diagnostics).await?;
+    Ok(DispatchResult { status, package_manager })
 }
 
 async fn dispatch_dlx(
     cwd: &AbsolutePath,
     args: DlxArgs,
     render_diagnostics: bool,
-) -> Result<ExitStatus, Error> {
+) -> Result<DispatchResult, Error> {
     match PackageManager::builder(cwd).build_with_default().await {
         Ok(manager) => {
+            let package_manager = manager.client;
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
-            run_resolution(cwd, resolution, render_diagnostics).await
+            let status = run_resolution(cwd, resolution, render_diagnostics).await?;
+            Ok(DispatchResult { status, package_manager })
         }
         Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
-            run_resolution(cwd, args.resolve_npx_fallback(), render_diagnostics).await
+            let status =
+                run_resolution(cwd, args.resolve_npx_fallback(), render_diagnostics).await?;
+            Ok(DispatchResult { status, package_manager: PackageManagerType::Npm })
         }
         Err(error) => Err(Error::Install(error)),
     }

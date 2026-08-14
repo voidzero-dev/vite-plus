@@ -108,9 +108,14 @@ pub(super) async fn execute_exec_workspace(
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>
     let base_path_dirs: Vec<std::path::PathBuf> = {
         let mut dirs = Vec::new();
-        // Include package manager bin dir
-        if let Ok(pm) = vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
-            dirs.push(pm.get_bin_prefix().as_path().to_path_buf());
+        // Include the package-manager bin directory. An unverified package
+        // manager stops the run. vp does not drop it from PATH in silence.
+        match vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
+            Ok(pm) => dirs.push(pm.get_bin_prefix().as_path().to_path_buf()),
+            Err(error) if error.is_integrity_failure() => return Err(error),
+            Err(error) => {
+                tracing::debug!(?error, "failed to resolve package manager for exec PATH setup");
+            }
         }
         // Include workspace root's node_modules/.bin
         let ws_bin = workspace_root.path.join("node_modules").join(".bin");

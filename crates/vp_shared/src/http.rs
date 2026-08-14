@@ -66,6 +66,54 @@ const REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
 /// retries (multiple minutes).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Default per-request timeout for large file downloads (Node.js runtimes,
+/// package-manager tarballs). Those archives are tens of megabytes, so on
+/// slow or flaky connections the shared [`REQUEST_TIMEOUT`] aborts an
+/// otherwise healthy transfer; this budget is far more forgiving while still
+/// bounding a stuck stream. Overridable via `VP_DOWNLOAD_TIMEOUT`.
+const DEFAULT_DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
+
+/// Largest accepted `VP_DOWNLOAD_TIMEOUT` value. Longer budgets are
+/// absurd for a download — and extreme values (e.g. `u64::MAX`) overflow when
+/// reqwest computes the request deadline: `Instant + Duration` panics, which
+/// the release profile turns into an abort.
+const MAX_DOWNLOAD_TIMEOUT: Duration = Duration::from_hours(24);
+
+/// Per-request timeout for large file downloads.
+///
+/// Returns [`DEFAULT_DOWNLOAD_TIMEOUT`] unless `VP_DOWNLOAD_TIMEOUT` is
+/// set to a positive integer number of seconds no larger than
+/// [`MAX_DOWNLOAD_TIMEOUT`]. A set-but-invalid value (non-numeric, zero,
+/// negative, above the maximum) warns and falls back to the default. The
+/// value is a plain number of seconds today; duration formats like `10m`
+/// may be supported later.
+///
+/// Call sites apply this per request rather than raising the shared client's
+/// [`REQUEST_TIMEOUT`], which stays short so a single stuck metadata fetch
+/// cannot hang a build.
+#[must_use]
+pub fn download_timeout() -> Duration {
+    let Some(value) = std::env::var_os(env_vars::VP_DOWNLOAD_TIMEOUT) else {
+        return DEFAULT_DOWNLOAD_TIMEOUT;
+    };
+    if os_str_is_blank(&value) {
+        return DEFAULT_DOWNLOAD_TIMEOUT;
+    }
+    match value.to_str().and_then(|s| s.trim().parse::<u64>().ok()) {
+        Some(secs) if secs > 0 && secs <= MAX_DOWNLOAD_TIMEOUT.as_secs() => {
+            Duration::from_secs(secs)
+        }
+        _ => {
+            output::warn(&vt_str::format!(
+                "ignoring invalid {}={value:?}: expected a number of seconds between 1 and {}",
+                env_vars::VP_DOWNLOAD_TIMEOUT,
+                MAX_DOWNLOAD_TIMEOUT.as_secs()
+            ));
+            DEFAULT_DOWNLOAD_TIMEOUT
+        }
+    }
+}
+
 /// Get the process-wide `reqwest::Client`.
 ///
 /// The client is built on first call and reused thereafter. See module docs
@@ -301,6 +349,56 @@ mod tests {
         assert!(message.contains(cause), "{message}");
         assert!(message.contains("HTTPS_PROXY"), "{message}");
         assert!(message.contains(env_vars::NODE_EXTRA_CA_CERTS), "{message}");
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn download_timeout_defaults_to_ten_minutes() {
+        // SAFETY: tests are run serially within this module for env vars.
+        unsafe {
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT);
+        }
+        assert_eq!(download_timeout(), DEFAULT_DOWNLOAD_TIMEOUT);
+        assert_eq!(download_timeout(), Duration::from_mins(10));
+        // The download budget must stay more forgiving than the shared
+        // per-request default, or slow tarball downloads keep timing out.
+        assert!(DEFAULT_DOWNLOAD_TIMEOUT > REQUEST_TIMEOUT);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn download_timeout_honors_override_and_rejects_invalid_values() {
+        // SAFETY: tests are run serially within this module for env vars.
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, "1800");
+        }
+        assert_eq!(download_timeout(), Duration::from_mins(30));
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, " 120 ");
+        }
+        assert_eq!(download_timeout(), Duration::from_secs(120));
+        // Boundary: the maximum itself is accepted...
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, "86400");
+        }
+        assert_eq!(download_timeout(), MAX_DOWNLOAD_TIMEOUT);
+        // ...anything beyond it is not. Regression for extreme parseable
+        // values (u64::MAX) overflowing the request-deadline computation
+        // (`Instant + Duration` panics; the release profile aborts), which
+        // crashed every download instead of falling back with a warning.
+        for invalid in ["0", "-1", "abc", "1.5", "", "  ", "86401", "18446744073709551615"] {
+            unsafe {
+                std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, invalid);
+            }
+            assert_eq!(
+                download_timeout(),
+                DEFAULT_DOWNLOAD_TIMEOUT,
+                "should fall back to the default: {invalid:?}"
+            );
+        }
+        unsafe {
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT);
+        }
     }
 
     #[test]

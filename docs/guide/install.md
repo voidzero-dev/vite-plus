@@ -39,6 +39,13 @@ A range resolves to an already-downloaded satisfying version when possible, othe
 
 Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior); the other `onFail` values are accepted but not yet differentiated.
 
+A `packageManager` pin can carry an integrity hash (`yarn@4.17.1+sha512.…`). `corepack use` writes that hash. Vite+ hashes the same artifact as Corepack:
+
+- the extracted CLI binary (`bin/yarn.js`) for Yarn 2 and later
+- the npm package tarball for npm, pnpm, and Yarn Classic
+
+Vite+ hashes the CLI once, when it installs Yarn, and records the pin it verified. A later command compares its own pin against that record. A pin that does not match the record fails the check, and the command stops. Corepack keeps the same kind of record for its own cache.
+
 The explicit `packageManager` field (or the `devEngines.packageManager` declaration) also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
 ## Usage
@@ -148,6 +155,11 @@ Use these when you need to understand the current state of dependencies.
 - `vp list` shows installed packages
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
+
+These commands show the packages that the package manager installed. They do
+not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show
+these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why`
+shows a hint when Vite+ also provides the package.
 
 #### Rebuild
 

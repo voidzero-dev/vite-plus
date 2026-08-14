@@ -10,7 +10,7 @@ import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
-import { getSpinner } from '../../utils/spinner.ts';
+import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { PRETTIER_CONFIG_FILES, PRETTIER_PACKAGE_JSON_CONFIG, detectConfigs } from '../detector.ts';
 import { rewriteToolLintStagedConfigFiles } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -99,19 +99,7 @@ export async function migratePrettierToOxfmt(
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
   const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-  const spinner = options?.silent
-    ? {
-        start: () => {},
-        stop: () => {},
-        pause: () => {},
-        resume: () => {},
-        cancel: () => {},
-        error: () => {},
-        clear: () => {},
-        message: () => {},
-        isCancelled: false,
-      }
-    : getSpinner(interactive);
+  const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Step 1: Generate .oxfmtrc.json from Prettier config
   if (prettierConfigFile) {

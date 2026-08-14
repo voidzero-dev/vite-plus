@@ -289,6 +289,54 @@ fn replaces_paths_with_labels() {
 }
 
 #[test]
+fn masks_toolchain_build_time_in_human_and_json_output() {
+    let input = concat!(
+        "vite-task (built 2026-08-06T09:30:00Z, revision ebe5837)\n",
+        "      \"builtAt\": \"2026-08-06T09:30:00Z\",\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "vite-task (built <build-time>, revision ebe5837)\n",
+            "      \"builtAt\": \"<build-time>\",\n",
+        )
+    );
+}
+
+#[test]
+fn masks_toolchain_versions_and_revisions_in_human_hint_and_json_output() {
+    let revision = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20";
+    let human = format!(
+        "Vite+ toolchain (global)\n\nvite-plus@0.2.8\n|-- bundles vite@8.2.1\n`-- compiles vite-task (revision {revision})\n"
+    );
+    assert_eq!(
+        redact_output(human, &[], true),
+        "Vite+ toolchain (global)\n\nvite-plus@<version>\n|-- bundles vite@<version>\n`-- compiles vite-task (revision <revision>)\n"
+    );
+
+    let hint = "Vite+ also provides vite@8.2.1 through its toolchain.\n".to_owned();
+    assert_eq!(
+        redact_output(hint, &[], true),
+        "Vite+ also provides vite@<version> through its toolchain.\n"
+    );
+
+    let json = format!(
+        "{{\n  \"schemaVersion\": 1,\n  \"source\": {{\"vitePlusVersion\": \"0.2.8\"}},\n  \"nodes\": [{{\"version\": \"8.2.1\", \"revision\": \"{revision}\"}}],\n  \"edges\": []\n}}\n"
+    );
+    assert_eq!(
+        redact_output(json, &[], true),
+        "{\n  \"schemaVersion\": 1,\n  \"source\": {\"vitePlusVersion\": \"<version>\"},\n  \"nodes\": [{\"version\": \"<version>\", \"revision\": \"<revision>\"}],\n  \"edges\": []\n}\n"
+    );
+}
+
+#[test]
+fn keeps_unrelated_build_times_visible() {
+    let input = "plugin built 2026-08-06T09:30:00Z\n".to_owned();
+    assert_eq!(redact_output(input.clone(), &[], true), input);
+}
+
+#[test]
 fn redacts_forward_slash_windows_path_variants() {
     // Windows children also print file:// and stack-frame forms with forward
     // slashes; those must redact even though the pair is backslash-form.

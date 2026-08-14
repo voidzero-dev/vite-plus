@@ -40,6 +40,7 @@ runs:
         {
           echo 'paths<<EOF'
           echo 'packages/cli/binding/*.node'
+          echo 'packages/cli/binding/vite-plus.build-time'
           echo 'target/x86_64-pc-windows-msvc/release/vp.exe'
           echo 'target/x86_64-pc-windows-msvc/release/vp-shim.exe'
           echo 'target/x86_64-pc-windows-msvc/release/vp-setup.exe'

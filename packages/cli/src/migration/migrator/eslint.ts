@@ -11,7 +11,7 @@ import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
-import { getSpinner } from '../../utils/spinner.ts';
+import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
@@ -131,19 +131,7 @@ export async function migrateEslintToOxlint(
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
   const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-  const spinner = options?.silent
-    ? {
-        start: () => {},
-        stop: () => {},
-        pause: () => {},
-        resume: () => {},
-        cancel: () => {},
-        error: () => {},
-        clear: () => {},
-        message: () => {},
-        isCancelled: false,
-      }
-    : getSpinner(interactive);
+  const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {

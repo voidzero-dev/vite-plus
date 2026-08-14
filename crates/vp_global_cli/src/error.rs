@@ -57,6 +57,9 @@ pub enum Error {
 
     #[error(transparent)]
     PmCli(#[from] vp_pm_cli::Error),
+
+    #[error(transparent)]
+    Toolchain(#[from] vp_toolchain::ToolchainError),
 }
 
 impl Error {
