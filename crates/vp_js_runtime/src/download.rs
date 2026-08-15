@@ -88,22 +88,36 @@ pub async fn download_file(
                 .timeout(timeout)
                 .header(reqwest::header::RANGE, format!("bytes={resume_from}-"))
                 .send()
-                .await?
-                .error_for_status()?;
+                .await?;
 
-            match classify_range_response(&ranged, resume_from) {
-                RangeOutcome::Resume { total } => (ranged, Some(total), true),
-                RangeOutcome::Restart => {
-                    let total = ranged.content_length();
-                    (ranged, total, false)
-                }
-                RangeOutcome::Reject => {
-                    // Never consume an inconsistent partial response. Retry
-                    // once without Range so the outer retry loop can progress.
-                    drop(ranged);
-                    let plain = full_response(client.get(url).timeout(timeout).send().await?)?;
-                    let total = plain.content_length();
-                    (plain, total, false)
+            // A range-capable server answers `Range: bytes=<len>-` on an
+            // already-complete file with `416 Range Not Satisfiable` (there's
+            // nothing left to send). `error_for_status()` would surface that
+            // as a hard failure and every retry would resend the same doomed
+            // Range request against the same full-length file, permanently
+            // failing instead of restarting. Treat it like an inconsistent
+            // partial response: drop it and fall back to a plain full request.
+            if ranged.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+                drop(ranged);
+                let plain = full_response(client.get(url).timeout(timeout).send().await?)?;
+                let total = plain.content_length();
+                (plain, total, false)
+            } else {
+                let ranged = ranged.error_for_status()?;
+                match classify_range_response(&ranged, resume_from) {
+                    RangeOutcome::Resume { total } => (ranged, Some(total), true),
+                    RangeOutcome::Restart => {
+                        let total = ranged.content_length();
+                        (ranged, total, false)
+                    }
+                    RangeOutcome::Reject => {
+                        // Never consume an inconsistent partial response. Retry
+                        // once without Range so the outer retry loop can progress.
+                        drop(ranged);
+                        let plain = full_response(client.get(url).timeout(timeout).send().await?)?;
+                        let total = plain.content_length();
+                        (plain, total, false)
+                    }
                 }
             }
         } else {
@@ -597,6 +611,44 @@ mod tests {
         let url = format!("{}/archive.bin", server.base_url());
         download_file(&url, &target, "Downloading test").await.unwrap();
 
+        assert_eq!(tokio::fs::read(target.as_path()).await.unwrap(), full_body);
+    }
+
+    // Regression for a retry after content-integrity failure: the file on
+    // disk is already the *full* archive (a complete-but-corrupt previous
+    // attempt), so the resume offset equals the file's total length. A
+    // range-capable server answers that with `416 Range Not Satisfiable`
+    // instead of `206`. Before the fix, `error_for_status()` turned that into
+    // a hard error and every retry re-sent the same doomed Range request
+    // against the same full-length file, so the download could never recover.
+    #[tokio::test]
+    async fn full_length_file_gets_416_and_restarts_with_a_plain_request() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let target = temp_target(&dir);
+
+        let full_body = b"the-full-archive-bytes-already-on-disk-from-a-prior-attempt";
+        // Simulate a complete-but-corrupt archive already on disk (e.g. one
+        // that failed hash verification and is being retried by the outer
+        // content-integrity loop in `runtime.rs`).
+        tokio::fs::write(target.as_path(), full_body).await.unwrap();
+
+        let range_mock = server.mock(|when, then| {
+            when.method(GET)
+                .path("/archive.bin")
+                .header("range", format!("bytes={}-", full_body.len()));
+            then.status(416);
+        });
+        let plain_mock = server.mock(|when, then| {
+            when.method(GET).path("/archive.bin");
+            then.status(200).header("content-length", full_body.len().to_string()).body(full_body);
+        });
+
+        let url = format!("{}/archive.bin", server.base_url());
+        download_file(&url, &target, "Downloading test").await.unwrap();
+
+        range_mock.assert_hits(1);
+        plain_mock.assert_hits(1);
         assert_eq!(tokio::fs::read(target.as_path()).await.unwrap(), full_body);
     }
 
