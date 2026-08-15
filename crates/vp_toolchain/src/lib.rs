@@ -384,7 +384,7 @@ fn render_children<'a>(
     };
     for (index, edge) in edges.iter().enumerate() {
         let is_last = index + 1 == edges.len();
-        let connector = if is_last { "`-- " } else { "|-- " };
+        let connector = if is_last { "└── " } else { "├── " };
         let Some(node) = nodes.get(edge.to.as_str()) else {
             continue;
         };
@@ -396,7 +396,7 @@ fn render_children<'a>(
         output.push('\n');
 
         if path.insert(node.id.as_str()) {
-            let child_prefix = vt_str::format!("{prefix}{}", if is_last { "    " } else { "|   " });
+            let child_prefix = vt_str::format!("{prefix}{}", if is_last { "    " } else { "│   " });
             render_children(output, node.id.as_str(), child_prefix.as_str(), nodes, children, path);
             path.remove(node.id.as_str());
         }
@@ -579,15 +579,15 @@ mod tests {
             "Vite+ toolchain (local)\n\
              \n\
              vite-plus@1.0.0\n\
-             |-- depends on @scope/core@1.0.0\n\
-             |   |-- bundles vite@8.0.0\n\
-             |   |   `-- uses rolldown@1.0.0\n\
-             |   |       |-- compiles oxc@0.1.0\n\
-             |   |       `-- compiles oxc-resolver@1.0.0\n\
-             |   `-- bundles rolldown@1.0.0\n\
-             |       |-- compiles oxc@0.1.0\n\
-             |       `-- compiles oxc-resolver@1.0.0\n\
-             `-- depends on vitest@4.0.0\n"
+             ├── depends on @scope/core@1.0.0\n\
+             │   ├── bundles vite@8.0.0\n\
+             │   │   └── uses rolldown@1.0.0\n\
+             │   │       ├── compiles oxc@0.1.0\n\
+             │   │       └── compiles oxc-resolver@1.0.0\n\
+             │   └── bundles rolldown@1.0.0\n\
+             │       ├── compiles oxc@0.1.0\n\
+             │       └── compiles oxc-resolver@1.0.0\n\
+             └── depends on vitest@4.0.0\n"
         );
     }
 
