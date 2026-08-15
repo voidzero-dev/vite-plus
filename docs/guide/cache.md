@@ -12,6 +12,8 @@ When a task runs successfully (exit code 0), its terminal output (stdout/stderr)
 
 When all checks match, Vite Task replays the cached terminal output, restores saved output files, and skips the command.
 
+Set [`replayLogs: false`](/config/run#replaylogs) on a task when cache hits should stay quiet. The task still hits the cache, skips execution, and restores cached output files; only cached stdout/stderr replay is suppressed.
+
 When a cache miss occurs, Vite Task tells you exactly why:
 
 ```
