@@ -7,7 +7,12 @@ import { updateExistingAgentInstructions } from '../utils/agent.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
 import { log, printHeader } from '../utils/terminal.ts';
-import { install, isHooksUserDisabled, resolveHooksLocation } from './hooks.ts';
+import {
+  install,
+  isGitHooksEnvDisabled,
+  isHooksUserDisabled,
+  resolveHooksLocation,
+} from './hooks.ts';
 
 async function main() {
   const args = mri(process.argv.slice(3), {
@@ -56,9 +61,10 @@ async function main() {
 
   // --- Step 1: Hooks setup ---
   // Prefer CLI flag, then last-used dir from local git config, then default.
-  // Skip location resolution entirely when `--no-hooks` so agent-only runs
-  // do not fail on a missing git repo or invalid `--hooks-dir`.
-  if (!skipHooks) {
+  // Check environment opt-outs before the Git-backed location lookup.
+  if (!skipHooks && isGitHooksEnvDisabled()) {
+    log('skip install (git hooks disabled)');
+  } else if (!skipHooks) {
     const location = resolveHooksLocation(dir);
     if ('isError' in location) {
       if (location.message) {
