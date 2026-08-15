@@ -3,7 +3,6 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import spawn from 'cross-spawn';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
@@ -1010,25 +1009,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo || isBundledMonorepo) {
-    // Ask up-front so the prompt isn't buried under scaffold output.
-    let shouldInitGit = shouldSetupGit;
-    if (options.interactive && !compactOutput && options.git === undefined) {
-      pauseCreateProgress();
-      const selected = await prompts.confirm({
-        message: 'Initialize git repository:',
-        initialValue: true,
-      });
-      resumeCreateProgress();
-      if (prompts.isCancel(selected)) {
-        prompts.log.info('Operation cancelled. Skipping git initialization');
-        shouldInitGit = false;
-      } else {
-        shouldInitGit = selected;
-      }
-    } else if (shouldInitGit && !compactOutput) {
-      prompts.log.info('Initializing git repository (default: yes)');
-    }
-
     updateCreateProgress('Creating monorepo');
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     const result = isBundledMonorepo
@@ -1055,18 +1035,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo.workspacePatterns = scaffoldedWorkspace.workspacePatterns;
     workspaceInfo.parentDirs = scaffoldedWorkspace.parentDirs;
     workspaceInfo.packages = scaffoldedWorkspace.packages;
-    if (shouldInitGit) {
-      const gitResult = spawn.sync('git', ['init'], { stdio: 'pipe', cwd: fullPath });
-      if (gitResult.status === 0) {
-        if (!compactOutput) {
-          prompts.log.success('Git repository initialized');
-        }
+    // Establish the destination's intended Git root before hook preflight,
+    // matching the standalone path below.
+    if (shouldSetupGit) {
+      updateCreateProgress('Initializing git repository');
+      if (await initGitRepository(fullPath)) {
         ensureDefaultGitignoreEntries(fullPath);
-      } else {
-        prompts.log.warn('Failed to initialize git repository');
-        if (gitResult.stderr) {
-          prompts.log.info(gitResult.stderr.toString());
-        }
       }
     }
     updateCreateProgress('Writing agent instructions');
@@ -1104,12 +1078,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       workspaceInfo.packages,
     );
     rewriteMonorepo(workspaceInfo, skipStagedMigration, compactOutput);
-    if (shouldSetupGit) {
-      updateCreateProgress('Initializing git repository');
-      if (await initGitRepository(fullPath)) {
-        ensureDefaultGitignoreEntries(fullPath);
-      }
-    }
     if (bundled?.monorepo) {
       // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
       // vite.config.ts so a bare `vp create` from inside it opens the
