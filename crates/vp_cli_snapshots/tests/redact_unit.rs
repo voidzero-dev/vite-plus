@@ -308,11 +308,11 @@ fn masks_toolchain_build_time_in_human_and_json_output() {
 fn masks_toolchain_versions_and_revisions_in_human_hint_and_json_output() {
     let revision = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20";
     let human = format!(
-        "Vite+ toolchain (global)\n\nvite-plus@0.2.8\n|-- bundles vite@8.2.1\n`-- compiles vite-task (revision {revision})\n"
+        "Vite+ toolchain (global)\n\nvite-plus@0.2.8\n├── bundles vite@8.2.1\n└── compiles vite-task (revision {revision})\n"
     );
     assert_eq!(
         redact_output(human, &[], true),
-        "Vite+ toolchain (global)\n\nvite-plus@<version>\n|-- bundles vite@<version>\n`-- compiles vite-task (revision <revision>)\n"
+        "Vite+ toolchain (global)\n\nvite-plus@<version>\n├── bundles vite@<version>\n└── compiles vite-task (revision <revision>)\n"
     );
 
     let hint = "Vite+ also provides vite@8.2.1 through its toolchain.\n".to_owned();
