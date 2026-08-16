@@ -8,7 +8,7 @@
 #   VP_VERSION - Version to install (default: latest)
 #   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
 #             %USERPROFILE%\.vite-plus is reused; otherwise data/bin/config
-#             follow VP_*_DIR / %LOCALAPPDATA% / %APPDATA%.
+#             follow VP_*_DIR / Windows known Local+Roaming folders.
 #   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -222,7 +222,7 @@ function Get-UserHomeDir {
 }
 
 # Mirror crates/vp_shared/src/dirs/resolution.rs (Windows):
-#   VP_HOME → existing %USERPROFILE%\.vite-plus → VP_*_DIR / Local+Roaming defaults
+#   VP_HOME → existing %USERPROFILE%\.vite-plus → VP_*_DIR / known Local+Roaming folders
 function Resolve-InstallLayout {
     $userHome = Get-UserHomeDir
     if ([string]::IsNullOrWhiteSpace($userHome)) {
@@ -247,15 +247,15 @@ function Resolve-InstallLayout {
         }
     }
 
-    $localApp = if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-        $env:LOCALAPPDATA
-    } else {
-        Join-Path $userHome "AppData\Local"
+    # Match EnvConfig / directories::BaseDirs: known folders, not process
+    # %LOCALAPPDATA% / %APPDATA% which can be redirected independently.
+    $localApp = [Environment]::GetFolderPath('LocalApplicationData')
+    if ([string]::IsNullOrWhiteSpace($localApp)) {
+        $localApp = Join-Path $userHome "AppData\Local"
     }
-    $roamingApp = if (-not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
-        $env:APPDATA
-    } else {
-        Join-Path $userHome "AppData\Roaming"
+    $roamingApp = [Environment]::GetFolderPath('ApplicationData')
+    if ([string]::IsNullOrWhiteSpace($roamingApp)) {
+        $roamingApp = Join-Path $userHome "AppData\Roaming"
     }
 
     $dataDir = if (Test-AbsoluteOverridePath $env:VP_DATA_DIR) {
@@ -275,6 +275,19 @@ function Resolve-InstallLayout {
         ShimDir = $shimDir
         ConfigDir = Join-Path $roamingApp "vite-plus"
     }
+}
+
+# Record the data root next to a trampoline so independent VP_BIN_DIR /
+# VP_DATA_DIR installs do not rely on sibling-path probing.
+function Write-ShimPointer {
+    param(
+        [string]$BinDir,
+        [string]$DataDir,
+        [string]$Name = "vp"
+    )
+    $path = Join-Path $BinDir "$Name.shim"
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($path, ($DataDir.TrimEnd('\', '/') + "`n"), $utf8)
 }
 
 function Normalize-InstallDir {
@@ -1000,6 +1013,7 @@ function Main {
     if (Test-Path $trampolineSrc) {
         # New versions: use trampoline exe to avoid "Terminate batch job (Y/N)?" on Ctrl+C
         Copy-Item -Path $trampolineSrc -Destination (Join-Path $ShimDir "vp.exe") -Force
+        Write-ShimPointer -BinDir $ShimDir -DataDir $InstallDir -Name "vp"
         # Remove legacy .cmd and shell script wrappers from previous versions
         foreach ($legacy in @((Join-Path $ShimDir "vp.cmd"), (Join-Path $ShimDir "vp"))) {
             if (Test-Path $legacy) {

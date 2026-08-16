@@ -24,7 +24,7 @@ pub mod string_similarity;
 mod tls;
 mod tracing;
 
-pub use dirs::{VP_BINARY_NAME, VpDirs};
+pub use dirs::{SHIM_POINTER_EXTENSION, VP_BINARY_NAME, VpDirs, shim_pointer_file_name};
 pub use env_config::EnvConfig;
 pub use error::format_error_chain;
 pub use http::{HttpClientError, download_timeout, shared_http_client};

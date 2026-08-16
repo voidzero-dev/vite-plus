@@ -18,6 +18,21 @@ use vt_path::{AbsolutePath, AbsolutePathBuf};
 /// Platform-specific binary name for the `vp` CLI.
 pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
 
+/// Extension of the per-exe sidecar that records the data root for Windows
+/// trampolines (`<BIN>/<name>.shim` next to `<BIN>/<name>.exe`).
+///
+/// Independent `VP_BIN_DIR` / `VP_DATA_DIR` put the shim and payload under
+/// different parents. The trampoline must not read dir env vars, so
+/// installers and `vp env setup` write this UTF-8 one-line file beside
+/// every trampoline copy.
+pub const SHIM_POINTER_EXTENSION: &str = "shim";
+
+/// Sidecar filename for a trampoline named `<exe_stem>.exe`.
+#[must_use]
+pub fn shim_pointer_file_name(exe_stem: &str) -> String {
+    format!("{exe_stem}.{SHIM_POINTER_EXTENSION}")
+}
+
 /// Subdirectory name appended to XDG base directories and platform defaults.
 pub(crate) const APP_DIR_NAME: &str = "vite-plus";
 
@@ -68,5 +83,46 @@ impl VpDirs {
             config: resolution::config_dir(home)?,
             state: resolution::state_dir(home)?,
         })
+    }
+
+    /// Write `<BIN>/<exe_stem>.shim` so the trampoline can find `<DATA>`.
+    pub fn write_shim_pointer(&self, exe_stem: &str) -> std::io::Result<()> {
+        self.write_shim_pointer_beside(self.bin.join(format!("{exe_stem}.exe")).as_path())
+    }
+
+    /// Write `<name>.shim` next to an existing trampoline copy.
+    pub fn write_shim_pointer_beside(&self, exe_path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(parent) = exe_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut line = self.data.as_path().to_string_lossy().into_owned();
+        line.push('\n');
+        std::fs::write(exe_path.with_extension(SHIM_POINTER_EXTENSION), line)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::EnvConfig;
+
+    #[test]
+    fn write_shim_pointer_records_data_root_per_exe() {
+        EnvConfig::scoped(|config| {
+            config.dirs.write_shim_pointer("vp").unwrap();
+            config.dirs.write_shim_pointer("node").unwrap();
+            let data = config.dirs.data.as_path().to_string_lossy();
+            for stem in ["vp", "node"] {
+                let path = config.dirs.bin.join(shim_pointer_file_name(stem));
+                let contents = std::fs::read_to_string(path.as_path()).unwrap();
+                assert_eq!(contents.trim(), data);
+            }
+        });
+    }
+
+    #[test]
+    fn shim_pointer_file_name_uses_stem_and_extension() {
+        assert_eq!(shim_pointer_file_name("vp"), "vp.shim");
+        assert_eq!(shim_pointer_file_name("node"), "node.shim");
     }
 }

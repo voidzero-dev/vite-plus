@@ -1172,6 +1172,7 @@ pub(crate) async fn create_package_shim(
         // VP_SHIM_TOOL env var before spawning vp.exe.
         let trampoline_src = get_trampoline_path()?;
         tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
+        vp_shared::EnvConfig::get().dirs.write_shim_pointer_beside(shim_path.as_path())?;
 
         // Remove legacy .cmd and shell script wrappers from previous versions.
         // In Git Bash/MSYS, the extensionless script takes precedence over .exe,
@@ -1206,7 +1207,7 @@ async fn remove_package_shim(bin_dir: &vt_path::AbsolutePath, bin_name: &str) ->
     {
         // Remove trampoline .exe shim and legacy .cmd / shell script wrappers.
         // Best-effort: ignore NotFound errors for files that don't exist.
-        for suffix in &[".exe", ".cmd", ""] {
+        for suffix in &[".exe", ".cmd", ".shim", ""] {
             let path = if suffix.is_empty() {
                 bin_dir.join(bin_name)
             } else {
@@ -1271,6 +1272,13 @@ mod tests {
                 {
                     let shim_path = bin_dir.join("test-shim.exe");
                     assert!(shim_path.as_path().exists());
+                    let pointer = bin_dir.join("test-shim.shim");
+                    assert!(pointer.as_path().exists(), "per-exe sidecar must be written");
+                    let contents = std::fs::read_to_string(pointer.as_path()).unwrap();
+                    assert_eq!(
+                        contents.trim(),
+                        vp_shared::EnvConfig::get().dirs.data.as_path().to_string_lossy()
+                    );
                 }
             },
         )
@@ -1382,6 +1390,10 @@ mod tests {
 
                     // Verify the shim was removed
                     assert!(!shim_path.as_path().exists(), "Shim should be removed");
+                    assert!(
+                        !bin_dir.join("tsc.shim").as_path().exists(),
+                        "per-exe sidecar should be removed"
+                    );
                 }
             },
         )

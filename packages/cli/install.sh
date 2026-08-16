@@ -152,6 +152,22 @@ is_windows_uname() {
   esac
 }
 
+# Match EnvConfig / directories::BaseDirs: known folders, not process
+# LOCALAPPDATA / APPDATA which can be redirected independently.
+windows_known_folder() {
+  local name="$1"
+  local fallback="$2"
+  local dir=""
+  if command -v powershell.exe >/dev/null 2>&1; then
+    dir="$(powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('${name}')" 2>/dev/null | tr -d '\r')"
+  fi
+  if [ -n "$dir" ]; then
+    printf '%s\n' "$dir"
+  else
+    printf '%s\n' "$fallback"
+  fi
+}
+
 user_home_dir() {
   if is_windows_uname; then
     printf '%s\n' "${USERPROFILE:-$HOME}"
@@ -206,7 +222,7 @@ resolve_install_layout() {
     if [ -n "$data_override" ]; then
       INSTALL_DIR="$data_override"
     elif is_windows_uname; then
-      INSTALL_DIR="${LOCALAPPDATA:-$home/AppData/Local}/vite-plus/data"
+      INSTALL_DIR="$(windows_known_folder LocalApplicationData "$home/AppData/Local")/vite-plus/data"
     else
       local xdg_data
       xdg_data="$(absolute_override "${XDG_DATA_HOME:-}")"
@@ -220,7 +236,7 @@ resolve_install_layout() {
     if [ -n "$bin_override" ]; then
       SHIM_DIR="$bin_override"
     elif is_windows_uname; then
-      SHIM_DIR="${LOCALAPPDATA:-$home/AppData/Local}/vite-plus/bin"
+      SHIM_DIR="$(windows_known_folder LocalApplicationData "$home/AppData/Local")/vite-plus/bin"
     else
       local xdg_bin xdg_data
       xdg_bin="$(absolute_override "${XDG_BIN_HOME:-}")"
@@ -235,7 +251,7 @@ resolve_install_layout() {
     fi
 
     if is_windows_uname; then
-      CONFIG_DIR="${APPDATA:-$home/AppData/Roaming}/vite-plus"
+      CONFIG_DIR="$(windows_known_folder ApplicationData "$home/AppData/Roaming")/vite-plus"
     else
       local xdg_config
       xdg_config="$(absolute_override "${XDG_CONFIG_HOME:-}")"
@@ -1296,6 +1312,8 @@ WRAPPER_EOF
     # Windows: copy trampoline as vp.exe (matching install.ps1)
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
       cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
+      # Independent VP_BIN_DIR / VP_DATA_DIR: trampoline reads <name>.shim, not env vars.
+      printf '%s\n' "$INSTALL_DIR" >"$SHIM_DIR/vp.shim"
     fi
   else
     ln -sfn "$INSTALL_DIR/current/bin/vp" "$SHIM_DIR/vp"

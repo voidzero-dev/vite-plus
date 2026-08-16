@@ -54,6 +54,9 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files().await?;
 
+    #[cfg(windows)]
+    refresh_owned_shim_pointers(dirs);
+
     if env_only {
         println!("{}", help::render_heading("Setup"));
         println!("  Updated shell environment files.");
@@ -202,6 +205,7 @@ async fn setup_vp_wrapper(
             }
 
             tokio::fs::copy(trampoline_src.as_path(), &bin_vp_exe).await?;
+            write_shim_pointer_beside(bin_vp_exe.as_path());
             tracing::debug!("Created trampoline {:?}", bin_vp_exe);
         }
 
@@ -337,6 +341,7 @@ async fn create_windows_shim(
     let trampoline_src = get_trampoline_path()?;
     let shim_path = bin_dir.join(format!("{tool}.exe"));
     tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
+    write_shim_pointer_beside(shim_path.as_path());
 
     // Clean up legacy .cmd and shell script wrappers from previous versions
     cleanup_legacy_windows_shim(bin_dir, tool).await;
@@ -376,6 +381,7 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
             tracing::warn!("Failed to refresh package shim {}: {}", bin_name, e);
             continue;
         }
+        write_shim_pointer_beside(shim_path.as_path());
 
         // Remove legacy .cmd/shell wrappers that could shadow the .exe in Git Bash.
         cleanup_legacy_windows_shim(bin_dir, bin_name).await;
@@ -384,6 +390,40 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
     }
 
     Ok(())
+}
+
+/// Write `<name>.shim` next to a trampoline copy, with this install's data root.
+#[cfg(windows)]
+fn write_shim_pointer_beside(exe_path: &std::path::Path) {
+    if let Err(e) = vp_shared::EnvConfig::get().dirs.write_shim_pointer_beside(exe_path) {
+        tracing::warn!("Failed to write shim pointer for {}: {e}", exe_path.display());
+    }
+}
+
+/// Rewrite sidecars for every owned trampoline that is already on disk.
+///
+/// Covers `--env-only` and skipped existing shims so a data-root change is
+/// picked up without `--refresh`.
+#[cfg(windows)]
+fn refresh_owned_shim_pointers(dirs: &vp_shared::VpDirs) {
+    let mut stems = vec!["vp".to_string()];
+    stems.extend(SHIM_TOOLS.iter().map(|tool| (*tool).to_string()));
+    if let Ok(entries) = std::fs::read_dir(dirs.data.join("bins").as_path()) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json")
+                && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
+            {
+                stems.push(stem.to_string());
+            }
+        }
+    }
+    for stem in stems {
+        let exe = dirs.bin.join(format!("{stem}.exe"));
+        if exe.as_path().exists() {
+            write_shim_pointer_beside(exe.as_path());
+        }
+    }
 }
 
 /// Get the path to the trampoline template binary (vp-shim.exe).

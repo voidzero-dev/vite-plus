@@ -418,6 +418,7 @@ async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>
         if tokio::fs::try_exists(&src).await.unwrap_or(false) {
             replace_windows_exe(&src, &shim_dst, &bin_dir).await?;
         }
+        dirs.write_shim_pointer("vp")?;
 
         // Best-effort cleanup of old shim files
         if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {

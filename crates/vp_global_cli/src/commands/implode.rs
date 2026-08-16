@@ -116,6 +116,16 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
                 output::warn(&vt_str::format!("Failed to remove shim {name}: {e}"));
             }
         }
+        if let Some(stem) = std::path::Path::new(&name).file_stem().and_then(|stem| stem.to_str()) {
+            let pointer = dirs.bin.join(vp_shared::shim_pointer_file_name(stem));
+            match std::fs::remove_file(pointer.as_path()) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    output::warn(&vt_str::format!("Failed to remove {stem}.shim: {e}"));
+                }
+            }
+        }
     }
     if removed > 0 {
         output::success(&vt_str::format!(
@@ -851,6 +861,7 @@ mod tests {
 
             std::fs::write(bins_dir.join("tsc.json").as_path(), "{}").unwrap();
             std::os::unix::fs::symlink(vp_target.as_path(), bin.join("tsc").as_path()).unwrap();
+            std::fs::write(bin.join("tsc.shim").as_path(), "data\n").unwrap();
 
             std::fs::write(bins_dir.join("eslint.json").as_path(), "{}").unwrap();
             std::os::unix::fs::symlink("/usr/bin/eslint", bin.join("eslint").as_path()).unwrap();
@@ -873,6 +884,10 @@ mod tests {
             assert!(
                 std::fs::symlink_metadata(bin.join("tsc").as_path()).is_err(),
                 "recorded package shim that points at vp must be removed"
+            );
+            assert!(
+                !bin.join("tsc.shim").as_path().exists(),
+                "sidecar next to a removed shim must be removed"
             );
         });
     }
