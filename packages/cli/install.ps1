@@ -964,6 +964,13 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
+    if ($nodeManagerResult -eq "false") {
+        $envOffOutput = & "$BinDir\vp.exe" env off 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Failed to configure system-first Node.js mode:"
+            Write-Host "$envOffOutput"
+        }
+    }
 
     Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
 
