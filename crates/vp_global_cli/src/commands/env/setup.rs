@@ -17,7 +17,7 @@
 
 use std::process::ExitStatus;
 
-use super::config::{get_bin_dir, get_vp_home};
+use super::config::{ShimMode, get_bin_dir, get_vp_home, load_config};
 use crate::{error::Error, help};
 
 /// Shells that get a generated `~/.vite-plus/env.*` setup script.
@@ -515,11 +515,12 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 // POSIX env file (bash/zsh)
 // When sourced multiple times, removes existing entry and re-prepends to front
 // Uses parameter expansion to split PATH around the bin entry in O(1) operations
-// Includes vp() shell function wrapper for `vp env use` (evals stdout)
+// Includes a vp() shell function wrapper for session-mutating env commands
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 export VP_HOME="__VP_HOME__"
+__PNPM_RUNTIME_ENV__
 __vp_bin="__VP_BIN__"
 case ":${PATH}:" in
     *":${__vp_bin}:"*)
@@ -537,13 +538,16 @@ case ":${PATH}:" in
 esac
 unset __vp_bin
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
+# Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 vp() {
     if [ "$1" = "env" ] && [ "$2" = "use" ]; then
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
         __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 VP_SHELL=sh command vp "$@")" || return $?
         eval "$__vp_out"
+    elif [ "$#" -eq 2 ] && [ "$1" = "env" ] && [ "$2" = "on" ]; then
+        command vp "$@" && export PNPM_CONFIG_RUNTIME=false
+    elif [ "$#" -eq 2 ] && [ "$1" = "env" ] && [ "$2" = "off" ]; then
+        command vp "$@" && unset PNPM_CONFIG_RUNTIME
     else
         command vp "$@"
     fi
@@ -568,12 +572,12 @@ fi
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 set -gx VP_HOME "__VP_HOME__"
+__PNPM_RUNTIME_ENV__
 set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
+# Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 function vp
     if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
@@ -583,6 +587,10 @@ function vp
         set -lx VP_SHELL fish
         set -l __vp_out (command vp $argv); or return $status
         eval (string join ';' $__vp_out)
+    else if test (count $argv) -eq 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "on"
+        command vp $argv; and set -gx PNPM_CONFIG_RUNTIME false
+    else if test (count $argv) -eq 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "off"
+        command vp $argv; and set -e PNPM_CONFIG_RUNTIME
     else
         command vp $argv
     end
@@ -599,15 +607,15 @@ end
 complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#;
 
-// Nushell env file with vp wrapper function.
+// Nushell env file with a wrapper for session-mutating env commands.
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 $env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
+__PNPM_RUNTIME_ENV__
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
-# Shell function wrapper: intercepts `vp env use` to parse its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
+# Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
     if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
@@ -629,6 +637,14 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
         }
         for key in $unsets {
             if ($key in $env) { hide-env $key }
+        }
+    } else if ($args | length) == 2 and $args.0 == "env" and $args.1 == "on" {
+        ^vp ...$args
+        if $env.LAST_EXIT_CODE == 0 { $env.PNPM_CONFIG_RUNTIME = "false" }
+    } else if ($args | length) == 2 and $args.0 == "env" and $args.1 == "off" {
+        ^vp ...$args
+        if $env.LAST_EXIT_CODE == 0 and ("PNPM_CONFIG_RUNTIME" in $env) {
+            hide-env PNPM_CONFIG_RUNTIME
         }
     } else {
         ^vp ...$args
@@ -665,13 +681,13 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 $env:VP_HOME = "__VP_HOME_WIN__"
+__PNPM_RUNTIME_ENV__
 $__vp_bin = "__VP_BIN_WIN__"
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
 }
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
+# Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 function vp {
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
@@ -690,6 +706,14 @@ function vp {
         Remove-Item Env:VP_SHELL -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
+        }
+    } elseif ($args.Count -eq 2 -and $args[0] -eq "env" -and $args[1] -eq "on") {
+        & (Join-Path $__vp_bin "vp") @args
+        if ($LASTEXITCODE -eq 0) { $env:PNPM_CONFIG_RUNTIME = "false" }
+    } elseif ($args.Count -eq 2 -and $args[0] -eq "env" -and $args[1] -eq "off") {
+        & (Join-Path $__vp_bin "vp") @args
+        if ($LASTEXITCODE -eq 0) {
+            Remove-Item Env:\PNPM_CONFIG_RUNTIME -ErrorAction SilentlyContinue
         }
     } else {
         & (Join-Path $__vp_bin "vp") @args
@@ -769,14 +793,18 @@ fn escape_nu_double_quoted_string(value: &str) -> String {
 }
 
 /// Render the env-file content for `shell` against `vite_plus_home`.
-fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -> String {
+fn render_env_content(
+    shell: EnvShell,
+    vite_plus_home: &vt_path::AbsolutePath,
+    shim_mode: ShimMode,
+) -> String {
     let bin_path = vite_plus_home.join("bin");
     let home_dir = vp_shared::EnvConfig::get().user_home;
     let home_dir = home_dir.as_deref();
     let home_path_ref = render_home_relative_path(vite_plus_home.as_path(), home_dir);
     let bin_path_ref = render_home_relative_path(bin_path.as_path(), home_dir);
 
-    match shell {
+    let content = match shell {
         EnvShell::Posix => ENV_TEMPLATE_POSIX
             .replace("__VP_HOME__", &home_path_ref)
             .replace("__VP_BIN__", &bin_path_ref),
@@ -802,7 +830,24 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -
                 .replace("__VP_HOME_WIN__", &home_path_win)
                 .replace("__VP_BIN_WIN__", &bin_path_win)
         }
-    }
+    };
+
+    let pnpm_runtime_env = match (shell, shim_mode) {
+        (EnvShell::Posix, ShimMode::Managed) => "export PNPM_CONFIG_RUNTIME=false",
+        (EnvShell::Posix, ShimMode::SystemFirst) => "unset PNPM_CONFIG_RUNTIME",
+        (EnvShell::Fish, ShimMode::Managed) => "set -gx PNPM_CONFIG_RUNTIME false",
+        (EnvShell::Fish, ShimMode::SystemFirst) => "set -e PNPM_CONFIG_RUNTIME",
+        (EnvShell::Nu, ShimMode::Managed) => "$env.PNPM_CONFIG_RUNTIME = \"false\"",
+        (EnvShell::Nu, ShimMode::SystemFirst) => {
+            "if (\"PNPM_CONFIG_RUNTIME\" in $env) { hide-env PNPM_CONFIG_RUNTIME }"
+        }
+        (EnvShell::Powershell, ShimMode::Managed) => "$env:PNPM_CONFIG_RUNTIME = \"false\"",
+        (EnvShell::Powershell, ShimMode::SystemFirst) => {
+            "Remove-Item Env:\\PNPM_CONFIG_RUNTIME -ErrorAction SilentlyContinue"
+        }
+    };
+
+    content.replace("__PNPM_RUNTIME_ENV__", pnpm_runtime_env)
 }
 
 /// Create env files with PATH guard (prevents duplicate PATH entries).
@@ -813,12 +858,17 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -
 /// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
 async fn create_env_files(vite_plus_home: &vt_path::AbsolutePath) -> Result<(), Error> {
+    let shim_mode = load_config().await?.shim_mode;
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-        let content = render_env_content(shell, vite_plus_home);
+        let content = render_env_content(shell, vite_plus_home, shim_mode);
         tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
     }
 
     Ok(())
+}
+
+pub(crate) async fn refresh_env_files() -> Result<(), Error> {
+    create_env_files(&get_vp_home()?).await
 }
 
 /// Print instructions for adding bin directory to PATH.
@@ -969,7 +1019,7 @@ mod tests {
         let home = AbsolutePathBuf::new(std::path::PathBuf::from(r#"/tmp/vp "home\with spaces""#))
             .unwrap();
 
-        let content = render_env_content(EnvShell::Nu, &home);
+        let content = render_env_content(EnvShell::Nu, &home, ShimMode::Managed);
 
         assert!(
             content.contains(

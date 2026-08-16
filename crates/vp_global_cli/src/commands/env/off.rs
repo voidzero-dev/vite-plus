@@ -5,7 +5,10 @@
 
 use std::process::ExitStatus;
 
-use super::config::{ShimMode, load_config, save_config};
+use super::{
+    config::{ShimMode, load_config, save_config},
+    setup,
+};
 use crate::{error::Error, help};
 
 /// Execute the `vp env off` command.
@@ -13,6 +16,7 @@ pub async fn execute() -> Result<ExitStatus, Error> {
     let mut config = load_config().await?;
 
     if config.shim_mode == ShimMode::SystemFirst {
+        setup::refresh_env_files().await?;
         println!("Node.js management is already set to system-first.");
         println!(
             "All vp commands and shims will prefer system Node.js, falling back to managed if not found."
@@ -22,6 +26,7 @@ pub async fn execute() -> Result<ExitStatus, Error> {
 
     config.shim_mode = ShimMode::SystemFirst;
     save_config(&config).await?;
+    setup::refresh_env_files().await?;
 
     println!("\u{2713} Node.js management set to system-first.");
     println!();

@@ -4,7 +4,10 @@
 
 use std::process::ExitStatus;
 
-use super::config::{ShimMode, load_config, save_config};
+use super::{
+    config::{ShimMode, load_config, save_config},
+    setup,
+};
 use crate::{error::Error, help};
 
 /// Execute the `vp env on` command.
@@ -12,6 +15,7 @@ pub async fn execute() -> Result<ExitStatus, Error> {
     let mut config = load_config().await?;
 
     if config.shim_mode == ShimMode::Managed {
+        setup::refresh_env_files().await?;
         println!("Node.js management is already set to managed.");
         println!("All vp commands and shims will always use Vite+ managed Node.js.");
         return Ok(ExitStatus::default());
@@ -19,6 +23,7 @@ pub async fn execute() -> Result<ExitStatus, Error> {
 
     config.shim_mode = ShimMode::Managed;
     save_config(&config).await?;
+    setup::refresh_env_files().await?;
 
     println!("\u{2713} Node.js management set to managed.");
     println!();
