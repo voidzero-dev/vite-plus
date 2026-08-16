@@ -7405,7 +7405,7 @@ dependencies = [
 [[package]]
 name = "snapshot_test"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c#0fd7673ec36e6a787555a89c39983cb981b1642c"
 dependencies = [
  "serde",
  "serde_json",
