@@ -13,6 +13,7 @@ import {
   parse as parseJsonc,
 } from 'jsonc-parser';
 
+import { getVpDirs } from '../../binding/index.js';
 import { PackageManager } from '../types/package.ts';
 import { detectFormattingOptions, writeJsonFile } from './json.ts';
 
@@ -102,6 +103,10 @@ const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 </project>
 `;
 
+function jetbrainsNodeInterpreterPath(): string {
+  return path.join(getVpDirs().bin, process.platform === 'win32' ? 'node.exe' : 'node');
+}
+
 function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
@@ -110,7 +115,7 @@ function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
       {
         keyToString: {
           'javascript.preferred.runtime.type.id': 'node',
-          nodejs_interpreter_path: '$USER_HOME$/.vite-plus/bin/node.exe',
+          nodejs_interpreter_path: jetbrainsNodeInterpreterPath(),
           nodejs_package_manager_path: packageManager,
         },
       },

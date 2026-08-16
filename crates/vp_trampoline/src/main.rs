@@ -38,8 +38,24 @@ const SHIM_POINTER_EXTENSION: &str = "shim";
 
 struct VpLocation {
     exe: std::path::PathBuf,
-    /// Data root from `<name>.shim`; pinned as `VP_DATA_DIR` on the child.
+    /// Data root from `<name>.shim`.
     vp_data_dir: std::path::PathBuf,
+}
+
+/// How the child `vp.exe` should resolve category roots.
+enum ChildDirPins {
+    /// Bin is `<data>/bin`: single-root (`VP_HOME` / `--install-dir`).
+    SingleRoot,
+    /// Independent bin and data roots.
+    Split,
+}
+
+fn child_dir_pins(bin_dir: &std::path::Path, data: &std::path::Path) -> ChildDirPins {
+    if bin_dir == data.join("bin").as_path() {
+        ChildDirPins::SingleRoot
+    } else {
+        ChildDirPins::Split
+    }
 }
 
 /// Locate `vp.exe` from `<BIN>/<name>.shim`.
@@ -86,14 +102,22 @@ fn main() {
     install_ctrl_handler();
 
     // 4. Spawn vp.exe
-    //    - Pin VP_DATA_DIR / VP_BIN_DIR from the sidecar so the child
-    //      EnvConfig matches this install. Do not set VP_HOME.
+    //    - Single-root (`<data>/bin`): pin VP_HOME so cache/config/state
+    //      stay on that root when the process has no inherited VP_HOME.
+    //    - Split: pin VP_DATA_DIR / VP_BIN_DIR. Do not set VP_HOME.
     //    - If tool is "vp", run in normal CLI mode (no VP_SHIM_TOOL)
     //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
     let mut cmd = Command::new(&location.exe);
     cmd.args(env::args_os().skip(1));
-    cmd.env("VP_DATA_DIR", &location.vp_data_dir);
-    cmd.env("VP_BIN_DIR", bin_dir);
+    match child_dir_pins(bin_dir, &location.vp_data_dir) {
+        ChildDirPins::SingleRoot => {
+            cmd.env("VP_HOME", &location.vp_data_dir);
+        }
+        ChildDirPins::Split => {
+            cmd.env("VP_DATA_DIR", &location.vp_data_dir);
+            cmd.env("VP_BIN_DIR", bin_dir);
+        }
+    }
 
     if tool_name != "vp" {
         cmd.env("VP_SHIM_TOOL", tool_name);
@@ -225,6 +249,19 @@ mod resolve_tests {
         assert_eq!(location.exe, data.join("current").join("bin").join("vp.exe"));
         assert_eq!(location.vp_data_dir, data);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn child_dir_pins_single_root_when_bin_is_under_data() {
+        let data = std::path::PathBuf::from("/install/root");
+        assert!(matches!(child_dir_pins(&data.join("bin"), &data), ChildDirPins::SingleRoot));
+    }
+
+    #[test]
+    fn child_dir_pins_split_when_bin_is_independent() {
+        let data = std::path::PathBuf::from("/data/root");
+        let bin = std::path::PathBuf::from("/other/bin");
+        assert!(matches!(child_dir_pins(&bin, &data), ChildDirPins::Split));
     }
 }
 

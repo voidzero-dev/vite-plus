@@ -315,11 +315,12 @@ function Test-SafeInstallDirToRemove {
 
     $normalized = Normalize-InstallDir $Path
     $root = [System.IO.Path]::GetPathRoot($normalized)
-    $home = Normalize-InstallDir $env:USERPROFILE
+    # Do not use $home: PowerShell is case-insensitive and $HOME is read-only on 5.1.
+    $userHome = Normalize-InstallDir $env:USERPROFILE
     $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
     $unsafeDirs = @(
         $root
-        $home
+        $userHome
         (Normalize-InstallDir $env:SystemRoot)
         (Normalize-InstallDir $env:ProgramFiles)
         (Normalize-InstallDir $programFilesX86)

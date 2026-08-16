@@ -64,8 +64,10 @@ pub(crate) fn package_shim_target() -> AbsolutePathBuf {
 ///
 /// Unix: a symlink whose target (relative links resolved against the shim
 /// parent) is [`package_shim_target`], or a working link to a `vp` binary
-/// (dev / `vp env setup` layouts). Windows: a symlink to `vp`/`vp.exe`, or
-/// a regular file (trampoline copy / `vp-use.cmd`).
+/// (dev / `vp env setup` layouts). Windows: a symlink to `vp`/`vp.exe`,
+/// `vp-use.cmd`, or a trampoline whose matching `<name>.shim` records this
+/// install's data root. A regular file alone is not enough: shared
+/// `VP_BIN_DIR` directories may contain unrelated `node.exe` / `npm.exe`.
 pub(crate) fn is_vp_shim_target(shim_path: &vt_path::AbsolutePath) -> bool {
     match std::fs::read_link(shim_path.as_path()) {
         Ok(target) => {
@@ -81,8 +83,30 @@ pub(crate) fn is_vp_shim_target(shim_path: &vt_path::AbsolutePath) -> bool {
                         && std::fs::exists(shim_path.as_path()).unwrap_or(false))
             }
         }
-        Err(_) => cfg!(windows) && shim_path.as_path().is_file(),
+        Err(_) => cfg!(windows) && windows_regular_file_is_vp_shim(shim_path),
     }
+}
+
+/// Windows trampoline / `vp-use.cmd` ownership check.
+fn windows_regular_file_is_vp_shim(shim_path: &vt_path::AbsolutePath) -> bool {
+    if !shim_path.as_path().is_file() {
+        return false;
+    }
+    if shim_path.as_path().file_name().is_some_and(|name| name == "vp-use.cmd") {
+        return true;
+    }
+    let Ok(bytes) =
+        std::fs::read(shim_path.as_path().with_extension(vp_shared::SHIM_POINTER_EXTENSION))
+    else {
+        return false;
+    };
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes.as_slice());
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let text = text.trim();
+    !text.is_empty()
+        && std::path::Path::new(text) == vp_shared::EnvConfig::get().dirs.data.as_path()
 }
 
 /// Check whether a binary name is a shim Vite+ owns unconditionally: core
@@ -1283,6 +1307,29 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn is_vp_shim_target_requires_sidecar_for_windows_exes() {
+        vp_shared::EnvConfig::scoped(|config| {
+            let bin = &config.dirs.bin;
+            std::fs::create_dir_all(bin).unwrap();
+            std::fs::write(bin.join("node.exe").as_path(), b"system-node").unwrap();
+            assert!(
+                !is_vp_shim_target(&bin.join("node.exe")),
+                "unrelated node.exe without a sidecar must not be treated as ours"
+            );
+
+            config.dirs.write_shim_pointer("node").unwrap();
+            assert!(
+                is_vp_shim_target(&bin.join("node.exe")),
+                "trampoline with this install's sidecar is owned"
+            );
+
+            std::fs::write(bin.join("vp-use.cmd").as_path(), b"@echo off").unwrap();
+            assert!(is_vp_shim_target(&bin.join("vp-use.cmd")));
+        });
     }
 
     #[tokio::test]

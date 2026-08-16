@@ -89,13 +89,18 @@ fn user_home_path() -> Option<AbsolutePathBuf> {
 
 /// Layout variables to re-export in persisted shell context.
 ///
-/// A set `VP_HOME` pins every category, so it is captured alone (verbatim
-/// from the process environment). Otherwise the *resolved* `bin` / `data` /
+/// An *absolute* `VP_HOME` pins every category, so it is captured alone
+/// (verbatim from the process environment). Relative `VP_HOME` is ignored
+/// by resolution and must not be re-exported, or later shells would lose
+/// the resolved `VP_*_DIR` roots. Otherwise the *resolved* `bin` / `data` /
 /// `cache` roots are stored as `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`.
 /// That pins this install for later shells without re-exporting `XDG_*`
 /// (those are user/session policy for every tool, not Vite+ overrides).
 fn dir_envs_from_resolved(dirs: &VpDirs) -> HashMap<&'static str, String> {
-    if let Ok(home) = std::env::var(env_vars::VP_HOME) {
+    if let Some(home) = std::env::var_os(env_vars::VP_HOME).and_then(|path| {
+        let display = path.to_string_lossy().into_owned();
+        AbsolutePathBuf::new(path.into()).map(|_| display)
+    }) {
         return HashMap::from([(env_vars::VP_HOME, home)]);
     }
     HashMap::from([
@@ -121,9 +126,9 @@ pub struct EnvConfig {
 
     /// Layout variables to re-export to persisted shell context.
     ///
-    /// Contains either `VP_HOME` alone (when that override is set) or the
-    /// resolved `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR` roots — never
-    /// both, and never `XDG_*`. Consumers that write shell context
+    /// Contains either `VP_HOME` alone (when that override is an absolute
+    /// path) or the resolved `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
+    /// roots — never both, and never `XDG_*`. Consumers that write shell context
     /// (`vp env setup` scripts, the Windows `vp-use.cmd` wrapper) render
     /// these so child processes resolve the identical roots even when the
     /// later session has different XDG variables.
@@ -562,6 +567,32 @@ mod tests {
                 );
                 // ...and resolution honors the pin, not the overrides.
                 assert_eq!(config.dirs.bin.as_path(), root.path().join("bin"));
+            },
+        );
+    }
+
+    /// Relative `VP_HOME` is ignored by resolution; persist the resolved
+    /// `VP_*_DIR` roots instead of re-exporting the rejected value.
+    #[test]
+    fn dir_envs_ignores_relative_vp_home() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("custom-data");
+        EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, Some(OsStr::new("relative-home"))),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_BIN_DIR, None),
+                (env_vars::VP_CACHE_DIR, None),
+                ("HOME", Some(root.path().as_os_str())),
+                ("USERPROFILE", Some(root.path().as_os_str())),
+            ],
+            |config| {
+                assert!(!config.dir_envs.contains_key(env_vars::VP_HOME));
+                assert_eq!(
+                    config.dir_envs[env_vars::VP_DATA_DIR],
+                    config.dirs.data.as_path().to_string_lossy()
+                );
+                assert_eq!(config.dirs.data.as_path(), data.as_path());
             },
         );
     }
