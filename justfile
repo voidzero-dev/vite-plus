@@ -59,6 +59,7 @@ watch *args='':
 fmt:
   cargo shear --fix
   cargo fmt --all
+  cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml
   pnpm fmt
 
 check:
@@ -71,14 +72,18 @@ watch-check:
 # vite-plus-cli (lives outside crates/) to catch type sync issues.
 # vp_cli_snapshots is excluded: its suite needs a built global binary and
 # node, and runs via `just snapshot-test` instead.
+# vp_trampoline is excluded from the workspace and tests from its own
+# directory (build-std). Its only test module is unix-only, so the Windows
+# recipe skips it instead of paying for a no-test build-std compile.
 # Single source of truth for cargo test, used by CI too.
 [unix]
 test:
-  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli
+  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli
+  cd crates/vp_trampoline && cargo test
 
 [windows]
 test:
-  $packages = Get-ChildItem -Path crates -Directory | Where-Object { $_.Name -ne 'vp_cli_snapshots' } | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
+  $packages = Get-ChildItem -Path crates -Directory | Where-Object { $_.Name -ne 'vp_cli_snapshots' -and $_.Name -ne 'vp_trampoline' } | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
 # PTY-based CLI snapshot tests (crates/vp_cli_snapshots). Builds the global
 # binary and shim template first so the runner never tests a stale build, and
@@ -87,9 +92,20 @@ test:
 # `UPDATE_SNAPSHOTS=1 just snapshot-test`. Local-flavor cases additionally
 # need a built packages/cli (`pnpm build`); the runner fails fast when dist
 # is missing or stale. Use snapshot-test-global on checkouts without one.
-snapshot-test *args='': _install_chromium
-  cargo build -p vp_global_cli -p vp_trampoline
+snapshot-test *args='': _install_chromium _build-trampoline
+  cargo build -p vp_global_cli
   cargo test -p vp_cli_snapshots -- {{args}}
+
+# The trampoline is excluded from the workspace; build it from its own
+# directory so its .cargo/config.toml (build-std) applies. Artifacts still
+# land in the repo-root target/ directory.
+[unix]
+_build-trampoline:
+  cd crates/vp_trampoline && cargo build
+
+[windows]
+_build-trampoline:
+  Set-Location crates/vp_trampoline; cargo build
 
 # Browser-mode snapshot cases run with PLAYWRIGHT_BROWSERS_PATH=0, so the
 # browser must be installed into node_modules with the same setting.
@@ -121,6 +137,7 @@ lint:
     -A clippy::redundant_else \
     -A clippy::unused_async_trait_impl \
     -A clippy::useless_borrows_in_formatting
+  cargo clippy --manifest-path crates/vp_trampoline/Cargo.toml --all-targets -- --deny warnings
 
 [unix]
 doc:

@@ -12,3 +12,7 @@ vite
 
 # PTY snapshot runner failure artifacts (reviewed via the diff, never committed)
 crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new
+# `cargo fmt/clippy --manifest-path crates/vp_trampoline/Cargo.toml` from the repo
+# root does not read the crate config (target-dir), so it creates a nested
+# target dir.
+/crates/vp_trampoline/target

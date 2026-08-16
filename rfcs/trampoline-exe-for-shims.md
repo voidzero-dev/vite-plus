@@ -124,10 +124,33 @@ layout and also records that Vite+ owns the adjacent executable.
 
 ```
 crates/vp_trampoline/
-├── Cargo.toml      # Zero external dependencies
+├── Cargo.toml           # Zero dependencies, own release profile
+├── Cargo.lock           # Own lockfile (the crate is not a workspace member)
+├── .cargo/
+│   └── config.toml      # build-std flags + target-dir = repo-root target/
 ├── src/
 │   └── main.rs     # Sidecar parser, launcher, and portable tests
 ```
+
+The crate is excluded from the workspace (`exclude` in the root `Cargo.toml`).
+Two build requirements force this:
+
+- The release profile sets `panic = "immediate-abort"`. Cargo ignores `panic`
+  in per-package profile overrides, so the crate needs its own profile.
+- The crate-local `.cargo/config.toml` enables build-std. Cargo reads that
+  config only when it runs from the crate directory.
+
+Build it from the crate directory:
+
+```bash
+cd crates/vp_trampoline && cargo build --release [--target <triple>]
+```
+
+Artifacts land in the repo-root `target/` directory (the crate config sets
+`target-dir = "../../target"`), so CI steps and `install-global-cli` find
+`vp-shim.exe` in the same place as workspace-built binaries. The build needs
+the pinned nightly toolchain and the `rust-src` component; both come from the
+repo `rust-toolchain.toml`.
 
 ### Trampoline Binary
 
@@ -152,14 +175,22 @@ points to a missing payload. It does not infer the layout from directory paths.
 
 ### Size Optimization
 
-| Technique                                                                             | Savings                    | Status |
-| ------------------------------------------------------------------------------------- | -------------------------- | ------ |
-| Zero external dependencies (raw FFI)                                                  | ~20KB (vs `windows` crate) | Done   |
-| No direct `core::fmt` usage (avoid `eprintln!`/`format!`/`.unwrap()`)                 | Marginal                   | Done   |
-| Workspace profile: `lto="fat"`, `codegen-units=1`, `strip="symbols"`, `panic="abort"` | Inherited                  | Done   |
-| Per-package `opt-level="z"` (optimize for size)                                       | ~5-10%                     | Done   |
+| Technique                                                              | Status |
+| ---------------------------------------------------------------------- | ------ |
+| Zero external dependencies (raw FFI, no `windows` crate)               | Done   |
+| No direct `core::fmt` usage (avoid `eprintln!`/`format!`/`.unwrap()`)  | Done   |
+| Own profile: `opt-level="z"`, `lto="fat"`, `codegen-units=1`, `strip`  | Done   |
+| build-std: recompile `std` with this profile (`-Zbuild-std`)           | Done   |
+| `panic = "immediate-abort"` (no panic formatting, unwinding, backtrace) | Done   |
+| `build-std-features = ["optimize_for_size"]` (drops panic-unwind, backtrace features) | Done |
 
-**Binary size**: ~200KB on Windows. The floor is set by `std::process::Command` which internally pulls in `core::fmt` for error formatting regardless of whether our code uses it. Further reduction to ~40-50KB (matching uv-trampoline) would require replacing `Command` with raw `CreateProcessW` and using nightly Rust (see Future Optimizations).
+**Binary size**: ~82KB on x86_64-pc-windows-msvc (~79KB on aarch64). With the
+precompiled `std` the same source built to ~222KB: the prebuilt rlib carries
+`lang_start` init, panic formatting, and backtrace support, and `opt-level`
+cannot remove code that a prebuilt rlib already contains. build-std recompiles
+`std` under this crate's own profile, and `panic = "immediate-abort"` compiles
+the panic machinery out. A further reduction to ~7KB is measured and documented
+under Future Optimizations.
 
 ### Environment Variables
 
@@ -254,18 +285,17 @@ When installing a pre-trampoline version (no `vp-shim.exe` in the package):
 | **Complexity**      | High (PE resources, zipimport)           | Low (filename + spawn)            |
 | **Data embedding**  | PE resources (kind, path, script ZIP)    | Adjacent directory-layout sidecar |
 | **Dependencies**    | `windows` crate (unsafe, no CRT)         | Zero (raw FFI declaration)        |
-| **Toolchain**       | Nightly Rust (`panic="immediate-abort"`) | Stable Rust                       |
-| **Binary size**     | 39-47 KB                                 | ~200 KB                           |
+| **Toolchain**       | Nightly Rust (`panic="immediate-abort"`) | Nightly Rust (same technique)     |
+| **Binary size**     | 39-47 KB                                 | ~82 KB                            |
 | **Entry point**     | `#![no_main]` + `mainCRTStartup`         | Standard `fn main()`              |
 | **Error output**    | `ufmt` (no `core::fmt`)                  | `write_all` (no `core::fmt`)      |
 | **Ctrl+C handling** | `SetConsoleCtrlHandler` → ignore         | Same approach                     |
 | **Exit code**       | `GetExitCodeProcess` → `exit()`          | `Command::status()` → `exit()`    |
 
-The vite-plus trampoline does not embed data in PE resources. It reads its own
-filename and adjacent sidecar. It then resolves `vp.exe` under the recorded data
-root. The ~150KB size difference from uv-trampoline comes from
-`std::process::Command` (which internally pulls in `core::fmt`) versus raw
-`CreateProcessW` with nightly-only `#![no_main]`.
+The vite-plus trampoline embeds no data in PE resources. It reads its filename
+and adjacent sidecar, resolves `vp.exe`, and starts it. Both projects use
+build-std and `panic = "immediate-abort"`. The remaining gap comes from
+`std::process::Command` and the `std` runtime initialization.
 
 ## Alternatives Considered
 
@@ -283,7 +313,7 @@ Requires administrator privileges or Developer Mode. Not reliable for all users.
 
 ### 4. Copy `vp.exe` as Each Shim (Rejected)
 
-~5-10MB per copy. The trampoline achieves the same result at ~200KB.
+~5-10MB per copy. Trampoline achieves the same result at ~82KB.
 
 ### 5. `windows` Crate for FFI (Rejected)
 
@@ -291,17 +321,83 @@ Adds ~100KB to the binary for a single `SetConsoleCtrlHandler` call. Raw FFI dec
 
 ## Future Optimizations
 
-If the ~200KB binary size needs to be reduced further:
+Every variant below was built with cargo-xwin and measured on
+x86_64-pc-windows-msvc. The numbers serve as reference material for further
+size work.
 
-1. **Switch to nightly Rust** with `panic="immediate-abort"` and `#![no_main]` + `mainCRTStartup` (~50KB savings)
-2. **Use raw Win32 `CreateProcessW`** instead of `std::process::Command` (eliminates most of std's process machinery)
-3. **Pre-build and check in** trampoline binaries (like uv does) to decouple the trampoline build from the workspace toolchain
+| Variant                                                                    | Toolchain | Size      |
+| -------------------------------------------------------------------------- | --------- | --------- |
+| Current source, precompiled `std`, `opt-level="z"` + fat LTO + `panic="abort"` | stable    | 221,696 B |
+| Current source + build-std + `panic="immediate-abort"` (shipped today)     | nightly   | 82,432 B  |
+| Same + `#![no_main]` + `mainCRTStartup` + `atexit` stub                    | nightly   | 69,632 B  |
+| Raw Win32 rewrite, normal `main`, stable, no build-std                     | stable    | 105,984 B |
+| Raw Win32 rewrite, normal `main` + build-std                               | nightly   | 13,824 B  |
+| Raw Win32 rewrite + `#![no_main]` (uv-trampoline structure)                | nightly   | 6,656 B   |
 
-These would bring the binary to ~40-50KB, matching uv-trampoline, at the cost of requiring a nightly toolchain and more unsafe code.
+For comparison: uv-trampoline ships 45,056 B (x64 console), Scoop's default
+kiennq shim is 136,192 B (statically linked MSVC C), and Scoop once vendored
+and then reverted a 317,952 B Rust shim.
+
+### The 7KB variant
+
+The floor is a raw Win32 rewrite in the uv-trampoline structure. It keeps the
+behavior contract of this RFC and produces a 6,656 B exe (7,168 B on aarch64)
+that imports only KERNEL32:
+
+- `#![no_main]` plus an exported `mainCRTStartup` symbol. The linker picks
+  that symbol as the console-subsystem entry point, so no `/ENTRY:` flag is
+  needed. `std` runtime init never runs. Requires
+  `build-std-features = ["compiler-builtins-mem"]` so `memcpy`/`memset` come
+  from compiler_builtins instead of the CRT.
+- Replace `std::process::Command` with `CreateProcessW`. Build the child
+  command line as `"<vp_exe>"` plus the raw tail of `GetCommandLineW` after
+  the first (program) argument. The skip uses the MSVC rule for the program
+  name: quotes toggle, no backslash escapes. This forwards the caller's
+  quoting byte for byte, which `Command`'s re-quoting cannot guarantee.
+- Set `VP_HOME` / `VP_SHIM_TOOL` with `SetEnvironmentVariableW` on our own
+  environment before the spawn; the child inherits it. Remove
+  `VP_TOOL_RECURSION` by passing a null value.
+- Wait with `WaitForSingleObject`, then propagate the raw child exit code via
+  `GetExitCodeProcess` + `ExitProcess`.
+- Heap use stays on `Vec` (the `std` System allocator is `HeapAlloc` on the
+  process heap; no custom allocator needed).
+
+### Gotchas (all hit while measuring)
+
+1. **`atexit` link failure**: current nightlies register TLS destructor
+   cleanup through C `atexit`. Under `#![no_main]` that symbol pulls
+   `msvcrt.lib(utility.obj)`, and the link fails with undefined `__vcrt_*` /
+   `__acrt_*` CRT init internals. Fix: export a no-op
+   `extern "C" fn atexit(...) -> i32 { 0 }`. The trampoline never needs
+   exit-time TLS destructors. uv's documented `rustc-link-lib=ucrt`
+   workaround (rust-lang/rust#143172) does not fix this pull; uv's pinned
+   older nightly simply predates the `atexit` registration.
+2. **Subsystem**: `#![no_main]` requires an explicit
+   `#![windows_subsystem = "console"]`, or lld fails with "subsystem must be
+   defined".
+3. **Do not use `+crt-static`**: it links the static CRT and grows the binary
+   to ~115KB.
+4. **Dev profile**: at `opt-level = 0` the compiler can emit references to
+   the MSVC unwinding helper `__CxxFrameHandler3` even with
+   `panic = "immediate-abort"`, and the link fails. Keep `opt-level = 1` and
+   LTO in the dev profile (uv does the same).
+
+### Open items before adopting the 7KB variant
+
+- Force `HANDLE_FLAG_INHERIT` on the std handles when the parent redirects
+  stdio (uv does this before `CreateProcess`); verify parity with
+  `std::process::Command` behavior on the Windows PTY snapshot suite.
+- Decide whether to assign the child to a job object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so a killed shim also kills its
+  child. Today neither the shipped trampoline nor the prototype does this.
+- Consider committing prebuilt, reproducible trampoline binaries (uv checks
+  in `/Brepro`-normalized exes and verifies them byte for byte in CI) to
+  decouple the shim from toolchain drift.
 
 ## References
 
 - [Issue #835](https://github.com/voidzero-dev/vite-plus/issues/835): Original feature request with video reproduction
-- [uv-trampoline](https://github.com/astral-sh/uv/tree/main/crates/uv-trampoline): Reference implementation by astral-sh (~40KB with nightly Rust)
+- [uv-trampoline](https://github.com/astral-sh/uv/tree/main/crates/uv-trampoline): Reference implementation by astral-sh. Same build recipe (workspace exclusion, build-std, `panic="immediate-abort"`, cargo-xwin), plus `#![no_main]`, raw Win32, and a CI `cargo bloat` gate that rejects any `core::fmt`/`std::panicking` symbol.
+- [Scoop shims](https://github.com/ScoopInstaller/Scoop/tree/master/supporting/shims): vendored native C shim (136KB, from kiennq/scoop-better-shimexe) and C# .NET shim (9.7KB); launch targets come from a sibling `.shim` text file.
 - [RFC: env-command](./env-command.md): Shim architecture documentation
 - [RFC: upgrade-command](./upgrade-command.md): Upgrade/rollback flow

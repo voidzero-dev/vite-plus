@@ -186,7 +186,7 @@ for (const napiTarget of pkg.napi.targets) {
     const shimSource = join(repoRoot, 'target', napiTarget, 'release', shimName);
     if (!existsSync(shimSource)) {
       console.error(
-        `Error: ${shimName} not found at ${shimSource}. Run "cargo build -p vp_trampoline --release --target ${napiTarget}" first.`,
+        `Error: ${shimName} not found at ${shimSource}. Run "cd crates/vp_trampoline && cargo build --release --target ${napiTarget}" first.`,
       );
       process.exit(1);
     }
