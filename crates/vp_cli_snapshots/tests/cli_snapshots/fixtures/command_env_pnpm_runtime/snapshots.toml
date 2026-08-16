@@ -16,5 +16,5 @@ name = "command_env_pnpm_runtime_current_shell"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["node", "assert-posix-wrapper.mjs"], comment = "vp env on and off update the current shell" },
+  { argv = ["node", "assert-posix-wrapper.mjs"], comment = "vp env on and off update the current shell, including through the global -C flag" },
 ]

@@ -7,6 +7,14 @@ const script = [
   '[ -z "${PNPM_CONFIG_RUNTIME+x}" ] || exit 1',
   'vp env on >/dev/null || exit 1',
   '[ "$PNPM_CONFIG_RUNTIME" = false ] || exit 1',
+  'vp -C "$PWD" env off >/dev/null || exit 1',
+  '[ -z "${PNPM_CONFIG_RUNTIME+x}" ] || exit 1',
+  'vp "-C$PWD" env on >/dev/null || exit 1',
+  '[ "$PNPM_CONFIG_RUNTIME" = false ] || exit 1',
+  'vp "-C=$PWD" env off >/dev/null || exit 1',
+  '[ -z "${PNPM_CONFIG_RUNTIME+x}" ] || exit 1',
+  'vp env on >/dev/null || exit 1',
+  '[ "$PNPM_CONFIG_RUNTIME" = false ] || exit 1',
 ].join('\n')
 const result = spawnSync('/bin/sh', ['-c', script], { env: process.env, encoding: 'utf8' })
 

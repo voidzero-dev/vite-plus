@@ -538,15 +538,30 @@ case ":${PATH}:" in
 esac
 unset __vp_bin
 
+# Match `vp env on|off` with an optional leading `-C` global flag.
+__vp_is_env_mode() {
+    case "$#" in
+        3) [ "$2" = "env" ] && [ "$3" = "$1" ] ;;
+        4)
+            case "$2" in
+                -C?*) [ "$3" = "env" ] && [ "$4" = "$1" ] ;;
+                *) return 1 ;;
+            esac
+            ;;
+        5) [ "$2" = "-C" ] && [ "$4" = "env" ] && [ "$5" = "$1" ] ;;
+        *) return 1 ;;
+    esac
+}
+
 # Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 vp() {
     if [ "$1" = "env" ] && [ "$2" = "use" ]; then
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
         __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 VP_SHELL=sh command vp "$@")" || return $?
         eval "$__vp_out"
-    elif [ "$#" -eq 2 ] && [ "$1" = "env" ] && [ "$2" = "on" ]; then
+    elif __vp_is_env_mode on "$@"; then
         command vp "$@" && export PNPM_CONFIG_RUNTIME=false
-    elif [ "$#" -eq 2 ] && [ "$1" = "env" ] && [ "$2" = "off" ]; then
+    elif __vp_is_env_mode off "$@"; then
         command vp "$@" && unset PNPM_CONFIG_RUNTIME
     else
         command vp "$@"
@@ -579,6 +594,15 @@ set -gx PATH __VP_BIN__ $PATH
 
 # Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 function vp
+    set -l __vp_env_mode
+    if test (count $argv) -eq 2; and test "$argv[1]" = "env"
+        set __vp_env_mode $argv[2]
+    else if test (count $argv) -eq 3; and string match -qr '^-C.+' -- "$argv[1]"; and test "$argv[2]" = "env"
+        set __vp_env_mode $argv[3]
+    else if test (count $argv) -eq 4; and test "$argv[1]" = "-C"; and test "$argv[3]" = "env"
+        set __vp_env_mode $argv[4]
+    end
+
     if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
@@ -587,9 +611,9 @@ function vp
         set -lx VP_SHELL fish
         set -l __vp_out (command vp $argv); or return $status
         eval (string join ';' $__vp_out)
-    else if test (count $argv) -eq 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "on"
+    else if test "$__vp_env_mode" = "on"
         command vp $argv; and set -gx PNPM_CONFIG_RUNTIME false
-    else if test (count $argv) -eq 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "off"
+    else if test "$__vp_env_mode" = "off"
         command vp $argv; and set -e PNPM_CONFIG_RUNTIME
     else
         command vp $argv
@@ -617,6 +641,16 @@ $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
 # Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
+    let env_mode = if ($args | length) == 2 and $args.0 == "env" {
+        $args.1
+    } else if ($args | length) == 3 and $args.0 =~ '^-C.+' and $args.1 == "env" {
+        $args.2
+    } else if ($args | length) == 4 and $args.0 == "-C" and $args.2 == "env" {
+        $args.3
+    } else {
+        null
+    }
+
     if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
@@ -638,10 +672,10 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
         for key in $unsets {
             if ($key in $env) { hide-env $key }
         }
-    } else if ($args | length) == 2 and $args.0 == "env" and $args.1 == "on" {
+    } else if $env_mode == "on" {
         ^vp ...$args
         if $env.LAST_EXIT_CODE == 0 { $env.PNPM_CONFIG_RUNTIME = "false" }
-    } else if ($args | length) == 2 and $args.0 == "env" and $args.1 == "off" {
+    } else if $env_mode == "off" {
         ^vp ...$args
         if $env.LAST_EXIT_CODE == 0 and ("PNPM_CONFIG_RUNTIME" in $env) {
             hide-env PNPM_CONFIG_RUNTIME
@@ -689,6 +723,15 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
 
 # Shell function wrapper: applies `vp env use`, `on`, and `off` changes to this session.
 function vp {
+    $envMode = $null
+    if ($args.Count -eq 2 -and $args[0] -eq "env") {
+        $envMode = $args[1]
+    } elseif ($args.Count -eq 3 -and $args[0] -match '^-C.+' -and $args[1] -eq "env") {
+        $envMode = $args[2]
+    } elseif ($args.Count -eq 4 -and $args[0] -eq "-C" -and $args[2] -eq "env") {
+        $envMode = $args[3]
+    }
+
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp") @args; return
@@ -707,10 +750,10 @@ function vp {
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }
-    } elseif ($args.Count -eq 2 -and $args[0] -eq "env" -and $args[1] -eq "on") {
+    } elseif ($envMode -eq "on") {
         & (Join-Path $__vp_bin "vp") @args
         if ($LASTEXITCODE -eq 0) { $env:PNPM_CONFIG_RUNTIME = "false" }
-    } elseif ($args.Count -eq 2 -and $args[0] -eq "env" -and $args[1] -eq "off") {
+    } elseif ($envMode -eq "off") {
         & (Join-Path $__vp_bin "vp") @args
         if ($LASTEXITCODE -eq 0) {
             Remove-Item Env:\PNPM_CONFIG_RUNTIME -ErrorAction SilentlyContinue
@@ -868,7 +911,9 @@ async fn create_env_files(vite_plus_home: &vt_path::AbsolutePath) -> Result<(), 
 }
 
 pub(crate) async fn refresh_env_files() -> Result<(), Error> {
-    create_env_files(&get_vp_home()?).await
+    let vite_plus_home = get_vp_home()?;
+    tokio::fs::create_dir_all(&vite_plus_home).await?;
+    create_env_files(&vite_plus_home).await
 }
 
 /// Print instructions for adding bin directory to PATH.
@@ -1002,6 +1047,21 @@ mod tests {
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
         assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
         assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
+    }
+
+    #[tokio::test]
+    async fn test_refresh_env_files_creates_missing_home() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
+            vite_plus_home: Some(home.as_path().to_path_buf()),
+            user_home: Some(temp_dir.path().to_path_buf()),
+            ..vp_shared::EnvConfig::for_test()
+        });
+
+        refresh_env_files().await.unwrap();
+
+        assert!(home.join("env").as_path().exists(), "env file should be created");
     }
 
     #[test]

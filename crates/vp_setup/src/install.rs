@@ -592,7 +592,7 @@ pub async fn read_current_version(install_dir: &AbsolutePath) -> Option<String> 
     target.file_name().and_then(|n| n.to_str()).map(String::from)
 }
 
-/// Create shell env files by running `vp env setup --env-only`.
+/// Create system-first shell env files by running `vp env off`.
 ///
 /// Used when the Node.js manager is disabled — ensures env files exist
 /// even without a full shim refresh.
@@ -603,15 +603,13 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
         return Ok(());
     }
 
-    let output = tokio::process::Command::new(vp_binary.as_path())
-        .args(["env", "setup", "--env-only"])
-        .output()
-        .await?;
+    let output =
+        tokio::process::Command::new(vp_binary.as_path()).args(["env", "off"]).output().await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
-            "env setup --env-only exited with code {}, continuing anyway\n{}",
+            "env off exited with code {}, continuing anyway\n{}",
             vp_shared::exit_code_from_status(output.status),
             stderr.trim()
         );
