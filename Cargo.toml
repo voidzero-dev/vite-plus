@@ -240,7 +240,7 @@ pretty_assertions = "1.4.1"
 phf = "0.14.0"
 prettyplease = "0.2.32"
 proc-macro2 = "1"
-pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
+pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "0fd7673ec36e6a787555a89c39983cb981b1642c" }
 pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
 quote = "1"
 rayon = "1.10.0"
