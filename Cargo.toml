@@ -264,7 +264,7 @@ sha2 = "0.10.9"
 shell-escape = "0.1.5"
 simdutf8 = "0.1.5"
 smallvec = { version = "1.15.1", features = ["union"] }
-snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
+snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "0fd7673ec36e6a787555a89c39983cb981b1642c" }
 string_cache = "0.9.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
