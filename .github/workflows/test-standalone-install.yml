@@ -186,7 +186,7 @@ jobs:
           test -e "$GRAND/.vite-plus/current"
           test -e "$GRAND/.vite-plus/bin/vp"
           test ! -d "$GRAND/.local/share/vite-plus"
-          test "$(readlink "$GRAND/.vite-plus/bin/vp")" = "../current/bin/vp"
+          test "$(readlink "$GRAND/.vite-plus/bin/vp")" = "$GRAND/.vite-plus/current/bin/vp"
           "$GRAND/.vite-plus/bin/vp" --version
 
   test-install-sh-readonly-config:
