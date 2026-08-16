@@ -8377,7 +8377,7 @@ dependencies = [
  "tokio",
  "vt",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
 ]
 
 [[package]]
@@ -8412,8 +8412,8 @@ dependencies = [
  "vp_toolchain",
  "vt",
  "vt_path",
- "vt_select",
- "vt_str",
+ "vt_select 0.0.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c)",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_workspace",
 ]
 
@@ -8473,7 +8473,7 @@ dependencies = [
  "tokio",
  "vp_shared",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_workspace",
 ]
 
@@ -8511,7 +8511,7 @@ dependencies = [
  "vp_shared",
  "vp_toolchain",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_workspace",
 ]
 
@@ -8554,7 +8554,7 @@ dependencies = [
  "tracing",
  "vp_shared",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "zip",
 ]
 
@@ -8608,7 +8608,7 @@ dependencies = [
  "vp_pm_cli_macros",
  "vp_shared",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_workspace",
 ]
 
@@ -8642,7 +8642,7 @@ dependencies = [
  "vp_pm_cli",
  "vp_shared",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
 ]
 
 [[package]]
@@ -8663,7 +8663,7 @@ dependencies = [
  "tracing-subscriber",
  "vt_path",
  "vt_powershell",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "webpki-root-certs",
 ]
 
@@ -8692,7 +8692,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
 ]
 
 [[package]]
@@ -8743,9 +8743,9 @@ dependencies = [
  "vt_ipc_shared",
  "vt_path",
  "vt_plan",
- "vt_select",
+ "vt_select 0.0.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_server",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_workspace",
  "wax",
  "winapi",
@@ -8786,7 +8786,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "vt_client",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
 ]
 
 [[package]]
@@ -8815,7 +8815,7 @@ dependencies = [
  "tracing",
  "vec1",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "vt_workspace",
  "wax",
  "wincode",
@@ -8851,7 +8851,7 @@ dependencies = [
  "ref-cast",
  "serde",
  "thiserror 2.0.19",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "wincode",
 ]
 
@@ -8878,7 +8878,7 @@ dependencies = [
  "vt_path",
  "vt_powershell",
  "vt_shell",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "which",
  "wincode",
 ]
@@ -8895,12 +8895,23 @@ dependencies = [
 [[package]]
 name = "vt_select"
 version = "0.0.0"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c#0fd7673ec36e6a787555a89c39983cb981b1642c"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "nucleo-matcher",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c)",
+]
+
+[[package]]
+name = "vt_select"
+version = "0.0.0"
 source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
 dependencies = [
  "anyhow",
  "crossterm",
  "nucleo-matcher",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
 ]
 
 [[package]]
@@ -8931,7 +8942,18 @@ dependencies = [
  "diff-struct",
  "serde",
  "shell-escape",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
+ "wincode",
+]
+
+[[package]]
+name = "vt_str"
+version = "0.1.0"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c#0fd7673ec36e6a787555a89c39983cb981b1642c"
+dependencies = [
+ "compact_str 0.9.1",
+ "diff-struct",
+ "serde",
  "wincode",
 ]
 
@@ -8962,7 +8984,7 @@ dependencies = [
  "vec1",
  "vt_glob",
  "vt_path",
- "vt_str",
+ "vt_str 0.1.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "wax",
 ]
 
