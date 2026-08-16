@@ -4,6 +4,13 @@
 Reusing Vite Task's cache across GitHub Actions runs is experimental. Test and measure it in your project before relying on it in CI.
 :::
 
+::: note `setup-vp` support
+The `setup-vp` action supports saving to GitHub Actions Cache with pre-wired defaults.
+Continue reading to learn how to set up.
+
+In either case, you will still need to follow most instructions on this page.
+:::
+
 Vite Task stores task results in `node_modules/.vite/task-cache` at the workspace root. Restore that directory in later GitHub Actions runs so Vite Task can reuse previous task results.
 
 GitHub Actions cache and Vite Task make separate decisions:
@@ -61,11 +68,38 @@ vp run lint # should print "cache hit"
 
 ## 2. Restore The Cache After Install
 
-Restore `node_modules/.vite/task-cache` after `vp install`, because package installation can recreate or modify `node_modules`.
+Use the `task-cache` toggle to enable saving the task cache to GitHub Actions Cache.
+It will use the key configuration seen later on this page.
 
-Set `<setup-vp-version>` below to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead.
+Set `<setup-vp-version>` below to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can also use a commit SHA instead, which can pin the action to a specific build.
 
 See [Automatic Version Updates](/guide/ci#automatic-version-updates) to configure Dependabot or Renovate.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: voidzero-dev/setup-vp@<setup-vp-version>
+        with:
+          node-version: '24'
+          cache: true
+          task-cache: true
+```
+
+Otherwise, remember to restore `node_modules/.vite/task-cache` after `vp install`, because package installation can recreate or modify `node_modules`.
 
 ```yaml [.github/workflows/ci.yml]
 name: CI
