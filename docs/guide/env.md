@@ -78,7 +78,7 @@ node --version
 vp-use --unset
 ```
 
-Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. Because Command Prompt cannot update its parent environment, restart it after `vp env on` or `vp env off` to apply the corresponding `PNPM_CONFIG_RUNTIME` change. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+Only `vp env use` needs this alternate command. Other `vp env` commands still update Vite+'s configuration, but Command Prompt does not load the generated shell environment files, so `PNPM_CONFIG_RUNTIME` is not applied there. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
 
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 
