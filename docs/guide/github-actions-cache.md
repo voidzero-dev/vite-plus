@@ -4,7 +4,7 @@
 Reusing Vite Task's cache across GitHub Actions runs is experimental. Test and measure it in your project before relying on it in CI.
 :::
 
-::: note `setup-vp` support
+::: tip `setup-vp` support
 The `setup-vp` action supports saving to GitHub Actions Cache with pre-wired defaults.
 Continue reading to learn how to set up.
 
