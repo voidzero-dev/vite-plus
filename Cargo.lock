@@ -5523,7 +5523,17 @@ dependencies = [
  "anyhow",
  "portable-pty",
  "pty_terminal",
- "pty_terminal_test_client",
+ "pty_terminal_test_client 0.0.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
+]
+
+[[package]]
+name = "pty_terminal_test_client"
+version = "0.0.0"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c#0fd7673ec36e6a787555a89c39983cb981b1642c"
+dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.4.3",
+ "winapi",
 ]
 
 [[package]]
@@ -5532,8 +5542,6 @@ version = "0.0.0"
 source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
 dependencies = [
  "base64 0.22.1",
- "getrandom 0.4.3",
- "winapi",
 ]
 
 [[package]]
@@ -8429,7 +8437,7 @@ dependencies = [
  "libtest-mimic",
  "nix 0.30.1",
  "pty_terminal_test",
- "pty_terminal_test_client",
+ "pty_terminal_test_client 0.0.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=0fd7673ec36e6a787555a89c39983cb981b1642c)",
  "regex",
  "serde",
  "serde_json",
@@ -8723,7 +8731,7 @@ dependencies = [
  "once_cell",
  "owo-colors",
  "petgraph 0.8.3",
- "pty_terminal_test_client",
+ "pty_terminal_test_client 0.0.0 (git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9)",
  "rayon",
  "rusqlite",
  "rustc-hash",
