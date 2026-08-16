@@ -4,3 +4,6 @@
 # - `windows_process_extensions_main_thread_handle` to get the main thread handle for Detours injection
 channel = "nightly-2026-08-02"
 profile = "default"
+# rust-src: crates/vp_trampoline builds std from source (build-std) to
+# minimize the shim binary size.
+components = ["rust-src"]

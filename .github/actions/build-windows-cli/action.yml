@@ -80,10 +80,25 @@ runs:
     - name: Build Rust CLI binaries
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vp_global_cli -p vp_trampoline -p vp_installer
+      run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vp_global_cli -p vp_installer
       env:
         XWIN_ACCEPT_LICENSE: '1'
         CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+
+    # The trampoline is excluded from the workspace and must build from its
+    # own directory so its .cargo/config.toml (build-std) applies. Pin
+    # CARGO_TARGET_DIR to an absolute path so the artifact still lands in the
+    # same target/ directory the artifact list above expects.
+    - name: Build trampoline shim binary
+      if: steps.binaries-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
+        case "$target_dir" in /*) ;; *) target_dir="$PWD/$target_dir" ;; esac
+        cd crates/vp_trampoline
+        CARGO_TARGET_DIR="$target_dir" cargo xwin build --release --target x86_64-pc-windows-msvc
+      env:
+        XWIN_ACCEPT_LICENSE: '1'
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:

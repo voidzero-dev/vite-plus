@@ -1,11 +1,30 @@
+# This crate is excluded from the workspace on purpose (see the root
+# Cargo.toml). It needs its own release profile with panic = "immediate-abort",
+# which cargo ignores in per-package profile overrides, plus the crate-local
+# .cargo/config.toml that enables build-std. Build it from this directory so
+# that config applies:
+#
+#   cd crates/vp_trampoline && cargo build --release [--target <triple>]
+#
+# Artifacts land in the repo-root target/ directory (see .cargo/config.toml),
+# the same location as workspace builds. The build needs the pinned nightly
+# toolchain and the rust-src component (both come from the repo
+# rust-toolchain.toml).
+#
+# Size on x86_64-pc-windows-msvc: ~82KB, down from ~222KB when it was a
+# workspace member built with the precompiled std. build-std recompiles std
+# with this profile, and panic = "immediate-abort" compiles out the panic
+# formatting, unwinding, and backtrace machinery. Background and further
+# options: rfcs/trampoline-exe-for-shims.md.
+cargo-features = ["panic-immediate-abort"]
+
 [package]
 name = "vp_trampoline"
 version = "0.0.0"
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
+authors = ["Vite+ Authors"]
+edition = "2024"
+license = "MIT"
 publish = false
-rust-version.workspace = true
 description = "Minimal Windows trampoline exe for vite-plus shims"
 
 [[bin]]
@@ -15,14 +34,36 @@ path = "src/main.rs"
 # No dependencies — the single Win32 FFI call (SetConsoleCtrlHandler) is
 # declared inline to avoid pulling in the heavy `windows`/`windows-core` crates.
 
-# Override workspace lints: this is a standalone minimal binary that intentionally
-# avoids dependencies on vp_shared, vt_path, vt_str, etc. to keep binary
-# size small. It uses std types and macros directly.
+# This crate does not inherit the workspace lints. It intentionally uses std
+# types and macros directly instead of vp_shared, vt_path, vt_str, etc. to
+# keep the binary size small; allow the repo-wide .clippy.toml restrictions
+# that exist to funnel code through those crates.
 [lints.clippy]
 disallowed_macros = "allow"
 disallowed_types = "allow"
 disallowed_methods = "allow"
 
-# Note: Release profile is defined at workspace root (Cargo.toml).
-# The workspace already sets lto="fat", codegen-units=1, strip="symbols", panic="abort".
-# For even smaller binaries, consider building this crate separately with opt-level="z".
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+# Stronger than "abort": panics become a bare abort with no message
+# formatting, so core::fmt and std::panicking never get linked.
+panic = "immediate-abort"
+debug = false
+
+# Debug builds must still optimize a little: at opt-level 0 the compiler can
+# emit references to the MSVC unwinding helper __CxxFrameHandler3 even with
+# panic = "immediate-abort", and the link fails (same constraint as
+# uv-trampoline).
+[profile.dev]
+opt-level = 1
+lto = true
+panic = "immediate-abort"
+debug = true
+
+[profile.test]
+inherits = "dev"
+
+[workspace]

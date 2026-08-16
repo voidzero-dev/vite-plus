@@ -335,6 +335,7 @@ jobs:
       - run: |
           cargo shear
           cargo fmt --check
+          cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
           just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 

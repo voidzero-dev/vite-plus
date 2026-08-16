@@ -1,0 +1,21 @@
+# This config only applies when cargo runs from this directory (config
+# discovery is cwd-based), which is why the trampoline must be built with
+# `cd crates/vp_trampoline && cargo build ...` and not with `-p vp_trampoline`
+# from the repo root.
+
+[unstable]
+# Recompile std with this crate's release profile (opt-level = "z" and
+# panic = "immediate-abort"). This is the main size lever: ~222KB -> ~82KB on
+# x86_64-pc-windows-msvc. Requires the rust-src rustup component.
+build-std = ["std", "panic_abort"]
+# Replace std's default features (drops panic-unwind and backtrace, enables
+# the size-optimized code paths).
+build-std-features = ["optimize_for_size"]
+# Let `cargo test` run with the abort-family panic strategy.
+panic-abort-tests = true
+
+[build]
+# Keep artifacts in the repo-root target/ directory, where CI steps, the
+# snapshot runner, and install-global-cli expect them. This path resolves
+# relative to this crate directory. A CARGO_TARGET_DIR env var still wins.
+target-dir = "../../target"
