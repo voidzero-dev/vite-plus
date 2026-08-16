@@ -2273,7 +2273,7 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "bstr",
@@ -2307,7 +2307,7 @@ dependencies = [
 [[package]]
 name = "fspy_client_unix"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -2325,7 +2325,7 @@ dependencies = [
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "cc",
  "winapi",
@@ -2334,7 +2334,7 @@ dependencies = [
 [[package]]
 name = "fspy_ipc_str"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "allocator-api2",
  "bumpalo",
@@ -2347,7 +2347,7 @@ dependencies = [
 [[package]]
 name = "fspy_nostd"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "atoi",
  "bitflags 2.13.1",
@@ -2361,7 +2361,7 @@ dependencies = [
 [[package]]
 name = "fspy_nostd_alloc"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "allocator-api2",
  "bump-scope",
@@ -2371,7 +2371,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "ctor",
  "fspy_client_unix",
@@ -2386,7 +2386,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "constcat",
  "fspy_detours_sys",
@@ -2404,7 +2404,7 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "futures-util",
  "libc",
@@ -2421,7 +2421,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "allocator-api2",
  "bitflags 2.13.1",
@@ -2444,7 +2444,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2463,7 +2463,7 @@ dependencies = [
 [[package]]
 name = "fspy_shm"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "fspy_nostd",
  "windows-sys 0.61.2",
@@ -3603,7 +3603,7 @@ dependencies = [
 [[package]]
 name = "materialized_artifact"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "materialized_artifact_macros",
  "tempfile",
@@ -3612,7 +3612,7 @@ dependencies = [
 [[package]]
 name = "materialized_artifact_macros"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5545,7 +5545,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -5555,7 +5555,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -5566,7 +5566,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test_client"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.4.3",
@@ -5873,7 +5873,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "append-only-vec",
@@ -6061,7 +6061,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_common"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6097,7 +6097,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6118,7 +6118,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev_common"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "derive_more",
  "rolldown_common",
@@ -6130,7 +6130,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "blake3",
  "rolldown_devtools_action",
@@ -6143,7 +6143,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools_action"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "serde",
  "ts-rs",
@@ -6151,7 +6151,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6163,7 +6163,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript_utils"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "memchr",
  "oxc",
@@ -6173,7 +6173,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_error"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6190,7 +6190,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "oxc_resolver",
  "vfs",
@@ -6198,7 +6198,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs_watcher"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "rolldown-notify",
  "rolldown-notify-debouncer-full",
@@ -6207,7 +6207,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6236,7 +6236,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_asset_module"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "rolldown_common",
@@ -6248,7 +6248,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_bundle_analyzer"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6262,7 +6262,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_chunk_import_map"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6275,7 +6275,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_copy_module"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6288,7 +6288,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_data_url"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "arcstr",
  "base64-simd",
@@ -6301,7 +6301,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_esm_external_require"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "nodejs-built-in-modules",
  "rolldown_common",
@@ -6312,7 +6312,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_hmr"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "rolldown_common",
  "rolldown_plugin",
@@ -6320,7 +6320,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_isolated_declaration"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6334,7 +6334,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_lazy_compilation"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6347,7 +6347,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_oxc_runtime"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "arcstr",
  "phf 0.14.0",
@@ -6358,7 +6358,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_replace"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "oxc",
@@ -6374,7 +6374,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_utils"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6527,7 +6527,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_vite_resolve"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6581,7 +6581,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_resolver"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6596,7 +6596,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_sourcemap"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "criterion2",
  "memchr",
@@ -6606,7 +6606,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_std_utils"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "regex",
  "sugar_path",
@@ -6652,7 +6652,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_tracing"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "tracing",
  "tracing-chrome",
@@ -6661,7 +6661,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_utils"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6699,7 +6699,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_watcher"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6719,7 +6719,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_workspace"
-version = "1.2.2"
+version = "1.2.4"
 
 [[package]]
 name = "ropey"
@@ -7420,7 +7420,7 @@ dependencies = [
 [[package]]
 name = "snapshot_test"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "serde",
  "serde_json",
@@ -7450,7 +7450,7 @@ dependencies = [
 [[package]]
 name = "socket_ipc"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "nix 0.31.3",
  "tempfile",
@@ -7530,7 +7530,7 @@ dependencies = [
 
 [[package]]
 name = "string_wizard"
-version = "1.2.2"
+version = "1.2.4"
 dependencies = [
  "insta",
  "memchr",
@@ -8723,7 +8723,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 [[package]]
 name = "vt"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anstream",
  "anyhow",
@@ -8782,7 +8782,7 @@ dependencies = [
 [[package]]
 name = "vt_client"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "fspy_ipc_str",
  "rustc-hash",
@@ -8795,7 +8795,7 @@ dependencies = [
 [[package]]
 name = "vt_client_napi"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "napi",
  "napi-build",
@@ -8807,7 +8807,7 @@ dependencies = [
 [[package]]
 name = "vt_glob"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "globset",
  "thiserror 2.0.19",
@@ -8817,7 +8817,7 @@ dependencies = [
 [[package]]
 name = "vt_graph"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8839,7 +8839,7 @@ dependencies = [
 [[package]]
 name = "vt_graph_ser"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "petgraph 0.8.3",
  "serde",
@@ -8848,7 +8848,7 @@ dependencies = [
 [[package]]
 name = "vt_ipc_shared"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "fspy_ipc_str",
  "rustc-hash",
@@ -8858,7 +8858,7 @@ dependencies = [
 [[package]]
 name = "vt_path"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "diff-struct",
  "os_str_bytes",
@@ -8873,7 +8873,7 @@ dependencies = [
 [[package]]
 name = "vt_plan"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8901,7 +8901,7 @@ dependencies = [
 [[package]]
 name = "vt_powershell"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "vt_path",
  "which",
@@ -8910,7 +8910,7 @@ dependencies = [
 [[package]]
 name = "vt_select"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -8921,7 +8921,7 @@ dependencies = [
 [[package]]
 name = "vt_server"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "fspy_ipc_str",
  "futures",
@@ -8940,7 +8940,7 @@ dependencies = [
 [[package]]
 name = "vt_shell"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "brush-parser 0.4.0",
  "diff-struct",
@@ -8953,7 +8953,7 @@ dependencies = [
 [[package]]
 name = "vt_str"
 version = "0.1.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "compact_str 0.9.1",
  "diff-struct",
@@ -8964,7 +8964,7 @@ dependencies = [
 [[package]]
 name = "vt_workspace"
 version = "0.0.0"
-source = "git+https://github.com/taskylizard/vite-task.git?rev=5ca3ca50826406b29a47a3bae6b69dd649facb9e#5ca3ca50826406b29a47a3bae6b69dd649facb9e"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=86ff8541052c2afac3c01553547ecfdd17119c21#86ff8541052c2afac3c01553547ecfdd17119c21"
 dependencies = [
  "clap",
  "petgraph 0.8.3",

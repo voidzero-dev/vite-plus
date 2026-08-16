@@ -8,10 +8,7 @@ ignored = [
   "css-module-lexer",
   "html5gum",
   "prettyplease",
-  "proc-macro2",
-  "quote",
   "string_cache",
-  "syn",
 ]
 
 [workspace.package]
@@ -186,7 +183,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
+fspy = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -243,8 +240,8 @@ pretty_assertions = "1.4.1"
 phf = "0.14.0"
 prettyplease = "0.2.32"
 proc-macro2 = "1"
-pty_terminal_test = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
-pty_terminal_test_client = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
+pty_terminal_test = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
+pty_terminal_test_client = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
 quote = "1"
 rayon = "1.10.0"
 regex = "1.11.1"
@@ -267,7 +264,7 @@ sha2 = "0.10.9"
 shell-escape = "0.1.5"
 simdutf8 = "0.1.5"
 smallvec = { version = "1.15.1", features = ["union"] }
-snapshot_test = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
+snapshot_test = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
 string_cache = "0.9.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
@@ -299,12 +296,12 @@ vp_setup = { path = "crates/vp_setup" }
 vp_shared = { path = "crates/vp_shared" }
 vp_static_config = { path = "crates/vp_static_config" }
 vp_toolchain = { path = "crates/vp_toolchain" }
-vt = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
-vt_path = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
-vt_powershell = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
-vt_select = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
-vt_str = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
-vt_workspace = { git = "https://github.com/taskylizard/vite-task.git", rev = "5ca3ca50826406b29a47a3bae6b69dd649facb9e" }
+vt = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
+vt_path = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
+vt_powershell = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
+vt_select = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
+vt_str = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
+vt_workspace = { git = "https://github.com/taskylizard/vite-task.git", rev = "86ff8541052c2afac3c01553547ecfdd17119c21" }
 walkdir = "2.5.0"
 webpki-root-certs = "1.0.9"
 which = "8.0.0"
@@ -313,7 +310,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.142.0", features = [
+oxc = { version = "0.144.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -325,17 +322,17 @@ oxc = { version = "0.142.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.142.0", features = ["pool"] }
-oxc_ast = "0.142.0"
-oxc_ecmascript = "0.142.0"
-oxc_parser = "0.142.0"
-oxc_span = "0.142.0"
-oxc_napi = "0.142.0"
-oxc_str = "0.142.0"
-oxc_minify_napi = "0.142.0"
-oxc_parser_napi = "0.142.0"
-oxc_transform_napi = "0.142.0"
-oxc_traverse = "0.142.0"
+oxc_allocator = { version = "0.144.0", features = ["pool"] }
+oxc_ast = "0.144.0"
+oxc_ecmascript = "0.144.0"
+oxc_parser = "0.144.0"
+oxc_span = "0.144.0"
+oxc_napi = "0.144.0"
+oxc_str = "0.144.0"
+oxc_minify_napi = "0.144.0"
+oxc_parser_napi = "0.144.0"
+oxc_transform_napi = "0.144.0"
+oxc_traverse = "0.144.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }
