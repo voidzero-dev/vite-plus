@@ -516,13 +516,17 @@ export interface InstallOptions {
   ignoreUserPreference?: boolean;
 }
 
-export function install(dir?: string, options: InstallOptions = {}): InstallResult {
-  // VP_GIT_HOOKS is the canonical name; VITE_GIT_HOOKS is kept for backwards compatibility.
-  if (
+export function isGitHooksEnvDisabled(): boolean {
+  // VP_GIT_HOOKS is canonical; VITE_GIT_HOOKS remains for backwards compatibility.
+  return (
     process.env.HUSKY === '0' ||
     process.env.VP_GIT_HOOKS === '0' ||
     process.env.VITE_GIT_HOOKS === '0'
-  ) {
+  );
+}
+
+export function install(dir?: string, options: InstallOptions = {}): InstallResult {
+  if (isGitHooksEnvDisabled()) {
     return { message: 'skip install (git hooks disabled)', isError: false };
   }
   if (!options.ignoreUserPreference && isHooksUserDisabled()) {

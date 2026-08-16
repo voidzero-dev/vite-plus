@@ -6,6 +6,14 @@
 
 `vp test` is built on [Vitest](https://vitest.dev/), so you get a Vite-native test runner that reuses your Vite config and plugins, supports Jest-style expectations, snapshots, and coverage, and handles modern ESM, TypeScript, and JSX projects cleanly.
 
+Vitest APIs are available from `vite-plus/test`, so a single `vite-plus` install is enough — you do not need to install `vitest` directly:
+
+```ts [src/example.test.ts]
+import { describe, expect, it, vi } from 'vite-plus/test';
+```
+
+For the browser mode subpaths (`vite-plus/test/browser*`), see [Migrating Vitest](/guide/migrate#vitest).
+
 ::: info
 `vp test` always runs the built-in Vitest command. If your project also has a `test` script in `package.json`, run `vp run test` when you want to run that script instead. See [Built-in Commands vs Scripts](/guide/run#built-in-commands-vs-scripts).
 :::

@@ -96,6 +96,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 - **create** - Create a new project from a template
 - **migrate** - Migrate an existing project to Vite+
 - **config** - Configure hooks and agent integration
+- **hooks** - Manage the Git hook dispatcher
 - **staged** - Run linters on staged files
 - **install** (`i`) - Install dependencies
 - **env** - Manage Node.js versions
