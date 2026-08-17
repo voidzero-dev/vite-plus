@@ -13,7 +13,7 @@ allowed-tools: Read, Grep, Glob, Edit, Bash
    snapshots, or broad ranges such as `vitest@4.x` as current-version references.
 3. Update references that promise to match Vite+'s currently bundled version. In
    particular, keep every exact Vitest pin in the manual-migration examples in sync,
-   including `docs/guide/migrate.md`, `README.md`, and `packages/cli/README.md` when
+   including `docs/src/guide/migrate.md`, `README.md`, and `packages/cli/README.md` when
    those examples are present.
 4. Preserve the surrounding wording and formatting. Do not rewrite examples whose
    version is intentionally historical or illustrative.

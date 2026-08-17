@@ -6,7 +6,7 @@
 # production runtime image: it ships the full toolchain (vite, rolldown, vitest,
 # oxlint, ...) and is meant for use as a build stage, CI image, or devcontainer.
 #
-# For production, use the documented multi-stage pattern (see docs/guide/docker.md)
+# For production, use the documented multi-stage pattern (see docs/src/guide/docker.md)
 # where this image builds the app and the exact Node.js resolved from
 # `.node-version` is copied into a small, vp-free runtime stage.
 

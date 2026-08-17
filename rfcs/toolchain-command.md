@@ -4,7 +4,7 @@
 - Related: [why-package-command.md](./why-package-command.md),
   [packages/core/BUNDLING.md](../packages/core/BUNDLING.md),
   [packages/cli/BUNDLING.md](../packages/cli/BUNDLING.md),
-  [docs/guide/upgrade.md](../docs/guide/upgrade.md)
+  [docs/src/guide/upgrade.md](../docs/src/guide/upgrade.md)
 
 ## Summary
 

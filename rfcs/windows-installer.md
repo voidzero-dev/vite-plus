@@ -555,7 +555,7 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 
 ### Phase 4: Documentation & Distribution (done)
 
-- Updated installation docs on website (`docs/guide/index.md`)
+- Updated installation docs on website (`docs/src/guide/index.md`)
 - Added `viteplus.dev/vp-setup.exe` redirect via Netlify (`netlify.toml`)
 - winget, chocolatey, scoop submission deferred to future work
 

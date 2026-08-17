@@ -12,7 +12,7 @@ import viteConfigEntryBasenames from './vite-config-entry-basenames.json' with {
 
 // `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
 // intentionally preserved by `vp migrate` (see migration's import_rewriter and
-// docs/guide/migrate.md) — `vite-plus/test*` is a thin re-export of upstream
+// docs/src/guide/migrate.md) — `vite-plus/test*` is a thin re-export of upstream
 // `vitest*`, so type augmentations have to target the upstream module identity
 // to merge correctly. Autofixing those module declarations here would split the
 // augmentation away from what imports actually resolve through.

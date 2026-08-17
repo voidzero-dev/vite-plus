@@ -817,7 +817,7 @@ landings:
 | `packages/cli/src/migration/migrator.ts`        | `injectCreateDefaultTemplate` helper (called from `bin.ts`, gated on bundled monorepo).                              |
 | `packages/cli/src/utils/npm-config.ts`          | `.npmrc` parser, `getNpmRegistry(scope?)`, `getNpmAuthHeader(url)`, `fetchNpmResource` (401/403 retry).              |
 | `packages/cli/src/resolve-vite-config.ts`       | `findWorkspaceRoot` exported for the default-template walk-up.                                                       |
-| `docs/guide/create.md`, `docs/config/create.md` | Authoring guide and `create.defaultTemplate` reference.                                                              |
+| `docs/src/guide/create.md`, `docs/src/config/create.md` | Authoring guide and `create.defaultTemplate` reference.                                                              |
 
 ## Testing
 

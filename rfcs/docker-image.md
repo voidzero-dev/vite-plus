@@ -272,7 +272,7 @@ exercises the real build path.
 
 ### Docs example verification
 
-The Dockerfile patterns documented below (and in `docs/guide/docker.md`) are kept
+The Dockerfile patterns documented below (and in `docs/src/guide/docker.md`) are kept
 honest by a reproduction repo whose GitHub Actions build and smoke-test each
 example end to end (build the image, run the container, assert `HTTP 200`, and
 assert the SSR runtime Node.js matches the pinned `.node-version`):
@@ -442,7 +442,7 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
 - Q2 plan: [#1324](https://github.com/voidzero-dev/vite-plus/issues/1324)
 - JS runtime management: [`js-runtime.md`](./js-runtime.md)
 - Node.js signature verification: [`verify-node-shasums-signature.md`](./verify-node-shasums-signature.md)
-- CI guide: `docs/guide/ci.md`
+- CI guide: `docs/src/guide/ci.md`
 - Distribution prior art: pnpm <https://pnpm.io/docker>, Deno <https://github.com/denoland/deno_docker>,
   mise <https://mise.jdx.dev/mise-cookbook/docker.html>, Turborepo
   <https://turborepo.dev/docs/guides/tools/docker>, distroless

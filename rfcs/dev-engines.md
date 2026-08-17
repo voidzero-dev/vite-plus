@@ -432,7 +432,7 @@ Both are intentionally separated from this PR: the per-entry fallback threads `o
 
 ### Phase 5: Documentation and tests
 
-1. Update `docs/guide/env.md`, `docs/guide/install.md`, `docs/config/*` as applicable.
+1. Update `docs/src/guide/env.md`, `docs/src/guide/install.md`, `docs/src/config/*` as applicable.
 2. ~~Update [rfcs/package-manager-detection.md](./package-manager-detection.md) (move `devEngines.packageManager` from Future Enhancements into the algorithm) and [rfcs/env-command.md](./env-command.md) (resolution chain).~~ Done alongside this RFC, together with [rfcs/js-runtime.md](./js-runtime.md) and [rfcs/migration-command.md](./migration-command.md).
 3. Snap tests (local and global) covering: pin into devEngines, pin with existing `.node-version`, unpin from devEngines, install with `devEngines.packageManager` (exact, range, array, unsupported name, conflict with `packageManager` field), doctor conflict output, create/migrate output.
 4. Rust unit tests alongside the existing suites in `package_manager.rs` and `package_json.rs`.

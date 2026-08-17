@@ -421,7 +421,7 @@ jobs:
 
   # Build and push a preview Docker image from the registry bridge build so the
   # image can be verified before a real release. Tagged `pr-<number>`; never
-  # `latest`. See docker/Dockerfile and docs/guide/docker.md.
+  # `latest`. See docker/Dockerfile and docs/src/guide/docker.md.
   #
   # Same-repo PRs only, for now. This job installs the preview package, which
   # executes the PR's code, and pushes the result to the org's GHCR namespace as
@@ -530,7 +530,7 @@ jobs:
               `docker run --rm ${image}:pr-${pr} vp --version`,
               '```',
               '',
-              'See [docs/guide/docker.md](https://github.com/voidzero-dev/vite-plus/blob/main/docs/guide/docker.md) for usage.',
+              'See [docs/src/guide/docker.md](https://github.com/voidzero-dev/vite-plus/blob/main/docs/src/guide/docker.md) for usage.',
             ].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,

@@ -2,7 +2,7 @@
 
 - Status: Implemented on `rfc/migrate-upgrade-path`; end-to-end browser-mode verification remains (see Follow-ups)
 - Depends on: [#1588 replace @voidzero-dev/vite-plus-test with upstream vitest](https://github.com/voidzero-dev/vite-plus/pull/1588) (merged, `342fd2f4`)
-- Related: `docs/guide/upgrade.md`, [migration-command.md](./migration-command.md), [upgrade-command.md](./upgrade-command.md)
+- Related: `docs/src/guide/upgrade.md`, [migration-command.md](./migration-command.md), [upgrade-command.md](./upgrade-command.md)
 
 ## Goal: upgrade in two commands
 
@@ -181,5 +181,5 @@ The matching Oxlint/autofix behavior is covered by the local `lint-vite-plus-imp
 
 - Verify the browser-mode upgrade across pnpm/npm/yarn; simplify package-local provisioning only if strict peer and optimizer resolution remain correct.
 - Add an end-to-end check on a real `0.1.x` project.
-- Update `docs/guide/upgrade.md` / the release-notes prompt to the `vp upgrade && vp migrate` flow once shipped, and `npm deprecate @voidzero-dev/vite-plus-test`.
+- Update `docs/src/guide/upgrade.md` / the release-notes prompt to the `vp upgrade && vp migrate` flow once shipped, and `npm deprecate @voidzero-dev/vite-plus-test`.
 - Optional `vp migrate --check` (detection-only, exit code signals an available upgrade) for CI.

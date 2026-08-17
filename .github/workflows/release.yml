@@ -243,7 +243,7 @@ jobs:
 
   # Build and push the official toolchain Docker image to GHCR after the npm
   # release is published (the image installs vp from npm, so the version must
-  # exist first). See docker/Dockerfile and docs/guide/docker.md.
+  # exist first). See docker/Dockerfile and docs/src/guide/docker.md.
   publish-docker:
     name: Publish Docker image
     runs-on: ubuntu-latest
