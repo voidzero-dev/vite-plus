@@ -414,19 +414,37 @@ mod tests {
 
     /// `HOME` (with `USERPROFILE` pinned to the same path for Windows'
     /// profile-first ordering) yields the platform split layout on Unix.
+    /// Layout override vars are cleared: a developer shell can export
+    /// `VP_HOME` (vp's env script does) or `XDG_*`, which would win over
+    /// the platform tail.
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn with_vars_home_yields_split_layout() {
         let root = tempfile::tempdir().unwrap();
         let home = root.path().join("home");
-        EnvConfig::with_vars([("HOME", &home), ("USERPROFILE", &home)], |config| {
-            assert_eq!(config.user_home.as_path(), home);
-            assert_eq!(config.dirs.bin.as_path(), home.join(".local/bin"));
-            assert_eq!(config.dirs.data.as_path(), home.join(".local/share/vite-plus"));
-            assert_eq!(config.dirs.cache.as_path(), home.join(".cache/vite-plus"));
-            assert_eq!(config.dirs.config.as_path(), home.join(".config/vite-plus"));
-            assert_eq!(config.dirs.state.as_path(), home.join(".local/state/vite-plus"));
-        });
+        EnvConfig::with_vars(
+            [
+                ("HOME", Some(home.as_path())),
+                ("USERPROFILE", Some(home.as_path())),
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, None),
+                (env_vars::VP_DATA_DIR, None),
+                (env_vars::VP_CACHE_DIR, None),
+                (env_vars::XDG_BIN_HOME, None),
+                (env_vars::XDG_DATA_HOME, None),
+                (env_vars::XDG_CACHE_HOME, None),
+                (env_vars::XDG_CONFIG_HOME, None),
+                (env_vars::XDG_STATE_HOME, None),
+            ],
+            |config| {
+                assert_eq!(config.user_home.as_path(), home);
+                assert_eq!(config.dirs.bin.as_path(), home.join(".local/bin"));
+                assert_eq!(config.dirs.data.as_path(), home.join(".local/share/vite-plus"));
+                assert_eq!(config.dirs.cache.as_path(), home.join(".cache/vite-plus"));
+                assert_eq!(config.dirs.config.as_path(), home.join(".config/vite-plus"));
+                assert_eq!(config.dirs.state.as_path(), home.join(".local/state/vite-plus"));
+            },
+        );
     }
 
     /// Known variables the test does not declare are inherited from the
