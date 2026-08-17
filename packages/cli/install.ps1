@@ -221,6 +221,16 @@ function Get-UserHomeDir {
     return [Environment]::GetFolderPath('UserProfile')
 }
 
+# Monolithic mapping: every category on one root.
+function New-MonolithicLayout {
+    param([string]$Root)
+    return [pscustomobject]@{
+        DataDir = $Root
+        ShimDir = Join-Path $Root "bin"
+        ConfigDir = $Root
+    }
+}
+
 # Mirror crates/vp_shared/src/dirs/resolution.rs (Windows):
 #   VP_HOME → existing %USERPROFILE%\.vite-plus → VP_*_DIR / known Local+Roaming folders
 function Resolve-InstallLayout {
@@ -232,22 +242,17 @@ function Resolve-InstallLayout {
     $legacyRoot = Join-Path $userHome ".vite-plus"
 
     if (Test-AbsoluteOverridePath $env:VP_HOME) {
-        return [pscustomobject]@{
-            DataDir = $env:VP_HOME
-            ShimDir = Join-Path $env:VP_HOME "bin"
-            ConfigDir = $env:VP_HOME
-        }
+        return New-MonolithicLayout $env:VP_HOME
     }
 
     # Grandfather only a real install: the `current` link every install
-    # activates. A bare %USERPROFILE%\.vite-plus left by a pre-split local
-    # CLI must not claim the layout. Matches vp_shared::dirs resolution.
-    if (Test-Path -LiteralPath (Join-Path $legacyRoot "current")) {
-        return [pscustomobject]@{
-            DataDir = $legacyRoot
-            ShimDir = Join-Path $legacyRoot "bin"
-            ConfigDir = $legacyRoot
-        }
+    # activates, checked without following it so a dangling link from a
+    # crashed upgrade still counts. A bare %USERPROFILE%\.vite-plus left by
+    # a pre-split local CLI must not claim the layout. Matches
+    # vp_shared::dirs resolution.
+    $currentLink = Join-Path $legacyRoot "current"
+    if ($null -ne (Get-Item -LiteralPath $currentLink -Force -ErrorAction SilentlyContinue)) {
+        return New-MonolithicLayout $legacyRoot
     }
 
     # Match EnvConfig / directories::BaseDirs: known folders, not process
@@ -302,11 +307,7 @@ function Use-LegacyLayout {
     } else {
         Join-Path $userHome ".vite-plus"
     }
-    $script:Layout = [pscustomobject]@{
-        DataDir = $root
-        ShimDir = Join-Path $root "bin"
-        ConfigDir = $root
-    }
+    $script:Layout = New-MonolithicLayout $root
     Set-LayoutVars
 }
 
@@ -931,15 +932,15 @@ function Main {
             Remove-Item $platformTempFile -ErrorAction SilentlyContinue
         }
 
-        # Remove Zone.Identifier (Mark of the Web) from downloaded binaries so
-        # Windows SmartScreen / Defender won't block execution.
-        $packageDir = Join-Path $platformTempExtract "package"
-        Get-ChildItem -Path $packageDir -Filter "*.exe" -ErrorAction SilentlyContinue | Unblock-File
-
         # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A release
         # that predates the split layout cannot answer; give it the monolithic
         # root so the installed PATH commands keep working.
+        $packageDir = Join-Path $platformTempExtract "package"
         $binarySource = Join-Path $packageDir $binaryName
+        if (Test-Path $binarySource) {
+            # Remove Zone.Identifier (Mark of the Web) so the probe can run.
+            Unblock-File -LiteralPath $binarySource
+        }
         if ((Test-Path $binarySource) -and (Apply-DirsFromVp $binarySource)) {
             Set-LayoutVars
         } else {

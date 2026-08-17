@@ -129,6 +129,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
+      VP_SKIP_DEPS_INSTALL: '1'
+      VP_NODE_MANAGER: 'yes'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -138,8 +142,6 @@ jobs:
         run: cargo build --release -p vp_global_cli
 
       - name: Fresh home uses split layout
-        env:
-          VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
         run: |
           set -euo pipefail
           FRESH=$(mktemp -d)
@@ -148,12 +150,7 @@ jobs:
           export USERPROFILE="$FRESH"
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
-          VP_LOCAL_TGZ="$FAKE_TGZ" \
-            VP_SKIP_DEPS_INSTALL=1 \
-            VP_VERSION=local-test \
-            CI=true \
-            VP_NODE_MANAGER=yes \
-            bash packages/cli/install.sh
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           test ! -d "$FRESH/.vite-plus"
           test -e "$FRESH/.local/share/vite-plus/current"
@@ -163,8 +160,6 @@ jobs:
           "$FRESH/.local/bin/vp" --version
 
       - name: Existing ~/.vite-plus is reused
-        env:
-          VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
         run: |
           set -euo pipefail
           GRAND=$(mktemp -d)
@@ -178,12 +173,7 @@ jobs:
           export USERPROFILE="$GRAND"
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
-          VP_LOCAL_TGZ="$FAKE_TGZ" \
-            VP_SKIP_DEPS_INSTALL=1 \
-            VP_VERSION=local-test \
-            CI=true \
-            VP_NODE_MANAGER=yes \
-            bash packages/cli/install.sh
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           test -f "$GRAND/.vite-plus/.keep"
           test -e "$GRAND/.vite-plus/current"
@@ -193,8 +183,6 @@ jobs:
           "$GRAND/.vite-plus/bin/vp" --version
 
       - name: Stray ~/.vite-plus does not capture a split install
-        env:
-          VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
         run: |
           set -euo pipefail
           STRAY=$(mktemp -d)
@@ -203,12 +191,7 @@ jobs:
           export USERPROFILE="$STRAY"
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
-          VP_LOCAL_TGZ="$FAKE_TGZ" \
-            VP_SKIP_DEPS_INSTALL=1 \
-            VP_VERSION=local-test \
-            CI=true \
-            VP_NODE_MANAGER=yes \
-            bash packages/cli/install.sh
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           # A pre-split local vite-plus can create ~/.vite-plus at any time
           # for caches, config, and managed runtimes. No `current` link, so
@@ -224,12 +207,7 @@ jobs:
 
           # A reinstall (vp upgrade selects its root through the same chain)
           # must keep targeting the split roots and leave the stray tree alone.
-          VP_LOCAL_TGZ="$FAKE_TGZ" \
-            VP_SKIP_DEPS_INSTALL=1 \
-            VP_VERSION=local-test2 \
-            CI=true \
-            VP_NODE_MANAGER=yes \
-            bash packages/cli/install.sh
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test2 bash packages/cli/install.sh
 
           test -x "$STRAY/.local/share/vite-plus/local-test2/bin/vp"
           test "$(readlink "$STRAY/.local/share/vite-plus/current")" = "local-test2"
@@ -242,6 +220,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+    env:
+      VP_VERSION: '0.2.9'
     strategy:
       fail-fast: false
       matrix:
@@ -256,15 +236,13 @@ jobs:
       - name: Run install.sh for a pre-split release
         # No VP_HOME pin: a release that predates VpDirs must fall back to the
         # monolithic ~/.vite-plus root on its own.
-        env:
-          VP_VERSION: 0.2.9
         run: |
           cat packages/cli/install.sh | bash | tee install-output.txt
           grep -F "predates the split directory layout" install-output.txt
 
       - name: Verify legacy layout
         run: |
-          test -x "$HOME/.vite-plus/0.2.9/bin/vp"
+          test -x "$HOME/.vite-plus/$VP_VERSION/bin/vp"
           test -e "$HOME/.vite-plus/current"
           test -f "$HOME/.vite-plus/env"
           # No split-layout leftovers.
@@ -292,6 +270,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      VP_VERSION: '0.2.9'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -299,8 +279,6 @@ jobs:
         # No VP_HOME pin: a release that predates VpDirs must fall back to the
         # monolithic %USERPROFILE%\.vite-plus root on its own.
         shell: pwsh
-        env:
-          VP_VERSION: 0.2.9
         run: |
           # *>&1 merges the information stream (Write-Host) into the pipeline
           # so Tee-Object can capture the installer notices.
@@ -314,7 +292,7 @@ jobs:
         shell: pwsh
         run: |
           $root = Join-Path $env:USERPROFILE ".vite-plus"
-          if (-not (Test-Path "$root\0.2.9\bin\vp.exe")) { Write-Error "payload missing"; exit 1 }
+          if (-not (Test-Path "$root\$env:VP_VERSION\bin\vp.exe")) { Write-Error "payload missing"; exit 1 }
           if (-not (Test-Path "$root\current")) { Write-Error "current link missing"; exit 1 }
           # No split-layout leftovers.
           foreach ($split in @((Join-Path $env:LOCALAPPDATA "vite-plus"), (Join-Path $env:APPDATA "vite-plus"))) {

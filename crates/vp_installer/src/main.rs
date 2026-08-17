@@ -126,10 +126,16 @@ fn main() {
     std::process::exit(code);
 }
 
+fn dir_displays(dirs: &VpDirs) -> (String, String) {
+    (
+        dirs.data.as_path().to_string_lossy().to_string(),
+        dirs.bin.as_path().to_string_lossy().to_string(),
+    )
+}
+
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
-    let data_dir_display = dirs.data.as_path().to_string_lossy().to_string();
-    let bin_dir_display = dirs.bin.as_path().to_string_lossy().to_string();
+    let (data_dir_display, bin_dir_display) = dir_displays(&dirs);
 
     // Pre-compute Node.js manager default before showing the menu,
     // so the user sees the resolved value and can override it.
@@ -149,8 +155,7 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
         Ok(effective_dirs) => {
             // A pre-split payload falls back to the monolithic root inside
             // do_install; report the directories that were actually used.
-            let data_dir_display = effective_dirs.data.as_path().to_string_lossy().to_string();
-            let bin_dir_display = effective_dirs.bin.as_path().to_string_lossy().to_string();
+            let (data_dir_display, bin_dir_display) = dir_displays(&effective_dirs);
             print_success(&opts, &data_dir_display, &bin_dir_display);
             0
         }
@@ -244,24 +249,35 @@ async fn do_install(
         // VP_HOME (default ~/.vite-plus); its env setup, shims, and
         // trampolines cannot follow split roots. Fall back to that monolithic
         // root when the payload cannot report split category roots.
-        let abandoned_split_data = if payload_supports_split_layout(&platform_data).await {
+        let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
+        let abandoned_split_data = if legacy.data == dirs.data {
+            // Pre-split and split-aware payloads target the same monolithic
+            // root here; skip the probe (a full payload extraction + spawn).
+            None
+        } else if let Some(probed) = probe_payload_dirs(&platform_data).await {
+            // Adopt the payload's own resolution, like install.sh /
+            // install.ps1, so the layout written and the layout the binary
+            // resolves cannot drift. cache/state stay self-resolved; the
+            // installer never touches them.
+            dirs = VpDirs {
+                data: probed.data,
+                bin: probed.bin,
+                config: probed.config,
+                cache: dirs.cache,
+                state: dirs.state,
+            };
             None
         } else {
-            let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
-            if legacy.data == dirs.data {
-                None
-            } else {
-                if !opts.quiet {
-                    print_info(&format!(
-                        "vite-plus {target_version} predates the split directory layout; installing to {}",
-                        legacy.data.as_path().display()
-                    ));
-                }
-                let split_data = dirs.data.clone();
-                let preexisted = tokio::fs::try_exists(&split_data).await.unwrap_or(true);
-                dirs = legacy;
-                (!preexisted).then_some(split_data)
+            if !opts.quiet {
+                print_info(&format!(
+                    "vite-plus {target_version} predates the split directory layout; installing to {}",
+                    legacy.data.as_path().display()
+                ));
             }
+            let split_data = dirs.data.clone();
+            let preexisted = tokio::fs::try_exists(&split_data).await.unwrap_or(true);
+            dirs = legacy;
+            (!preexisted).then_some(split_data)
         };
 
         let install_dir = &dirs.data;
@@ -325,35 +341,46 @@ async fn do_install(
     Ok(dirs)
 }
 
-/// Ask the downloaded payload whether it understands the split directory
-/// layout: a split-aware `vp` prints tab-separated category roots under
-/// `VP_DUMP_DIRS=1`, a pre-split release prints its help instead. Errors
-/// count as "no" — the monolithic root works for every release, so the
-/// fallback direction is safe.
-async fn payload_supports_split_layout(platform_data: &[u8]) -> bool {
-    let Ok(temp) = tempfile::tempdir() else {
-        return false;
-    };
-    let Some(temp_root) = AbsolutePathBuf::new(temp.path().to_path_buf()) else {
-        return false;
-    };
-    if install::extract_platform_package(platform_data, &temp_root).await.is_err() {
-        return false;
-    }
+/// Category roots a split-aware payload reports via `VP_DUMP_DIRS`.
+struct ProbedDirs {
+    data: AbsolutePathBuf,
+    bin: AbsolutePathBuf,
+    config: AbsolutePathBuf,
+}
+
+/// Ask the downloaded payload for its directory layout: a split-aware `vp`
+/// prints tab-separated category roots under `VP_DUMP_DIRS=1`, a pre-split
+/// release prints its help instead. Errors count as "no answer" — the
+/// monolithic root works for every release, so the fallback direction is
+/// safe.
+async fn probe_payload_dirs(platform_data: &[u8]) -> Option<ProbedDirs> {
+    let temp = tempfile::tempdir().ok()?;
+    let temp_root = AbsolutePathBuf::new(temp.path().to_path_buf())?;
+    install::extract_platform_package(platform_data, &temp_root).await.ok()?;
 
     let vp_binary = temp_root.join("bin").join(VP_BINARY_NAME);
-    let Ok(output) = tokio::process::Command::new(vp_binary.as_path())
+    let output = tokio::process::Command::new(vp_binary.as_path())
         .env(vp_shared::env_vars::VP_DUMP_DIRS, "1")
         .output()
         .await
-    else {
-        return false;
-    };
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
 
-    output.status.success()
-        && String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .any(|line| line.strip_prefix("data\t").is_some_and(|root| !root.is_empty()))
+    use vp_shared::env_vars::dump_dirs;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let category = |key: &str| {
+        stdout.lines().find_map(|line| {
+            let root = line.strip_prefix(key)?.strip_prefix('\t')?;
+            AbsolutePathBuf::new(root.into())
+        })
+    };
+    Some(ProbedDirs {
+        data: category(dump_dirs::DATA)?,
+        bin: category(dump_dirs::BIN)?,
+        config: category(dump_dirs::CONFIG)?,
+    })
 }
 
 /// Auto-detect whether the Node.js version manager should be enabled.
@@ -730,22 +757,10 @@ mod tests {
     }
 
     fn with_clean_home<R>(home: &std::path::Path, f: impl FnOnce() -> R) -> R {
-        EnvConfig::with_vars(
-            [
-                ("HOME", Some(home.as_os_str())),
-                ("USERPROFILE", Some(home.as_os_str())),
-                (env_vars::VP_HOME, None),
-                (env_vars::VP_BIN_DIR, None),
-                (env_vars::VP_DATA_DIR, None),
-                (env_vars::VP_CACHE_DIR, None),
-                (env_vars::XDG_BIN_HOME, None),
-                (env_vars::XDG_DATA_HOME, None),
-                (env_vars::XDG_CACHE_HOME, None),
-                (env_vars::XDG_CONFIG_HOME, None),
-                (env_vars::XDG_STATE_HOME, None),
-            ],
-            |_| f(),
-        )
+        let mut vars =
+            vec![("HOME", Some(home.as_os_str())), ("USERPROFILE", Some(home.as_os_str()))];
+        vars.extend(env_vars::LAYOUT_OVERRIDE_VARS.iter().map(|name| (*name, None)));
+        EnvConfig::with_vars(vars, |_| f())
     }
 
     #[test]

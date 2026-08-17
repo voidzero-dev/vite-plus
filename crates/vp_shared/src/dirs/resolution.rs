@@ -131,12 +131,25 @@ impl DirResolution for SingleRoot {
     }
 }
 
+/// The single-root mapping as a full [`super::VpDirs`] value, for callers
+/// outside the chain (the installer fallback for pre-split payloads).
+pub(super) fn single_root_dirs(root: AbsolutePathBuf) -> super::VpDirs {
+    let place = SingleRoot { root: Some(root) };
+    super::VpDirs {
+        bin: place.bin_dir().expect("single-root mapping is total"),
+        data: place.data_dir().expect("single-root mapping is total"),
+        cache: place.cache_dir().expect("single-root mapping is total"),
+        config: place.config_dir().expect("single-root mapping is total"),
+        state: place.state_dir().expect("single-root mapping is total"),
+    }
+}
+
 /// `VP_HOME` override: always pins the single-root mapping when set.
 struct VpHome;
 
 impl VpHome {
     fn resolver(_home: &AbsolutePath) -> SingleRoot {
-        SingleRoot { root: process_env_var(env_vars::VP_HOME) }
+        SingleRoot { root: vp_home_override() }
     }
 }
 

@@ -341,10 +341,11 @@ fn dump_dirs_from_env_config() -> bool {
     {
         return false;
     }
+    use vp_shared::env_vars::dump_dirs;
     let dirs = &vp_shared::EnvConfig::get().dirs;
-    println!("data\t{}", dirs.data.as_path().display());
-    println!("bin\t{}", dirs.bin.as_path().display());
-    println!("config\t{}", dirs.config.as_path().display());
+    println!("{}\t{}", dump_dirs::DATA, dirs.data.as_path().display());
+    println!("{}\t{}", dump_dirs::BIN, dirs.bin.as_path().display());
+    println!("{}\t{}", dump_dirs::CONFIG, dirs.config.as_path().display());
     true
 }
 

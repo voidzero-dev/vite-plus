@@ -95,13 +95,7 @@ impl VpDirs {
     pub fn legacy_single_root(home: &AbsolutePath) -> Self {
         let root = resolution::vp_home_override()
             .unwrap_or_else(|| home.join(resolution::VP_HOME_DIR_NAME));
-        Self {
-            bin: root.join("bin"),
-            data: root.clone(),
-            cache: root.join("cache"),
-            config: root.clone(),
-            state: root,
-        }
+        resolution::single_root_dirs(root)
     }
 
     /// Write `<BIN>/<exe_stem>.shim` so the trampoline can find `<DATA>`.

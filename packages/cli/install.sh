@@ -198,6 +198,13 @@ set_config_dir_refs() {
   fi
 }
 
+# Monolithic mapping: every category on one root.
+set_monolithic_layout() {
+  INSTALL_DIR="$1"
+  SHIM_DIR="$1/bin"
+  CONFIG_DIR="$1"
+}
+
 # Releases that predate the split layout resolve every path from VP_HOME
 # (default ~/.vite-plus). Install them into that monolithic root so their
 # env setup, shims, and upgrades agree with where the installer wrote them.
@@ -206,9 +213,7 @@ use_legacy_layout() {
   home="$(user_home_dir)"
   [ -n "$home" ] || error "Could not resolve user home directory"
   vp_home="$(absolute_override "${VP_HOME:-}")"
-  INSTALL_DIR="${vp_home:-$home/.vite-plus}"
-  SHIM_DIR="$INSTALL_DIR/bin"
-  CONFIG_DIR="$INSTALL_DIR"
+  set_monolithic_layout "${vp_home:-$home/.vite-plus}"
   set_config_dir_refs "$CONFIG_DIR" "$home"
 }
 
@@ -222,17 +227,13 @@ resolve_install_layout() {
   legacy="$home/.vite-plus"
   vp_home="$(absolute_override "${VP_HOME:-}")"
   if [ -n "$vp_home" ]; then
-    INSTALL_DIR="$vp_home"
-    SHIM_DIR="$vp_home/bin"
-    CONFIG_DIR="$vp_home"
+    set_monolithic_layout "$vp_home"
   # Grandfather only a real install: the `current` link every install
   # activates (-L also accepts a dangling link from a crashed upgrade).
   # A bare ~/.vite-plus left by a pre-split local CLI must not claim the
   # layout. Matches vp_shared::dirs resolution.
   elif [ -e "$legacy/current" ] || [ -L "$legacy/current" ]; then
-    INSTALL_DIR="$legacy"
-    SHIM_DIR="$legacy/bin"
-    CONFIG_DIR="$legacy"
+    set_monolithic_layout "$legacy"
   else
     data_override="$(absolute_override "${VP_DATA_DIR:-}")"
     bin_override="$(absolute_override "${VP_BIN_DIR:-}")"

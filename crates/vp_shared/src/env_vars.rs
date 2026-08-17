@@ -52,6 +52,21 @@ pub const XDG_STATE_HOME: &str = "XDG_STATE_HOME";
 /// XDG base directory for disposable caches.
 pub const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
 
+/// Every environment variable the `VpDirs` resolution chain reads. Tests
+/// clear these to isolate layout resolution from the developer's shell
+/// (which typically exports `VP_HOME` via vp's own env script).
+pub const LAYOUT_OVERRIDE_VARS: &[&str] = &[
+    VP_HOME,
+    VP_BIN_DIR,
+    VP_DATA_DIR,
+    VP_CACHE_DIR,
+    XDG_BIN_HOME,
+    XDG_DATA_HOME,
+    XDG_CACHE_HOME,
+    XDG_CONFIG_HOME,
+    XDG_STATE_HOME,
+];
+
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vt=trace"`).
 pub const VP_LOG: &str = "VP_LOG";
 
@@ -173,6 +188,15 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 /// that already have a `vp` binary and must not re-implement directory
 /// resolution.
 pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
+
+/// Category keys in [`VP_DUMP_DIRS`] output, one `<key>\t<path>` line per
+/// category. Shared by the printer (`vp_global_cli`) and the Rust parser
+/// (`vp-setup`); `install.sh` / `install.ps1` spell the same keys.
+pub mod dump_dirs {
+    pub const DATA: &str = "data";
+    pub const BIN: &str = "bin";
+    pub const CONFIG: &str = "config";
+}
 
 /// Override the trampoline binary path for tests.
 ///
