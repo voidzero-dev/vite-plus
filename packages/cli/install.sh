@@ -198,6 +198,20 @@ set_config_dir_refs() {
   fi
 }
 
+# Releases that predate the split layout resolve every path from VP_HOME
+# (default ~/.vite-plus). Install them into that monolithic root so their
+# env setup, shims, and upgrades agree with where the installer wrote them.
+use_legacy_layout() {
+  local home vp_home
+  home="$(user_home_dir)"
+  [ -n "$home" ] || error "Could not resolve user home directory"
+  vp_home="$(absolute_override "${VP_HOME:-}")"
+  INSTALL_DIR="${vp_home:-$home/.vite-plus}"
+  SHIM_DIR="$INSTALL_DIR/bin"
+  CONFIG_DIR="$INSTALL_DIR"
+  set_config_dir_refs "$CONFIG_DIR" "$home"
+}
+
 # Mirror crates/vp_shared/src/dirs/resolution.rs:
 #   VP_HOME → existing ~/.vite-plus → VP_*_DIR / XDG_* / platform defaults
 resolve_install_layout() {
@@ -1178,15 +1192,45 @@ main() {
     VP_VERSION="$RESOLVED_VERSION"
   fi
 
-  # Set up version-specific directories
-  VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
-  BIN_DIR="$VERSION_DIR/bin"
-  CURRENT_LINK="$INSTALL_DIR/current"
-
   local binary_name="vp"
   if [[ "$platform" == win32* ]]; then
     binary_name="vp.exe"
   fi
+
+  # Download the CLI platform tarball before the layout is final: the
+  # downloaded binary decides which layout it supports (see below).
+  local platform_temp_dir=""
+  if [ -z "$LOCAL_TGZ" ]; then
+    # npm registry or registry bridge (when PR_VERSION is set)
+    get_platform_suffix "$platform"
+    local platform_url
+    if [ -n "$PR_VERSION" ]; then
+      # The registry bridge redirects this URL to the platform tarball for the
+      # matching commit build (0.0.0-commit.<sha>).
+      platform_url="${BRIDGE_DOWNLOAD_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
+    else
+      local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
+      platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
+    fi
+
+    # Create temp directory for extraction
+    platform_temp_dir=$(mktemp -d)
+    download_and_extract "$platform_url" "$platform_temp_dir" 1
+    chmod +x "$platform_temp_dir/$binary_name"
+
+    # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A release that
+    # predates the split layout cannot answer; give it the monolithic root so
+    # the installed PATH commands keep working.
+    if ! apply_dirs_from_vp "$platform_temp_dir/$binary_name"; then
+      use_legacy_layout
+      info "vite-plus ${VP_VERSION} predates the split directory layout; installing to $(abbreviate_path "$INSTALL_DIR")"
+    fi
+  fi
+
+  # Set up version-specific directories
+  VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
+  BIN_DIR="$VERSION_DIR/bin"
+  CURRENT_LINK="$INSTALL_DIR/current"
 
   # Create bin directory
   mkdir -p "$BIN_DIR"
@@ -1211,23 +1255,6 @@ main() {
     fi
     chmod +x "$BIN_DIR/$binary_name"
   else
-    # Download CLI platform tarball — npm registry or registry bridge (when PR_VERSION is set)
-    get_platform_suffix "$platform"
-    local platform_url
-    if [ -n "$PR_VERSION" ]; then
-      # The registry bridge redirects this URL to the platform tarball for the
-      # matching commit build (0.0.0-commit.<sha>).
-      platform_url="${BRIDGE_DOWNLOAD_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
-    else
-      local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
-      platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
-    fi
-
-    # Create temp directory for extraction
-    local platform_temp_dir
-    platform_temp_dir=$(mktemp -d)
-    download_and_extract "$platform_url" "$platform_temp_dir" 1
-
     # Copy binary to BIN_DIR
     cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
     chmod +x "$BIN_DIR/$binary_name"
@@ -1403,7 +1430,7 @@ WRAPPER_EOF
 apply_dirs_from_vp() {
   local vp="$1"
   local out
-  out="$(VP_DUMP_DIRS=1 "$vp")" || return 1
+  out="$(VP_DUMP_DIRS=1 "$vp" 2>/dev/null)" || return 1
   INSTALL_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "data" { print $2; exit }')"
   SHIM_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "bin" { print $2; exit }')"
   CONFIG_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "config" { print $2; exit }')"

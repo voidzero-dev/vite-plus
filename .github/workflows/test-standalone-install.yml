@@ -189,6 +189,104 @@ jobs:
           test "$(readlink "$GRAND/.vite-plus/bin/vp")" = "$GRAND/.vite-plus/current/bin/vp"
           "$GRAND/.vite-plus/bin/vp" --version
 
+  test-install-sh-old-version:
+    name: Test install.sh pre-split release (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux x64 glibc
+          - os: macos-latest
+            name: macOS ARM64
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Run install.sh for a pre-split release
+        # No VP_HOME pin: a release that predates VpDirs must fall back to the
+        # monolithic ~/.vite-plus root on its own.
+        env:
+          VP_VERSION: 0.2.9
+        run: |
+          cat packages/cli/install.sh | bash | tee install-output.txt
+          grep -F "predates the split directory layout" install-output.txt
+
+      - name: Verify legacy layout
+        run: |
+          test -x "$HOME/.vite-plus/0.2.9/bin/vp"
+          test -e "$HOME/.vite-plus/current"
+          test -f "$HOME/.vite-plus/env"
+          # No split-layout leftovers.
+          test ! -d "$HOME/.local/share/vite-plus"
+          test ! -d "$HOME/.config/vite-plus"
+          test ! -e "$HOME/.local/bin/vp"
+          ls -al "$HOME/.vite-plus/bin"
+          for shim in vp vpr vpx node npm npx corepack; do
+            test -e "$HOME/.vite-plus/bin/$shim"
+          done
+
+      - name: Verify PATH-resolved commands work
+        run: |
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          command -v vp | grep -F "$HOME/.vite-plus/bin/vp"
+          vp --version
+          node --version
+          npm --version
+          vp env doctor
+
+  test-install-ps1-old-version:
+    name: Test install.ps1 pre-split release (Windows x64)
+    # GitHub-hosted runner: %USERPROFILE% matches the OS profile, so the old
+    # release's own path resolution and `vp env doctor` agree with the install.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Run install.ps1 for a pre-split release
+        # No VP_HOME pin: a release that predates VpDirs must fall back to the
+        # monolithic %USERPROFILE%\.vite-plus root on its own.
+        shell: pwsh
+        env:
+          VP_VERSION: 0.2.9
+        run: |
+          # *>&1 merges the information stream (Write-Host) into the pipeline
+          # so Tee-Object can capture the installer notices.
+          & ./packages/cli/install.ps1 *>&1 | Tee-Object -FilePath install-output.txt
+          if (-not (Select-String -Path install-output.txt -Pattern "predates the split directory layout" -SimpleMatch -Quiet)) {
+            Write-Error "Expected the pre-split fallback notice in installer output"
+            exit 1
+          }
+
+      - name: Verify legacy layout
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:USERPROFILE ".vite-plus"
+          if (-not (Test-Path "$root\0.2.9\bin\vp.exe")) { Write-Error "payload missing"; exit 1 }
+          if (-not (Test-Path "$root\current")) { Write-Error "current link missing"; exit 1 }
+          # No split-layout leftovers.
+          foreach ($split in @((Join-Path $env:LOCALAPPDATA "vite-plus"), (Join-Path $env:APPDATA "vite-plus"))) {
+            if (Test-Path $split) { Write-Error "unexpected split dir: $split"; exit 1 }
+          }
+          Get-ChildItem -Force "$root\bin"
+          foreach ($shim in @("vp.exe", "vpr.exe", "vpx.exe", "node.exe", "npm.exe", "npx.exe")) {
+            if (-not (Test-Path "$root\bin\$shim")) { Write-Error "shim missing: $shim"; exit 1 }
+          }
+
+      - name: Verify PATH-resolved commands work
+        shell: pwsh
+        run: |
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          where.exe vp
+          vp --version
+          node --version
+          npm --version
+          vp env doctor
+
   test-install-sh-readonly-config:
     name: Test install.sh (readonly shell config)
     runs-on: ubuntu-latest

@@ -85,6 +85,25 @@ impl VpDirs {
         })
     }
 
+    /// Single-root mapping for releases that predate the split layout.
+    ///
+    /// Those binaries resolve every path from `VP_HOME` (default
+    /// `<home>/.vite-plus`); their env setup, shims, and trampolines cannot
+    /// follow split roots. Installers use this mapping when the downloaded
+    /// payload cannot report split category roots via `VP_DUMP_DIRS`.
+    #[must_use]
+    pub fn legacy_single_root(home: &AbsolutePath) -> Self {
+        let root = resolution::vp_home_override()
+            .unwrap_or_else(|| home.join(resolution::VP_HOME_DIR_NAME));
+        Self {
+            bin: root.join("bin"),
+            data: root.clone(),
+            cache: root.join("cache"),
+            config: root.clone(),
+            state: root,
+        }
+    }
+
     /// Write `<BIN>/<exe_stem>.shim` so the trampoline can find `<DATA>`.
     pub fn write_shim_pointer(&self, exe_stem: &str) -> std::io::Result<()> {
         self.write_shim_pointer_beside(self.bin.join(format!("{exe_stem}.exe")).as_path())
@@ -124,5 +143,33 @@ mod tests {
     fn shim_pointer_file_name_uses_stem_and_extension() {
         assert_eq!(shim_pointer_file_name("vp"), "vp.shim");
         assert_eq!(shim_pointer_file_name("node"), "node.shim");
+    }
+
+    #[test]
+    fn legacy_single_root_defaults_to_home_root() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        temp_env::with_var(crate::env_vars::VP_HOME, None::<&str>, || {
+            let dirs = VpDirs::legacy_single_root(&home);
+            let expected = home.join(resolution::VP_HOME_DIR_NAME);
+            assert_eq!(dirs.data, expected);
+            assert_eq!(dirs.bin, expected.join("bin"));
+            assert_eq!(dirs.cache, expected.join("cache"));
+            assert_eq!(dirs.config, expected);
+            assert_eq!(dirs.state, expected);
+        });
+    }
+
+    #[test]
+    fn legacy_single_root_honors_vp_home() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let pinned = home.join("custom-root");
+        temp_env::with_var(crate::env_vars::VP_HOME, Some(pinned.as_path().as_os_str()), || {
+            let dirs = VpDirs::legacy_single_root(&home);
+            assert_eq!(dirs.data, pinned);
+            assert_eq!(dirs.bin, pinned.join("bin"));
+            assert_eq!(dirs.config, pinned);
+        });
     }
 }

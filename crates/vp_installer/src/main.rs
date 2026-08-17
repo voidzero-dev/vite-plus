@@ -146,7 +146,11 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     }
 
     let code = match do_install(&opts, &dirs).await {
-        Ok(()) => {
+        Ok(effective_dirs) => {
+            // A pre-split payload falls back to the monolithic root inside
+            // do_install; report the directories that were actually used.
+            let data_dir_display = effective_dirs.data.as_path().to_string_lossy().to_string();
+            let bin_dir_display = effective_dirs.bin.as_path().to_string_lossy().to_string();
             print_success(&opts, &data_dir_display, &bin_dir_display);
             0
         }
@@ -165,17 +169,24 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     code
 }
 
+/// Install the resolved version and return the directories that were actually
+/// used: a pre-split payload falls back to the monolithic root mid-install.
 #[allow(clippy::print_stdout)]
-async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
-    let install_dir = &dirs.data;
+async fn do_install(
+    opts: &cli::Options,
+    dirs: &VpDirs,
+) -> Result<VpDirs, Box<dyn std::error::Error>> {
+    let mut dirs = dirs.clone();
     let platform_suffix = platform::detect_platform_suffix()?;
     if !opts.quiet {
         print_info(&format!("detected platform: {platform_suffix}"));
     }
 
-    // Check local version first to potentially skip HTTP requests
-    tokio::fs::create_dir_all(install_dir).await?;
-    let current_version = install::read_current_version(install_dir).await;
+    // Check local version first to potentially skip HTTP requests.
+    // Read-only here: the install root is created only after the downloaded
+    // payload confirms the layout, so a pre-split fallback leaves no empty
+    // split directories behind.
+    let current_version = install::read_current_version(&dirs.data).await;
 
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
 
@@ -194,7 +205,7 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     let same_version = current_version
         .as_deref()
         .is_some_and(|current| install::is_install_dir_for_version(current, &target_version))
-        && tokio::fs::try_exists(install_dir.join("current").join("bin").join(VP_BINARY_NAME))
+        && tokio::fs::try_exists(dirs.data.join("current").join("bin").join(VP_BINARY_NAME))
             .await
             .unwrap_or(false);
 
@@ -229,6 +240,31 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         }
         integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
+        // A release that predates the split layout resolves every path from
+        // VP_HOME (default ~/.vite-plus); its env setup, shims, and
+        // trampolines cannot follow split roots. Fall back to that monolithic
+        // root when the payload cannot report split category roots.
+        let abandoned_split_data = if payload_supports_split_layout(&platform_data).await {
+            None
+        } else {
+            let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
+            if legacy.data == dirs.data {
+                None
+            } else {
+                if !opts.quiet {
+                    print_info(&format!(
+                        "vite-plus {target_version} predates the split directory layout; installing to {}",
+                        legacy.data.as_path().display()
+                    ));
+                }
+                let split_data = dirs.data.clone();
+                let preexisted = tokio::fs::try_exists(&split_data).await.unwrap_or(true);
+                dirs = legacy;
+                (!preexisted).then_some(split_data)
+            }
+        };
+
+        let install_dir = &dirs.data;
         let version_dir = install_dir.join(&target_version);
         tokio::fs::create_dir_all(&version_dir).await?;
 
@@ -246,6 +282,14 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         if result.is_err() {
             let _ = tokio::fs::remove_dir_all(&version_dir).await;
         }
+
+        // Managed node/pnpm for the wrapper install resolve their paths from
+        // the process EnvConfig, which was pinned before the payload chose
+        // the monolithic root. Drop the split data root they landed in when
+        // this run created it.
+        if let Some(split_data) = abandoned_split_data {
+            let _ = tokio::fs::remove_dir_all(&split_data).await;
+        }
         result?;
     }
 
@@ -256,7 +300,7 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     if !opts.quiet {
         print_info("setting up shims...");
     }
-    if let Err(e) = setup_bin_shims(dirs).await {
+    if let Err(e) = setup_bin_shims(&dirs).await {
         print_warn(&format!("Shim setup failed (non-fatal): {e}"));
     }
 
@@ -264,10 +308,10 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         if !opts.quiet {
             print_info("setting up Node.js version manager...");
         }
-        if let Err(e) = install::refresh_shims(install_dir).await {
+        if let Err(e) = install::refresh_shims(&dirs.data).await {
             print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
         }
-    } else if let Err(e) = install::create_env_files(install_dir).await {
+    } else if let Err(e) = install::create_env_files(&dirs.data).await {
         print_warn(&format!("Env file creation failed (non-fatal): {e}"));
     }
 
@@ -278,7 +322,38 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         }
     }
 
-    Ok(())
+    Ok(dirs)
+}
+
+/// Ask the downloaded payload whether it understands the split directory
+/// layout: a split-aware `vp` prints tab-separated category roots under
+/// `VP_DUMP_DIRS=1`, a pre-split release prints its help instead. Errors
+/// count as "no" — the monolithic root works for every release, so the
+/// fallback direction is safe.
+async fn payload_supports_split_layout(platform_data: &[u8]) -> bool {
+    let Ok(temp) = tempfile::tempdir() else {
+        return false;
+    };
+    let Some(temp_root) = AbsolutePathBuf::new(temp.path().to_path_buf()) else {
+        return false;
+    };
+    if install::extract_platform_package(platform_data, &temp_root).await.is_err() {
+        return false;
+    }
+
+    let vp_binary = temp_root.join("bin").join(VP_BINARY_NAME);
+    let Ok(output) = tokio::process::Command::new(vp_binary.as_path())
+        .env(vp_shared::env_vars::VP_DUMP_DIRS, "1")
+        .output()
+        .await
+    else {
+        return false;
+    };
+
+    output.status.success()
+        && String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .any(|line| line.strip_prefix("data\t").is_some_and(|root| !root.is_empty()))
 }
 
 /// Auto-detect whether the Node.js version manager should be enabled.

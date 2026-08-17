@@ -11,6 +11,7 @@ These variables control the installer scripts and the standalone Windows install
 - **Purpose**: Version to install
 - **Default**: `latest`
 - **CLI equivalent**: `--version`
+- **Note**: Releases that predate the split directory layout (0.2.x and earlier) always install into the monolithic root (`VP_HOME` or `~/.vite-plus`), even on a fresh machine. The installer detects this from the downloaded binary and prints a notice.
 - **Example**:
 
   ```bash

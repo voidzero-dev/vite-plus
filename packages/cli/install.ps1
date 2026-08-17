@@ -277,6 +277,36 @@ function Resolve-InstallLayout {
     }
 }
 
+function Set-LayoutVars {
+    $script:InstallDir = $script:Layout.DataDir
+    $script:ShimDir = $script:Layout.ShimDir
+    $script:ConfigDir = $script:Layout.ConfigDir
+    $script:NodeManagerBinDisplay = $script:ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
+}
+
+# Releases that predate the split layout resolve every path from VP_HOME
+# (default %USERPROFILE%\.vite-plus). Install them into that monolithic root
+# so their env setup, shims, and trampolines agree with where the installer
+# wrote them.
+function Use-LegacyLayout {
+    $userHome = Get-UserHomeDir
+    if ([string]::IsNullOrWhiteSpace($userHome)) {
+        Write-Error-Exit "Could not resolve user home directory"
+    }
+
+    $root = if (Test-AbsoluteOverridePath $env:VP_HOME) {
+        $env:VP_HOME
+    } else {
+        Join-Path $userHome ".vite-plus"
+    }
+    $script:Layout = [pscustomobject]@{
+        DataDir = $root
+        ShimDir = Join-Path $root "bin"
+        ConfigDir = $root
+    }
+    Set-LayoutVars
+}
+
 # Record the data root next to a trampoline so independent VP_BIN_DIR /
 # VP_DATA_DIR installs do not rely on sibling-path probing.
 function Write-ShimPointer {
@@ -867,33 +897,13 @@ function Main {
         $ViteVersion = Get-VersionFromMetadata
     }
 
-    # Set up version-specific directories
-    $VersionDir = "$InstallDir\$ViteVersion"
-    $BinDir = "$VersionDir\bin"
-    $CurrentLink = "$InstallDir\current"
-
     $binaryName = "vp.exe"
 
-    # Create bin directory
-    New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-
-    if ($LocalTgz) {
-        # Local development mode: only need the binary
-        Write-Info "Using local tarball: $LocalTgz"
-
-        # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
-        if ($LocalBinary -and (Test-Path $LocalBinary)) {
-            Copy-Item -Path $LocalBinary -Destination (Join-Path $BinDir $binaryName) -Force
-            # Also copy trampoline shim binary if available (sibling to vp.exe)
-            $shimSource = Join-Path (Split-Path $LocalBinary) "vp-shim.exe"
-            if (Test-Path $shimSource) {
-                Copy-Item -Path $shimSource -Destination (Join-Path $BinDir "vp-shim.exe") -Force
-            }
-        } else {
-            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
-        }
-    } else {
-        # Download CLI platform tarball — npm registry or registry bridge (when PrVersion is set)
+    # Download the CLI platform tarball before the layout is final: the
+    # downloaded binary decides which layout it supports (see below).
+    $platformTempExtract = $null
+    if (-not $LocalTgz) {
+        # npm registry or registry bridge (when PrVersion is set)
         $platformSuffix = Get-PlatformSuffix -Platform $platform
         if ($PrVersion) {
             # The registry bridge redirects this URL to the platform tarball for
@@ -914,23 +924,62 @@ function Main {
 
             # Extract the package
             & "$env:SystemRoot\System32\tar.exe" -xzf $platformTempFile -C $platformTempExtract
-
-            # Copy binary to BinDir
-            $packageDir = Join-Path $platformTempExtract "package"
-            $binarySource = Join-Path $packageDir $binaryName
-            if (Test-Path $binarySource) {
-                Copy-Item -Path $binarySource -Destination $BinDir -Force
-            }
-            # Also copy trampoline shim binary if present in the package
-            $shimSource = Join-Path $packageDir "vp-shim.exe"
-            if (Test-Path $shimSource) {
-                Copy-Item -Path $shimSource -Destination $BinDir -Force
-            }
-
-            Remove-Item -Recurse -Force $platformTempExtract
         } finally {
             Remove-Item $platformTempFile -ErrorAction SilentlyContinue
         }
+
+        # Remove Zone.Identifier (Mark of the Web) from downloaded binaries so
+        # Windows SmartScreen / Defender won't block execution.
+        $packageDir = Join-Path $platformTempExtract "package"
+        Get-ChildItem -Path $packageDir -Filter "*.exe" -ErrorAction SilentlyContinue | Unblock-File
+
+        # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A release
+        # that predates the split layout cannot answer; give it the monolithic
+        # root so the installed PATH commands keep working.
+        $binarySource = Join-Path $packageDir $binaryName
+        if ((Test-Path $binarySource) -and (Apply-DirsFromVp $binarySource)) {
+            Set-LayoutVars
+        } else {
+            Use-LegacyLayout
+            Write-Info "vite-plus $ViteVersion predates the split directory layout; installing to $InstallDir"
+        }
+    }
+
+    # Set up version-specific directories
+    $VersionDir = "$InstallDir\$ViteVersion"
+    $BinDir = "$VersionDir\bin"
+    $CurrentLink = "$InstallDir\current"
+
+    # Create bin directory
+    New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+
+    if ($LocalTgz) {
+        # Local development mode: only need the binary
+        Write-Info "Using local tarball: $LocalTgz"
+
+        # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
+        if ($LocalBinary -and (Test-Path $LocalBinary)) {
+            Copy-Item -Path $LocalBinary -Destination (Join-Path $BinDir $binaryName) -Force
+            # Also copy trampoline shim binary if available (sibling to vp.exe)
+            $shimSource = Join-Path (Split-Path $LocalBinary) "vp-shim.exe"
+            if (Test-Path $shimSource) {
+                Copy-Item -Path $shimSource -Destination (Join-Path $BinDir "vp-shim.exe") -Force
+            }
+        } else {
+            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
+        }
+    } else {
+        # Copy binary to BinDir
+        if (Test-Path $binarySource) {
+            Copy-Item -Path $binarySource -Destination $BinDir -Force
+        }
+        # Also copy trampoline shim binary if present in the package
+        $shimSource = Join-Path $packageDir "vp-shim.exe"
+        if (Test-Path $shimSource) {
+            Copy-Item -Path $shimSource -Destination $BinDir -Force
+        }
+
+        Remove-Item -Recurse -Force $platformTempExtract
     }
 
     # Remove Zone.Identifier (Mark of the Web) from downloaded binaries so
@@ -1190,10 +1239,7 @@ function Apply-DirsFromVp {
 if (-not ($env:VP_LOCAL_BINARY -and (Test-Path -LiteralPath $env:VP_LOCAL_BINARY) -and (Apply-DirsFromVp $env:VP_LOCAL_BINARY))) {
     $script:Layout = Resolve-InstallLayout
 }
-$InstallDir = $script:Layout.DataDir
-$ShimDir = $script:Layout.ShimDir
-$ConfigDir = $script:Layout.ConfigDir
-$NodeManagerBinDisplay = $ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
+Set-LayoutVars
 
 try {
     Main

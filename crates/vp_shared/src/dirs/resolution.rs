@@ -51,6 +51,11 @@ fn process_env_var(name: &str) -> Option<AbsolutePathBuf> {
     std::env::var_os(name).and_then(|path| AbsolutePathBuf::new(path.into()))
 }
 
+/// Absolute `VP_HOME` override from the process environment, if set.
+pub(super) fn vp_home_override() -> Option<AbsolutePathBuf> {
+    process_env_var(env_vars::VP_HOME)
+}
+
 /// Explicit per-category overrides from the `VP_*_DIR` environment variables.
 struct VpEnvs {
     bin_dir: Option<AbsolutePathBuf>,
