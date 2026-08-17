@@ -875,7 +875,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const shouldSetupGit = await resolveGitInit(options, isMonorepo);
-  if (!isMonorepo) {
+  if (!isMonorepo && (!options.interactive || shouldSetupGit || options.hooks === true)) {
     shouldSetupHooks = await promptGitHooks(options);
   }
 
