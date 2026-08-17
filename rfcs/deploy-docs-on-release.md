@@ -294,7 +294,7 @@ after the deploy get the new script together with the new binaries.
 ## Alternatives considered
 
 - **Gate only the install scripts, keep push deploys for `docs/**`.** Fixes
-  problem 2 but not problem 1, and lets `docs/src/guide/install.md` drift from the
+  problem 2 but not problem 1, and lets `docs/guide/install.md` drift from the
   script it documents. Two freshness channels on one site.
 - **Versioned docs.** Publish `main` but hide unreleased sections until their
   release. Needs authoring conventions and theme/tooling support; out of scope.

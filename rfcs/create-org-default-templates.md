@@ -803,21 +803,21 @@ plumbing.
 Shipped on branch `vp-create-support-org` (PR #1398). Concrete
 landings:
 
-| Module                                                  | Role                                                                                                                 |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `packages/cli/src/create/org-manifest.ts`               | `parseOrgScopedSpec`, `readOrgManifest`, schema validation (incl. `__vp_` reserved-prefix check).                    |
-| `packages/cli/src/create/org-resolve.ts`                | `resolveOrgManifestForCreate`, `getConfiguredDefaultTemplate`, picker / `--no-interactive` table dispatch.           |
-| `packages/cli/src/create/org-picker.ts`                 | `pickOrgTemplate` interactive picker, escape-hatch entry, context-aware filtering.                                   |
-| `packages/cli/src/create/org-tarball.ts`                | `ensureOrgPackageExtracted`, `resolveBundledPath`, `sanitizeHostForPath`, integrity verification, mode preservation. |
-| `packages/cli/src/create/templates/bundled.ts`          | `executeBundledTemplate` (directory-copy scaffold for relative-path manifest entries).                               |
-| `packages/cli/src/create/discovery.ts`                  | `bundledLocalPath` + `skipShorthand` parameters threading manifest results into the existing template flow.          |
-| `packages/cli/src/create/bin.ts`                        | Unified monorepo branch (builtin + bundled), git-init prompt, `injectCreateDefaultTemplate` for `@org` monorepos.    |
-| `packages/cli/src/create/utils.ts`                      | `ensureGitignoreNodeModules` post-`git init` guarantee.                                                              |
-| `packages/cli/src/define-config.ts`                     | `create: { defaultTemplate?: string }` augmentation on `UserConfig`.                                                 |
-| `packages/cli/src/migration/migrator.ts`                | `injectCreateDefaultTemplate` helper (called from `bin.ts`, gated on bundled monorepo).                              |
-| `packages/cli/src/utils/npm-config.ts`                  | `.npmrc` parser, `getNpmRegistry(scope?)`, `getNpmAuthHeader(url)`, `fetchNpmResource` (401/403 retry).              |
-| `packages/cli/src/resolve-vite-config.ts`               | `findWorkspaceRoot` exported for the default-template walk-up.                                                       |
-| `docs/src/guide/create.md`, `docs/src/config/create.md` | Authoring guide and `create.defaultTemplate` reference.                                                              |
+| Module                                          | Role                                                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/cli/src/create/org-manifest.ts`       | `parseOrgScopedSpec`, `readOrgManifest`, schema validation (incl. `__vp_` reserved-prefix check).                    |
+| `packages/cli/src/create/org-resolve.ts`        | `resolveOrgManifestForCreate`, `getConfiguredDefaultTemplate`, picker / `--no-interactive` table dispatch.           |
+| `packages/cli/src/create/org-picker.ts`         | `pickOrgTemplate` interactive picker, escape-hatch entry, context-aware filtering.                                   |
+| `packages/cli/src/create/org-tarball.ts`        | `ensureOrgPackageExtracted`, `resolveBundledPath`, `sanitizeHostForPath`, integrity verification, mode preservation. |
+| `packages/cli/src/create/templates/bundled.ts`  | `executeBundledTemplate` (directory-copy scaffold for relative-path manifest entries).                               |
+| `packages/cli/src/create/discovery.ts`          | `bundledLocalPath` + `skipShorthand` parameters threading manifest results into the existing template flow.          |
+| `packages/cli/src/create/bin.ts`                | Unified monorepo branch (builtin + bundled), git-init prompt, `injectCreateDefaultTemplate` for `@org` monorepos.    |
+| `packages/cli/src/create/utils.ts`              | `ensureGitignoreNodeModules` post-`git init` guarantee.                                                              |
+| `packages/cli/src/define-config.ts`             | `create: { defaultTemplate?: string }` augmentation on `UserConfig`.                                                 |
+| `packages/cli/src/migration/migrator.ts`        | `injectCreateDefaultTemplate` helper (called from `bin.ts`, gated on bundled monorepo).                              |
+| `packages/cli/src/utils/npm-config.ts`          | `.npmrc` parser, `getNpmRegistry(scope?)`, `getNpmAuthHeader(url)`, `fetchNpmResource` (401/403 retry).              |
+| `packages/cli/src/resolve-vite-config.ts`       | `findWorkspaceRoot` exported for the default-template walk-up.                                                       |
+| `docs/guide/create.md`, `docs/config/create.md` | Authoring guide and `create.defaultTemplate` reference.                                                              |
 
 ## Testing
 

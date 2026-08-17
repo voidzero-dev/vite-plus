@@ -344,7 +344,7 @@ All changes live in the Rust layers; no upstream Vite or tsdown changes are requ
 - Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
 - `packages/cli/src/pack-bin.ts` needs no change: positional handling is untouched and `-C` never reaches it.
-- Docs: a `-C` entry in the global CLI docs, `docs/src/guide/monorepo.md` "App Commands", and a `docs/src/config/` page for the new key.
+- Docs: a `-C` entry in the global CLI docs, `docs/guide/monorepo.md` "App Commands", and a `docs/config/` page for the new key.
 
 ## Compatibility
 

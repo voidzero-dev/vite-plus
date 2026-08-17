@@ -474,7 +474,7 @@ Run: `pnpm -F vite-plus snap-test-local command-pm-stage` and
 
 ## Documentation
 
-- `docs/src/guide/install.md`: the `vp pm <command>` "Advanced" section lists
+- `docs/guide/install.md`: the `vp pm <command>` "Advanced" section lists
   forwarded commands; add `vp pm stage` with a short staged-publishing blurb and
   a pointer to npm's docs.
 - Note the yarn caveat (`vp pm stage` ≠ `yarn stage`) where relevant.

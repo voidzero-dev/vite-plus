@@ -112,7 +112,6 @@ const guideSidebar = [
 export default extendConfig(
   withMermaid(
     defineConfig({
-      srcDir: 'src',
       title: 'Vite+',
       titleTemplate: ':title | The Unified Toolchain for the Web',
       description: 'The Unified Toolchain for the Web',
@@ -134,8 +133,6 @@ export default extendConfig(
         ['meta', { name: 'twitter:site', content: '@voidzerodev' }],
       ],
       vite: {
-        // Keep deployment assets out of the documentation bundled with vite-plus.
-        publicDir: resolve(__dirname, '../public'),
         define: {
           __DOCS_ORIGIN__: JSON.stringify(docsOrigin),
           __DOCS_INSTALL_SH_URL__: JSON.stringify(installShUrl),

@@ -54,11 +54,11 @@ vite-plus/
 - **Package-manager behavior**: start at `crates/vp_pm_cli/`.
 - **Managed Node runtime / shims**: start at `crates/vp_js_runtime/`.
 - **Static `vite.config.ts` extraction**: start at `crates/vp_static_config/README.md` and `packages/cli/src/resolve-vite-config.ts`.
-- **Migration behavior**: `docs/src/guide/migrate-rules.md`.
+- **Migration behavior**: `docs/guide/migrate-rules.md`.
 - **Migrator code (`vp migrate`)**: category modules under `packages/cli/src/migration/migrator/` behind the `migrator.ts` barrel; follow `migrator/README.md` when changing migrator code.
 - **Bundled toolchain surfaces**: start with `packages/core/BUNDLING.md` and `packages/cli/BUNDLING.md`.
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
-- **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/src/` (`docs/src/guide/`, `docs/src/config/`); generated agent guidance is separate.
+- **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
 - **CLI output behavior**: inspect the relevant code plus `crates/vp_cli_snapshots/tests/cli_snapshots/` (PTY snapshot suite; write new cases here).
 - **Interactive CLI testing (prompts, pickers, keystrokes)**: `crates/vp_cli_snapshots/tests/cli_snapshots/README.md` and `rfcs/interactive-snapshot-tests.md`.
 - **Install-testing against the local build**: `packages/tools/src/local-npm-registry.ts` serves the packed checkout behind a real registry interface; used by PTY snapshot fixtures, ecosystem e2e (`ecosystem-ci/patch-project.ts`), and local `vp migrate`/`vp create` iteration (see `CONTRIBUTING.md`).
@@ -90,7 +90,7 @@ Important distinctions:
 - Do not introduce `vite-task.json`; current Vite+ task configuration lives under `run` in `vite.config.ts`.
 - Do not run `cargo test -p vt` in this repo; Vite Task crates are git dependencies, not local workspace members.
 
-Reference: `docs/src/guide/run.md` and `docs/src/config/run.md`.
+Reference: `docs/guide/run.md` and `docs/config/run.md`.
 
 ## Development Workflow
 
@@ -196,9 +196,9 @@ Use the validation matrix above as the source of truth. For behavior-bearing cha
 - Contributor workflow: `CONTRIBUTING.md`
 - Root scripts: `package.json`
 - Repo config: `vite.config.ts`
-- Vite+ guide: `docs/src/guide/index.md`
-- Run guide: `docs/src/guide/run.md`
-- Run config: `docs/src/config/run.md`
+- Vite+ guide: `docs/guide/index.md`
+- Run guide: `docs/guide/run.md`
+- Run config: `docs/config/run.md`
 - CLI package architecture: `packages/cli/BUNDLING.md`
 - Core package architecture: `packages/core/BUNDLING.md`
 - CLI snapshot runner: `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`

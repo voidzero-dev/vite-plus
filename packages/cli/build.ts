@@ -913,8 +913,7 @@ export default toolchain;
 async function copyBundledDocs() {
   console.log('\nCopying bundled docs...');
 
-  // Keep site tooling and deployment assets outside the published package.
-  const docsSourceDir = join(projectDir, '..', '..', 'docs', 'src');
+  const docsSourceDir = join(projectDir, '..', '..', 'docs');
   const docsTargetDir = join(projectDir, 'docs');
 
   if (!existsSync(docsSourceDir)) {
@@ -923,9 +922,22 @@ async function copyBundledDocs() {
   }
 
   await rm(docsTargetDir, { recursive: true, force: true });
-  await cp(docsSourceDir, docsTargetDir, { recursive: true });
+  // Preserve the website layout while publishing only authored Markdown.
+  const bundledDocsEntries = new Set(['config', 'guide', 'index.md', 'team.md']);
+  await cp(docsSourceDir, docsTargetDir, {
+    recursive: true,
+    filter: (source) => {
+      const relativePath = relative(docsSourceDir, source).replaceAll('\\', '/');
+      const [entry] = relativePath.split('/');
+      return (
+        relativePath === '' ||
+        (bundledDocsEntries.has(entry) &&
+          (statSync(source).isDirectory() || source.endsWith('.md')))
+      );
+    },
+  });
 
-  console.log('  Copied docs/src to docs/');
+  console.log('  Copied Markdown docs to docs/');
 }
 
 async function syncReadmeFromRoot() {
