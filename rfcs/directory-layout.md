@@ -227,6 +227,8 @@ The installers accept any published `VP_VERSION`. Until the first split-aware re
 
 **`vp-setup` specifics.** `vp-setup` resolves its `EnvConfig` at process start, so the fallback happens mid-install: `do_install` swaps to the monolithic mapping after the probe and returns the effective directories for the success summary. The managed Node.js and pnpm for the wrapper install still resolve their paths from the process-wide `EnvConfig`, pinned before the fallback. These tools land in the abandoned split data root; `do_install` removes that root when this run created it. Known limit: the interactive menu shows the split directories before the download. A pinned pre-split version thus confirms one location and then installs to the monolithic root, with the notice.
 
+**`vp upgrade`.** On a split install, `vp upgrade` rejects a target below 0.3.0 before the download, with a message that names the minimum version. Preview builds (`0.0.0-commit.<sha>`) are allowed: they track the current branch. Monolithic installs accept every release, so CI upgrade tests keep their old targets. The upgrade path uses a version gate, not the payload probe: the running binary is split-aware by definition, so the boundary is a fixed release number.
+
 **Coverage.** The `test-install-sh-old-version` (Linux, macOS) and `test-install-ps1-old-version` (Windows) CI jobs install a pinned pre-split release with no `VP_HOME`. They assert the monolithic layout, the absence of split roots, and working PATH-resolved commands. This mechanism also keeps fresh default installs of `latest` functional in the window between the merge of this RFC and the 0.3.0 release.
 
 ### Global CLI → JS children

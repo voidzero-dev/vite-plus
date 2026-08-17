@@ -86,6 +86,25 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
+    // Step 6: Reject targets that cannot run on this install's layout.
+    //
+    // A pre-split payload resolves every path from VP_HOME (default
+    // ~/.vite-plus). Activated on a split install, it would move config,
+    // runtimes, and later upgrades to that monolithic root while the split
+    // PATH entries keep serving this binary. Monolithic installs (VP_HOME
+    // pin or grandfathered ~/.vite-plus) accept every release.
+    let legacy = vp_shared::VpDirs::legacy_single_root(&config.user_home);
+    if legacy.data != config.dirs.data && !supports_split_layout(&resolved.version) {
+        return Err(Error::Upgrade(
+            format!(
+                "vite-plus {} does not support the split directory layout of this install. \
+                 Upgrade to {MIN_SPLIT_LAYOUT_VERSION} or newer, or set VP_HOME to use one directory.",
+                resolved.version
+            )
+            .into(),
+        ));
+    }
+
     if !options.silent {
         output::info(&format!(
             "downloading vite-plus@{} for {}...",
@@ -253,4 +272,38 @@ async fn execute_rollback(
     }
 
     Ok(ExitStatus::default())
+}
+
+/// First release that resolves the split directory layout.
+const MIN_SPLIT_LAYOUT_VERSION: &str = "0.3.0";
+
+/// Whether a payload of `version` understands the split layout:
+/// [`MIN_SPLIT_LAYOUT_VERSION`] and newer (prereleases included), plus
+/// preview builds (`0.0.0-commit.<sha>`), which track the current branch.
+fn supports_split_layout(version: &str) -> bool {
+    let Ok(version) = node_semver::Version::parse(version) else {
+        return false;
+    };
+    if version.major == 0 && version.minor == 0 && version.patch == 0 {
+        return !version.pre_release.is_empty() || !version.build.is_empty();
+    }
+    version.major > 0 || version.minor >= 3
+}
+
+#[cfg(test)]
+mod tests {
+    use super::supports_split_layout;
+
+    #[test]
+    fn split_layout_support_by_version() {
+        assert!(supports_split_layout("0.3.0"));
+        assert!(supports_split_layout("0.3.0-alpha.1"));
+        assert!(supports_split_layout("0.4.2"));
+        assert!(supports_split_layout("1.0.0"));
+        assert!(supports_split_layout("0.0.0-commit.0123abc"));
+        assert!(!supports_split_layout("0.2.9"));
+        assert!(!supports_split_layout("0.2.0"));
+        assert!(!supports_split_layout("0.1.14-alpha.1"));
+        assert!(!supports_split_layout("not-a-version"));
+    }
 }

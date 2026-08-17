@@ -92,6 +92,48 @@ pub async fn extract_platform_package(
     Ok(())
 }
 
+/// Category roots a split-aware payload reports via `VP_DUMP_DIRS`.
+pub struct PayloadDirs {
+    pub data: AbsolutePathBuf,
+    pub bin: AbsolutePathBuf,
+    pub config: AbsolutePathBuf,
+}
+
+/// Ask a downloaded platform payload for its directory layout: a split-aware
+/// `vp` prints tab-separated category roots under `VP_DUMP_DIRS=1`, a
+/// pre-split release prints its help instead. Errors count as "no answer" —
+/// the monolithic root works for every release, so the fallback direction is
+/// safe.
+pub async fn probe_payload_dirs(platform_data: &[u8]) -> Option<PayloadDirs> {
+    let temp = tempfile::tempdir().ok()?;
+    let temp_root = AbsolutePathBuf::new(temp.path().to_path_buf())?;
+    extract_platform_package(platform_data, &temp_root).await.ok()?;
+
+    let vp_binary = temp_root.join("bin").join(crate::VP_BINARY_NAME);
+    let output = tokio::process::Command::new(vp_binary.as_path())
+        .env(vp_shared::env_vars::VP_DUMP_DIRS, "1")
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    use vp_shared::env_vars::dump_dirs;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let category = |key: &str| {
+        stdout.lines().find_map(|line| {
+            let root = line.strip_prefix(key)?.strip_prefix('\t')?;
+            AbsolutePathBuf::new(root.into())
+        })
+    };
+    Some(PayloadDirs {
+        data: category(dump_dirs::DATA)?,
+        bin: category(dump_dirs::BIN)?,
+        config: category(dump_dirs::CONFIG)?,
+    })
+}
+
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
 const PINNED_PNPM_VERSION: &str = "10.33.0";
@@ -972,5 +1014,38 @@ mod tests {
     #[test]
     fn test_is_release_age_error_ignores_npm_min_release_age() {
         assert!(!is_release_age_error(b"", b"min-release-age prevented installing vite-plus",));
+    }
+
+    /// A platform tarball whose `package/vp` is the given shell script.
+    #[cfg(unix)]
+    fn fake_platform_tgz(vp_script: &str) -> Vec<u8> {
+        use flate2::{Compression, write::GzEncoder};
+        let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
+        let mut header = tar::Header::new_gnu();
+        header.set_path("package/vp").unwrap();
+        header.set_size(vp_script.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        tar.append(&header, vp_script.as_bytes()).unwrap();
+        tar.into_inner().unwrap().finish().unwrap()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn probe_payload_dirs_parses_split_aware_output() {
+        let script = "#!/bin/sh\nprintf 'data\\t/probe-data\\nbin\\t/probe-bin\\nconfig\\t/probe-config\\n'\n";
+        let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
+        assert_eq!(dirs.data.as_path(), Path::new("/probe-data"));
+        assert_eq!(dirs.bin.as_path(), Path::new("/probe-bin"));
+        assert_eq!(dirs.config.as_path(), Path::new("/probe-config"));
+    }
+
+    /// A pre-split `vp` prints its help and exits 0; the probe must report
+    /// "no answer".
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn probe_payload_dirs_rejects_pre_split_help_output() {
+        let script = "#!/bin/sh\necho 'Usage: vp [COMMAND]'\n";
+        assert!(probe_payload_dirs(&fake_platform_tgz(script)).await.is_none());
     }
 }

@@ -254,7 +254,7 @@ async fn do_install(
             // Pre-split and split-aware payloads target the same monolithic
             // root here; skip the probe (a full payload extraction + spawn).
             None
-        } else if let Some(probed) = probe_payload_dirs(&platform_data).await {
+        } else if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
             // Adopt the payload's own resolution, like install.sh /
             // install.ps1, so the layout written and the layout the binary
             // resolves cannot drift. cache/state stay self-resolved; the
@@ -339,48 +339,6 @@ async fn do_install(
     }
 
     Ok(dirs)
-}
-
-/// Category roots a split-aware payload reports via `VP_DUMP_DIRS`.
-struct ProbedDirs {
-    data: AbsolutePathBuf,
-    bin: AbsolutePathBuf,
-    config: AbsolutePathBuf,
-}
-
-/// Ask the downloaded payload for its directory layout: a split-aware `vp`
-/// prints tab-separated category roots under `VP_DUMP_DIRS=1`, a pre-split
-/// release prints its help instead. Errors count as "no answer" — the
-/// monolithic root works for every release, so the fallback direction is
-/// safe.
-async fn probe_payload_dirs(platform_data: &[u8]) -> Option<ProbedDirs> {
-    let temp = tempfile::tempdir().ok()?;
-    let temp_root = AbsolutePathBuf::new(temp.path().to_path_buf())?;
-    install::extract_platform_package(platform_data, &temp_root).await.ok()?;
-
-    let vp_binary = temp_root.join("bin").join(VP_BINARY_NAME);
-    let output = tokio::process::Command::new(vp_binary.as_path())
-        .env(vp_shared::env_vars::VP_DUMP_DIRS, "1")
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    use vp_shared::env_vars::dump_dirs;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let category = |key: &str| {
-        stdout.lines().find_map(|line| {
-            let root = line.strip_prefix(key)?.strip_prefix('\t')?;
-            AbsolutePathBuf::new(root.into())
-        })
-    };
-    Some(ProbedDirs {
-        data: category(dump_dirs::DATA)?,
-        bin: category(dump_dirs::BIN)?,
-        config: category(dump_dirs::CONFIG)?,
-    })
 }
 
 /// Auto-detect whether the Node.js version manager should be enabled.
