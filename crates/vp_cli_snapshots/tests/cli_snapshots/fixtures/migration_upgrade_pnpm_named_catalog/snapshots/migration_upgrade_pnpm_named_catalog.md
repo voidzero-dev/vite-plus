@@ -52,7 +52,7 @@ catalogs:
     vitest: <version>
     vite-plus: <version>
 overrides:
-  vite: catalog:vite-stack
+  vite@*: catalog:vite-stack
 peerDependencyRules:
   allowAny:
     - vite
@@ -107,7 +107,7 @@ catalogs:
     vitest: <version>
     vite-plus: <version>
 overrides:
-  vite: catalog:vite-stack
+  vite@*: catalog:vite-stack
 peerDependencyRules:
   allowAny:
     - vite

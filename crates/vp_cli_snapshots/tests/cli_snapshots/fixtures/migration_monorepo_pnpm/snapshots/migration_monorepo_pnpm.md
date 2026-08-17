@@ -124,8 +124,8 @@ catalog:
 
 minimumReleaseAge: 1440
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
