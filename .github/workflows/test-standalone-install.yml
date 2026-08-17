@@ -169,7 +169,10 @@ jobs:
           set -euo pipefail
           GRAND=$(mktemp -d)
           FAKE_TGZ=$(mktemp)
-          mkdir -p "$GRAND/.vite-plus"
+          # A real prior install: grandfathering requires the `current` link,
+          # not a bare ~/.vite-plus directory.
+          mkdir -p "$GRAND/.vite-plus/0.0.1/bin"
+          ln -s 0.0.1 "$GRAND/.vite-plus/current"
           echo keep > "$GRAND/.vite-plus/.keep"
           export HOME="$GRAND"
           export USERPROFILE="$GRAND"
@@ -188,6 +191,51 @@ jobs:
           test ! -d "$GRAND/.local/share/vite-plus"
           test "$(readlink "$GRAND/.vite-plus/bin/vp")" = "$GRAND/.vite-plus/current/bin/vp"
           "$GRAND/.vite-plus/bin/vp" --version
+
+      - name: Stray ~/.vite-plus does not capture a split install
+        env:
+          VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
+        run: |
+          set -euo pipefail
+          STRAY=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$STRAY"
+          export USERPROFILE="$STRAY"
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" \
+            VP_SKIP_DEPS_INSTALL=1 \
+            VP_VERSION=local-test \
+            CI=true \
+            VP_NODE_MANAGER=yes \
+            bash packages/cli/install.sh
+
+          # A pre-split local vite-plus can create ~/.vite-plus at any time
+          # for caches, config, and managed runtimes. No `current` link, so
+          # this is a stray tree, not an install.
+          mkdir -p "$STRAY/.vite-plus/cache" "$STRAY/.vite-plus/js_runtime"
+          echo '{}' > "$STRAY/.vite-plus/config.json"
+
+          # Resolution must stay on the split roots, with and without the
+          # env-script pins.
+          data_root() { VP_DUMP_DIRS=1 "$STRAY/.local/bin/vp" | awk -F'\t' '$1=="data"{print $2}'; }
+          test "$(data_root)" = "$STRAY/.local/share/vite-plus"
+          test "$(VP_DATA_DIR="$STRAY/.local/share/vite-plus" VP_BIN_DIR="$STRAY/.local/bin" data_root)" = "$STRAY/.local/share/vite-plus"
+
+          # A reinstall (vp upgrade selects its root through the same chain)
+          # must keep targeting the split roots and leave the stray tree alone.
+          VP_LOCAL_TGZ="$FAKE_TGZ" \
+            VP_SKIP_DEPS_INSTALL=1 \
+            VP_VERSION=local-test2 \
+            CI=true \
+            VP_NODE_MANAGER=yes \
+            bash packages/cli/install.sh
+
+          test -x "$STRAY/.local/share/vite-plus/local-test2/bin/vp"
+          test "$(readlink "$STRAY/.local/share/vite-plus/current")" = "local-test2"
+          test ! -e "$STRAY/.vite-plus/current"
+          test ! -e "$STRAY/.vite-plus/bin"
+          "$STRAY/.local/bin/vp" --version
 
   test-install-sh-old-version:
     name: Test install.sh pre-split release (${{ matrix.name }})

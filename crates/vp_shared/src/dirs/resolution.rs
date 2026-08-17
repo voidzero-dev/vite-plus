@@ -11,7 +11,8 @@
 //! - [`VpHome`] — `VP_HOME` override: pins the single-root mapping under
 //!   that root.
 //! - [`UserHome`] — `<home>/.vite-plus` (injected home), proposed only when
-//!   that directory already exists on disk.
+//!   that directory contains a `current` link (a real install, not a stray
+//!   tree left by a pre-split local CLI).
 //! - [`VpEnvs`] — `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`.
 //! - XDG / platform defaults.
 //!
@@ -143,15 +144,20 @@ impl VpHome {
 struct UserHome;
 
 impl UserHome {
-    /// Proposes the root only when it already exists on disk **as a
-    /// directory** — the installers gate with directory-only checks
-    /// (`[ -d ]` / `-PathType Container`), so a regular file or dangling
-    /// artifact must not claim the layout. Gating on the root itself accepts
-    /// `bin`/`cache` subdirs even when not yet created under an existing
-    /// install.
+    /// Proposes the root only when it contains the `current` link every
+    /// global install activates. Bare existence of `~/.vite-plus` is not
+    /// enough: pre-split local CLIs create that directory for caches,
+    /// config, and managed runtimes, and such a stray tree must not capture
+    /// a split install (a later `vp upgrade` or reinstall would silently
+    /// move to the monolithic root while the split PATH entries go stale).
+    /// The marker is checked without following links, so an install with a
+    /// dangling `current` (crash mid-upgrade) still grandfathers. The
+    /// installers gate the same way (`current` presence, not `[ -d ]` on
+    /// the root).
     fn resolver(home: &AbsolutePath) -> SingleRoot {
         let root = home.join(VP_HOME_DIR_NAME);
-        SingleRoot { root: root.as_path().is_dir().then_some(root) }
+        let is_install = std::fs::symlink_metadata(root.join("current").as_path()).is_ok();
+        SingleRoot { root: is_install.then_some(root) }
     }
 }
 
@@ -438,7 +444,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
         let vp_home = home.join(VP_HOME_DIR_NAME);
-        std::fs::create_dir_all(&vp_home).unwrap();
+        std::fs::create_dir_all(vp_home.join("current")).unwrap();
 
         let place = UserHome::resolver(&home);
         assert_dir(place.bin_dir(), vp_home.join("bin").as_path());
@@ -459,6 +465,41 @@ mod tests {
         assert!(place.cache_dir().is_none());
         assert!(place.config_dir().is_none());
         assert!(place.state_dir().is_none());
+    }
+
+    /// A `~/.vite-plus` without a `current` link is not an install: pre-split
+    /// local CLIs create the directory for caches, config, and managed
+    /// runtimes, and such a stray tree must not capture a split install.
+    #[test]
+    fn user_home_abstains_for_stray_root_without_current() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let vp_home = home.join(VP_HOME_DIR_NAME);
+        std::fs::create_dir_all(vp_home.join("cache")).unwrap();
+        std::fs::create_dir_all(vp_home.join("js_runtime")).unwrap();
+        std::fs::write(vp_home.join("config.json"), "{}").unwrap();
+
+        let place = UserHome::resolver(&home);
+        assert!(place.bin_dir().is_none());
+        assert!(place.data_dir().is_none());
+        assert!(place.cache_dir().is_none());
+        assert!(place.config_dir().is_none());
+        assert!(place.state_dir().is_none());
+    }
+
+    /// A dangling `current` link still marks an install (for example a crash
+    /// mid-upgrade); the gate checks link presence without following it.
+    #[cfg(unix)]
+    #[test]
+    fn user_home_accepts_dangling_current_link() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let vp_home = home.join(VP_HOME_DIR_NAME);
+        std::fs::create_dir_all(&vp_home).unwrap();
+        std::os::unix::fs::symlink("0.0.0-missing", vp_home.join("current")).unwrap();
+
+        let place = UserHome::resolver(&home);
+        assert_dir(place.data_dir(), vp_home.as_path());
     }
 
     #[test]

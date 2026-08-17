@@ -7,8 +7,8 @@
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
 #   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
-#             %USERPROFILE%\.vite-plus is reused; otherwise data/bin/config
-#             follow VP_*_DIR / Windows known Local+Roaming folders.
+#             %USERPROFILE%\.vite-plus install is reused; otherwise data/bin/
+#             config follow VP_*_DIR / Windows known Local+Roaming folders.
 #   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -239,7 +239,10 @@ function Resolve-InstallLayout {
         }
     }
 
-    if (Test-Path -LiteralPath $legacyRoot -PathType Container) {
+    # Grandfather only a real install: the `current` link every install
+    # activates. A bare %USERPROFILE%\.vite-plus left by a pre-split local
+    # CLI must not claim the layout. Matches vp_shared::dirs resolution.
+    if (Test-Path -LiteralPath (Join-Path $legacyRoot "current")) {
         return [pscustomobject]@{
             DataDir = $legacyRoot
             ShimDir = Join-Path $legacyRoot "bin"

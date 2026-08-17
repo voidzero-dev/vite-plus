@@ -153,11 +153,14 @@ site.
 
 Each category walks the following ordered sources. A source either proposes
 a path or is skipped; the first proposal wins. The only stateful source is
-`~/.vite-plus`: it proposes only when that directory already exists on disk
-**as a directory** (checked once at resolution, matching the installers'
-`[ -d ]` / `-PathType Container` gates), so grandfathering does not claim
-empty paths; bin/cache under an existing root are accepted even if those
-subdirs are not created yet.
+`~/.vite-plus`: it proposes only when that directory contains the `current`
+link every global install activates (checked once at resolution, without
+following the link, and matched by the installers' gates). Bare existence
+is not enough: a pre-split local vite-plus creates `~/.vite-plus` for
+caches, config, and managed runtimes, and because this source outranks
+`VP_*_DIR`, such a stray tree would otherwise capture an existing split
+install: a later `vp upgrade` or reinstall would silently move to the
+monolithic root while the split PATH entries keep serving the old binary.
 
 **Unix:**
 
@@ -174,7 +177,7 @@ VP_HOME
 | Source                                            | Behavior                                                                                                                                                                                                                           |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`VP_HOME`**                                     | When set, pins the **monolithic mapping** under that root for all categories.                                                                                                                                                      |
-| **`~/.vite-plus`**                                | When that directory exists, use the monolithic mapping under it.                                                                                                                                                                   |
+| **`~/.vite-plus`**                                | When that directory contains a `current` link (a real install), use the monolithic mapping under it.                                                                                                                               |
 | **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | Absolute per-category overrides (relative values ignored). Only the categories with a corresponding variable are proposed here.                                                                                                    |
 | **`XDG_*`** (Unix)                                | Absolute `XDG_BIN_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, with app name `vite-plus` on data/cache/config/state. Bin may follow uv-style `$XDG_DATA_HOME/../bin` when only data home is set. |
 | **Platform defaults**                             | See [category mapping](#category-mapping) (Unix XDG-style homes under `$HOME`, Windows Local/Roaming app dirs).                                                                                                                    |
@@ -198,7 +201,7 @@ Under **data** (both layouts): version directories, `current`, `js_runtime`, `pa
 `install.sh` / `install.ps1` (and local `install-global-cli`) mirror the CLI chain:
 
 1. If `VP_HOME` is set → install into that root as **monolithic**.
-2. Else if default `~/.vite-plus` (or Windows equivalent) **exists** → **grandfather** the monolithic root.
+2. Else if default `~/.vite-plus` (or Windows equivalent) **contains a `current` link** → **grandfather** the monolithic root.
 3. Else → **split** data/bin/config (and related) using `VP_*_DIR` / `XDG_*` / platform defaults.
 
 There is a **single** install script per platform (no separate per-layout install script). Local bootstrap does **not** force `VP_HOME`; it resolves the install data dir the same way.
@@ -213,6 +216,8 @@ The installers accept any published `VP_VERSION`, and until the first split-awar
 
 - A split-aware binary prints one tab-separated line per category root (`data\t<path>`, `bin\t<path>`, `config\t<path>`) and exits. The installer **adopts these paths verbatim**, so the layout the installer writes and the layout the binary resolves cannot drift.
 - A pre-split binary does not know the variable, prints its help, and exits 0 without those lines. The installer then installs into the **monolithic root** (`VP_HOME` if set, else `~/.vite-plus`) and prints a notice (`vite-plus <version> predates the split directory layout; installing to ~/.vite-plus`). Everything the binary later does agrees with that root, so the installed `vp`, `vpr`, `vpx`, `node`, and `npm` commands work.
+
+**Stray legacy trees.** A pre-split local vite-plus (a project dependency) can create `~/.vite-plus` at any time on a machine whose global install is split: it writes caches, config, and managed runtimes there. Grandfathering gates on the `current` link, not on bare directory existence, so such a stray tree does not flip an existing split install; `vp upgrade` and reinstalls keep targeting the split roots. The `test-install-sh-layout` CI job covers this (split install → stray `~/.vite-plus` → resolution and reinstall stay split).
 
 **Failure direction.** Probe failure also covers a payload that cannot run at all (wrong platform, missing VC++ runtime). The installer then picks the monolithic root and the dependency-install step fails with the real error, as before. The monolithic root works for every release, old and new (a split-aware binary grandfathers an existing `~/.vite-plus`), so a false "pre-split" answer degrades gracefully; a false "split-aware" answer is impossible because only a binary that implements `VP_DUMP_DIRS` can print the roots.
 

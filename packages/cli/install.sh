@@ -8,7 +8,7 @@
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
 #   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
-#             ~/.vite-plus is reused; otherwise data/bin/config follow
+#             ~/.vite-plus install is reused; otherwise data/bin/config follow
 #             VP_*_DIR / XDG_* / platform defaults.
 #   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
 #   XDG_BIN_HOME / XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
@@ -225,7 +225,11 @@ resolve_install_layout() {
     INSTALL_DIR="$vp_home"
     SHIM_DIR="$vp_home/bin"
     CONFIG_DIR="$vp_home"
-  elif [ -d "$legacy" ]; then
+  # Grandfather only a real install: the `current` link every install
+  # activates (-L also accepts a dangling link from a crashed upgrade).
+  # A bare ~/.vite-plus left by a pre-split local CLI must not claim the
+  # layout. Matches vp_shared::dirs resolution.
+  elif [ -e "$legacy/current" ] || [ -L "$legacy/current" ]; then
     INSTALL_DIR="$legacy"
     SHIM_DIR="$legacy/bin"
     CONFIG_DIR="$legacy"

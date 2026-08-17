@@ -768,7 +768,9 @@ mod tests {
     fn existing_vite_plus_reuses_single_root_without_setting_vp_home() {
         let tmp = tempfile::tempdir().unwrap();
         let legacy = tmp.path().join(".vite-plus");
-        std::fs::create_dir_all(&legacy).unwrap();
+        // Grandfathering requires a real install: the `current` link, not a
+        // bare directory.
+        std::fs::create_dir_all(legacy.join("current")).unwrap();
 
         with_clean_home(tmp.path(), || {
             let dirs = prepare_dirs(&opts(None)).unwrap();

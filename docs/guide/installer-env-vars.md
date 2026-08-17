@@ -27,7 +27,7 @@ These variables control the installer scripts and the standalone Windows install
 ### `VP_HOME`
 
 - **Purpose**: Optional single-root pin. When set to an absolute path, every category (bin, data, cache, config, state) lives under that directory. The installed CLI reads the same variable (see [Environment](/guide/env)).
-- **Default**: unset. If `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows) already exists, that tree is reused. Otherwise a fresh install uses the split platform layout (`~/.local/share/vite-plus` + `~/.local/bin` on Unix; `%LOCALAPPDATA%\vite-plus\data` + `%LOCALAPPDATA%\vite-plus\bin` on Windows).
+- **Default**: unset. If `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows) holds an existing install (it contains a `current` link), that tree is reused. Otherwise a fresh install uses the split platform layout (`~/.local/share/vite-plus` + `~/.local/bin` on Unix; `%LOCALAPPDATA%\vite-plus\data` + `%LOCALAPPDATA%\vite-plus\bin` on Windows).
 - **CLI equivalent**: `--install-dir`
 - **Example**:
 
