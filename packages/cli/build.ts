@@ -910,15 +910,11 @@ export default toolchain;
   console.log(`  Created ./versions (${Object.keys(versions).length} tools)`);
 }
 
-/**
- * Copy the docs source tree into docs/, preserving relative paths.
- * Generated VitePress output and installed dependencies are excluded so the package
- * only ships authoring sources and referenced assets.
- */
 async function copyBundledDocs() {
   console.log('\nCopying bundled docs...');
 
-  const docsSourceDir = join(projectDir, '..', '..', 'docs');
+  // Keep site tooling and deployment assets outside the published package.
+  const docsSourceDir = join(projectDir, '..', '..', 'docs', 'src');
   const docsTargetDir = join(projectDir, 'docs');
 
   if (!existsSync(docsSourceDir)) {
@@ -926,17 +922,10 @@ async function copyBundledDocs() {
     return;
   }
 
-  const skipPrefixes = ['node_modules', '.vitepress/cache', '.vitepress/dist'];
   await rm(docsTargetDir, { recursive: true, force: true });
-  await cp(docsSourceDir, docsTargetDir, {
-    recursive: true,
-    filter: (src) => {
-      const rel = relative(docsSourceDir, src).replaceAll('\\', '/');
-      return !skipPrefixes.some((prefix) => rel === prefix || rel.startsWith(`${prefix}/`));
-    },
-  });
+  await cp(docsSourceDir, docsTargetDir, { recursive: true });
 
-  console.log('  Copied docs to docs/ (with paths preserved)');
+  console.log('  Copied docs/src to docs/');
 }
 
 async function syncReadmeFromRoot() {
