@@ -7,6 +7,7 @@ import { type OxlintConfig } from 'oxlint';
 
 import {
   hasConfigKey,
+  mergeDynamicConfig,
   mergeJsonConfig,
   mergeTsdownConfig,
   rewriteImportsInDirectory,
@@ -231,46 +232,77 @@ export function mergeViteConfigFiles(
   }
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
   if (configs.oxlintConfig) {
-    // Inject options.typeAware and options.typeCheck defaults before merging
-    const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
-    const oxlintJson = readJsonFile(fullOxlintPath, true) as OxlintConfig;
-    if (!oxlintJson.options) {
-      oxlintJson.options = {};
-    }
-    // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
-    if (!hasBaseUrlInTsconfig(projectPath)) {
-      if (oxlintJson.options.typeAware === undefined) {
-        oxlintJson.options.typeAware = true;
+    if (isJsonOxcConfig(configs.oxlintConfig)) {
+      // Inject options.typeAware and options.typeCheck defaults before merging
+      const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
+      const oxlintJson = readJsonFile(fullOxlintPath, true) as OxlintConfig;
+      if (!oxlintJson.options) {
+        oxlintJson.options = {};
       }
-      if (oxlintJson.options.typeCheck === undefined) {
-        oxlintJson.options.typeCheck = true;
+      // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+      if (!hasBaseUrlInTsconfig(projectPath)) {
+        if (oxlintJson.options.typeAware === undefined) {
+          oxlintJson.options.typeAware = true;
+        }
+        if (oxlintJson.options.typeCheck === undefined) {
+          oxlintJson.options.typeCheck = true;
+        }
+      } else {
+        warnMigration(BASEURL_TSCONFIG_WARNING, report);
       }
+      // Drop references to plugins / jsPlugins / rules that won't resolve
+      // at lint time (e.g. `@oxlint/migrate` translating `@unocss/eslint-config`
+      // → `eslint-plugin-unocss` even when that package isn't installed).
+      // Resolve workspace package paths against `workspaceRoot` when the
+      // caller is processing a sub-package — otherwise the sanitizer would
+      // mistakenly look for `subPath/<sibling-pkg-path>` and miss the
+      // hoisted deps it's supposed to see.
+      sanitizeMigratedOxlintConfig(
+        oxlintJson,
+        collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
+        report,
+      );
+      ensureSvelteRuneGlobals(oxlintJson);
+      const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
+      // writeJsonFile preserves the user file's existing indent/newline (and adds a
+      // trailing newline) instead of forcing 2-space + no EOL.
+      writeJsonFile(fullOxlintPath, normalizedOxlintConfig as Record<string, unknown>);
+      // merge oxlint config into vite.config.ts
+      mergeAndRemoveJsonConfig(
+        projectPath,
+        viteConfig,
+        configs.oxlintConfig,
+        'lint',
+        silent,
+        report,
+      );
     } else {
-      warnMigration(BASEURL_TSCONFIG_WARNING, report);
+      mergeDynamicConfigFile(
+        projectPath,
+        viteConfig,
+        configs.oxlintConfig,
+        'oxlintConfig',
+        'lint',
+        silent,
+        report,
+      );
     }
-    // Drop references to plugins / jsPlugins / rules that won't resolve
-    // at lint time (e.g. `@oxlint/migrate` translating `@unocss/eslint-config`
-    // → `eslint-plugin-unocss` even when that package isn't installed).
-    // Resolve workspace package paths against `workspaceRoot` when the
-    // caller is processing a sub-package — otherwise the sanitizer would
-    // mistakenly look for `subPath/<sibling-pkg-path>` and miss the
-    // hoisted deps it's supposed to see.
-    sanitizeMigratedOxlintConfig(
-      oxlintJson,
-      collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
-      report,
-    );
-    ensureSvelteRuneGlobals(oxlintJson);
-    const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
-    // writeJsonFile preserves the user file's existing indent/newline (and adds a
-    // trailing newline) instead of forcing 2-space + no EOL.
-    writeJsonFile(fullOxlintPath, normalizedOxlintConfig as Record<string, unknown>);
-    // merge oxlint config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent, report);
   }
   if (configs.oxfmtConfig) {
-    // merge oxfmt config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt', silent, report);
+    if (isJsonOxcConfig(configs.oxfmtConfig)) {
+      // merge oxfmt config into vite.config.ts
+      mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt', silent, report);
+    } else {
+      mergeDynamicConfigFile(
+        projectPath,
+        viteConfig,
+        configs.oxfmtConfig,
+        'oxfmtConfig',
+        'fmt',
+        silent,
+        report,
+      );
+    }
   }
 }
 
@@ -421,6 +453,63 @@ function mergeAndRemoveJsonConfig(
   }
 }
 
+function isJsonOxcConfig(configPath: string): boolean {
+  return configPath.endsWith('.json') || configPath.endsWith('.jsonc');
+}
+
+function mergeDynamicConfigFile(
+  projectPath: string,
+  viteConfigPath: string,
+  dynamicConfigPath: string,
+  importName: string,
+  configKey: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  const fullViteConfigPath = path.join(projectPath, viteConfigPath);
+  const fullDynamicConfigPath = path.join(projectPath, dynamicConfigPath);
+
+  if (hasConfigKey(fullViteConfigPath, configKey)) {
+    warnMigration(
+      `${displayRelative(fullDynamicConfigPath)} found but "${configKey}" already exists in ${displayRelative(fullViteConfigPath)}`,
+      report,
+    );
+    infoMigration(
+      `Please manually merge ${displayRelative(fullDynamicConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+      report,
+    );
+    return;
+  }
+
+  const result = mergeDynamicConfig(
+    fullViteConfigPath,
+    `./${dynamicConfigPath}`,
+    importName,
+    configKey,
+  );
+  if (result.updated) {
+    fs.writeFileSync(fullViteConfigPath, result.content);
+    if (report) {
+      report.mergedConfigCount++;
+    }
+    if (!silent) {
+      prompts.log.success(
+        `✔ Added ${displayRelative(fullDynamicConfigPath)} to ${displayRelative(fullViteConfigPath)}`,
+      );
+    }
+    return;
+  }
+
+  warnMigration(
+    `Failed to add ${displayRelative(fullDynamicConfigPath)} to ${displayRelative(fullViteConfigPath)}`,
+    report,
+  );
+  infoMigration(
+    `Please manually merge ${displayRelative(fullDynamicConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+    report,
+  );
+}
+
 /**
  * Merge a staged config object into vite.config.ts as `staged: { ... }`.
  * Writes the config to a temp JSON file, calls mergeJsonConfig NAPI, then cleans up.
@@ -514,7 +603,8 @@ export function wrapLazyPluginsInViteConfig(
 
 /**
  * Rewrite imports in all TypeScript/JavaScript files under a directory
- * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
+ * This rewrites imports from tool packages bundled by Vite+ to its public
+ * entry points.
  * @param projectPath - The root directory to search for files
  */
 export function rewriteAllImports(

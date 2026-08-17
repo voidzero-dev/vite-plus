@@ -244,6 +244,29 @@ pub fn merge_tsdown_config(
     })
 }
 
+/// Merge a dynamic config into a top-level Vite config key by importing it.
+#[napi]
+pub fn merge_dynamic_config(
+    vite_config_path: String,
+    config_path: String,
+    import_name: String,
+    config_key: String,
+) -> Result<MergeJsonConfigResult> {
+    let result = vp_migration::merge_dynamic_config(
+        Path::new(&vite_config_path),
+        &config_path,
+        &import_name,
+        &config_key,
+    )
+    .map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
+}
+
 /// Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
 /// with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
 /// `vite-plus` when needed.

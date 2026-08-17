@@ -829,42 +829,42 @@ fn indent_multiline(s: &str, spaces: usize) -> String {
         .join("\n")
 }
 
-/// Merge tsdown config into vite.config.ts by importing it
+/// Merge a dynamic config into vite.config.ts by importing it.
 ///
-/// This function adds an import statement for the tsdown config file
-/// and adds `pack: tsdownConfig` to the defineConfig.
+/// This function adds a default import for the config file and assigns it to
+/// the requested top-level Vite config key.
 ///
 /// # Arguments
 ///
 /// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
-/// * `tsdown_config_path` - Path to the tsdown.config.ts file (relative path like "./tsdown.config.ts")
+/// * `config_path` - Relative path to the imported config file
+/// * `import_name` - Local identifier for the default import
+/// * `config_key` - Top-level Vite config key that receives the imported config
 ///
 /// # Returns
 ///
 /// Returns a `MergeResult` with the updated content
-pub fn merge_tsdown_config(
+pub fn merge_dynamic_config(
     vite_config_path: &Path,
-    tsdown_config_path: &str,
+    config_path: &str,
+    import_name: &str,
+    config_key: &str,
 ) -> Result<MergeResult, Error> {
     let vite_config_content = std::fs::read_to_string(vite_config_path)?;
-    merge_tsdown_config_content(&vite_config_content, tsdown_config_path)
+    merge_dynamic_config_content(&vite_config_content, config_path, import_name, config_key)
 }
 
-/// Merge tsdown config into vite config content
-///
-/// This adds:
-/// 1. An import statement: `import tsdownConfig from './tsdown.config.ts'`
-/// 2. The pack config in defineConfig: `pack: tsdownConfig`
-///
-/// This function is idempotent - running it multiple times will not create duplicates.
-fn merge_tsdown_config_content(
+fn merge_dynamic_config_content(
     vite_config_content: &str,
-    tsdown_config_path: &str,
+    config_path: &str,
+    import_name: &str,
+    config_key: &str,
 ) -> Result<MergeResult, Error> {
     let uses_function_callback = check_function_callback(vite_config_content)?;
 
-    // Check if already migrated (idempotency check)
-    if vite_config_content.contains("import tsdownConfig from") {
+    // A pre-existing key wins. This makes the transform idempotent and avoids
+    // silently replacing a user's inline configuration.
+    if has_config_key(vite_config_content, config_key)? {
         return Ok(MergeResult {
             content: vite_config_content.to_string(),
             updated: false,
@@ -872,26 +872,52 @@ fn merge_tsdown_config_content(
         });
     }
 
-    // Step 1: Add import statement at the beginning
-    // Use JavaScript extensions for TypeScript files (TypeScript module resolution convention)
-    // .ts → .js, .mts → .mjs, .cts → .cjs
-    let import_path = if tsdown_config_path.ends_with(".mts") {
-        tsdown_config_path.replace(".mts", ".mjs")
-    } else if tsdown_config_path.ends_with(".cts") {
-        tsdown_config_path.replace(".cts", ".cjs")
-    } else if tsdown_config_path.ends_with(".ts") {
-        tsdown_config_path.replace(".ts", ".js")
-    } else {
-        tsdown_config_path.to_string()
-    };
-    let content_with_import =
-        format!("import tsdownConfig from '{import_path}';\n\n{vite_config_content}");
+    // Add the config key first so an unsupported Vite config shape never gets
+    // an orphaned import prepended to it.
+    let merge_rule = generate_merge_rule(import_name, config_key);
+    let (mut final_content, updated) = ast_grep::apply_rules(vite_config_content, &merge_rule)?;
+    if !updated {
+        return Ok(MergeResult {
+            content: vite_config_content.to_string(),
+            updated: false,
+            uses_function_callback,
+        });
+    }
 
-    // Step 2: Add pack: tsdownConfig to defineConfig
-    let pack_rule = generate_merge_rule("tsdownConfig", "pack");
-    let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
+    // Reuse an existing default import when a partially migrated config
+    // already has one. Otherwise prepend it using JavaScript extensions for
+    // TypeScript source files, matching TypeScript module resolution.
+    let import_prefix = format!("import {import_name} from");
+    if !vite_config_content.contains(&import_prefix) {
+        let import_path = if let Some(stem) = config_path.strip_suffix(".mts") {
+            format!("{stem}.mjs")
+        } else if let Some(stem) = config_path.strip_suffix(".cts") {
+            format!("{stem}.cjs")
+        } else if let Some(stem) = config_path.strip_suffix(".ts") {
+            format!("{stem}.js")
+        } else {
+            config_path.to_string()
+        };
+        final_content = format!("import {import_name} from '{import_path}';\n\n{final_content}");
+    }
 
     Ok(MergeResult { content: final_content, updated: true, uses_function_callback })
+}
+
+/// Merge tsdown config into vite.config.ts by importing it as `pack`.
+pub fn merge_tsdown_config(
+    vite_config_path: &Path,
+    tsdown_config_path: &str,
+) -> Result<MergeResult, Error> {
+    merge_dynamic_config(vite_config_path, tsdown_config_path, "tsdownConfig", "pack")
+}
+
+#[cfg(test)]
+fn merge_tsdown_config_content(
+    vite_config_content: &str,
+    tsdown_config_path: &str,
+) -> Result<MergeResult, Error> {
+    merge_dynamic_config_content(vite_config_content, tsdown_config_path, "tsdownConfig", "pack")
 }
 
 #[cfg(test)]
@@ -2394,6 +2420,61 @@ export default defineConfig({});"#;
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.cjs").unwrap();
         assert!(result.content.contains("import tsdownConfig from './tsdown.config.cjs'"));
+    }
+
+    #[test]
+    fn test_merge_dynamic_config_content() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let result =
+            merge_dynamic_config_content(vite_config, "./oxlint.config.ts", "oxlintConfig", "lint")
+                .unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import oxlintConfig from './oxlint.config.js';
+
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: oxlintConfig,
+  plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_merge_dynamic_config_content_preserves_existing_key() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: { rules: {} },
+});"#;
+
+        let result =
+            merge_dynamic_config_content(vite_config, "./oxlint.config.ts", "oxlintConfig", "lint")
+                .unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_merge_dynamic_config_content_does_not_add_orphan_import() {
+        let vite_config = "export default makeConfig();";
+
+        let result =
+            merge_dynamic_config_content(vite_config, "./oxfmt.config.mts", "oxfmtConfig", "fmt")
+                .unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+        assert!(!result.content.contains("oxfmt.config.mjs"));
     }
 
     // ── upsert_json_config_content ────────────────────────────────────────
