@@ -43,7 +43,7 @@ pnpm settings consolidated by the version upgrade
 
 ```
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
