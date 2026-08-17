@@ -154,13 +154,13 @@ site.
 Each category walks the following ordered sources. A source either proposes
 a path or is skipped; the first proposal wins. The only stateful source is
 `~/.vite-plus`: it proposes only when that directory contains the `current`
-link every global install activates (checked once at resolution, without
-following the link, and matched by the installers' gates). Bare existence
-is not enough: a pre-split local vite-plus creates `~/.vite-plus` for
-caches, config, and managed runtimes, and because this source outranks
-`VP_*_DIR`, such a stray tree would otherwise capture an existing split
-install: a later `vp upgrade` or reinstall would silently move to the
-monolithic root while the split PATH entries keep serving the old binary.
+link every global install activates. The gate runs once at resolution, does
+not follow the link, and matches the installers' gates. Bare existence is
+not enough: a pre-split local vite-plus creates `~/.vite-plus` for caches,
+config, and managed runtimes, and this source outranks `VP_*_DIR`. A stray
+tree would otherwise capture an existing split install. A later
+`vp upgrade` or reinstall would then silently move to the monolithic root,
+and the split PATH entries would keep serving the old binary.
 
 **Unix:**
 
@@ -210,20 +210,24 @@ Env scripts are written under **config** (split: `~/.config/vite-plus/env*`; mon
 
 ### Compatibility with pre-split releases
 
-The installers accept any published `VP_VERSION`, and until the first split-aware release (planned 0.3.0) ships, `latest` also resolves to a pre-split version. A pre-split binary resolves every path from `VP_HOME` (default `~/.vite-plus`): its env setup, shims, trampoline, and `vp upgrade` all assume that monolithic root. Installing such a binary into split roots produces a broken install that still exits 0: the PATH trampoline points at `<bin>/../current` which does not exist, env scripts are sourced from a config dir the binary never writes, and the binary's own env setup builds a second, half-built `~/.vite-plus` tree.
+The installers accept any published `VP_VERSION`. Until the first split-aware release (planned 0.3.0) ships, `latest` also resolves to a pre-split version. A pre-split binary resolves every path from `VP_HOME` (default `~/.vite-plus`): its env setup, shims, trampoline, and `vp upgrade` all assume that monolithic root. An install of such a binary into split roots is broken, but the installer still exits 0:
 
-**Detection: capability probe, not a version gate.** After downloading the platform payload and before committing to a layout, every installer (`install.sh`, `install.ps1`, `vp-setup`) runs the payload binary once with `VP_DUMP_DIRS=1`:
+- The PATH trampoline points at `<bin>/../current`, which does not exist.
+- Shell startup sources an env script from a config dir the binary never writes.
+- The binary's own env setup builds a second, incomplete `~/.vite-plus` tree.
+
+**Detection.** Every installer (`install.sh`, `install.ps1`, `vp-setup`) downloads the platform payload before the layout is final. It then runs the payload binary once with `VP_DUMP_DIRS=1`:
 
 - A split-aware binary prints one tab-separated line per category root (`data\t<path>`, `bin\t<path>`, `config\t<path>`) and exits. The installer **adopts these paths verbatim**, so the layout the installer writes and the layout the binary resolves cannot drift.
-- A pre-split binary does not know the variable, prints its help, and exits 0 without those lines. The installer then installs into the **monolithic root** (`VP_HOME` if set, else `~/.vite-plus`) and prints a notice (`vite-plus <version> predates the split directory layout; installing to ~/.vite-plus`). Everything the binary later does agrees with that root, so the installed `vp`, `vpr`, `vpx`, `node`, and `npm` commands work.
+- A pre-split binary does not know the variable, prints its help, and exits 0 without those lines. The installer then installs into the **monolithic root**: `VP_HOME` if set, else `~/.vite-plus`. It prints a notice: `vite-plus <version> does not support the split directory layout; the install goes to ~/.vite-plus`. Everything the binary later does agrees with that root, so the installed `vp`, `vpr`, `vpx`, `node`, and `npm` commands work.
 
-**Stray legacy trees.** A pre-split local vite-plus (a project dependency) can create `~/.vite-plus` at any time on a machine whose global install is split: it writes caches, config, and managed runtimes there. Grandfathering gates on the `current` link, not on bare directory existence, so such a stray tree does not flip an existing split install; `vp upgrade` and reinstalls keep targeting the split roots. The `test-install-sh-layout` CI job covers this (split install → stray `~/.vite-plus` → resolution and reinstall stay split).
+**Stray legacy trees.** A pre-split local vite-plus (a project dependency) can create `~/.vite-plus` at any time on a machine whose global install is split: it writes caches, config, and managed runtimes there. The grandfather gate requires the `current` link, not bare directory existence, so such a stray tree does not flip an existing split install. `vp upgrade` and reinstalls keep the split roots. The `test-install-sh-layout` CI job covers this case: it makes a split install, creates a stray `~/.vite-plus`, and checks that resolution and a reinstall stay split.
 
-**Failure direction.** Probe failure also covers a payload that cannot run at all (wrong platform, missing VC++ runtime). The installer then picks the monolithic root and the dependency-install step fails with the real error, as before. The monolithic root works for every release, old and new (a split-aware binary grandfathers an existing `~/.vite-plus`), so a false "pre-split" answer degrades gracefully; a false "split-aware" answer is impossible because only a binary that implements `VP_DUMP_DIRS` can print the roots.
+**Failure direction.** Probe failure also covers a payload that cannot run at all (wrong platform, missing VC++ runtime). The installer then picks the monolithic root, and the dependency-install step fails with the real error, as before. The monolithic root works for every release, old and new, because a split-aware binary grandfathers an existing `~/.vite-plus`. A false "pre-split" answer therefore degrades gracefully. A false "split-aware" answer is impossible: only a binary that implements `VP_DUMP_DIRS` can print the roots.
 
-**`vp-setup` specifics.** `vp-setup` resolves its `EnvConfig` at process start, so the fallback happens mid-install: `do_install` swaps to the monolithic mapping after the probe and returns the effective directories for the success summary. Managed Node.js/pnpm used for the wrapper install still resolve from the process-wide `EnvConfig` pinned before the fallback; the abandoned split data root they land in is removed when this run created it. Known limit: the interactive menu shows the split directories before the download, so a pinned pre-split version confirms one location and installs to the legacy root with the notice.
+**`vp-setup` specifics.** `vp-setup` resolves its `EnvConfig` at process start, so the fallback happens mid-install: `do_install` swaps to the monolithic mapping after the probe and returns the effective directories for the success summary. The managed Node.js and pnpm for the wrapper install still resolve their paths from the process-wide `EnvConfig`, pinned before the fallback. These tools land in the abandoned split data root; `do_install` removes that root when this run created it. Known limit: the interactive menu shows the split directories before the download. A pinned pre-split version thus confirms one location and then installs to the monolithic root, with the notice.
 
-**Coverage.** The `test-install-sh-old-version` (Linux, macOS) and `test-install-ps1-old-version` (Windows) CI jobs install a pinned pre-split release with no `VP_HOME` and assert the legacy layout, the absence of split roots, and working PATH-resolved commands. This mechanism also keeps fresh default installs of `latest` working during the window between merging this RFC and shipping 0.3.0.
+**Coverage.** The `test-install-sh-old-version` (Linux, macOS) and `test-install-ps1-old-version` (Windows) CI jobs install a pinned pre-split release with no `VP_HOME`. They assert the monolithic layout, the absence of split roots, and working PATH-resolved commands. This mechanism also keeps fresh default installs of `latest` functional in the window between the merge of this RFC and the 0.3.0 release.
 
 ### Global CLI → JS children
 

@@ -1223,12 +1223,12 @@ main() {
     download_and_extract "$platform_url" "$platform_temp_dir" 1
     chmod +x "$platform_temp_dir/$binary_name"
 
-    # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A release that
-    # predates the split layout cannot answer; give it the monolithic root so
-    # the installed PATH commands keep working.
+    # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A pre-split
+    # release cannot answer; give it the monolithic root so the installed
+    # PATH commands work.
     if ! apply_dirs_from_vp "$platform_temp_dir/$binary_name"; then
       use_legacy_layout
-      info "vite-plus ${VP_VERSION} predates the split directory layout; installing to $(abbreviate_path "$INSTALL_DIR")"
+      info "vite-plus ${VP_VERSION} does not support the split directory layout; the install goes to $(abbreviate_path "$INSTALL_DIR")"
     fi
   fi
 

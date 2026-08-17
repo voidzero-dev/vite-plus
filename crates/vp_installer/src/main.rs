@@ -245,7 +245,7 @@ async fn do_install(
         }
         integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
-        // A release that predates the split layout resolves every path from
+        // A pre-split release resolves every path from
         // VP_HOME (default ~/.vite-plus); its env setup, shims, and
         // trampolines cannot follow split roots. Fall back to that monolithic
         // root when the payload cannot report split category roots.
@@ -270,7 +270,7 @@ async fn do_install(
         } else {
             if !opts.quiet {
                 print_info(&format!(
-                    "vite-plus {target_version} predates the split directory layout; installing to {}",
+                    "vite-plus {target_version} does not support the split directory layout; the install goes to {}",
                     legacy.data.as_path().display()
                 ));
             }

@@ -238,9 +238,9 @@ jobs:
         # monolithic ~/.vite-plus root on its own.
         run: |
           cat packages/cli/install.sh | bash | tee install-output.txt
-          grep -F "predates the split directory layout" install-output.txt
+          grep -F "does not support the split directory layout" install-output.txt
 
-      - name: Verify legacy layout
+      - name: Verify monolithic layout
         run: |
           test -x "$HOME/.vite-plus/$VP_VERSION/bin/vp"
           test -e "$HOME/.vite-plus/current"
@@ -283,12 +283,12 @@ jobs:
           # *>&1 merges the information stream (Write-Host) into the pipeline
           # so Tee-Object can capture the installer notices.
           & ./packages/cli/install.ps1 *>&1 | Tee-Object -FilePath install-output.txt
-          if (-not (Select-String -Path install-output.txt -Pattern "predates the split directory layout" -SimpleMatch -Quiet)) {
+          if (-not (Select-String -Path install-output.txt -Pattern "does not support the split directory layout" -SimpleMatch -Quiet)) {
             Write-Error "Expected the pre-split fallback notice in installer output"
             exit 1
           }
 
-      - name: Verify legacy layout
+      - name: Verify monolithic layout
         shell: pwsh
         run: |
           $root = Join-Path $env:USERPROFILE ".vite-plus"

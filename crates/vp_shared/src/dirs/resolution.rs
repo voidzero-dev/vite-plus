@@ -160,13 +160,12 @@ impl UserHome {
     /// Proposes the root only when it contains the `current` link every
     /// global install activates. Bare existence of `~/.vite-plus` is not
     /// enough: pre-split local CLIs create that directory for caches,
-    /// config, and managed runtimes, and such a stray tree must not capture
-    /// a split install (a later `vp upgrade` or reinstall would silently
-    /// move to the monolithic root while the split PATH entries go stale).
-    /// The marker is checked without following links, so an install with a
-    /// dangling `current` (crash mid-upgrade) still grandfathers. The
-    /// installers gate the same way (`current` presence, not `[ -d ]` on
-    /// the root).
+    /// config, and managed runtimes. Such a stray tree must not capture a
+    /// split install, or a later `vp upgrade` would silently move to the
+    /// monolithic root while the split PATH entries go stale. The gate
+    /// checks the link without following it, so an install with a dangling
+    /// `current` (crash mid-upgrade) still grandfathers. The installers
+    /// gate the same way.
     fn resolver(home: &AbsolutePath) -> SingleRoot {
         let root = home.join(VP_HOME_DIR_NAME);
         let is_install = std::fs::symlink_metadata(root.join("current").as_path()).is_ok();

@@ -932,9 +932,9 @@ function Main {
             Remove-Item $platformTempFile -ErrorAction SilentlyContinue
         }
 
-        # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A release
-        # that predates the split layout cannot answer; give it the monolithic
-        # root so the installed PATH commands keep working.
+        # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A
+        # pre-split release cannot answer; give it the monolithic root so the
+        # installed PATH commands work.
         $packageDir = Join-Path $platformTempExtract "package"
         $binarySource = Join-Path $packageDir $binaryName
         if (Test-Path $binarySource) {
@@ -945,7 +945,7 @@ function Main {
             Set-LayoutVars
         } else {
             Use-LegacyLayout
-            Write-Info "vite-plus $ViteVersion predates the split directory layout; installing to $InstallDir"
+            Write-Info "vite-plus $ViteVersion does not support the split directory layout; the install goes to $InstallDir"
         }
     }
 
