@@ -152,7 +152,7 @@ is_windows_uname() {
   esac
 }
 
-user_home_dir() {
+resolution_home_dir() {
   if is_windows_uname; then
     printf '%s\n' "${USERPROFILE:-$HOME}"
   else
@@ -192,10 +192,10 @@ escape_nu_double_quoted() {
 
 set_config_dir_refs() {
   local dir="$1"
-  local home="$2"
+  local shell_home="$2"
   local suffix
-  if [ -n "$home" ] && case "$dir" in "$home"/*) true;; *) false;; esac; then
-    suffix="${dir#"$home"}"
+  if [ -n "$shell_home" ] && case "$dir" in "$shell_home"/*) true;; *) false;; esac; then
+    suffix="${dir#"$shell_home"}"
     CONFIG_DIR_REF_POSIX="\$HOME$(escape_posix_double_quoted "$suffix")"
     CONFIG_DIR_REF_FISH="\$HOME$(escape_fish_double_quoted "$suffix")"
     CONFIG_DIR_REF_NU="~$(escape_nu_double_quoted "$suffix")"
@@ -219,12 +219,12 @@ set_monolithic_layout() {
 # (default ~/.vite-plus). Install them into that monolithic root so their
 # env setup, shims, and upgrades agree with where the installer wrote them.
 use_legacy_layout() {
-  local home vp_home
-  home="$(user_home_dir)"
-  [ -n "$home" ] || error "Could not resolve user home directory"
+  local resolution_home vp_home
+  resolution_home="$(resolution_home_dir)"
+  [ -n "$resolution_home" ] || error "Could not resolve user home directory"
   vp_home="$(absolute_override "${VP_HOME:-}")"
-  set_monolithic_layout "${vp_home:-$home/.vite-plus}"
-  set_config_dir_refs "$CONFIG_DIR" "$home"
+  set_monolithic_layout "${vp_home:-$resolution_home/.vite-plus}"
+  set_config_dir_refs "$CONFIG_DIR" "${HOME:-}"
 }
 
 normalize_existing_dir() {
@@ -1423,7 +1423,7 @@ apply_dirs_from_vp() {
   CONFIG_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "config" { print $2; exit }')"
   STATE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "state" { print $2; exit }')"
   [ -n "$INSTALL_DIR" ] && [ -n "$SHIM_DIR" ] && [ -n "$CACHE_DIR" ] && [ -n "$CONFIG_DIR" ] && [ -n "$STATE_DIR" ] || return 1
-  set_config_dir_refs "$CONFIG_DIR" "$(user_home_dir)"
+  set_config_dir_refs "$CONFIG_DIR" "${HOME:-}"
 }
 
 main "$@"

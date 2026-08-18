@@ -152,10 +152,33 @@ jobs:
 
           TEST_ROOT=$(mktemp -d)
           export HOME="$TEST_ROOT/home"
-          export USERPROFILE="$HOME"
+          export USERPROFILE='C:/Users/alice'
           export XDG_CONFIG_HOME="$TEST_ROOT/shell-config"
           mkdir -p "$HOME" "$XDG_CONFIG_HOME"
 
+          # Windows layout resolution prefers USERPROFILE, but shell source
+          # entries may abbreviate paths only against the shell's HOME.
+          is_windows_uname() { return 0; }
+          unset VP_HOME
+          use_legacy_layout
+          test "$CONFIG_DIR" = "$USERPROFILE/.vite-plus"
+          test "$CONFIG_DIR_REF_POSIX" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_FISH" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_NU" = "$CONFIG_DIR"
+
+          fake_vp() {
+            printf 'bin\t%s/bin\n' "$USERPROFILE"
+            printf 'data\t%s/AppData/Local/vite-plus/data\n' "$USERPROFILE"
+            printf 'cache\t%s/AppData/Local/vite-plus/cache\n' "$USERPROFILE"
+            printf 'config\t%s/AppData/Roaming/vite-plus\n' "$USERPROFILE"
+            printf 'state\t%s/AppData/Local/vite-plus/state\n' "$USERPROFILE"
+          }
+          apply_dirs_from_vp fake_vp
+          test "$CONFIG_DIR_REF_POSIX" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_FISH" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_NU" = "$CONFIG_DIR"
+
+          export USERPROFILE="$HOME"
           SPECIAL=$(printf 'config-$USER-"-\047-`-\134')
           CONFIG_DIR="$TEST_ROOT/$SPECIAL"
           mkdir -p "$CONFIG_DIR"
