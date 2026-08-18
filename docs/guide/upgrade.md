@@ -43,6 +43,46 @@ vp upgrade <version>              # install a specific version
 vp upgrade --registry <registry>  # use a custom npm registry
 ```
 
+### Move an Existing Install to the Split Directory Layout
+
+Vite+ 0.3.0 is the first release that supports the split directory layout.
+Versions 0.2.x and earlier use the single-root layout for fresh installs and
+upgrades.
+
+`vp upgrade` keeps an existing default installation in `~/.vite-plus` on Unix or
+`%USERPROFILE%\.vite-plus` on Windows. It upgrades the CLI in that directory and
+does not move the installation into the split platform directories. You can
+continue to use the existing layout.
+
+To use the split layout now, remove the existing installation and install Vite+
+again. Run `vp implode` with the same `VP_HOME` setting that the current
+installation uses. Then unset `VP_HOME` before you run the installer:
+
+::: warning
+`vp implode` removes all Vite+-managed Node.js runtimes, global packages,
+configuration, and caches. Keep the existing layout if you do not want to
+recreate that data.
+:::
+
+```bash
+vp implode
+unset VP_HOME
+curl -fsSL https://vite.plus | bash
+```
+
+On Windows:
+
+```powershell
+vp implode
+Remove-Item Env:\VP_HOME -ErrorAction SilentlyContinue
+irm https://vite.plus/ps1 | iex
+```
+
+Remove any persistent `VP_HOME` definition from your shell profile or system
+environment as well. A fresh install with `VP_HOME` set uses the single-root
+layout by design. If the installer resolves to Vite+ 0.2.x or earlier, it also
+uses the single-root layout and prints a notice.
+
 ### Rollback
 
 Vite+ keeps the **3 most recent** versions installed so you can revert quickly:
