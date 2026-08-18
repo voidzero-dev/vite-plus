@@ -807,11 +807,21 @@ mod tests {
             let dirs = prepare_dirs(&opts(None)).unwrap();
             assert_eq!(dirs, expected);
             assert!(std::env::var_os(env_vars::VP_HOME).is_none());
+            #[cfg(not(windows))]
             assert_eq!(
                 dirs.bin.as_path(),
                 dirs.data.join("bin").as_path(),
                 "fresh Unix installs keep executables in the Vite+-owned data tree"
             );
+            #[cfg(windows)]
+            {
+                let windows_bin = dirs.data.as_path().parent().unwrap().join("bin");
+                assert_eq!(
+                    dirs.bin.as_path(),
+                    windows_bin.as_path(),
+                    "fresh Windows installs keep bin and data as sibling application directories"
+                );
+            }
         });
     }
 
