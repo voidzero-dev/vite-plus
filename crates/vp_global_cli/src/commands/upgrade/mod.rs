@@ -98,7 +98,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Err(Error::Upgrade(
             format!(
                 "vite-plus {} does not support the split directory layout of this install. \
-                 Run `vp upgrade` to upgrade to the latest version, or set VP_HOME to use one directory.",
+                 Run `vp upgrade` to install the latest version, or set VP_HOME to use one directory.",
                 resolved.version
             )
             .into(),
