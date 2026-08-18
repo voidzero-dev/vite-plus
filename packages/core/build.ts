@@ -498,11 +498,34 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
-// Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
-// `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
-// import every color the Vite+ branding uses, so after the logger patches we
-// add any missing ones, resolving their (minified) export aliases from main's
-// own `export { ... }` map so the fix survives rolldown renaming them.
+// Whether `name` is already a top-level binding of this chunk. Depending on
+// rolldown's chunking, ansis is sometimes inlined into the logger chunk itself,
+// so the colors are local declarations (a single big
+// `const { ..., bold, ..., red, ... } = ...` destructure) instead of imports.
+// Those are already in scope, so no import must be added for them.
+function isDeclaredInChunk(content: string, name: string): boolean {
+  if (new RegExp(`(?:^|[;{}\\s])(?:const|let|var|function|class)\\s+${name}\\b`, 'm').test(content)) {
+    return true;
+  }
+  const destructureRe = /(?:const|let|var)\s*\{([^}]*)\}\s*=/g;
+  for (const [, bindings] of content.matchAll(destructureRe)) {
+    for (const binding of bindings.split(',')) {
+      // `a`, `a: b` (local is `b`) and `a = fallback` all bind a local name.
+      const local = binding.split(':').pop()?.split('=')[0]?.trim();
+      if (local === name) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Ensure a bundled chunk can reference the given ansis color helpers (e.g.
+// `bold`, `red`). tsdown's logger module does not import every color the Vite+
+// branding uses, so after the logger patches we add any that are neither
+// declared in the chunk nor already imported, resolving their (minified) export
+// aliases from the providing chunk's own `export { ... }` map so the fix
+// survives rolldown renaming them.
 async function ensureAnsisImports(
   content: string,
   names: string[],
@@ -515,9 +538,6 @@ async function ensureAnsisImports(
   // chunk actually re-exports it.
   const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
   const imports = [...content.matchAll(importRe)];
-  if (imports.length === 0) {
-    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
-  }
 
   // Every binding already in scope across all imports (its local name).
   const localNames = new Set<string>();
@@ -531,9 +551,14 @@ async function ensureAnsisImports(
       localNames.add(aliased ? aliased[1] : trimmed);
     }
   }
-  const missing = names.filter((name) => !localNames.has(name));
+  const missing = names.filter(
+    (name) => !localNames.has(name) && !isDeclaredInChunk(content, name),
+  );
   if (missing.length === 0) {
     return content;
+  }
+  if (imports.length === 0) {
+    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
   }
 
   // Group missing colors by the imported chunk that re-exports them. Chunks
