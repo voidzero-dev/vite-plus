@@ -573,8 +573,9 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
-and set -e PATH[$__vp_idx]
+__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
 set -gx PATH "__VP_BIN__" $PATH
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
@@ -587,7 +588,10 @@ function vp
         set -lx VP_ENV_USE_EVAL_ENABLE 1
         set -lx VP_SHELL fish
         set -l __vp_out (command vp $argv); or return $status
-        eval (string join ';' $__vp_out)
+        for __vp_command in $__vp_out
+            eval $__vp_command; or return $status
+        end
+        return 0
     else
         command vp $argv
     end

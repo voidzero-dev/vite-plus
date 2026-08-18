@@ -319,6 +319,7 @@ impl PlatformFilter {
 #[derive(Clone, Copy, serde::Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 enum RequiredTool {
+    Fish,
     Nu,
 }
 
@@ -327,6 +328,7 @@ impl RequiredTool {
     /// reports that error instead of silently hiding a bad override.
     fn is_missing(self) -> bool {
         match self {
+            Self::Fish => matches!(flavor::fish_path(), Ok(None)),
             Self::Nu => matches!(flavor::nushell_path(), Ok(None)),
         }
     }
@@ -457,6 +459,7 @@ struct CaseInstall {
     path_env: OsString,
     tool_dirs: Vec<PathBuf>,
     vpt: PathBuf,
+    fish: Option<PathBuf>,
     nu: Option<PathBuf>,
 }
 
@@ -471,6 +474,12 @@ impl CaseInstall {
     ) -> Result<PathBuf, String> {
         if program == "vpt" {
             return Ok(self.vpt.clone());
+        }
+        if program == "fish" {
+            return self.fish.clone().ok_or_else(|| {
+                "`fish` is required by this snapshot case; install Fish or set VP_SNAP_FISH_BIN"
+                    .to_owned()
+            });
         }
         if program == "nu" {
             return self.nu.clone().ok_or_else(|| {
@@ -573,6 +582,7 @@ impl CaseHome {
             path_env: compose_path_env(&path_dirs),
             tool_dirs,
             vpt: runtime.vpt.clone(),
+            fish: runtime.fish.clone(),
             nu: runtime.nu.clone(),
         })
     }

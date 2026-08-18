@@ -956,6 +956,9 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
+      - name: Install Fish
+        uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
+
       # https://github.com/marketplace/actions/setup-nu
       - name: Install Nushell
         uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
@@ -980,6 +983,7 @@ jobs:
         run: |
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
+          VP_SNAP_FISH_BIN="$(command -v fish)" \
           VP_SNAP_NU_BIN="$(command -v nu)" \
           cargo test -p vp_cli_snapshots
         env:

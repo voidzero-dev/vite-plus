@@ -6,7 +6,7 @@
 //!
 //! Each flavor gets one runner bin directory per run (created under the run
 //! temp root) for runner-owned helpers. `vpt` always lives there; optional
-//! external tools such as Nushell are linked there when available.
+//! external tools such as Fish and Nushell are linked there when available.
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +30,9 @@ impl Flavor {
 pub struct FlavorRuntime {
     pub runner_bin_dir: PathBuf,
     pub vpt: PathBuf,
+    /// Runner-owned Fish binary used by fixtures that execute generated
+    /// `env.fish` files. CI supplies it through `VP_SNAP_FISH_BIN`.
+    pub fish: Option<PathBuf>,
     /// Runner-owned Nushell binary used by fixtures that execute generated
     /// `env.nu` files. CI supplies it through `VP_SNAP_NU_BIN`.
     pub nu: Option<PathBuf>,
@@ -193,21 +196,32 @@ fn vpt_path() -> Result<PathBuf, String> {
     })
 }
 
-/// Resolves an optional Nushell binary for fixtures that exercise generated
-/// `env.nu` files. The explicit override keeps CI deterministic; a developer's
-/// PATH is the local fallback.
-pub fn nushell_path() -> Result<Option<PathBuf>, String> {
-    if let Some(nu) = std::env::var_os("VP_SNAP_NU_BIN") {
-        let nu = PathBuf::from(nu);
-        if nu.is_file() {
-            return std::fs::canonicalize(&nu).map(Some).map_err(|e| {
-                format!("failed to canonicalize VP_SNAP_NU_BIN {}: {e}", nu.display())
-            });
+/// Resolves an optional external tool. The explicit override keeps CI
+/// deterministic; a developer's PATH is the local fallback.
+fn optional_tool_path(env_var: &str, binary: &str) -> Result<Option<PathBuf>, String> {
+    if let Some(tool) = std::env::var_os(env_var) {
+        let tool = PathBuf::from(tool);
+        if tool.is_file() {
+            return std::fs::canonicalize(&tool)
+                .map(Some)
+                .map_err(|e| format!("failed to canonicalize {env_var} {}: {e}", tool.display()));
         }
-        return Err(format!("VP_SNAP_NU_BIN is set but {} does not exist", nu.display()));
+        return Err(format!("{env_var} is set but {} does not exist", tool.display()));
     }
 
-    Ok(which::which("nu").ok())
+    Ok(which::which(binary).ok())
+}
+
+/// Resolves an optional Fish binary for fixtures that exercise generated
+/// `env.fish` files.
+pub fn fish_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_FISH_BIN", "fish")
+}
+
+/// Resolves an optional Nushell binary for fixtures that exercise generated
+/// `env.nu` files.
+pub fn nushell_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_NU_BIN", "nu")
 }
 
 /// Home-layout names, shared with `CaseHome` in main.rs so the product's
@@ -307,6 +321,8 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
         .map_err(|e| format!("failed to create bin dir: {e}"))?;
 
     let vpt = install_runner_tool(&runner_bin_dir, "vpt", &vpt_path()?)?;
+    let fish =
+        fish_path()?.map(|path| install_runner_tool(&runner_bin_dir, "fish", &path)).transpose()?;
     let nu = nushell_path()?
         .map(|path| install_runner_tool(&runner_bin_dir, "nu", &path))
         .transpose()?;
@@ -315,5 +331,5 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
         Flavor::Local => local_cli_package_dir()?,
         Flavor::Global => repo_root().join("packages/cli"),
     };
-    Ok(FlavorRuntime { runner_bin_dir, vpt, nu, global_vp, cli_package_dir })
+    Ok(FlavorRuntime { runner_bin_dir, vpt, fish, nu, global_vp, cli_package_dir })
 }

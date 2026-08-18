@@ -63,6 +63,7 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_GLOBAL_VP`         | Path to a prebuilt global `vp` binary (skips the target-dir lookup) |
 | `VP_SNAP_LOCAL_CLI_BIN_DIR` | Local CLI bin dir (default `<repo>/packages/cli/bin`)               |
 | `VP_SNAP_JS_RUNTIME_DIR`    | Provisioned managed runtime to seed case homes with                 |
+| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files      |
 | `VP_SNAP_NU_BIN`            | Nushell binary for cases that execute generated `env.nu` files      |
 | `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)          |
 
@@ -75,7 +76,7 @@ vp = "local"                  # "local" | "global" | ["local", "global"]
 comment = "What this proves." # rendered into the snapshot
 cwd = "packages/app"          # optional, relative to the fixture root
 skip-platforms = ["windows"]  # or { os = "linux", libc = "musl" }
-requires = ["nu"]             # ignore when an optional runner tool is absent
+requires = ["fish"]           # "fish" | "nu"; ignore when the tool is absent
 ignore = false                # true: only runs with `-- --ignored`
 seed-runtime = true           # false: start from an empty VP_HOME
 link-node-modules = false     # true: expose the run-root node_modules as
@@ -118,7 +119,7 @@ A step is a bare argv array or a table:
   interactions = [ ... ] }
 ```
 
-`argv[0]` may be `vpt`, a runner-provisioned tool such as `nu`, or any
+`argv[0]` may be `vpt`, a runner-provisioned tool such as `fish` or `nu`, or any
 executable exposed by the case's Vite+ installation, including default shims
 such as `vp`, `node`, and `corepack` and globally installed package binaries.
 There is no shell: no `&&`, no
@@ -185,9 +186,10 @@ case-owned tool dirs, then a system tail for child processes and direct `git` st
 `TERM=xterm-256color`, `VP_CLI_TEST=1`, `VP_EMIT_MILESTONES=1`, a fresh
 `HOME`, `VP_HOME`, and npm prefix. The runner still rejects direct step tools
 that resolve outside the case-owned dirs, except for `git`; `vpt` is the only
-required runner helper on PATH, while optional tools such as `nu` are linked
-there when available. `CI` and `NO_COLOR` are deliberately NOT set: with a PTY
-attached, the CLI behaves interactively by default, which is the point.
+required runner helper on PATH, while optional tools such as `fish` and `nu`
+are linked there when available. `CI` and `NO_COLOR` are deliberately NOT
+set: with a PTY attached, the CLI behaves interactively by default, which is
+the point.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
 
