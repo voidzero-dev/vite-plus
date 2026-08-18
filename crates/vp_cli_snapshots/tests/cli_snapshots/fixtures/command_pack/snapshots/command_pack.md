@@ -16,6 +16,8 @@ Arguments:
   [...files]  Bundle files
 
 Options:
+  --config-loader <loader>      Config loader to use: auto, native, tsx, unrun (default: auto)
+  --no-config                   Disable config file
   -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                       Clean output directory, --no-clean to disable
   --deps.never-bundle <module>  Mark dependencies as external

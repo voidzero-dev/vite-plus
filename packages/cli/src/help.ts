@@ -835,6 +835,11 @@ const commandHelpDocs = {
         title: 'Options',
         rows: [
           {
+            label: '--config-loader <loader>',
+            description: 'Config loader to use: auto, native, tsx, unrun (default: auto)',
+          },
+          { label: '--no-config', description: 'Disable config file' },
+          {
             label: '-f, --format <format>',
             description: 'Bundle format: esm, cjs, iife, umd (default: esm)',
           },
