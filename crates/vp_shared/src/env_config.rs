@@ -427,7 +427,7 @@ mod tests {
         vars.extend(env_vars::LAYOUT_OVERRIDE_VARS.iter().map(|name| (*name, None)));
         EnvConfig::with_vars(vars, |config| {
             assert_eq!(config.user_home.as_path(), home);
-            assert_eq!(config.dirs.bin.as_path(), home.join(".local/bin"));
+            assert_eq!(config.dirs.bin.as_path(), home.join(".local/share/vite-plus/bin"));
             assert_eq!(config.dirs.data.as_path(), home.join(".local/share/vite-plus"));
             assert_eq!(config.dirs.cache.as_path(), home.join(".cache/vite-plus"));
             assert_eq!(config.dirs.config.as_path(), home.join(".config/vite-plus"));

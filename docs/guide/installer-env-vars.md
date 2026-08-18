@@ -27,7 +27,7 @@ These variables control the installer scripts and the standalone Windows install
 ### `VP_HOME`
 
 - **Purpose**: Optional single-root pin. When set to an absolute path, every category (bin, data, cache, config, state) lives under that directory. The installed CLI reads the same variable (see [Environment](/guide/env)).
-- **Default**: unset. If `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows) holds an existing install (it contains a `current` link), that tree is reused. Otherwise a fresh install uses the split platform layout (`~/.local/share/vite-plus` + `~/.local/bin` on Unix; `%LOCALAPPDATA%\vite-plus\data` + `%LOCALAPPDATA%\vite-plus\bin` on Windows).
+- **Default**: unset. If `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows) holds an existing install (it contains a `current` link), that tree is reused. Otherwise a fresh install uses the split platform layout (`~/.local/share/vite-plus` with its Vite+-owned `bin` subdirectory on Unix; `%LOCALAPPDATA%\vite-plus\data` + `%LOCALAPPDATA%\vite-plus\bin` on Windows).
 - **CLI equivalent**: `--install-dir`
 - **Example**:
 
@@ -43,7 +43,7 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
 
-- **Purpose**: Absolute per-category overrides for a split install. Ignored when `VP_HOME` is set or an existing `~/.vite-plus` is being reused.
+- **Purpose**: Absolute category overrides for a split install. `VP_BIN_DIR` overrides the executable directory. When it is unset, `VP_DATA_DIR` also derives the executable directory as `<VP_DATA_DIR>/bin`. These variables are ignored when `VP_HOME` is set or an existing `~/.vite-plus` is being reused.
 - **Default**: unset (XDG / platform defaults)
 - **Example**:
 

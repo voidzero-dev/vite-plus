@@ -28,8 +28,8 @@ Vite+ historically stores the entire global install under a single monolithic ro
 
 That layout is simple to install and document, but it conflicts with platform conventions:
 
-1. **XDG / platform split** — binaries, data, cache, config, and state belong in different roots (`~/.local/bin`, `~/.local/share`, `~/.cache`, `~/.config`, `~/.local/state` on Unix; analogous Local/Roaming app dirs on Windows).
-2. **PATH hygiene** — a dedicated `~/.local/bin` (or `%LOCALAPPDATA%\vite-plus\bin`) is the usual place for user tools; burying shims under a private tree forces a custom PATH entry forever.
+1. **XDG / platform split** — data, cache, config, and state belong in their platform roots (`~/.local/share`, `~/.cache`, `~/.config`, `~/.local/state` on Unix; analogous Local/Roaming app dirs on Windows).
+2. **Executable ownership** — Vite+ manages `vp`, runtime dispatchers, and global-package shims. Keeping them in an application-owned bin avoids collisions with unrelated tools in a shared user executable directory.
 3. **Scattered path construction** — call sites historically joined `~/.vite-plus/...` or read `VP_HOME` ad hoc, making layout changes error-prone.
 4. **Testing friction** — snapshot and CI setups pin `VP_HOME` to force a single tree, which couples fixtures to the monolithic shape.
 
@@ -65,16 +65,17 @@ That layout is simple to install and document, but it conflicts with platform co
 
 #### `<BIN>` ownership invariant
 
-The resolution source determines `<BIN>` ownership. The category alone does not make the directory Vite+-owned.
+The default `<BIN>` is application-owned. An explicit `VP_BIN_DIR` is the exception and must be treated as potentially shared.
 
-| Resolution source                                                              | Ownership                                                                                                                                                                                                                                         |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unix platform default, `XDG_BIN_HOME`, or the `$XDG_DATA_HOME/../bin` fallback | Shared user executable directory. The default `$HOME/.local/bin` is the [XDG location for user-specific executable files](https://specifications.freedesktop.org/basedir-spec/latest/). Vite+ owns only entries that it created and can identify. |
-| Windows platform default                                                       | Application-owned directory under `%LOCALAPPDATA%\vite-plus\bin`.                                                                                                                                                                                 |
-| `VP_HOME` or a grandfathered monolithic install                                | Application-owned `<root>/bin` inside the Vite+ install root.                                                                                                                                                                                     |
-| User-supplied `VP_BIN_DIR` on any platform                                     | Potentially shared, regardless of whether its path resembles a platform default.                                                                                                                                                                  |
+| Resolution source                               | Ownership                                                                        |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| Unix platform default or `XDG_DATA_HOME`        | Application-owned `<DATA>/bin`.                                                  |
+| Windows platform default                        | Application-owned `%LOCALAPPDATA%\vite-plus\bin`.                                |
+| `VP_DATA_DIR` when `VP_BIN_DIR` is unset        | Application-owned `<DATA>/bin`.                                                  |
+| `VP_HOME` or a grandfathered monolithic install | Application-owned `<root>/bin` inside the Vite+ install root.                    |
+| User-supplied `VP_BIN_DIR` on any platform      | Potentially shared, regardless of whether its path resembles a platform default. |
 
-`VpDirs` and `VP_DUMP_DIRS` expose resolved paths without resolution provenance. A consumer that has only a path must use the shared-directory policy. It may manage an application-owned `<BIN>` as a directory only when it retains trusted provenance for that mapping. It must not infer ownership from the path string.
+`VpDirs` and `VP_DUMP_DIRS` expose resolved paths without resolution provenance. A consumer must not infer from a path string that a separately resolved `<BIN>` is application-owned. It may remove `<BIN>` as part of another Vite+-owned root that contains it (the Unix default is removed with `<DATA>`), or when it retains trusted provenance for an application-owned mapping. Otherwise it must use the potentially shared-directory policy.
 
 For a potentially shared `<BIN>`, installers, `vp env setup`, global package shim management, and `vp implode` must follow these rules:
 
@@ -188,33 +189,33 @@ and the split PATH entries would keep serving the old binary.
 VP_HOME
   → existing ~/.vite-plus
   → VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR
-  → XDG_BIN_HOME / XDG_DATA_HOME / XDG_CACHE_HOME / XDG_CONFIG_HOME / XDG_STATE_HOME
+  → XDG_DATA_HOME / XDG_CACHE_HOME / XDG_CONFIG_HOME / XDG_STATE_HOME
   → platform defaults
 ```
 
 **Windows:** same head; no XDG step — after `VP_*_DIR`, fall through to Windows platform defaults (`%LOCALAPPDATA%` / `%APPDATA%`). When the known-folder query is unavailable (restricted service or CI contexts), the platform step falls back to the conventional `AppData\Local` / `AppData\Roaming` locations under the resolved user home, so a known home always yields a complete layout.
 
-| Source                                            | Behavior                                                                                                                                                                                                                           |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`VP_HOME`**                                     | When set, pins the **monolithic mapping** under that root for all categories.                                                                                                                                                      |
-| **`~/.vite-plus`**                                | When that directory contains a `current` link (a real install), use the monolithic mapping under it.                                                                                                                               |
-| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | Absolute per-category overrides (relative values ignored). Only the categories with a corresponding variable are proposed here.                                                                                                    |
-| **`XDG_*`** (Unix)                                | Absolute `XDG_BIN_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, with app name `vite-plus` on data/cache/config/state. Bin may follow uv-style `$XDG_DATA_HOME/../bin` when only data home is set. |
-| **Platform defaults**                             | See [category mapping](#category-mapping) (Unix XDG-style homes under `$HOME`, Windows Local/Roaming app dirs).                                                                                                                    |
+| Source                                            | Behavior                                                                                                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`VP_HOME`**                                     | When set, pins the **monolithic mapping** under that root for all categories.                                                                     |
+| **`~/.vite-plus`**                                | When that directory contains a `current` link (a real install), use the monolithic mapping under it.                                              |
+| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | Absolute category overrides (relative values ignored). `VP_BIN_DIR` wins for bin; otherwise an absolute `VP_DATA_DIR` also proposes `<DATA>/bin`. |
+| **`XDG_*`** (Unix)                                | Absolute `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME`, with app name `vite-plus`. Bin resolves to `<DATA>/bin`.     |
+| **Platform defaults**                             | See [category mapping](#category-mapping) (Unix XDG-style homes under `$HOME`, Windows Local/Roaming app dirs).                                   |
 
-Relative `VP_*` / `XDG_*` values are treated as unset (per the XDG Base Directory Spec for the spec-defined variables). `XDG_BIN_HOME` is not part of the XDG spec; it is a uv-style convention, as is the `$XDG_DATA_HOME/../bin` bin fallback above.
+Relative `VP_*` / `XDG_*` values are treated as unset, per the XDG Base Directory Specification.
 
 ### Category mapping
 
-| Category   | Split default (Unix)       | Split default (Windows)          | Monolithic (`VP_HOME` / existing `~/.vite-plus`) |
-| ---------- | -------------------------- | -------------------------------- | ------------------------------------------------ |
-| **bin**    | `~/.local/bin`             | `%LOCALAPPDATA%\vite-plus\bin`   | `<root>/bin`                                     |
-| **data**   | `~/.local/share/vite-plus` | `%LOCALAPPDATA%\vite-plus\data`  | `<root>`                                         |
-| **cache**  | `~/.cache/vite-plus`       | `%LOCALAPPDATA%\vite-plus\cache` | `<root>/cache`                                   |
-| **config** | `~/.config/vite-plus`      | `%APPDATA%\vite-plus`            | `<root>`                                         |
-| **state**  | `~/.local/state/vite-plus` | `%LOCALAPPDATA%\vite-plus\state` | `<root>`                                         |
+| Category   | Split default (Unix)           | Split default (Windows)          | Monolithic (`VP_HOME` / existing `~/.vite-plus`) |
+| ---------- | ------------------------------ | -------------------------------- | ------------------------------------------------ |
+| **bin**    | `~/.local/share/vite-plus/bin` | `%LOCALAPPDATA%\vite-plus\bin`   | `<root>/bin`                                     |
+| **data**   | `~/.local/share/vite-plus`     | `%LOCALAPPDATA%\vite-plus\data`  | `<root>`                                         |
+| **cache**  | `~/.cache/vite-plus`           | `%LOCALAPPDATA%\vite-plus\cache` | `<root>/cache`                                   |
+| **config** | `~/.config/vite-plus`          | `%APPDATA%\vite-plus`            | `<root>`                                         |
+| **state**  | `~/.local/state/vite-plus`     | `%LOCALAPPDATA%\vite-plus\state` | `<root>`                                         |
 
-Under **data** (both layouts): version directories, `current`, `js_runtime`, `package_manager`, `packages`, `bins`.
+Under **data** (both layouts): version directories, `current`, `js_runtime`, `package_manager`, `packages`, `bins`. The Unix split default also nests the executable category at `<DATA>/bin`.
 
 #### Windows `<CONFIG>` portability
 
@@ -234,9 +235,11 @@ There is a **single** install script per platform (no separate per-layout instal
 
 Env scripts are written under **config** (split: `~/.config/vite-plus/env*`; monolithic: the install root). PATH entries point at the resolved **bin** directory.
 
+External installers and integrations must consume the resolved paths from the Vite+ binary through `VP_DUMP_DIRS`. They must not reconstruct `<BIN>` from `$HOME`, XDG variables, or platform conventions.
+
 #### Node-manager shim ownership
 
-Node-manager shims follow the [`<BIN>` ownership invariant](#bin-ownership-invariant). On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. On Windows, `install.ps1`, `vp-setup`, and Unix-like shells recognize `<BIN>/node.exe` only when its `node.shim` sidecar points to the resolved data root.
+Node-manager shims follow the [`<BIN>` ownership invariant](#bin-ownership-invariant). The default bin is private to Vite+, but an explicit `VP_BIN_DIR` can be shared, so replacement and cleanup paths retain per-entry ownership checks. On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. On Windows, `install.ps1`, `vp-setup`, and Unix-like shells recognize `<BIN>/node.exe` only when its `node.shim` sidecar points to the resolved data root.
 
 A foreign Node entry blocks automatic enablement. This includes CI and devcontainer environments as well as the no-system-Node fallback. `VP_NODE_MANAGER=yes` or acceptance of the interactive prompt authorizes the installer to replace conflicting `node`, `npm`, `npx`, and `corepack` entries. Without one of these opt-ins, the installer preserves the foreign entry. `VP_NODE_MANAGER=no` prevents replacement. A reinstall refreshes the shims after the ownership check confirms that Vite+ created them.
 
@@ -275,12 +278,12 @@ Under the split layout, the global CLI injects `VP_BIN_DIR` / `VP_DATA_DIR` / `V
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Existing `~/.vite-plus`                             | Paths unchanged (grandfathered until migrate follow-up).                                                                             |
 | Custom `VP_HOME`                                    | Still works as a full-root pin.                                                                                                      |
-| Fresh install                                       | Split layout; typically only `~/.local/bin` (or Windows bin dir) needs to be on PATH.                                                |
+| Fresh install                                       | Split layout; the Vite+-owned `~/.local/share/vite-plus/bin` (or Windows bin dir) is added to PATH.                                  |
 | Pre-split version (pinned, or `latest` until 0.3.0) | Monolithic `~/.vite-plus`, detected via probe (see [Compatibility with pre-split releases](#compatibility-with-pre-split-releases)). |
 
 ### Verified scenarios (manual)
 
-1. **Fresh split** — empty home, no `VP_HOME`: install lands on `~/.local/share/vite-plus`, shims in `~/.local/bin`, env under `~/.config/vite-plus`; `vp --version` works.
+1. **Fresh split** — empty home, no `VP_HOME`: install lands on `~/.local/share/vite-plus`, shims in its `bin` subdirectory, env under `~/.config/vite-plus`; `vp --version` works.
 2. **Monolithic reuse** — pre-seeded `~/.vite-plus` with markers: `install-global-cli` upgrades `current` in place, keeps prior version dirs and markers, does not create split roots; runtime writes `resolve_cache.json` under `~/.vite-plus/cache`; `vp env doctor` reports home `~/.vite-plus`.
 
 ## Follow-up: `VP_HOME` cleanup
@@ -345,6 +348,7 @@ Custom `VP_HOME` roots are **out of auto-migrate** (they stay a manual full-root
 2. **Always migrate on first run of any command** — surprising and dangerous mid-script. Prefer explicit `vp upgrade` / installer.
 3. **Keep monolithic forever; only document XDG as optional** — fails PATH and platform conventions for new users.
 4. **Separate install scripts for monolithic vs split** — duplicated drift; replaced by one script with resolution branching.
+5. **Use the shared `~/.local/bin` on Unix** — avoids one PATH addition on systems that already include it, but forces ownership checks and collision handling for every runtime and package shim. Vite+ already manages PATH, so the application-owned data bin is simpler and safer.
 
 ## Open questions (post-migrate)
 

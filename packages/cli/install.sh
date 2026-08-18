@@ -11,7 +11,7 @@
 #             ~/.vite-plus install is reused; otherwise data/bin/config follow
 #             VP_*_DIR / XDG_* / platform defaults.
 #   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
-#   XDG_BIN_HOME / XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
+#   XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -976,8 +976,8 @@ refresh_shims() {
 }
 
 # Return success only when the existing Node entry belongs to this Vite+
-# install. `<BIN>` may be a shared directory (for example ~/.local/bin), so
-# existence alone is not proof that Vite+ may replace it.
+# install. An explicit VP_BIN_DIR may be shared, so existence alone is not
+# proof that Vite+ may replace it.
 is_vite_plus_node_shim() {
   local bin_path="$1"
   local vp_bin="$2"
@@ -1025,8 +1025,9 @@ setup_node_manager() {
   fi
 
   # Check whether an existing Node entry is a Vite+ shim. A foreign entry in
-  # the shared bin directory blocks automatic enablement, but the interactive
-  # prompt below can still obtain explicit consent to replace it.
+  # a custom, potentially shared bin directory blocks automatic enablement,
+  # but the interactive prompt below can still obtain explicit consent to
+  # replace it.
   local unmanaged_node_in_bin="false"
   if [ -e "$bin_path/node" ] || [ -L "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
     if is_vite_plus_node_shim "$bin_path" "$vp_bin"; then

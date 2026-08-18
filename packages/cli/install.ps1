@@ -784,7 +784,7 @@ function Setup-NodeManager {
         return "false"
     }
 
-    # A foreign Node executable in a shared bin directory blocks every
+    # A foreign Node executable in a custom, potentially shared bin blocks every
     # automatic path below. Explicit opt-in above or acceptance of the
     # interactive prompt still authorizes replacement.
     $foreignNodeInBin = $false

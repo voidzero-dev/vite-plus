@@ -13,7 +13,9 @@
 //! - [`UserHome`] — `<home>/.vite-plus` (injected home), proposed only when
 //!   that directory contains a `current` link (a real install, not a stray
 //!   tree left by a pre-split local CLI).
-//! - [`VpEnvs`] — `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`.
+//! - [`VpEnvs`] — `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`. When
+//!   `VP_BIN_DIR` is unset, an absolute `VP_DATA_DIR` also proposes
+//!   `<DATA>/bin`.
 //! - XDG / platform defaults.
 //!
 //! Single-root mapping (VpHome / UserHome):
@@ -66,9 +68,11 @@ struct VpEnvs {
 
 impl VpEnvs {
     fn resolver(_home: &AbsolutePath) -> Self {
+        let data_dir = process_env_var(env_vars::VP_DATA_DIR);
         Self {
-            bin_dir: process_env_var(env_vars::VP_BIN_DIR),
-            data_dir: process_env_var(env_vars::VP_DATA_DIR),
+            bin_dir: process_env_var(env_vars::VP_BIN_DIR)
+                .or_else(|| data_dir.as_ref().map(|data| data.join("bin"))),
+            data_dir,
             cache_dir: process_env_var(env_vars::VP_CACHE_DIR),
         }
     }
@@ -216,13 +220,7 @@ mod unix {
 
     impl DirResolution for Xdg {
         fn bin_dir(&self) -> Option<AbsolutePathBuf> {
-            super::process_env_var(env_vars::XDG_BIN_HOME).or_else(|| {
-                // `$XDG_DATA_HOME/../bin` fallback, lexically
-                // normalized so string-equality consumers (dedup, layout
-                // checks) see the canonical path.
-                super::process_env_var(env_vars::XDG_DATA_HOME)
-                    .map(|dir| dir.join("../bin").clean())
-            })
+            self.data_dir().map(|data| data.join("bin"))
         }
 
         fn data_dir(&self) -> Option<AbsolutePathBuf> {
@@ -253,7 +251,7 @@ mod unix {
 
     impl DirResolution for Unix {
         fn bin_dir(&self) -> Option<AbsolutePathBuf> {
-            Some(self.0.join(".local/bin"))
+            self.data_dir().map(|data| data.join("bin"))
         }
 
         fn data_dir(&self) -> Option<AbsolutePathBuf> {
@@ -432,6 +430,40 @@ mod tests {
     }
 
     #[test]
+    fn vp_data_dir_proposes_an_owned_bin_by_default() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let data = root.path().join("data");
+
+        temp_env::with_vars(
+            [(env_vars::VP_BIN_DIR, None), (env_vars::VP_DATA_DIR, Some(data.as_os_str()))],
+            || {
+                let envs = VpEnvs::resolver(&home);
+                assert_dir(envs.bin_dir(), &data.join("bin"));
+                assert_dir(envs.data_dir(), &data);
+            },
+        );
+    }
+
+    #[test]
+    fn relative_vp_bin_dir_falls_back_to_the_owned_data_bin() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let data = root.path().join("data");
+
+        temp_env::with_vars(
+            [
+                (env_vars::VP_BIN_DIR, Some(OsStr::new("relative/bin"))),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+            ],
+            || {
+                let envs = VpEnvs::resolver(&home);
+                assert_dir(envs.bin_dir(), &data.join("bin"));
+            },
+        );
+    }
+
+    #[test]
     fn vp_envs_drops_relative_and_unset() {
         let root = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
@@ -535,7 +567,6 @@ mod tests {
         fn xdg_resolves_all_categories() {
             let root = tempfile::tempdir().unwrap();
             let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
-            let bin = root.path().join("bin-home");
             let data = root.path().join("data-home");
             let cache = root.path().join("cache-home");
             let config = root.path().join("config-home");
@@ -543,7 +574,6 @@ mod tests {
 
             temp_env::with_vars(
                 [
-                    (env_vars::XDG_BIN_HOME, Some(bin.as_os_str())),
                     (env_vars::XDG_DATA_HOME, Some(data.as_os_str())),
                     (env_vars::XDG_CACHE_HOME, Some(cache.as_os_str())),
                     (env_vars::XDG_CONFIG_HOME, Some(config.as_os_str())),
@@ -551,7 +581,7 @@ mod tests {
                 ],
                 || {
                     let xdg = Xdg::resolver(&home);
-                    assert_dir(xdg.bin_dir(), &bin);
+                    assert_dir(xdg.bin_dir(), &data.join(APP_DIR_NAME).join("bin"));
                     assert_dir(xdg.data_dir(), &data.join(APP_DIR_NAME));
                     assert_dir(xdg.cache_dir(), &cache.join(APP_DIR_NAME));
                     assert_dir(xdg.config_dir(), &config.join(APP_DIR_NAME));
@@ -561,19 +591,15 @@ mod tests {
         }
 
         #[test]
-        fn xdg_bin_falls_back_to_normalized_data_home_sibling() {
+        fn xdg_bin_is_owned_by_the_data_root() {
             let root = tempfile::tempdir().unwrap();
             let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
             let data = root.path().join("data-home");
 
-            temp_env::with_vars(
-                [(env_vars::XDG_BIN_HOME, None), (env_vars::XDG_DATA_HOME, Some(data.as_os_str()))],
-                || {
-                    let xdg = Xdg::resolver(&home);
-                    // uv-style `$XDG_DATA_HOME/../bin`, with `..` resolved lexically.
-                    assert_dir(xdg.bin_dir(), &root.path().join("bin"));
-                },
-            );
+            temp_env::with_var(env_vars::XDG_DATA_HOME, Some(data.as_os_str()), || {
+                let xdg = Xdg::resolver(&home);
+                assert_dir(xdg.bin_dir(), &data.join(APP_DIR_NAME).join("bin"));
+            });
         }
 
         #[test]
@@ -582,7 +608,10 @@ mod tests {
             let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
 
             let unix = Unix::resolver(&home);
-            assert_dir(unix.bin_dir(), home.join(".local/bin").as_path());
+            assert_dir(
+                unix.bin_dir(),
+                home.join(vt_str::format!(".local/share/{APP_DIR_NAME}/bin")).as_path(),
+            );
             assert_dir(
                 unix.data_dir(),
                 home.join(vt_str::format!(".local/share/{APP_DIR_NAME}")).as_path(),

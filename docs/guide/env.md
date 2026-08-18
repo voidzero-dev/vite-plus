@@ -21,7 +21,7 @@ latest LTS.
 
 When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
-By default, a fresh install stores managed runtimes and related files in the split platform layout (`~/.local/share/vite-plus` on Unix, `%LOCALAPPDATA%\vite-plus\data` on Windows). An existing `~/.vite-plus` tree is kept in place. `VP_HOME` still pins every category under one custom root.
+By default, a fresh install stores managed runtimes and related files in the split platform layout (`~/.local/share/vite-plus` on Unix, `%LOCALAPPDATA%\vite-plus\data` on Windows). The Unix executable directory is the Vite+-owned `~/.local/share/vite-plus/bin`; Windows uses `%LOCALAPPDATA%\vite-plus\bin`. An existing `~/.vite-plus` tree is kept in place. `VP_HOME` still pins every category under one custom root.
 
 If you want to keep that behavior, run:
 

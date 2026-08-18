@@ -66,8 +66,9 @@ impl VpDirs {
     /// Unix platform defaults. The caller ([`EnvConfig`](crate::EnvConfig))
     /// resolves the home once and passes it in; resolution itself reads only
     /// the override env vars, never `HOME`/`USERPROFILE`. Each category is
-    /// resolved independently, so roots may come from different sources
-    /// (e.g. `bin` from `VP_BIN_DIR`, `data` from `XDG_DATA_HOME`).
+    /// resolved independently, except that an unset `VP_BIN_DIR` derives
+    /// `<DATA>/bin` from `VP_DATA_DIR` on every platform or from
+    /// `XDG_DATA_HOME` on Unix.
     ///
     /// Returns `None` only when no chain source proposes a category — with a
     /// known home both platform tails are total (Unix defaults under the

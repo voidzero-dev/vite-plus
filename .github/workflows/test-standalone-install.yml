@@ -225,25 +225,25 @@ jobs:
           export HOME="$FRESH"
           export USERPROFILE="$FRESH"
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
-          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           test ! -d "$FRESH/.vite-plus"
           test -e "$FRESH/.local/share/vite-plus/current"
-          test -e "$FRESH/.local/bin/vp"
+          test -e "$FRESH/.local/share/vite-plus/bin/vp"
           test -f "$FRESH/.config/vite-plus/env"
-          test "$(readlink "$FRESH/.local/bin/vp")" = "$FRESH/.local/share/vite-plus/current/bin/vp"
-          "$FRESH/.local/bin/vp" --version
+          test "$(readlink "$FRESH/.local/share/vite-plus/bin/vp")" = "$FRESH/.local/share/vite-plus/current/bin/vp"
+          "$FRESH/.local/share/vite-plus/bin/vp" --version
 
-          DUMP=$(VP_DUMP_DIRS=1 "$FRESH/.local/bin/vp")
+          DUMP=$(VP_DUMP_DIRS=1 "$FRESH/.local/share/vite-plus/bin/vp")
           dump_dir() { printf '%s\n' "$DUMP" | awk -F'\t' -v key="$1" '$1 == key { print $2; exit }'; }
-          test "$(dump_dir bin)" = "$FRESH/.local/bin"
+          test "$(dump_dir bin)" = "$FRESH/.local/share/vite-plus/bin"
           test "$(dump_dir data)" = "$FRESH/.local/share/vite-plus"
           test "$(dump_dir cache)" = "$FRESH/.cache/vite-plus"
           test "$(dump_dir config)" = "$FRESH/.config/vite-plus"
           test "$(dump_dir state)" = "$FRESH/.local/state/vite-plus"
 
-      - name: Fresh split install preserves an unrelated Node executable
+      - name: Custom shared bin preserves an unrelated Node executable
         run: |
           set -euo pipefail
           FOREIGN=$(mktemp -d)
@@ -253,11 +253,12 @@ jobs:
           chmod +x "$FOREIGN/.local/bin/node"
           export HOME="$FOREIGN"
           export USERPROFILE="$FOREIGN"
-          # Override the job-level opt-in. CI auto-enablement must also leave a
-          # Node executable that Vite+ does not own untouched.
+          export VP_BIN_DIR="$FOREIGN/.local/bin"
+          # Override the job-level opt-in. A custom bin is potentially shared,
+          # so CI auto-enablement must leave an unowned Node executable alone.
           export VP_NODE_MANAGER=
-          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
-          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          unset VP_HOME VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-foreign-node bash packages/cli/install.sh
 
           test -f "$FOREIGN/.local/bin/node"
@@ -277,7 +278,7 @@ jobs:
           export HOME="$GRAND"
           export USERPROFILE="$GRAND"
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
-          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           test -f "$GRAND/.vite-plus/.keep"
@@ -295,7 +296,7 @@ jobs:
           export HOME="$STRAY"
           export USERPROFILE="$STRAY"
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
-          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           # A pre-split local vite-plus can create ~/.vite-plus at any time
@@ -306,7 +307,7 @@ jobs:
 
           # Resolution must stay on the split roots, with and without the
           # env-script pins.
-          data_root() { VP_DUMP_DIRS=1 "$STRAY/.local/bin/vp" | awk -F'\t' '$1=="data"{print $2}'; }
+          data_root() { VP_DUMP_DIRS=1 "$STRAY/.local/share/vite-plus/bin/vp" | awk -F'\t' '$1=="data"{print $2}'; }
           test "$(data_root)" = "$STRAY/.local/share/vite-plus"
           test "$(VP_DATA_DIR="$STRAY/.local/share/vite-plus" VP_BIN_DIR="$STRAY/.local/bin" data_root)" = "$STRAY/.local/share/vite-plus"
 
@@ -318,7 +319,7 @@ jobs:
           test "$(readlink "$STRAY/.local/share/vite-plus/current")" = "local-test2"
           test ! -e "$STRAY/.vite-plus/current"
           test ! -e "$STRAY/.vite-plus/bin"
-          "$STRAY/.local/bin/vp" --version
+          "$STRAY/.local/share/vite-plus/bin/vp" --version
 
   test-install-sh-old-version:
     name: Test install.sh pre-split release (${{ matrix.name }})

@@ -807,10 +807,10 @@ mod tests {
             let dirs = prepare_dirs(&opts(None)).unwrap();
             assert_eq!(dirs, expected);
             assert!(std::env::var_os(env_vars::VP_HOME).is_none());
-            assert_ne!(
+            assert_eq!(
                 dirs.bin.as_path(),
                 dirs.data.join("bin").as_path(),
-                "fresh install must not collapse bin under the data root"
+                "fresh Unix installs keep executables in the Vite+-owned data tree"
             );
         });
     }
@@ -863,7 +863,6 @@ mod tests {
                 (env_vars::VP_BIN_DIR, None),
                 (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
                 (env_vars::VP_CACHE_DIR, None),
-                (env_vars::XDG_BIN_HOME, None),
                 (env_vars::XDG_DATA_HOME, None),
                 (env_vars::XDG_CACHE_HOME, None),
                 (env_vars::XDG_CONFIG_HOME, None),
@@ -872,6 +871,7 @@ mod tests {
             |config| {
                 let dirs = prepare_dirs(&opts(None)).unwrap();
                 assert_eq!(dirs.data.as_path(), data.as_path());
+                assert_eq!(dirs.bin, dirs.data.join("bin"));
                 assert_eq!(dirs, config.dirs);
                 assert!(std::env::var_os(env_vars::VP_HOME).is_none());
             },

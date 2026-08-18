@@ -1580,7 +1580,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let user_home = temp_dir.path();
         let data = user_home.join(".local/share/vite-plus");
-        let bin_dir = AbsolutePathBuf::new(user_home.join(".local/bin")).unwrap();
+        let bin_dir = AbsolutePathBuf::new(data.join("bin")).unwrap();
         let version_vp = data.join("0.1.0").join("bin").join("vp");
         let current = data.join("current");
 
@@ -1594,7 +1594,6 @@ mod tests {
                 (vp_shared::env_vars::VP_HOME, None),
                 (vp_shared::env_vars::VP_BIN_DIR, None),
                 (vp_shared::env_vars::VP_DATA_DIR, None),
-                (vp_shared::env_vars::XDG_BIN_HOME, None),
                 (vp_shared::env_vars::XDG_DATA_HOME, None),
                 ("HOME", Some(user_home.as_os_str())),
                 ("USERPROFILE", Some(user_home.as_os_str())),

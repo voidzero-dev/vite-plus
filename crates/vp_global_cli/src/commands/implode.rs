@@ -46,9 +46,10 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // The delete set is the vite-plus-owned roots, deduped: under a
     // single-root mapping data/config/state are the same directory and cache
     // sits inside it, so a naive per-category removal would delete the same
-    // path twice. `<BIN>` is never removed wholesale — it may be a shared
-    // directory (e.g. `~/.local/bin`); only vp-owned shim files are removed
-    // from it.
+    // path twice. The default Unix `<BIN>` is nested under `<DATA>` and is
+    // removed with it. A separately resolved `<BIN>` is never removed
+    // wholesale because an explicit `VP_BIN_DIR` may be shared; only
+    // vp-owned shim files are removed from it.
     let mut roots: Vec<AbsolutePathBuf> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
         .into_iter()
         .map(|root| {
@@ -114,9 +115,10 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 
 /// Remove the shim files vite-plus owns from the bin directory.
 ///
-/// The bin directory itself is never touched: it may be shared with other
-/// tools (e.g. `~/.local/bin`). Package shims are taken from
-/// `<DATA>/bins/*.json`; `vp` and the default env shims are also
+/// The bin directory itself is never removed directly: an explicit
+/// `VP_BIN_DIR` may be shared with other tools. The default Unix bin is
+/// removed indirectly with its containing `<DATA>` root. Package shims are
+/// taken from `<DATA>/bins/*.json`; `vp` and the default env shims are also
 /// considered because they are not recorded there. A candidate is deleted
 /// only when it is a symlink to this install's `vp` (Unix) or a trampoline
 /// we wrote (Windows).
