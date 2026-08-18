@@ -1,6 +1,10 @@
 //! `vp implode` — completely remove vp and all its data from this system.
 
-use std::{io::Write, process::ExitStatus};
+use std::{
+    io::Write,
+    path::{Component, Path, PathBuf},
+    process::ExitStatus,
+};
 
 use owo_colors::OwoColorize;
 use rustc_hash::FxHashSet;
@@ -21,6 +25,20 @@ use crate::{
 /// Comment marker written by the install script above the sourcing line.
 const VITE_PLUS_COMMENT: &str = "# Vite+ bin";
 
+fn lexical_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let env_config = vp_shared::EnvConfig::get();
     let dirs = &env_config.dirs;
@@ -31,10 +49,16 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // path twice. `<BIN>` is never removed wholesale — it may be a shared
     // directory (e.g. `~/.local/bin`); only vp-owned shim files are removed
     // from it.
-    let mut roots: Vec<&AbsolutePathBuf> = vec![&dirs.data, &dirs.cache, &dirs.config, &dirs.state];
+    let mut roots: Vec<AbsolutePathBuf> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
+        .into_iter()
+        .map(|root| {
+            AbsolutePathBuf::new(lexical_path(root.as_path()))
+                .expect("resolved Vite+ roots remain absolute after lexical normalization")
+        })
+        .collect();
     roots.sort_by(|a, b| a.as_path().cmp(b.as_path()));
     roots.dedup();
-    let mut delete_set: Vec<&AbsolutePathBuf> = Vec::new();
+    let mut delete_set: Vec<AbsolutePathBuf> = Vec::new();
     for root in roots {
         if !delete_set.iter().any(|kept| root.as_path().starts_with(kept.as_path())) {
             delete_set.push(root);
@@ -210,7 +234,7 @@ fn collect_affected_profiles(
 /// Show confirmation prompt and require the user to type "uninstall".
 /// Returns `Ok(true)` if confirmed, `Ok(false)` if aborted.
 fn confirm_implode(
-    delete_set: &[&AbsolutePathBuf],
+    delete_set: &[AbsolutePathBuf],
     bin_dir: &vt_path::AbsolutePath,
     affected_profiles: &[AffectedProfile],
 ) -> Result<bool, Error> {
@@ -841,6 +865,45 @@ mod tests {
             assert!(result.is_ok());
             assert!(result.unwrap().success());
         });
+    }
+
+    #[test]
+    fn execute_normalizes_category_roots_before_deduplication() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = temp_dir.path().join("home");
+        let bin = temp_dir.path().join("bin");
+        let data = temp_dir.path().join("data");
+        let cache = data.join("../cache");
+        let normalized_cache = temp_dir.path().join("cache");
+        let xdg_config = temp_dir.path().join("config-base");
+        let xdg_state = temp_dir.path().join("state-base");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(&normalized_cache).unwrap();
+        std::fs::write(data.join("data.txt"), b"data").unwrap();
+        std::fs::write(normalized_cache.join("cache.txt"), b"cache").unwrap();
+
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, Some(bin.as_os_str())),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_CACHE_DIR, Some(cache.as_os_str())),
+                (env_vars::XDG_CONFIG_HOME, Some(xdg_config.as_os_str())),
+                (env_vars::XDG_STATE_HOME, Some(xdg_state.as_os_str())),
+                ("HOME", Some(home.as_os_str())),
+                ("USERPROFILE", Some(home.as_os_str())),
+            ],
+            |_| {
+                let result = execute(true).unwrap();
+                assert!(result.success());
+                assert!(!data.exists(), "data root must be removed");
+                assert!(
+                    !normalized_cache.exists(),
+                    "lexically distinct cache root must be removed"
+                );
+            },
+        );
     }
 
     #[cfg(unix)]
