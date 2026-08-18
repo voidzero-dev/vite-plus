@@ -922,17 +922,16 @@ async function copyBundledDocs() {
   }
 
   await rm(docsTargetDir, { recursive: true, force: true });
-  // Preserve the website layout while publishing only authored Markdown.
-  const bundledDocsEntries = new Set(['config', 'guide', 'index.md', 'team.md']);
+  const skipPrefixes = ['node_modules', '.vitepress/cache', '.vitepress/dist'];
   await cp(docsSourceDir, docsTargetDir, {
     recursive: true,
     filter: (source) => {
       const relativePath = relative(docsSourceDir, source).replaceAll('\\', '/');
-      const [entry] = relativePath.split('/');
       return (
-        relativePath === '' ||
-        (bundledDocsEntries.has(entry) &&
-          (statSync(source).isDirectory() || source.endsWith('.md')))
+        !skipPrefixes.some(
+          (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`),
+        ) &&
+        (statSync(source).isDirectory() || source.endsWith('.md'))
       );
     },
   });
