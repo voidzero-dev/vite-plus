@@ -65,7 +65,7 @@ That layout is simple to install and document, but it conflicts with platform co
 
 #### `<BIN>` ownership invariant
 
-The default `<BIN>` is application-owned. An explicit `VP_BIN_DIR` is the exception and must be treated as potentially shared.
+The default `<BIN>` is application-owned, and Vite+ may manage all entries inside it. An explicit `VP_BIN_DIR` must be treated as potentially shared and requires per-entry ownership checks.
 
 | Resolution source                               | Ownership                                                                        |
 | ----------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -217,6 +217,20 @@ Relative `VP_*` / `XDG_*` values are treated as unset, per the XDG Base Director
 
 Under **data** (both layouts): version directories, `current`, `js_runtime`, `package_manager`, `packages`, `bins`. The Unix split default also nests the executable category at `<DATA>/bin`.
 
+#### XDG category semantics
+
+On Unix, Vite+ follows the XDG Base Directory Specification for user data, configuration, cache, and state. Those categories resolve from `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, and `XDG_STATE_HOME`.
+
+The specification identifies [`$HOME/.local/bin`](https://specifications.freedesktop.org/basedir-spec/latest/) as the location for user-specific executables. Vite+ does not use that shared namespace for its default `<BIN>`, and XDG does not require an executable directory under the data root. Vite+ defines its Unix bin as an application-owned namespace derived from the resolved data root:
+
+```text
+<BIN> = <DATA>/bin
+```
+
+The installers and `vp env setup` add this directory to `PATH`. It contains `vp` plus Vite+-managed runtime and package dispatchers such as `node`, `npm`, `npx`, and global package commands. Keeping these entries together lets Vite+ create, refresh, and remove them without claiming entries in the shared `~/.local/bin` namespace.
+
+The relationship to `<DATA>` is the invariant. A custom `XDG_DATA_HOME` therefore moves both categories while preserving the same layout.
+
 #### Windows `<CONFIG>` portability
 
 Windows maps `<CONFIG>` to [`%APPDATA%\vite-plus`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_roamingappdata), the roaming application-data directory. It maps `<DATA>`, `<CACHE>`, and `<STATE>` under [`%LOCALAPPDATA%`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_localappdata). Durable files in `<CONFIG>`, including `config.json`, must contain portable user preferences. Machine-specific paths, downloaded payloads, caches, and session state belong in the local categories.
@@ -278,7 +292,7 @@ Under the split layout, the global CLI injects `VP_BIN_DIR` / `VP_DATA_DIR` / `V
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Existing `~/.vite-plus`                             | Paths unchanged (grandfathered until migrate follow-up).                                                                             |
 | Custom `VP_HOME`                                    | Still works as a full-root pin.                                                                                                      |
-| Fresh install                                       | Split layout; the Vite+-owned `~/.local/share/vite-plus/bin` (or Windows bin dir) is added to PATH.                                  |
+| Fresh install                                       | Split layout; the Vite+-owned `<DATA>/bin` on Unix (or Windows application bin) is added to PATH.                                    |
 | Pre-split version (pinned, or `latest` until 0.3.0) | Monolithic `~/.vite-plus`, detected via probe (see [Compatibility with pre-split releases](#compatibility-with-pre-split-releases)). |
 
 ### Verified scenarios (manual)
