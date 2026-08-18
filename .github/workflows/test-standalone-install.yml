@@ -138,6 +138,59 @@ jobs:
       - uses: ./.github/actions/clone
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
 
+      - name: Shell config paths preserve metacharacters
+        run: |
+          # The literal metacharacters and globals consumed by sourced installer
+          # functions are intentional.
+          # shellcheck disable=SC2016,SC2034
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y fish zsh
+
+          # Load installer helpers without invoking main.
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+
+          TEST_ROOT=$(mktemp -d)
+          export HOME="$TEST_ROOT/home"
+          export USERPROFILE="$HOME"
+          export XDG_CONFIG_HOME="$TEST_ROOT/shell-config"
+          mkdir -p "$HOME" "$XDG_CONFIG_HOME"
+
+          SPECIAL=$(printf 'config-$USER-"-\047-`-\134')
+          CONFIG_DIR="$TEST_ROOT/$SPECIAL"
+          mkdir -p "$CONFIG_DIR"
+          set_config_dir_refs "$CONFIG_DIR" "$HOME"
+
+          SHELL_CONFIG_SUMMARY=()
+          SHELL_CONFIG_FAILED_SHELLS=()
+          SHELL_CONFIG_HAS_UPDATED=false
+          SHELL_CONFIG_HAS_CONFIGURED=false
+          SHELL_CONFIG_HAS_FAILURE=false
+
+          printf '%s\n' 'export VP_CONFIG_SOURCE_MARKER=bash-zsh' > "$CONFIG_DIR/env"
+          touch "$HOME/.bashrc"
+          configure_bash_path
+          configure_zsh_path
+          bash --noprofile --norc -c 'source "$HOME/.bashrc"; test "$VP_CONFIG_SOURCE_MARKER" = bash-zsh'
+          zsh -f -c 'source "$HOME/.zshenv"; test "$VP_CONFIG_SOURCE_MARKER" = bash-zsh'
+
+          printf '%s\n' 'set -gx VP_CONFIG_SOURCE_MARKER fish' > "$CONFIG_DIR/env.fish"
+          configure_fish_path
+          fish --no-config -c 'source "$XDG_CONFIG_HOME/fish/conf.d/vite-plus.fish"; test "$VP_CONFIG_SOURCE_MARKER" = fish'
+
+          NUSHELL_DIR="$TEST_ROOT/nushell"
+          discover_nushell_vendor_autoload_dir() { printf '%s\n' "$NUSHELL_DIR"; }
+          configure_nushell_path
+          python3 - "$NUSHELL_DIR/vite-plus.nu" "$CONFIG_DIR/env.nu" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          line = pathlib.Path(sys.argv[1]).read_text().splitlines()[1]
+          assert line.startswith('source '), line
+          assert json.loads(line.removeprefix('source ')) == sys.argv[2], line
+          PY
+
       - name: Build local vp
         run: cargo build --release -p vp_global_cli
 

@@ -160,15 +160,49 @@ user_home_dir() {
   fi
 }
 
+# Escape a path fragment for a Bash/Zsh double-quoted string. `$HOME` is
+# added separately when the config directory is under the user home.
+escape_posix_double_quoted() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\$/\\\$}"
+  value="${value//\`/\\\`}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+# Fish double-quoted strings do not evaluate backticks, but `$`, `"`, and
+# backslashes still need escaping.
+escape_fish_double_quoted() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\$/\\\$}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+# Nushell expands values only in interpolated strings (`$"..."`). In a plain
+# double-quoted string only backslashes and double quotes need escaping.
+escape_nu_double_quoted() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
 set_config_dir_refs() {
   local dir="$1"
   local home="$2"
+  local suffix
   if [ -n "$home" ] && case "$dir" in "$home"/*) true;; *) false;; esac; then
-    CONFIG_DIR_REF_POSIX="\$HOME${dir#"$home"}"
-    CONFIG_DIR_REF_NU="~${dir#"$home"}"
+    suffix="${dir#"$home"}"
+    CONFIG_DIR_REF_POSIX="\$HOME$(escape_posix_double_quoted "$suffix")"
+    CONFIG_DIR_REF_FISH="\$HOME$(escape_fish_double_quoted "$suffix")"
+    CONFIG_DIR_REF_NU="~$(escape_nu_double_quoted "$suffix")"
   else
-    CONFIG_DIR_REF_POSIX="$dir"
-    CONFIG_DIR_REF_NU="$dir"
+    CONFIG_DIR_REF_POSIX="$(escape_posix_double_quoted "$dir")"
+    CONFIG_DIR_REF_FISH="$(escape_fish_double_quoted "$dir")"
+    CONFIG_DIR_REF_NU="$(escape_nu_double_quoted "$dir")"
   fi
 }
 
@@ -669,9 +703,11 @@ append_source_to_file() {
     fi
   done
 
-  echo "" >> "$shell_config"
-  echo "# Vite+ bin (https://viteplus.dev)" >> "$shell_config"
-  echo "$source_line" >> "$shell_config"
+  {
+    printf '\n'
+    printf '%s\n' "# Vite+ bin (https://viteplus.dev)"
+    printf '%s\n' "$source_line"
+  } >> "$shell_config"
   return 0
 }
 
@@ -837,7 +873,7 @@ configure_bash_path() {
 configure_fish_path() {
   local fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish"
   local fish_content="# Vite+ bin (https://viteplus.dev)
-source \"$CONFIG_DIR_REF_POSIX/env.fish\"
+source \"$CONFIG_DIR_REF_FISH/env.fish\"
 "
 
   local result=0
@@ -872,7 +908,7 @@ configure_nushell_path() {
 
   local nushell_autoload="$nushell_dir/vite-plus.nu"
   local nushell_content="# Vite+ bin (https://viteplus.dev)
-source '$CONFIG_DIR_REF_NU/env.nu'
+source \"$CONFIG_DIR_REF_NU/env.nu\"
 "
 
   local result=0
@@ -1363,11 +1399,11 @@ WRAPPER_EOF
     echo ""
     echo "  Manual setup instructions:"
     echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
-    echo "        . \"$CONFIG_DIR_REF_POSIX/env\""
+    printf '        . "%s/env"\n' "$CONFIG_DIR_REF_POSIX"
     echo "    - Fish: create ${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish with:"
-    echo "        source \"$CONFIG_DIR_REF_POSIX/env.fish\""
+    printf '        source "%s/env.fish"\n' "$CONFIG_DIR_REF_FISH"
     echo "    - Nushell: create a vendor autoload file with:"
-    echo "        source '$CONFIG_DIR_REF_NU/env.nu'"
+    printf '        source "%s/env.nu"\n' "$CONFIG_DIR_REF_NU"
     echo ""
     echo "  Or run vp directly:"
     echo ""
