@@ -80,7 +80,7 @@ vp-use --unset
 
 Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the bin directory on Windows.
 
-In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
+In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under the resolved state directory so later shim calls in the same job can resolve the selected Node.js version.
 
 ### Manage
 
@@ -146,7 +146,7 @@ Vite+ creates a `corepack` shim by default, so corepack works without a system N
 - On Node.js 25 and later, where corepack is no longer bundled, Vite+ installs corepack as a managed global package on first use. Only the `corepack` binary is linked; run `vp install -g corepack` yourself if you also want the package's pnpm/yarn launchers exposed directly.
 - If you install corepack explicitly with `vp install -g corepack`, that installation is always preferred.
 
-`corepack enable` normally creates `pnpm`/`yarn` launchers next to the corepack binary, which under Vite+ would not be on `PATH`. The shim fixes this by defaulting `--install-directory` to `VP_HOME/bin`, so after `corepack enable` the launchers are available everywhere and still resolve the project's Node.js and package-manager versions:
+`corepack enable` normally creates `pnpm`/`yarn` launchers next to the corepack binary, which under Vite+ would not be on `PATH`. The shim fixes this by defaulting `--install-directory` to the resolved bin directory, so after `corepack enable` the launchers are available everywhere and still resolve the project's Node.js and package-manager versions:
 
 ```bash
 corepack enable               # pnpm and yarn now resolve via corepack
