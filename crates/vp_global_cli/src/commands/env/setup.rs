@@ -571,9 +571,9 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
+__ENV_EXPORTS__set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
 and set -e PATH[$__vp_idx]
-set -gx PATH __VP_BIN__ $PATH
+set -gx PATH "__VP_BIN__" $PATH
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -666,7 +666,7 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__$__vp_bin = "__VP_BIN_WIN__"
+__ENV_EXPORTS__$__vp_bin = '__VP_BIN_WIN__'
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
 }
@@ -770,6 +770,24 @@ fn render_nu_path_ref(path_ref: &str) -> String {
     }
 }
 
+/// Escapes a value for a POSIX-shell double-quoted string.
+fn escape_posix_double_quoted_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('$', "\\$").replace('`', "\\`").replace('"', "\\\"")
+}
+
+/// Escapes a value for a Fish double-quoted string.
+fn escape_fish_double_quoted_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('$', "\\$").replace('"', "\\\"")
+}
+
+/// Escape only the literal suffix of a `$HOME`-relative path. `$HOME` itself
+/// must remain expandable when the generated POSIX/Fish env file is sourced.
+fn escape_home_relative_double_quoted_path(path_ref: &str, escape: fn(&str) -> String) -> String {
+    path_ref
+        .strip_prefix("$HOME")
+        .map_or_else(|| escape(path_ref), |suffix| format!("$HOME{}", escape(suffix)))
+}
+
 /// Escapes a value so it can be safely embedded in a Nushell double-quoted string.
 ///
 /// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
@@ -777,6 +795,11 @@ fn render_nu_path_ref(path_ref: &str) -> String {
 fn escape_nu_double_quoted_string(value: &str) -> String {
     // `vp "home\with spaces"` → `vp \"home\\with spaces\"`
     value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Escapes a value for a PowerShell single-quoted string.
+fn escape_powershell_single_quoted_string(value: &str) -> String {
+    value.replace('\'', "''")
 }
 
 /// Render the re-export lines for the captured layout overrides
@@ -790,14 +813,22 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     exports
         .into_iter()
         .map(|(name, value)| match shell {
-            EnvShell::Posix => format!(
-                "export {name}=\"{}\"\n",
-                render_home_relative_path(std::path::Path::new(value), home_dir)
-            ),
-            EnvShell::Fish => format!(
-                "set -gx {name} \"{}\"\n",
-                render_home_relative_path(std::path::Path::new(value), home_dir)
-            ),
+            EnvShell::Posix => {
+                let path_ref = render_home_relative_path(std::path::Path::new(value), home_dir);
+                let escaped = escape_home_relative_double_quoted_path(
+                    &path_ref,
+                    escape_posix_double_quoted_string,
+                );
+                format!("export {name}=\"{escaped}\"\n")
+            }
+            EnvShell::Fish => {
+                let path_ref = render_home_relative_path(std::path::Path::new(value), home_dir);
+                let escaped = escape_home_relative_double_quoted_path(
+                    &path_ref,
+                    escape_fish_double_quoted_string,
+                );
+                format!("set -gx {name} \"{escaped}\"\n")
+            }
             EnvShell::Nu => {
                 let path_ref = render_nu_path_ref(&render_home_relative_path(
                     std::path::Path::new(value),
@@ -809,7 +840,10 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
                 )
             }
             // PowerShell uses the actual absolute path (not $HOME-relative)
-            EnvShell::Powershell => format!("$env:{name} = \"{value}\"\n"),
+            EnvShell::Powershell => {
+                let escaped = escape_powershell_single_quoted_string(value);
+                format!("$env:{name} = '{escaped}'\n")
+            }
         })
         .collect()
 }
@@ -826,12 +860,24 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
     let dir_envs = render_dir_envs(shell, config);
 
     match shell {
-        EnvShell::Posix => ENV_TEMPLATE_POSIX
-            .replace("__ENV_EXPORTS__", &dir_envs)
-            .replace("__VP_BIN__", &bin_path_ref),
-        EnvShell::Fish => ENV_TEMPLATE_FISH
-            .replace("__ENV_EXPORTS__", &dir_envs)
-            .replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Posix => {
+            let bin_path_ref = escape_home_relative_double_quoted_path(
+                &bin_path_ref,
+                escape_posix_double_quoted_string,
+            );
+            ENV_TEMPLATE_POSIX
+                .replace("__ENV_EXPORTS__", &dir_envs)
+                .replace("__VP_BIN__", &bin_path_ref)
+        }
+        EnvShell::Fish => {
+            let bin_path_ref = escape_home_relative_double_quoted_path(
+                &bin_path_ref,
+                escape_fish_double_quoted_string,
+            );
+            ENV_TEMPLATE_FISH
+                .replace("__ENV_EXPORTS__", &dir_envs)
+                .replace("__VP_BIN__", &bin_path_ref)
+        }
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
@@ -843,7 +889,8 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
         }
         EnvShell::Powershell => {
             // PowerShell uses the actual absolute path (not $HOME-relative)
-            let bin_path_win = dirs.bin.as_path().display().to_string();
+            let bin_path_win =
+                escape_powershell_single_quoted_string(&dirs.bin.as_path().display().to_string());
             ENV_TEMPLATE_PS1
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN_WIN__", &bin_path_win)
@@ -1056,6 +1103,129 @@ mod tests {
         assert_eq!(
             escape_nu_double_quoted_string(r#"vp "home\with spaces""#),
             r#"vp \"home\\with spaces\""#
+        );
+    }
+
+    #[test]
+    fn test_escape_shell_string_literals() {
+        let value = r#"$USER "double" `tick` slash\ single'"#;
+        assert_eq!(
+            escape_posix_double_quoted_string(value),
+            r#"\$USER \"double\" \`tick\` slash\\ single'"#
+        );
+        assert_eq!(
+            escape_fish_double_quoted_string(value),
+            r#"\$USER \"double\" `tick` slash\\ single'"#
+        );
+        assert_eq!(
+            escape_nu_double_quoted_string(value),
+            r#"$USER \"double\" `tick` slash\\ single'"#
+        );
+        assert_eq!(
+            escape_powershell_single_quoted_string(value),
+            r#"$USER "double" `tick` slash\ single''"#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_preserves_metacharacter_dirs() {
+        let temp_dir = TempDir::new().unwrap();
+        let special = r#"$USER-"-'-`-\"#;
+        let custom_bin = temp_dir.path().join(format!("bin-{special}"));
+        let custom_data = temp_dir.path().join(format!("data-{special}"));
+        let custom_cache = temp_dir.path().join(format!("cache-{special}"));
+
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, Some(custom_bin.as_os_str())),
+                (vp_shared::env_vars::VP_DATA_DIR, Some(custom_data.as_os_str())),
+                (vp_shared::env_vars::VP_CACHE_DIR, Some(custom_cache.as_os_str())),
+                ("HOME", Some(temp_dir.path().as_os_str())),
+                ("USERPROFILE", Some(temp_dir.path().as_os_str())),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let home_dir = config.user_home.as_path();
+
+                let bin_ref = render_home_relative_path(custom_bin.as_path(), home_dir);
+                let posix_bin_ref = escape_home_relative_double_quoted_path(
+                    &bin_ref,
+                    escape_posix_double_quoted_string,
+                );
+                let fish_bin_ref = escape_home_relative_double_quoted_path(
+                    &bin_ref,
+                    escape_fish_double_quoted_string,
+                );
+                let nu_bin_ref = escape_nu_double_quoted_string(&render_nu_path_ref(&bin_ref));
+                let ps_bin_ref = escape_powershell_single_quoted_string(
+                    &custom_bin.as_path().display().to_string(),
+                );
+                let data_ref = render_home_relative_path(custom_data.as_path(), home_dir);
+                let posix_data_ref = escape_home_relative_double_quoted_path(
+                    &data_ref,
+                    escape_posix_double_quoted_string,
+                );
+                let fish_data_ref = escape_home_relative_double_quoted_path(
+                    &data_ref,
+                    escape_fish_double_quoted_string,
+                );
+                let nu_data_ref = escape_nu_double_quoted_string(&render_nu_path_ref(&data_ref));
+                let ps_data_ref = escape_powershell_single_quoted_string(
+                    &custom_data.as_path().display().to_string(),
+                );
+
+                let posix_content = render_env_content(EnvShell::Posix, &config);
+                let fish_content = render_env_content(EnvShell::Fish, &config);
+                let nu_content = render_env_content(EnvShell::Nu, &config);
+                let ps_content = render_env_content(EnvShell::Powershell, &config);
+                assert!(posix_content.contains(&format!("__vp_bin=\"{posix_bin_ref}\"")));
+                assert!(
+                    posix_content.contains(&format!("export VP_DATA_DIR=\"{posix_data_ref}\""))
+                );
+                assert!(fish_content.contains(&format!("contains -i -- \"{fish_bin_ref}\"")));
+                assert!(fish_content.contains(&format!("set -gx VP_DATA_DIR \"{fish_data_ref}\"")));
+                assert!(nu_content.contains(&format!("prepend \"{nu_bin_ref}\"")));
+                assert!(nu_content.contains(&format!(
+                    "$env.VP_DATA_DIR = (\"{nu_data_ref}\" | path expand --no-symlink)"
+                )));
+                assert!(ps_content.contains(&format!("$__vp_bin = '{ps_bin_ref}'")));
+                assert!(ps_content.contains(&format!("$env:VP_DATA_DIR = '{ps_data_ref}'")));
+
+                // Source the generated POSIX file and verify both the persisted
+                // overrides and PATH retain every literal metacharacter.
+                let env_file = temp_dir.path().join("env");
+                std::fs::write(&env_file, posix_content).unwrap();
+                let output = std::process::Command::new("sh")
+                    .args([
+                        "-c",
+                        r#". "$1"; printf '%s\n%s\n%s\n%s\n' "$VP_BIN_DIR" "$VP_DATA_DIR" "$VP_CACHE_DIR" "${PATH%%:*}""#,
+                        "sh",
+                    ])
+                    .arg(&env_file)
+                    .env("HOME", temp_dir.path())
+                    .env_remove(vp_shared::env_vars::VP_BIN_DIR)
+                    .env_remove(vp_shared::env_vars::VP_DATA_DIR)
+                    .env_remove(vp_shared::env_vars::VP_CACHE_DIR)
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "sourcing env failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert_eq!(
+                    String::from_utf8(output.stdout).unwrap(),
+                    format!(
+                        "{}\n{}\n{}\n{}\n",
+                        custom_bin.display(),
+                        custom_data.display(),
+                        custom_cache.display(),
+                        custom_bin.display()
+                    )
+                );
+            },
         );
     }
 
