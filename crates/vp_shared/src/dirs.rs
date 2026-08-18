@@ -112,6 +112,28 @@ impl VpDirs {
         line.push('\n');
         std::fs::write(exe_path.with_extension(SHIM_POINTER_EXTENSION), line)
     }
+
+    /// Whether `exe_path` is a Windows trampoline owned by this install.
+    ///
+    /// A regular executable alone is not evidence of ownership because
+    /// `<BIN>` can be shared. Trampoline copy paths write a per-executable
+    /// sidecar containing this install's data root; consumers must require
+    /// that marker before refreshing or deleting an existing executable.
+    #[must_use]
+    pub fn owns_windows_trampoline(&self, exe_path: &std::path::Path) -> bool {
+        if !exe_path.is_file() {
+            return false;
+        }
+        let Ok(bytes) = std::fs::read(exe_path.with_extension(SHIM_POINTER_EXTENSION)) else {
+            return false;
+        };
+        let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes.as_slice());
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            return false;
+        };
+        let text = text.trim();
+        !text.is_empty() && std::path::Path::new(text) == self.data.as_path()
+    }
 }
 
 #[cfg(test)]
@@ -137,6 +159,27 @@ mod tests {
     fn shim_pointer_file_name_uses_stem_and_extension() {
         assert_eq!(shim_pointer_file_name("vp"), "vp.shim");
         assert_eq!(shim_pointer_file_name("node"), "node.shim");
+    }
+
+    #[test]
+    fn windows_trampoline_ownership_requires_matching_sidecar() {
+        EnvConfig::scoped(|config| {
+            let node = config.dirs.bin.join("node.exe");
+            std::fs::create_dir_all(&config.dirs.bin).unwrap();
+            std::fs::write(node.as_path(), b"trampoline-or-foreign").unwrap();
+
+            assert!(!config.dirs.owns_windows_trampoline(node.as_path()));
+
+            std::fs::write(
+                node.as_path().with_extension(SHIM_POINTER_EXTENSION),
+                b"C:\\unrelated-data\n",
+            )
+            .unwrap();
+            assert!(!config.dirs.owns_windows_trampoline(node.as_path()));
+
+            config.dirs.write_shim_pointer("node").unwrap();
+            assert!(config.dirs.owns_windows_trampoline(node.as_path()));
+        });
     }
 
     #[test]

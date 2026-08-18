@@ -1073,9 +1073,44 @@ jobs:
         with:
           target-dir: ${{ format('{0}/target', env.DEV_DRIVE) }}
 
-      - name: Build vp-setup.exe
+      - name: Build Windows installers
         shell: bash
-        run: cargo build --release -p vp_installer
+        run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
+
+      - name: PowerShell installer preserves an unrelated Node executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vite-plus-foreign-node-ps1"
+          $data = Join-Path $root "data"
+          $bin = Join-Path $root "bin"
+          $cache = Join-Path $root "cache"
+          $node = Join-Path $bin "node.exe"
+          $fakeTgz = Join-Path $root "vite-plus.tgz"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          [System.IO.File]::WriteAllText($node, "foreign-node")
+          New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
+
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          $env:VP_BIN_DIR = $bin
+          $env:VP_DATA_DIR = $data
+          $env:VP_CACHE_DIR = $cache
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = $fakeTgz
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-foreign-node"
+          $env:VP_NODE_MANAGER = ""
+          $env:CI = "true"
+
+          & ./packages/cli/install.ps1
+
+          if ([System.IO.File]::ReadAllText($node) -ne "foreign-node") {
+            Write-Error "install.ps1 replaced an unrelated node.exe"
+          }
+          if (Test-Path (Join-Path $bin "node.shim")) {
+            Write-Error "install.ps1 claimed an unrelated node.exe"
+          }
 
       - name: Install via vp-setup.exe (silent)
         shell: pwsh

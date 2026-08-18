@@ -210,9 +210,11 @@ Env scripts are written under **config** (split: `~/.config/vite-plus/env*`; mon
 
 #### Node-manager shim ownership
 
-The Unix split layout places shims in `~/.local/bin`, which can contain executables from other tools. When `<BIN>/node` exists, `install.sh` verifies ownership before an automatic Node-manager shim refresh. On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. In Windows Unix-like shells, `<BIN>/node.exe` must have a `node.shim` sidecar that points to the resolved data root.
+The split layout can place shims in a bin directory shared with other tools, such as `~/.local/bin` or a custom `VP_BIN_DIR`. Every installer verifies ownership before an automatic Node-manager shim refresh. On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. On Windows, `install.ps1`, `vp-setup`, and Unix-like shells recognize `<BIN>/node.exe` only when its `node.shim` sidecar points to the resolved data root.
 
 A foreign Node entry blocks automatic enablement. This includes CI and devcontainer environments as well as the no-system-Node fallback. `VP_NODE_MANAGER=yes` or acceptance of the interactive prompt authorizes the installer to replace conflicting `node`, `npm`, `npx`, and `corepack` entries. Without one of these opt-ins, the installer preserves the foreign entry. `VP_NODE_MANAGER=no` prevents replacement. A reinstall refreshes the shims after the ownership check confirms that Vite+ created them.
+
+Windows sidecars are ownership markers, not discovery files. Vite+ writes one immediately after it copies a trampoline executable. `vp env setup --env-only` never writes sidecars, and setup without `--refresh` does not add a sidecar to an executable it skipped. An explicit `vp env setup --refresh` replaces the executable and then records ownership of the new trampoline.
 
 ### Compatibility with pre-split releases
 

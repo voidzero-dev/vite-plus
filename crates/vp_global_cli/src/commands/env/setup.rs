@@ -54,9 +54,6 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files().await?;
 
-    #[cfg(windows)]
-    refresh_owned_shim_pointers(dirs);
-
     if env_only {
         println!("{}", help::render_heading("Setup"));
         println!("  Updated shell environment files.");
@@ -397,32 +394,6 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
 fn write_shim_pointer_beside(exe_path: &std::path::Path) {
     if let Err(e) = vp_shared::EnvConfig::get().dirs.write_shim_pointer_beside(exe_path) {
         tracing::warn!("Failed to write shim pointer for {}: {e}", exe_path.display());
-    }
-}
-
-/// Rewrite sidecars for every owned trampoline that is already on disk.
-///
-/// Covers `--env-only` and skipped existing shims so a data-root change is
-/// picked up without `--refresh`.
-#[cfg(windows)]
-fn refresh_owned_shim_pointers(dirs: &vp_shared::VpDirs) {
-    let mut stems = vec!["vp".to_string()];
-    stems.extend(SHIM_TOOLS.iter().map(|tool| (*tool).to_string()));
-    if let Ok(entries) = std::fs::read_dir(dirs.data.join("bins").as_path()) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json")
-                && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
-            {
-                stems.push(stem.to_string());
-            }
-        }
-    }
-    for stem in stems {
-        let exe = dirs.bin.join(format!("{stem}.exe"));
-        if exe.as_path().exists() {
-            write_shim_pointer_beside(exe.as_path());
-        }
     }
 }
 
@@ -1450,6 +1421,41 @@ mod tests {
                 assert!(
                     cmd_content.contains(&format!("\"{}\" env use %*", expected_exe.display())),
                     "vp-use.cmd should invoke the install-local vp.exe, got: {cmd_content}"
+                );
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn test_setup_does_not_claim_foreign_windows_executable() {
+        let temp_dir = TempDir::new().unwrap();
+        let install_root = temp_dir.path().join("vite-plus");
+        let bin_dir = install_root.join("bin");
+        let node = bin_dir.join("node.exe");
+        let pointer = bin_dir.join("node.shim");
+        let trampoline = write_fake_trampoline(temp_dir.path());
+
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&node, b"foreign-node").await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, install_root.as_os_str()),
+                ("HOME", temp_dir.path().as_os_str()),
+                ("USERPROFILE", temp_dir.path().as_os_str()),
+                (vp_shared::env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str()),
+            ],
+            |_| async {
+                execute(false, true).await.unwrap();
+                assert!(!pointer.exists(), "--env-only must not write shim ownership markers");
+
+                execute(false, false).await.unwrap();
+                assert_eq!(tokio::fs::read(&node).await.unwrap(), b"foreign-node");
+                assert!(
+                    !pointer.exists(),
+                    "setup without --refresh must not claim a skipped executable"
                 );
             },
         )

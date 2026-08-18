@@ -140,7 +140,7 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     // Pre-compute Node.js manager default before showing the menu,
     // so the user sees the resolved value and can override it.
     if !opts.no_node_manager {
-        opts.no_node_manager = !auto_detect_node_manager(&dirs.bin, !opts.yes);
+        opts.no_node_manager = !auto_detect_node_manager(&dirs, !opts.yes);
     }
 
     if !opts.yes {
@@ -348,13 +348,55 @@ async fn do_install(
 ///
 /// Matches install.ps1/install.sh auto-detect logic:
 /// 1. VP_NODE_MANAGER=yes → enable; VP_NODE_MANAGER=no → disable
-/// 2. Already managing Node (bin/node.exe exists) → enable (refresh)
+/// 2. Vite+-owned Node shim → enable (refresh); foreign target-bin Node → require consent
 /// 3. CI / Codespaces / DevContainer / DevPod → enable
 /// 4. No system `node` found → enable
 /// 5. System node present, interactive → enable (matching install.ps1's default-Y prompt;
 ///    user can disable via customize menu before proceeding)
 /// 6. System node present, silent → disable (don't silently take over)
-fn auto_detect_node_manager(bin_dir: &vt_path::AbsolutePath, interactive: bool) -> bool {
+fn auto_detect_node_manager(dirs: &VpDirs, interactive: bool) -> bool {
+    auto_detect_node_manager_for_state(existing_node_shim_state(dirs), interactive)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NodeShimState {
+    Absent,
+    Owned,
+    Foreign,
+}
+
+fn existing_node_shim_state(dirs: &VpDirs) -> NodeShimState {
+    #[cfg(windows)]
+    {
+        let node = dirs.bin.join("node.exe");
+        if !node.as_path().exists() {
+            return NodeShimState::Absent;
+        }
+        return if dirs.owns_windows_trampoline(node.as_path()) {
+            NodeShimState::Owned
+        } else {
+            NodeShimState::Foreign
+        };
+    }
+
+    #[cfg(not(windows))]
+    {
+        let node = dirs.bin.join("node");
+        let Ok(metadata) = std::fs::symlink_metadata(node.as_path()) else {
+            return NodeShimState::Absent;
+        };
+        if !metadata.file_type().is_symlink() {
+            return NodeShimState::Foreign;
+        }
+        let expected = dirs.data.join("current").join("bin").join(vp_shared::VP_BINARY_NAME);
+        let owned = std::fs::canonicalize(node.as_path()).is_ok_and(|target| {
+            std::fs::canonicalize(expected.as_path()).is_ok_and(|expected| target == expected)
+        });
+        if owned { NodeShimState::Owned } else { NodeShimState::Foreign }
+    }
+}
+
+fn auto_detect_node_manager_for_state(state: NodeShimState, interactive: bool) -> bool {
     // VP_NODE_MANAGER env var: only "yes" and "no" are recognized;
     // unrecognized values fall through to normal auto-detection
     // (matching install.ps1/install.sh behavior).
@@ -367,10 +409,12 @@ fn auto_detect_node_manager(bin_dir: &vt_path::AbsolutePath, interactive: bool) 
         }
     }
 
-    // Already managing Node (shims exist from a previous install)
-    let node_shim = bin_dir.join(if cfg!(windows) { "node.exe" } else { "node" });
-    if node_shim.as_path().exists() {
-        return true;
+    match state {
+        NodeShimState::Owned => return true,
+        // Silent setup must not overwrite an unrelated executable. In the
+        // interactive menu, proceeding with the enabled default is consent.
+        NodeShimState::Foreign => return interactive,
+        NodeShimState::Absent => {}
     }
 
     // Auto-enable on CI / devcontainer environments
@@ -477,8 +521,8 @@ async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>
 
         if tokio::fs::try_exists(&src).await.unwrap_or(false) {
             replace_windows_exe(&src, &shim_dst, &bin_dir).await?;
+            dirs.write_shim_pointer("vp")?;
         }
-        dirs.write_shim_pointer("vp")?;
 
         // Best-effort cleanup of old shim files
         if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
@@ -719,6 +763,41 @@ mod tests {
             vec![("HOME", Some(home.as_os_str())), ("USERPROFILE", Some(home.as_os_str()))];
         vars.extend(env_vars::LAYOUT_OVERRIDE_VARS.iter().map(|name| (*name, None)));
         EnvConfig::with_vars(vars, |_| f())
+    }
+
+    #[test]
+    fn foreign_node_requires_interactive_or_explicit_consent() {
+        EnvConfig::with_vars([("VP_NODE_MANAGER", None), ("CI", Some("true"))], |_| {
+            assert!(
+                !auto_detect_node_manager_for_state(NodeShimState::Foreign, false),
+                "silent CI setup must preserve a foreign Node executable"
+            );
+            assert!(
+                auto_detect_node_manager_for_state(NodeShimState::Foreign, true),
+                "the interactive menu can obtain consent to replace it"
+            );
+        });
+
+        EnvConfig::with_vars([("VP_NODE_MANAGER", Some("yes")), ("CI", None)], |_| {
+            assert!(auto_detect_node_manager_for_state(NodeShimState::Foreign, false));
+        });
+        EnvConfig::with_vars([("VP_NODE_MANAGER", Some("no")), ("CI", None)], |_| {
+            assert!(!auto_detect_node_manager_for_state(NodeShimState::Owned, true));
+        });
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn existing_windows_node_requires_matching_sidecar() {
+        EnvConfig::scoped(|config| {
+            let node = config.dirs.bin.join("node.exe");
+            std::fs::create_dir_all(&config.dirs.bin).unwrap();
+            std::fs::write(node.as_path(), b"foreign-node").unwrap();
+            assert_eq!(existing_node_shim_state(&config.dirs), NodeShimState::Foreign);
+
+            config.dirs.write_shim_pointer("node").unwrap();
+            assert_eq!(existing_node_shim_state(&config.dirs), NodeShimState::Owned);
+        });
     }
 
     #[test]

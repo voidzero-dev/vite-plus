@@ -95,18 +95,7 @@ fn windows_regular_file_is_vp_shim(shim_path: &vt_path::AbsolutePath) -> bool {
     if shim_path.as_path().file_name().is_some_and(|name| name == "vp-use.cmd") {
         return true;
     }
-    let Ok(bytes) =
-        std::fs::read(shim_path.as_path().with_extension(vp_shared::SHIM_POINTER_EXTENSION))
-    else {
-        return false;
-    };
-    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes.as_slice());
-    let Ok(text) = std::str::from_utf8(bytes) else {
-        return false;
-    };
-    let text = text.trim();
-    !text.is_empty()
-        && std::path::Path::new(text) == vp_shared::EnvConfig::get().dirs.data.as_path()
+    vp_shared::EnvConfig::get().dirs.owns_windows_trampoline(shim_path.as_path())
 }
 
 /// Check whether a binary name is a shim Vite+ owns unconditionally: core

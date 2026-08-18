@@ -795,6 +795,30 @@ function Refresh-Shims {
     }
 }
 
+# Return true only when the existing Node executable belongs to this Vite+
+# install. $ShimDir can be shared, so node.exe existence alone does not grant
+# permission to replace it.
+function Test-VitePlusNodeShim {
+    $nodePath = Join-Path $ShimDir "node.exe"
+    $pointerPath = Join-Path $ShimDir "node.shim"
+    $hasNode = Test-Path -LiteralPath $nodePath -PathType Leaf
+    $hasPointer = Test-Path -LiteralPath $pointerPath -PathType Leaf
+    if (-not $hasNode -or -not $hasPointer) {
+        return $false
+    }
+
+    try {
+        $pointer = [System.IO.File]::ReadAllText($pointerPath).Trim()
+    } catch {
+        return $false
+    }
+    if ([string]::IsNullOrWhiteSpace($pointer)) {
+        return $false
+    }
+
+    return (Normalize-InstallDir $pointer) -eq (Normalize-InstallDir $InstallDir)
+}
+
 # Setup Node.js version manager (node/npm/npx/corepack shims)
 # Returns: "true" = enabled, "false" = not enabled, "already" = already configured
 function Setup-NodeManager {
@@ -810,11 +834,16 @@ function Setup-NodeManager {
         return "false"
     }
 
-    # Check if Vite+ is already managing Node.js (bin\node.exe exists)
-    if (Test-Path "$binPath\node.exe") {
-        # Already managing Node.js, just refresh shims
-        Refresh-Shims -BinDir $BinDir
-        return "already"
+    # A foreign Node executable in a shared bin directory blocks every
+    # automatic path below. Explicit opt-in above or acceptance of the
+    # interactive prompt still authorizes replacement.
+    $foreignNodeInBin = $false
+    if (Test-Path -LiteralPath (Join-Path $binPath "node.exe")) {
+        if (Test-VitePlusNodeShim) {
+            Refresh-Shims -BinDir $BinDir
+            return "already"
+        }
+        $foreignNodeInBin = $true
     }
 
     # Auto-enable on CI or devcontainer environments
@@ -822,7 +851,8 @@ function Setup-NodeManager {
     # CODESPACES: set by GitHub Codespaces (https://docs.github.com/en/codespaces)
     # REMOTE_CONTAINERS: set by VS Code Dev Containers extension
     # DEVPOD: set by DevPod (https://devpod.sh)
-    if ($env:CI -or $env:CODESPACES -or $env:REMOTE_CONTAINERS -or $env:DEVPOD) {
+    $isAutomaticEnvironment = $env:CI -or $env:CODESPACES -or $env:REMOTE_CONTAINERS -or $env:DEVPOD
+    if (-not $foreignNodeInBin -and $isAutomaticEnvironment) {
         Refresh-Shims -BinDir $BinDir
         return "true"
     }
@@ -831,13 +861,15 @@ function Setup-NodeManager {
     $nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
 
     # Auto-enable if no node available on system
-    if (-not $nodeAvailable) {
+    if (-not $nodeAvailable -and -not $foreignNodeInBin) {
         Refresh-Shims -BinDir $BinDir
         return "true"
     }
 
     # Prompt user in interactive mode
-    $isInteractive = [Environment]::UserInteractive
+    # CI implies unattended setup even when the host process reports itself as
+    # interactive (which some hosted PowerShell runners do).
+    $isInteractive = [Environment]::UserInteractive -and -not $env:CI
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
