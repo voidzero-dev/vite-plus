@@ -498,6 +498,31 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
+// Collect the names a bundled chunk binds at its own top level. Rolldown emits
+// module-scope statements unindented, so anchoring to the start of a line keeps
+// nested-scope declarations (which would not be visible at the logger call
+// site) out of the result.
+function collectTopLevelDeclarations(content: string): Set<string> {
+  const declared = new Set<string>();
+  for (const [, name] of content.matchAll(
+    /^(?:const|let|var|function\*?|class)\s+([A-Za-z0-9_$]+)/gm,
+  )) {
+    declared.add(name);
+  }
+  for (const [, bindings] of content.matchAll(/^(?:const|let|var)\s*\{([^}]*)\}\s*=/gm)) {
+    for (const binding of bindings.split(',')) {
+      // Strip a default value (`a = 1`), then prefer the renamed local (`a: b`).
+      const trimmed = binding.split('=')[0].trim();
+      if (!trimmed) {
+        continue;
+      }
+      const renamed = trimmed.match(/:\s*([A-Za-z0-9_$]+)$/);
+      declared.add(renamed ? renamed[1] : trimmed);
+    }
+  }
+  return declared;
+}
+
 // Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
 // `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
 // import every color the Vite+ branding uses, so after the logger patches we
@@ -530,6 +555,15 @@ async function ensureAnsisImports(
       const aliased = trimmed.match(/\bas\s+([A-Za-z0-9_$]+)$/);
       localNames.add(aliased ? aliased[1] : trimmed);
     }
+  }
+  // Bindings the chunk declares itself. Depending on rolldown's chunking, ansis
+  // is sometimes inlined straight into the logger chunk (as a top-level
+  // `const { ..., bold, ..., red, ... } = ...` destructuring) instead of living
+  // in a shared chunk, in which case the colors are already in module scope and
+  // must not be imported again. Only top-level (unindented) declarations count,
+  // so a same-named binding in a nested scope can't be mistaken for one.
+  for (const name of collectTopLevelDeclarations(content)) {
+    localNames.add(name);
   }
   const missing = names.filter((name) => !localNames.has(name));
   if (missing.length === 0) {
