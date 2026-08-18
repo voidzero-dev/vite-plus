@@ -159,6 +159,27 @@ jobs:
           test "$(readlink "$FRESH/.local/bin/vp")" = "$FRESH/.local/share/vite-plus/current/bin/vp"
           "$FRESH/.local/bin/vp" --version
 
+      - name: Fresh split install preserves an unrelated Node executable
+        run: |
+          set -euo pipefail
+          FOREIGN=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          mkdir -p "$FOREIGN/.local/bin"
+          printf '#!/bin/sh\necho foreign-node\n' > "$FOREIGN/.local/bin/node"
+          chmod +x "$FOREIGN/.local/bin/node"
+          export HOME="$FOREIGN"
+          export USERPROFILE="$FOREIGN"
+          # Override the job-level opt-in. CI auto-enablement must also leave a
+          # Node executable that Vite+ does not own untouched.
+          export VP_NODE_MANAGER=
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_BIN_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-foreign-node bash packages/cli/install.sh
+
+          test -f "$FOREIGN/.local/bin/node"
+          test ! -L "$FOREIGN/.local/bin/node"
+          test "$("$FOREIGN/.local/bin/node")" = "foreign-node"
+
       - name: Existing ~/.vite-plus is reused
         run: |
           set -euo pipefail

@@ -208,6 +208,12 @@ There is a **single** install script per platform (no separate per-layout instal
 
 Env scripts are written under **config** (split: `~/.config/vite-plus/env*`; monolithic: the install root). PATH entries point at the resolved **bin** directory.
 
+#### Node-manager shim ownership
+
+The Unix split layout places shims in `~/.local/bin`, which can contain executables from other tools. When `<BIN>/node` exists, `install.sh` verifies ownership before an automatic Node-manager shim refresh. On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. In Windows Unix-like shells, `<BIN>/node.exe` must have a `node.shim` sidecar that points to the resolved data root.
+
+A foreign Node entry blocks automatic enablement. This includes CI and devcontainer environments as well as the no-system-Node fallback. `VP_NODE_MANAGER=yes` or acceptance of the interactive prompt authorizes the installer to replace conflicting `node`, `npm`, `npx`, and `corepack` entries. Without one of these opt-ins, the installer preserves the foreign entry. `VP_NODE_MANAGER=no` prevents replacement. A reinstall refreshes the shims after the ownership check confirms that Vite+ created them.
+
 ### Compatibility with pre-split releases
 
 The installers accept any published `VP_VERSION`. Until the first split-aware release (planned 0.3.0) ships, `latest` also resolves to a pre-split version. A pre-split binary resolves every path from `VP_HOME` (default `~/.vite-plus`): its env setup, shims, trampoline, and `vp upgrade` all assume that monolithic root. An install of such a binary into split roots is broken, but the installer still exits 0:

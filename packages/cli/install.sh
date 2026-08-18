@@ -1031,6 +1031,31 @@ refresh_shims() {
   fi
 }
 
+# Return success only when the existing Node entry belongs to this Vite+
+# install. `<BIN>` may be a shared directory (for example ~/.local/bin), so
+# existence alone is not proof that Vite+ may replace it.
+is_vite_plus_node_shim() {
+  local bin_path="$1"
+  local vp_bin="$2"
+
+  # Unix shims are symlinks to the active vp binary. `-ef` follows the link
+  # and accepts both the old relative target and the split-layout absolute one.
+  if [ -L "$bin_path/node" ] && [ "$bin_path/node" -ef "$vp_bin" ]; then
+    return 0
+  fi
+
+  # install.sh can also run under Git Bash/MSYS. Windows trampolines carry a
+  # per-executable sidecar that records the owning data root.
+  if [ -f "$bin_path/node.exe" ] && [ -f "$bin_path/node.shim" ]; then
+    local pointer=""
+    IFS= read -r pointer < "$bin_path/node.shim" || return 1
+    pointer="${pointer%$'\r'}"
+    [ "$pointer" = "$INSTALL_DIR" ] && return 0
+  fi
+
+  return 1
+}
+
 # Setup Node.js version manager (node/npm/npx/corepack shims)
 # Sets NODE_MANAGER_ENABLED global
 # Arguments: bin_dir - path to the version's bin directory containing vp
@@ -1055,11 +1080,17 @@ setup_node_manager() {
     return 0
   fi
 
-  # Check if Vite+ is already managing Node.js (bin/node or bin/node.exe exists)
-  if [ -e "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
-    refresh_shims "$vp_bin"
-    NODE_MANAGER_ENABLED="already"
-    return 0
+  # Check whether an existing Node entry is a Vite+ shim. A foreign entry in
+  # the shared bin directory blocks automatic enablement, but the interactive
+  # prompt below can still obtain explicit consent to replace it.
+  local unmanaged_node_in_bin="false"
+  if [ -e "$bin_path/node" ] || [ -L "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
+    if is_vite_plus_node_shim "$bin_path" "$vp_bin"; then
+      refresh_shims "$vp_bin"
+      NODE_MANAGER_ENABLED="already"
+      return 0
+    fi
+    unmanaged_node_in_bin="true"
   fi
 
   # Auto-enable on CI or devcontainer environments
@@ -1067,7 +1098,7 @@ setup_node_manager() {
   # CODESPACES: set by GitHub Codespaces (https://docs.github.com/en/codespaces)
   # REMOTE_CONTAINERS: set by VS Code Dev Containers extension
   # DEVPOD: set by DevPod (https://devpod.sh)
-  if [ -n "$CI" ] || [ -n "$CODESPACES" ] || [ -n "$REMOTE_CONTAINERS" ] || [ -n "$DEVPOD" ]; then
+  if [ "$unmanaged_node_in_bin" = "false" ] && { [ -n "$CI" ] || [ -n "$CODESPACES" ] || [ -n "$REMOTE_CONTAINERS" ] || [ -n "$DEVPOD" ]; }; then
     refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
@@ -1080,7 +1111,7 @@ setup_node_manager() {
   fi
 
   # Auto-enable if no node available on system
-  if [ "$node_available" = "false" ]; then
+  if [ "$node_available" = "false" ] && [ "$unmanaged_node_in_bin" = "false" ]; then
     refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
