@@ -57,18 +57,38 @@ That layout is simple to install and document, but it conflicts with platform co
 
 | Root     | Contents                                                                                                                                             |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bin`    | Executables and shims (`<BIN>/vp`, `<BIN>/node`, …)                                                                                                  |
+| `bin`    | Executables and shims; ownership follows the resolved mapping (`<BIN>/vp`, `<BIN>/node`, …)                                                          |
 | `data`   | CLI versions, managed runtimes, package managers (`<DATA>/current`, `<DATA>/js_runtime`, `<DATA>/package_manager`, `<DATA>/packages`, `<DATA>/bins`) |
 | `cache`  | Disposable caches (`resolve_cache.json`, `.upgrade-check.json`, create-org tarballs)                                                                 |
 | `config` | User configuration (`<CONFIG>/env*`, `<CONFIG>/config.json`)                                                                                         |
 | `state`  | State files (session version)                                                                                                                        |
 
+#### `<BIN>` ownership invariant
+
+The resolution source determines `<BIN>` ownership. The category alone does not make the directory Vite+-owned.
+
+| Resolution source                                                              | Ownership                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unix platform default, `XDG_BIN_HOME`, or the `$XDG_DATA_HOME/../bin` fallback | Shared user executable directory. The default `$HOME/.local/bin` is the [XDG location for user-specific executable files](https://specifications.freedesktop.org/basedir-spec/latest/). Vite+ owns only entries that it created and can identify. |
+| Windows platform default                                                       | Application-owned directory under `%LOCALAPPDATA%\vite-plus\bin`.                                                                                                                                                                                 |
+| `VP_HOME` or a grandfathered monolithic install                                | Application-owned `<root>/bin` inside the Vite+ install root.                                                                                                                                                                                     |
+| User-supplied `VP_BIN_DIR` on any platform                                     | Potentially shared, regardless of whether its path resembles a platform default.                                                                                                                                                                  |
+
+`VpDirs` and `VP_DUMP_DIRS` expose resolved paths without resolution provenance. A consumer that has only a path must use the shared-directory policy. It may manage an application-owned `<BIN>` as a directory only when it retains trusted provenance for that mapping. It must not infer ownership from the path string.
+
+For a potentially shared `<BIN>`, installers, `vp env setup`, global package shim management, and `vp implode` must follow these rules:
+
+- Never recursively remove `<BIN>`.
+- Verify a symlink target, trampoline marker, or equivalent ownership evidence before replacing or removing an entry. A known filename or global package metadata does not prove ownership.
+- Preserve an existing entry whose ownership Vite+ cannot verify. Treat it as a conflict unless the user authorizes replacement, then record ownership of the new Vite+ entry.
+
 `VpDirs` is a **stateful value**: the strategy chain runs once at
 construction (`VpDirs::resolve()`), the five roots are stored as public
 fields, and process env changes afterwards are not observed (child processes
-resolve their own roots from their own environment). The struct carries **no
-notion of layout** — every resolution source maps onto the same five roots,
-and features must not branch on how the roots were produced.
+resolve their own roots from their own environment). The struct carries no
+layout tag: every resolution source maps onto the same five roots, and feature
+path construction must not branch on how the roots were produced. The
+ownership rule above governs destructive operations on `<BIN>`.
 
 First-level directories under `data` (`current`, `js_runtime`, …) and all
 deeper trees (`config.json`, `js_runtime/node/<ver>`, `resolve_cache.json`,
@@ -196,6 +216,12 @@ Relative `VP_*` / `XDG_*` values are treated as unset (per the XDG Base Director
 
 Under **data** (both layouts): version directories, `current`, `js_runtime`, `package_manager`, `packages`, `bins`.
 
+#### Windows `<CONFIG>` portability
+
+Windows maps `<CONFIG>` to [`%APPDATA%\vite-plus`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_roamingappdata), the roaming application-data directory. It maps `<DATA>`, `<CACHE>`, and `<STATE>` under [`%LOCALAPPDATA%`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_localappdata). Durable files in `<CONFIG>`, including `config.json`, must contain portable user preferences. Machine-specific paths, downloaded payloads, caches, and session state belong in the local categories.
+
+The generated `<CONFIG>/env*` files are setup projections of the current machine's resolved roots, not authoritative state. Installers and `vp env setup` regenerate them for the current machine. Features must not use them to store machine identity or durable state.
+
 ### Installers
 
 `install.sh` / `install.ps1` (and local `install-global-cli`) mirror the CLI chain:
@@ -210,7 +236,7 @@ Env scripts are written under **config** (split: `~/.config/vite-plus/env*`; mon
 
 #### Node-manager shim ownership
 
-The split layout can place shims in a bin directory shared with other tools, such as `~/.local/bin` or a custom `VP_BIN_DIR`. Every installer verifies ownership before an automatic Node-manager shim refresh. On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. On Windows, `install.ps1`, `vp-setup`, and Unix-like shells recognize `<BIN>/node.exe` only when its `node.shim` sidecar points to the resolved data root.
+Node-manager shims follow the [`<BIN>` ownership invariant](#bin-ownership-invariant). On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. On Windows, `install.ps1`, `vp-setup`, and Unix-like shells recognize `<BIN>/node.exe` only when its `node.shim` sidecar points to the resolved data root.
 
 A foreign Node entry blocks automatic enablement. This includes CI and devcontainer environments as well as the no-system-Node fallback. `VP_NODE_MANAGER=yes` or acceptance of the interactive prompt authorizes the installer to replace conflicting `node`, `npm`, `npx`, and `corepack` entries. Without one of these opt-ins, the installer preserves the foreign entry. `VP_NODE_MANAGER=no` prevents replacement. A reinstall refreshes the shims after the ownership check confirms that Vite+ created them.
 
