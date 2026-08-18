@@ -160,6 +160,24 @@ resolution_home_dir() {
   fi
 }
 
+# Released setup-vp versions add the legacy ~/.vite-plus/bin directory to the
+# GitHub Actions PATH after this installer exits. Keep those callers on the
+# monolithic layout until setup-vp declares that it consumes VP_DUMP_DIRS.
+enable_setup_vp_legacy_compatibility() {
+  [ "${GITHUB_ACTION_REPOSITORY:-}" = "voidzero-dev/setup-vp" ] || return 0
+  [ "${VP_VPDIRS_AWARE:-}" != "1" ] || return 0
+  [ -z "${VP_HOME:-}" ] || return 0
+  [ -z "${VP_BIN_DIR:-}" ] || return 0
+  [ -z "${VP_DATA_DIR:-}" ] || return 0
+  [ -z "${VP_CACHE_DIR:-}" ] || return 0
+
+  local resolution_home
+  resolution_home="$(resolution_home_dir)"
+  [ -n "$resolution_home" ] || error "Could not resolve user home directory"
+  VP_HOME="$resolution_home/.vite-plus"
+  export VP_HOME
+}
+
 # Escape a path fragment for a Bash/Zsh double-quoted string. `$HOME` is
 # added separately when the config directory is under the user home.
 escape_posix_double_quoted() {
@@ -1132,6 +1150,7 @@ main() {
     error "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
   fi
 
+  enable_setup_vp_legacy_compatibility
   check_requirements
 
   local previous_install_dir=""

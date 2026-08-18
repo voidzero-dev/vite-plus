@@ -221,6 +221,28 @@ function Get-UserHomeDir {
     return [Environment]::GetFolderPath('UserProfile')
 }
 
+# Released setup-vp versions add the legacy %USERPROFILE%\.vite-plus\bin
+# directory to the GitHub Actions PATH after this installer exits. Keep those
+# callers on the monolithic layout until setup-vp declares that it consumes
+# VP_DUMP_DIRS.
+function Enable-SetupVpLegacyCompatibility {
+    if ($env:GITHUB_ACTION_REPOSITORY -cne "voidzero-dev/setup-vp") {
+        return
+    }
+    if ($env:VP_VPDIRS_AWARE -eq "1") {
+        return
+    }
+    if ($env:VP_HOME -or $env:VP_BIN_DIR -or $env:VP_DATA_DIR -or $env:VP_CACHE_DIR) {
+        return
+    }
+
+    $userHome = Get-UserHomeDir
+    if ([string]::IsNullOrWhiteSpace($userHome)) {
+        Write-Error-Exit "Could not resolve user home directory"
+    }
+    $env:VP_HOME = Join-Path $userHome ".vite-plus"
+}
+
 # Monolithic mapping: every category on one root.
 function New-MonolithicLayout {
     param([string]$Root)
@@ -846,6 +868,7 @@ function Main {
         Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
     }
 
+    Enable-SetupVpLegacyCompatibility
     $previousInstallDir = $null
 
     # Suppress progress bars for cleaner output

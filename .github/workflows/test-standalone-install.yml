@@ -217,6 +217,25 @@ jobs:
       - name: Build local vp
         run: cargo build --release -p vp_global_cli
 
+      - name: Existing setup-vp uses legacy layout
+        run: |
+          set -euo pipefail
+          LEGACY=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$LEGACY"
+          export USERPROFILE="$LEGACY"
+          export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
+          unset VP_VPDIRS_AWARE
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-setup-vp-legacy bash packages/cli/install.sh
+
+          test -e "$LEGACY/.vite-plus/current"
+          test -e "$LEGACY/.vite-plus/bin/vp"
+          test ! -d "$LEGACY/.local/share/vite-plus"
+          test "$(readlink "$LEGACY/.vite-plus/bin/vp")" = "$LEGACY/.vite-plus/current/bin/vp"
+          "$LEGACY/.vite-plus/bin/vp" --version
+
       - name: Fresh home uses split layout
         run: |
           set -euo pipefail
@@ -224,6 +243,8 @@ jobs:
           FAKE_TGZ=$(mktemp)
           export HOME="$FRESH"
           export USERPROFILE="$FRESH"
+          export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
+          export VP_VPDIRS_AWARE=1
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
@@ -253,6 +274,8 @@ jobs:
           chmod +x "$FOREIGN/.local/bin/node"
           export HOME="$FOREIGN"
           export USERPROFILE="$FOREIGN"
+          export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
+          unset VP_VPDIRS_AWARE
           export VP_BIN_DIR="$FOREIGN/.local/bin"
           # Override the job-level opt-in. A custom bin is potentially shared,
           # so CI auto-enablement must leave an unowned Node executable alone.
@@ -261,6 +284,7 @@ jobs:
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-foreign-node bash packages/cli/install.sh
 
+          test ! -d "$FOREIGN/.vite-plus"
           test -f "$FOREIGN/.local/bin/node"
           test ! -L "$FOREIGN/.local/bin/node"
           test "$("$FOREIGN/.local/bin/node")" = "foreign-node"
@@ -1161,6 +1185,42 @@ jobs:
       - name: Build Windows installers
         shell: bash
         run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
+
+      - name: Existing setup-vp uses legacy layout in PowerShell installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vite-plus-setup-vp-legacy-ps1"
+          $fakeTgz = Join-Path $root "vite-plus.tgz"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
+
+          $env:USERPROFILE = $root
+          $env:GITHUB_ACTION_REPOSITORY = "voidzero-dev/setup-vp"
+          Remove-Item Env:VP_VPDIRS_AWARE -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_DATA_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = $fakeTgz
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-setup-vp-legacy"
+          $env:VP_NODE_MANAGER = "no"
+          $env:CI = "true"
+
+          & ./packages/cli/install.ps1
+
+          $legacyRoot = Join-Path $root ".vite-plus"
+          $vp = Join-Path $legacyRoot "bin/vp.exe"
+          if (-not (Test-Path (Join-Path $legacyRoot "current"))) {
+            Write-Error "setup-vp compatibility install did not use $legacyRoot"
+          }
+          if (-not (Test-Path $vp)) {
+            Write-Error "setup-vp compatibility entrypoint not found: $vp"
+          }
+          & $vp --version
 
       - name: PowerShell installer preserves an unrelated Node executable
         shell: pwsh
