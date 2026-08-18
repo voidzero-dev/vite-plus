@@ -345,7 +345,9 @@ fn dump_dirs_from_env_config() -> bool {
     let dirs = &vp_shared::EnvConfig::get().dirs;
     println!("{}\t{}", dump_dirs::DATA, dirs.data.as_path().display());
     println!("{}\t{}", dump_dirs::BIN, dirs.bin.as_path().display());
+    println!("{}\t{}", dump_dirs::CACHE, dirs.cache.as_path().display());
     println!("{}\t{}", dump_dirs::CONFIG, dirs.config.as_path().display());
+    println!("{}\t{}", dump_dirs::STATE, dirs.state.as_path().display());
     true
 }
 

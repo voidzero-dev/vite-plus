@@ -82,7 +82,7 @@ These variables control the installer scripts and the standalone Windows install
 
 ### Development variables
 
-When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) and `VP_LOCAL_BINARY` (path to a local `vp` binary) feed the installer a local build. With a local `vp` binary, installers ask that binary (via `VP_DUMP_DIRS=1`) for the `EnvConfig` data/bin/config roots instead of resolving directory env vars themselves. The installers also set `VP_INSTALL_STOP` themselves; do not set it manually.
+When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) and `VP_LOCAL_BINARY` (path to a local `vp` binary) feed the installer a local build. Installers ask the selected binary (via `VP_DUMP_DIRS=1`) for all five `EnvConfig` category roots instead of resolving directory environment variables themselves. The installers also set `VP_INSTALL_STOP` themselves; do not set it manually.
 
 ## Runtime Variables
 

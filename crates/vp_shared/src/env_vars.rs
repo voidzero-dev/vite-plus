@@ -183,10 +183,9 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 
 // ── Testing / Development ───────────────────────────────────────────────
 
-/// When set to `1`, the global CLI prints `<DATA>`, `<BIN>`, and `<CONFIG>`
-/// (one per line) from [`crate::EnvConfig`] and exits. Used by installers
-/// that already have a `vp` binary and must not re-implement directory
-/// resolution.
+/// When set to `1`, the global CLI prints all five category roots (one per
+/// line) from [`crate::EnvConfig`] and exits. Used by installers that already
+/// have a `vp` binary and must not re-implement directory resolution.
 pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
 
 /// Category keys in [`VP_DUMP_DIRS`] output, one `<key>\t<path>` line per
@@ -195,7 +194,9 @@ pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
 pub mod dump_dirs {
     pub const DATA: &str = "data";
     pub const BIN: &str = "bin";
+    pub const CACHE: &str = "cache";
     pub const CONFIG: &str = "config";
+    pub const STATE: &str = "state";
 }
 
 /// Override the trampoline binary path for tests.

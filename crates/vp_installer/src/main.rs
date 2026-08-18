@@ -257,14 +257,13 @@ async fn do_install(
         } else if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
             // Adopt the payload's own resolution, like install.sh /
             // install.ps1, so the layout written and the layout the binary
-            // resolves cannot drift. cache/state stay self-resolved; the
-            // installer never touches them.
+            // resolves cannot drift.
             dirs = VpDirs {
                 data: probed.data,
                 bin: probed.bin,
+                cache: probed.cache,
                 config: probed.config,
-                cache: dirs.cache,
-                state: dirs.state,
+                state: probed.state,
             };
             None
         } else {

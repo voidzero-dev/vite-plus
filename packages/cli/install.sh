@@ -23,8 +23,8 @@
 set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
-# INSTALL_DIR (data), SHIM_DIR (bin), and CONFIG_DIR are resolved after the
-# helper functions are defined — see resolve_install_layout.
+# Category roots are resolved by the selected payload via VP_DUMP_DIRS after
+# the helper functions are defined. Pre-split payloads use a legacy fallback.
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
@@ -152,37 +152,11 @@ is_windows_uname() {
   esac
 }
 
-# Match EnvConfig / directories::BaseDirs: known folders, not process
-# LOCALAPPDATA / APPDATA which can be redirected independently.
-windows_known_folder() {
-  local name="$1"
-  local fallback="$2"
-  local dir=""
-  if command -v powershell.exe >/dev/null 2>&1; then
-    dir="$(powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('${name}')" 2>/dev/null | tr -d '\r')"
-  fi
-  if [ -n "$dir" ]; then
-    printf '%s\n' "$dir"
-  else
-    printf '%s\n' "$fallback"
-  fi
-}
-
 user_home_dir() {
   if is_windows_uname; then
     printf '%s\n' "${USERPROFILE:-$HOME}"
   else
     printf '%s\n' "${HOME:-$USERPROFILE}"
-  fi
-}
-
-xdg_data_sibling_bin() {
-  local data_home="${1%/}"
-  local parent="${data_home%/*}"
-  if [ -z "$parent" ] || [ "$parent" = "$data_home" ]; then
-    printf '/bin\n'
-  else
-    printf '%s/bin\n' "$parent"
   fi
 }
 
@@ -202,7 +176,9 @@ set_config_dir_refs() {
 set_monolithic_layout() {
   INSTALL_DIR="$1"
   SHIM_DIR="$1/bin"
+  CACHE_DIR="$1/cache"
   CONFIG_DIR="$1"
+  STATE_DIR="$1"
 }
 
 # Releases that predate the split layout resolve every path from VP_HOME
@@ -214,74 +190,6 @@ use_legacy_layout() {
   [ -n "$home" ] || error "Could not resolve user home directory"
   vp_home="$(absolute_override "${VP_HOME:-}")"
   set_monolithic_layout "${vp_home:-$home/.vite-plus}"
-  set_config_dir_refs "$CONFIG_DIR" "$home"
-}
-
-# Mirror crates/vp_shared/src/dirs/resolution.rs:
-#   VP_HOME → existing ~/.vite-plus → VP_*_DIR / XDG_* / platform defaults
-resolve_install_layout() {
-  local home legacy vp_home data_override bin_override
-  home="$(user_home_dir)"
-  [ -n "$home" ] || error "Could not resolve user home directory"
-
-  legacy="$home/.vite-plus"
-  vp_home="$(absolute_override "${VP_HOME:-}")"
-  if [ -n "$vp_home" ]; then
-    set_monolithic_layout "$vp_home"
-  # Grandfather only a real install: the `current` link every install
-  # activates (-L also accepts a dangling link from a crashed upgrade).
-  # A bare ~/.vite-plus left by a pre-split local CLI must not claim the
-  # layout. Matches vp_shared::dirs resolution.
-  elif [ -e "$legacy/current" ] || [ -L "$legacy/current" ]; then
-    set_monolithic_layout "$legacy"
-  else
-    data_override="$(absolute_override "${VP_DATA_DIR:-}")"
-    bin_override="$(absolute_override "${VP_BIN_DIR:-}")"
-
-    if [ -n "$data_override" ]; then
-      INSTALL_DIR="$data_override"
-    elif is_windows_uname; then
-      INSTALL_DIR="$(windows_known_folder LocalApplicationData "$home/AppData/Local")/vite-plus/data"
-    else
-      local xdg_data
-      xdg_data="$(absolute_override "${XDG_DATA_HOME:-}")"
-      if [ -n "$xdg_data" ]; then
-        INSTALL_DIR="$xdg_data/vite-plus"
-      else
-        INSTALL_DIR="$home/.local/share/vite-plus"
-      fi
-    fi
-
-    if [ -n "$bin_override" ]; then
-      SHIM_DIR="$bin_override"
-    elif is_windows_uname; then
-      SHIM_DIR="$(windows_known_folder LocalApplicationData "$home/AppData/Local")/vite-plus/bin"
-    else
-      local xdg_bin xdg_data
-      xdg_bin="$(absolute_override "${XDG_BIN_HOME:-}")"
-      xdg_data="$(absolute_override "${XDG_DATA_HOME:-}")"
-      if [ -n "$xdg_bin" ]; then
-        SHIM_DIR="$xdg_bin"
-      elif [ -n "$xdg_data" ]; then
-        SHIM_DIR="$(xdg_data_sibling_bin "$xdg_data")"
-      else
-        SHIM_DIR="$home/.local/bin"
-      fi
-    fi
-
-    if is_windows_uname; then
-      CONFIG_DIR="$(windows_known_folder ApplicationData "$home/AppData/Roaming")/vite-plus"
-    else
-      local xdg_config
-      xdg_config="$(absolute_override "${XDG_CONFIG_HOME:-}")"
-      if [ -n "$xdg_config" ]; then
-        CONFIG_DIR="$xdg_config/vite-plus"
-      else
-        CONFIG_DIR="$home/.config/vite-plus"
-      fi
-    fi
-  fi
-
   set_config_dir_refs "$CONFIG_DIR" "$home"
 }
 
@@ -1189,11 +1097,7 @@ main() {
 
   check_requirements
 
-  local previous_install_dir
-  previous_install_dir="$(detect_previous_install_dir || true)"
-  if [ -n "$previous_install_dir" ] && is_nested_install_dir "$previous_install_dir" "$INSTALL_DIR"; then
-    error "Previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Choose a separate VP_HOME or remove the previous install first."
-  fi
+  local previous_install_dir=""
 
   local platform
   platform=$(detect_platform)
@@ -1207,6 +1111,13 @@ main() {
     # Use version as-is (default to "local-dev")
     if [ "$VP_VERSION" = "latest" ] || [ "$VP_VERSION" = "test" ]; then
       VP_VERSION="local-dev"
+    fi
+    if [ -z "$LOCAL_BINARY" ] || [ ! -f "$LOCAL_BINARY" ]; then
+      error "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
+    fi
+    if ! apply_dirs_from_vp "$LOCAL_BINARY"; then
+      use_legacy_layout
+      info "The local vite-plus binary does not support the split directory layout; the install goes to $(abbreviate_path "$INSTALL_DIR")"
     fi
   elif [ -n "$PR_VERSION" ]; then
     # Registry bridge mode: resolve the requested PR/SHA to the bridge's
@@ -1263,6 +1174,13 @@ main() {
     fi
   fi
 
+  # Layout-dependent migration checks run only after the selected payload has
+  # resolved the category roots (or selected the pre-split fallback).
+  previous_install_dir="$(detect_previous_install_dir || true)"
+  if [ -n "$previous_install_dir" ] && is_nested_install_dir "$previous_install_dir" "$INSTALL_DIR"; then
+    error "Previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Choose a separate VP_HOME or remove the previous install first."
+  fi
+
   # Set up version-specific directories
   VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
   BIN_DIR="$VERSION_DIR/bin"
@@ -1276,18 +1194,14 @@ main() {
     info "Using local tarball: $LOCAL_TGZ"
 
     # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
-    if [ -n "$LOCAL_BINARY" ]; then
-      cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
-      # On Windows, also copy the trampoline shim binary if available
-      if [[ "$platform" == win32* ]]; then
-        local shim_src
-        shim_src="$(dirname "$LOCAL_BINARY")/vp-shim.exe"
-        if [ -f "$shim_src" ]; then
-          cp "$shim_src" "$BIN_DIR/vp-shim.exe"
-        fi
+    cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
+    # On Windows, also copy the trampoline shim binary if available
+    if [[ "$platform" == win32* ]]; then
+      local shim_src
+      shim_src="$(dirname "$LOCAL_BINARY")/vp-shim.exe"
+      if [ -f "$shim_src" ]; then
+        cp "$shim_src" "$BIN_DIR/vp-shim.exe"
       fi
-    else
-      error "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
     fi
     chmod +x "$BIN_DIR/$binary_name"
   else
@@ -1469,14 +1383,11 @@ apply_dirs_from_vp() {
   out="$(VP_DUMP_DIRS=1 "$vp" 2>/dev/null)" || return 1
   INSTALL_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "data" { print $2; exit }')"
   SHIM_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "bin" { print $2; exit }')"
+  CACHE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "cache" { print $2; exit }')"
   CONFIG_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "config" { print $2; exit }')"
-  [ -n "$INSTALL_DIR" ] && [ -n "$SHIM_DIR" ] && [ -n "$CONFIG_DIR" ] || return 1
+  STATE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "state" { print $2; exit }')"
+  [ -n "$INSTALL_DIR" ] && [ -n "$SHIM_DIR" ] && [ -n "$CACHE_DIR" ] && [ -n "$CONFIG_DIR" ] && [ -n "$STATE_DIR" ] || return 1
   set_config_dir_refs "$CONFIG_DIR" "$(user_home_dir)"
 }
 
-if [ -n "${VP_LOCAL_BINARY:-}" ] && [ -f "$VP_LOCAL_BINARY" ] && apply_dirs_from_vp "$VP_LOCAL_BINARY"; then
-  :
-else
-  resolve_install_layout
-fi
 main "$@"

@@ -96,7 +96,9 @@ pub async fn extract_platform_package(
 pub struct PayloadDirs {
     pub data: AbsolutePathBuf,
     pub bin: AbsolutePathBuf,
+    pub cache: AbsolutePathBuf,
     pub config: AbsolutePathBuf,
+    pub state: AbsolutePathBuf,
 }
 
 /// Ask a downloaded platform payload for its directory layout: a split-aware
@@ -130,7 +132,9 @@ pub async fn probe_payload_dirs(platform_data: &[u8]) -> Option<PayloadDirs> {
     Some(PayloadDirs {
         data: category(dump_dirs::DATA)?,
         bin: category(dump_dirs::BIN)?,
+        cache: category(dump_dirs::CACHE)?,
         config: category(dump_dirs::CONFIG)?,
+        state: category(dump_dirs::STATE)?,
     })
 }
 
@@ -1033,11 +1037,13 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn probe_payload_dirs_parses_split_aware_output() {
-        let script = "#!/bin/sh\nprintf 'data\\t/probe-data\\nbin\\t/probe-bin\\nconfig\\t/probe-config\\n'\n";
+        let script = "#!/bin/sh\nprintf 'data\\t/probe-data\\nbin\\t/probe-bin\\ncache\\t/probe-cache\\nconfig\\t/probe-config\\nstate\\t/probe-state\\n'\n";
         let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
         assert_eq!(dirs.data.as_path(), Path::new("/probe-data"));
         assert_eq!(dirs.bin.as_path(), Path::new("/probe-bin"));
+        assert_eq!(dirs.cache.as_path(), Path::new("/probe-cache"));
         assert_eq!(dirs.config.as_path(), Path::new("/probe-config"));
+        assert_eq!(dirs.state.as_path(), Path::new("/probe-state"));
     }
 
     /// A pre-split `vp` prints its help and exits 0; the probe must report

@@ -159,6 +159,14 @@ jobs:
           test "$(readlink "$FRESH/.local/bin/vp")" = "$FRESH/.local/share/vite-plus/current/bin/vp"
           "$FRESH/.local/bin/vp" --version
 
+          DUMP=$(VP_DUMP_DIRS=1 "$FRESH/.local/bin/vp")
+          dump_dir() { printf '%s\n' "$DUMP" | awk -F'\t' -v key="$1" '$1 == key { print $2; exit }'; }
+          test "$(dump_dir bin)" = "$FRESH/.local/bin"
+          test "$(dump_dir data)" = "$FRESH/.local/share/vite-plus"
+          test "$(dump_dir cache)" = "$FRESH/.cache/vite-plus"
+          test "$(dump_dir config)" = "$FRESH/.config/vite-plus"
+          test "$(dump_dir state)" = "$FRESH/.local/state/vite-plus"
+
       - name: Fresh split install preserves an unrelated Node executable
         run: |
           set -euo pipefail

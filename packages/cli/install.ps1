@@ -20,8 +20,8 @@
 $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
-# $InstallDir (data), $ShimDir (bin), and $ConfigDir are resolved after the
-# helper functions are defined — see Resolve-InstallLayout.
+# Category roots are resolved by the selected payload via VP_DUMP_DIRS after
+# the helper functions are defined. Pre-split payloads use a legacy fallback.
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
@@ -227,68 +227,18 @@ function New-MonolithicLayout {
     return [pscustomobject]@{
         DataDir = $Root
         ShimDir = Join-Path $Root "bin"
+        CacheDir = Join-Path $Root "cache"
         ConfigDir = $Root
-    }
-}
-
-# Mirror crates/vp_shared/src/dirs/resolution.rs (Windows):
-#   VP_HOME → existing %USERPROFILE%\.vite-plus → VP_*_DIR / known Local+Roaming folders
-function Resolve-InstallLayout {
-    $userHome = Get-UserHomeDir
-    if ([string]::IsNullOrWhiteSpace($userHome)) {
-        Write-Error-Exit "Could not resolve user home directory"
-    }
-
-    $legacyRoot = Join-Path $userHome ".vite-plus"
-
-    if (Test-AbsoluteOverridePath $env:VP_HOME) {
-        return New-MonolithicLayout $env:VP_HOME
-    }
-
-    # Grandfather only a real install: the `current` link every install
-    # activates, checked without following it so a dangling link from a
-    # crashed upgrade still counts. A bare %USERPROFILE%\.vite-plus left by
-    # a pre-split local CLI must not claim the layout. Matches
-    # vp_shared::dirs resolution.
-    $currentLink = Join-Path $legacyRoot "current"
-    if ($null -ne (Get-Item -LiteralPath $currentLink -Force -ErrorAction SilentlyContinue)) {
-        return New-MonolithicLayout $legacyRoot
-    }
-
-    # Match EnvConfig / directories::BaseDirs: known folders, not process
-    # %LOCALAPPDATA% / %APPDATA% which can be redirected independently.
-    $localApp = [Environment]::GetFolderPath('LocalApplicationData')
-    if ([string]::IsNullOrWhiteSpace($localApp)) {
-        $localApp = Join-Path $userHome "AppData\Local"
-    }
-    $roamingApp = [Environment]::GetFolderPath('ApplicationData')
-    if ([string]::IsNullOrWhiteSpace($roamingApp)) {
-        $roamingApp = Join-Path $userHome "AppData\Roaming"
-    }
-
-    $dataDir = if (Test-AbsoluteOverridePath $env:VP_DATA_DIR) {
-        $env:VP_DATA_DIR
-    } else {
-        Join-Path (Join-Path $localApp "vite-plus") "data"
-    }
-
-    $shimDir = if (Test-AbsoluteOverridePath $env:VP_BIN_DIR) {
-        $env:VP_BIN_DIR
-    } else {
-        Join-Path (Join-Path $localApp "vite-plus") "bin"
-    }
-
-    return [pscustomobject]@{
-        DataDir = $dataDir
-        ShimDir = $shimDir
-        ConfigDir = Join-Path $roamingApp "vite-plus"
+        StateDir = $Root
     }
 }
 
 function Set-LayoutVars {
     $script:InstallDir = $script:Layout.DataDir
     $script:ShimDir = $script:Layout.ShimDir
+    $script:CacheDir = $script:Layout.CacheDir
     $script:ConfigDir = $script:Layout.ConfigDir
+    $script:StateDir = $script:Layout.StateDir
     $script:NodeManagerBinDisplay = $script:ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
 }
 
@@ -896,10 +846,7 @@ function Main {
         Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
     }
 
-    $previousInstallDir = Get-PreviousInstallDir
-    if ($previousInstallDir -and (Test-NestedInstallDir -OldDir $previousInstallDir -NewDir $InstallDir)) {
-        Write-Error-Exit "Previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Choose a separate VP_HOME or remove the previous install first."
-    }
+    $previousInstallDir = $null
 
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
@@ -916,6 +863,15 @@ function Main {
         # Use version as-is (default to "local-dev")
         if ($ViteVersion -eq "latest" -or $ViteVersion -eq "test") {
             $ViteVersion = "local-dev"
+        }
+        if (-not $LocalBinary -or -not (Test-Path -LiteralPath $LocalBinary -PathType Leaf)) {
+            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
+        }
+        if (Apply-DirsFromVp $LocalBinary) {
+            Set-LayoutVars
+        } else {
+            Use-LegacyLayout
+            Write-Info "The local vite-plus binary does not support the split directory layout; the install goes to $InstallDir"
         }
     } elseif ($PrVersion) {
         # Registry bridge mode: resolve the requested PR/SHA to the bridge's
@@ -981,6 +937,13 @@ function Main {
         }
     }
 
+    # Layout-dependent migration checks run only after the selected payload has
+    # resolved the category roots (or selected the pre-split fallback).
+    $previousInstallDir = Get-PreviousInstallDir
+    if ($previousInstallDir -and (Test-NestedInstallDir -OldDir $previousInstallDir -NewDir $InstallDir)) {
+        Write-Error-Exit "Previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Choose a separate VP_HOME or remove the previous install first."
+    }
+
     # Set up version-specific directories
     $VersionDir = "$InstallDir\$ViteVersion"
     $BinDir = "$VersionDir\bin"
@@ -994,15 +957,11 @@ function Main {
         Write-Info "Using local tarball: $LocalTgz"
 
         # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
-        if ($LocalBinary -and (Test-Path $LocalBinary)) {
-            Copy-Item -Path $LocalBinary -Destination (Join-Path $BinDir $binaryName) -Force
-            # Also copy trampoline shim binary if available (sibling to vp.exe)
-            $shimSource = Join-Path (Split-Path $LocalBinary) "vp-shim.exe"
-            if (Test-Path $shimSource) {
-                Copy-Item -Path $shimSource -Destination (Join-Path $BinDir "vp-shim.exe") -Force
-            }
-        } else {
-            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
+        Copy-Item -Path $LocalBinary -Destination (Join-Path $BinDir $binaryName) -Force
+        # Also copy trampoline shim binary if available (sibling to vp.exe)
+        $shimSource = Join-Path (Split-Path $LocalBinary) "vp-shim.exe"
+        if (Test-Path $shimSource) {
+            Copy-Item -Path $shimSource -Destination (Join-Path $BinDir "vp-shim.exe") -Force
         }
     } else {
         # Copy binary to BinDir
@@ -1261,21 +1220,18 @@ function Apply-DirsFromVp {
         }
         $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
     }
-    if (-not $map['data'] -or -not $map['bin'] -or -not $map['config']) {
+    if (-not $map['data'] -or -not $map['bin'] -or -not $map['cache'] -or -not $map['config'] -or -not $map['state']) {
         return $false
     }
     $script:Layout = [pscustomobject]@{
         DataDir = $map['data']
         ShimDir = $map['bin']
+        CacheDir = $map['cache']
         ConfigDir = $map['config']
+        StateDir = $map['state']
     }
     return $true
 }
-
-if (-not ($env:VP_LOCAL_BINARY -and (Test-Path -LiteralPath $env:VP_LOCAL_BINARY) -and (Apply-DirsFromVp $env:VP_LOCAL_BINARY))) {
-    $script:Layout = Resolve-InstallLayout
-}
-Set-LayoutVars
 
 try {
     Main
