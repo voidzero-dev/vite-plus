@@ -98,7 +98,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Err(Error::Upgrade(
             format!(
                 "vite-plus {} does not support the split directory layout of this install. \
-                 Upgrade to {MIN_SPLIT_LAYOUT_VERSION} or newer, or set VP_HOME to use one directory.",
+                 Run `vp upgrade` to upgrade to the latest version, or set VP_HOME to use one directory.",
                 resolved.version
             )
             .into(),
@@ -274,12 +274,9 @@ async fn execute_rollback(
     Ok(ExitStatus::default())
 }
 
-/// First release that resolves the split directory layout.
-const MIN_SPLIT_LAYOUT_VERSION: &str = "0.3.0";
-
 /// Whether a payload of `version` understands the split layout:
-/// [`MIN_SPLIT_LAYOUT_VERSION`] and newer (prereleases included), plus
-/// preview builds (`0.0.0-commit.<sha>`), which track the current branch.
+/// 0.3.0 and newer (prereleases included), plus preview builds
+/// (`0.0.0-commit.<sha>`), which track the current branch.
 fn supports_split_layout(version: &str) -> bool {
     let Ok(version) = node_semver::Version::parse(version) else {
         return false;
