@@ -189,7 +189,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let binary_relative_path = provider.binary_relative_path(platform);
     let bin_dir_relative_path = provider.bin_dir_relative_path(platform);
 
-    // Cache path: $CACHE_DIR/vite-plus/js_runtime/{runtime}/{version}/
+    // Cache path: <DATA>/js_runtime/{runtime}/{version}/
     let install_dir = cache_dir.join(provider.name()).join(version);
 
     // Check if already cached
@@ -674,8 +674,18 @@ pub async fn read_package_json(
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+    use vp_shared::env_vars;
 
     use super::*;
+
+    /// Shared VP_HOME for tests exercising the real download path: pinning
+    /// isolates them from concurrent `with_vars` scopes, and one shared root
+    /// keeps the download cache warm across tests and runs.
+    fn shared_vp_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("vp-js-runtime-tests-vp-home");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn test_js_runtime_type_display() {
@@ -739,34 +749,46 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_runtime_for_project_with_dev_engines() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with devEngines.runtime
-        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with devEngines.runtime
+                let package_json =
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        // Version should be >= 20.18.0 and < 21.0.0
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20);
-        assert!(parsed.minor >= 18);
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Version should be >= 20.18.0 and < 21.0.0
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20);
+                assert!(parsed.minor >= 18);
 
-        // Verify the binary exists and works
-        let binary_path = runtime.get_binary_path();
-        assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
+                // Verify the binary exists and works
+                let binary_path = runtime.get_binary_path();
+                assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_runtime_for_project_with_multiple_runtimes() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with array of runtimes
-        let package_json = r#"{
+                // Create package.json with array of runtimes
+                let package_json = r#"{
             "devEngines": {
                 "runtime": [
                     {"name": "deno", "version": "^2.0.0"},
@@ -774,15 +796,18 @@ mod tests {
                 ]
             }
         }"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        // Should use node runtime (deno is not supported yet)
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20);
+                // Should use node runtime (deno is not supported yet)
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -791,34 +816,42 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_download_runtime_for_project_no_dev_engines() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json without devEngines (minified, will use default 2-space indent)
-        let package_json = r#"{"name": "test-project"}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json without devEngines (minified, will use default 2-space indent)
+                let package_json = r#"{"name": "test-project"}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        // Should download Node.js
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Should download Node.js
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
-        // Should have a valid version
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert!(parsed.major >= 20);
+                // Should have a valid version
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert!(parsed.major >= 20);
 
-        // .node-version is written only if no ancestor has one (write-back is
-        // suppressed when an ancestor .node-version exists, e.g. in a monorepo)
-        if tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap() {
-            let node_version_content =
-                tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-            assert_eq!(node_version_content, format!("{version}\n"));
-        }
+                // .node-version is written only if no ancestor has one (write-back is
+                // suppressed when an ancestor .node-version exists, e.g. in a monorepo)
+                if tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap() {
+                    let node_version_content =
+                        tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                    assert_eq!(node_version_content, format!("{version}\n"));
+                }
 
-        // package.json should remain unchanged
-        let pkg_content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
-        assert_eq!(pkg_content, package_json);
+                // package.json should remain unchanged
+                let pkg_content =
+                    tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
+                assert_eq!(pkg_content, package_json);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -827,11 +860,15 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_download_runtime_for_project_does_not_write_back_when_no_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with runtime but no version
-        let package_json = r#"{
+                // Create package.json with runtime but no version
+                let package_json = r#"{
   "name": "test-project",
   "devEngines": {
     "runtime": {
@@ -840,28 +877,36 @@ mod tests {
   }
 }
 "#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let _runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let _runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        // .node-version should NOT be written (auto-write was removed)
-        assert!(
-            !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
-            ".node-version should not be auto-created"
-        );
+                // .node-version should NOT be written (auto-write was removed)
+                assert!(
+                    !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
+                    ".node-version should not be auto-created"
+                );
 
-        // package.json should remain unchanged
-        let pkg_content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
-        assert_eq!(pkg_content, package_json);
+                // package.json should remain unchanged
+                let pkg_content =
+                    tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
+                assert_eq!(pkg_content, package_json);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_runtime_for_project_does_not_write_back_when_version_specified() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with version range
-        let package_json = r#"{
+                // Create package.json with version range
+                let package_json = r#"{
   "name": "test-project",
   "devEngines": {
     "runtime": {
@@ -871,39 +916,51 @@ mod tests {
   }
 }
 "#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20);
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20);
 
-        // Should NOT write .node-version since a version was specified
-        assert!(!tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap());
+                // Should NOT write .node-version since a version was specified
+                assert!(!tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap());
 
-        // package.json should remain unchanged
-        let pkg_content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
-        assert_eq!(pkg_content, package_json);
+                // package.json should remain unchanged
+                let pkg_content =
+                    tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
+                assert_eq!(pkg_content, package_json);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_runtime_for_project_with_v_prefix_exact_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with exact version including 'v' prefix
-        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"v20.18.0"}}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with exact version including 'v' prefix
+                let package_json =
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"v20.18.0"}}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        // Version should be normalized (without 'v' prefix)
-        assert_eq!(runtime.version(), "20.18.0");
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Version should be normalized (without 'v' prefix)
+                assert_eq!(runtime.version(), "20.18.0");
 
-        // Verify the binary exists and works
-        let binary_path = runtime.get_binary_path();
-        assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
+                // Verify the binary exists and works
+                let binary_path = runtime.get_binary_path();
+                assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -912,124 +969,159 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_download_runtime_for_project_no_package_json() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // No package.json file
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                // No package.json file
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        // Should download latest Node.js
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Should download latest Node.js
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
-        // Should NOT write .node-version
-        assert!(
-            !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
-            ".node-version should not be auto-created"
-        );
+                // Should NOT write .node-version
+                assert!(
+                    !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
+                    ".node-version should not be auto-created"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_runtime_for_project_inherits_parent_node_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Write .node-version in root (simulating monorepo root)
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                // Write .node-version in root (simulating monorepo root)
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create a sub-package directory with a minimal package.json (no engines/devEngines)
-        let subdir = temp_path.join("packages").join("foo");
-        tokio::fs::create_dir_all(&subdir).await.unwrap();
-        tokio::fs::write(subdir.join("package.json"), r#"{"name": "foo"}"#).await.unwrap();
+                // Create a sub-package directory with a minimal package.json (no engines/devEngines)
+                let subdir = temp_path.join("packages").join("foo");
+                tokio::fs::create_dir_all(&subdir).await.unwrap();
+                tokio::fs::write(subdir.join("package.json"), r#"{"name": "foo"}"#).await.unwrap();
 
-        let runtime = download_runtime_for_project(&subdir).await.unwrap();
+                let runtime = download_runtime_for_project(&subdir).await.unwrap();
 
-        // Should inherit version from parent's .node-version
-        assert_eq!(runtime.version(), "20.18.0");
+                // Should inherit version from parent's .node-version
+                assert_eq!(runtime.version(), "20.18.0");
 
-        // Should NOT write .node-version in the sub-package
-        assert!(
-            !tokio::fs::try_exists(subdir.join(".node-version")).await.unwrap(),
-            ".node-version should not be written in sub-package when parent already has one"
-        );
+                // Should NOT write .node-version in the sub-package
+                assert!(
+                    !tokio::fs::try_exists(subdir.join(".node-version")).await.unwrap(),
+                    ".node-version should not be written in sub-package when parent already has one"
+                );
+            },
+        )
+        .await;
     }
 
     /// Integration test that downloads a real Node.js version
     #[tokio::test]
     async fn test_download_node_integration() {
-        // Use a small, old version for faster download
-        let version = "20.18.0";
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                // Use a small, old version for faster download
+                let version = "20.18.0";
 
-        let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+                let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
 
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        assert_eq!(runtime.version(), version);
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                assert_eq!(runtime.version(), version);
 
-        // Verify the binary exists
-        let binary_path = runtime.get_binary_path();
-        assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
+                // Verify the binary exists
+                let binary_path = runtime.get_binary_path();
+                assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
 
-        // Verify binary is executable by checking version
-        let output = tokio::process::Command::new(binary_path.as_path())
-            .arg("--version")
-            .output()
-            .await
-            .unwrap();
+                // Verify binary is executable by checking version
+                let output = tokio::process::Command::new(binary_path.as_path())
+                    .arg("--version")
+                    .output()
+                    .await
+                    .unwrap();
 
-        assert!(output.status.success());
-        let version_output = String::from_utf8_lossy(&output.stdout);
-        assert!(version_output.contains(version));
+                assert!(output.status.success());
+                let version_output = String::from_utf8_lossy(&output.stdout);
+                assert!(version_output.contains(version));
+            },
+        )
+        .await;
     }
 
     /// Test cache reuse - second call should be instant
     #[tokio::test]
     async fn test_download_node_cache_reuse() {
-        let version = "20.18.0";
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let version = "20.18.0";
 
-        // First download
-        let runtime1 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+                // First download
+                let runtime1 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
 
-        // Second download should use cache
-        let start = std::time::Instant::now();
-        let runtime2 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
-        let elapsed = start.elapsed();
+                // Second download should use cache
+                let start = std::time::Instant::now();
+                let runtime2 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+                let elapsed = start.elapsed();
 
-        // Cache hit should be very fast (< 100ms)
-        assert!(elapsed.as_millis() < 100, "Cache reuse took too long: {elapsed:?}");
+                // Cache hit should be very fast (< 100ms)
+                assert!(elapsed.as_millis() < 100, "Cache reuse took too long: {elapsed:?}");
 
-        // Should return same install directory
-        assert_eq!(runtime1.install_dir, runtime2.install_dir);
+                // Should return same install directory
+                assert_eq!(runtime1.install_dir, runtime2.install_dir);
+            },
+        )
+        .await;
     }
 
     /// Test that incomplete installations are cleaned up and re-downloaded
     #[tokio::test]
     #[ignore]
     async fn test_incomplete_installation_cleanup() {
-        // Use a different version to avoid interference with other tests
-        let version = "20.18.1";
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                // Use a different version to avoid interference with other tests
+                let version = "20.18.1";
 
-        // First, ensure we have a valid cached version
-        let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
-        let install_dir = runtime.install_dir.clone();
-        let binary_path = runtime.get_binary_path();
+                // First, ensure we have a valid cached version
+                let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+                let install_dir = runtime.install_dir.clone();
+                let binary_path = runtime.get_binary_path();
 
-        // Simulate an incomplete installation by removing the binary but keeping the directory
-        tokio::fs::remove_file(&binary_path).await.unwrap();
-        assert!(!tokio::fs::try_exists(&binary_path).await.unwrap());
-        assert!(tokio::fs::try_exists(&install_dir).await.unwrap());
+                // Simulate an incomplete installation by removing the binary but keeping the directory
+                tokio::fs::remove_file(&binary_path).await.unwrap();
+                assert!(!tokio::fs::try_exists(&binary_path).await.unwrap());
+                assert!(tokio::fs::try_exists(&install_dir).await.unwrap());
 
-        // Now download again - it should detect the incomplete installation and re-download
-        let runtime2 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+                // Now download again - it should detect the incomplete installation and re-download
+                let runtime2 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
 
-        // Verify the binary exists again
-        assert!(tokio::fs::try_exists(&runtime2.get_binary_path()).await.unwrap());
+                // Verify the binary exists again
+                assert!(tokio::fs::try_exists(&runtime2.get_binary_path()).await.unwrap());
 
-        // Verify binary is executable
-        let output = tokio::process::Command::new(runtime2.get_binary_path().as_path())
-            .arg("--version")
-            .output()
-            .await
-            .unwrap();
-        assert!(output.status.success());
+                // Verify binary is executable
+                let output = tokio::process::Command::new(runtime2.get_binary_path().as_path())
+                    .arg("--version")
+                    .output()
+                    .await
+                    .unwrap();
+                assert!(output.status.success());
+            },
+        )
+        .await;
     }
 
     /// Test concurrent downloads - multiple tasks downloading the same version
@@ -1037,71 +1129,78 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_concurrent_downloads() {
-        // Use a different version to avoid conflicts with other tests
-        let version = "20.17.0";
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                // Use a different version to avoid conflicts with other tests
+                let version = "20.17.0";
 
-        // Clear any existing cache for this version
-        let cache_dir = crate::cache::get_cache_dir().unwrap();
-        let install_dir = cache_dir.join("node").join(version);
-        if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
-            tokio::fs::remove_dir_all(&install_dir).await.unwrap();
-        }
+                // Clear any existing cache for this version
+                let cache_dir = crate::cache::get_cache_dir().unwrap();
+                let install_dir = cache_dir.join("node").join(version);
+                if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
+                    tokio::fs::remove_dir_all(&install_dir).await.unwrap();
+                }
 
-        // Spawn multiple concurrent download tasks
-        let num_concurrent = 4;
-        let mut handles = Vec::with_capacity(num_concurrent);
+                // Spawn multiple concurrent download tasks
+                let num_concurrent = 4;
+                let mut handles = Vec::with_capacity(num_concurrent);
 
-        for i in 0..num_concurrent {
-            let version = version.to_string();
-            handles.push(tokio::spawn(async move {
-                tracing::info!("Starting concurrent download task {i}");
-                let result = download_runtime(JsRuntimeType::Node, &version).await;
-                tracing::info!("Completed concurrent download task {i}");
-                result
-            }));
-        }
+                for i in 0..num_concurrent {
+                    let version = version.to_string();
+                    handles.push(tokio::spawn(async move {
+                        tracing::info!("Starting concurrent download task {i}");
+                        let result = download_runtime(JsRuntimeType::Node, &version).await;
+                        tracing::info!("Completed concurrent download task {i}");
+                        result
+                    }));
+                }
 
-        // Wait for all tasks and collect results
-        let mut results = Vec::with_capacity(num_concurrent);
-        for handle in handles {
-            results.push(handle.await.unwrap());
-        }
+                // Wait for all tasks and collect results
+                let mut results = Vec::with_capacity(num_concurrent);
+                for handle in handles {
+                    results.push(handle.await.unwrap());
+                }
 
-        // All tasks should succeed
-        for (i, result) in results.iter().enumerate() {
-            assert!(result.is_ok(), "Task {i} failed: {:?}", result.as_ref().err());
-        }
+                // All tasks should succeed
+                for (i, result) in results.iter().enumerate() {
+                    assert!(result.is_ok(), "Task {i} failed: {:?}", result.as_ref().err());
+                }
 
-        // All tasks should return the same install directory
-        let first_install_dir = &results[0].as_ref().unwrap().install_dir;
-        for (i, result) in results.iter().enumerate().skip(1) {
-            assert_eq!(
-                &result.as_ref().unwrap().install_dir,
-                first_install_dir,
-                "Task {i} has different install_dir"
-            );
-        }
+                // All tasks should return the same install directory
+                let first_install_dir = &results[0].as_ref().unwrap().install_dir;
+                for (i, result) in results.iter().enumerate().skip(1) {
+                    assert_eq!(
+                        &result.as_ref().unwrap().install_dir,
+                        first_install_dir,
+                        "Task {i} has different install_dir"
+                    );
+                }
 
-        // Verify the binary works
-        let runtime = results.into_iter().next().unwrap().unwrap();
-        let binary_path = runtime.get_binary_path();
-        assert!(
-            tokio::fs::try_exists(&binary_path).await.unwrap(),
-            "Binary should exist at {binary_path:?}"
-        );
+                // Verify the binary works
+                let runtime = results.into_iter().next().unwrap().unwrap();
+                let binary_path = runtime.get_binary_path();
+                assert!(
+                    tokio::fs::try_exists(&binary_path).await.unwrap(),
+                    "Binary should exist at {binary_path:?}"
+                );
 
-        let output = tokio::process::Command::new(binary_path.as_path())
-            .arg("--version")
-            .output()
-            .await
-            .unwrap();
+                let output = tokio::process::Command::new(binary_path.as_path())
+                    .arg("--version")
+                    .output()
+                    .await
+                    .unwrap();
 
-        assert!(output.status.success(), "Binary should be executable");
-        let version_output = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            version_output.contains(version),
-            "Version output should contain {version}, got: {version_output}"
-        );
+                assert!(output.status.success(), "Binary should be executable");
+                let version_output = String::from_utf8_lossy(&output.stdout);
+                assert!(
+                    version_output.contains(version),
+                    "Version output should contain {version}, got: {version_output}"
+                );
+            },
+        )
+        .await;
     }
 
     // ==========================================
@@ -1110,103 +1209,138 @@ mod tests {
 
     #[tokio::test]
     async fn test_node_version_file_takes_priority() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with exact version
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                // Create .node-version with exact version
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create package.json with engines.node (should be ignored)
-        let package_json = r#"{"engines":{"node":">=22.0.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with engines.node (should be ignored)
+                let package_json = r#"{"engines":{"node":">=22.0.0"}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        assert_eq!(runtime.version(), "20.18.0");
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                assert_eq!(runtime.version(), "20.18.0");
 
-        // Should NOT write back since .node-version had exact version
-        let node_version_content =
-            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(node_version_content, "20.18.0\n");
+                // Should NOT write back since .node-version had exact version
+                let node_version_content =
+                    tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                assert_eq!(node_version_content, "20.18.0\n");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_dev_engines_takes_priority_over_engines_node() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with both engines.node and devEngines.runtime
-        let package_json = r#"{
+                // Create package.json with both engines.node and devEngines.runtime
+                let package_json = r#"{
   "engines": {"node": "^20.18.0"},
   "devEngines": {"runtime": {"name": "node", "version": "^22.0.0"}}
 }"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        // devEngines.runtime is the dev-environment requirement and wins over the
-        // consumer-facing engines.node range (rfcs/dev-engines.md)
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 22);
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                // devEngines.runtime is the dev-environment requirement and wins over the
+                // consumer-facing engines.node range (rfcs/dev-engines.md)
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 22);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_only_engines_node_source() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with only engines.node
-        let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with only engines.node
+                let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20);
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20);
 
-        // Should NOT write .node-version since a version was specified
-        assert!(!tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap());
+                // Should NOT write .node-version since a version was specified
+                assert!(!tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_node_version_file_partial_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with partial version (two parts)
-        tokio::fs::write(temp_path.join(".node-version"), "20.18\n").await.unwrap();
+                // Create .node-version with partial version (two parts)
+                tokio::fs::write(temp_path.join(".node-version"), "20.18\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        // Should resolve to a 20.18.x or higher version in 20.x line
-        assert_eq!(parsed.major, 20);
-        // Minor version should be at least 18
-        assert!(parsed.minor >= 18, "Expected minor >= 18, got {}", parsed.minor);
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                // Should resolve to a 20.18.x or higher version in 20.x line
+                assert_eq!(parsed.major, 20);
+                // Minor version should be at least 18
+                assert!(parsed.minor >= 18, "Expected minor >= 18, got {}", parsed.minor);
 
-        // Should NOT write back - .node-version already has a version specified
-        let node_version_content =
-            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(node_version_content, "20.18\n");
+                // Should NOT write back - .node-version already has a version specified
+                let node_version_content =
+                    tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                assert_eq!(node_version_content, "20.18\n");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_node_version_file_single_part_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with single-part version
-        tokio::fs::write(temp_path.join(".node-version"), "20\n").await.unwrap();
+                // Create .node-version with single-part version
+                tokio::fs::write(temp_path.join(".node-version"), "20\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        // Should resolve to a 20.x.x version
-        assert_eq!(parsed.major, 20);
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                // Should resolve to a 20.x.x version
+                assert_eq!(parsed.major, 20);
 
-        // Should NOT write back - .node-version already has a version specified
-        let node_version_content =
-            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(node_version_content, "20\n");
+                // Should NOT write back - .node-version already has a version specified
+                let node_version_content =
+                    tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                assert_eq!(node_version_content, "20\n");
+            },
+        )
+        .await;
     }
 
     #[test]
@@ -1227,24 +1361,31 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_invalid_node_version_file_is_ignored() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with invalid version
-        tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+                // Create .node-version with invalid version
+                tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
 
-        // Create package.json without any version
-        let package_json = r#"{"name": "test-project"}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json without any version
+                let package_json = r#"{"name": "test-project"}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Should fall through to fetch latest LTS since .node-version is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Should fall through to fetch latest LTS since .node-version is invalid
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
-        // Should have a valid version (latest LTS)
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert!(parsed.major >= 20);
+                // Should have a valid version (latest LTS)
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert!(parsed.major >= 20);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1253,21 +1394,28 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_invalid_engines_node_is_ignored() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with invalid engines.node
-        let package_json = r#"{"engines":{"node":"invalid"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with invalid engines.node
+                let package_json = r#"{"engines":{"node":"invalid"}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Should fall through to fetch latest LTS since engines.node is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Should fall through to fetch latest LTS since engines.node is invalid
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
-        // Should have a valid version (latest LTS)
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert!(parsed.major >= 20);
+                // Should have a valid version (latest LTS)
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert!(parsed.major >= 20);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1276,59 +1424,81 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_invalid_dev_engines_runtime_is_ignored() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with invalid devEngines.runtime version
-        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid"}}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with invalid devEngines.runtime version
+                let package_json =
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"invalid"}}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Should fall through to fetch latest LTS since devEngines.runtime is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // Should fall through to fetch latest LTS since devEngines.runtime is invalid
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
 
-        // Should have a valid version (latest LTS)
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert!(parsed.major >= 20);
+                // Should have a valid version (latest LTS)
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert!(parsed.major >= 20);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_invalid_node_version_file_falls_through_to_valid_engines() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with invalid version
-        tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+                // Create .node-version with invalid version
+                tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
 
-        // Create package.json with valid engines.node
-        let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                // Create package.json with valid engines.node
+                let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Should use engines.node since .node-version is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20);
+                // Should use engines.node since .node-version is invalid
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_invalid_engines_falls_through_to_valid_dev_engines() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create package.json with invalid engines.node but valid devEngines.runtime
-        let package_json = r#"{
+                // Create package.json with invalid engines.node but valid devEngines.runtime
+                let package_json = r#"{
   "engines": {"node": "invalid"},
   "devEngines": {"runtime": {"name": "node", "version": "^20.18.0"}}
 }"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+                tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Should use devEngines.runtime since engines.node is invalid
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20);
+                // Should use devEngines.runtime since engines.node is invalid
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20);
+            },
+        )
+        .await;
     }
 
     #[test]
@@ -1452,24 +1622,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_runtime_for_project_with_lts_alias_in_node_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with LTS alias
-        tokio::fs::write(temp_path.join(".node-version"), "lts/iron\n").await.unwrap();
+                // Create .node-version with LTS alias
+                tokio::fs::write(temp_path.join(".node-version"), "lts/iron\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        // lts/iron should resolve to v20.x
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {version}");
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // lts/iron should resolve to v20.x
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {version}");
 
-        // Should NOT overwrite .node-version - user explicitly specified an LTS alias
-        let node_version_content =
-            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(node_version_content, "lts/iron\n", ".node-version should remain unchanged");
+                // Should NOT overwrite .node-version - user explicitly specified an LTS alias
+                let node_version_content =
+                    tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                assert_eq!(
+                    node_version_content, "lts/iron\n",
+                    ".node-version should remain unchanged"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1478,24 +1658,37 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_download_runtime_for_project_with_lts_latest_alias() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with lts/* alias
-        tokio::fs::write(temp_path.join(".node-version"), "lts/*\n").await.unwrap();
+                // Create .node-version with lts/* alias
+                tokio::fs::write(temp_path.join(".node-version"), "lts/*\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        // lts/* should resolve to latest LTS (at least v22.x as of 2026)
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        assert!(parsed.major >= 22, "lts/* should resolve to at least v22.x, got {version}");
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // lts/* should resolve to latest LTS (at least v22.x as of 2026)
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                assert!(
+                    parsed.major >= 22,
+                    "lts/* should resolve to at least v22.x, got {version}"
+                );
 
-        // Should NOT overwrite .node-version
-        let node_version_content =
-            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(node_version_content, "lts/*\n", ".node-version should remain unchanged");
+                // Should NOT overwrite .node-version
+                let node_version_content =
+                    tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                assert_eq!(
+                    node_version_content, "lts/*\n",
+                    ".node-version should remain unchanged"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1510,25 +1703,38 @@ mod tests {
         ignore = "latest can outrun the unofficial-builds musl channel"
     )]
     async fn test_download_runtime_for_project_with_latest_alias_in_node_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create .node-version with "latest" alias
-        tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
+                // Create .node-version with "latest" alias
+                tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+                let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        // "latest" should resolve to the absolute latest version (including non-LTS)
-        let version = runtime.version();
-        let parsed = node_semver::Version::parse(version).unwrap();
-        // Latest version should be at least v20.x
-        assert!(parsed.major >= 20, "'latest' should resolve to at least v20.x, got {version}");
+                assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+                // "latest" should resolve to the absolute latest version (including non-LTS)
+                let version = runtime.version();
+                let parsed = node_semver::Version::parse(version).unwrap();
+                // Latest version should be at least v20.x
+                assert!(
+                    parsed.major >= 20,
+                    "'latest' should resolve to at least v20.x, got {version}"
+                );
 
-        // Should NOT overwrite .node-version - user explicitly specified "latest"
-        let node_version_content =
-            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(node_version_content, "latest\n", ".node-version should remain unchanged");
+                // Should NOT overwrite .node-version - user explicitly specified "latest"
+                let node_version_content =
+                    tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+                assert_eq!(
+                    node_version_content, "latest\n",
+                    ".node-version should remain unchanged"
+                );
+            },
+        )
+        .await;
     }
 
     // ==========================================

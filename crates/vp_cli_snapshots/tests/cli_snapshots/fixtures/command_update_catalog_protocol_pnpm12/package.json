@@ -1,0 +1,7 @@
+{
+  "name": "command-update-catalog-protocol-pnpm12",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "pnpm@12.0.0-rc.3"
+}

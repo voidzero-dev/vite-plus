@@ -3,7 +3,7 @@ use vp_shared::EnvConfig;
 /// Get the configured NPM registry URL.
 #[must_use]
 pub fn npm_registry() -> String {
-    EnvConfig::get().npm_registry
+    EnvConfig::get().npm_registry.clone()
 }
 
 /// Get the tgz url of a npm package
@@ -30,23 +30,22 @@ pub(crate) fn get_npm_package_metadata_url(name: &str) -> vt_str::Str {
 
 #[cfg(test)]
 mod tests {
+    use vp_shared::env_vars;
+
     use super::*;
 
     #[test]
     fn test_npm_registry_default() {
-        EnvConfig::test_scope(EnvConfig::for_test(), || {
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
             assert_eq!(npm_registry(), "https://registry.npmjs.org");
         });
     }
 
     #[test]
     fn test_npm_registry_custom() {
-        EnvConfig::test_scope(
-            EnvConfig {
-                npm_registry: "https://registry.npmmirror.com".into(),
-                ..EnvConfig::for_test()
-            },
-            || {
+        EnvConfig::with_vars(
+            [(env_vars::NPM_CONFIG_REGISTRY, "https://registry.npmmirror.com")],
+            |_| {
                 assert_eq!(npm_registry(), "https://registry.npmmirror.com");
             },
         );
@@ -54,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_npm_tgz_url() {
-        EnvConfig::test_scope(EnvConfig::for_test(), || {
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
             assert_eq!(
                 get_npm_package_tgz_url("vite", "7.1.3"),
                 "https://registry.npmjs.org/vite/-/vite-7.1.3.tgz"

@@ -1,7 +1,7 @@
 //! Per-binary configuration storage for global packages.
 //!
 //! Each binary installed via `vp install -g` gets a config file at
-//! `~/.vite-plus/bins/{name}.json` that tracks which package owns it.
+//! `<DATA>/bins/{name}.json` that tracks which package owns it.
 //! This enables:
 //! - Deterministic binary-to-package resolution
 //! - Conflict detection when installing packages with overlapping binaries
@@ -10,7 +10,6 @@
 use serde::{Deserialize, Serialize};
 use vt_path::AbsolutePathBuf;
 
-use super::config::get_vp_home;
 use crate::error::Error;
 
 /// Source that installed a binary.
@@ -24,7 +23,7 @@ pub enum BinSource {
     Npm,
 }
 
-/// Config for a single binary, stored at ~/.vite-plus/bins/{name}.json
+/// Config for a single binary, stored at `<DATA>/bins/{name}.json`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BinConfig {
@@ -52,9 +51,9 @@ impl BinConfig {
         Self { name, package, version: String::new(), node_version, source: BinSource::Npm }
     }
 
-    /// Get the bins directory path (~/.vite-plus/bins/).
+    /// Get the bins directory path (`<DATA>/bins`).
     pub fn bins_dir() -> Result<AbsolutePathBuf, Error> {
-        Ok(get_vp_home()?.join("bins"))
+        Ok(vp_shared::EnvConfig::get().dirs.data.join("bins"))
     }
 
     /// Get the path to a binary's config file.
@@ -154,7 +153,7 @@ impl BinConfig {
         Self::find_bins_where(|config| config.package == package_name).await
     }
 
-    /// Scan `~/.vite-plus/bins/` and return names of binaries matching a predicate.
+    /// Scan `<DATA>/bins` and return names of binaries matching a predicate.
     async fn find_bins_where(predicate: impl Fn(&BinConfig) -> bool) -> Result<Vec<String>, Error> {
         let bins_dir = Self::bins_dir()?;
         if !tokio::fs::try_exists(&bins_dir).await.unwrap_or(false) {
@@ -184,119 +183,116 @@ impl BinConfig {
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+    use vp_shared::env_vars;
 
     use super::*;
 
     #[tokio::test]
     async fn test_save_and_load() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let config = BinConfig::new(
+                "tsc".to_string(),
+                "typescript".to_string(),
+                "5.0.0".to_string(),
+                "20.18.0".to_string(),
+            );
+            config.save().await.unwrap();
 
-        let config = BinConfig::new(
-            "tsc".to_string(),
-            "typescript".to_string(),
-            "5.0.0".to_string(),
-            "20.18.0".to_string(),
-        );
-        config.save().await.unwrap();
-
-        let loaded = BinConfig::load("tsc").await.unwrap();
-        assert!(loaded.is_some());
-        let loaded = loaded.unwrap();
-        assert_eq!(loaded.name, "tsc");
-        assert_eq!(loaded.package, "typescript");
-        assert_eq!(loaded.version, "5.0.0");
-        assert_eq!(loaded.node_version, "20.18.0");
+            let loaded = BinConfig::load("tsc").await.unwrap();
+            assert!(loaded.is_some());
+            let loaded = loaded.unwrap();
+            assert_eq!(loaded.name, "tsc");
+            assert_eq!(loaded.package, "typescript");
+            assert_eq!(loaded.version, "5.0.0");
+            assert_eq!(loaded.node_version, "20.18.0");
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_find_by_package() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create configs for typescript (tsc, tsserver)
+            let tsc = BinConfig::new(
+                "tsc".to_string(),
+                "typescript".to_string(),
+                "5.0.0".to_string(),
+                "20.18.0".to_string(),
+            );
+            tsc.save().await.unwrap();
 
-        // Create configs for typescript (tsc, tsserver)
-        let tsc = BinConfig::new(
-            "tsc".to_string(),
-            "typescript".to_string(),
-            "5.0.0".to_string(),
-            "20.18.0".to_string(),
-        );
-        tsc.save().await.unwrap();
+            let tsserver = BinConfig::new(
+                "tsserver".to_string(),
+                "typescript".to_string(),
+                "5.0.0".to_string(),
+                "20.18.0".to_string(),
+            );
+            tsserver.save().await.unwrap();
 
-        let tsserver = BinConfig::new(
-            "tsserver".to_string(),
-            "typescript".to_string(),
-            "5.0.0".to_string(),
-            "20.18.0".to_string(),
-        );
-        tsserver.save().await.unwrap();
+            // Create config for eslint
+            let eslint = BinConfig::new(
+                "eslint".to_string(),
+                "eslint".to_string(),
+                "9.0.0".to_string(),
+                "22.0.0".to_string(),
+            );
+            eslint.save().await.unwrap();
 
-        // Create config for eslint
-        let eslint = BinConfig::new(
-            "eslint".to_string(),
-            "eslint".to_string(),
-            "9.0.0".to_string(),
-            "22.0.0".to_string(),
-        );
-        eslint.save().await.unwrap();
+            // Find by package
+            let ts_bins = BinConfig::find_by_package("typescript").await.unwrap();
+            assert_eq!(ts_bins.len(), 2);
+            assert!(ts_bins.contains(&"tsc".to_string()));
+            assert!(ts_bins.contains(&"tsserver".to_string()));
 
-        // Find by package
-        let ts_bins = BinConfig::find_by_package("typescript").await.unwrap();
-        assert_eq!(ts_bins.len(), 2);
-        assert!(ts_bins.contains(&"tsc".to_string()));
-        assert!(ts_bins.contains(&"tsserver".to_string()));
+            let eslint_bins = BinConfig::find_by_package("eslint").await.unwrap();
+            assert_eq!(eslint_bins.len(), 1);
+            assert!(eslint_bins.contains(&"eslint".to_string()));
 
-        let eslint_bins = BinConfig::find_by_package("eslint").await.unwrap();
-        assert_eq!(eslint_bins.len(), 1);
-        assert!(eslint_bins.contains(&"eslint".to_string()));
-
-        let nonexistent_bins = BinConfig::find_by_package("nonexistent").await.unwrap();
-        assert!(nonexistent_bins.is_empty());
+            let nonexistent_bins = BinConfig::find_by_package("nonexistent").await.unwrap();
+            assert!(nonexistent_bins.is_empty());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_delete() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let config = BinConfig::new(
+                "tsc".to_string(),
+                "typescript".to_string(),
+                "5.0.0".to_string(),
+                "20.18.0".to_string(),
+            );
+            config.save().await.unwrap();
 
-        let config = BinConfig::new(
-            "tsc".to_string(),
-            "typescript".to_string(),
-            "5.0.0".to_string(),
-            "20.18.0".to_string(),
-        );
-        config.save().await.unwrap();
+            // Verify it exists
+            let loaded = BinConfig::load("tsc").await.unwrap();
+            assert!(loaded.is_some());
 
-        // Verify it exists
-        let loaded = BinConfig::load("tsc").await.unwrap();
-        assert!(loaded.is_some());
+            // Delete
+            BinConfig::delete("tsc").await.unwrap();
 
-        // Delete
-        BinConfig::delete("tsc").await.unwrap();
+            // Verify it's gone
+            let loaded = BinConfig::load("tsc").await.unwrap();
+            assert!(loaded.is_none());
 
-        // Verify it's gone
-        let loaded = BinConfig::load("tsc").await.unwrap();
-        assert!(loaded.is_none());
-
-        // Delete again should not error
-        BinConfig::delete("tsc").await.unwrap();
+            // Delete again should not error
+            BinConfig::delete("tsc").await.unwrap();
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_load_nonexistent() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-
-        let loaded = BinConfig::load("nonexistent").await.unwrap();
-        assert!(loaded.is_none());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let loaded = BinConfig::load("nonexistent").await.unwrap();
+            assert!(loaded.is_none());
+        })
+        .await;
     }
 
     #[test]
@@ -336,77 +332,73 @@ mod tests {
     #[test]
     fn test_sync_save_load_delete() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp_dir.path())], |_| {
+            let config = BinConfig::new_npm(
+                "codex".to_string(),
+                "@openai/codex".to_string(),
+                "22.22.0".to_string(),
+            );
+            config.save_sync().unwrap();
 
-        let config = BinConfig::new_npm(
-            "codex".to_string(),
-            "@openai/codex".to_string(),
-            "22.22.0".to_string(),
-        );
-        config.save_sync().unwrap();
+            let loaded = BinConfig::load_sync("codex").unwrap();
+            assert!(loaded.is_some());
+            let loaded = loaded.unwrap();
+            assert_eq!(loaded.source, BinSource::Npm);
+            assert_eq!(loaded.package, "@openai/codex");
 
-        let loaded = BinConfig::load_sync("codex").unwrap();
-        assert!(loaded.is_some());
-        let loaded = loaded.unwrap();
-        assert_eq!(loaded.source, BinSource::Npm);
-        assert_eq!(loaded.package, "@openai/codex");
+            BinConfig::delete_sync("codex").unwrap();
+            let loaded = BinConfig::load_sync("codex").unwrap();
+            assert!(loaded.is_none());
 
-        BinConfig::delete_sync("codex").unwrap();
-        let loaded = BinConfig::load_sync("codex").unwrap();
-        assert!(loaded.is_none());
-
-        // Delete again should not error
-        BinConfig::delete_sync("codex").unwrap();
+            // Delete again should not error
+            BinConfig::delete_sync("codex").unwrap();
+        });
     }
 
     #[tokio::test]
     async fn test_find_all_vp_source() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create Vp-source configs
+            let tsc = BinConfig::new(
+                "tsc".to_string(),
+                "typescript".to_string(),
+                "5.0.0".to_string(),
+                "20.18.0".to_string(),
+            );
+            tsc.save().await.unwrap();
 
-        // Create Vp-source configs
-        let tsc = BinConfig::new(
-            "tsc".to_string(),
-            "typescript".to_string(),
-            "5.0.0".to_string(),
-            "20.18.0".to_string(),
-        );
-        tsc.save().await.unwrap();
+            let corepack = BinConfig::new(
+                "corepack".to_string(),
+                "corepack".to_string(),
+                "0.20.0".to_string(),
+                "20.18.0".to_string(),
+            );
+            corepack.save().await.unwrap();
 
-        let corepack = BinConfig::new(
-            "corepack".to_string(),
-            "corepack".to_string(),
-            "0.20.0".to_string(),
-            "20.18.0".to_string(),
-        );
-        corepack.save().await.unwrap();
+            // Create Npm-source config (should be excluded)
+            let codex = BinConfig::new_npm(
+                "codex".to_string(),
+                "@openai/codex".to_string(),
+                "22.22.0".to_string(),
+            );
+            codex.save().await.unwrap();
 
-        // Create Npm-source config (should be excluded)
-        let codex = BinConfig::new_npm(
-            "codex".to_string(),
-            "@openai/codex".to_string(),
-            "22.22.0".to_string(),
-        );
-        codex.save().await.unwrap();
-
-        let mut vp_bins = BinConfig::find_all_vp_source().await.unwrap();
-        vp_bins.sort();
-        assert_eq!(vp_bins.len(), 2);
-        assert_eq!(vp_bins, vec!["corepack", "tsc"]);
+            let mut vp_bins = BinConfig::find_all_vp_source().await.unwrap();
+            vp_bins.sort();
+            assert_eq!(vp_bins.len(), 2);
+            assert_eq!(vp_bins, vec!["corepack", "tsc"]);
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_find_all_vp_source_empty_bins_dir() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-
-        let vp_bins = BinConfig::find_all_vp_source().await.unwrap();
-        assert!(vp_bins.is_empty());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let vp_bins = BinConfig::find_all_vp_source().await.unwrap();
+            assert!(vp_bins.is_empty());
+        })
+        .await;
     }
 }

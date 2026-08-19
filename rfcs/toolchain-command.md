@@ -155,18 +155,18 @@ The command prints an ownership tree with relationship labels:
 Vite+ toolchain (local)
 
 vite-plus@0.2.4
-|-- depends on @voidzero-dev/vite-plus-core@0.2.4
-|   |-- bundles vite@8.1.3
-|   |   `-- uses rolldown@1.1.4
-|   |-- bundles rolldown@1.1.4
-|   |   |-- compiles oxc@0.138.0
-|   |   `-- compiles oxc-resolver@11.22.0
-|   `-- bundles tsdown@0.22.3
-|-- depends on vitest@4.1.10
-|-- depends on oxlint@1.72.0
-|-- depends on oxlint-tsgolint@0.24.0
-|-- depends on oxfmt@0.57.0
-`-- compiles vite-task (built 2026-08-06T09:30:00Z, revision <revision>)
+├── depends on @voidzero-dev/vite-plus-core@0.2.4
+│   ├── bundles vite@8.1.3
+│   │   └── uses rolldown@1.1.4
+│   ├── bundles rolldown@1.1.4
+│   │   ├── compiles oxc@0.138.0
+│   │   └── compiles oxc-resolver@11.22.0
+│   └── bundles tsdown@0.22.3
+├── depends on vitest@4.1.10
+├── depends on oxlint@1.72.0
+├── depends on oxlint-tsgolint@0.24.0
+├── depends on oxfmt@0.57.0
+└── compiles vite-task (built 2026-08-06T09:30:00Z, revision <revision>)
 ```
 
 These versions show the repository state when this RFC was written. They are
@@ -190,11 +190,11 @@ $ vp toolchain vite
 Vite+ toolchain (local)
 
 vite-plus@0.2.4
-`-- depends on @voidzero-dev/vite-plus-core@0.2.4
-    `-- bundles vite@8.1.3
-        `-- uses rolldown@1.1.4
-            |-- compiles oxc@0.138.0
-            `-- compiles oxc-resolver@11.22.0
+└── depends on @voidzero-dev/vite-plus-core@0.2.4
+    └── bundles vite@8.1.3
+        └── uses rolldown@1.1.4
+            ├── compiles oxc@0.138.0
+            └── compiles oxc-resolver@11.22.0
 ```
 
 For multiple filters, the command returns the union of those nodes and edges.

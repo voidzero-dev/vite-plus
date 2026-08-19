@@ -1,30 +1,27 @@
-//! Windows-specific: when a vp-managed package-manager `.cmd` shim has a
-//! sibling `.ps1`, rewrite the spawn to go through
-//! `powershell.exe -File <sibling.ps1>`.
+//! On Windows, route a managed package-manager `.cmd` shim through
+//! `powershell.exe -File <sibling.ps1>` when the sibling `.ps1` file exists.
 //!
-//! Running a `.cmd` from any shell makes `cmd.exe` prompt "Terminate batch
-//! job (Y/N)?" on Ctrl+C, which leaves the terminal corrupt. Routing through
-//! `PowerShell` sidesteps the prompt and lets Ctrl+C propagate cleanly.
+//! When a shell runs a `.cmd` file, Ctrl+C makes `cmd.exe` show a termination
+//! prompt. This prompt can damage the terminal state. PowerShell does not show
+//! the prompt and passes Ctrl+C to the child process.
 //!
 //! The rewrite is scoped to two patterns:
-//!   - Inside `$VP_HOME` (`~/.vite-plus` by default) — vp's managed shims:
-//!     - `$VP_HOME/js_runtime/node/<ver>/{npm,npx}.cmd`,
-//!     - `$VP_HOME/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
-//!   - Any `<...>/node_modules/.bin/*.cmd` — the canonical layout for
-//!     npm/pnpm/yarn-emitted shims (cmd-shim writes both `.cmd` and `.ps1`
-//!     so the wrappers stay equivalent).
+//!   - Managed shims in the Vite+ data root (`<DATA>`):
+//!     - `<DATA>/js_runtime/node/<ver>/{npm,npx}.cmd`,
+//!     - `<DATA>/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
+//!   - Each `<...>/node_modules/.bin/*.cmd` shim. npm, pnpm, and Yarn use this
+//!     standard layout. `cmd-shim` writes equivalent `.cmd` and `.ps1` files.
 //!
-//! Anything outside both patterns — system tools, third-party CLIs whose
-//! `.cmd` and `.ps1` wrappers may diverge — keeps its existing `.cmd`
-//! path (Ctrl+C corruption included), so we don't silently change
-//! execution semantics for unrelated commands or bypass execution
-//! policies on locked-down hosts.
+//! Keep the `.cmd` path for files outside these patterns. This includes system
+//! tools and third-party CLIs with different `.cmd` and `.ps1` behavior. This
+//! rule keeps the execution behavior of unrelated commands. It also obeys host
+//! execution policies.
 //!
-//! The rewrite is also skipped when stdin is not a terminal. The
-//! `pnpm`/`npm`/`yarn` `.ps1` wrappers introspect stdin (e.g.
-//! `$MyInvocation.ExpectingInput`) and hang when stdin is piped or
-//! null; in that environment there is no terminal to corrupt with the
-//! Ctrl+C prompt anyway, so falling back to `.cmd` is strictly safer.
+//! Do not rewrite when standard input is not a terminal. The pnpm, npm, and
+//! Yarn `.ps1` wrappers inspect standard input. For example, they use
+//! `$MyInvocation.ExpectingInput`. They can stop responding when input is a
+//! pipe or null. In this case, there is no terminal that the Ctrl+C prompt can
+//! damage. Use the `.cmd` file.
 //!
 //! See <https://github.com/voidzero-dev/vite-plus/issues/1489>
 //! and <https://github.com/voidzero-dev/vite-plus/issues/1176>.
@@ -36,45 +33,35 @@ use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powe
 
 /// Rewrite a vp-managed `.cmd` invocation to go through `PowerShell`.
 ///
-/// Returns `Some((powershell_host, prefix_args))` when the rewrite applies.
-/// `prefix_args` is `["-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass",
-/// "-File", <abs ps1 path>]`; callers prepend it to the user args and spawn
-/// `powershell_host`.
+/// Return `Some((powershell_host, prefix_args))` when the rewrite applies.
+/// `prefix_args` contains `-NoProfile`, `-NoLogo`, `-ExecutionPolicy`,
+/// `Bypass`, `-File`, and the absolute `.ps1` path. Add these arguments before
+/// the user arguments. Then start `powershell_host`.
 ///
 /// Returns `None` when:
 /// - not on Windows,
 /// - no `PowerShell` host (`pwsh.exe` or `powershell.exe`) is on PATH,
-/// - stdin is not a terminal (the `.ps1` wrappers hang on piped/null
-///   stdin and the Ctrl+C concern doesn't apply without a TTY),
-/// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is
-///   unresolvable) AND not under any `node_modules/.bin/`,
+/// - standard input is not a terminal,
+/// - the resolved path is not in the Vite+ data root or a
+///   `node_modules/.bin/` directory,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
 pub fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
-    // `build_command` always inherits stdin into spawned children, so a TTY on
-    // our stdin means a TTY in the child too. `is_stdin_terminal` is shared with
-    // `vt_plan::ps1_shim` via the `vt_powershell` crate.
+    // `build_command` gives its standard input to child processes. Thus, a TTY
+    // here is also a TTY in the child. The `vt_powershell` crate shares
+    // `is_stdin_terminal` with `vt_plan::ps1_shim`.
     let host = powershell_host()?;
-    rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
+    // Vite+ managed shims are under the data root (`<DATA>/js_runtime/…`,
+    // `<DATA>/package_manager/…`).
+    let config = vp_shared::EnvConfig::get();
+    rewrite_in_scope(resolved, Some(config.dirs.data.as_absolute_path()), host, is_stdin_terminal())
 }
 
-/// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
-/// Returns `None` if `vp_shared::get_vp_home()` failed; the rewrite still
-/// applies to `node_modules/.bin/*.cmd` paths in that case (the two scopes
-/// are independent).
-fn vp_home() -> Option<&'static AbsolutePathBuf> {
-    use std::sync::LazyLock;
-
-    static VP_HOME: LazyLock<Option<AbsolutePathBuf>> =
-        LazyLock::new(|| vp_shared::get_vp_home().ok());
-    VP_HOME.as_ref()
-}
-
-/// Pure rewrite logic. Factored out so tests can drive it on any platform
-/// without depending on a real `powershell.exe` or a real `$VP_HOME`.
+/// Apply the rewrite without external state. Tests can call this function on
+/// each platform without a real `powershell.exe` or Vite+ data root.
 fn rewrite_in_scope(
     resolved: &AbsolutePath,
     vp_home: Option<&AbsolutePath>,
@@ -108,9 +95,9 @@ fn is_in_managed_scope(resolved: &AbsolutePath, vp_home: Option<&AbsolutePath>) 
     in_vp_home || is_in_node_modules_bin(resolved)
 }
 
-/// `true` when `resolved` is `<...>/node_modules/.bin/<file>` (matched
-/// case-insensitively on the `.bin`/`node_modules` components — Windows
-/// is case-insensitive, and pnpm's hoisted layouts can vary in casing).
+/// Return `true` when `resolved` is `<...>/node_modules/.bin/<file>`. Compare
+/// the `.bin` and `node_modules` components without case sensitivity. Windows
+/// is not case-sensitive, and pnpm hoisted layouts can use different case.
 fn is_in_node_modules_bin(resolved: &AbsolutePath) -> bool {
     let mut parents = resolved.as_path().components().rev();
     parents.next(); // shim filename
@@ -211,10 +198,9 @@ mod tests {
         );
     }
 
-    /// `vp_home` may be unresolvable in unusual environments (CI containers
-    /// missing $HOME, sandboxed shells); when that happens the
-    /// `node_modules/.bin` scope must still rewrite, since it is
-    /// architecturally independent from the `$VP_HOME` scope.
+    /// When no vp data root participates in the scope check (`None` here),
+    /// the `node_modules/.bin` scope must still rewrite, since it is
+    /// architecturally independent from the data-root scope.
     #[test]
     fn rewrites_cmd_in_node_modules_bin_when_vp_home_unresolved() {
         let dir = tempdir().unwrap();

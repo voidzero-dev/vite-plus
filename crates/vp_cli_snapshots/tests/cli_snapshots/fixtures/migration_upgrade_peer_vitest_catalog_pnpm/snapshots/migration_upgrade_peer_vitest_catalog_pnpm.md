@@ -50,7 +50,7 @@ catalog:
 catalogs:
   test: {}
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

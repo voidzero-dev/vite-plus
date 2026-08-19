@@ -37,6 +37,7 @@ reqwest = { workspace = true, features = ["stream", "rustls-no-provider"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

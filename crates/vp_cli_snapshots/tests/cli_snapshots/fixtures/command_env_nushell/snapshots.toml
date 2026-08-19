@@ -8,3 +8,14 @@ steps = [
   { argv = ["vpt", "cp", "assert.nu", 'vp "home\with spaces"/assert.nu'], snapshot = false },
   { argv = ["nu", "assert.nu"], cwd = 'vp "home\with spaces"', comment = "loads the generated env.nu and verifies the Nushell wrapper", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
 ]
+
+[[case]]
+name = "command_env_nushell_metachar_dirs"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["nu"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["HOME", "${workspace}/shell-home"], ["USERPROFILE", "${workspace}/shell-home"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash"], ["VP_DATA_DIR", "${workspace}/data-$USER-\"quote\"-'single'-`tick`-\\slash"], ["VP_CACHE_DIR", "${workspace}/cache-$USER-\"quote\"-'single'-`tick`-\\slash"], ["XDG_CONFIG_HOME", "${workspace}/config-$USER-\"quote\"-'single'-`tick`-\\slash"]], snapshot = false },
+  { argv = ["vpt", "cp", "assert_dirs.nu", "config-$USER-\"quote\"-'single'-`tick`-\\slash/vite-plus/assert_dirs.nu"], snapshot = false },
+  { argv = ["nu", "config-$USER-\"quote\"-'single'-`tick`-\\slash/vite-plus/assert_dirs.nu"], comment = "Nushell loads env.nu, preserves a PATH with shell metacharacters, and omits internal directory variables", envs = [["HOME", "${workspace}/shell-home"], ["USERPROFILE", "${workspace}/shell-home"], ["VP_HOME", ""], ["EXPECTED_VP_BIN_DIR", "${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash"], ["PATH", "${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash:${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash:${PATH}"]] },
+]

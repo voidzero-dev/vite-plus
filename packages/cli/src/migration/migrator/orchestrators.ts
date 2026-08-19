@@ -21,6 +21,7 @@ import {
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
   managedOverridePackages,
+  mergeManagedPnpmOverrides,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
   mergeViteConfigFiles,
@@ -185,19 +186,18 @@ export function rewriteStandaloneProject(
         // Common case: drop a lingering managed `vitest` override + its peer
         // rules before re-merging.
         if (!usesVitest) {
-          removeManagedVitestEntry(pkg.pnpm?.overrides);
+          removeManagedVitestEntry(pkg.pnpm?.overrides, 'pnpm-ranged');
           if (pkg.pnpm?.peerDependencyRules) {
             removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
           }
         }
         // Project already has pnpm config in package.json -- keep using it.
+        // `mergeManagedPnpmOverrides` writes the range-qualified keys and drops
+        // any pre-#2309 bare key. `peerDependencyRules` below keys on plain
+        // package names, so it stays bare.
         pkg.pnpm = {
           ...pkg.pnpm,
-          overrides: {
-            ...pkg.pnpm?.overrides,
-            ...managed,
-            ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
-          },
+          overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
           peerDependencyRules: {
             ...pkg.pnpm?.peerDependencyRules,
             allowAny: [

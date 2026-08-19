@@ -234,6 +234,32 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     }
 }
 
+/// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+#[napi(object)]
+pub struct VpDirsJs {
+    pub bin: String,
+    pub data: String,
+    pub cache: String,
+    pub config: String,
+    pub state: String,
+}
+
+/// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+///
+/// JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
+/// this is the JS surface of the same `EnvConfig::get().dirs` Rust uses.
+#[napi]
+pub fn get_vp_dirs() -> VpDirsJs {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    VpDirsJs {
+        bin: dirs.bin.as_path().to_string_lossy().into_owned(),
+        data: dirs.data.as_path().to_string_lossy().into_owned(),
+        cache: dirs.cache.as_path().to_string_lossy().into_owned(),
+        config: dirs.config.as_path().to_string_lossy().into_owned(),
+        state: dirs.state.as_path().to_string_lossy().into_owned(),
+    }
+}
+
 /// Render the Vite+ header using the Rust implementation.
 #[napi]
 pub fn vite_plus_header() -> String {
