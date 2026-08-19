@@ -28,6 +28,8 @@ enum EnvShell {
     Powershell,
 }
 
+const UTF8_BOM: char = '\u{feff}';
+
 impl EnvShell {
     /// File name written under `<CONFIG>/` for this shell's setup script.
     const fn env_file_name(self) -> &'static str {
@@ -907,7 +909,12 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
 async fn create_env_files() -> Result<(), Error> {
     let config = vp_shared::EnvConfig::get();
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-        let content = render_env_content(shell, &config);
+        let mut content = render_env_content(shell, &config);
+        if matches!(shell, EnvShell::Powershell) {
+            // Windows PowerShell 5.1 uses the active ANSI code page for a
+            // UTF-8 script without a BOM. The BOM preserves non-ASCII paths.
+            content.insert(0, UTF8_BOM);
+        }
         tokio::fs::write(config.dirs.config.join(shell.env_file_name()), content).await?;
     }
 
@@ -1092,6 +1099,32 @@ mod tests {
                 assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
                 assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
                 assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_create_env_files_adds_one_bom_only_to_powershell() {
+        const UTF8_BOM_BYTES: &[u8] = b"\xEF\xBB\xBF";
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
+                create_env_files().await.unwrap();
+
+                for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
+                    let bytes = tokio::fs::read(home.join(shell.env_file_name())).await.unwrap();
+                    if matches!(shell, EnvShell::Powershell) {
+                        assert!(bytes.starts_with(UTF8_BOM_BYTES));
+                        assert!(!bytes[UTF8_BOM_BYTES.len()..].starts_with(UTF8_BOM_BYTES));
+                    } else {
+                        assert!(!bytes.starts_with(UTF8_BOM_BYTES));
+                    }
+                }
             },
         )
         .await;

@@ -1308,6 +1308,83 @@ jobs:
             }
           }
 
+      - name: Windows PowerShell 5.1 sources env.ps1 from a Unicode path
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw "This test requires Windows PowerShell 5.1"
+          }
+
+          $suffix = "unicode-{0}{1}-{2}{3}" -f [char]0x6D4B, [char]0x8BD5, [char]0x8DEF, [char]0x5F84
+          $root = Join-Path $env:RUNNER_TEMP "vp-unicode-env"
+          $env:VP_HOME = Join-Path $root $suffix
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = Join-Path $root "empty.tgz"
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-unicode-env"
+          $env:VP_NODE_MANAGER = "yes"
+          $env:VP_NODE_VERSION = "22.13.1"
+          $env:CI = "true"
+          Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_DATA_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
+          $pathBeforeInstall = $env:Path
+
+          & ./packages/cli/install.ps1
+
+          $expectedHome = $env:VP_HOME
+          $expectedBin = Join-Path $expectedHome "bin"
+          $envFile = Join-Path $expectedHome "env.ps1"
+          $bom = [byte[]](0xEF, 0xBB, 0xBF)
+
+          function Assert-One-Utf8Bom([string]$Path) {
+            $bytes = [System.IO.File]::ReadAllBytes($Path)
+            if ($bytes.Length -lt 3 -or $bytes[0] -ne $bom[0] -or $bytes[1] -ne $bom[1] -or $bytes[2] -ne $bom[2]) {
+              throw "$Path does not start with a UTF-8 BOM"
+            }
+            if ($bytes.Length -ge 6 -and $bytes[3] -eq $bom[0] -and $bytes[4] -eq $bom[1] -and $bytes[5] -eq $bom[2]) {
+              throw "$Path starts with more than one UTF-8 BOM"
+            }
+          }
+
+          Assert-One-Utf8Bom $envFile
+          foreach ($name in @("env", "env.fish", "env.nu")) {
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $expectedHome $name))
+            if ($bytes.Length -ge 3 -and $bytes[0] -eq $bom[0] -and $bytes[1] -eq $bom[1] -and $bytes[2] -eq $bom[2]) {
+              throw "$name has an unexpected UTF-8 BOM"
+            }
+          }
+
+          # Remove the PATH change made by the installer. The generated file
+          # must restore the exact Unicode path by itself.
+          $env:Path = $pathBeforeInstall
+          $env:VP_HOME = "incorrect-before-source"
+          . $envFile
+
+          if ($env:VP_HOME -cne $expectedHome) { throw "env.ps1 changed the Unicode VP_HOME" }
+          if ($__vp_bin -cne $expectedBin) { throw "env.ps1 changed the Unicode bin path" }
+          foreach ($name in @("vp", "node", "npm")) {
+            $expected = Join-Path $expectedBin "$name.exe"
+            $actual = (Get-Command "$name.exe" -CommandType Application).Source
+            if ($actual -cne $expected) { throw "$name resolves to '$actual' instead of '$expected'" }
+          }
+
+          vp --version
+          node --version
+          npm --version
+
+          vp env setup --env-only
+          Assert-One-Utf8Bom $envFile
+
+          $env:VP_TEST_ENV_FILE = $envFile
+          $env:VP_TEST_EXPECTED_HOME = $expectedHome
+          & pwsh -NoProfile -Command '. $env:VP_TEST_ENV_FILE; if ($env:VP_HOME -cne $env:VP_TEST_EXPECTED_HOME) { throw "PowerShell 7 changed VP_HOME" }; vp --version'
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell 7 could not source env.ps1" }
+
       - name: Split-layout implode removes the running trampoline safely
         shell: pwsh
         run: |
