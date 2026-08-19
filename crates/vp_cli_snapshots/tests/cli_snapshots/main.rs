@@ -744,6 +744,16 @@ fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String,
     // this via `unset-env`.
     env.insert("VP_SKIP_INSTALL".into(), "1".into());
     env.insert("NPM_CONFIG_PREFIX".into(), case_home.npm_prefix().into_os_string());
+    // pnpm >= 11 defaults `minimumReleaseAge` to 24 hours. Real-install fixtures
+    // pull the just-published Vite+ toolchain (oxlint, oxfmt, vitest, the oxc
+    // family), so on the day of an upstream bump pnpm quarantines them and
+    // records exact-version `minimumReleaseAgeExclude` entries in the generated
+    // `pnpm-workspace.yaml` — output that churns with the publish calendar
+    // rather than with vp behaviour. Opt out so snapshots stay deterministic
+    // whatever the age of the bundled versions. pnpm >= 10.6 only reads the
+    // PNPM_CONFIG_* spelling; older pnpm reads the lowercase form.
+    env.insert("PNPM_CONFIG_MINIMUM_RELEASE_AGE".into(), "0".into());
+    env.insert("pnpm_config_minimum_release_age".into(), "0".into());
     for (key, value) in [
         ("GIT_AUTHOR_NAME", "vite-plus-test"),
         ("GIT_AUTHOR_EMAIL", "test@vite-plus.invalid"),
