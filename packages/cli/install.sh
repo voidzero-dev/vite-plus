@@ -465,6 +465,7 @@ check_requirements() {
 # Fetch package metadata from npm registry (cached for reuse)
 # Uses VP_VERSION to fetch the correct version's metadata
 PACKAGE_METADATA=""
+PLATFORM_TARBALL_URL=""
 fetch_package_metadata() {
   if [ -z "$PACKAGE_METADATA" ]; then
     local version_path metadata_url
@@ -506,6 +507,258 @@ get_version_from_metadata() {
   RESOLVED_VERSION=$(echo "$PACKAGE_METADATA" | grep -o '"version" *: *"[^"]*"' | head -1 | cut -d'"' -f4)
   if [ -z "$RESOLVED_VERSION" ]; then
     error "Failed to extract version from package metadata"
+  fi
+}
+
+# Extract the platform tarball URL and provenance predicate from npm version
+# metadata. Bootstrap runs before Node.js is available and cannot require jq,
+# so this parser tracks each JSON path segment and container boundary rather
+# than matching key names or dot-joined paths. Keeping segments separate means
+# a package-defined key containing dots cannot impersonate npm's nested
+# `dist.attestations.provenance` metadata. Invalid JSON fails closed.
+parse_platform_distribution_metadata() {
+  awk '
+    function fail_json(message) {
+      print message > "/dev/stderr"
+      exit 2
+    }
+
+    function skip_whitespace(    c) {
+      while (json_pos <= json_length) {
+        c = substr(json_text, json_pos, 1)
+        if (c == " " || c == "\t" || c == "\r" || c == "\n") {
+          json_pos++
+        } else {
+          return
+        }
+      }
+    }
+
+    function parse_string(    result, c, escaped, hex) {
+      skip_whitespace()
+      if (substr(json_text, json_pos, 1) != "\"") {
+        fail_json("expected JSON string")
+      }
+      json_pos++
+
+      while (json_pos <= json_length) {
+        c = substr(json_text, json_pos, 1)
+        json_pos++
+        if (c == "\"") {
+          return result
+        }
+        if (c == "\\") {
+          if (json_pos > json_length) {
+            fail_json("unterminated JSON escape")
+          }
+          escaped = substr(json_text, json_pos, 1)
+          json_pos++
+          if (escaped == "\"" || escaped == "\\" || escaped == "/") {
+            result = result escaped
+          } else if (escaped == "b" || escaped == "f" || escaped == "n" || escaped == "r" || escaped == "t") {
+            # Keep control escapes printable so extracted values cannot inject lines.
+            result = result "\\" escaped
+          } else if (escaped == "u") {
+            hex = substr(json_text, json_pos, 4)
+            if (length(hex) != 4 || hex ~ /[^0-9A-Fa-f]/) {
+              fail_json("invalid JSON unicode escape")
+            }
+            result = result "\\u" hex
+            json_pos += 4
+          } else {
+            fail_json("invalid JSON escape")
+          }
+        } else {
+          if (c ~ /[[:cntrl:]]/) {
+            fail_json("unescaped control character in JSON string")
+          }
+          result = result c
+        }
+      }
+
+      fail_json("unterminated JSON string")
+    }
+
+    function is_object_key(depth, key) {
+      return path_kind[depth] == "object-key" && path_key[depth] == key
+    }
+
+    function remember_string(depth, value) {
+      if (depth == 2 && is_object_key(1, "dist") && is_object_key(2, "tarball")) {
+        if (++tarball_count != 1) fail_json("duplicate dist.tarball")
+        tarball = value
+      } else if (depth == 4 && is_object_key(1, "dist") &&
+                 is_object_key(2, "attestations") &&
+                 is_object_key(3, "provenance") &&
+                 is_object_key(4, "predicateType")) {
+        if (++predicate_count != 1) fail_json("duplicate provenance predicateType")
+        predicate_type = value
+      } else if (depth == 1 && is_object_key(1, "error")) {
+        if (++error_count != 1) fail_json("duplicate registry error")
+        registry_error = value
+      }
+    }
+
+    function parse_number(    start, value, c) {
+      start = json_pos
+      while (json_pos <= json_length) {
+        c = substr(json_text, json_pos, 1)
+        if (c ~ /[-+0-9.eE]/) json_pos++
+        else break
+      }
+      value = substr(json_text, start, json_pos - start)
+      if (value !~ /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) {
+        fail_json("invalid JSON number")
+      }
+    }
+
+    function parse_literal(literal) {
+      if (substr(json_text, json_pos, length(literal)) != literal) {
+        fail_json("invalid JSON literal")
+      }
+      json_pos += length(literal)
+    }
+
+    function parse_array(depth,    c, child_depth) {
+      json_pos++
+      skip_whitespace()
+      if (substr(json_text, json_pos, 1) == "]") {
+        json_pos++
+        return
+      }
+
+      while (1) {
+        child_depth = depth + 1
+        path_kind[child_depth] = "array-item"
+        path_key[child_depth] = ""
+        parse_value(child_depth)
+        delete path_kind[child_depth]
+        delete path_key[child_depth]
+        skip_whitespace()
+        c = substr(json_text, json_pos, 1)
+        if (c == "]") {
+          json_pos++
+          return
+        }
+        if (c != ",") fail_json("expected comma in JSON array")
+        json_pos++
+      }
+    }
+
+    function parse_object(depth,    key, child_depth, c, object_id) {
+      json_pos++
+      object_id = ++object_count
+      skip_whitespace()
+      if (substr(json_text, json_pos, 1) == "}") {
+        json_pos++
+        return
+      }
+
+      while (1) {
+        key = parse_string()
+        if ((object_id SUBSEP key) in object_keys) {
+          fail_json("duplicate key in JSON object")
+        }
+        object_keys[object_id SUBSEP key] = 1
+        skip_whitespace()
+        if (substr(json_text, json_pos, 1) != ":") {
+          fail_json("expected colon in JSON object")
+        }
+        json_pos++
+        child_depth = depth + 1
+        path_kind[child_depth] = "object-key"
+        path_key[child_depth] = key
+        parse_value(child_depth)
+        delete path_kind[child_depth]
+        delete path_key[child_depth]
+        skip_whitespace()
+        c = substr(json_text, json_pos, 1)
+        if (c == "}") {
+          json_pos++
+          return
+        }
+        if (c != ",") fail_json("expected comma in JSON object")
+        json_pos++
+      }
+    }
+
+    function parse_value(depth,    c, value) {
+      skip_whitespace()
+      c = substr(json_text, json_pos, 1)
+      if (c == "{") {
+        parse_object(depth)
+      } else if (c == "[") {
+        parse_array(depth)
+      } else if (c == "\"") {
+        value = parse_string()
+        remember_string(depth, value)
+      } else if (c == "t") {
+        parse_literal("true")
+      } else if (c == "f") {
+        parse_literal("false")
+      } else if (c == "n") {
+        parse_literal("null")
+      } else if (c == "-" || c ~ /[0-9]/) {
+        parse_number()
+      } else {
+        fail_json("invalid JSON value")
+      }
+    }
+
+    { json_text = json_text $0 "\n" }
+
+    END {
+      json_length = length(json_text)
+      json_pos = 1
+      parse_value(0)
+      skip_whitespace()
+      if (json_pos <= json_length) fail_json("unexpected data after JSON value")
+
+      print tarball
+      print predicate_type
+      print registry_error
+    }
+  '
+}
+
+# Fetch exact platform package metadata and admit only npm provenance predicate
+# types supported by Vite+. `dist.signatures` is deliberately insufficient: it
+# authenticates registry metadata, while provenance binds this release binary
+# to the build that produced it. Any missing or unrecognized evidence is denied
+# before the tarball URL is used.
+resolve_platform_distribution() {
+  local package_name="$1"
+  local package_version="$2"
+  local encoded_package_name="${package_name/\//%2F}"
+  local metadata_url="${NPM_REGISTRY}/${encoded_package_name}/${package_version}"
+  local metadata parsed registry_error predicate_type
+
+  metadata=$(curl_with_error_handling -s "$metadata_url")
+  if [ -z "$metadata" ]; then
+    error "Failed to fetch CLI package metadata from: $metadata_url"
+  fi
+
+  if ! parsed=$(printf '%s\n' "$metadata" | parse_platform_distribution_metadata); then
+    error "Failed to parse CLI package metadata for ${package_name}@${package_version}\n  URL: $metadata_url"
+  fi
+
+  PLATFORM_TARBALL_URL=$(printf '%s\n' "$parsed" | sed -n '1p')
+  predicate_type=$(printf '%s\n' "$parsed" | sed -n '2p')
+  registry_error=$(printf '%s\n' "$parsed" | sed -n '3p')
+
+  if [ -n "$registry_error" ]; then
+    error "Failed to fetch CLI package metadata '${package_name}@${package_version}': ${registry_error}\n  URL: $metadata_url"
+  fi
+
+  case "$predicate_type" in
+    https://slsa.dev/provenance/v1|https://slsa.dev/provenance/v0.2) ;;
+    *)
+      error "Refusing to install ${package_name}@${package_version}: the package does not contain supported npm provenance metadata. Vite+ only installs release binaries published with npm provenance."
+      ;;
+  esac
+
+  if [ -z "$PLATFORM_TARBALL_URL" ]; then
+    error "CLI package metadata for ${package_name}@${package_version} does not include dist.tarball\n  URL: $metadata_url"
   fi
 }
 
@@ -1086,7 +1339,8 @@ main() {
       platform_url="${BRIDGE_DOWNLOAD_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
     else
       local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
-      platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
+      resolve_platform_distribution "$package_name" "$VP_VERSION"
+      platform_url="$PLATFORM_TARBALL_URL"
     fi
 
     # Create temp directory for extraction

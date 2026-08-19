@@ -8,7 +8,9 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'packages/cli/tests/fixtures/provenance-registry.mjs'
       - 'crates/vp_installer/**'
+      - 'crates/vp_global_cli/**'
       - 'crates/vp_pm_cli/**'
       - 'crates/vp_setup/**'
       - '.github/workflows/test-standalone-install.yml'
@@ -113,6 +115,192 @@ jobs:
           # rollback to the previous version (should succeed after a real update)
           vp upgrade --rollback
           vp --version
+
+  test-install-sh-provenance:
+    name: Test install.sh (npm provenance)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Verify platform package provenance before download
+        env:
+          TEST_VERSION: 9.9.9-provenance-test.1
+        run: |
+          run_case() {
+            mode="$1"
+            expected="$2"
+            case_dir="$RUNNER_TEMP/vite-plus-provenance-sh-$mode"
+            port_file="$case_dir/port"
+            log_file="$case_dir/requests.jsonl"
+            vp_home="$case_dir/vp-home"
+
+            rm -rf "$case_dir"
+            mkdir -p "$case_dir/home" "$vp_home"
+            node packages/cli/tests/fixtures/provenance-registry.mjs \
+              --port-file "$port_file" \
+              --log-file "$log_file" \
+              --mode "$mode" \
+              --version "$TEST_VERSION" &
+            server_pid=$!
+
+            for _ in $(seq 1 100); do
+              [ -s "$port_file" ] && break
+              sleep 0.1
+            done
+            if [ ! -s "$port_file" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+              echo "Mock registry did not start"
+              return 1
+            fi
+
+            registry="http://127.0.0.1:$(cat "$port_file")"
+            set +e
+            output=$(env \
+              CI=true \
+              HOME="$case_dir/home" \
+              VP_HOME="$vp_home" \
+              VP_NODE_MANAGER=no \
+              VP_VERSION="$TEST_VERSION" \
+              NPM_CONFIG_REGISTRY="$registry" \
+              bash packages/cli/install.sh 2>&1)
+            status=$?
+            set -e
+
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+            printf '%s\n' "$output"
+
+            if [ "$status" -eq 0 ]; then
+              echo "Expected the fixture tarball endpoint to prevent installation"
+              return 1
+            fi
+
+            if [ "$expected" = reject ]; then
+              printf '%s\n' "$output" | grep -F \
+                "does not contain supported npm provenance metadata"
+              printf '%s\n' "$output" | grep -F \
+                "@voidzero-dev/vite-plus-cli-"
+              printf '%s\n' "$output" | grep -F "$TEST_VERSION"
+
+              if grep -F '"path":"/platform.tgz"' "$log_file"; then
+                echo "Platform tarball was requested before provenance validation"
+                return 1
+              fi
+              if [ -e "$vp_home/current" ] || [ -e "$vp_home/$TEST_VERSION/bin/vp" ]; then
+                echo "Rejected package left an active or executable installation"
+                return 1
+              fi
+            else
+              if printf '%s\n' "$output" | grep -F \
+                "does not contain supported npm provenance metadata"; then
+                echo "Supported provenance metadata was rejected"
+                return 1
+              fi
+              grep -F '"path":"/platform.tgz"' "$log_file"
+            fi
+          }
+
+          run_case missing reject
+          run_case malformed reject
+          run_case top-level-only reject
+          run_case dotted-top-level-key reject
+          run_case unsupported reject
+          run_case valid-v1 allow
+          run_case valid-v0.2 allow
+
+  test-vp-upgrade-provenance:
+    name: Test vp upgrade (npm provenance)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+
+      - name: Test shared provenance resolver
+        run: cargo test -p vp_setup registry
+
+      - name: Build global vp
+        run: cargo build -p vp_global_cli
+
+      - name: Verify upgrade provenance before download
+        env:
+          TEST_VERSION: 9.9.9-provenance-test.1
+        run: |
+          case_dir="$RUNNER_TEMP/vite-plus-provenance-upgrade"
+          port_file="$case_dir/port"
+          log_file="$case_dir/requests.jsonl"
+          rm -rf "$case_dir"
+          mkdir -p "$case_dir"
+
+          node packages/cli/tests/fixtures/provenance-registry.mjs \
+            --port-file "$port_file" \
+            --log-file "$log_file" \
+            --mode missing \
+            --version "$TEST_VERSION" &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for _ in $(seq 1 100); do
+            [ -s "$port_file" ] && break
+            sleep 0.1
+          done
+          if [ ! -s "$port_file" ]; then
+            echo "Mock registry did not start"
+            exit 1
+          fi
+
+          registry="http://127.0.0.1:$(cat "$port_file")"
+          run_upgrade() {
+            label="$1"
+            shift
+            home_dir="$case_dir/home-$label"
+            vp_home="$case_dir/vp-home-$label"
+            mkdir -p "$home_dir"
+
+            set +e
+            output=$(env \
+              CI=true \
+              HOME="$home_dir" \
+              VP_HOME="$vp_home" \
+              target/debug/vp upgrade "$TEST_VERSION" --registry "$registry" "$@" 2>&1)
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+
+            if [ "$status" -eq 0 ]; then
+              echo "Expected vp upgrade $label to reject missing provenance"
+              return 1
+            fi
+            printf '%s\n' "$output" | grep -F \
+              "does not contain supported npm provenance metadata"
+            printf '%s\n' "$output" | grep -F \
+              "@voidzero-dev/vite-plus-cli-"
+            printf '%s\n' "$output" | grep -F "$TEST_VERSION"
+
+            if [ -e "$vp_home/current" ] || [ -e "$vp_home/$TEST_VERSION" ]; then
+              echo "Rejected upgrade changed the active or target version"
+              return 1
+            fi
+          }
+
+          run_upgrade install
+          run_upgrade check --check
+
+          if grep -F '"path":"/platform.tgz"' "$log_file"; then
+            echo "Platform tarball was requested before provenance validation"
+            exit 1
+          fi
+          grep -F '"path":"/@voidzero-dev/vite-plus-cli-' "$log_file"
 
   test-install-sh-readonly-config:
     name: Test install.sh (readonly shell config)
@@ -570,6 +758,137 @@ jobs:
           vp upgrade --rollback
           vp --version
 
+  test-install-ps1-provenance:
+    name: Test install.ps1 (npm provenance, Windows PowerShell 5.1)
+    runs-on: namespace-profile-windows-4c-8g
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Verify platform package provenance before download
+        shell: powershell
+        env:
+          TEST_VERSION: 9.9.9-provenance-test.1
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Invoke-ProvenanceCase {
+            param(
+              [string]$Mode,
+              [bool]$ExpectRejection,
+              [bool]$RawContentType = $false
+            )
+
+            $caseDir = Join-Path $env:RUNNER_TEMP "vite-plus-provenance-ps1-$Mode"
+            $homeDir = Join-Path $caseDir "home"
+            $vpHome = Join-Path $caseDir "vp-home"
+            $portFile = Join-Path $caseDir "port"
+            $logFile = Join-Path $caseDir "requests.jsonl"
+            $stdoutFile = Join-Path $caseDir "registry.stdout.log"
+            $stderrFile = Join-Path $caseDir "registry.stderr.log"
+            $installerStdoutFile = Join-Path $caseDir "installer.stdout.log"
+            $installerStderrFile = Join-Path $caseDir "installer.stderr.log"
+
+            Remove-Item -Path $caseDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Path $homeDir, $vpHome -Force | Out-Null
+
+            $fixture = Join-Path (Get-Location) "packages/cli/tests/fixtures/provenance-registry.mjs"
+            $serverArgs = @(
+              $fixture,
+              "--port-file", $portFile,
+              "--log-file", $logFile,
+              "--mode", $Mode,
+              "--version", $env:TEST_VERSION
+            )
+            if ($RawContentType) {
+              $serverArgs += @("--raw-content-type", "true")
+            }
+
+            $server = Start-Process -FilePath "node" -ArgumentList $serverArgs -PassThru -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+
+            try {
+              for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $portFile); $attempt++) {
+                Start-Sleep -Milliseconds 100
+              }
+              if (-not (Test-Path $portFile)) {
+                throw "Mock registry did not start: $(Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)"
+              }
+
+              $registry = "http://127.0.0.1:$(Get-Content $portFile -Raw)"
+              $env:CI = "true"
+              $env:USERPROFILE = $homeDir
+              $env:VP_HOME = $vpHome
+              $env:VP_NODE_MANAGER = "no"
+              $env:VP_VERSION = $env:TEST_VERSION
+              $env:NPM_CONFIG_REGISTRY = $registry
+
+              # Windows PowerShell 5.1 turns redirected native stderr into a
+              # NativeCommandError. Capture each stream separately so the
+              # expected tarball failure cannot stop this parent test script.
+              $installerArgs = @(
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", ".\packages\cli\install.ps1"
+              )
+              $installer = Start-Process -FilePath "powershell.exe" -ArgumentList $installerArgs -PassThru -Wait -RedirectStandardOutput $installerStdoutFile -RedirectStandardError $installerStderrFile
+              $exitCode = $installer.ExitCode
+              $text = @(
+                Get-Content -Path $installerStdoutFile -Raw -ErrorAction SilentlyContinue
+                Get-Content -Path $installerStderrFile -Raw -ErrorAction SilentlyContinue
+              ) -join "`n"
+            } finally {
+              if (-not $server.HasExited) {
+                Stop-Process -Id $server.Id -Force
+                $server.WaitForExit()
+              }
+            }
+
+            Write-Host $text
+            if ($exitCode -eq 0) {
+              throw "Expected the fixture tarball endpoint to prevent installation"
+            }
+
+            $requests = Get-Content -Path $logFile -Raw
+            $tarballRequested = $requests.Contains('"path":"/platform.tgz"')
+            $provenanceError = "does not contain supported npm provenance metadata"
+
+            if ($ExpectRejection) {
+              if (-not $text.Contains($provenanceError)) {
+                throw "Expected provenance rejection for $Mode"
+              }
+              if (-not $text.Contains("@voidzero-dev/vite-plus-cli-") -or
+                  -not $text.Contains($env:TEST_VERSION)) {
+                throw "Expected rejected package name and version in installer output"
+              }
+              if ($tarballRequested) {
+                throw "Platform tarball was requested before provenance validation"
+              }
+              if ((Test-Path (Join-Path $vpHome "current")) -or
+                  (Test-Path (Join-Path $vpHome "$($env:TEST_VERSION)\bin\vp.exe"))) {
+                throw "Rejected package left an active or executable installation"
+              }
+            } else {
+              if ($text.Contains($provenanceError)) {
+                throw "Supported provenance metadata was rejected"
+              }
+              if (-not $tarballRequested) {
+                throw "Supported provenance metadata did not reach the tarball endpoint"
+              }
+            }
+
+            # The child installer and the deliberate tarball failure are expected.
+            $global:LASTEXITCODE = 0
+          }
+
+          Invoke-ProvenanceCase -Mode "missing" -ExpectRejection $true
+          Invoke-ProvenanceCase -Mode "malformed" -ExpectRejection $true
+          Invoke-ProvenanceCase -Mode "top-level-only" -ExpectRejection $true -RawContentType $true
+          Invoke-ProvenanceCase -Mode "dotted-top-level-key" -ExpectRejection $true
+          Invoke-ProvenanceCase -Mode "unsupported" -ExpectRejection $true
+          Invoke-ProvenanceCase -Mode "valid-v1" -ExpectRejection $false
+          Invoke-ProvenanceCase -Mode "valid-v0.2" -ExpectRejection $false
+
   test-install-ps1-release-age:
     name: Test install.ps1 (minimum-release-age)
     runs-on: namespace-profile-windows-4c-8g
@@ -842,6 +1161,74 @@ jobs:
       - name: Build vp-setup.exe
         shell: bash
         run: cargo build --release -p vp_installer
+
+      - name: Verify vp-setup.exe provenance before download
+        shell: pwsh
+        env:
+          TEST_VERSION: 9.9.9-provenance-test.1
+        run: |
+          $ErrorActionPreference = "Stop"
+          $caseDir = Join-Path $env:RUNNER_TEMP "vite-plus-provenance-vp-setup"
+          $installDir = Join-Path $caseDir "install"
+          $portFile = Join-Path $caseDir "port"
+          $logFile = Join-Path $caseDir "requests.jsonl"
+          $stdoutFile = Join-Path $caseDir "registry.stdout.log"
+          $stderrFile = Join-Path $caseDir "registry.stderr.log"
+          Remove-Item -Path $caseDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $caseDir -Force | Out-Null
+
+          $fixture = Join-Path (Get-Location) "packages/cli/tests/fixtures/provenance-registry.mjs"
+          $serverArgs = @(
+            $fixture,
+            "--port-file", $portFile,
+            "--log-file", $logFile,
+            "--mode", "missing",
+            "--version", $env:TEST_VERSION
+          )
+          $server = Start-Process -FilePath "node" -ArgumentList $serverArgs -PassThru -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+
+          try {
+            for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $portFile); $attempt++) {
+              Start-Sleep -Milliseconds 100
+            }
+            if (-not (Test-Path $portFile)) {
+              throw "Mock registry did not start: $(Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)"
+            }
+
+            $registry = "http://127.0.0.1:$(Get-Content $portFile -Raw)"
+            $binary = "${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}"
+            $output = & $binary --yes --no-node-manager --no-modify-path --install-dir $installDir --registry $registry --version $env:TEST_VERSION 2>&1
+            $exitCode = $LASTEXITCODE
+            $text = $output -join "`n"
+          } finally {
+            if (-not $server.HasExited) {
+              Stop-Process -Id $server.Id -Force
+              $server.WaitForExit()
+            }
+          }
+
+          Write-Host $text
+          if ($exitCode -eq 0) {
+            throw "Expected vp-setup.exe to reject missing provenance"
+          }
+          if (-not $text.Contains("does not contain supported npm provenance metadata") -or
+              -not $text.Contains("@voidzero-dev/vite-plus-cli-") -or
+              -not $text.Contains($env:TEST_VERSION)) {
+            throw "Expected provenance rejection with the package name and version"
+          }
+
+          $requests = Get-Content -Path $logFile -Raw
+          if ($requests.Contains('"path":"/platform.tgz"')) {
+            throw "Platform tarball was requested before provenance validation"
+          }
+          if ((Test-Path (Join-Path $installDir "current")) -or
+              (Test-Path (Join-Path $installDir "bin\vp.exe")) -or
+              (Test-Path (Join-Path $installDir $env:TEST_VERSION))) {
+            throw "Rejected package left a partial vp-setup.exe installation"
+          }
+
+          # The child installer is expected to fail in this test.
+          $global:LASTEXITCODE = 0
 
       - name: Install via vp-setup.exe (silent)
         shell: pwsh
