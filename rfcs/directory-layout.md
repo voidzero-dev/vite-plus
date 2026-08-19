@@ -242,13 +242,13 @@ A restricted service or CI environment can prevent the known-folder query.
 When this occurs, Vite+ uses `AppData\Local` and `AppData\Roaming` under the
 resolved user home. Thus, a known home always produces a complete layout.
 
-| Source                                            | Behavior                                                                                                             |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **`VP_HOME`**                                     | Vite+ puts the **monolithic mapping** for all categories under this root.                                            |
-| **`~/.vite-plus`**                                | Vite+ uses the monolithic mapping when this directory contains a `current` link.                                     |
-| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | All three values must be set to absolute paths. An incomplete or invalid group has no effect.                        |
-| **`XDG_*`** (Unix)                                | Vite+ uses absolute XDG category roots with the app name `vite-plus`. Bin resolves to `<DATA>/bin`.                  |
-| **Platform defaults**                             | [Category mapping](#category-mapping) defines the Unix and Windows defaults.                                         |
+| Source                                            | Behavior                                                                                            |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **`VP_HOME`**                                     | Vite+ puts the **monolithic mapping** for all categories under this root.                           |
+| **`~/.vite-plus`**                                | Vite+ uses the monolithic mapping when this directory contains a `current` link.                    |
+| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | All three values must be set to absolute paths. An incomplete or invalid group has no effect.       |
+| **`XDG_*`** (Unix)                                | Vite+ uses absolute XDG category roots with the app name `vite-plus`. Bin resolves to `<DATA>/bin`. |
+| **Platform defaults**                             | [Category mapping](#category-mapping) defines the Unix and Windows defaults.                        |
 
 Vite+ ignores relative `VP_*` and `XDG_*` values. This behavior follows the XDG
 Base Directory Specification.

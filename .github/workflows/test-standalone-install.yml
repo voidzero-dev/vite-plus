@@ -1209,12 +1209,21 @@ jobs:
         run: |
           Remove-Item Env:VP_HOME, Env:VP_BIN_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
           $env:VP_DATA_DIR = Join-Path $env:RUNNER_TEMP "incomplete-vp-data"
-          $output = & pwsh -NoProfile -File ./packages/cli/install.ps1 *>&1
-          if ($LASTEXITCODE -eq 0) {
-            throw "install.ps1 accepted an incomplete directory override group"
-          }
-          $text = "$output"
+          $stdout = Join-Path $env:RUNNER_TEMP "vp-incomplete-override.stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "vp-incomplete-override.stderr.txt"
+          $installer = (Resolve-Path ./packages/cli/install.ps1).Path
+          $process = Start-Process -FilePath (Get-Command pwsh).Source `
+            -ArgumentList @("-NoProfile", "-File", "`"$installer`"") `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
+            -Wait -PassThru
+          $text = @(
+            Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue
+            Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue
+          ) -join [Environment]::NewLine
           Write-Host $text
+          if ($process.ExitCode -ne 1) {
+            throw "install.ps1 exited with $($process.ExitCode), expected 1"
+          }
           if (-not $text.Contains("Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together")) {
             throw "install.ps1 did not report the incomplete override group"
           }
