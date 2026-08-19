@@ -203,7 +203,7 @@ itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
 jsonschema = { version = "0.46.5", default-features = false }
-junction = "1.4.1"
+junction = "2.0.0"
 libtest-mimic = "0.8.2"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.62"
@@ -258,7 +258,7 @@ semver = "1.0.26"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 serde_yaml = "0.9.34"
-serial_test = "3.2.0"
+serial_test = "4.0.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
 shell-escape = "0.1.5"
@@ -268,7 +268,7 @@ snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "
 string_cache = "0.9.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
-syn = { version = "2", default-features = false }
+syn = { version = "3", default-features = false }
 tar = "0.4.43"
 tempfile = "3.14.0"
 terminal_size = "0.4.2"
@@ -307,7 +307,7 @@ webpki-root-certs = "1.0.9"
 which = "8.0.0"
 winreg = "0.56.0"
 xxhash-rust = "0.8.15"
-zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "8.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
 oxc = { version = "0.144.0", features = [
