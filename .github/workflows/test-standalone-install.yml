@@ -1308,6 +1308,60 @@ jobs:
             }
           }
 
+      - name: Split-layout implode removes the running trampoline safely
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vp-split-implode"
+          $data = Join-Path $root "data"
+          $bin = Join-Path $root "bin"
+          $cache = Join-Path $root "cache"
+          $fakeTgz = Join-Path $root "empty.tgz"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
+
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          $env:VP_BIN_DIR = $bin
+          $env:VP_DATA_DIR = $data
+          $env:VP_CACHE_DIR = $cache
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = $fakeTgz
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-split-implode"
+          $env:VP_NODE_MANAGER = "no"
+
+          & ./packages/cli/install.ps1
+
+          $vp = Join-Path $bin "vp.exe"
+          $sidecar = Join-Path $bin "vp.shim"
+          $unrelated = Join-Path $bin "unrelated.txt"
+          [System.IO.File]::WriteAllText($unrelated, "keep")
+
+          & $vp implode --yes
+          for ($i = 0; $i -lt 100 -and ((Test-Path $vp) -or (Test-Path $sidecar)); $i++) {
+            Start-Sleep -Milliseconds 100
+          }
+          if (Test-Path $vp) { throw "implode left vp.exe in the split bin" }
+          if (Test-Path $sidecar) { throw "implode left vp.shim in the split bin" }
+          if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
+            throw "implode changed an unrelated bin entry"
+          }
+
+          # Reinstall as soon as a second implode returns. The deferred cleanup
+          # for the old trampoline must not remove the replacement.
+          & ./packages/cli/install.ps1
+          & $vp implode --yes
+          & ./packages/cli/install.ps1
+          Start-Sleep -Seconds 2
+
+          if (-not (Test-Path $vp)) { throw "deferred cleanup removed the new vp.exe" }
+          if (-not (Test-Path $sidecar)) { throw "deferred cleanup removed the new vp.shim" }
+          if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
+            throw "the reinstall changed an unrelated bin entry"
+          }
+          & $vp --version
+
       - name: Install via vp-setup.exe (silent)
         shell: pwsh
         run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}

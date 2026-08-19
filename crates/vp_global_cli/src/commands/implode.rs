@@ -131,26 +131,45 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
     names.insert("vp-use.cmd".to_string());
 
     let mut removed = 0;
+    #[cfg(windows)]
+    let mut scheduled = 0;
     for name in names {
         let path = dirs.bin.join(&name);
         if !is_vp_shim_target(&path) {
             continue;
         }
+        let pointer = std::path::Path::new(&name)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .map(|stem| dirs.bin.join(vp_shared::shim_pointer_file_name(stem)));
         match std::fs::remove_file(path.as_path()) {
-            Ok(()) => removed += 1,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                output::warn(&vt_str::format!("Vite+ could not remove shim {name}: {e}"));
-            }
-        }
-        if let Some(stem) = std::path::Path::new(&name).file_stem().and_then(|stem| stem.to_str()) {
-            let pointer = dirs.bin.join(vp_shared::shim_pointer_file_name(stem));
-            match std::fs::remove_file(pointer.as_path()) {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => {
-                    output::warn(&vt_str::format!("Vite+ could not remove {stem}.shim: {e}"));
+            Ok(()) => {
+                removed += 1;
+                if let Some(pointer) = pointer.as_ref() {
+                    remove_shim_pointer(pointer, &name);
                 }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if let Some(pointer) = pointer.as_ref() {
+                    remove_shim_pointer(pointer, &name);
+                }
+            }
+            Err(e) => {
+                #[cfg(windows)]
+                if let Some(pointer) = pointer.as_ref() {
+                    match schedule_deferred_shim_delete(path.as_path(), pointer.as_path()) {
+                        Ok(_) => {
+                            scheduled += 1;
+                            continue;
+                        }
+                        Err(schedule_error) => {
+                            output::warn(&vt_str::format!(
+                                "Vite+ could not schedule removal of shim {name}: {schedule_error}"
+                            ));
+                        }
+                    }
+                }
+                output::warn(&vt_str::format!("Vite+ could not remove shim {name}: {e}"));
             }
         }
     }
@@ -160,6 +179,24 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
             if removed == 1 { "" } else { "s" },
             dirs.bin.as_path().display()
         ));
+    }
+    #[cfg(windows)]
+    if scheduled > 0 {
+        output::success(&vt_str::format!(
+            "Vite+ scheduled removal of {scheduled} locked shim{} from {}",
+            if scheduled == 1 { "" } else { "s" },
+            dirs.bin.as_path().display()
+        ));
+    }
+}
+
+fn remove_shim_pointer(pointer: &AbsolutePathBuf, name: &str) {
+    match std::fs::remove_file(pointer.as_path()) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            output::warn(&vt_str::format!("Vite+ could not remove the sidecar for {name}: {e}"));
+        }
     }
 }
 
@@ -379,6 +416,95 @@ fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::p
     let script = build_deferred_delete_script(trash_path);
     std::process::Command::new("cmd.exe")
         .args(["/C", &script])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+}
+
+#[cfg(any(windows, test))]
+struct DeferredShimPaths {
+    executable: PathBuf,
+    pointer: PathBuf,
+}
+
+/// Rename a locked shim and its sidecar to unique paths, then remove that pair
+/// after the process that uses the executable exits. A reinstall can use the
+/// original paths immediately. The helper never refers to those original paths,
+/// so it cannot remove the replacement.
+#[cfg(windows)]
+fn schedule_deferred_shim_delete(
+    executable: &Path,
+    pointer: &Path,
+) -> std::io::Result<DeferredShimPaths> {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let suffix = vt_str::format!("removing-{}-{nonce}", std::process::id());
+    let paths = DeferredShimPaths {
+        executable: deferred_shim_path(executable, &suffix),
+        pointer: deferred_shim_path(pointer, &suffix),
+    };
+
+    std::fs::rename(pointer, &paths.pointer)?;
+    if let Err(e) = std::fs::rename(executable, &paths.executable) {
+        if std::fs::rename(&paths.pointer, pointer).is_err() {
+            let _ = std::fs::copy(&paths.pointer, pointer);
+        }
+        return Err(e);
+    }
+
+    if let Err(e) = spawn_deferred_shim_delete(&paths) {
+        if std::fs::rename(&paths.executable, executable).is_ok() {
+            if std::fs::rename(&paths.pointer, pointer).is_err() {
+                let _ = std::fs::copy(&paths.pointer, pointer);
+            }
+        }
+        return Err(e);
+    }
+
+    Ok(paths)
+}
+
+#[cfg(any(windows, test))]
+fn deferred_shim_path(path: &Path, suffix: &str) -> PathBuf {
+    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default();
+    path.with_extension(vt_str::format!("{extension}.{suffix}"))
+}
+
+#[cfg(any(windows, test))]
+fn powershell_path_literal(path: &Path) -> Str {
+    Str::from(path.to_string_lossy().replace('\'', "''"))
+}
+
+/// Build a PowerShell script that retries removal of a renamed executable. It
+/// removes the sidecar only after the executable is gone.
+#[cfg(any(windows, test))]
+fn build_deferred_shim_delete_script(paths: &DeferredShimPaths) -> Str {
+    let executable = powershell_path_literal(&paths.executable);
+    let pointer = powershell_path_literal(&paths.pointer);
+    vt_str::format!(
+        "$ErrorActionPreference='SilentlyContinue';\
+         $exe='{executable}';$sidecar='{pointer}';\
+         for($i=0;$i -lt 100;$i++){{\
+           if(-not (Test-Path -LiteralPath $exe)){{\
+             Remove-Item -LiteralPath $sidecar -Force;exit 0\
+           }};\
+           Remove-Item -LiteralPath $exe -Force;\
+           if(-not (Test-Path -LiteralPath $exe)){{\
+             Remove-Item -LiteralPath $sidecar -Force;exit 0\
+           }};\
+           Start-Sleep -Milliseconds 100\
+         }};exit 1"
+    )
+}
+
+#[cfg(windows)]
+fn spawn_deferred_shim_delete(paths: &DeferredShimPaths) -> std::io::Result<std::process::Child> {
+    let script = build_deferred_shim_delete_script(paths);
+    std::process::Command::new("powershell.exe")
+        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -709,6 +835,77 @@ mod tests {
     }
 
     #[test]
+    fn test_build_deferred_shim_delete_script_uses_only_renamed_paths() {
+        assert_eq!(
+            deferred_shim_path(Path::new(r"C:\Users\test\bin\vp.exe"), "removing-1234"),
+            PathBuf::from(r"C:\Users\test\bin\vp.exe.removing-1234")
+        );
+        let paths = DeferredShimPaths {
+            executable: PathBuf::from(r"C:\Users\test\bin\vp.exe.removing-1234"),
+            pointer: PathBuf::from(r"C:\Users\test\bin\vp.shim.removing-1234"),
+        };
+        let script = build_deferred_shim_delete_script(&paths);
+        assert!(script.contains("Remove-Item -LiteralPath $exe"));
+        assert!(script.contains("Remove-Item -LiteralPath $sidecar"));
+        assert!(script.contains(r"C:\Users\test\bin\vp.exe.removing-1234"));
+        assert!(script.contains(r"C:\Users\test\bin\vp.shim.removing-1234"));
+        assert!(!script.contains(r"$exe='C:\Users\test\bin\vp.exe';"));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn locked_executable_child() {
+        if std::env::var_os("VP_IMPLODE_LOCK_TEST").is_some() {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn deferred_shim_delete_cannot_remove_an_immediate_reinstall() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let bin = temp_dir.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let executable = bin.join("vp.exe");
+        let pointer = bin.join("vp.shim");
+        let unrelated = bin.join("unrelated.txt");
+        std::fs::copy(std::env::current_exe().unwrap(), &executable).unwrap();
+        std::fs::write(&pointer, b"old-sidecar").unwrap();
+        std::fs::write(&unrelated, b"keep").unwrap();
+
+        let mut child = std::process::Command::new(&executable)
+            .args(["locked_executable_child", "--nocapture"])
+            .env("VP_IMPLODE_LOCK_TEST", "1")
+            .spawn()
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        assert!(child.try_wait().unwrap().is_none(), "test executable must still be running");
+        assert!(std::fs::remove_file(&executable).is_err(), "running executable must be locked");
+
+        let deferred = schedule_deferred_shim_delete(&executable, &pointer).unwrap();
+        assert!(!executable.exists(), "the original executable path must be free immediately");
+        assert!(!pointer.exists(), "the original sidecar path must be free immediately");
+
+        // Simulate an installer that starts as soon as `vp implode` returns.
+        std::fs::copy(std::env::current_exe().unwrap(), &executable).unwrap();
+        std::fs::write(&pointer, b"new-sidecar").unwrap();
+
+        assert!(child.wait().unwrap().success());
+        for _ in 0..100 {
+            if !deferred.executable.exists() && !deferred.pointer.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        assert!(!deferred.executable.exists(), "the renamed executable must be removed");
+        assert!(!deferred.pointer.exists(), "the renamed sidecar must be removed");
+        assert!(executable.exists(), "deferred cleanup must preserve the replacement executable");
+        assert_eq!(std::fs::read(&pointer).unwrap(), b"new-sidecar");
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"keep");
+    }
+
+    #[test]
     #[cfg(not(windows))]
     fn test_abbreviate_home_path() {
         let home = AbsolutePathBuf::new("/home/user".into()).unwrap();
@@ -955,6 +1152,26 @@ mod tests {
                 !bin.join("tsc.shim").as_path().exists(),
                 "sidecar next to a removed shim must be removed"
             );
+        });
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn remove_shim_files_preserves_unowned_windows_entries() {
+        vp_shared::EnvConfig::scoped(|config| {
+            let bin = &config.dirs.bin;
+            std::fs::create_dir_all(bin).unwrap();
+            std::fs::write(bin.join("vp.exe").as_path(), b"foreign-vp").unwrap();
+            std::fs::write(bin.join("unrelated.txt").as_path(), b"keep").unwrap();
+            std::fs::write(bin.join("node.exe").as_path(), b"owned-node").unwrap();
+            config.dirs.write_shim_pointer("node").unwrap();
+
+            remove_shim_files(&config.dirs);
+
+            assert_eq!(std::fs::read(bin.join("vp.exe").as_path()).unwrap(), b"foreign-vp");
+            assert_eq!(std::fs::read(bin.join("unrelated.txt").as_path()).unwrap(), b"keep");
+            assert!(!bin.join("node.exe").as_path().exists());
+            assert!(!bin.join("node.shim").as_path().exists());
         });
     }
 }

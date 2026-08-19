@@ -363,6 +363,13 @@ replaces the executable and then records ownership of the new trampoline.
 The trampoline also accepts the earlier one-line sidecar format. That format
 contains only the data root, so it keeps the earlier path-based behavior.
 
+On Windows, `vp implode` cannot delete the trampoline that started the current
+command. For a separate `<BIN>`, it renames the owned executable and its
+sidecar to unique paths. A detached process deletes only these renamed paths
+after the trampoline exits. The original names are free for an immediate
+reinstall, and the cleanup process cannot delete the new files. Vite+ does not
+remove unrelated entries or the complete `<BIN>` directory.
+
 ### Compatibility with pre-split releases
 
 The installers accept each published `VP_VERSION`. Before version 0.3.0 is
