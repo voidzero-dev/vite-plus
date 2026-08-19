@@ -1106,6 +1106,9 @@ jobs:
           # trampoline would fail. current\bin\vp.exe is the real CLI.
           export VP_SNAP_GLOBAL_VP="$USERPROFILE/.vite-plus/current/bin/vp.exe"
           export VP_SNAP_JS_RUNTIME_DIR="$USERPROFILE/.vite-plus/js_runtime"
+          # Keep pwsh at its canonical installation path; copying pwsh.exe
+          # alone can break its adjacent runtime dependencies.
+          export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
           cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast

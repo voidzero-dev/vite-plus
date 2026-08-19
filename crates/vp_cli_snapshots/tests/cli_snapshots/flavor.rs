@@ -7,6 +7,8 @@
 //! Each flavor gets one runner bin directory per run (created under the run
 //! temp root) for runner-owned helpers. `vpt` always lives there; optional
 //! external shells are linked there when available.
+//! PowerShell keeps its original installation path because `pwsh.exe` may
+//! depend on files installed beside it.
 
 use std::path::{Path, PathBuf};
 
@@ -41,6 +43,9 @@ pub struct FlavorRuntime {
     /// Runner-owned Nushell binary used by fixtures that execute generated
     /// `env.nu` files. CI supplies it through `VP_SNAP_NU_BIN`.
     pub nu: Option<PathBuf>,
+    /// Canonical PowerShell binary used by fixtures that execute generated
+    /// `env.ps1` files. CI supplies it through `VP_SNAP_PWSH_BIN`.
+    pub pwsh: Option<PathBuf>,
     /// Source global `vp` binary to install into each case's `VP_HOME/current`.
     pub global_vp: PathBuf,
     /// Source package installed into each case's `VP_HOME/current/node_modules`.
@@ -241,6 +246,12 @@ pub fn nushell_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_NU_BIN", "nu")
 }
 
+/// Resolves an optional PowerShell binary for fixtures that exercise generated
+/// `env.ps1` files.
+pub fn powershell_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_PWSH_BIN", "pwsh")
+}
+
 /// Home-layout names, shared with `CaseHome` in main.rs so the product's
 /// `~/.vite-plus/js_runtime` layout is spelled once.
 pub const VP_HOME_DIR: &str = ".vite-plus";
@@ -349,10 +360,24 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
     let nu = nushell_path()?
         .map(|path| install_runner_tool(&runner_bin_dir, "nu", &path))
         .transpose()?;
+    // Keep PowerShell at its canonical installation path. Relocating only
+    // pwsh.exe can break its lookup of adjacent runtime and managed files.
+    let pwsh = powershell_path()?;
     let global_vp = global_vp_path()?;
     let cli_package_dir = match flavor {
         Flavor::Local => local_cli_package_dir()?,
         Flavor::Global => repo_root().join("packages/cli"),
     };
-    Ok(FlavorRuntime { runner_bin_dir, vpt, sh, bash, zsh, fish, nu, global_vp, cli_package_dir })
+    Ok(FlavorRuntime {
+        runner_bin_dir,
+        vpt,
+        sh,
+        bash,
+        zsh,
+        fish,
+        nu,
+        pwsh,
+        global_vp,
+        cli_package_dir,
+    })
 }

@@ -324,6 +324,7 @@ enum RequiredTool {
     Zsh,
     Fish,
     Nu,
+    Pwsh,
 }
 
 impl RequiredTool {
@@ -336,6 +337,7 @@ impl RequiredTool {
             Self::Zsh => matches!(flavor::zsh_path(), Ok(None)),
             Self::Fish => matches!(flavor::fish_path(), Ok(None)),
             Self::Nu => matches!(flavor::nushell_path(), Ok(None)),
+            Self::Pwsh => matches!(flavor::powershell_path(), Ok(None)),
         }
     }
 }
@@ -470,6 +472,7 @@ struct CaseInstall {
     zsh: Option<PathBuf>,
     fish: Option<PathBuf>,
     nu: Option<PathBuf>,
+    pwsh: Option<PathBuf>,
 }
 
 impl CaseInstall {
@@ -511,6 +514,13 @@ impl CaseInstall {
         if program == "nu" {
             return self.nu.clone().ok_or_else(|| {
                 "`nu` is required by this snapshot case; install Nushell or set VP_SNAP_NU_BIN"
+                    .to_owned()
+            });
+        }
+        if program == "pwsh" {
+            return self.pwsh.clone().ok_or_else(|| {
+                "`pwsh` is required by this snapshot case; install PowerShell or set \
+                 VP_SNAP_PWSH_BIN"
                     .to_owned()
             });
         }
@@ -614,6 +624,7 @@ impl CaseHome {
             zsh: runtime.zsh.clone(),
             fish: runtime.fish.clone(),
             nu: runtime.nu.clone(),
+            pwsh: runtime.pwsh.clone(),
         })
     }
 
