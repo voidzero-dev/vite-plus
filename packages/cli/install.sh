@@ -7,9 +7,9 @@
 #
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
-#   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
-#             ~/.vite-plus install is reused; otherwise data/bin/config follow
-#             VP_*_DIR / XDG_* / platform defaults.
+#   VP_HOME - Optional pin for the monolithic layout. If unset, Vite+ reuses an
+#             existing ~/.vite-plus install. Otherwise, data, bin, and config
+#             use VP_*_DIR, XDG_*, or platform defaults.
 #   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
 #   XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
@@ -23,8 +23,8 @@
 set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
-# Category roots are resolved by the selected payload via VP_DUMP_DIRS after
-# the helper functions are defined. Pre-split payloads use a legacy fallback.
+# After these helper definitions, the selected payload resolves category roots
+# through VP_DUMP_DIRS. Pre-split payloads use the legacy layout.
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
@@ -160,9 +160,9 @@ resolution_home_dir() {
   fi
 }
 
-# Released setup-vp versions add the legacy ~/.vite-plus/bin directory to the
-# GitHub Actions PATH after this installer exits. Keep those callers on the
-# monolithic layout until setup-vp declares that it consumes VP_DUMP_DIRS.
+# Released setup-vp versions add ~/.vite-plus/bin to the GitHub Actions PATH.
+# They do this after the installer exits. Use the monolithic layout until
+# setup-vp declares support for VP_DUMP_DIRS.
 enable_setup_vp_legacy_compatibility() {
   [ "${GITHUB_ACTION_REPOSITORY:-}" = "voidzero-dev/setup-vp" ] || return 0
   [ "${VP_VPDIRS_AWARE:-}" != "1" ] || return 0
@@ -173,7 +173,7 @@ enable_setup_vp_legacy_compatibility() {
 
   local resolution_home
   resolution_home="$(resolution_home_dir)"
-  [ -n "$resolution_home" ] || error "Could not resolve user home directory"
+  [ -n "$resolution_home" ] || error "Vite+ could not resolve the user home directory."
   VP_HOME="$resolution_home/.vite-plus"
   export VP_HOME
 }
@@ -233,13 +233,13 @@ set_monolithic_layout() {
   STATE_DIR="$1"
 }
 
-# Releases that predate the split layout resolve every path from VP_HOME
-# (default ~/.vite-plus). Install them into that monolithic root so their
-# env setup, shims, and upgrades agree with where the installer wrote them.
+# Pre-split releases resolve all paths from VP_HOME, which defaults to
+# ~/.vite-plus. Install them in this monolithic root. This keeps environment
+# setup, shims, upgrades, and installer paths consistent.
 use_legacy_layout() {
   local resolution_home vp_home
   resolution_home="$(resolution_home_dir)"
-  [ -n "$resolution_home" ] || error "Could not resolve user home directory"
+  [ -n "$resolution_home" ] || error "Vite+ could not resolve the user home directory."
   vp_home="$(absolute_override "${VP_HOME:-}")"
   set_monolithic_layout "${vp_home:-$resolution_home/.vite-plus}"
   set_config_dir_refs "$CONFIG_DIR" "${HOME:-}"
@@ -993,15 +993,14 @@ refresh_shims() {
   fi
 }
 
-# Return success only when the existing Node entry belongs to this Vite+
-# install. An explicit VP_BIN_DIR may be shared, so existence alone is not
-# proof that Vite+ may replace it.
+# Return success only if this Vite+ install owns the existing Node entry. An
+# explicit VP_BIN_DIR can be shared. Entry existence does not permit replacement.
 is_vite_plus_node_shim() {
   local bin_path="$1"
   local vp_bin="$2"
 
-  # Unix shims are symlinks to the active vp binary. `-ef` follows the link
-  # and accepts both the old relative target and the split-layout absolute one.
+  # Unix shims are symlinks to the active vp binary. `-ef` follows the link. It
+  # accepts the old relative target and the absolute split-layout target.
   if [ -L "$bin_path/node" ] && [ "$bin_path/node" -ef "$vp_bin" ]; then
     return 0
   fi
@@ -1042,10 +1041,9 @@ setup_node_manager() {
     return 0
   fi
 
-  # Check whether an existing Node entry is a Vite+ shim. A foreign entry in
-  # a custom, potentially shared bin directory blocks automatic enablement,
-  # but the interactive prompt below can still obtain explicit consent to
-  # replace it.
+  # Check if an existing Node entry is a Vite+ shim. A foreign entry in a custom
+  # bin directory prevents automatic enablement. The prompt below can get
+  # permission to replace the entry.
   local unmanaged_node_in_bin="false"
   if [ -e "$bin_path/node" ] || [ -L "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
     if is_vite_plus_node_shim "$bin_path" "$vp_bin"; then
@@ -1084,7 +1082,8 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_DIR") and automatically uses the right version."
+    echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_DIR")."
+    echo "It selects the required version automatically."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
@@ -1169,11 +1168,11 @@ main() {
       VP_VERSION="local-dev"
     fi
     if [ -z "$LOCAL_BINARY" ] || [ ! -f "$LOCAL_BINARY" ]; then
-      error "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
+      error "Set VP_LOCAL_BINARY when you use VP_LOCAL_TGZ."
     fi
     if ! apply_dirs_from_vp "$LOCAL_BINARY"; then
       use_legacy_layout
-      info "The local vite-plus binary does not support the split directory layout; the install goes to $(abbreviate_path "$INSTALL_DIR")"
+      info "The local vite-plus binary does not support the split directory layout. Vite+ will install it in $(abbreviate_path "$INSTALL_DIR")."
     fi
   elif [ -n "$PR_VERSION" ]; then
     # Registry bridge mode: resolve the requested PR/SHA to the bridge's
@@ -1200,8 +1199,8 @@ main() {
     binary_name="vp.exe"
   fi
 
-  # Download the CLI platform tarball before the layout is final: the
-  # downloaded binary decides which layout it supports (see below).
+  # Download the CLI platform tarball before Vite+ selects the final layout.
+  # The downloaded binary reports the layout that it supports.
   local platform_temp_dir=""
   if [ -z "$LOCAL_TGZ" ]; then
     # npm registry or registry bridge (when PR_VERSION is set)
@@ -1221,20 +1220,20 @@ main() {
     download_and_extract "$platform_url" "$platform_temp_dir" 1
     chmod +x "$platform_temp_dir/$binary_name"
 
-    # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A pre-split
-    # release cannot answer; give it the monolithic root so the installed
-    # PATH commands work.
+    # Ask the downloaded binary for its layout through VP_DUMP_DIRS. A pre-split
+    # release cannot report a layout. Give that release the monolithic root so
+    # the installed PATH commands work.
     if ! apply_dirs_from_vp "$platform_temp_dir/$binary_name"; then
       use_legacy_layout
-      info "vite-plus ${VP_VERSION} does not support the split directory layout; the install goes to $(abbreviate_path "$INSTALL_DIR")"
+      info "vite-plus ${VP_VERSION} does not support the split directory layout. Vite+ will install it in $(abbreviate_path "$INSTALL_DIR")."
     fi
   fi
 
-  # Layout-dependent migration checks run only after the selected payload has
-  # resolved the category roots (or selected the pre-split fallback).
+  # Run layout migration checks after the payload resolves the category roots.
+  # A pre-split payload selects the legacy layout first.
   previous_install_dir="$(detect_previous_install_dir || true)"
   if [ -n "$previous_install_dir" ] && is_nested_install_dir "$previous_install_dir" "$INSTALL_DIR"; then
-    error "Previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Choose a separate VP_HOME or remove the previous install first."
+    error "The previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Set VP_HOME to a directory that does not overlap. Alternatively, remove the previous install."
   fi
 
   # Set up version-specific directories
@@ -1247,7 +1246,7 @@ main() {
 
   if [ -n "$LOCAL_TGZ" ]; then
     # Local development mode: only need the binary
-    info "Using local tarball: $LOCAL_TGZ"
+    info "Vite+ uses the local tarball: $LOCAL_TGZ"
 
     # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
     cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
@@ -1345,7 +1344,8 @@ WRAPPER_EOF
     # Windows: copy trampoline as vp.exe (matching install.ps1)
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
       cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
-      # Independent VP_BIN_DIR / VP_DATA_DIR: trampoline reads <name>.shim, not env vars.
+      # For separate VP_BIN_DIR and VP_DATA_DIR values, the trampoline reads
+      # <name>.shim instead of environment variables.
       printf '%s\n' "$INSTALL_DIR" >"$SHIM_DIR/vp.shim"
     fi
   else
@@ -1372,7 +1372,7 @@ WRAPPER_EOF
   # Configure shell PATH after the install is otherwise complete.
   configure_shell_path
 
-  # Use ~ shorthand if the shim dir is under HOME, otherwise show full path
+  # Use ~ when the shim directory is under HOME. Otherwise, show the full path.
   local display_location
   display_location="$(abbreviate_path "$SHIM_DIR")"
 

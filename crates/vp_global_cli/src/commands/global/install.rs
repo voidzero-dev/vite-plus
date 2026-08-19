@@ -49,8 +49,8 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> InstallError {
     (Some(package_name.to_string()), Box::new(error.into()))
 }
 
-/// Absolute path of the `vp` binary package shims should link to:
-/// `<DATA>/current/bin/vp` (or `vp.exe` on Windows).
+/// Absolute `vp` path for package shims. The path is
+/// `<DATA>/current/bin/vp`, or `vp.exe` on Windows.
 pub(crate) fn package_shim_target() -> AbsolutePathBuf {
     vp_shared::EnvConfig::get()
         .dirs
@@ -62,12 +62,14 @@ pub(crate) fn package_shim_target() -> AbsolutePathBuf {
 
 /// Whether `shim_path` is a Vite+ shim for this install's `vp`.
 ///
-/// Unix: a symlink whose target (relative links resolved against the shim
-/// parent) is [`package_shim_target`], or a working link to a `vp` binary
-/// (dev / `vp env setup` layouts). Windows: a symlink to `vp`/`vp.exe`,
-/// `vp-use.cmd`, or a trampoline whose matching `<name>.shim` records this
-/// install's data root. A regular file alone is not enough: shared
-/// `VP_BIN_DIR` directories may contain unrelated `node.exe` / `npm.exe`.
+/// On Unix, accept a symlink to [`package_shim_target`]. Resolve a relative
+/// target from the shim parent. Also accept a working link to a `vp` binary for
+/// development and `vp env setup` layouts.
+///
+/// On Windows, accept a symlink to `vp` or `vp.exe`, or accept `vp-use.cmd`.
+/// Also accept a trampoline when its `<name>.shim` records this install's data
+/// root. A regular file does not prove ownership. A shared `VP_BIN_DIR` can
+/// contain unrelated executables such as `node.exe` and `npm.exe`.
 pub(crate) fn is_vp_shim_target(shim_path: &vt_path::AbsolutePath) -> bool {
     match std::fs::read_link(shim_path.as_path()) {
         Ok(target) => {
@@ -98,23 +100,21 @@ fn windows_regular_file_is_vp_shim(shim_path: &vt_path::AbsolutePath) -> bool {
     vp_shared::EnvConfig::get().dirs.owns_windows_trampoline(shim_path.as_path())
 }
 
-/// Check whether a binary name is a shim Vite+ owns unconditionally: core
-/// shims plus the default env shims (node, npm, npx, corepack, vpx, vpr).
-/// Protected shims are never removed on behalf of packages, and are never
-/// created for packages either, with one exception: `vp install -g corepack`
-/// may take BinConfig ownership of the corepack shim (see
-/// `create_package_shim`).
+/// Check if Vite+ always owns a shim name. These names include core shims and
+/// the default environment shims: node, npm, npx, corepack, vpx, and vpr.
+/// Packages cannot create or remove a protected shim. One exception applies:
+/// `vp install -g corepack` can assign `BinConfig` ownership of the corepack
+/// shim. See `create_package_shim`.
 pub(crate) fn is_protected_shim(bin_name: &str, ignore_case: bool) -> bool {
     let bin_name =
         if cfg!(target_os = "linux") || !ignore_case { bin_name } else { &bin_name.to_lowercase() };
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
-/// Whether a package may own a bin name. Protected shim names never belong
-/// to packages, with one exception: the `corepack` package owning its own
-/// `corepack` bin, so an explicit `vp install -g corepack` wins the shim's
-/// resolution order. The exemption is scoped to the package name; any other
-/// package declaring a `corepack` bin must not take BinConfig ownership.
+/// Check if a package can own a bin name. A protected shim cannot belong to a
+/// package, except for the `corepack` bin from the `corepack` package. This
+/// exception lets an explicit `vp install -g corepack` have priority. No other
+/// package can get `BinConfig` ownership of a declared `corepack` bin.
 pub(crate) fn package_may_own_bin(package_name: &str, bin_name: &str) -> bool {
     !is_protected_shim(bin_name, true) || (bin_name == "corepack" && package_name == "corepack")
 }
@@ -136,7 +136,7 @@ pub struct InstallOptions<'a> {
     pub only_bins: Option<&'a [&'a str]>,
 }
 
-/// Install global packages parallelly.
+/// Install global packages in parallel.
 pub async fn install(
     package_specs: &[String],
     options: InstallOptions<'_>,

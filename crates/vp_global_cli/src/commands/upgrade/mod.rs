@@ -86,19 +86,19 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
-    // Step 6: Reject targets that cannot run on this install's layout.
+    // Step 6: Reject a target that cannot use the current layout.
     //
-    // A pre-split payload resolves every path from VP_HOME (default
-    // ~/.vite-plus). Activated on a split install, it would move config,
-    // runtimes, and later upgrades to that monolithic root while the split
-    // PATH entries keep serving this binary. Monolithic installs (VP_HOME
-    // pin or grandfathered ~/.vite-plus) accept every release.
+    // A pre-split payload resolves each path from VP_HOME. Its default is
+    // ~/.vite-plus. On a split install, it would move configuration, runtimes,
+    // and later upgrades to that root. The split PATH would still use this
+    // binary. A monolithic install accepts each release. This includes a
+    // VP_HOME pin and an existing ~/.vite-plus install.
     let legacy = vp_shared::VpDirs::legacy_single_root(&config.user_home);
     if legacy.data != config.dirs.data && !supports_split_layout(&resolved.version) {
         return Err(Error::Upgrade(
             format!(
-                "vite-plus {} does not support the split directory layout of this install. \
-                 Run `vp upgrade` to install the latest version, or set VP_HOME to use one directory.",
+                "vite-plus {} does not support this split directory layout. \
+                 Run `vp upgrade` to install the latest version. To use one directory, set VP_HOME.",
                 resolved.version
             )
             .into(),
@@ -274,9 +274,10 @@ async fn execute_rollback(
     Ok(ExitStatus::default())
 }
 
-/// Whether a payload of `version` understands the split layout:
-/// 0.3.0 and newer (prereleases included), plus preview builds
-/// (`0.0.0-commit.<sha>`), which track the current branch.
+/// Return `true` if `version` supports the split layout.
+///
+/// Version 0.3.0 and later support it, including prereleases. Preview builds
+/// (`0.0.0-commit.<sha>`) also support it because they track the current branch.
 fn supports_split_layout(version: &str) -> bool {
     let Ok(version) = node_semver::Version::parse(version) else {
         return false;

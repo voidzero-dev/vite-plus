@@ -6,9 +6,9 @@
 #
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
-#   VP_HOME - Optional single-root pin (monolithic). When unset, an existing
-#             %USERPROFILE%\.vite-plus install is reused; otherwise data/bin/
-#             config follow VP_*_DIR / Windows known Local+Roaming folders.
+#   VP_HOME - Optional pin for the monolithic layout. If unset, Vite+ reuses an
+#             existing %USERPROFILE%\.vite-plus install. Otherwise, data, bin,
+#             and config use VP_*_DIR or the Windows Local and Roaming folders.
 #   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -20,8 +20,8 @@
 $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
-# Category roots are resolved by the selected payload via VP_DUMP_DIRS after
-# the helper functions are defined. Pre-split payloads use a legacy fallback.
+# After these helper definitions, the selected payload resolves category roots
+# through VP_DUMP_DIRS. Pre-split payloads use the legacy layout.
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
@@ -221,10 +221,9 @@ function Get-UserHomeDir {
     return [Environment]::GetFolderPath('UserProfile')
 }
 
-# Released setup-vp versions add the legacy %USERPROFILE%\.vite-plus\bin
-# directory to the GitHub Actions PATH after this installer exits. Keep those
-# callers on the monolithic layout until setup-vp declares that it consumes
-# VP_DUMP_DIRS.
+# Released setup-vp versions add %USERPROFILE%\.vite-plus\bin to the GitHub
+# Actions PATH. They do this after the installer exits. Use the monolithic
+# layout until setup-vp declares support for VP_DUMP_DIRS.
 function Enable-SetupVpLegacyCompatibility {
     if ($env:GITHUB_ACTION_REPOSITORY -cne "voidzero-dev/setup-vp") {
         return
@@ -238,7 +237,7 @@ function Enable-SetupVpLegacyCompatibility {
 
     $userHome = Get-UserHomeDir
     if ([string]::IsNullOrWhiteSpace($userHome)) {
-        Write-Error-Exit "Could not resolve user home directory"
+        Write-Error-Exit "Vite+ could not resolve the user home directory."
     }
     $env:VP_HOME = Join-Path $userHome ".vite-plus"
 }
@@ -264,14 +263,13 @@ function Set-LayoutVars {
     $script:NodeManagerBinDisplay = $script:ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
 }
 
-# Releases that predate the split layout resolve every path from VP_HOME
-# (default %USERPROFILE%\.vite-plus). Install them into that monolithic root
-# so their env setup, shims, and trampolines agree with where the installer
-# wrote them.
+# Pre-split releases resolve all paths from VP_HOME, which defaults to
+# %USERPROFILE%\.vite-plus. Install them in this monolithic root. This keeps
+# environment setup, shims, trampolines, and installer paths consistent.
 function Use-LegacyLayout {
     $userHome = Get-UserHomeDir
     if ([string]::IsNullOrWhiteSpace($userHome)) {
-        Write-Error-Exit "Could not resolve user home directory"
+        Write-Error-Exit "Vite+ could not resolve the user home directory."
     }
 
     $root = if (Test-AbsoluteOverridePath $env:VP_HOME) {
@@ -283,8 +281,8 @@ function Use-LegacyLayout {
     Set-LayoutVars
 }
 
-# Record the data root next to a trampoline so independent VP_BIN_DIR /
-# VP_DATA_DIR installs do not rely on sibling-path probing.
+# Record the data root next to each trampoline. This lets separate VP_BIN_DIR
+# and VP_DATA_DIR values work without sibling-path checks.
 function Write-ShimPointer {
     param(
         [string]$BinDir,
@@ -767,9 +765,8 @@ function Refresh-Shims {
     }
 }
 
-# Return true only when the existing Node executable belongs to this Vite+
-# install. $ShimDir can be shared, so node.exe existence alone does not grant
-# permission to replace it.
+# Return true only if this Vite+ install owns the existing Node executable.
+# $ShimDir can be shared. The existence of node.exe does not permit replacement.
 function Test-VitePlusNodeShim {
     $nodePath = Join-Path $ShimDir "node.exe"
     $pointerPath = Join-Path $ShimDir "node.shim"
@@ -806,9 +803,9 @@ function Setup-NodeManager {
         return "false"
     }
 
-    # A foreign Node executable in a custom, potentially shared bin blocks every
-    # automatic path below. Explicit opt-in above or acceptance of the
-    # interactive prompt still authorizes replacement.
+    # A foreign Node executable in a custom bin directory prevents automatic
+    # enablement. The explicit setting or interactive prompt can permit
+    # replacement.
     $foreignNodeInBin = $false
     if (Test-Path -LiteralPath (Join-Path $binPath "node.exe")) {
         if (Test-VitePlusNodeShim) {
@@ -839,13 +836,14 @@ function Setup-NodeManager {
     }
 
     # Prompt user in interactive mode
-    # CI implies unattended setup even when the host process reports itself as
-    # interactive (which some hosted PowerShell runners do).
+    # CI requires unattended setup. Some hosted PowerShell runners report an
+    # interactive host process, so do not use that report in CI.
     $isInteractive = [Environment]::UserInteractive -and -not $env:CI
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to $NodeManagerBinDisplay and automatically uses the right version."
+        Write-Host "Vite+ adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to $NodeManagerBinDisplay."
+        Write-Host "It selects the required version automatically."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
@@ -888,13 +886,13 @@ function Main {
             $ViteVersion = "local-dev"
         }
         if (-not $LocalBinary -or -not (Test-Path -LiteralPath $LocalBinary -PathType Leaf)) {
-            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
+            Write-Error-Exit "Set VP_LOCAL_BINARY when you use VP_LOCAL_TGZ."
         }
         if (Apply-DirsFromVp $LocalBinary) {
             Set-LayoutVars
         } else {
             Use-LegacyLayout
-            Write-Info "The local vite-plus binary does not support the split directory layout; the install goes to $InstallDir"
+            Write-Info "The local vite-plus binary does not support the split directory layout. Vite+ will install it in $InstallDir."
         }
     } elseif ($PrVersion) {
         # Registry bridge mode: resolve the requested PR/SHA to the bridge's
@@ -914,8 +912,8 @@ function Main {
 
     $binaryName = "vp.exe"
 
-    # Download the CLI platform tarball before the layout is final: the
-    # downloaded binary decides which layout it supports (see below).
+    # Download the CLI platform tarball before Vite+ selects the final layout.
+    # The downloaded binary reports the layout that it supports.
     $platformTempExtract = $null
     if (-not $LocalTgz) {
         # npm registry or registry bridge (when PrVersion is set)
@@ -943,9 +941,9 @@ function Main {
             Remove-Item $platformTempFile -ErrorAction SilentlyContinue
         }
 
-        # Ask the downloaded binary for its layout (VP_DUMP_DIRS). A
-        # pre-split release cannot answer; give it the monolithic root so the
-        # installed PATH commands work.
+        # Ask the downloaded binary for its layout through VP_DUMP_DIRS. A
+        # pre-split release cannot report a layout. Give that release the
+        # monolithic root so the installed PATH commands work.
         $packageDir = Join-Path $platformTempExtract "package"
         $binarySource = Join-Path $packageDir $binaryName
         if (Test-Path $binarySource) {
@@ -956,15 +954,15 @@ function Main {
             Set-LayoutVars
         } else {
             Use-LegacyLayout
-            Write-Info "vite-plus $ViteVersion does not support the split directory layout; the install goes to $InstallDir"
+            Write-Info "vite-plus $ViteVersion does not support the split directory layout. Vite+ will install it in $InstallDir."
         }
     }
 
-    # Layout-dependent migration checks run only after the selected payload has
-    # resolved the category roots (or selected the pre-split fallback).
+    # Run layout migration checks after the payload resolves the category roots.
+    # A pre-split payload selects the legacy layout first.
     $previousInstallDir = Get-PreviousInstallDir
     if ($previousInstallDir -and (Test-NestedInstallDir -OldDir $previousInstallDir -NewDir $InstallDir)) {
-        Write-Error-Exit "Previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Choose a separate VP_HOME or remove the previous install first."
+        Write-Error-Exit "The previous Vite+ install at $previousInstallDir overlaps with VP_HOME $InstallDir. Set VP_HOME to a directory that does not overlap. Alternatively, remove the previous install."
     }
 
     # Set up version-specific directories
@@ -977,7 +975,7 @@ function Main {
 
     if ($LocalTgz) {
         # Local development mode: only need the binary
-        Write-Info "Using local tarball: $LocalTgz"
+        Write-Info "Vite+ uses the local tarball: $LocalTgz"
 
         # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
         Copy-Item -Path $LocalBinary -Destination (Join-Path $BinDir $binaryName) -Force
@@ -1098,8 +1096,8 @@ function Main {
                 Remove-Item -Path $stalePath -Force -ErrorAction SilentlyContinue
             }
         }
-        # Pin VP_HOME to the data root. On a split install $ShimDir is not
-        # `$InstallDir\bin`, so `%~dp0..` would miss `<data>\current`.
+        # Pin VP_HOME to the data root. In a split install, $ShimDir is not
+        # `$InstallDir\bin`. Thus, `%~dp0..` would not find `<data>\current`.
         $wrapperContent = @"
 @echo off
 set VP_HOME=$InstallDir
@@ -1139,7 +1137,8 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     $pathResult = Configure-UserPath
     $nushellResult = Configure-Nushell
 
-    # Use ~ shorthand if the shim dir is under USERPROFILE, otherwise show full path
+    # Use ~ when the shim directory is under USERPROFILE. Otherwise, show the
+    # full path.
     $displayDir = $ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
     $displayConfigDir = $ConfigDir -replace [regex]::Escape($env:USERPROFILE), '~'
 

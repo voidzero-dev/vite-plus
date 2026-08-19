@@ -22,11 +22,12 @@ pub struct Options {
     #[arg(long = "tag", default_value = "latest")]
     pub tag: String,
 
-    /// Custom single-root installation directory (sets `VP_HOME`).
+    /// Set a custom single-root installation directory and set `VP_HOME`.
     ///
-    /// Default: reuse an existing `~/.vite-plus` if present, otherwise the
-    /// platform data directory (`~/.local/share/vite-plus` on Unix,
-    /// `%LOCALAPPDATA%\vite-plus\data` on Windows).
+    /// By default, Vite+ reuses an existing `~/.vite-plus` install. Otherwise,
+    /// it uses the platform data directory. This directory is
+    /// `~/.local/share/vite-plus` on Unix and `%LOCALAPPDATA%\vite-plus\data`
+    /// on Windows.
     #[arg(long = "install-dir")]
     pub install_dir: Option<String>,
 

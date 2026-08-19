@@ -22,10 +22,10 @@ const LOCAL_DEV_PREFIX = 'local-dev';
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 
 function pinCiLegacyHome() {
-  // CI workflows still look for `~/.vite-plus/bin/vp` (#2371). Pin VP_HOME so
-  // bootstrap stays on the monolithic root: the resolver grandfathers
-  // `~/.vite-plus` only when it holds an install (a `current` link), so a
-  // bare directory can no longer select the layout.
+  // CI workflows still use `~/.vite-plus/bin/vp` (#2371). Set VP_HOME so the
+  // bootstrap uses the monolithic root. The resolver uses `~/.vite-plus` only
+  // when it contains an install with a `current` link. An empty directory does
+  // not select the monolithic layout.
   if (process.env.CI == null || process.env.VP_HOME != null) {
     return;
   }

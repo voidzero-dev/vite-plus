@@ -11,7 +11,10 @@ These variables control the installer scripts and the standalone Windows install
 - **Purpose**: Version to install
 - **Default**: `latest`
 - **CLI equivalent**: `--version`
-- **Note**: Releases that do not support the split directory layout (0.2.x and earlier) always install into the monolithic root (`VP_HOME` or `~/.vite-plus`), even on a fresh machine. The installer detects this from the downloaded binary and prints a notice.
+- **Note**: Vite+ 0.2.x and earlier do not support the split directory layout.
+  The installer always puts these releases in the monolithic root (`VP_HOME` or
+  `~/.vite-plus`). This rule also applies to a fresh machine. The installer
+  checks the downloaded binary and prints a notice.
 - **Example**:
 
   ```bash
@@ -26,8 +29,15 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_HOME`
 
-- **Purpose**: Optional single-root pin. When set to an absolute path, every category (bin, data, cache, config, state) lives under that directory. The installed CLI reads the same variable (see [Environment](/guide/env)).
-- **Default**: unset. If `~/.vite-plus` (Unix) or `%USERPROFILE%\.vite-plus` (Windows) holds an existing install (it contains a `current` link), that tree is reused. Otherwise a fresh install uses the split platform layout (`~/.local/share/vite-plus` with its Vite+-owned `bin` subdirectory on Unix; `%LOCALAPPDATA%\vite-plus\data` + `%LOCALAPPDATA%\vite-plus\bin` on Windows).
+- **Purpose**: Optional pin for the single-root layout. Set it to an absolute
+  path. Vite+ then puts bin, data, cache, config, and state under that directory.
+  The installed CLI reads the same variable. See [Environment](/guide/env).
+- **Default**: unset. Vite+ reuses an existing install in `~/.vite-plus` on
+  Unix or `%USERPROFILE%\.vite-plus` on Windows. The directory must contain a
+  `current` link. Otherwise, a fresh install uses the split platform layout. On
+  Unix, it uses `~/.local/share/vite-plus` and its Vite+-owned `bin`
+  subdirectory. On Windows, it uses `%LOCALAPPDATA%\vite-plus\data` and
+  `%LOCALAPPDATA%\vite-plus\bin`.
 - **CLI equivalent**: `--install-dir`
 - **Example**:
 
@@ -43,7 +53,10 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
 
-- **Purpose**: Absolute category overrides for a split install. `VP_BIN_DIR` overrides the executable directory. When it is unset, `VP_DATA_DIR` also derives the executable directory as `<VP_DATA_DIR>/bin`. These variables are ignored when `VP_HOME` is set or an existing `~/.vite-plus` is being reused.
+- **Purpose**: Absolute category overrides for a split install. `VP_BIN_DIR`
+  sets the executable directory. If `VP_BIN_DIR` is unset, Vite+ uses
+  `<VP_DATA_DIR>/bin`. Vite+ ignores these variables when `VP_HOME` is set. It
+  also ignores them when it reuses an existing `~/.vite-plus` install.
 - **Default**: unset (XDG / platform defaults)
 - **Example**:
 
@@ -82,7 +95,12 @@ These variables control the installer scripts and the standalone Windows install
 
 ### Development variables
 
-When developing Vite+ itself, `VP_LOCAL_TGZ` (path to a local `vite-plus.tgz`) and `VP_LOCAL_BINARY` (path to a local `vp` binary) feed the installer a local build. Installers ask the selected binary (via `VP_DUMP_DIRS=1`) for all five `EnvConfig` category roots instead of resolving directory environment variables themselves. The installers also set `VP_INSTALL_STOP` themselves; do not set it manually.
+Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself.
+`VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY`
+specifies a local `vp` binary. The installers use these files for the local
+build. They use `VP_DUMP_DIRS=1` to get all five `EnvConfig` category roots from
+the selected binary. They do not resolve the directory variables. The
+installers set `VP_INSTALL_STOP`; do not set it manually.
 
 ## Runtime Variables
 

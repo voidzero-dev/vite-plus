@@ -45,9 +45,9 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Pin VP_HOME for pre-split published CLI
-        # This job installs the npm-published CLI, which does not yet resolve
-        # the split layout. Pin VP_HOME so the new installer still writes a
-        # single-root tree the released binary understands.
+        # This job installs the published CLI, which does not support the split
+        # layout. Set VP_HOME so the new installer writes a compatible
+        # single-root tree.
         run: echo "VP_HOME=$HOME/.vite-plus" >> $GITHUB_ENV
 
       - name: Run install.sh
@@ -140,8 +140,8 @@ jobs:
 
       - name: Shell config paths preserve metacharacters
         run: |
-          # The literal metacharacters and globals consumed by sourced installer
-          # functions are intentional.
+          # Sourced installer functions use these globals and literal
+          # metacharacters. Keep them unchanged.
           # shellcheck disable=SC2016,SC2034
           set -euo pipefail
           sudo apt-get update
@@ -156,8 +156,8 @@ jobs:
           export XDG_CONFIG_HOME="$TEST_ROOT/shell-config"
           mkdir -p "$HOME" "$XDG_CONFIG_HOME"
 
-          # Windows layout resolution prefers USERPROFILE, but shell source
-          # entries may abbreviate paths only against the shell's HOME.
+          # Windows layout resolution uses USERPROFILE first. Shell source
+          # entries can use short paths only for the shell HOME.
           is_windows_uname() { return 0; }
           unset VP_HOME
           use_legacy_layout
@@ -277,8 +277,8 @@ jobs:
           export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
           unset VP_VPDIRS_AWARE
           export VP_BIN_DIR="$FOREIGN/.local/bin"
-          # Override the job-level opt-in. A custom bin is potentially shared,
-          # so CI auto-enablement must leave an unowned Node executable alone.
+          # Override the setting for this job. A custom bin can be shared. CI
+          # must not replace a Node executable that Vite+ does not own.
           export VP_NODE_MANAGER=
           unset VP_HOME VP_DATA_DIR VP_CACHE_DIR
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
@@ -294,8 +294,8 @@ jobs:
           set -euo pipefail
           GRAND=$(mktemp -d)
           FAKE_TGZ=$(mktemp)
-          # A real prior install: grandfathering requires the `current` link,
-          # not a bare ~/.vite-plus directory.
+          # A prior install must contain a `current` link. An empty
+          # ~/.vite-plus directory is not an install.
           mkdir -p "$GRAND/.vite-plus/0.0.1/bin"
           ln -s 0.0.1 "$GRAND/.vite-plus/current"
           echo keep > "$GRAND/.vite-plus/.keep"
@@ -323,20 +323,20 @@ jobs:
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
-          # A pre-split local vite-plus can create ~/.vite-plus at any time
-          # for caches, config, and managed runtimes. No `current` link, so
-          # this is a stray tree, not an install.
+          # A local pre-split Vite+ can create ~/.vite-plus for caches, config,
+          # and managed runtimes. This tree has no `current` link, so it is not
+          # an install.
           mkdir -p "$STRAY/.vite-plus/cache" "$STRAY/.vite-plus/js_runtime"
           echo '{}' > "$STRAY/.vite-plus/config.json"
 
-          # Resolution must stay on the split roots, with and without the
-          # env-script pins.
+          # Resolution must use the split roots with and without the environment
+          # script variables.
           data_root() { VP_DUMP_DIRS=1 "$STRAY/.local/share/vite-plus/bin/vp" | awk -F'\t' '$1=="data"{print $2}'; }
           test "$(data_root)" = "$STRAY/.local/share/vite-plus"
           test "$(VP_DATA_DIR="$STRAY/.local/share/vite-plus" VP_BIN_DIR="$STRAY/.local/bin" data_root)" = "$STRAY/.local/share/vite-plus"
 
-          # A reinstall (vp upgrade selects its root through the same chain)
-          # must keep targeting the split roots and leave the stray tree alone.
+          # A reinstall must continue to use the split roots. It must not change
+          # the stray tree. `vp upgrade` uses the same resolution chain.
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test2 bash packages/cli/install.sh
 
           test -x "$STRAY/.local/share/vite-plus/local-test2/bin/vp"
@@ -364,8 +364,8 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Run install.sh for a pre-split release
-        # No VP_HOME pin: a release that predates VpDirs must fall back to the
-        # monolithic ~/.vite-plus root on its own.
+        # Do not set VP_HOME. A pre-VpDirs release must select the monolithic
+        # ~/.vite-plus root.
         run: |
           cat packages/cli/install.sh | bash | tee install-output.txt
           grep -F "does not support the split directory layout" install-output.txt
@@ -395,8 +395,8 @@ jobs:
 
   test-install-ps1-old-version:
     name: Test install.ps1 pre-split release (Windows x64)
-    # GitHub-hosted runner: %USERPROFILE% matches the OS profile, so the old
-    # release's own path resolution and `vp env doctor` agree with the install.
+    # On a GitHub-hosted runner, %USERPROFILE% matches the operating-system
+    # profile. The old resolver and `vp env doctor` must report the install path.
     runs-on: windows-latest
     permissions:
       contents: read
@@ -406,12 +406,12 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Run install.ps1 for a pre-split release
-        # No VP_HOME pin: a release that predates VpDirs must fall back to the
-        # monolithic %USERPROFILE%\.vite-plus root on its own.
+        # Do not set VP_HOME. A pre-VpDirs release must select the monolithic
+        # %USERPROFILE%\.vite-plus root.
         shell: pwsh
         run: |
-          # *>&1 merges the information stream (Write-Host) into the pipeline
-          # so Tee-Object can capture the installer notices.
+          # *>&1 adds the Write-Host information stream to the pipeline.
+          # Tee-Object can then record installer notices.
           & ./packages/cli/install.ps1 *>&1 | Tee-Object -FilePath install-output.txt
           if (-not (Select-String -Path install-output.txt -Pattern "does not support the split directory layout" -SimpleMatch -Quiet)) {
             Write-Error "Expected the pre-split fallback notice in installer output"

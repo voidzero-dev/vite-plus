@@ -1,10 +1,10 @@
 //! Centralized environment variable configuration.
 //!
-//! Reads all known env vars once, provides global access via `EnvConfig::get()`.
-//! The user home is resolved in [`EnvConfig::from_env`] (`HOME`/`USERPROFILE`,
-//! platform-ordered like the installers, with a system base-dirs fallback) and
-//! passed into [`VpDirs::resolve`]; directory resolution reads the override
-//! env vars (`VP_HOME`, `VP_*_DIR`, `XDG_*`).
+//! [`EnvConfig::get`] provides global access to known environment variables.
+//! [`EnvConfig::from_env`] resolves the user home from `HOME` or `USERPROFILE`.
+//! It uses the installer platform order and a system base-directory fallback.
+//! It then passes the home to [`VpDirs::resolve`]. Directory resolution reads
+//! `VP_HOME`, `VP_*_DIR`, and `XDG_*`.
 //!
 //! # Usage
 //!
@@ -47,20 +47,22 @@ use crate::{VpDirs, env_vars};
 
 /// Process-wide config, lazily initialized on the first [`EnvConfig::get`].
 ///
-/// Test builds (including downstream crates with the `test-utils` feature)
-/// never touch this: they re-resolve from the process environment on every
-/// `get()`, so `temp_env`-scoped mutations are observed immediately.
+/// Test builds do not use this value. This includes downstream crates that
+/// enable `test-utils`. Tests resolve the process environment on each `get()`
+/// call. Thus, a `temp_env` scope applies its values immediately.
 #[cfg(not(any(test, feature = "test-utils")))]
 static ENV_CONFIG: OnceLock<Arc<EnvConfig>> = OnceLock::new();
 
 /// Process-env home lookup, mirroring the installers' platform ordering.
 ///
-/// On Windows `USERPROFILE` wins over `HOME`: `install.ps1` grandfathers
-/// `%USERPROFILE%\.vite-plus`, and Unix-style shells (Git Bash, MSYS) set
-/// `HOME` to a different directory, so a `HOME`-first lookup would miss an
-/// existing single-root install. Matching the installer means the
-/// existing-install probe checks `%USERPROFILE%\.vite-plus` only — `$HOME\.vite-plus` is not
-/// consulted on Windows when both are set. On Unix `HOME` is authoritative.
+/// On Windows, `USERPROFILE` has priority over `HOME`. `install.ps1` keeps an
+/// existing `%USERPROFILE%\.vite-plus` install. Git Bash and MSYS can set
+/// `HOME` to a different directory. If `HOME` had priority, resolution could
+/// miss the existing single-root install.
+///
+/// This order matches the installer. When both variables are set on Windows,
+/// the check uses `%USERPROFILE%\.vite-plus`, not `$HOME\.vite-plus`. On Unix,
+/// `HOME` has priority.
 #[cfg(target_os = "windows")]
 fn home_env_path() -> Option<AbsolutePathBuf> {
     std::env::var_os("USERPROFILE")
@@ -78,8 +80,8 @@ fn home_env_path() -> Option<AbsolutePathBuf> {
 
 /// User home for [`EnvConfig::user_home`] and [`VpDirs`] resolution.
 ///
-/// Consults process `HOME`/`USERPROFILE` (platform-ordered, see
-/// [`home_env_path`]) first, then [`BaseDirs`].
+/// First, check process `HOME` and `USERPROFILE` in platform order. See
+/// [`home_env_path`]. If neither provides a home, use [`BaseDirs`].
 fn user_home_path() -> Option<AbsolutePathBuf> {
     if let Some(home) = home_env_path() {
         return Some(home);
@@ -89,13 +91,15 @@ fn user_home_path() -> Option<AbsolutePathBuf> {
 
 /// Layout variables to re-export in persisted shell context.
 ///
-/// An *absolute* `VP_HOME` pins every category, so it is captured alone
-/// (verbatim from the process environment). Relative `VP_HOME` is ignored
-/// by resolution and must not be re-exported, or later shells would lose
-/// the resolved `VP_*_DIR` roots. Otherwise the *resolved* `bin` / `data` /
-/// `cache` roots are stored as `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`.
-/// That pins this install for later shells without re-exporting `XDG_*`
-/// (those are user/session policy for every tool, not Vite+ overrides).
+/// An absolute `VP_HOME` sets each category, so store only this variable. Keep
+/// its process-environment value unchanged. Resolution ignores a relative
+/// `VP_HOME`. Do not export a rejected relative value because a later shell
+/// would lose the resolved `VP_*_DIR` values.
+///
+/// Without an absolute `VP_HOME`, store the resolved `bin`, `data`, and `cache`
+/// roots in `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR`. These values keep
+/// the install roots stable in later shells. Do not export `XDG_*`; those
+/// variables define session policy for all tools, not only Vite+.
 fn dir_envs_from_resolved(dirs: &VpDirs) -> HashMap<&'static str, String> {
     if let Some(home) = std::env::var_os(env_vars::VP_HOME).and_then(|path| {
         let display = path.to_string_lossy().into_owned();
@@ -112,26 +116,27 @@ fn dir_envs_from_resolved(dirs: &VpDirs) -> HashMap<&'static str, String> {
 
 /// Centralized configuration read from environment variables.
 ///
-/// All known vite-plus environment variables are read once at construction
-/// time, including the on-disk category roots ([`VpDirs`]). Use
-/// `EnvConfig::get()` to access the current config from anywhere.
+/// Construction reads all known Vite+ environment variables, including the
+/// on-disk category roots in [`VpDirs`]. Use `EnvConfig::get()` to access the
+/// current configuration.
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
     /// On-disk category roots, resolved once at construction.
     ///
-    /// Features join their own paths under these roots (`<DATA>/js_runtime`,
-    /// `<CONFIG>/config.json`, …) instead of constructing install paths ad
-    /// hoc.
+    /// Each feature constructs its paths under these roots. Examples include
+    /// `<DATA>/js_runtime` and `<CONFIG>/config.json`. Features must not
+    /// construct complete install paths independently.
     pub dirs: VpDirs,
 
     /// Layout variables to re-export to persisted shell context.
     ///
-    /// Contains either `VP_HOME` alone (when that override is an absolute
-    /// path) or the resolved `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
-    /// roots — never both, and never `XDG_*`. Consumers that write shell context
-    /// (`vp env setup` scripts, the Windows `vp-use.cmd` wrapper) render
-    /// these so child processes resolve the identical roots even when the
-    /// later session has different XDG variables.
+    /// Contains only `VP_HOME` when it is an absolute path. Otherwise, it
+    /// contains the resolved `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR`.
+    /// It never contains both forms or any `XDG_*` variable.
+    ///
+    /// Shell-context writers use these values. Examples include `vp env setup`
+    /// scripts and the Windows `vp-use.cmd` wrapper. Child processes then use
+    /// the same roots, even if a later session has different XDG variables.
     pub dir_envs: HashMap<&'static str, String>,
 
     /// NPM registry URL.
@@ -169,10 +174,10 @@ pub struct EnvConfig {
 
     /// User home directory.
     ///
-    /// Resolved once from `HOME`/`USERPROFILE` (platform-ordered, see
-    /// [`home_env_path`]) with a system base-dirs fallback. The same value is
-    /// passed to [`VpDirs::resolve`], so `user_home` and [`Self::dirs`] never
-    /// disagree.
+    /// Resolved once from `HOME` or `USERPROFILE` in platform order. See
+    /// [`home_env_path`]. A system base-directory query provides the fallback.
+    /// [`VpDirs::resolve`] receives the same value. Thus, `user_home` and
+    /// [`Self::dirs`] cannot use different homes.
     pub user_home: AbsolutePathBuf,
 
     /// Explicitly specify the current shell.
@@ -184,16 +189,15 @@ pub struct EnvConfig {
 impl EnvConfig {
     /// Read configuration from the real process environment.
     ///
-    /// Called lazily on the first [`EnvConfig::get`] (and cached) in non-test
-    /// builds; test builds call it on every `get()` so env-mutating serial
-    /// tests see fresh values.
+    /// Non-test builds call this function on the first [`EnvConfig::get`] and
+    /// cache the result. Test builds call it on each `get()`. Thus, tests that
+    /// change the environment get current values.
     ///
     /// # Panics
     ///
-    /// Panics when no user home can be resolved (`HOME`/`USERPROFILE` unset
-    /// and the system base-dirs query failing) or when directory resolution
-    /// still fails (see [`VpDirs::resolve`]) — a CLI without a home directory
-    /// cannot function.
+    /// Panics if `HOME`, `USERPROFILE`, and the system base-directory query do
+    /// not provide a user home. Also panics if [`VpDirs::resolve`] fails. The
+    /// CLI cannot operate without a home and resolved directories.
     fn from_env() -> Arc<EnvConfig> {
         let user_home = user_home_path()
             .expect("vite-plus could not resolve a user home directory: no home available");
@@ -220,19 +224,17 @@ impl EnvConfig {
 
     /// Get the current config.
     ///
-    /// In test builds (`cfg(test)`, or a downstream crate's tests with the
-    /// `test-utils` feature enabled via dev-dependencies) the config is
-    /// re-resolved on every call — intentionally **not** cached — so
-    /// [`with_vars`](Self::with_vars) scopes and env-mutating serial tests
-    /// are observed immediately.
+    /// Test builds resolve the configuration on each call and do not cache it.
+    /// This applies to `cfg(test)` and downstream tests that enable
+    /// `test-utils` in dev-dependencies. Thus, [`with_vars`](Self::with_vars)
+    /// scopes and serial environment changes apply immediately.
     ///
-    /// In non-test builds the process env is read once on the first call and
-    /// cached process-wide.
+    /// Non-test builds read the process environment on the first call. They
+    /// cache the configuration for the process.
     ///
-    /// Returns a shared handle — cloning the `Arc` is a refcount bump, so
-    /// callers should hold or borrow it rather than cloning the underlying
-    /// config. This is the primary way to access configuration throughout the
-    /// codebase.
+    /// Returns a shared handle. Cloning the `Arc` only increments its reference
+    /// count. Hold or borrow this handle instead of cloning the configuration.
+    /// This is the primary configuration access method.
     #[must_use]
     pub fn get() -> Arc<Self> {
         #[cfg(any(test, feature = "test-utils"))]
@@ -248,15 +250,15 @@ impl EnvConfig {
 
 /// What to do with one variable in a [`EnvConfig::with_vars`] pin list.
 ///
-/// Plain values set the variable; an `Option` sets it when `Some` and
-/// **unsets** it when `None` — the only way to exercise presence-checked
-/// variables (`CI` → `is_ci`, `VP_ENV_USE_EVAL_ENABLE`, …) in their "off"
-/// state, since assigning an empty value still counts as set.
+/// A plain value sets the variable. `Some` sets an optional value, and `None`
+/// unsets it. Unsetting is the only inactive state for presence-checked
+/// variables such as `CI` and `VP_ENV_USE_EVAL_ENABLE`. An empty value still
+/// counts as set.
 ///
-/// Implemented for the common string/path types instead of via `ToString`:
-/// paths may be non-UTF-8, and a lossy conversion would silently corrupt
-/// them. (A blanket `impl<T: AsRef<OsStr>>` is impossible — coherence rules
-/// it out next to the `Option` impl.)
+/// Common string and path types implement this trait directly. The
+/// implementation does not use `ToString`. A path can contain non-UTF-8 data,
+/// and a lossy conversion can damage it. Rust coherence rules prevent a blanket
+/// `impl<T: AsRef<OsStr>>` next to the `Option` implementation.
 #[cfg(any(test, feature = "test-utils"))]
 pub trait EnvValue {
     /// The value to pin, or `None` to unset the variable for the scope.
@@ -286,18 +288,18 @@ impl<T: AsRef<OsStr>> EnvValue for Option<T> {
 
 #[cfg(any(test, feature = "test-utils"))]
 impl EnvConfig {
-    /// Run `f` with the given environment variables set, then restore the
+    /// Set the specified environment variables and run `f`. Then restore the
     /// previous process environment.
     ///
-    /// Any process variable may be pinned; variables not declared here are
-    /// inherited from the process environment as-is. `f` receives the config
-    /// resolved under the pinned variables — no [`EnvConfig::get`] call
-    /// needed (and `get` re-resolves on every call, so code under test
-    /// observes the same values, including the derived directory roots).
+    /// This function can set any process variable. It inherits undeclared
+    /// variables without changes. `f` receives the configuration for the set
+    /// variables. The callback does not need to call [`EnvConfig::get`]. In
+    /// tests, `get` resolves the same values on each call. These values include
+    /// the derived directory roots.
     ///
-    /// This delegates to [`temp_env::with_vars`], which holds a process-wide
-    /// lock for the duration — no `#[serial]` needed between `with_vars`
-    /// tests, and nested scopes shadow outer ones until they return.
+    /// This function calls [`temp_env::with_vars`], which holds a process-wide
+    /// lock for the complete scope. `with_vars` tests do not need `#[serial]`.
+    /// A nested scope replaces outer values until the nested scope ends.
     ///
     /// ```rust
     /// use vp_shared::{EnvConfig, env_vars};
@@ -323,12 +325,11 @@ impl EnvConfig {
         temp_env::with_vars(vars, || f(Self::get()))
     }
 
-    /// [`with_vars`](Self::with_vars) for async tests: the variables stay set
-    /// across `.await` points and are restored when the future completes.
+    /// Async form of [`with_vars`](Self::with_vars). The variables remain set
+    /// across `.await` points. The function restores them when the future ends.
     ///
-    /// Requires a current-thread runtime (the `#[tokio::test`] default):
-    /// `temp_env`'s lock guard is held across the awaited future and is not
-    /// `Send`.
+    /// Requires a current-thread runtime, which is the `#[tokio::test]` default.
+    /// The future holds the `temp_env` lock guard, and the guard is not `Send`.
     ///
     /// ```no_run
     /// # async fn example() {
@@ -346,19 +347,17 @@ impl EnvConfig {
     ) -> R {
         let vars: Vec<(&'static str, Option<OsString>)> =
             vars.into_iter().map(|(name, value)| (name, value.into_var_value())).collect();
-        // The config must resolve after the variables are pinned, so it is
-        // built inside the scoped future rather than as a call argument.
+        // Resolve the configuration after the variables are set. Build it in
+        // the scoped future instead of a call argument.
         temp_env::async_with_vars(vars, async move { f(Self::get()).await }).await
     }
 
-    /// Run `f` with every vite-plus directory pinned under a fresh temporary
-    /// directory (via `VP_HOME`), deleted when the scope returns.
+    /// Set `VP_HOME` to a new temporary directory and run `f`. This puts each
+    /// Vite+ directory under that root. Delete the root when the scope ends.
     ///
-    /// For tests that read or write through the resolved directories without
-    /// caring where they live. Tests that need the concrete path — or a
-    /// shared root that keeps download caches warm across tests — should
-    /// create their own directory and use [`with_vars`](Self::with_vars)
-    /// instead.
+    /// Use this function when a test does not need the root path. A test can
+    /// require a known path or a shared download cache. In that case, create a
+    /// directory and use [`with_vars`](Self::with_vars) instead.
     ///
     /// ```rust
     /// use vp_shared::EnvConfig;
@@ -372,12 +371,12 @@ impl EnvConfig {
         Self::with_vars([(env_vars::VP_HOME, home.path())], f)
     }
 
-    /// [`scoped`](Self::scoped) for async tests: the pin stays active across
-    /// `.await` points and the temporary directory is deleted when the future
-    /// completes.
+    /// Async form of [`scoped`](Self::scoped). The pin remains active across
+    /// `.await` points. The function deletes the temporary directory when the
+    /// future ends.
     ///
-    /// Requires a current-thread runtime (the `#[tokio::test`] default), like
-    /// [`with_vars_async`](Self::with_vars_async).
+    /// Like [`with_vars_async`](Self::with_vars_async), this function requires
+    /// a current-thread runtime. This is the `#[tokio::test]` default.
     ///
     /// ```no_run
     /// # async fn example() {
@@ -412,11 +411,10 @@ mod tests {
         });
     }
 
-    /// `HOME` (with `USERPROFILE` pinned to the same path for Windows'
-    /// profile-first ordering) yields the platform split layout on Unix.
-    /// Layout override vars are cleared: a developer shell can export
-    /// `VP_HOME` (vp's env script does) or `XDG_*`, which would win over
-    /// the platform tail.
+    /// `HOME` produces the Unix split layout. Set `USERPROFILE` to the same
+    /// path for the Windows profile-first order. Clear layout overrides because
+    /// a developer shell can export `VP_HOME` or `XDG_*`. These variables have
+    /// priority over platform defaults.
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn with_vars_home_yields_split_layout() {
@@ -435,8 +433,8 @@ mod tests {
         });
     }
 
-    /// Known variables the test does not declare are inherited from the
-    /// process environment as-is.
+    /// Inherit known variables that the test does not declare. Do not change
+    /// their values.
     #[test]
     fn with_vars_inherits_undeclared_vars() {
         EnvConfig::with_vars([("CI", "true"), (env_vars::VP_NODE_VERSION, "22.0.0")], |_| {
@@ -467,8 +465,8 @@ mod tests {
 
     #[test]
     fn with_vars_restores_after_scope() {
-        // The outer scope pins a known baseline under temp_env's lock, so the
-        // restore assertion is isolated from other env-mutating tests.
+        // Set a known baseline while temp_env holds its lock. This isolates the
+        // restore check from other tests that change the environment.
         EnvConfig::with_vars([(env_vars::NPM_CONFIG_REGISTRY, "https://before")], |config| {
             EnvConfig::with_vars(
                 [(env_vars::NPM_CONFIG_REGISTRY, "https://custom.registry")],
@@ -491,9 +489,9 @@ mod tests {
         });
     }
 
-    /// Without `VP_HOME`, `dir_envs` pins the resolved roots as `VP_*_DIR`
-    /// so persisted shell context reproduces this install. Relative
-    /// `VP_BIN_DIR` is ignored by resolution and is not captured raw.
+    /// Without `VP_HOME`, store the resolved roots as `VP_*_DIR`. A persisted
+    /// shell then uses the same install. Resolution ignores a relative
+    /// `VP_BIN_DIR`, so do not store its original value.
     #[test]
     fn with_vars_populates_dir_envs() {
         let root = tempfile::tempdir().unwrap();
@@ -522,8 +520,8 @@ mod tests {
         );
     }
 
-    /// XDG inputs affect resolution but are not re-exported; the resolved
-    /// `VP_*_DIR` values are what later shells need.
+    /// XDG variables affect resolution but are not exported again. Later shells
+    /// need the resolved `VP_*_DIR` values.
     #[test]
     fn dir_envs_pins_resolved_roots_not_xdg() {
         let root = tempfile::tempdir().unwrap();
@@ -550,8 +548,8 @@ mod tests {
         );
     }
 
-    /// A declared `VP_HOME` pins every category, so per-category `VP_*_DIR`
-    /// overrides are dead letters and must not be captured alongside it.
+    /// A declared `VP_HOME` sets each category. Therefore, do not store ignored
+    /// per-category `VP_*_DIR` values with it.
     #[test]
     fn dir_envs_vp_home_excludes_category_overrides() {
         let root = tempfile::tempdir().unwrap();
@@ -571,14 +569,14 @@ mod tests {
                         root.path().to_string_lossy().into_owned()
                     )])
                 );
-                // ...and resolution honors the pin, not the overrides.
+                // Resolution uses the pin and ignores the category overrides.
                 assert_eq!(config.dirs.bin.as_path(), root.path().join("bin"));
             },
         );
     }
 
-    /// Relative `VP_HOME` is ignored by resolution; persist the resolved
-    /// `VP_*_DIR` roots instead of re-exporting the rejected value.
+    /// Resolution ignores a relative `VP_HOME`. Store the resolved `VP_*_DIR`
+    /// roots instead of the rejected value.
     #[test]
     fn dir_envs_ignores_relative_vp_home() {
         let root = tempfile::tempdir().unwrap();
@@ -603,8 +601,8 @@ mod tests {
         );
     }
 
-    /// Unix keeps `HOME` authoritative even when `USERPROFILE` is also set
-    /// (e.g. exported by a mixed shell environment).
+    /// Unix uses `HOME` when `USERPROFILE` is also set. A mixed shell
+    /// environment can export both variables.
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn user_home_env_prefers_home_over_userprofile() {
@@ -617,8 +615,8 @@ mod tests {
         });
     }
 
-    /// Windows: `%USERPROFILE%` must win over a Git Bash `HOME`, matching
-    /// install.ps1's grandfathering check.
+    /// Windows uses `%USERPROFILE%` instead of a Git Bash `HOME`. This matches
+    /// the existing-install check in install.ps1.
     #[cfg(target_os = "windows")]
     #[test]
     fn user_home_env_prefers_userprofile_over_home() {
@@ -645,8 +643,9 @@ mod tests {
         });
     }
 
-    /// A `None` value unsets the variable for the scope and restores it
-    /// afterwards — the only "off" state for presence-checked variables.
+    /// A `None` value unsets the variable for the scope. The function restores
+    /// it after the scope ends. This is the only inactive state for a
+    /// presence-checked variable.
     #[test]
     fn with_vars_none_unsets_variable() {
         EnvConfig::with_vars([("CI", "true")], |config| {

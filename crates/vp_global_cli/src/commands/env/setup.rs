@@ -393,7 +393,7 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
 #[cfg(windows)]
 fn write_shim_pointer_beside(exe_path: &std::path::Path) {
     if let Err(e) = vp_shared::EnvConfig::get().dirs.write_shim_pointer_beside(exe_path) {
-        tracing::warn!("Failed to write shim pointer for {}: {e}", exe_path.display());
+        tracing::warn!("Vite+ could not write the shim pointer for {}: {e}", exe_path.display());
     }
 }
 
@@ -770,25 +770,25 @@ fn render_nu_path_ref(path_ref: &str) -> String {
     }
 }
 
-/// Escapes a value for a POSIX-shell double-quoted string.
+/// Escape a value for a POSIX-shell double-quoted string.
 fn escape_posix_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('$', "\\$").replace('`', "\\`").replace('"', "\\\"")
 }
 
-/// Escapes a value for a Fish double-quoted string.
+/// Escape a value for a Fish double-quoted string.
 fn escape_fish_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('$', "\\$").replace('"', "\\\"")
 }
 
-/// Escape only the literal suffix of a `$HOME`-relative path. `$HOME` itself
-/// must remain expandable when the generated POSIX/Fish env file is sourced.
+/// Escape only the literal suffix of a `$HOME`-relative path. Keep `$HOME`
+/// available for expansion when the POSIX or Fish environment file runs.
 fn escape_home_relative_double_quoted_path(path_ref: &str, escape: fn(&str) -> String) -> String {
     path_ref
         .strip_prefix("$HOME")
         .map_or_else(|| escape(path_ref), |suffix| format!("$HOME{}", escape(suffix)))
 }
 
-/// Escapes a value so it can be safely embedded in a Nushell double-quoted string.
+/// Escape a value for a Nushell double-quoted string.
 ///
 /// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
 /// https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
@@ -797,15 +797,14 @@ fn escape_nu_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-/// Escapes a value for a PowerShell single-quoted string.
+/// Escape a value for a PowerShell single-quoted string.
 fn escape_powershell_single_quoted_string(value: &str) -> String {
     value.replace('\'', "''")
 }
 
-/// Render the re-export lines for the captured layout overrides
-/// ([`EnvConfig::dir_envs`]), sorted by variable name for deterministic
-/// output. Always contains either `VP_HOME` or the resolved `VP_*_DIR`
-/// roots so later shells reproduce this install.
+/// Render export lines for the layout values in [`EnvConfig::dir_envs`]. Sort
+/// the lines by variable name to keep the output stable. The values contain
+/// `VP_HOME` or the resolved `VP_*_DIR` roots. Later shells use the same install.
 fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     let home_dir = config.user_home.as_path();
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
@@ -848,11 +847,10 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
         .collect()
 }
 
-/// Render the env-file content for `shell` against the resolved config.
+/// Render the environment-file content for `shell` and the resolved config.
 ///
-/// PATH is pointed at the resolved bin directory. The layout overrides
-/// captured in [`EnvConfig::dir_envs`] are re-exported so child shells
-/// resolve the identical roots.
+/// Put the resolved bin directory on `PATH`. Export the layout values in
+/// [`EnvConfig::dir_envs`] so child shells resolve the same roots.
 fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
@@ -898,7 +896,8 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
     }
 }
 
-/// Create env files under `<CONFIG>/` with PATH guard (prevents duplicate PATH entries).
+/// Create environment files under `<CONFIG>/`. Add a guard that prevents
+/// duplicate `PATH` entries.
 ///
 /// Creates:
 /// - `env` (POSIX shell — bash/zsh) with `vp()` wrapper function
@@ -915,10 +914,10 @@ async fn create_env_files() -> Result<(), Error> {
     Ok(())
 }
 
-/// Print instructions for sourcing the env files and adding bin to PATH.
+/// Print instructions for sourcing the environment files and adding bin to `PATH`.
 fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
-    // Use $HOME-relative paths for readability (POSIX/Fish use $HOME; Nushell's
-    // `source` is a parse-time keyword that cannot expand $HOME, so use ~).
+    // Use paths relative to $HOME. POSIX and Fish use $HOME. Nushell cannot
+    // expand $HOME in the parse-time `source` keyword, so use ~.
     let env_path = env_dir.as_path().display().to_string();
     let home = vp_shared::EnvConfig::get().user_home.as_path().display().to_string();
     let (env_path, nu_env_path) = if let Some(suffix) = env_path.strip_prefix(&home) {

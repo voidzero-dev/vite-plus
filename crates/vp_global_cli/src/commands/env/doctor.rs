@@ -130,9 +130,9 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
 /// Report the five resolved category roots.
 ///
-/// `bin` and `config` are created by `vp env setup`, so a missing one is an
-/// error. `data`, `cache`, and `state` are created lazily on first use — a
-/// missing one is reported as "not created yet", not an error.
+/// `vp env setup` creates `bin` and `config`, so they must exist. Vite+ creates
+/// `data`, `cache`, and `state` when it first needs them. Report a missing lazy
+/// directory as "not created yet", not as an error.
 async fn check_dirs() -> bool {
     let dirs = &vp_shared::EnvConfig::get().dirs;
     let rows: [(&str, &AbsolutePathBuf, bool); 5] = [
@@ -154,7 +154,7 @@ async fn check_dirs() -> bool {
                 label,
                 &format!("{display} {}", "(does not exist)".red()),
             );
-            print_hint("Run 'vp env setup' to create it.");
+            print_hint("Run 'vp env setup' to create the directory.");
             ok = false;
         } else {
             print_check(
@@ -390,7 +390,7 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
 fn print_path_fix(env_dir: &vt_path::AbsolutePath) {
     #[cfg(not(windows))]
     {
-        // Point at the env files in the config dir, $HOME-prefixed for readability
+        // Show the environment-file paths relative to $HOME when possible.
         let env_path = env_dir.as_path().display().to_string();
         let env_path = if let Ok(home_dir) = std::env::var("HOME") {
             if let Some(suffix) = env_path.strip_prefix(&home_dir) {
@@ -459,7 +459,7 @@ fn check_profile_files(env_dir: &str, profile_files: &[ShellProfile]) -> Option<
 
 /// Print IDE setup guidance for GUI applications.
 fn print_ide_setup_guidance(env_dir: &vt_path::AbsolutePath) {
-    // Point at the env files in the config dir, $HOME-prefixed for readability
+    // Show the environment-file paths relative to $HOME when possible.
     let env_path = env_dir.as_path().display().to_string();
     let env_path = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = env_path.strip_prefix(&home_dir) {

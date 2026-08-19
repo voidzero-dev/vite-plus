@@ -1,20 +1,17 @@
 //! Directory resolution.
 //!
-//! Each category is resolved by walking an ordered chain of *resolution
-//! sources*. A source either proposes a candidate (`Some`) or abstains
-//! (`None`); the first proposal wins.
+//! Each category uses an ordered chain of resolution sources. A source returns
+//! a candidate (`Some`) or no value (`None`). The first candidate wins.
 //!
 //! Source chain on Unix:
 //! [`VpHome`] → [`UserHome`] → [`VpEnvs`] → [`unix::Xdg`] → [`unix::Unix`]
 //! (Windows omits XDG; platform tail is [`windows::Windows`]):
 //!
-//! - [`VpHome`] — `VP_HOME` override: pins the single-root mapping under
-//!   that root.
-//! - [`UserHome`] — `<home>/.vite-plus` (injected home), proposed only when
-//!   that directory contains a `current` link (a real install, not a stray
-//!   tree left by a pre-split local CLI).
-//! - [`VpEnvs`] — `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`. When
-//!   `VP_BIN_DIR` is unset, an absolute `VP_DATA_DIR` also proposes
+//! - [`VpHome`] uses `VP_HOME` for the single-root mapping.
+//! - [`UserHome`] uses `<home>/.vite-plus` only if it contains a `current`
+//!   link. The link identifies an install instead of a stray pre-split tree.
+//! - [`VpEnvs`] uses `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR`. If
+//!   `VP_BIN_DIR` is unset, an absolute `VP_DATA_DIR` also provides
 //!   `<DATA>/bin`.
 //! - XDG / platform defaults.
 //!
@@ -22,14 +19,14 @@
 //! `bin` → `<root>/bin`, `data`/`config`/`state` → `<root>`,
 //! `cache` → `<root>/cache`.
 //!
-//! The user home is **injected by the caller** ([`EnvConfig`](crate::EnvConfig)
-//! resolves it once and passes it into every chain function); sources here
-//! read the override env vars (`VP_HOME`, `VP_*_DIR`, `XDG_*`) but never
-//! `HOME`/`USERPROFILE`. The Windows platform tail is the one exception: it
-//! queries the OS known folders, which may be redirected independently of the
-//! profile directory, and falls back to the conventional `AppData` locations
-//! under the injected home when the query is unavailable (restricted service
-//! or CI contexts).
+//! The caller provides the user home. [`EnvConfig`](crate::EnvConfig) resolves
+//! it once and passes it to each chain function. Sources read `VP_HOME`,
+//! `VP_*_DIR`, and `XDG_*`. They do not read `HOME` or `USERPROFILE`.
+//!
+//! The Windows platform source also queries operating-system known folders.
+//! These folders can use paths outside the profile directory. If the query is
+//! unavailable, Windows uses the standard `AppData` paths under the provided
+//! home. Restricted services and CI can require this fallback.
 
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -161,15 +158,16 @@ impl VpHome {
 struct UserHome;
 
 impl UserHome {
-    /// Proposes the root only when it contains the `current` link every
-    /// global install activates. Bare existence of `~/.vite-plus` is not
-    /// enough: pre-split local CLIs create that directory for caches,
-    /// config, and managed runtimes. Such a stray tree must not capture a
-    /// split install, or a later `vp upgrade` would silently move to the
-    /// monolithic root while the split PATH entries go stale. The gate
-    /// checks the link without following it, so an install with a dangling
-    /// `current` (crash mid-upgrade) still grandfathers. The installers
-    /// gate the same way.
+    /// Provide the root only if it contains a `current` link. Each global
+    /// install creates this link. A directory alone is not sufficient because
+    /// pre-split local CLIs create it for caches, config, and managed runtimes.
+    /// A stray tree must not select the monolithic layout for a split install.
+    /// Otherwise, a later `vp upgrade` could change roots without a notice and
+    /// leave obsolete split `PATH` entries.
+    ///
+    /// Check the link without following it. Thus, a dangling `current` link
+    /// still identifies an install after an interrupted upgrade. The installers
+    /// use the same check.
     fn resolver(home: &AbsolutePath) -> SingleRoot {
         let root = home.join(VP_HOME_DIR_NAME);
         let is_install = std::fs::symlink_metadata(root.join("current").as_path()).is_ok();
@@ -179,9 +177,9 @@ impl UserHome {
 
 macro_rules! resolutions {
     ($method: ident, [$($resolution: ty),*]) => {
-        /// Resolve this category by walking the source chain; the first
-        /// proposal wins. `home` is the user home resolved by the caller;
-        /// sources that don't need it ignore it.
+        /// Resolve this category through the source chain. The first candidate
+        /// wins. The caller resolves and provides `home`. Sources that do not
+        /// need it ignore it.
         pub fn $method(home: &AbsolutePath) -> Option<AbsolutePathBuf> {
             $({
                 let source = <$resolution>::resolver(home);
@@ -287,15 +285,15 @@ mod windows {
 
     impl Windows {
         pub(super) fn resolver(home: &AbsolutePath) -> Self {
-            // Production prefers the actual Windows known folders, which may
-            // be redirected independently of the user's profile directory.
+            // Use the Windows known folders when available. Windows can redirect
+            // them independently of the user profile directory.
             Self::from_base_dirs(BaseDirs::new().as_ref(), home)
         }
 
-        /// Known-folder locations when available, else the conventional
-        /// `AppData` locations under the injected home — the query can fail
-        /// in restricted service or CI contexts, and a resolved home must
-        /// still yield a complete layout.
+        /// Use known-folder paths when available. Otherwise, use the standard
+        /// `AppData` paths under the provided home. The query can fail in a
+        /// restricted service or CI environment. A resolved home must still
+        /// provide a complete layout.
         fn from_base_dirs(base: Option<&BaseDirs>, home: &AbsolutePath) -> Self {
             Self {
                 local: base
@@ -511,9 +509,9 @@ mod tests {
         assert!(place.state_dir().is_none());
     }
 
-    /// A `~/.vite-plus` without a `current` link is not an install: pre-split
-    /// local CLIs create the directory for caches, config, and managed
-    /// runtimes, and such a stray tree must not capture a split install.
+    /// A `~/.vite-plus` directory without a `current` link is not an install.
+    /// Pre-split local CLIs create this directory for caches, config, and
+    /// managed runtimes. This stray tree must not select the monolithic layout.
     #[test]
     fn user_home_abstains_for_stray_root_without_current() {
         let root = tempfile::tempdir().unwrap();
@@ -531,8 +529,8 @@ mod tests {
         assert!(place.state_dir().is_none());
     }
 
-    /// A dangling `current` link still marks an install (for example a crash
-    /// mid-upgrade); the gate checks link presence without following it.
+    /// A dangling `current` link still identifies an install after an
+    /// interrupted upgrade. The check does not follow the link.
     #[cfg(unix)]
     #[test]
     fn user_home_accepts_dangling_current_link() {

@@ -2,11 +2,16 @@
 
 ## Status
 
-**Partially implemented** — fresh-install split layout + centralized resolution ship in [#2346](https://github.com/voidzero-dev/vite-plus/pull/2346) (closes [#827](https://github.com/voidzero-dev/vite-plus/issues/827)). Automatic on-disk migration and full `VP_HOME` cleanup are follow-ups ([#2371](https://github.com/voidzero-dev/vite-plus/issues/2371), [#2372](https://github.com/voidzero-dev/vite-plus/issues/2372)).
+**Partially implemented.** [PR #2346](https://github.com/voidzero-dev/vite-plus/pull/2346)
+adds the split layout for fresh installs and centralizes directory resolution.
+It closes [issue #827](https://github.com/voidzero-dev/vite-plus/issues/827).
+[Issue #2371](https://github.com/voidzero-dev/vite-plus/issues/2371) tracks
+full `VP_HOME` cleanup. [Issue #2372](https://github.com/voidzero-dev/vite-plus/issues/2372)
+tracks automatic migration of existing files.
 
 ## Background
 
-Vite+ historically stores the entire global install under a single monolithic root:
+Vite+ previously stored the complete global install under one monolithic root:
 
 ```text
 ~/.vite-plus/
@@ -26,28 +31,47 @@ Vite+ historically stores the entire global install under a single monolithic ro
 └── .upgrade-check.json             # upgrade-check cache
 ```
 
-That layout is simple to install and document, but it conflicts with platform conventions:
+This layout is easy to install and document. However, it conflicts with
+platform conventions:
 
-1. **XDG / platform split** — data, cache, config, and state belong in their platform roots (`~/.local/share`, `~/.cache`, `~/.config`, `~/.local/state` on Unix; analogous Local/Roaming app dirs on Windows).
-2. **Executable ownership** — Vite+ manages `vp`, runtime dispatchers, and global-package shims. Keeping them in an application-owned bin avoids collisions with unrelated tools in a shared user executable directory.
-3. **Scattered path construction** — call sites historically joined `~/.vite-plus/...` or read `VP_HOME` ad hoc, making layout changes error-prone.
-4. **Testing friction** — snapshot and CI setups pin `VP_HOME` to force a single tree, which couples fixtures to the monolithic shape.
+1. **XDG and platform roots.** Data, cache, config, and state belong in their
+   platform roots. Unix uses `~/.local/share`, `~/.cache`, `~/.config`, and
+   `~/.local/state`. Windows uses the applicable Local and Roaming directories.
+2. **Executable ownership.** Vite+ manages `vp`, runtime dispatchers, and
+   global-package shims. An application-owned bin directory prevents collisions
+   with unrelated tools in a shared directory.
+3. **Path construction.** Call sites previously joined paths under
+   `~/.vite-plus` or read `VP_HOME` directly. This made layout changes difficult
+   and increased the risk of errors.
+4. **Tests.** Snapshot and CI tests set `VP_HOME` to create one directory tree.
+   This makes the fixtures depend on the monolithic layout.
 
 ## Goals
 
-1. **Centralize** all on-disk category roots and first-level data subdirectories in `vp_shared::VpDirs` so no call site invents `~/.vite-plus/...` or reads `XDG_*` itself.
-2. **Default fresh installs** to the split XDG / platform layout.
-3. **Grandfather** existing default installs that still live at `~/.vite-plus` without moving files in this phase.
-4. Keep **`VP_HOME` as a full-root pin** for custom roots and older scripts; prefer `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR` for new configuration.
-5. Align **installers** (`install.sh`, `install.ps1`, `vp-setup`, `install-global-cli`) with the same resolution strategy as the CLI.
-6. Support **implode, env setup, trampoline, upgrade check**, and related flows on both layouts.
+1. Store all category roots and first-level data directories in
+   `vp_shared::VpDirs`. Call sites must not construct `~/.vite-plus` paths or
+   read `XDG_*` directly.
+2. Use the split XDG or platform layout for fresh installs.
+3. Keep existing default installs in `~/.vite-plus` during this phase. Do not
+   move their files.
+4. Keep `VP_HOME` as a full-root pin for custom roots and old scripts. Prefer
+   `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` for new configuration.
+5. Use the CLI resolution strategy in `install.sh`, `install.ps1`, `vp-setup`,
+   and `install-global-cli`.
+6. Support both layouts in implode, env setup, trampoline, upgrade check, and
+   related operations.
 
 ## Non-Goals (this phase)
 
-1. **Automatic migration** of an existing `~/.vite-plus` tree into split roots (tracked in [#2372](https://github.com/voidzero-dev/vite-plus/issues/2372); see [Follow-up: layout migrate](#follow-up-layout-migrate-on-vp-upgrade)).
-2. Removing the **read** of `VP_HOME` from the resolution chain (cleanup of _setters_ is [#2371](https://github.com/voidzero-dev/vite-plus/issues/2371)).
-3. Introducing a new distribution channel or package format.
-4. Changing the on-disk _payload_ shape under a version directory (`current`, version dirs, `node_modules`).
+1. This phase does not move an existing `~/.vite-plus` tree to the split roots.
+   [Issue #2372](https://github.com/voidzero-dev/vite-plus/issues/2372) tracks
+   this work. See [Follow-up: layout migrate](#follow-up-layout-migrate-on-vp-upgrade).
+2. This phase does not remove `VP_HOME` from the resolution chain.
+   [Issue #2371](https://github.com/voidzero-dev/vite-plus/issues/2371) tracks
+   cleanup of code that sets this variable.
+3. This phase does not add a distribution channel or package format.
+4. This phase does not change the payload structure in a version directory.
+   This structure includes `current`, version directories, and `node_modules`.
 
 ## Design
 
@@ -65,7 +89,9 @@ That layout is simple to install and document, but it conflicts with platform co
 
 #### `<BIN>` ownership invariant
 
-The default `<BIN>` is application-owned, and Vite+ may manage all entries inside it. An explicit `VP_BIN_DIR` must be treated as potentially shared and requires per-entry ownership checks.
+Vite+ owns the default `<BIN>` and may manage all entries in it. Treat an
+explicit `VP_BIN_DIR` as potentially shared. Check the ownership of each entry
+in a potentially shared directory.
 
 | Resolution source                               | Ownership                                                                        |
 | ----------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -75,53 +101,67 @@ The default `<BIN>` is application-owned, and Vite+ may manage all entries insid
 | `VP_HOME` or a grandfathered monolithic install | Application-owned `<root>/bin` inside the Vite+ install root.                    |
 | User-supplied `VP_BIN_DIR` on any platform      | Potentially shared, regardless of whether its path resembles a platform default. |
 
-`VpDirs` and `VP_DUMP_DIRS` expose resolved paths without resolution provenance. A consumer must not infer from a path string that a separately resolved `<BIN>` is application-owned. It may remove `<BIN>` as part of another Vite+-owned root that contains it (the Unix default is removed with `<DATA>`), or when it retains trusted provenance for an application-owned mapping. Otherwise it must use the potentially shared-directory policy.
+`VpDirs` and `VP_DUMP_DIRS` return resolved paths without their source. A path
+string does not prove that a separately resolved `<BIN>` is application-owned.
+A consumer may remove `<BIN>` as part of a Vite+-owned parent root. For example,
+removing the Unix default `<DATA>` also removes `<BIN>`. A consumer may also
+remove `<BIN>` when it has trusted source information for an application-owned
+mapping. Otherwise, it must use the policy for a potentially shared directory.
 
 For a potentially shared `<BIN>`, installers, `vp env setup`, global package shim management, and `vp implode` must follow these rules:
 
 - Never recursively remove `<BIN>`.
-- Verify a symlink target, trampoline marker, or equivalent ownership evidence before replacing or removing an entry. A known filename or global package metadata does not prove ownership.
-- Preserve an existing entry whose ownership Vite+ cannot verify. Treat it as a conflict unless the user authorizes replacement, then record ownership of the new Vite+ entry.
+- Before replacement or removal, verify a symlink target, trampoline marker, or
+  equivalent ownership record. A known filename or global-package metadata does
+  not prove ownership.
+- Preserve an entry if Vite+ cannot verify its ownership. Treat the entry as a
+  conflict unless the user permits replacement. Record ownership after Vite+
+  creates the replacement.
 
-`VpDirs` is a **stateful value**: the strategy chain runs once at
-construction (`VpDirs::resolve()`), the five roots are stored as public
-fields, and process env changes afterwards are not observed (child processes
-resolve their own roots from their own environment). The struct carries no
-layout tag: every resolution source maps onto the same five roots, and feature
-path construction must not branch on how the roots were produced. The
-ownership rule above governs destructive operations on `<BIN>`.
+`VpDirs` is a **stateful value**. `VpDirs::resolve()` runs the strategy chain
+once during construction. It stores the five roots in public fields. Later
+changes to the process environment do not change these fields. Child processes
+resolve their own roots from their own environment.
 
-First-level directories under `data` (`current`, `js_runtime`, …) and all
-deeper trees (`config.json`, `js_runtime/node/<ver>`, `resolve_cache.json`,
-…) are joined by the owning feature, not by `VpDirs`.
+The struct has no layout tag. Each resolution source produces the same five
+roots. Feature code must not construct paths differently for each source. The
+ownership rule above controls destructive operations on `<BIN>`.
 
-`EnvConfig` **owns** the resolved `VpDirs` (`EnvConfig::get().dirs`),
-constructed in `EnvConfig::from_env()`; the dependency is one-way —
-`from_env()` resolves the user home once (`HOME`/`USERPROFILE`,
-platform-ordered like the installers, with a system base-dirs fallback),
-stores it as `EnvConfig.user_home` (`AbsolutePathBuf`), and passes it into
-`VpDirs::resolve(home)`, so `user_home` and `dirs` never disagree. Directory
-resolution reads only the override env vars (`VP_HOME`, `VP_*_DIR`, `XDG_*`)
-— never `HOME`/`USERPROFILE` — and carries no test-only branches: tests
-exercise the same resolution chain through the process environment (see
-[Test configuration](#test-configuration)).
+Each feature constructs the paths that it owns. These paths include first-level
+directories under `data`, such as `current` and `js_runtime`. They also include
+deeper paths such as `config.json`, `js_runtime/node/<ver>`, and
+`resolve_cache.json`. `VpDirs` does not construct these paths.
+
+`EnvConfig` owns the resolved `VpDirs` at `EnvConfig::get().dirs`.
+`EnvConfig::from_env()` constructs this value. It resolves the user home once
+from `HOME` or `USERPROFILE`. It uses the same platform order as the installers
+and falls back to the system base directories.
+
+`EnvConfig` stores the result as an `AbsolutePathBuf` in
+`EnvConfig.user_home`. It passes the same value to `VpDirs::resolve(home)`.
+Thus, `user_home` and `dirs` cannot use different home directories. Directory
+resolution reads only `VP_HOME`, `VP_*_DIR`, and `XDG_*`. It does not read
+`HOME` or `USERPROFILE`.
+
+Directory resolution has no test-only branches. Tests use the process
+environment to run the production resolution chain. See
+[Test configuration](#test-configuration).
 
 ### Test configuration
 
-`EnvConfig::get()` has two behaviors, selected at compile time:
+The build configuration selects one of two `EnvConfig::get()` behaviors:
 
-- **Release builds** read the process env once, lazily, and cache the config
-  process-wide (`OnceLock`).
-- **Test builds** — `cfg(test)`, or any downstream crate enabling the
-  `test-utils` feature through `[dev-dependencies]` — re-resolve on **every**
-  `get()`, so env-scoped tests observe pinned values immediately. The
-  feature pulls in `temp-env` and `tempfile` as optional dependencies, so
-  the helpers stay out of release binaries.
+- **Release builds** read the process environment on the first call. They cache
+  the configuration for the process in a `OnceLock`.
+- **Test builds** resolve the configuration on **every** call. This behavior
+  applies to `cfg(test)` and to downstream tests that enable `test-utils` in
+  `[dev-dependencies]`. Thus, environment scopes apply their values immediately.
+  The feature adds `temp-env` and `tempfile` as optional dependencies. Release
+  binaries do not include these helpers.
 
-Tests pin the **environment**, never paths: the same env → dirs resolution
-chain production uses derives the roots, so fixtures cannot drift from
-production resolution. Four `EnvConfig` associated functions (all gated on
-`test-utils`) cover the matrix:
+Tests pin the **environment**, not resolved paths. The production resolution
+chain then derives the roots. This prevents fixtures from using different
+resolution rules. The `test-utils` feature provides four `EnvConfig` functions:
 
 | Helper                          | Environment                                                           | Root                                                                     | Use                                                                                  |
 | ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -132,56 +172,56 @@ production resolution. Four `EnvConfig` associated functions (all gated on
 
 Semantics:
 
-- The callback **receives the resolved `Arc<EnvConfig>`** — no manual
-  `EnvConfig::get()` needed. For the async helpers the config is resolved
-  inside the scoped future, after the variables are pinned.
-- **Any** process variable may be pinned; there is no allowlist. Undeclared
-  variables are inherited from the process environment as-is.
-- Values implement the `EnvValue` trait: plain string/path values set the
-  variable, and an `Option` sets it when `Some` / **unsets** it when `None`
-  — the only "off" state for presence-checked variables (`CI` → `is_ci`,
-  `VP_ENV_USE_EVAL_ENABLE`, …), since assigning a value still counts as set.
-  `EnvValue` is implemented for the concrete string/path types rather than
-  via `ToString`: paths may be non-UTF-8 and a lossy conversion would
-  silently corrupt them.
-- The helpers delegate to `temp_env`, which holds a process-wide lock for
-  the whole scope — no `#[serial]` needed between scope-based tests, and
-  nested scopes shadow outer ones until they return.
-- Download-heavy suites (package managers, Node runtimes) pin a **shared**
-  `VP_HOME` root per test binary (under `std::env::temp_dir()`) so download
-  caches stay warm across tests and runs; concurrent installs under one root
-  are lock-protected.
+- The callback receives the resolved `Arc<EnvConfig>`. The caller does not need
+  to call `EnvConfig::get()`. An async helper resolves the configuration inside
+  the scoped future after it sets the variables.
+- A test can pin any process variable. There is no allowlist. The helper
+  inherits undeclared variables without changes.
+- Values implement the `EnvValue` trait. A string or path sets the variable.
+  `Some` sets an optional value, and `None` unsets it. Unsetting is the only
+  inactive state for presence-checked variables such as `CI` and
+  `VP_ENV_USE_EVAL_ENABLE`.
+- Concrete string and path types implement `EnvValue`. The implementation does
+  not use `ToString`. A path can contain non-UTF-8 data, and a lossy conversion
+  can damage it.
+- The helpers call `temp_env`, which holds a process-wide lock for the complete
+  scope. Tests that use these scopes do not need `#[serial]`. A nested scope
+  replaces values from the outer scope until the nested scope ends.
+- Download tests use one shared `VP_HOME` for each test binary. This root is
+  under `std::env::temp_dir()`. It keeps download caches available between tests
+  and test runs. Locks protect concurrent installs in the root.
 
-One discipline follows from the shared lock: `temp_env`'s lock is independent
-of `serial_test`'s. Within a test binary that uses these scopes, **every**
-test that mutates the process environment must go through `temp_env` (or
-these helpers) — a raw `set_var`/`remove_var` can otherwise rewrite a
-variable mid-scope and corrupt another test's pinned state. Tests mutating
-only variables that no scope pins (e.g. `VP_SHIM_TOOL`) may stay on
-`#[serial]`.
+The `temp_env` lock is independent of the `serial_test` lock. In a test binary
+that uses these scopes, every environment change must use `temp_env` or these
+helpers. A direct `set_var` or `remove_var` call can change a variable during
+another scope. This can damage the pinned state of another test. A test can use
+only `#[serial]` if no scope pins the variable, such as `VP_SHIM_TOOL`.
 
 ### Comment convention
 
-Code comments and docs refer to on-disk locations with **category
-placeholders** — `<BIN>/xxx`, `<DATA>/xxx`, `<CACHE>/xxx`, `<CONFIG>/xxx`,
-`<STATE>/xxx` — never with dual-layout annotations. Do not write
-`monolithic: ~/.vite-plus/xxx, split: ~/.local/share/vite-plus/xxx`; the mapping
-from placeholder to concrete path is defined once, in
-[category mapping](#category-mapping), and must not be restated per call
-site.
+Code comments and documentation use **category placeholders** for on-disk
+locations. Use `<BIN>/xxx`, `<DATA>/xxx`, `<CACHE>/xxx`, `<CONFIG>/xxx`, or
+`<STATE>/xxx`. Do not add a separate path for each layout at a call site. For
+example, do not write `monolithic: ~/.vite-plus/xxx, split:
+~/.local/share/vite-plus/xxx`. [Category mapping](#category-mapping) defines the
+concrete paths in one place.
 
 ### Resolution chain
 
-Each category walks the following ordered sources. A source either proposes
-a path or is skipped; the first proposal wins. The only stateful source is
-`~/.vite-plus`: it proposes only when that directory contains the `current`
-link every global install activates. The gate runs once at resolution, does
-not follow the link, and matches the installers' gates. Bare existence is
-not enough: a pre-split local vite-plus creates `~/.vite-plus` for caches,
-config, and managed runtimes, and this source outranks `VP_*_DIR`. A stray
-tree would otherwise capture an existing split install. A later
-`vp upgrade` or reinstall would then silently move to the monolithic root,
-and the split PATH entries would keep serving the old binary.
+Each category checks the following sources in order. A source can provide a path
+or provide no value. The first path wins.
+
+`~/.vite-plus` is the only source that checks file-system state. It provides a
+path only when the directory contains a `current` link. Each global install
+creates this link. The check runs once during resolution and does not follow the
+link. The installers use the same check.
+
+Directory existence alone is not sufficient. A local pre-split Vite+ dependency
+can create `~/.vite-plus` for caches, config, and managed runtimes. This source
+has a higher priority than `VP_*_DIR`. Without the `current` check, this stray
+directory could select the monolithic layout for an existing split install. A
+later upgrade or reinstall could then change roots without a notice. The split
+`PATH` entries would continue to run the old binary.
 
 **Unix:**
 
@@ -193,17 +233,22 @@ VP_HOME
   → platform defaults
 ```
 
-**Windows:** same head; no XDG step — after `VP_*_DIR`, fall through to Windows platform defaults (`%LOCALAPPDATA%` / `%APPDATA%`). When the known-folder query is unavailable (restricted service or CI contexts), the platform step falls back to the conventional `AppData\Local` / `AppData\Roaming` locations under the resolved user home, so a known home always yields a complete layout.
+**Windows:** Windows uses the same first three sources but does not use XDG
+variables. After `VP_*_DIR`, resolution uses `%LOCALAPPDATA%` and `%APPDATA%`.
+A restricted service or CI environment can prevent the known-folder query.
+When this occurs, Vite+ uses `AppData\Local` and `AppData\Roaming` under the
+resolved user home. Thus, a known home always produces a complete layout.
 
-| Source                                            | Behavior                                                                                                                                          |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`VP_HOME`**                                     | When set, pins the **monolithic mapping** under that root for all categories.                                                                     |
-| **`~/.vite-plus`**                                | When that directory contains a `current` link (a real install), use the monolithic mapping under it.                                              |
-| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | Absolute category overrides (relative values ignored). `VP_BIN_DIR` wins for bin; otherwise an absolute `VP_DATA_DIR` also proposes `<DATA>/bin`. |
-| **`XDG_*`** (Unix)                                | Absolute `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME`, with app name `vite-plus`. Bin resolves to `<DATA>/bin`.     |
-| **Platform defaults**                             | See [category mapping](#category-mapping) (Unix XDG-style homes under `$HOME`, Windows Local/Roaming app dirs).                                   |
+| Source                                            | Behavior                                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **`VP_HOME`**                                     | Vite+ puts the **monolithic mapping** for all categories under this root.                                            |
+| **`~/.vite-plus`**                                | Vite+ uses the monolithic mapping when this directory contains a `current` link.                                     |
+| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | Vite+ ignores relative values. `VP_BIN_DIR` sets bin. Otherwise, an absolute `VP_DATA_DIR` sets bin to `<DATA>/bin`. |
+| **`XDG_*`** (Unix)                                | Vite+ uses absolute XDG category roots with the app name `vite-plus`. Bin resolves to `<DATA>/bin`.                  |
+| **Platform defaults**                             | [Category mapping](#category-mapping) defines the Unix and Windows defaults.                                         |
 
-Relative `VP_*` / `XDG_*` values are treated as unset, per the XDG Base Directory Specification.
+Vite+ ignores relative `VP_*` and `XDG_*` values. This behavior follows the XDG
+Base Directory Specification.
 
 ### Category mapping
 
@@ -215,108 +260,229 @@ Relative `VP_*` / `XDG_*` values are treated as unset, per the XDG Base Director
 | **config** | `~/.config/vite-plus`          | `%APPDATA%\vite-plus`            | `<root>`                                         |
 | **state**  | `~/.local/state/vite-plus`     | `%LOCALAPPDATA%\vite-plus\state` | `<root>`                                         |
 
-Under **data** (both layouts): version directories, `current`, `js_runtime`, `package_manager`, `packages`, `bins`. The Unix split default also nests the executable category at `<DATA>/bin`.
+In both layouts, **data** contains version directories, `current`, `js_runtime`,
+`package_manager`, `packages`, and `bins`. The Unix split default also puts the
+executable category in `<DATA>/bin`.
 
 #### XDG category semantics
 
-On Unix, Vite+ follows the XDG Base Directory Specification for user data, configuration, cache, and state. Those categories resolve from `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, and `XDG_STATE_HOME`.
+On Unix, Vite+ follows the XDG Base Directory Specification for user data,
+configuration, cache, and state. It resolves these categories from
+`XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, and `XDG_STATE_HOME`.
 
-The specification identifies [`$HOME/.local/bin`](https://specifications.freedesktop.org/basedir-spec/latest/) as the location for user-specific executables. Vite+ does not use that shared namespace for its default `<BIN>`, and XDG does not require an executable directory under the data root. Vite+ defines its Unix bin as an application-owned namespace derived from the resolved data root:
+The specification identifies
+[`$HOME/.local/bin`](https://specifications.freedesktop.org/basedir-spec/latest/)
+as the directory for user-specific executables. Vite+ does not use this shared
+directory for its default `<BIN>`. XDG does not require an executable directory
+under the data root. Vite+ derives its application-owned Unix bin from the
+resolved data root:
 
 ```text
 <BIN> = <DATA>/bin
 ```
 
-The installers and `vp env setup` add this directory to `PATH`. It contains `vp` plus Vite+-managed runtime and package dispatchers such as `node`, `npm`, `npx`, and global package commands. Keeping these entries together lets Vite+ create, refresh, and remove them without claiming entries in the shared `~/.local/bin` namespace.
+The installers and `vp env setup` add this directory to `PATH`. It contains
+`vp`, runtime dispatchers, and package dispatchers that Vite+ manages. Examples
+include `node`, `npm`, `npx`, and global-package commands. This directory lets
+Vite+ create, update, and remove these entries. Vite+ does not own entries in
+the shared `~/.local/bin` directory.
 
-The relationship to `<DATA>` is the invariant. A custom `XDG_DATA_HOME` therefore moves both categories while preserving the same layout.
+The relationship to `<DATA>` is the required rule. A custom `XDG_DATA_HOME`
+moves both categories and keeps the same layout.
 
 #### Windows `<CONFIG>` portability
 
-Windows maps `<CONFIG>` to [`%APPDATA%\vite-plus`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_roamingappdata), the roaming application-data directory. It maps `<DATA>`, `<CACHE>`, and `<STATE>` under [`%LOCALAPPDATA%`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_localappdata). Durable files in `<CONFIG>`, including `config.json`, must contain portable user preferences. Machine-specific paths, downloaded payloads, caches, and session state belong in the local categories.
+Windows maps `<CONFIG>` to the roaming application-data directory at
+[`%APPDATA%\vite-plus`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_roamingappdata).
+It maps `<DATA>`, `<CACHE>`, and `<STATE>` under
+[`%LOCALAPPDATA%`](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid#folderid_localappdata).
+Files in `<CONFIG>`, including `config.json`, must contain portable user
+preferences. Store machine-specific paths, downloaded payloads, caches, and
+session state in the local categories.
 
-The generated `<CONFIG>/env*` files are setup projections of the current machine's resolved roots, not authoritative state. Installers and `vp env setup` regenerate them for the current machine. Features must not use them to store machine identity or durable state.
+The generated `<CONFIG>/env*` files describe the resolved roots for the current
+machine. They are not authoritative state. Installers and `vp env setup` create
+them again for the current machine. Features must not store machine identity or
+durable state in these files.
 
 ### Installers
 
-`install.sh` / `install.ps1` (and local `install-global-cli`) mirror the CLI chain:
+`install.sh`, `install.ps1`, and the local `install-global-cli` use the CLI
+resolution chain:
 
-1. If `VP_HOME` is set → install into that root as **monolithic**.
-2. Else if default `~/.vite-plus` (or Windows equivalent) **contains a `current` link** → **grandfather** the monolithic root.
-3. Else → **split** data/bin/config (and related) using `VP_*_DIR` / `XDG_*` / platform defaults.
+1. If `VP_HOME` is set, use that root for the **monolithic** layout.
+2. Otherwise, check the default `~/.vite-plus` directory or its Windows
+   equivalent. If it contains a `current` link, keep the monolithic root.
+3. Otherwise, use `VP_*_DIR`, `XDG_*`, or platform defaults for the **split**
+   layout.
 
-There is a **single** install script per platform (no separate per-layout install script). Local bootstrap does **not** force `VP_HOME`; it resolves the install data dir the same way.
+Each platform has one install script. There is no separate script for each
+layout. Local bootstrap does not set `VP_HOME`. It resolves the install data
+directory through the same chain.
 
-Env scripts are written under **config** (split: `~/.config/vite-plus/env*`; monolithic: the install root). PATH entries point at the resolved **bin** directory.
+The installers write environment scripts under **config**. The split layout
+uses `~/.config/vite-plus/env*`, and the monolithic layout uses the install root.
+`PATH` entries point to the resolved **bin** directory.
 
-External installers and integrations must consume the resolved paths from the Vite+ binary through `VP_DUMP_DIRS`. They must not reconstruct `<BIN>` from `$HOME`, XDG variables, or platform conventions.
+External installers and integrations must get resolved paths from the Vite+
+binary through `VP_DUMP_DIRS`. They must not construct `<BIN>` from `$HOME`, XDG
+variables, or platform rules.
 
 #### Node-manager shim ownership
 
-Node-manager shims follow the [`<BIN>` ownership invariant](#bin-ownership-invariant). The default bin is private to Vite+, but an explicit `VP_BIN_DIR` can be shared, so replacement and cleanup paths retain per-entry ownership checks. On Unix, `<BIN>/node` must be a symlink to the active `vp` binary. On Windows, `install.ps1`, `vp-setup`, and Unix-like shells recognize `<BIN>/node.exe` only when its `node.shim` sidecar points to the resolved data root.
+Node-manager shims follow the
+[`<BIN>` ownership invariant](#bin-ownership-invariant). Vite+ owns the default
+bin. An explicit `VP_BIN_DIR` can be shared, so replacement and cleanup code
+must check each entry. On Unix, `<BIN>/node` must be a symlink to the active `vp`
+binary. On Windows, an applicable `node.shim` file must point to the resolved
+data root. `install.ps1`, `vp-setup`, and Unix-like shells use this check for
+`<BIN>/node.exe`.
 
-A foreign Node entry blocks automatic enablement. This includes CI and devcontainer environments as well as the no-system-Node fallback. `VP_NODE_MANAGER=yes` or acceptance of the interactive prompt authorizes the installer to replace conflicting `node`, `npm`, `npx`, and `corepack` entries. Without one of these opt-ins, the installer preserves the foreign entry. `VP_NODE_MANAGER=no` prevents replacement. A reinstall refreshes the shims after the ownership check confirms that Vite+ created them.
+A foreign Node entry prevents automatic enablement. This rule applies in CI,
+development containers, and the fallback for a missing system Node.js. The installer may
+replace conflicting `node`, `npm`, `npx`, and `corepack` entries after explicit
+permission. Set `VP_NODE_MANAGER=yes` or accept the interactive prompt to give
+permission. Without permission, the installer keeps the foreign entry.
+`VP_NODE_MANAGER=no` prevents replacement. During a reinstall, Vite+ updates a
+shim only after the ownership check identifies it as a Vite+ shim.
 
-Windows sidecars are ownership markers, not discovery files. Vite+ writes one immediately after it copies a trampoline executable. `vp env setup --env-only` never writes sidecars, and setup without `--refresh` does not add a sidecar to an executable it skipped. An explicit `vp env setup --refresh` replaces the executable and then records ownership of the new trampoline.
+Windows sidecar files record ownership. They do not find executables. Vite+
+writes a sidecar immediately after it copies a trampoline executable.
+`vp env setup --env-only` does not write sidecars. Setup without `--refresh`
+does not add a sidecar to a skipped executable. `vp env setup --refresh`
+replaces the executable and then records ownership of the new trampoline.
 
 ### Compatibility with pre-split releases
 
-The installers accept any published `VP_VERSION`. Until the first split-aware release (planned 0.3.0) ships, `latest` also resolves to a pre-split version. A pre-split binary resolves every path from `VP_HOME` (default `~/.vite-plus`): its env setup, shims, trampoline, and `vp upgrade` all assume that monolithic root. An install of such a binary into split roots is broken, but the installer still exits 0:
+The installers accept each published `VP_VERSION`. Before version 0.3.0 is
+available, `latest` can select a pre-split release. A pre-split binary resolves
+all paths from `VP_HOME`, which defaults to `~/.vite-plus`. Its environment
+setup, shims, trampoline, and `vp upgrade` expect this monolithic root. If the
+installer puts this binary in split roots, the install is not functional.
+However, the installer still exits with status 0:
 
 - The PATH trampoline points at `<bin>/../current`, which does not exist.
 - Shell startup sources an env script from a config dir the binary never writes.
 - The binary's own env setup builds a second, incomplete `~/.vite-plus` tree.
 
-**Detection.** Every installer (`install.sh`, `install.ps1`, `vp-setup`) downloads the platform payload before the layout is final. It then runs the payload binary once with `VP_DUMP_DIRS=1`. The shell and PowerShell installers do not resolve `VP_*_DIR`, XDG variables, platform defaults, or legacy grandfathering themselves:
+**Detection.** Each installer downloads the platform payload before it selects
+the final layout. This includes `install.sh`, `install.ps1`, and `vp-setup`. The
+installer then runs the payload binary once with `VP_DUMP_DIRS=1`. The shell and
+PowerShell installers do not resolve `VP_*_DIR`, XDG variables, platform
+defaults, or legacy installs themselves:
 
-- A split-aware binary prints one tab-separated line for each of the five category roots (`bin`, `data`, `cache`, `config`, and `state`) and exits. The installer **adopts these paths verbatim**, so the layout the installer writes and the layout the binary resolves cannot drift.
-- A pre-split binary does not know the variable, prints its help, and exits 0 without those lines. The installer then installs into the **monolithic root**: `VP_HOME` if set, else `~/.vite-plus`. It prints a notice: `vite-plus <version> does not support the split directory layout; the install goes to ~/.vite-plus`. Everything the binary later does agrees with that root, so the installed `vp`, `vpr`, `vpx`, `node`, and `npm` commands work.
+- A split-aware binary prints one tab-separated line for each category root.
+  The categories are `bin`, `data`, `cache`, `config`, and `state`. The installer
+  uses these paths without changes. Thus, the installer and the binary cannot
+  resolve different layouts.
+- A pre-split binary does not recognize the variable. It prints help and exits
+  with status 0 without the category lines. The installer then uses the
+  **monolithic root**. It uses `VP_HOME` when set and `~/.vite-plus` otherwise.
+  The installer prints a notice. The binary then uses the same root, so the
+  installed `vp`, `vpr`, `vpx`, `node`, and `npm` commands work.
 
-**Stray legacy trees.** A pre-split local vite-plus (a project dependency) can create `~/.vite-plus` at any time on a machine whose global install is split: it writes caches, config, and managed runtimes there. The grandfather gate requires the `current` link, not bare directory existence, so such a stray tree does not flip an existing split install. `vp upgrade` and reinstalls keep the split roots. The `test-install-sh-layout` CI job covers this case: it makes a split install, creates a stray `~/.vite-plus`, and checks that resolution and a reinstall stay split.
+**Stray legacy trees.** A project can contain a local pre-split Vite+ dependency.
+This dependency can create `~/.vite-plus` on a machine with a split global
+install. It writes caches, config, and managed runtimes there. The legacy check
+requires a `current` link, not only a directory. Thus, a stray tree does not
+change an existing split install. `vp upgrade` and reinstalls keep the split
+roots.
 
-**Failure direction.** Probe failure also covers a payload that cannot run at all (wrong platform, missing VC++ runtime). The installer then picks the monolithic root, and the dependency-install step fails with the real error, as before. The monolithic root works for every release, old and new, because a split-aware binary grandfathers an existing `~/.vite-plus`. A false "pre-split" answer therefore degrades gracefully. A false "split-aware" answer is impossible: only a binary that implements `VP_DUMP_DIRS` can print the roots.
+The `test-install-sh-layout` CI job tests this case. It creates a split install
+and a stray `~/.vite-plus` tree. It then checks that resolution and a reinstall
+remain split.
 
-**`vp-setup` specifics.** `vp-setup` resolves its `EnvConfig` at process start, so the fallback happens mid-install: `do_install` swaps to the monolithic mapping after the probe and returns the effective directories for the success summary. The managed Node.js and pnpm for the wrapper install still resolve their paths from the process-wide `EnvConfig`, pinned before the fallback. These tools land in the abandoned split data root; `do_install` removes that root when this run created it. Known limit: the interactive menu shows the split directories before the download. A pinned pre-split version thus confirms one location and then installs to the monolithic root, with the notice.
+**Probe failure.** A payload can fail to run because it is for the wrong platform
+or requires a missing VC++ runtime. The installer then selects the monolithic
+root. The dependency-install step reports the applicable error as before.
 
-**`vp upgrade`.** On a split install, `vp upgrade` rejects a target below 0.3.0 before the download and directs the user to install the latest version with `vp upgrade`. Preview builds (`0.0.0-commit.<sha>`) are allowed: they track the current branch. Monolithic installs accept every release, so CI upgrade tests keep their old targets. The upgrade path uses a version gate, not the payload probe: the running binary is split-aware by definition, so the boundary is a fixed release number.
+The monolithic root works for old and new releases. A split-aware binary keeps
+an existing `~/.vite-plus` install. Thus, an incorrect pre-split result still
+produces a compatible layout. An incorrect split-aware result is not possible.
+Only a binary that implements `VP_DUMP_DIRS` can print the roots.
 
-**Coverage.** The `test-install-sh-old-version` (Linux, macOS) and `test-install-ps1-old-version` (Windows) CI jobs install a pinned pre-split release with no `VP_HOME`. They assert the monolithic layout, the absence of split roots, and working PATH-resolved commands. This mechanism also keeps fresh default installs of `latest` functional in the window between the merge of this RFC and the 0.3.0 release.
+**`vp-setup` behavior.** `vp-setup` resolves `EnvConfig` when the process starts.
+Therefore, a pre-split fallback occurs during the install. After the probe,
+`do_install` changes to the monolithic mapping. It returns the effective
+directories for the success summary.
+
+The wrapper install uses managed Node.js and pnpm. These tools get their paths
+from the process-wide `EnvConfig`, which resolves before the fallback. Therefore,
+the tools first go into the unused split data root. `do_install` removes this
+root if the current run created it.
+
+The interactive menu has one known limit. It shows the split directories before
+the download. For a pinned pre-split version, the user confirms those
+directories. The installer then uses the monolithic root and prints the notice.
+
+**`vp upgrade`.** On a split install, `vp upgrade` rejects a target earlier than
+0.3.0 before the download. It tells the user to run `vp upgrade` to install the
+latest version. Preview builds with the `0.0.0-commit.<sha>` format are allowed
+because they track the current branch. Monolithic installs accept every release.
+Thus, CI upgrade tests can keep their old targets.
+
+The upgrade path checks the version instead of probing the payload. The running
+binary already supports the split layout. Therefore, a fixed release number can
+define the boundary.
+
+**Coverage.** The `test-install-sh-old-version` jobs run on Linux and macOS. The
+`test-install-ps1-old-version` job runs on Windows. These jobs install a pinned
+pre-split release without `VP_HOME`. They check the monolithic layout, the
+absence of split roots, and commands that run through `PATH`.
+
+This mechanism also keeps fresh default installs of `latest` functional before
+the 0.3.0 release becomes available.
 
 ### Global CLI → JS children
 
-Under the split layout, the global CLI injects `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR` into JS child processes when those vars are unset, so the NAPI / local CLI and JS tools see the same category roots without re-implementing XDG logic.
+In the split layout, the global CLI sets `VP_BIN_DIR`, `VP_DATA_DIR`, and
+`VP_CACHE_DIR` for JavaScript child processes when these variables are unset.
+Thus, the NAPI CLI, local CLI, and JavaScript tools use the same roots. They do
+not implement the XDG rules again.
 
 ### User impact (this phase)
 
-| Install state                                       | Behavior                                                                                                                             |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Existing `~/.vite-plus`                             | Paths unchanged (grandfathered until migrate follow-up).                                                                             |
-| Custom `VP_HOME`                                    | Still works as a full-root pin.                                                                                                      |
-| Fresh install                                       | Split layout; the Vite+-owned `<DATA>/bin` on Unix (or Windows application bin) is added to PATH.                                    |
-| Pre-split version (pinned, or `latest` until 0.3.0) | Monolithic `~/.vite-plus`, detected via probe (see [Compatibility with pre-split releases](#compatibility-with-pre-split-releases)). |
+| Install state                                       | Behavior                                                                                                |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Existing `~/.vite-plus`                             | Vite+ keeps the paths until the migration follow-up.                                                    |
+| Custom `VP_HOME`                                    | Vite+ continues to use this value as a full-root pin.                                                   |
+| Fresh install                                       | Vite+ uses the split layout and adds its bin directory to `PATH`.                                       |
+| Pre-split version (pinned, or `latest` until 0.3.0) | Vite+ uses monolithic `~/.vite-plus`. The installer detects this requirement through the payload probe. |
 
 ### Verified scenarios (manual)
 
-1. **Fresh split** — empty home, no `VP_HOME`: install lands on `~/.local/share/vite-plus`, shims in its `bin` subdirectory, env under `~/.config/vite-plus`; `vp --version` works.
-2. **Monolithic reuse** — pre-seeded `~/.vite-plus` with markers: `install-global-cli` upgrades `current` in place, keeps prior version dirs and markers, does not create split roots; runtime writes `resolve_cache.json` under `~/.vite-plus/cache`; `vp env doctor` reports home `~/.vite-plus`.
+1. **Fresh split.** Start with an empty home and no `VP_HOME`. The installer
+   uses `~/.local/share/vite-plus`. It puts shims in the `bin` subdirectory and
+   environment files under `~/.config/vite-plus`. The `vp --version` command
+   works.
+2. **Monolithic reuse.** Start with a marked `~/.vite-plus` install.
+   `install-global-cli` updates `current` in place. It keeps old version
+   directories and markers, and it does not create split roots. The runtime
+   writes `resolve_cache.json` under `~/.vite-plus/cache`. `vp env doctor`
+   reports `~/.vite-plus` as the home.
 
 ## Follow-up: `VP_HOME` cleanup
 
 **Issue:** [#2371](https://github.com/voidzero-dev/vite-plus/issues/2371)
 
-Much of the repo still **sets** or **assumes** `VP_HOME` as the primary install root (especially PTY snapshot tests). That fights the split layout.
+Many files still set or expect `VP_HOME` as the primary install root. PTY
+snapshot tests use it frequently. This behavior conflicts with the split layout.
 
 **Direction:**
 
 - Prefer `VP_*_DIR` / XDG / platform defaults in tests, CI, and docs.
-- Keep **reading** `VP_HOME` in `VpDirs` as a custom-root pin until a later cleanup.
-- Snapshot suite should not require a permanent `VP_HOME=~/.vite-plus` baseline for the happy path.
+- Continue to read `VP_HOME` in `VpDirs` as a custom-root pin until a later
+  cleanup.
+- Do not require a permanent `VP_HOME=~/.vite-plus` value for normal snapshot
+  tests.
 
 ## Follow-up: layout migrate on `vp upgrade`
 
 **Issue:** [#2372](https://github.com/voidzero-dev/vite-plus/issues/2372)
 
-After the split layout ships, stop grandfathering forever: on `vp upgrade` (and installer reinstall where appropriate), migrate a **default** monolithic install into split roots and remove `~/.vite-plus`.
+After the split layout ships, stop keeping the default monolithic layout. During
+`vp upgrade`, move a default monolithic install to the split roots. Do the same
+during a reinstall when applicable. Then remove `~/.vite-plus`.
 
 ### Mapping (Unix defaults; Windows analogous)
 
@@ -328,24 +494,38 @@ After the split layout ships, stop grandfathering forever: on `vp upgrade` (and 
 | Shims / env scripts                                                          | **regenerate** into bin + config (do not copy relative links or stale env text) |
 | Resolve cache, upgrade-check cache, create-org tarballs                      | cache dir                                                                       |
 
-Custom `VP_HOME` roots are **out of auto-migrate** (they stay a manual full-root pin).
+Do not migrate custom `VP_HOME` roots automatically. They remain a manual
+full-root pin.
 
 ### Locked design constraints
 
-1. **Copy-first**, then delete the monolithic root (no long-lived tombstone unless Windows file locks force a deferred cleanup).
-2. **Never delete** the monolithic root before split `data/current` (and critical shims) are verified.
-3. **Conflict** if the split data root already holds a healthy unrelated install — abort with a clear message.
-4. Shell profiles that source `~/.vite-plus/env*` must be **rewritten or cleaned** to the new config env path.
-5. **N-1 path**: users on a pre-migrate CLI may re-exec after upgrade and/or re-run the install script as the guaranteed fallback.
-6. **Immediate** removal of the default monolithic root after a successful migrate (product choice: do not leave an empty grandfather forever).
+1. Copy the files before you delete the monolithic root. Keep a temporary
+   marker only if Windows file locks delay cleanup.
+2. Do not delete the monolithic root before you verify split `data/current` and
+   the critical shims.
+3. Stop with a clear conflict message if the split data root contains a healthy,
+   unrelated install.
+4. Update or remove shell-profile entries that source `~/.vite-plus/env*`. Use
+   the new config environment path.
+5. Support users who run the release before the migration release. After the
+   upgrade, the CLI can start itself again or the user can run the installer.
+   The installer is the required fallback.
+6. Remove the default monolithic root immediately after a successful migration.
+   Do not keep an empty legacy root.
 
 ### Acceptance (migrate)
 
-- Machine with only default `~/.vite-plus` runs `vp upgrade` once → split roots populated, `~/.vite-plus` gone, shims/env work after shell restart.
+- A machine with only the default `~/.vite-plus` runs `vp upgrade` once. The
+  command populates the split roots and removes `~/.vite-plus`. Shims and
+  environment setup work after a shell restart.
 - Fresh install never creates `~/.vite-plus`.
-- CI covers monolithic → split upgrade (in addition to released-CLI and fresh-split install paths).
+- CI tests the monolithic-to-split upgrade. It also tests the released CLI and
+  fresh split installs.
 
-> Experimental migrate work was sketched on a side branch and **withdrawn** from the dirs PR because moving a live global install is high risk (Windows locks, PATH/profile cutover, concurrent shims). Re-land only behind careful staging and tests.
+> A side branch contained an experimental migration. This PR does not include
+> that work because moving a live global install has high risk. The risks include
+> Windows locks, changes to `PATH` and profiles, and concurrent shims. Add the
+> migration only with controlled stages and tests.
 
 ## Testing strategy
 
@@ -358,16 +538,23 @@ Custom `VP_HOME` roots are **out of auto-migrate** (they stay a manual full-root
 
 ## Alternatives considered
 
-1. **Always split; never grandfather** — breaks existing installs until migrate is perfect. Rejected for the first ship.
-2. **Always migrate on first run of any command** — surprising and dangerous mid-script. Prefer explicit `vp upgrade` / installer.
-3. **Keep monolithic forever; only document XDG as optional** — fails PATH and platform conventions for new users.
-4. **Separate install scripts for monolithic vs split** — duplicated drift; replaced by one script with resolution branching.
-5. **Use the shared `~/.local/bin` on Unix** — avoids one PATH addition on systems that already include it, but forces ownership checks and collision handling for every runtime and package shim. Vite+ already manages PATH, so the application-owned data bin is simpler and safer.
+1. **Always use the split layout.** This breaks existing installs until the
+   migration is reliable. Therefore, the first release does not use this option.
+2. **Migrate during the first run of any command.** This can change files during
+   a script without warning. Use an explicit `vp upgrade` or installer instead.
+3. **Keep the monolithic layout.** Optional XDG documentation does not meet
+   `PATH` and platform conventions for new users.
+4. **Use separate install scripts for each layout.** Separate scripts can become
+   inconsistent. One script with resolution branches prevents this problem.
+5. **Use the shared `~/.local/bin` on Unix.** This can avoid one `PATH` change.
+   However, Vite+ must then check ownership and collisions for each runtime and
+   package shim. Vite+ already manages `PATH`, so an application-owned data bin
+   is simpler and safer.
 
 ## Open questions (post-migrate)
 
-1. Timeline for dropping the **read** of `VP_HOME` after most users are on split roots.
-2. Windows deferred delete / reboot policy when locked files block monolithic root removal.
+1. When can Vite+ stop reading `VP_HOME` after most users use split roots?
+2. Which delayed deletion or restart policy must Windows use when locked files prevent root removal?
 
 ## References
 

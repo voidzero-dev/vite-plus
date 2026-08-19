@@ -1,16 +1,16 @@
 //! Minimal Windows trampoline for vite-plus shims.
 //!
-//! This binary is copied and renamed for each shim tool (node.exe, npm.exe, etc.).
-//! It detects the tool name from its own filename, then spawns `vp.exe` with the
-//! `VP_SHIM_TOOL` environment variable set, allowing `vp.exe` to enter
-//! shim dispatch mode.
+//! Vite+ copies and renames this binary for each shim tool, such as `node.exe`
+//! and `npm.exe`. The trampoline gets the tool name from its filename. It then
+//! starts `vp.exe` with the `VP_SHIM_TOOL` environment variable. This variable
+//! puts `vp.exe` in shim dispatch mode.
 //!
-//! On Ctrl+C, the trampoline ignores the signal (the child process handles it),
-//! avoiding the "Terminate batch job (Y/N)?" prompt that `.cmd` wrappers produce.
+//! The trampoline ignores Ctrl+C because the child process handles it. This
+//! prevents the termination prompt that `.cmd` wrappers produce.
 //!
-//! **Size optimization**: This binary avoids `core::fmt` (which adds ~100KB) by
-//! never using `format!`, `eprintln!`, `println!`, or `.unwrap()`. All error
-//! paths use `process::exit(1)` directly.
+//! **Size optimization:** `core::fmt` adds approximately 100 KB. This binary
+//! does not use `format!`, `eprintln!`, `println!`, or `.unwrap()`. Each error
+//! path calls `process::exit(1)` directly.
 //!
 //! See: <https://github.com/voidzero-dev/vite-plus/issues/835>
 
@@ -31,9 +31,9 @@ fn exit_code_from_status(status: ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-/// Must match [`vp_shared::SHIM_POINTER_EXTENSION`]. Duplicated here so this
-/// binary stays dependency-free. Each trampoline reads `<name>.shim` next to
-/// itself (`node.exe` → `node.shim`).
+/// Must match [`vp_shared::SHIM_POINTER_EXTENSION`]. Keep a local copy so this
+/// binary has no dependency on `vp_shared`. Each trampoline reads
+/// `<name>.shim` next to itself. For example, `node.exe` reads `node.shim`.
 const SHIM_POINTER_EXTENSION: &str = "shim";
 
 struct VpLocation {
@@ -60,10 +60,10 @@ fn child_dir_pins(bin_dir: &std::path::Path, data: &std::path::Path) -> ChildDir
 
 /// Locate `vp.exe` from `<BIN>/<name>.shim`.
 ///
-/// Directory env vars are owned by `EnvConfig` in the child `vp.exe` — this
-/// binary must not read `VP_HOME` / `VP_*_DIR`. Every trampoline copy has a
-/// sidecar written at install / `vp env setup`, so sibling-layout probing
-/// is not needed.
+/// `EnvConfig` in the child `vp.exe` owns the directory variables. This binary
+/// must not read `VP_HOME` or `VP_*_DIR`. Installation and `vp env setup` write
+/// a sidecar for each trampoline copy. Thus, this function does not check
+/// sibling layout paths.
 fn resolve_vp_exe(exe_path: &std::path::Path) -> Option<VpLocation> {
     let data = read_shim_pointer(exe_path)?;
     let exe = data.join("current").join("bin").join("vp.exe");
@@ -92,18 +92,18 @@ fn main() {
         use std::io::Write;
         let stderr = std::io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"vite-plus: failed to locate vp.exe via .shim\n");
+        let _ = handle.write_all(b"vite-plus: could not locate vp.exe through .shim\n");
         process::exit(1);
     };
 
-    // 3. Install Ctrl+C handler that ignores signals (child will handle them).
-    //    This prevents the "Terminate batch job (Y/N)?" prompt.
+    // 3. Install a Ctrl+C handler that ignores the signal. The child handles
+    //    the signal. This prevents the termination prompt from cmd.exe.
     #[cfg(windows)]
     install_ctrl_handler();
 
     // 4. Spawn vp.exe
-    //    - Single-root (`<data>/bin`): pin VP_HOME so cache/config/state
-    //      stay on that root when the process has no inherited VP_HOME.
+    //    - Single root (`<data>/bin`): set VP_HOME. This keeps cache, config,
+    //      and state on that root when the process does not inherit VP_HOME.
     //    - Split: pin VP_DATA_DIR / VP_BIN_DIR. Do not set VP_HOME.
     //    - If tool is "vp", run in normal CLI mode (no VP_SHIM_TOOL)
     //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
@@ -121,11 +121,10 @@ fn main() {
 
     if tool_name != "vp" {
         cmd.env("VP_SHIM_TOOL", tool_name);
-        // Clear the recursion marker so nested shim invocations (e.g., npm
-        // spawning node) get fresh version resolution instead of falling
-        // through to passthrough mode. The old .cmd wrappers went through
-        // `vp env exec` which cleared this in exec.rs; the trampoline
-        // bypasses that path.
+        // Clear the recursion marker before a nested shim call, such as npm
+        // starting node. The nested shim must resolve the version again instead
+        // of using passthrough mode. Old .cmd wrappers used `vp env exec`, which
+        // cleared this marker in exec.rs. The trampoline does not use that path.
         // Must match vp_shared::env_vars::VP_TOOL_RECURSION
         cmd.env_remove("VP_TOOL_RECURSION");
     }
@@ -138,7 +137,7 @@ fn main() {
             use std::io::Write;
             let stderr = std::io::stderr();
             let mut handle = stderr.lock();
-            let _ = handle.write_all(b"vite-plus: failed to execute ");
+            let _ = handle.write_all(b"vite-plus: could not execute ");
             let _ = handle.write_all(location.exe.as_os_str().as_encoded_bytes());
             let _ = handle.write_all(b"\n");
             process::exit(1);

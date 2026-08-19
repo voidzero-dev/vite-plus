@@ -106,9 +106,9 @@ fn main() {
 
     let opts = cli::parse();
 
-    // Resolve category roots (and pin VP_HOME only for --install-dir / VP_HOME)
-    // before starting the tokio runtime, so the unsafe set_var runs while
-    // we're still single-threaded.
+    // Resolve the category roots before the tokio runtime starts. EnvConfig
+    // reads an existing VP_HOME value. The --install-dir option sets VP_HOME
+    // here. Thus, the unsafe set_var runs while the process has one thread.
     let dirs = match prepare_dirs(&opts) {
         Ok(dirs) => dirs,
         Err(e) => {
@@ -153,8 +153,8 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
 
     let code = match do_install(&opts, &dirs).await {
         Ok(effective_dirs) => {
-            // A pre-split payload falls back to the monolithic root inside
-            // do_install; report the directories that were actually used.
+            // do_install uses the monolithic root for a pre-split payload.
+            // Report the directories that it used.
             let (data_dir_display, bin_dir_display) = dir_displays(&effective_dirs);
             print_success(&opts, &data_dir_display, &bin_dir_display);
             0
@@ -174,8 +174,8 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     code
 }
 
-/// Install the resolved version and return the directories that were actually
-/// used: a pre-split payload falls back to the monolithic root mid-install.
+/// Install the resolved version and return the directories that the installer
+/// used. The installer uses the monolithic root for a pre-split payload.
 #[allow(clippy::print_stdout)]
 async fn do_install(
     opts: &cli::Options,
@@ -188,9 +188,9 @@ async fn do_install(
     }
 
     // Check local version first to potentially skip HTTP requests.
-    // Read-only here: the install root is created only after the downloaded
-    // payload confirms the layout, so a pre-split fallback leaves no empty
-    // split directories behind.
+    // This operation is read-only. Create the install root only after the
+    // downloaded payload confirms the layout. Thus, a pre-split fallback does
+    // not leave empty split directories.
     let current_version = install::read_current_version(&dirs.data).await;
 
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
@@ -245,19 +245,18 @@ async fn do_install(
         }
         integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
-        // A pre-split release resolves every path from
-        // VP_HOME (default ~/.vite-plus); its env setup, shims, and
-        // trampolines cannot follow split roots. Fall back to that monolithic
-        // root when the payload cannot report split category roots.
+        // A pre-split release resolves every path from VP_HOME. Its default is
+        // ~/.vite-plus. Its environment setup, shims, and trampolines cannot
+        // use split roots. Use that monolithic root when the payload cannot
+        // report split category roots.
         let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
         let abandoned_split_data = if legacy.data == dirs.data {
-            // Pre-split and split-aware payloads target the same monolithic
-            // root here; skip the probe (a full payload extraction + spawn).
+            // Pre-split and split-aware payloads use the same monolithic root
+            // here. Skip the probe because it extracts and starts the payload.
             None
         } else if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
-            // Adopt the payload's own resolution, like install.sh /
-            // install.ps1, so the layout written and the layout the binary
-            // resolves cannot drift.
+            // Use the payload's resolution, as install.sh and install.ps1 do.
+            // This keeps the written layout equal to the resolved layout.
             dirs = VpDirs {
                 data: probed.data,
                 bin: probed.bin,
@@ -269,7 +268,7 @@ async fn do_install(
         } else {
             if !opts.quiet {
                 print_info(&format!(
-                    "vite-plus {target_version} does not support the split directory layout; the install goes to {}",
+                    "vite-plus {target_version} does not support the split directory layout. Vite+ will install it in {}.",
                     legacy.data.as_path().display()
                 ));
             }
@@ -298,10 +297,9 @@ async fn do_install(
             let _ = tokio::fs::remove_dir_all(&version_dir).await;
         }
 
-        // Managed node/pnpm for the wrapper install resolve their paths from
-        // the process EnvConfig, which was pinned before the payload chose
-        // the monolithic root. Drop the split data root they landed in when
-        // this run created it.
+        // The managed node and pnpm use paths from the process EnvConfig. The
+        // installer pinned this configuration before the payload selected the
+        // monolithic root. Remove the split data root if this run created it.
         if let Some(split_data) = abandoned_split_data {
             let _ = tokio::fs::remove_dir_all(&split_data).await;
         }
@@ -569,14 +567,15 @@ async fn download_with_progress(
 
 /// Resolve install category roots from [`vp_shared::EnvConfig`].
 ///
-/// `--install-dir` is the only installer-owned override: it pins `VP_HOME`
-/// so EnvConfig's existing chain produces a single-root layout. Directory
-/// env vars (`VP_HOME`, `VP_*_DIR`, `XDG_*`) are never read here.
+/// `--install-dir` is the only override that the installer owns. It pins
+/// `VP_HOME`, so EnvConfig produces a single-root layout. This function never
+/// reads directory environment variables (`VP_HOME`, `VP_*_DIR`, `XDG_*`).
 fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
         let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
-        let abs = AbsolutePathBuf::new(abs).ok_or("Invalid installation directory")?;
+        let abs = AbsolutePathBuf::new(abs)
+            .ok_or("The installation directory must be an absolute path")?;
         // Safety: called in main() before any threads are spawned (or under
         // EnvConfig::with_vars in tests, which serializes env mutation).
         unsafe { std::env::set_var("VP_HOME", abs.as_path()) };

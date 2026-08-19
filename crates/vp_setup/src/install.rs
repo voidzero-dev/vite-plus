@@ -101,11 +101,12 @@ pub struct PayloadDirs {
     pub state: AbsolutePathBuf,
 }
 
-/// Ask a downloaded platform payload for its directory layout: a split-aware
-/// `vp` prints tab-separated category roots under `VP_DUMP_DIRS=1`, a
-/// pre-split release prints its help instead. Errors count as "no answer" —
-/// the monolithic root works for every release, so the fallback direction is
-/// safe.
+/// Ask a downloaded platform payload for its directory layout.
+///
+/// A split-aware `vp` prints tab-separated category roots when
+/// `VP_DUMP_DIRS=1`. A pre-split release prints its help instead. An error
+/// means that the payload gave no answer. Every release supports the
+/// monolithic root, so that fallback is safe.
 pub async fn probe_payload_dirs(platform_data: &[u8]) -> Option<PayloadDirs> {
     let temp = tempfile::tempdir().ok()?;
     let temp_root = AbsolutePathBuf::new(temp.path().to_path_buf())?;

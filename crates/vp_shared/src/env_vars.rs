@@ -16,22 +16,22 @@
 
 /// Override pinning every category root under one directory.
 ///
-/// Highest-priority layout rule: when set, `bin` resolves to `<root>/bin`,
-/// `cache` to `<root>/cache`, and data/config/state to `<root>` itself.
-/// Exported by older env scripts and custom-location installs; fresh
-/// installs no longer set it. Prefer `VP_*_DIR` / `XDG_*` variables.
+/// This is the highest-priority layout rule. When set, `bin` uses
+/// `<root>/bin`, and `cache` uses `<root>/cache`. Data, config, and state use
+/// `<root>`. Old environment scripts and custom-location installs export this
+/// variable. Fresh installs do not set it. Prefer `VP_*_DIR` or `XDG_*`.
 pub const VP_HOME: &str = "VP_HOME";
 
 /// Override directory for executables and shims.
 ///
-/// Applies within the XDG/platform resolution; a `VP_HOME`-pinned or probed
-/// single-root install is all-or-nothing and ignores it. When this is unset,
-/// an explicit `VP_DATA_DIR` derives `<DATA>/bin`.
+/// Applies during XDG and platform resolution. A single-root install from
+/// `VP_HOME` or the existing-install check ignores this variable. If this
+/// variable is unset, an explicit `VP_DATA_DIR` provides `<DATA>/bin`.
 pub const VP_BIN_DIR: &str = "VP_BIN_DIR";
 
-/// Override directory for payload data: CLI versions, Node.js runtimes, and
-/// package managers (the disk hogs). Also provides the default `<DATA>/bin`
-/// executable directory when `VP_BIN_DIR` is unset.
+/// Override directory for CLI versions, Node.js runtimes, and package managers.
+/// These files use most of the disk space. When `VP_BIN_DIR` is unset, this
+/// variable also provides the `<DATA>/bin` executable directory.
 pub const VP_DATA_DIR: &str = "VP_DATA_DIR";
 
 /// Override directory for the disposable cache.
@@ -51,9 +51,9 @@ pub const XDG_STATE_HOME: &str = "XDG_STATE_HOME";
 /// XDG base directory for disposable caches.
 pub const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
 
-/// Every environment variable the `VpDirs` resolution chain reads. Tests
-/// clear these to isolate layout resolution from the developer's shell
-/// (which typically exports `VP_HOME` via vp's own env script).
+/// All environment variables that the `VpDirs` resolution chain reads. Tests
+/// clear them to isolate resolution from the developer shell. The Vite+
+/// environment script usually exports `VP_HOME` in that shell.
 pub const LAYOUT_OVERRIDE_VARS: &[&str] = &[
     VP_HOME,
     VP_BIN_DIR,
@@ -181,14 +181,15 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 
 // ── Testing / Development ───────────────────────────────────────────────
 
-/// When set to `1`, the global CLI prints all five category roots (one per
-/// line) from [`crate::EnvConfig`] and exits. Used by installers that already
-/// have a `vp` binary and must not re-implement directory resolution.
+/// When set to `1`, the global CLI prints the five category roots from
+/// [`crate::EnvConfig`] and exits. It prints one root on each line. Installers
+/// use this variable when they have a `vp` binary. Thus, they do not implement
+/// directory resolution again.
 pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
 
-/// Category keys in [`VP_DUMP_DIRS`] output, one `<key>\t<path>` line per
-/// category. Shared by the printer (`vp_global_cli`) and the Rust parser
-/// (`vp-setup`); `install.sh` / `install.ps1` spell the same keys.
+/// Category keys in [`VP_DUMP_DIRS`] output. Each category uses one
+/// `<key>\t<path>` line. The `vp_global_cli` printer and `vp-setup` parser share
+/// these values. `install.sh` and `install.ps1` use the same keys.
 pub mod dump_dirs {
     pub const DATA: &str = "data";
     pub const BIN: &str = "bin";

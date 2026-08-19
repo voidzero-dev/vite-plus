@@ -43,13 +43,13 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let env_config = vp_shared::EnvConfig::get();
     let dirs = &env_config.dirs;
 
-    // The delete set is the vite-plus-owned roots, deduped: under a
-    // single-root mapping data/config/state are the same directory and cache
-    // sits inside it, so a naive per-category removal would delete the same
-    // path twice. The default Unix `<BIN>` is nested under `<DATA>` and is
-    // removed with it. A separately resolved `<BIN>` is never removed
-    // wholesale because an explicit `VP_BIN_DIR` may be shared; only
-    // vp-owned shim files are removed from it.
+    // Build a unique set of Vite+-owned roots. In a single-root layout, data,
+    // config, and state use the same directory. Cache is inside that directory.
+    // Removing each category separately could remove the same path twice.
+    //
+    // The default Unix `<BIN>` is under `<DATA>`, so removal of `<DATA>` also
+    // removes it. Never remove a separately resolved `<BIN>` because an
+    // explicit `VP_BIN_DIR` can be shared. Remove only Vite+-owned shims from it.
     let mut roots: Vec<AbsolutePathBuf> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
         .into_iter()
         .map(|root| {
@@ -67,16 +67,16 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     }
 
     if !delete_set.iter().any(|root| root.as_path().exists()) {
-        output::info("vite-plus is not installed (no installation directory exists)");
+        output::info("vite-plus is not installed. No installation directory exists.");
         return Ok(exit_status(0));
     }
 
-    // User home for shell profile paths
+    // Use the user home to resolve shell-profile paths.
     let user_home = &env_config.user_home;
 
     let source_matcher = VitePlusSourceMatcher::new(&dirs.config, user_home);
 
-    // Collect shell profiles that contain Vite+ lines (content cached for cleaning)
+    // Find shell profiles that contain Vite+ lines. Keep their content for cleanup.
     let affected_profiles = collect_affected_profiles(user_home, &source_matcher);
 
     // Confirmation
@@ -84,16 +84,16 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         return Ok(exit_status(0));
     }
 
-    // Clean shell profiles using cached content (no re-read)
+    // Clean shell profiles with the stored content. Do not read them again.
     clean_affected_profiles(&affected_profiles, &source_matcher);
 
     // Remove Windows PATH entry
     #[cfg(windows)]
     {
         if let Err(e) = remove_windows_path_entry(&dirs.bin) {
-            output::warn(&vt_str::format!("Failed to clean Windows PATH: {e}"));
+            output::warn(&vt_str::format!("Vite+ could not clean the Windows PATH: {e}"));
         } else {
-            output::success("Removed vite-plus from Windows PATH");
+            output::success("Vite+ removed its bin directory from the Windows PATH.");
         }
     }
 
@@ -107,7 +107,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     }
 
     output::raw("");
-    output::success("vite-plus has been removed from your system.");
+    output::success("Vite+ removed its managed files and shell entries from your system.");
     output::note("Restart your terminal to apply shell changes.");
 
     Ok(exit_status(0))
@@ -115,13 +115,14 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 
 /// Remove the shim files vite-plus owns from the bin directory.
 ///
-/// The bin directory itself is never removed directly: an explicit
-/// `VP_BIN_DIR` may be shared with other tools. The default Unix bin is
-/// removed indirectly with its containing `<DATA>` root. Package shims are
-/// taken from `<DATA>/bins/*.json`; `vp` and the default env shims are also
-/// considered because they are not recorded there. A candidate is deleted
-/// only when it is a symlink to this install's `vp` (Unix) or a trampoline
-/// we wrote (Windows).
+/// Do not remove the bin directory directly because an explicit `VP_BIN_DIR`
+/// can be shared with other tools. Removal of the default Unix `<DATA>` root
+/// also removes its bin directory.
+///
+/// Get package-shim names from `<DATA>/bins/*.json`. Also check `vp` and the
+/// default environment shims because those files are not in the metadata.
+/// Remove a Unix candidate only if it links to this install's `vp`. Remove a
+/// Windows candidate only if Vite+ created the trampoline.
 fn remove_shim_files(dirs: &vp_shared::VpDirs) {
     let mut names = recorded_bin_shim_names(dirs);
     names.insert(shim_filename("vp"));
@@ -139,7 +140,7 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
             Ok(()) => removed += 1,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
-                output::warn(&vt_str::format!("Failed to remove shim {name}: {e}"));
+                output::warn(&vt_str::format!("Vite+ could not remove shim {name}: {e}"));
             }
         }
         if let Some(stem) = std::path::Path::new(&name).file_stem().and_then(|stem| stem.to_str()) {
@@ -148,14 +149,14 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => {
-                    output::warn(&vt_str::format!("Failed to remove {stem}.shim: {e}"));
+                    output::warn(&vt_str::format!("Vite+ could not remove {stem}.shim: {e}"));
                 }
             }
         }
     }
     if removed > 0 {
         output::success(&vt_str::format!(
-            "Removed {removed} shim{} from {}",
+            "Vite+ removed {removed} shim{} from {}",
             if removed == 1 { "" } else { "s" },
             dirs.bin.as_path().display()
         ));
@@ -188,9 +189,9 @@ struct AffectedProfile {
     kind: AffectedProfileKind,
 }
 
-// Indicating whether it's a snippet (remove file) or a main profile (remove lines).
+// Specify a snippet file or a main profile.
 enum AffectedProfileKind {
-    // A snippet, uninstall would be as easy as removing the file
+    // Remove a snippet file during uninstall.
     Snippet,
     Main {
         /// File content read during detection (reused for cleaning).
@@ -199,8 +200,8 @@ enum AffectedProfileKind {
     },
 }
 
-/// Collect shell profiles that contain Vite+ sourcing lines.
-/// Content is cached so we don't need to re-read during cleaning.
+/// Find shell profiles that contain Vite+ source lines. Store their content so
+/// cleanup does not read the files again.
 fn collect_affected_profiles(
     user_home: &AbsolutePathBuf,
     source_matcher: &VitePlusSourceMatcher,
