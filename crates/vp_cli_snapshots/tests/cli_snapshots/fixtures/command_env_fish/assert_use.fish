@@ -39,4 +39,18 @@ if set -q VP_NODE_VERSION
     exit 1
 end
 
+vp env use --no-install
+or begin
+    echo "vp env use without a version failed through the Fish wrapper"
+    exit 1
+end
+if not set -q VP_NODE_VERSION
+    echo "vp env use without a version did not set VP_NODE_VERSION"
+    exit 1
+end
+if test "$VP_NODE_VERSION" != "22.18.0"
+    echo "file-based VP_NODE_VERSION mismatch: expected 22.18.0, got $VP_NODE_VERSION"
+    exit 1
+end
+
 echo "Fish environment use checks passed"
