@@ -355,6 +355,8 @@ jobs:
             const isFork = process.env.IS_FORK === 'true';
             const marker = '<!-- pkg-pr-bridge-version -->';
             const bridge = 'https://registry-bridge.viteplus.dev/';
+            const installerScripts =
+              `https://raw.githubusercontent.com/${process.env.HEAD_REPO}/${process.env.HEAD_SHA}/packages/cli`;
             const artifactUrl = (id) =>
               `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.RUN_ID}/artifacts/${id}`;
             // Built as a line array (not a template literal) so the inline
@@ -386,11 +388,11 @@ jobs:
               '',
               '```bash',
               '# macOS / Linux',
-              `curl -fsSL https://vite.plus | VP_PR_VERSION=${pr} bash`,
+              `curl -fsSL ${installerScripts}/install.sh | VP_PR_VERSION=${pr} bash`,
               '```',
               '```powershell',
               '# Windows (PowerShell)',
-              `$env:VP_PR_VERSION="${pr}"; irm https://vite.plus/ps1 | iex`,
+              `$env:VP_PR_VERSION="${pr}"; irm ${installerScripts}/install.ps1 | iex`,
               '```',
               '',
               '**Or download the standalone Windows installer built from this commit:**',
