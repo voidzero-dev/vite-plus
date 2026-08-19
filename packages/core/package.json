@@ -114,11 +114,11 @@
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
     "postcss": "^8.5.6",
-    "yuku-codegen": "^0.5.44",
-    "yuku-parser": "^0.5.44"
+    "yuku-codegen": "^0.8.0",
+    "yuku-parser": "^0.8.0"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.43.0",
+    "@ast-grep/napi": "^0.45.0",
     "@babel/generator": "^7.28.5",
     "@babel/parser": "^7.28.5",
     "@babel/types": "^7.28.5",
@@ -162,7 +162,7 @@
     "terser": "^5.16.0",
     "tsx": "^4.8.1",
     "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
-    "unplugin-unused": "^0.5.0",
+    "unplugin-unused": "^0.5.0 || ^0.6.0",
     "unrun": "*",
     "yaml": "^2.4.2"
   },

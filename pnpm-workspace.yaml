@@ -22,7 +22,7 @@ catalog:
   '@oxc-node/core': ^0.1.0
   '@oxc-project/runtime': =0.144.0
   '@oxc-project/types': =0.144.0
-  '@oxlint/plugins': =1.73.0
+  '@oxlint/plugins': =1.78.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
@@ -45,7 +45,7 @@ catalog:
   '@types/strip-comments': ^2.0.4
   '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
-  '@typescript/native-preview': 7.0.0-dev.20260605.1
+  '@typescript/native-preview': 7.0.0-dev.20260707.2
   '@vitejs/plugin-react': ^5.1.2
   '@vitest/browser': 4.1.10
   '@vitest/browser-playwright': 4.1.10
