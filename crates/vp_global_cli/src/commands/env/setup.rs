@@ -735,7 +735,22 @@ fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let export_lines: String =
         exports.into_iter().map(|(name, value)| format!("set {name}={value}\r\n")).collect();
     format!(
-        "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\n{export_lines}for /f \"delims=\" %%i in ('\"{}\" env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n",
+        concat!(
+            "@echo off\r\n",
+            "setlocal\r\n",
+            "set VP_ENV_USE_EVAL_ENABLE=1\r\n",
+            "set VP_SHELL=cmd\r\n",
+            "{export_lines}",
+            "set \"__VP_USE_OUT=%TEMP%\\vp-use-%RANDOM%-%RANDOM%.tmp\"\r\n",
+            "\"{}\" env use %* > \"%__VP_USE_OUT%\"\r\n",
+            "set \"__VP_USE_STATUS=%ERRORLEVEL%\"\r\n",
+            "endlocal & set \"__VP_USE_OUT=%__VP_USE_OUT%\" & set \"__VP_USE_STATUS=%__VP_USE_STATUS%\"\r\n",
+            "{export_lines}",
+            "if \"%__VP_USE_STATUS%\"==\"0\" for /f \"usebackq delims=\" %%i in (\"%__VP_USE_OUT%\") do %%i\r\n",
+            "del /q \"%__VP_USE_OUT%\" >nul 2>&1\r\n",
+            "set \"__VP_USE_OUT=\"\r\n",
+            "set \"__VP_USE_STATUS=\" & exit /b %__VP_USE_STATUS%\r\n",
+        ),
         vp_exe.as_path().display()
     )
 }
@@ -1584,6 +1599,12 @@ mod tests {
                 assert!(
                     cmd_content.contains(&format!("\"{}\" env use %*", expected_exe.display())),
                     "vp-use.cmd should invoke the install-local vp.exe, got: {cmd_content}"
+                );
+                assert!(cmd_content.contains("setlocal\r\n"));
+                assert!(cmd_content.contains("set VP_SHELL=cmd\r\n"));
+                assert!(
+                    cmd_content.contains("exit /b %__VP_USE_STATUS%"),
+                    "vp-use.cmd should preserve the vp env use exit status"
                 );
             },
         )

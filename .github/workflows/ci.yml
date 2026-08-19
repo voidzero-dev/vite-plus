@@ -1106,6 +1106,7 @@ jobs:
           # trampoline would fail. current\bin\vp.exe is the real CLI.
           export VP_SNAP_GLOBAL_VP="$USERPROFILE/.vite-plus/current/bin/vp.exe"
           export VP_SNAP_JS_RUNTIME_DIR="$USERPROFILE/.vite-plus/js_runtime"
+          export VP_SNAP_CMD_BIN="$(cygpath -w "$(command -v cmd.exe)")"
           # Keep pwsh at its canonical installation path; copying pwsh.exe
           # alone can break its adjacent runtime dependencies.
           export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"

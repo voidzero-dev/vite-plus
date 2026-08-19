@@ -322,6 +322,7 @@ enum RequiredTool {
     Sh,
     Bash,
     Zsh,
+    Cmd,
     Fish,
     Nu,
     Pwsh,
@@ -335,6 +336,7 @@ impl RequiredTool {
             Self::Sh => matches!(flavor::sh_path(), Ok(None)),
             Self::Bash => matches!(flavor::bash_path(), Ok(None)),
             Self::Zsh => matches!(flavor::zsh_path(), Ok(None)),
+            Self::Cmd => matches!(flavor::cmd_path(), Ok(None)),
             Self::Fish => matches!(flavor::fish_path(), Ok(None)),
             Self::Nu => matches!(flavor::nushell_path(), Ok(None)),
             Self::Pwsh => matches!(flavor::powershell_path(), Ok(None)),
@@ -470,6 +472,7 @@ struct CaseInstall {
     sh: Option<PathBuf>,
     bash: Option<PathBuf>,
     zsh: Option<PathBuf>,
+    cmd: Option<PathBuf>,
     fish: Option<PathBuf>,
     nu: Option<PathBuf>,
     pwsh: Option<PathBuf>,
@@ -503,6 +506,11 @@ impl CaseInstall {
             return self.zsh.clone().ok_or_else(|| {
                 "`zsh` is required by this snapshot case; install Zsh or set VP_SNAP_ZSH_BIN"
                     .to_owned()
+            });
+        }
+        if program == "cmd" {
+            return self.cmd.clone().ok_or_else(|| {
+                "`cmd` is required by this snapshot case; set VP_SNAP_CMD_BIN to cmd.exe".to_owned()
             });
         }
         if program == "fish" {
@@ -622,6 +630,7 @@ impl CaseHome {
             sh: runtime.sh.clone(),
             bash: runtime.bash.clone(),
             zsh: runtime.zsh.clone(),
+            cmd: runtime.cmd.clone(),
             fish: runtime.fish.clone(),
             nu: runtime.nu.clone(),
             pwsh: runtime.pwsh.clone(),
