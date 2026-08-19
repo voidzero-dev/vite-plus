@@ -389,7 +389,7 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
     Ok(())
 }
 
-/// Write `<name>.shim` next to a trampoline copy, with this install's data root.
+/// Write `<name>.shim` next to a trampoline copy, with the resolved layout.
 #[cfg(windows)]
 fn write_shim_pointer_beside(exe_path: &std::path::Path) {
     if let Err(e) = vp_shared::EnvConfig::get().dirs.write_shim_pointer_beside(exe_path) {

@@ -408,6 +408,7 @@ mod tests {
             assert_eq!(config.dirs.cache.as_path(), root.path().join("cache"));
             assert_eq!(config.dirs.config.as_path(), root.path());
             assert_eq!(config.dirs.state.as_path(), root.path());
+            assert_eq!(config.dirs.layout(), crate::VpDirsLayout::SingleRoot);
         });
     }
 
@@ -430,6 +431,45 @@ mod tests {
             assert_eq!(config.dirs.cache.as_path(), home.join(".cache/vite-plus"));
             assert_eq!(config.dirs.config.as_path(), home.join(".config/vite-plus"));
             assert_eq!(config.dirs.state.as_path(), home.join(".local/state/vite-plus"));
+            assert_eq!(config.dirs.layout(), crate::VpDirsLayout::Split);
+        });
+    }
+
+    #[test]
+    fn vp_data_dir_keeps_split_layout_when_bin_is_data_bin() {
+        let root = tempfile::tempdir().unwrap();
+        let home = root.path().join("home");
+        let data = root.path().join("custom-data");
+        let mut vars =
+            vec![("HOME", Some(home.as_os_str())), ("USERPROFILE", Some(home.as_os_str()))];
+        vars.extend(env_vars::LAYOUT_OVERRIDE_VARS.iter().map(|name| (*name, None)));
+        vars.push((env_vars::VP_DATA_DIR, Some(data.as_os_str())));
+
+        EnvConfig::with_vars(vars, |config| {
+            assert_eq!(config.dirs.data.as_path(), data);
+            assert_eq!(config.dirs.bin.as_path(), data.join("bin"));
+            assert_ne!(config.dirs.cache.as_path(), data.join("cache"));
+            assert_eq!(config.dirs.layout(), crate::VpDirsLayout::Split);
+        });
+    }
+
+    #[test]
+    fn existing_default_install_keeps_single_root_layout() {
+        let root = tempfile::tempdir().unwrap();
+        let home = root.path().join("home");
+        let install = home.join(".vite-plus");
+        std::fs::create_dir_all(install.join("current")).unwrap();
+        let mut vars =
+            vec![("HOME", Some(home.as_os_str())), ("USERPROFILE", Some(home.as_os_str()))];
+        vars.extend(env_vars::LAYOUT_OVERRIDE_VARS.iter().map(|name| (*name, None)));
+
+        EnvConfig::with_vars(vars, |config| {
+            assert_eq!(config.dirs.data.as_path(), install);
+            assert_eq!(config.dirs.bin.as_path(), install.join("bin"));
+            assert_eq!(config.dirs.cache.as_path(), install.join("cache"));
+            assert_eq!(config.dirs.config.as_path(), install);
+            assert_eq!(config.dirs.state.as_path(), install);
+            assert_eq!(config.dirs.layout(), crate::VpDirsLayout::SingleRoot);
         });
     }
 

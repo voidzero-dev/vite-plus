@@ -92,8 +92,10 @@ pub async fn extract_platform_package(
     Ok(())
 }
 
-/// Category roots a split-aware payload reports via `VP_DUMP_DIRS`.
+/// Layout mode and category roots a split-aware payload reports via
+/// `VP_DUMP_DIRS`.
 pub struct PayloadDirs {
+    pub layout: vp_shared::VpDirsLayout,
     pub data: AbsolutePathBuf,
     pub bin: AbsolutePathBuf,
     pub cache: AbsolutePathBuf,
@@ -124,19 +126,35 @@ pub async fn probe_payload_dirs(platform_data: &[u8]) -> Option<PayloadDirs> {
 
     use vp_shared::env_vars::dump_dirs;
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let value =
+        |key: &str| stdout.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix('\t'));
     let category = |key: &str| {
-        stdout.lines().find_map(|line| {
-            let root = line.strip_prefix(key)?.strip_prefix('\t')?;
-            AbsolutePathBuf::new(root.into())
-        })
+        let root = value(key)?;
+        AbsolutePathBuf::new(root.into())
     };
-    Some(PayloadDirs {
-        data: category(dump_dirs::DATA)?,
-        bin: category(dump_dirs::BIN)?,
-        cache: category(dump_dirs::CACHE)?,
-        config: category(dump_dirs::CONFIG)?,
-        state: category(dump_dirs::STATE)?,
-    })
+    let data = category(dump_dirs::DATA)?;
+    let bin = category(dump_dirs::BIN)?;
+    let cache = category(dump_dirs::CACHE)?;
+    let config = category(dump_dirs::CONFIG)?;
+    let state = category(dump_dirs::STATE)?;
+    let layout = value(dump_dirs::LAYOUT)
+        .and_then(vp_shared::VpDirsLayout::parse)
+        .unwrap_or_else(|| infer_payload_layout(&bin, &data, &cache, &config, &state));
+    Some(PayloadDirs { layout, data, bin, cache, config, state })
+}
+
+fn infer_payload_layout(
+    bin: &AbsolutePathBuf,
+    data: &AbsolutePathBuf,
+    cache: &AbsolutePathBuf,
+    config: &AbsolutePathBuf,
+    state: &AbsolutePathBuf,
+) -> vp_shared::VpDirsLayout {
+    if bin == &data.join("bin") && cache == &data.join("cache") && config == data && state == data {
+        vp_shared::VpDirsLayout::SingleRoot
+    } else {
+        vp_shared::VpDirsLayout::Split
+    }
 }
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
@@ -1038,13 +1056,30 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn probe_payload_dirs_parses_split_aware_output() {
-        let script = "#!/bin/sh\nprintf 'data\\t/probe-data\\nbin\\t/probe-bin\\ncache\\t/probe-cache\\nconfig\\t/probe-config\\nstate\\t/probe-state\\n'\n";
+        let script = "#!/bin/sh\nprintf 'layout\\tsplit\\ndata\\t/probe-data\\nbin\\t/probe-bin\\ncache\\t/probe-cache\\nconfig\\t/probe-config\\nstate\\t/probe-state\\n'\n";
         let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
+        assert_eq!(dirs.layout, vp_shared::VpDirsLayout::Split);
         assert_eq!(dirs.data.as_path(), Path::new("/probe-data"));
         assert_eq!(dirs.bin.as_path(), Path::new("/probe-bin"));
         assert_eq!(dirs.cache.as_path(), Path::new("/probe-cache"));
         assert_eq!(dirs.config.as_path(), Path::new("/probe-config"));
         assert_eq!(dirs.state.as_path(), Path::new("/probe-state"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn probe_payload_dirs_infers_old_single_root_output() {
+        let script = "#!/bin/sh\nprintf 'data\\t/probe-root\\nbin\\t/probe-root/bin\\ncache\\t/probe-root/cache\\nconfig\\t/probe-root\\nstate\\t/probe-root\\n'\n";
+        let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
+        assert_eq!(dirs.layout, vp_shared::VpDirsLayout::SingleRoot);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn probe_payload_dirs_does_not_infer_single_root_from_data_bin_alone() {
+        let script = "#!/bin/sh\nprintf 'data\\t/probe-data\\nbin\\t/probe-data/bin\\ncache\\t/platform-cache\\nconfig\\t/platform-config\\nstate\\t/platform-state\\n'\n";
+        let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
+        assert_eq!(dirs.layout, vp_shared::VpDirsLayout::Split);
     }
 
     /// A pre-split `vp` prints its help and exits 0; the probe must report

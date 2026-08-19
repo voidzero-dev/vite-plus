@@ -1257,6 +1257,57 @@ jobs:
             Write-Error "install.ps1 claimed an unrelated node.exe"
           }
 
+      - name: VP_DATA_DIR keeps the split layout through the trampoline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vp-partial-override"
+          $env:USERPROFILE = Join-Path $root "profile"
+          $env:LOCALAPPDATA = Join-Path $env:USERPROFILE "AppData\Local"
+          $env:APPDATA = Join-Path $env:USERPROFILE "AppData\Roaming"
+          $env:VP_DATA_DIR = Join-Path $root "data only"
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = Join-Path $root "empty.tgz"
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-partial-override"
+          $env:VP_NODE_MANAGER = "no"
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
+
+          & ./packages/cli/install.ps1
+
+          function Get-DirMap([string]$VpBinary) {
+            $env:VP_DUMP_DIRS = "1"
+            try {
+              $map = @{}
+              foreach ($line in @(& $VpBinary)) {
+                $parts = "$line" -split "`t", 2
+                if ($parts.Length -eq 2) { $map[$parts[0]] = $parts[1] }
+              }
+              return $map
+            } finally {
+              Remove-Item Env:VP_DUMP_DIRS -ErrorAction SilentlyContinue
+            }
+          }
+
+          $payload = Join-Path $env:VP_DATA_DIR "current\bin\vp.exe"
+          $trampoline = Join-Path $env:VP_DATA_DIR "bin\vp.exe"
+          $expected = Get-DirMap $payload
+          if ($expected['layout'] -ne 'split') { throw "payload did not select split layout" }
+          if ($expected['bin'] -ne (Join-Path $env:VP_DATA_DIR 'bin')) { throw "unexpected bin root" }
+          if ($expected['cache'] -eq (Join-Path $env:VP_DATA_DIR 'cache')) { throw "cache collapsed under data" }
+
+          Remove-Item Env:VP_DATA_DIR -ErrorAction Stop
+          $actual = Get-DirMap $trampoline
+          foreach ($key in @('layout', 'data', 'bin', 'cache', 'config', 'state')) {
+            if ($actual[$key] -ne $expected[$key]) {
+              throw "$key differs: payload='$($expected[$key])', trampoline='$($actual[$key])'"
+            }
+          }
+
       - name: Install via vp-setup.exe (silent)
         shell: pwsh
         run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}

@@ -257,13 +257,14 @@ async fn do_install(
         } else if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
             // Use the payload's resolution, as install.sh and install.ps1 do.
             // This keeps the written layout equal to the resolved layout.
-            dirs = VpDirs {
-                data: probed.data,
-                bin: probed.bin,
-                cache: probed.cache,
-                config: probed.config,
-                state: probed.state,
-            };
+            dirs = VpDirs::from_resolved_parts(
+                probed.bin,
+                probed.data,
+                probed.cache,
+                probed.config,
+                probed.state,
+                probed.layout,
+            );
             None
         } else {
             if !opts.quiet {

@@ -101,8 +101,9 @@ in a potentially shared directory.
 | `VP_HOME` or a grandfathered monolithic install | Application-owned `<root>/bin` inside the Vite+ install root.                    |
 | User-supplied `VP_BIN_DIR` on any platform      | Potentially shared, regardless of whether its path resembles a platform default. |
 
-`VpDirs` and `VP_DUMP_DIRS` return resolved paths without their source. A path
-string does not prove that a separately resolved `<BIN>` is application-owned.
+`VpDirs` and `VP_DUMP_DIRS` preserve the layout mode, but not the precise source
+of each root. A path string does not prove that a separately resolved `<BIN>`
+is application-owned.
 A consumer may remove `<BIN>` as part of a Vite+-owned parent root. For example,
 removing the Unix default `<DATA>` also removes `<BIN>`. A consumer may also
 remove `<BIN>` when it has trusted source information for an application-owned
@@ -123,9 +124,11 @@ once during construction. It stores the five roots in public fields. Later
 changes to the process environment do not change these fields. Child processes
 resolve their own roots from their own environment.
 
-The struct has no layout tag. Each resolution source produces the same five
-roots. Feature code must not construct paths differently for each source. The
-ownership rule above controls destructive operations on `<BIN>`.
+The struct also stores whether resolution selected the single-root or split
+mode. This value preserves provenance for Windows trampoline sidecars. Feature
+code must use the five resolved roots. It must not construct different paths
+for each mode. The ownership rule above controls destructive operations on
+`<BIN>`.
 
 Each feature constructs the paths that it owns. These paths include first-level
 directories under `data`, such as `current` and `js_runtime`. They also include
@@ -346,11 +349,19 @@ permission. Without permission, the installer keeps the foreign entry.
 `VP_NODE_MANAGER=no` prevents replacement. During a reinstall, Vite+ updates a
 shim only after the ownership check identifies it as a Vite+ shim.
 
-Windows sidecar files record ownership. They do not find executables. Vite+
-writes a sidecar immediately after it copies a trampoline executable.
+Windows sidecar files record ownership and tell the trampoline which layout to
+preserve. The versioned sidecar records the layout mode, data root, and cache
+root. A split trampoline sets `VP_DATA_DIR`, `VP_BIN_DIR`, and `VP_CACHE_DIR`
+for its child. A single-root trampoline sets `VP_HOME`. It does not infer the
+mode from path equality because a split `VP_DATA_DIR` override also makes
+`<BIN>` equal to `<DATA>/bin`.
+
+Vite+ writes a sidecar immediately after it copies a trampoline executable.
 `vp env setup --env-only` does not write sidecars. Setup without `--refresh`
 does not add a sidecar to a skipped executable. `vp env setup --refresh`
 replaces the executable and then records ownership of the new trampoline.
+The trampoline also accepts the earlier one-line sidecar format. That format
+contains only the data root, so it keeps the earlier path-based behavior.
 
 ### Compatibility with pre-split releases
 
@@ -371,10 +382,13 @@ installer then runs the payload binary once with `VP_DUMP_DIRS=1`. The shell and
 PowerShell installers do not resolve `VP_*_DIR`, XDG variables, platform
 defaults, or legacy installs themselves:
 
-- A split-aware binary prints one tab-separated line for each category root.
-  The categories are `bin`, `data`, `cache`, `config`, and `state`. The installer
-  uses these paths without changes. Thus, the installer and the binary cannot
-  resolve different layouts.
+- A current split-aware binary prints the layout mode and one tab-separated line
+  for each category root. The categories are `bin`, `data`, `cache`, `config`,
+  and `state`. The installer uses these values without changes. Thus, the
+  installer and the binary cannot resolve different layouts.
+- An earlier split-aware preview can omit the layout mode. For this output, the
+  installer selects single-root mode only if all five roots match the
+  single-root mapping. Otherwise, it selects split mode.
 - A pre-split binary does not recognize the variable. It prints help and exits
   with status 0 without the category lines. The installer then uses the
   **monolithic root**. It uses `VP_HOME` when set and `~/.vite-plus` otherwise.

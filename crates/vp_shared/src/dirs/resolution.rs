@@ -30,7 +30,7 @@
 
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::APP_DIR_NAME;
+use super::{APP_DIR_NAME, VpDirsLayout};
 use crate::env_vars;
 
 /// Directory name of the single-root install probed under the user home.
@@ -142,6 +142,7 @@ pub(super) fn single_root_dirs(root: AbsolutePathBuf) -> super::VpDirs {
         cache: place.cache_dir().expect("single-root mapping is total"),
         config: place.config_dir().expect("single-root mapping is total"),
         state: place.state_dir().expect("single-root mapping is total"),
+        layout: VpDirsLayout::SingleRoot,
     }
 }
 
@@ -172,6 +173,15 @@ impl UserHome {
         let root = home.join(VP_HOME_DIR_NAME);
         let is_install = std::fs::symlink_metadata(root.join("current").as_path()).is_ok();
         SingleRoot { root: is_install.then_some(root) }
+    }
+}
+
+/// Return the source mode before category paths lose their provenance.
+pub(super) fn layout(home: &AbsolutePath) -> VpDirsLayout {
+    if VpHome::resolver(home).root.is_some() || UserHome::resolver(home).root.is_some() {
+        VpDirsLayout::SingleRoot
+    } else {
+        VpDirsLayout::Split
     }
 }
 

@@ -17,8 +17,12 @@ use vt_path::{AbsolutePath, AbsolutePathBuf};
 /// Platform-specific binary name for the `vp` CLI.
 pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
 
-/// Extension for a Windows trampoline sidecar. The sidecar records the data
-/// root and is next to its executable (`<BIN>/<name>.shim`).
+/// Header for the versioned Windows trampoline sidecar format.
+pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
+
+/// Extension for a Windows trampoline sidecar. The sidecar records the layout,
+/// data root, and cache root. It is next to its executable
+/// (`<BIN>/<name>.shim`).
 ///
 /// Separate `VP_BIN_DIR` and `VP_DATA_DIR` values put the shim and payload
 /// under different parents. A trampoline must not read directory environment
@@ -35,14 +39,43 @@ pub fn shim_pointer_file_name(exe_stem: &str) -> String {
 /// Subdirectory name appended to XDG base directories and platform defaults.
 pub(crate) const APP_DIR_NAME: &str = "vite-plus";
 
+/// Resolution mode that a Windows trampoline must preserve for its child.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VpDirsLayout {
+    /// `VP_HOME` or a grandfathered monolithic install selected one root.
+    SingleRoot,
+    /// Category overrides or platform defaults selected independent roots.
+    Split,
+}
+
+impl VpDirsLayout {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SingleRoot => "single-root",
+            Self::Split => "split",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "single-root" => Some(Self::SingleRoot),
+            "split" => Some(Self::Split),
+            _ => None,
+        }
+    }
+}
+
 /// On-disk category roots for the vite-plus install.
 ///
 /// [`VpDirs::resolve`] resolves and stores the values once during construction.
 /// Later process-environment changes do not change them. Child processes
 /// resolve their roots from their own environment.
 ///
-/// The struct has no layout policy. The resolution chain maps each source to
-/// the same five roots. Features must not use different logic for each source.
+/// The private layout value preserves the resolution source for Windows
+/// trampolines. Feature code must use the five roots and must not construct
+/// paths differently for each source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VpDirs {
     /// Executables and shims (`<BIN>/vp`, `<BIN>/node`, …).
@@ -56,6 +89,7 @@ pub struct VpDirs {
     pub config: AbsolutePathBuf,
     /// State files (session version, …).
     pub state: AbsolutePathBuf,
+    layout: VpDirsLayout,
 }
 
 impl VpDirs {
@@ -82,7 +116,27 @@ impl VpDirs {
             cache: resolution::cache_dir(home)?,
             config: resolution::config_dir(home)?,
             state: resolution::state_dir(home)?,
+            layout: resolution::layout(home),
         })
+    }
+
+    /// Construct category roots reported by another Vite+ binary.
+    #[must_use]
+    pub fn from_resolved_parts(
+        bin: AbsolutePathBuf,
+        data: AbsolutePathBuf,
+        cache: AbsolutePathBuf,
+        config: AbsolutePathBuf,
+        state: AbsolutePathBuf,
+        layout: VpDirsLayout,
+    ) -> Self {
+        Self { bin, data, cache, config, state, layout }
+    }
+
+    /// Return the resolution mode that selected these roots.
+    #[must_use]
+    pub const fn layout(&self) -> VpDirsLayout {
+        self.layout
     }
 
     /// Single-root mapping for releases that predate the split layout.
@@ -98,19 +152,23 @@ impl VpDirs {
         resolution::single_root_dirs(root)
     }
 
-    /// Write `<BIN>/<exe_stem>.shim` so the trampoline can find `<DATA>`.
+    /// Write `<BIN>/<exe_stem>.shim` with the resolved layout and roots.
     pub fn write_shim_pointer(&self, exe_stem: &str) -> std::io::Result<()> {
         self.write_shim_pointer_beside(self.bin.join(format!("{exe_stem}.exe")).as_path())
     }
 
-    /// Write `<name>.shim` next to an existing trampoline copy.
+    /// Write a versioned `<name>.shim` next to an existing trampoline copy.
     pub fn write_shim_pointer_beside(&self, exe_path: &std::path::Path) -> std::io::Result<()> {
         if let Some(parent) = exe_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let mut line = self.data.as_path().to_string_lossy().into_owned();
-        line.push('\n');
-        std::fs::write(exe_path.with_extension(SHIM_POINTER_EXTENSION), line)
+        let contents = format!(
+            "{SHIM_POINTER_HEADER}\nlayout={}\ndata={}\ncache={}\n",
+            self.layout.as_str(),
+            self.data.as_path().to_string_lossy(),
+            self.cache.as_path().to_string_lossy()
+        );
+        std::fs::write(exe_path.with_extension(SHIM_POINTER_EXTENSION), contents)
     }
 
     /// Whether `exe_path` is a Windows trampoline owned by this install.
@@ -131,9 +189,24 @@ impl VpDirs {
         let Ok(text) = std::str::from_utf8(bytes) else {
             return false;
         };
-        let text = text.trim();
-        !text.is_empty() && std::path::Path::new(text) == self.data.as_path()
+        let Some(data) = shim_pointer_data(text) else {
+            return false;
+        };
+        std::path::Path::new(data) == self.data.as_path()
     }
+}
+
+fn shim_pointer_data(text: &str) -> Option<&str> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut lines = text.lines();
+    if lines.next()? != SHIM_POINTER_HEADER {
+        // Compatibility with the one-line sidecars from earlier PR previews.
+        return Some(text);
+    }
+    lines.find_map(|line| line.strip_prefix("data=").filter(|data| !data.is_empty()))
 }
 
 #[cfg(test)]
@@ -147,10 +220,17 @@ mod tests {
             config.dirs.write_shim_pointer("vp").unwrap();
             config.dirs.write_shim_pointer("node").unwrap();
             let data = config.dirs.data.as_path().to_string_lossy();
+            let cache = config.dirs.cache.as_path().to_string_lossy();
             for stem in ["vp", "node"] {
                 let path = config.dirs.bin.join(shim_pointer_file_name(stem));
                 let contents = std::fs::read_to_string(path.as_path()).unwrap();
-                assert_eq!(contents.trim(), data);
+                assert_eq!(
+                    contents,
+                    format!(
+                        "{SHIM_POINTER_HEADER}\nlayout={}\ndata={data}\ncache={cache}\n",
+                        config.dirs.layout().as_str()
+                    )
+                );
             }
         });
     }
@@ -183,6 +263,22 @@ mod tests {
     }
 
     #[test]
+    fn windows_trampoline_ownership_accepts_legacy_sidecar() {
+        EnvConfig::scoped(|config| {
+            let node = config.dirs.bin.join("node.exe");
+            std::fs::create_dir_all(&config.dirs.bin).unwrap();
+            std::fs::write(node.as_path(), b"trampoline").unwrap();
+            std::fs::write(
+                node.as_path().with_extension(SHIM_POINTER_EXTENSION),
+                format!("{}\n", config.dirs.data.as_path().display()),
+            )
+            .unwrap();
+
+            assert!(config.dirs.owns_windows_trampoline(node.as_path()));
+        });
+    }
+
+    #[test]
     fn legacy_single_root_defaults_to_home_root() {
         let root = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
@@ -194,6 +290,7 @@ mod tests {
             assert_eq!(dirs.cache, expected.join("cache"));
             assert_eq!(dirs.config, expected);
             assert_eq!(dirs.state, expected);
+            assert_eq!(dirs.layout(), VpDirsLayout::SingleRoot);
         });
     }
 
@@ -207,6 +304,7 @@ mod tests {
             assert_eq!(dirs.data, pinned);
             assert_eq!(dirs.bin, pinned.join("bin"));
             assert_eq!(dirs.config, pinned);
+            assert_eq!(dirs.layout(), VpDirsLayout::SingleRoot);
         });
     }
 }

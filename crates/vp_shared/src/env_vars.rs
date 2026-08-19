@@ -181,16 +181,17 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 
 // ── Testing / Development ───────────────────────────────────────────────
 
-/// When set to `1`, the global CLI prints the five category roots from
-/// [`crate::EnvConfig`] and exits. It prints one root on each line. Installers
-/// use this variable when they have a `vp` binary. Thus, they do not implement
-/// directory resolution again.
+/// When set to `1`, the global CLI prints the layout mode and the five category
+/// roots from [`crate::EnvConfig`], then exits. It prints one value on each
+/// line. Installers use this variable when they have a `vp` binary. Thus, they
+/// do not implement directory resolution again.
 pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
 
-/// Category keys in [`VP_DUMP_DIRS`] output. Each category uses one
-/// `<key>\t<path>` line. The `vp_global_cli` printer and `vp-setup` parser share
-/// these values. `install.sh` and `install.ps1` use the same keys.
+/// Keys in [`VP_DUMP_DIRS`] output. Each value uses one `<key>\t<value>` line.
+/// The `vp_global_cli` printer and `vp-setup` parser share these values.
+/// `install.sh` and `install.ps1` use the same keys.
 pub mod dump_dirs {
+    pub const LAYOUT: &str = "layout";
     pub const DATA: &str = "data";
     pub const BIN: &str = "bin";
     pub const CACHE: &str = "cache";

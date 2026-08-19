@@ -35,26 +35,48 @@ fn exit_code_from_status(status: ExitStatus) -> i32 {
 /// binary has no dependency on `vp_shared`. Each trampoline reads
 /// `<name>.shim` next to itself. For example, `node.exe` reads `node.shim`.
 const SHIM_POINTER_EXTENSION: &str = "shim";
+/// Must match [`vp_shared::SHIM_POINTER_HEADER`].
+const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
+
+enum ShimLayout {
+    SingleRoot,
+    Split {
+        cache: std::path::PathBuf,
+    },
+    /// One-line sidecars from earlier PR previews did not record provenance.
+    Legacy,
+}
+
+struct ShimPointer {
+    data: std::path::PathBuf,
+    layout: ShimLayout,
+}
 
 struct VpLocation {
     exe: std::path::PathBuf,
-    /// Data root from `<name>.shim`.
-    vp_data_dir: std::path::PathBuf,
+    pointer: ShimPointer,
 }
 
 /// How the child `vp.exe` should resolve category roots.
-enum ChildDirPins {
-    /// Bin is `<data>/bin`: single-root (`VP_HOME` / `--install-dir`).
+enum ChildDirPins<'a> {
+    /// `VP_HOME` or a grandfathered install explicitly selected one root.
     SingleRoot,
-    /// Independent bin and data roots.
-    Split,
+    /// The versioned sidecar explicitly selected split roots.
+    Split { cache: &'a std::path::Path },
+    /// A legacy sidecar and independent bin and data roots.
+    LegacySplit,
 }
 
-fn child_dir_pins(bin_dir: &std::path::Path, data: &std::path::Path) -> ChildDirPins {
-    if bin_dir == data.join("bin").as_path() {
-        ChildDirPins::SingleRoot
-    } else {
-        ChildDirPins::Split
+fn child_dir_pins<'a>(bin_dir: &std::path::Path, pointer: &'a ShimPointer) -> ChildDirPins<'a> {
+    match &pointer.layout {
+        ShimLayout::SingleRoot => ChildDirPins::SingleRoot,
+        ShimLayout::Split { cache } => ChildDirPins::Split { cache },
+        ShimLayout::Legacy if bin_dir == pointer.data.join("bin").as_path() => {
+            // Compatibility with one-line sidecars from earlier PR previews.
+            // Their path shape is ambiguous, so preserve their old behavior.
+            ChildDirPins::SingleRoot
+        }
+        ShimLayout::Legacy => ChildDirPins::LegacySplit,
     }
 }
 
@@ -65,19 +87,45 @@ fn child_dir_pins(bin_dir: &std::path::Path, data: &std::path::Path) -> ChildDir
 /// a sidecar for each trampoline copy. Thus, this function does not check
 /// sibling layout paths.
 fn resolve_vp_exe(exe_path: &std::path::Path) -> Option<VpLocation> {
-    let data = read_shim_pointer(exe_path)?;
-    let exe = data.join("current").join("bin").join("vp.exe");
-    exe.exists().then_some(VpLocation { exe, vp_data_dir: data })
+    let pointer = read_shim_pointer(exe_path)?;
+    let exe = pointer.data.join("current").join("bin").join("vp.exe");
+    exe.exists().then_some(VpLocation { exe, pointer })
 }
 
-fn read_shim_pointer(exe_path: &std::path::Path) -> Option<std::path::PathBuf> {
+fn read_shim_pointer(exe_path: &std::path::Path) -> Option<ShimPointer> {
     let bytes = std::fs::read(exe_path.with_extension(SHIM_POINTER_EXTENSION)).ok()?;
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes.as_slice());
     let text = std::str::from_utf8(bytes).ok()?.trim();
     if text.is_empty() {
         return None;
     }
-    Some(std::path::PathBuf::from(text))
+    let mut lines = text.lines();
+    if lines.next()? != SHIM_POINTER_HEADER {
+        return Some(ShimPointer {
+            data: std::path::PathBuf::from(text),
+            layout: ShimLayout::Legacy,
+        });
+    }
+
+    let mut layout = None;
+    let mut data = None;
+    let mut cache = None;
+    for line in lines {
+        if let Some(value) = line.strip_prefix("layout=") {
+            layout = Some(value);
+        } else if let Some(value) = line.strip_prefix("data=") {
+            data = (!value.is_empty()).then(|| std::path::PathBuf::from(value));
+        } else if let Some(value) = line.strip_prefix("cache=") {
+            cache = (!value.is_empty()).then(|| std::path::PathBuf::from(value));
+        }
+    }
+    let data = data?;
+    let layout = match layout? {
+        "single-root" => ShimLayout::SingleRoot,
+        "split" => ShimLayout::Split { cache: cache? },
+        _ => return None,
+    };
+    Some(ShimPointer { data, layout })
 }
 
 fn main() {
@@ -102,19 +150,25 @@ fn main() {
     install_ctrl_handler();
 
     // 4. Spawn vp.exe
-    //    - Single root (`<data>/bin`): set VP_HOME. This keeps cache, config,
-    //      and state on that root when the process does not inherit VP_HOME.
-    //    - Split: pin VP_DATA_DIR / VP_BIN_DIR. Do not set VP_HOME.
+    //    - Single root: set VP_HOME.
+    //    - Split: clear VP_HOME and pin VP_DATA_DIR / VP_BIN_DIR / VP_CACHE_DIR.
     //    - If tool is "vp", run in normal CLI mode (no VP_SHIM_TOOL)
     //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
     let mut cmd = Command::new(&location.exe);
     cmd.args(env::args_os().skip(1));
-    match child_dir_pins(bin_dir, &location.vp_data_dir) {
+    match child_dir_pins(bin_dir, &location.pointer) {
         ChildDirPins::SingleRoot => {
-            cmd.env("VP_HOME", &location.vp_data_dir);
+            cmd.env("VP_HOME", &location.pointer.data);
         }
-        ChildDirPins::Split => {
-            cmd.env("VP_DATA_DIR", &location.vp_data_dir);
+        ChildDirPins::Split { cache } => {
+            cmd.env_remove("VP_HOME");
+            cmd.env("VP_DATA_DIR", &location.pointer.data);
+            cmd.env("VP_BIN_DIR", bin_dir);
+            cmd.env("VP_CACHE_DIR", cache);
+        }
+        ChildDirPins::LegacySplit => {
+            cmd.env_remove("VP_HOME");
+            cmd.env("VP_DATA_DIR", &location.pointer.data);
             cmd.env("VP_BIN_DIR", bin_dir);
         }
     }
@@ -169,6 +223,14 @@ mod resolve_tests {
         fs::write(path, b"").unwrap();
     }
 
+    fn versioned_pointer(layout: &str, data: &Path, cache: &Path) -> String {
+        format!(
+            "{SHIM_POINTER_HEADER}\nlayout={layout}\ndata={}\ncache={}\n",
+            data.display(),
+            cache.display()
+        )
+    }
+
     #[test]
     fn missing_pointer_does_not_probe_sibling_layout() {
         let root = std::env::temp_dir().join(format!("vp-trampoline-no-ptr-{}", process::id()));
@@ -208,7 +270,8 @@ mod resolve_tests {
 
         let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
         assert_eq!(location.exe, data.join("current").join("bin").join("vp.exe"));
-        assert_eq!(location.vp_data_dir, data);
+        assert_eq!(location.pointer.data, data);
+        assert!(matches!(location.pointer.layout, ShimLayout::Legacy));
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -227,7 +290,7 @@ mod resolve_tests {
 
         let location = resolve_vp_exe(&bin.join("node.exe")).unwrap();
         assert_eq!(location.exe, node_data.join("current").join("bin").join("vp.exe"));
-        assert_eq!(location.vp_data_dir, node_data);
+        assert_eq!(location.pointer.data, node_data);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -240,27 +303,63 @@ mod resolve_tests {
         fs::create_dir_all(&bin).unwrap();
         write_exe(&data.join("current").join("bin").join("vp.exe"));
         let mut contents = vec![0xEF, 0xBB, 0xBF];
-        contents.extend_from_slice(data.to_string_lossy().as_bytes());
-        contents.extend_from_slice(b"\r\n");
+        contents.extend_from_slice(
+            versioned_pointer("split", &data, &root.join("cache")).replace('\n', "\r\n").as_bytes(),
+        );
         fs::write(bin.join("vp.shim"), contents).unwrap();
 
         let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
         assert_eq!(location.exe, data.join("current").join("bin").join("vp.exe"));
-        assert_eq!(location.vp_data_dir, data);
+        assert_eq!(location.pointer.data, data);
+        assert!(matches!(location.pointer.layout, ShimLayout::Split { .. }));
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn child_dir_pins_single_root_when_bin_is_under_data() {
-        let data = std::path::PathBuf::from("/install/root");
-        assert!(matches!(child_dir_pins(&data.join("bin"), &data), ChildDirPins::SingleRoot));
+    fn explicit_split_does_not_become_single_root_when_bin_is_under_data() {
+        let root = std::env::temp_dir().join(format!("vp-trampoline-split-{}", process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let data = root.join("data");
+        let bin = data.join("bin");
+        let cache = root.join("platform-cache");
+        write_exe(&data.join("current").join("bin").join("vp.exe"));
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("vp.shim"), versioned_pointer("split", &data, &cache)).unwrap();
+
+        let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
+        assert!(matches!(
+            child_dir_pins(&bin, &location.pointer),
+            ChildDirPins::Split { cache: value } if value == cache
+        ));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn child_dir_pins_split_when_bin_is_independent() {
+    fn explicit_single_root_sets_vp_home() {
+        let root =
+            std::env::temp_dir().join(format!("vp-trampoline-single-root-{}", process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let bin = root.join("bin");
+        write_exe(&root.join("current").join("bin").join("vp.exe"));
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(
+            bin.join("vp.shim"),
+            versioned_pointer("single-root", &root, &root.join("cache")),
+        )
+        .unwrap();
+
+        let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
+        assert!(matches!(child_dir_pins(&bin, &location.pointer), ChildDirPins::SingleRoot));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn legacy_pointer_preserves_path_based_behavior() {
         let data = std::path::PathBuf::from("/data/root");
         let bin = std::path::PathBuf::from("/other/bin");
-        assert!(matches!(child_dir_pins(&bin, &data), ChildDirPins::Split));
+        let pointer = ShimPointer { data: data.clone(), layout: ShimLayout::Legacy };
+        assert!(matches!(child_dir_pins(&data.join("bin"), &pointer), ChildDirPins::SingleRoot));
+        assert!(matches!(child_dir_pins(&bin, &pointer), ChildDirPins::LegacySplit));
     }
 }
 

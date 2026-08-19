@@ -226,6 +226,7 @@ set_config_dir_refs() {
 
 # Monolithic mapping: every category on one root.
 set_monolithic_layout() {
+  LAYOUT_KIND="single-root"
   INSTALL_DIR="$1"
   SHIM_DIR="$1/bin"
   CACHE_DIR="$1/cache"
@@ -1009,11 +1010,27 @@ is_vite_plus_node_shim() {
   # per-executable sidecar that records the owning data root.
   if [ -f "$bin_path/node.exe" ] && [ -f "$bin_path/node.shim" ]; then
     local pointer=""
-    IFS= read -r pointer < "$bin_path/node.shim" || return 1
-    pointer="${pointer%$'\r'}"
+    pointer="$(shim_pointer_data "$bin_path/node.shim")" || return 1
     [ "$pointer" = "$INSTALL_DIR" ] && return 0
   fi
 
+  return 1
+}
+
+shim_pointer_data() {
+  local file="$1" first="" line=""
+  IFS= read -r first < "$file" || [ -n "$first" ] || return 1
+  first="${first%$'\r'}"
+  if [ "$first" != "vite-plus-shim-v1" ]; then
+    printf '%s\n' "$first"
+    return 0
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      data=*) printf '%s\n' "${line#data=}"; return 0 ;;
+    esac
+  done < "$file"
   return 1
 }
 
@@ -1346,7 +1363,8 @@ WRAPPER_EOF
       cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
       # For separate VP_BIN_DIR and VP_DATA_DIR values, the trampoline reads
       # <name>.shim instead of environment variables.
-      printf '%s\n' "$INSTALL_DIR" >"$SHIM_DIR/vp.shim"
+      printf 'vite-plus-shim-v1\nlayout=%s\ndata=%s\ncache=%s\n' \
+        "$LAYOUT_KIND" "$INSTALL_DIR" "$CACHE_DIR" >"$SHIM_DIR/vp.shim"
     fi
   else
     ln -sfn "$INSTALL_DIR/current/bin/vp" "$SHIM_DIR/vp"
@@ -1442,7 +1460,16 @@ apply_dirs_from_vp() {
   CACHE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "cache" { print $2; exit }')"
   CONFIG_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "config" { print $2; exit }')"
   STATE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "state" { print $2; exit }')"
+  LAYOUT_KIND="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "layout" { print $2; exit }')"
   [ -n "$INSTALL_DIR" ] && [ -n "$SHIM_DIR" ] && [ -n "$CACHE_DIR" ] && [ -n "$CONFIG_DIR" ] && [ -n "$STATE_DIR" ] || return 1
+  if [ "$LAYOUT_KIND" != "single-root" ] && [ "$LAYOUT_KIND" != "split" ]; then
+    if [ "$SHIM_DIR" = "$INSTALL_DIR/bin" ] && [ "$CACHE_DIR" = "$INSTALL_DIR/cache" ] \
+      && [ "$CONFIG_DIR" = "$INSTALL_DIR" ] && [ "$STATE_DIR" = "$INSTALL_DIR" ]; then
+      LAYOUT_KIND="single-root"
+    else
+      LAYOUT_KIND="split"
+    fi
+  fi
   set_config_dir_refs "$CONFIG_DIR" "${HOME:-}"
 }
 

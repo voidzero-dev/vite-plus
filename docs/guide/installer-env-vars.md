@@ -98,9 +98,9 @@ These variables control the installer scripts and the standalone Windows install
 Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself.
 `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY`
 specifies a local `vp` binary. The installers use these files for the local
-build. They use `VP_DUMP_DIRS=1` to get all five `EnvConfig` category roots from
-the selected binary. They do not resolve the directory variables. The
-installers set `VP_INSTALL_STOP`; do not set it manually.
+build. They use `VP_DUMP_DIRS=1` to get the layout mode and all five `EnvConfig`
+category roots from the selected binary. They do not resolve the directory
+variables. The installers set `VP_INSTALL_STOP`; do not set it manually.
 
 ## Runtime Variables
 

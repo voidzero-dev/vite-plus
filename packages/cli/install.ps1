@@ -246,6 +246,7 @@ function Enable-SetupVpLegacyCompatibility {
 function New-MonolithicLayout {
     param([string]$Root)
     return [pscustomobject]@{
+        Kind = "single-root"
         DataDir = $Root
         ShimDir = Join-Path $Root "bin"
         CacheDir = Join-Path $Root "cache"
@@ -281,17 +282,42 @@ function Use-LegacyLayout {
     Set-LayoutVars
 }
 
-# Record the data root next to each trampoline. This lets separate VP_BIN_DIR
-# and VP_DATA_DIR values work without sibling-path checks.
+# Record the resolved layout next to each trampoline.
 function Write-ShimPointer {
     param(
         [string]$BinDir,
         [string]$DataDir,
+        [string]$CacheDir,
+        [string]$LayoutKind,
         [string]$Name = "vp"
     )
     $path = Join-Path $BinDir "$Name.shim"
     $utf8 = New-Object System.Text.UTF8Encoding $false
-    [System.IO.File]::WriteAllText($path, ($DataDir.TrimEnd('\', '/') + "`n"), $utf8)
+    $contents = "vite-plus-shim-v1`nlayout=$LayoutKind`ndata=$($DataDir.TrimEnd('\', '/'))`ncache=$($CacheDir.TrimEnd('\', '/'))`n"
+    [System.IO.File]::WriteAllText($path, $contents, $utf8)
+}
+
+function Get-ShimPointerData {
+    param([string]$Path)
+    try {
+        $contents = [System.IO.File]::ReadAllText($Path).Trim()
+    } catch {
+        return $null
+    }
+    if ([string]::IsNullOrWhiteSpace($contents)) {
+        return $null
+    }
+    $lines = $contents -split "`r?`n"
+    if ($lines[0] -ne "vite-plus-shim-v1") {
+        # Compatibility with one-line sidecars from earlier PR previews.
+        return $contents
+    }
+    foreach ($line in $lines) {
+        if ($line.StartsWith("data=")) {
+            return $line.Substring(5)
+        }
+    }
+    return $null
 }
 
 function Normalize-InstallDir {
@@ -776,11 +802,7 @@ function Test-VitePlusNodeShim {
         return $false
     }
 
-    try {
-        $pointer = [System.IO.File]::ReadAllText($pointerPath).Trim()
-    } catch {
-        return $false
-    }
+    $pointer = Get-ShimPointerData $pointerPath
     if ([string]::IsNullOrWhiteSpace($pointer)) {
         return $false
     }
@@ -1079,7 +1101,7 @@ function Main {
     if (Test-Path $trampolineSrc) {
         # New versions: use trampoline exe to avoid "Terminate batch job (Y/N)?" on Ctrl+C
         Copy-Item -Path $trampolineSrc -Destination (Join-Path $ShimDir "vp.exe") -Force
-        Write-ShimPointer -BinDir $ShimDir -DataDir $InstallDir -Name "vp"
+        Write-ShimPointer -BinDir $ShimDir -DataDir $InstallDir -CacheDir $CacheDir -LayoutKind $Layout.Kind -Name "vp"
         # Remove legacy .cmd and shell script wrappers from previous versions
         foreach ($legacy in @((Join-Path $ShimDir "vp.cmd"), (Join-Path $ShimDir "vp"))) {
             if (Test-Path $legacy) {
@@ -1245,7 +1267,16 @@ function Apply-DirsFromVp {
     if (-not $map['data'] -or -not $map['bin'] -or -not $map['cache'] -or -not $map['config'] -or -not $map['state']) {
         return $false
     }
+    $layoutKind = $map['layout']
+    if ($layoutKind -ne 'single-root' -and $layoutKind -ne 'split') {
+        $isSingleRoot = (Normalize-InstallDir $map['bin']) -eq (Normalize-InstallDir (Join-Path $map['data'] 'bin')) `
+            -and (Normalize-InstallDir $map['cache']) -eq (Normalize-InstallDir (Join-Path $map['data'] 'cache')) `
+            -and (Normalize-InstallDir $map['config']) -eq (Normalize-InstallDir $map['data']) `
+            -and (Normalize-InstallDir $map['state']) -eq (Normalize-InstallDir $map['data'])
+        $layoutKind = if ($isSingleRoot) { 'single-root' } else { 'split' }
+    }
     $script:Layout = [pscustomobject]@{
+        Kind = $layoutKind
         DataDir = $map['data']
         ShimDir = $map['bin']
         CacheDir = $map['cache']

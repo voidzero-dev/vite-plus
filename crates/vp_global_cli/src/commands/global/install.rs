@@ -1288,9 +1288,16 @@ mod tests {
                     let pointer = bin_dir.join("test-shim.shim");
                     assert!(pointer.as_path().exists(), "per-exe sidecar must be written");
                     let contents = std::fs::read_to_string(pointer.as_path()).unwrap();
+                    let dirs = &vp_shared::EnvConfig::get().dirs;
                     assert_eq!(
-                        contents.trim(),
-                        vp_shared::EnvConfig::get().dirs.data.as_path().to_string_lossy()
+                        contents,
+                        format!(
+                            "{}\nlayout={}\ndata={}\ncache={}\n",
+                            vp_shared::SHIM_POINTER_HEADER,
+                            dirs.layout().as_str(),
+                            dirs.data.as_path().display(),
+                            dirs.cache.as_path().display()
+                        )
                     );
                 }
             },
