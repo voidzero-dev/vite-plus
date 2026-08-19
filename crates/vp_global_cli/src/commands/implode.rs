@@ -48,8 +48,8 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // Removing each category separately could remove the same path twice.
     //
     // The default Unix `<BIN>` is under `<DATA>`, so removal of `<DATA>` also
-    // removes it. Never remove a separately resolved `<BIN>` because an
-    // explicit `VP_BIN_DIR` can be shared. Remove only Vite+-owned shims from it.
+    // removes it. Never remove a separately resolved `<BIN>` because a bin from
+    // an explicit override group can be shared. Remove only Vite+-owned shims.
     let mut roots: Vec<AbsolutePathBuf> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
         .into_iter()
         .map(|root| {
@@ -115,9 +115,9 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 
 /// Remove the shim files vite-plus owns from the bin directory.
 ///
-/// Do not remove the bin directory directly because an explicit `VP_BIN_DIR`
-/// can be shared with other tools. Removal of the default Unix `<DATA>` root
-/// also removes its bin directory.
+/// Do not remove the bin directory directly because a bin from an explicit
+/// override group can be shared with other tools. Removal of the default Unix
+/// `<DATA>` root also removes its bin directory.
 ///
 /// Get package-shim names from `<DATA>/bins/*.json`. Also check `vp` and the
 /// default environment shims because those files are not in the metadata.

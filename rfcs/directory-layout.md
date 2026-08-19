@@ -54,8 +54,9 @@ platform conventions:
 2. Use the split XDG or platform layout for fresh installs.
 3. Keep existing default installs in `~/.vite-plus` during this phase. Do not
    move their files.
-4. Keep `VP_HOME` as a full-root pin for custom roots and old scripts. Prefer
-   `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` for new configuration.
+4. Keep `VP_HOME` as a full-root pin for custom roots and old scripts. Internal
+   integrations can set `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` as one
+   complete group when they must pin a split layout.
 5. Use the CLI resolution strategy in `install.sh`, `install.ps1`, `vp-setup`,
    and `install-global-cli`.
 6. Support both layouts in implode, env setup, trampoline, upgrade check, and
@@ -89,17 +90,16 @@ platform conventions:
 
 #### `<BIN>` ownership invariant
 
-Vite+ owns the default `<BIN>` and may manage all entries in it. Treat an
-explicit `VP_BIN_DIR` as potentially shared. Check the ownership of each entry
-in a potentially shared directory.
+Vite+ owns the default `<BIN>` and may manage all entries in it. Treat a bin
+from an explicit `VP_*_DIR` group as potentially shared. Check the ownership
+of each entry in a potentially shared directory.
 
 | Resolution source                               | Ownership                                                                        |
 | ----------------------------------------------- | -------------------------------------------------------------------------------- |
 | Unix platform default or `XDG_DATA_HOME`        | Application-owned `<DATA>/bin`.                                                  |
 | Windows platform default                        | Application-owned `%LOCALAPPDATA%\vite-plus\bin`.                                |
-| `VP_DATA_DIR` when `VP_BIN_DIR` is unset        | Application-owned `<DATA>/bin`.                                                  |
 | `VP_HOME` or a grandfathered monolithic install | Application-owned `<root>/bin` inside the Vite+ install root.                    |
-| User-supplied `VP_BIN_DIR` on any platform      | Potentially shared, regardless of whether its path resembles a platform default. |
+| Complete user-supplied `VP_*_DIR` group         | Potentially shared, regardless of whether its path resembles a platform default. |
 
 `VpDirs` and `VP_DUMP_DIRS` preserve the layout mode, but not the precise source
 of each root. A path string does not prove that a separately resolved `<BIN>`
@@ -231,7 +231,7 @@ later upgrade or reinstall could then change roots without a notice. The split
 ```text
 VP_HOME
   → existing ~/.vite-plus
-  → VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR
+  → complete VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR group
   → XDG_DATA_HOME / XDG_CACHE_HOME / XDG_CONFIG_HOME / XDG_STATE_HOME
   → platform defaults
 ```
@@ -246,7 +246,7 @@ resolved user home. Thus, a known home always produces a complete layout.
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **`VP_HOME`**                                     | Vite+ puts the **monolithic mapping** for all categories under this root.                                            |
 | **`~/.vite-plus`**                                | Vite+ uses the monolithic mapping when this directory contains a `current` link.                                     |
-| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | Vite+ ignores relative values. `VP_BIN_DIR` sets bin. Otherwise, an absolute `VP_DATA_DIR` sets bin to `<DATA>/bin`. |
+| **`VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`** | All three values must be set to absolute paths. An incomplete or invalid group has no effect.                        |
 | **`XDG_*`** (Unix)                                | Vite+ uses absolute XDG category roots with the app name `vite-plus`. Bin resolves to `<DATA>/bin`.                  |
 | **Platform defaults**                             | [Category mapping](#category-mapping) defines the Unix and Windows defaults.                                         |
 
@@ -303,10 +303,11 @@ Files in `<CONFIG>`, including `config.json`, must contain portable user
 preferences. Store machine-specific paths, downloaded payloads, caches, and
 session state in the local categories.
 
-The generated `<CONFIG>/env*` files describe the resolved roots for the current
-machine. They are not authoritative state. Installers and `vp env setup` create
-them again for the current machine. Features must not store machine identity or
-durable state in these files.
+The generated `<CONFIG>/env*` files add the resolved `<BIN>` to `PATH`. They do
+not export the internal `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
+Each process resolves the split layout from its current environment. The files
+keep an explicit `VP_HOME` only when they must preserve a custom monolithic
+root. Features must not store machine identity or durable state in these files.
 
 ### Installers
 
@@ -316,8 +317,8 @@ resolution chain:
 1. If `VP_HOME` is set, use that root for the **monolithic** layout.
 2. Otherwise, check the default `~/.vite-plus` directory or its Windows
    equivalent. If it contains a `current` link, keep the monolithic root.
-3. Otherwise, use `VP_*_DIR`, `XDG_*`, or platform defaults for the **split**
-   layout.
+3. Otherwise, use a complete `VP_*_DIR` group, `XDG_*`, or platform defaults
+   for the **split** layout.
 
 Each platform has one install script. There is no separate script for each
 layout. Local bootstrap does not set `VP_HOME`. It resolves the install data
@@ -335,8 +336,8 @@ variables, or platform rules.
 
 Node-manager shims follow the
 [`<BIN>` ownership invariant](#bin-ownership-invariant). Vite+ owns the default
-bin. An explicit `VP_BIN_DIR` can be shared, so replacement and cleanup code
-must check each entry. On Unix, `<BIN>/node` must be a symlink to the active `vp`
+bin. A bin from an explicit `VP_*_DIR` group can be shared, so replacement and
+cleanup code must check each entry. On Unix, `<BIN>/node` must be a symlink to the active `vp`
 binary. On Windows, an applicable `node.shim` file must point to the resolved
 data root. `install.ps1`, `vp-setup`, and Unix-like shells use this check for
 `<BIN>/node.exe`.
@@ -353,8 +354,8 @@ Windows sidecar files record ownership and tell the trampoline which layout to
 preserve. The versioned sidecar records the layout mode, data root, and cache
 root. A split trampoline sets `VP_DATA_DIR`, `VP_BIN_DIR`, and `VP_CACHE_DIR`
 for its child. A single-root trampoline sets `VP_HOME`. It does not infer the
-mode from path equality because a split `VP_DATA_DIR` override also makes
-`<BIN>` equal to `<DATA>/bin`.
+mode from path equality because an explicit split layout can also set `<BIN>`
+to `<DATA>/bin`.
 
 Vite+ writes a sidecar immediately after it copies a trampoline executable.
 `vp env setup --env-only` does not write sidecars. Setup without `--refresh`
@@ -456,10 +457,12 @@ the 0.3.0 release becomes available.
 
 ### Global CLI → JS children
 
-In the split layout, the global CLI sets `VP_BIN_DIR`, `VP_DATA_DIR`, and
-`VP_CACHE_DIR` for JavaScript child processes when these variables are unset.
-Thus, the NAPI CLI, local CLI, and JavaScript tools use the same roots. They do
-not implement the XDG rules again.
+JavaScript child processes inherit the same `VP_HOME`, complete `VP_*_DIR`
+group, XDG variables, and platform environment as the global CLI. The NAPI CLI
+resolves these inputs through `VpDirs`; it does not implement the directory
+rules again. Generated env files do not create a `VP_*_DIR` override group.
+Windows trampolines are the exception: a split sidecar passes the complete
+group to its child because the trampoline must preserve its recorded layout.
 
 ### User impact (this phase)
 

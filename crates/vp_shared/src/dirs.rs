@@ -24,10 +24,10 @@ pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
 /// data root, and cache root. It is next to its executable
 /// (`<BIN>/<name>.shim`).
 ///
-/// Separate `VP_BIN_DIR` and `VP_DATA_DIR` values put the shim and payload
-/// under different parents. A trampoline must not read directory environment
-/// variables. Installers and `vp env setup` write this one-line UTF-8 file
-/// next to each trampoline copy.
+/// The complete `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group can put
+/// the shim and payload under different parents. A trampoline must not read
+/// directory environment variables. Installers and `vp env setup` write this
+/// one-line UTF-8 file next to each trampoline copy.
 pub const SHIM_POINTER_EXTENSION: &str = "shim";
 
 /// Sidecar filename for a trampoline named `<exe_stem>.exe`.
@@ -99,9 +99,8 @@ impl VpDirs {
     /// Directory resolution reads override variables, not `HOME` or
     /// `USERPROFILE`.
     ///
-    /// Resolution processes each category separately. One exception applies
-    /// when `VP_BIN_DIR` is unset. All platforms derive `<DATA>/bin` from
-    /// `VP_DATA_DIR`, and Unix can also derive it from `XDG_DATA_HOME`.
+    /// The `VP_*_DIR` group applies only when all three values are absolute.
+    /// Unix derives its default bin from `XDG_DATA_HOME`.
     ///
     /// Return `None` only if no source provides a category. A known home always
     /// provides the platform defaults. Unix puts its defaults under the home.

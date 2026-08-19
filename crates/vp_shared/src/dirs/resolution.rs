@@ -10,9 +10,8 @@
 //! - [`VpHome`] uses `VP_HOME` for the single-root mapping.
 //! - [`UserHome`] uses `<home>/.vite-plus` only if it contains a `current`
 //!   link. The link identifies an install instead of a stray pre-split tree.
-//! - [`VpEnvs`] uses `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR`. If
-//!   `VP_BIN_DIR` is unset, an absolute `VP_DATA_DIR` also provides
-//!   `<DATA>/bin`.
+//! - [`VpEnvs`] uses `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` only when
+//!   all three are absolute paths. An incomplete group has no effect.
 //! - XDG / platform defaults.
 //!
 //! Single-root mapping (VpHome / UserHome):
@@ -56,7 +55,7 @@ pub(super) fn vp_home_override() -> Option<AbsolutePathBuf> {
     process_env_var(env_vars::VP_HOME)
 }
 
-/// Explicit per-category overrides from the `VP_*_DIR` environment variables.
+/// Complete category overrides from the `VP_*_DIR` environment variables.
 struct VpEnvs {
     bin_dir: Option<AbsolutePathBuf>,
     data_dir: Option<AbsolutePathBuf>,
@@ -65,12 +64,18 @@ struct VpEnvs {
 
 impl VpEnvs {
     fn resolver(_home: &AbsolutePath) -> Self {
-        let data_dir = process_env_var(env_vars::VP_DATA_DIR);
-        Self {
-            bin_dir: process_env_var(env_vars::VP_BIN_DIR)
-                .or_else(|| data_dir.as_ref().map(|data| data.join("bin"))),
-            data_dir,
-            cache_dir: process_env_var(env_vars::VP_CACHE_DIR),
+        let dirs = (
+            process_env_var(env_vars::VP_BIN_DIR),
+            process_env_var(env_vars::VP_DATA_DIR),
+            process_env_var(env_vars::VP_CACHE_DIR),
+        );
+        match dirs {
+            (Some(bin_dir), Some(data_dir), Some(cache_dir)) => Self {
+                bin_dir: Some(bin_dir),
+                data_dir: Some(data_dir),
+                cache_dir: Some(cache_dir),
+            },
+            _ => Self { bin_dir: None, data_dir: None, cache_dir: None },
         }
     }
 }
@@ -438,35 +443,44 @@ mod tests {
     }
 
     #[test]
-    fn vp_data_dir_proposes_an_owned_bin_by_default() {
-        let root = tempfile::tempdir().unwrap();
-        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
-        let data = root.path().join("data");
-
-        temp_env::with_vars(
-            [(env_vars::VP_BIN_DIR, None), (env_vars::VP_DATA_DIR, Some(data.as_os_str()))],
-            || {
-                let envs = VpEnvs::resolver(&home);
-                assert_dir(envs.bin_dir(), &data.join("bin"));
-                assert_dir(envs.data_dir(), &data);
-            },
-        );
-    }
-
-    #[test]
-    fn relative_vp_bin_dir_falls_back_to_the_owned_data_bin() {
+    fn incomplete_vp_dir_group_has_no_effect() {
         let root = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
         let data = root.path().join("data");
 
         temp_env::with_vars(
             [
-                (env_vars::VP_BIN_DIR, Some(OsStr::new("relative/bin"))),
+                (env_vars::VP_BIN_DIR, None),
                 (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_CACHE_DIR, None),
             ],
             || {
                 let envs = VpEnvs::resolver(&home);
-                assert_dir(envs.bin_dir(), &data.join("bin"));
+                assert!(envs.bin_dir().is_none());
+                assert!(envs.data_dir().is_none());
+                assert!(envs.cache_dir().is_none());
+            },
+        );
+    }
+
+    #[test]
+    fn relative_vp_dir_invalidates_the_group() {
+        let root = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let data = root.path().join("data");
+        let cache = root.path().join("cache");
+
+        temp_env::with_vars(
+            [
+                (env_vars::VP_BIN_DIR, Some(OsStr::new("relative/bin"))),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_CACHE_DIR, Some(cache.as_os_str())),
+            ],
+            || {
+                let envs = VpEnvs::resolver(&home);
+                assert!(envs.bin_dir().is_none());
+                assert!(envs.data_dir().is_none());
+                assert!(envs.cache_dir().is_none());
             },
         );
     }

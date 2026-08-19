@@ -24,17 +24,18 @@ pub const VP_HOME: &str = "VP_HOME";
 
 /// Override directory for executables and shims.
 ///
-/// Applies during XDG and platform resolution. A single-root install from
-/// `VP_HOME` or the existing-install check ignores this variable. If this
-/// variable is unset, an explicit `VP_DATA_DIR` provides `<DATA>/bin`.
+/// Applies only when `VP_DATA_DIR` and `VP_CACHE_DIR` are also absolute. A
+/// single-root install from `VP_HOME` or the existing-install check ignores
+/// the complete group.
 pub const VP_BIN_DIR: &str = "VP_BIN_DIR";
 
 /// Override directory for CLI versions, Node.js runtimes, and package managers.
-/// These files use most of the disk space. When `VP_BIN_DIR` is unset, this
-/// variable also provides the `<DATA>/bin` executable directory.
+/// These files use most of the disk space. Applies only as part of the complete
+/// `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
 pub const VP_DATA_DIR: &str = "VP_DATA_DIR";
 
-/// Override directory for the disposable cache.
+/// Override directory for the disposable cache. Applies only as part of the
+/// complete `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
 pub const VP_CACHE_DIR: &str = "VP_CACHE_DIR";
 
 // ── XDG base directories: read by VpDirs resolution ────────────────────

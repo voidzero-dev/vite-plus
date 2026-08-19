@@ -7,9 +7,10 @@
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
 #   VP_HOME - Optional pin for the monolithic layout. If unset, Vite+ reuses an
-#             existing %USERPROFILE%\.vite-plus install. Otherwise, data, bin,
-#             and config use VP_*_DIR or the Windows Local and Roaming folders.
-#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
+#             existing %USERPROFILE%\.vite-plus install. Otherwise, the complete
+#             VP_*_DIR group or Windows Local and Roaming folders select the roots.
+#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Complete group of absolute
+#                                             category overrides
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
 #   VP_PR_VERSION - PR number or commit SHA to install from the registry bridge
@@ -209,6 +210,22 @@ function Test-AbsoluteOverridePath {
         return $false
     }
     return [System.IO.Path]::IsPathRooted($Path)
+}
+
+function Test-VpDirOverrides {
+    $values = @($env:VP_BIN_DIR, $env:VP_DATA_DIR, $env:VP_CACHE_DIR) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    if ($values.Count -ne 0 -and $values.Count -ne 3) {
+        Write-Error-Exit "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+    }
+    if ($values.Count -eq 3) {
+        foreach ($name in @("VP_BIN_DIR", "VP_DATA_DIR", "VP_CACHE_DIR")) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if (-not (Test-AbsoluteOverridePath $value)) {
+                Write-Error-Exit "$name must be an absolute path."
+            }
+        }
+    }
 }
 
 function Get-UserHomeDir {
@@ -888,6 +905,7 @@ function Main {
         Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
     }
 
+    Test-VpDirOverrides
     Enable-SetupVpLegacyCompatibility
     $previousInstallDir = $null
 

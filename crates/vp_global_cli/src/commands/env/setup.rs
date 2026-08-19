@@ -804,9 +804,9 @@ fn escape_powershell_single_quoted_string(value: &str) -> String {
     value.replace('\'', "''")
 }
 
-/// Render export lines for the layout values in [`EnvConfig::dir_envs`]. Sort
-/// the lines by variable name to keep the output stable. The values contain
-/// `VP_HOME` or the resolved `VP_*_DIR` roots. Later shells use the same install.
+/// Render export lines for the persisted layout values in
+/// [`EnvConfig::dir_envs`]. The map contains only an explicit absolute
+/// `VP_HOME`. Sort the lines to keep the output stable.
 fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     let home_dir = config.user_home.as_path();
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
@@ -851,8 +851,8 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
 
 /// Render the environment-file content for `shell` and the resolved config.
 ///
-/// Put the resolved bin directory on `PATH`. Export the layout values in
-/// [`EnvConfig::dir_envs`] so child shells resolve the same roots.
+/// Put the resolved bin directory on `PATH`. Persist an explicit `VP_HOME`, but
+/// do not export the internal split-directory group.
 fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
@@ -1012,43 +1012,33 @@ mod tests {
     }
 
     #[test]
-    fn test_render_env_content_re_exports_dir_overrides() {
+    fn test_render_env_content_does_not_export_split_dir_group() {
         let temp_dir = TempDir::new().unwrap();
         let custom_bin = temp_dir.path().join("custom-bin");
         let custom_data = temp_dir.path().join("custom-data");
+        let custom_cache = temp_dir.path().join("custom-cache");
         vp_shared::EnvConfig::with_vars(
             [
                 (vp_shared::env_vars::VP_HOME, None),
                 (vp_shared::env_vars::VP_BIN_DIR, Some(custom_bin.as_os_str())),
                 (vp_shared::env_vars::VP_DATA_DIR, Some(custom_data.as_os_str())),
+                (vp_shared::env_vars::VP_CACHE_DIR, Some(custom_cache.as_os_str())),
                 ("HOME", Some(temp_dir.path().as_os_str())),
                 ("USERPROFILE", Some(temp_dir.path().as_os_str())),
             ],
             |_| {
-                // dir_envs is captured from the overlaid environment.
                 let config = vp_shared::EnvConfig::get();
                 let content = render_env_content(EnvShell::Posix, &config);
-
-                let bin_line = "export VP_BIN_DIR=\"$HOME/custom-bin\"\n";
-                let data_line = "export VP_DATA_DIR=\"$HOME/custom-data\"\n";
-                assert!(
-                    content.contains(bin_line),
-                    "env should re-export VP_BIN_DIR, got: {content}"
-                );
-                assert!(
-                    content.contains(data_line),
-                    "env should re-export VP_DATA_DIR, got: {content}"
-                );
-                assert!(
-                    content.find(bin_line) < content.find(data_line),
-                    "export lines should be sorted by variable name, got: {content}"
-                );
+                assert!(!content.contains("VP_BIN_DIR"));
+                assert!(!content.contains("VP_DATA_DIR"));
+                assert!(!content.contains("VP_CACHE_DIR"));
+                assert!(content.contains("$HOME/custom-bin"));
             },
         );
     }
 
     #[test]
-    fn test_render_env_content_pins_resolved_dirs_without_vp_home() {
+    fn test_render_env_content_omits_resolved_dirs_without_vp_home() {
         let temp_dir = TempDir::new().unwrap();
         vp_shared::EnvConfig::with_vars(
             [
@@ -1072,10 +1062,10 @@ mod tests {
                         "{shell:?} env file should not re-export XDG_*, got: {content}"
                     );
                     assert!(
-                        content.contains("VP_BIN_DIR")
-                            && content.contains("VP_DATA_DIR")
-                            && content.contains("VP_CACHE_DIR"),
-                        "{shell:?} env file should pin resolved VP_*_DIR roots, got: {content}"
+                        !content.contains("VP_BIN_DIR")
+                            && !content.contains("VP_DATA_DIR")
+                            && !content.contains("VP_CACHE_DIR"),
+                        "{shell:?} env file should omit VP_*_DIR, got: {content}"
                     );
                 }
             },
@@ -1194,45 +1184,28 @@ mod tests {
                 let ps_bin_ref = escape_powershell_single_quoted_string(
                     &custom_bin.as_path().display().to_string(),
                 );
-                let data_ref = render_home_relative_path(custom_data.as_path(), home_dir);
-                let posix_data_ref = escape_home_relative_double_quoted_path(
-                    &data_ref,
-                    escape_posix_double_quoted_string,
-                );
-                let fish_data_ref = escape_home_relative_double_quoted_path(
-                    &data_ref,
-                    escape_fish_double_quoted_string,
-                );
-                let nu_data_ref = escape_nu_double_quoted_string(&render_nu_path_ref(&data_ref));
-                let ps_data_ref = escape_powershell_single_quoted_string(
-                    &custom_data.as_path().display().to_string(),
-                );
-
                 let posix_content = render_env_content(EnvShell::Posix, &config);
                 let fish_content = render_env_content(EnvShell::Fish, &config);
                 let nu_content = render_env_content(EnvShell::Nu, &config);
                 let ps_content = render_env_content(EnvShell::Powershell, &config);
                 assert!(posix_content.contains(&format!("__vp_bin=\"{posix_bin_ref}\"")));
-                assert!(
-                    posix_content.contains(&format!("export VP_DATA_DIR=\"{posix_data_ref}\""))
-                );
                 assert!(fish_content.contains(&format!("contains -i -- \"{fish_bin_ref}\"")));
-                assert!(fish_content.contains(&format!("set -gx VP_DATA_DIR \"{fish_data_ref}\"")));
                 assert!(nu_content.contains(&format!("prepend \"{nu_bin_ref}\"")));
-                assert!(nu_content.contains(&format!(
-                    "$env.VP_DATA_DIR = (\"{nu_data_ref}\" | path expand --no-symlink)"
-                )));
                 assert!(ps_content.contains(&format!("$__vp_bin = '{ps_bin_ref}'")));
-                assert!(ps_content.contains(&format!("$env:VP_DATA_DIR = '{ps_data_ref}'")));
+                for content in [&posix_content, &fish_content, &nu_content, &ps_content] {
+                    assert!(!content.contains("VP_BIN_DIR"));
+                    assert!(!content.contains("VP_DATA_DIR"));
+                    assert!(!content.contains("VP_CACHE_DIR"));
+                }
 
-                // Source the generated POSIX file and verify both the persisted
-                // overrides and PATH retain every literal metacharacter.
+                // Source the generated POSIX file and verify that PATH retains
+                // every literal metacharacter without exporting the overrides.
                 let env_file = temp_dir.path().join("env");
                 std::fs::write(&env_file, posix_content).unwrap();
                 let output = std::process::Command::new("sh")
                     .args([
                         "-c",
-                        r#". "$1"; printf '%s\n%s\n%s\n%s\n' "$VP_BIN_DIR" "$VP_DATA_DIR" "$VP_CACHE_DIR" "${PATH%%:*}""#,
+                        r#". "$1"; printf '%s\n%s\n%s\n%s\n' "${VP_BIN_DIR-unset}" "${VP_DATA_DIR-unset}" "${VP_CACHE_DIR-unset}" "${PATH%%:*}""#,
                         "sh",
                     ])
                     .arg(&env_file)
@@ -1249,13 +1222,7 @@ mod tests {
                 );
                 assert_eq!(
                     String::from_utf8(output.stdout).unwrap(),
-                    format!(
-                        "{}\n{}\n{}\n{}\n",
-                        custom_bin.display(),
-                        custom_data.display(),
-                        custom_cache.display(),
-                        custom_bin.display()
-                    )
+                    format!("unset\nunset\nunset\n{}\n", custom_bin.display())
                 );
             },
         );

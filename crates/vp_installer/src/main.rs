@@ -860,9 +860,11 @@ mod tests {
     }
 
     #[test]
-    fn vp_data_dir_override_is_used_when_fresh() {
+    fn complete_vp_dir_group_is_used_when_fresh() {
         let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
         let data = tmp.path().join("data");
+        let cache = tmp.path().join("cache");
         std::fs::create_dir_all(&data).unwrap();
 
         EnvConfig::with_vars(
@@ -870,9 +872,9 @@ mod tests {
                 ("HOME", Some(tmp.path().as_os_str())),
                 ("USERPROFILE", Some(tmp.path().as_os_str())),
                 (env_vars::VP_HOME, None),
-                (env_vars::VP_BIN_DIR, None),
+                (env_vars::VP_BIN_DIR, Some(bin.as_os_str())),
                 (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
-                (env_vars::VP_CACHE_DIR, None),
+                (env_vars::VP_CACHE_DIR, Some(cache.as_os_str())),
                 (env_vars::XDG_DATA_HOME, None),
                 (env_vars::XDG_CACHE_HOME, None),
                 (env_vars::XDG_CONFIG_HOME, None),
@@ -881,7 +883,8 @@ mod tests {
             |config| {
                 let dirs = prepare_dirs(&opts(None)).unwrap();
                 assert_eq!(dirs.data.as_path(), data.as_path());
-                assert_eq!(dirs.bin, dirs.data.join("bin"));
+                assert_eq!(dirs.bin.as_path(), bin.as_path());
+                assert_eq!(dirs.cache.as_path(), cache.as_path());
                 assert_eq!(dirs, config.dirs);
                 assert!(std::env::var_os(env_vars::VP_HOME).is_none());
             },

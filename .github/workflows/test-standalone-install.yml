@@ -217,6 +217,22 @@ jobs:
       - name: Build local vp
         run: cargo build --release -p vp_global_cli
 
+      - name: Incomplete directory overrides are rejected
+        run: |
+          set -euo pipefail
+          OUTPUT=$(mktemp)
+          if (
+            unset VP_HOME VP_BIN_DIR VP_CACHE_DIR
+            export VP_DATA_DIR="$RUNNER_TEMP/incomplete-vp-data"
+            bash packages/cli/install.sh
+          ) >"$OUTPUT" 2>&1; then
+            cat "$OUTPUT"
+            echo "install.sh accepted an incomplete directory override group"
+            exit 1
+          fi
+          cat "$OUTPUT"
+          grep -F "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together" "$OUTPUT"
+
       - name: Existing setup-vp uses legacy layout
         run: |
           set -euo pipefail
@@ -277,10 +293,12 @@ jobs:
           export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
           unset VP_VPDIRS_AWARE
           export VP_BIN_DIR="$FOREIGN/.local/bin"
+          export VP_DATA_DIR="$FOREIGN/.local/share/vite-plus"
+          export VP_CACHE_DIR="$FOREIGN/.cache/vite-plus"
           # Override the setting for this job. A custom bin can be shared. CI
           # must not replace a Node executable that Vite+ does not own.
           export VP_NODE_MANAGER=
-          unset VP_HOME VP_DATA_DIR VP_CACHE_DIR
+          unset VP_HOME
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-foreign-node bash packages/cli/install.sh
 
@@ -333,7 +351,7 @@ jobs:
           # script variables.
           data_root() { VP_DUMP_DIRS=1 "$STRAY/.local/share/vite-plus/bin/vp" | awk -F'\t' '$1=="data"{print $2}'; }
           test "$(data_root)" = "$STRAY/.local/share/vite-plus"
-          test "$(VP_DATA_DIR="$STRAY/.local/share/vite-plus" VP_BIN_DIR="$STRAY/.local/bin" data_root)" = "$STRAY/.local/share/vite-plus"
+          test "$(VP_DATA_DIR="$STRAY/.local/share/vite-plus" VP_BIN_DIR="$STRAY/.local/bin" VP_CACHE_DIR="$STRAY/.cache/vite-plus" data_root)" = "$STRAY/.local/share/vite-plus"
 
           # A reinstall must continue to use the split roots. It must not change
           # the stray tree. `vp upgrade` uses the same resolution chain.
@@ -1186,6 +1204,21 @@ jobs:
         shell: bash
         run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
 
+      - name: Incomplete directory overrides are rejected in PowerShell
+        shell: pwsh
+        run: |
+          Remove-Item Env:VP_HOME, Env:VP_BIN_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          $env:VP_DATA_DIR = Join-Path $env:RUNNER_TEMP "incomplete-vp-data"
+          $output = & pwsh -NoProfile -File ./packages/cli/install.ps1 *>&1
+          if ($LASTEXITCODE -eq 0) {
+            throw "install.ps1 accepted an incomplete directory override group"
+          }
+          $text = "$output"
+          Write-Host $text
+          if (-not $text.Contains("Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together")) {
+            throw "install.ps1 did not report the incomplete override group"
+          }
+
       - name: Existing setup-vp uses legacy layout in PowerShell installer
         shell: pwsh
         run: |
@@ -1257,23 +1290,23 @@ jobs:
             Write-Error "install.ps1 claimed an unrelated node.exe"
           }
 
-      - name: VP_DATA_DIR keeps the split layout through the trampoline
+      - name: Complete directory overrides keep the split layout through the trampoline
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $root = Join-Path $env:RUNNER_TEMP "vp-partial-override"
+          $root = Join-Path $env:RUNNER_TEMP "vp-complete-overrides"
           $env:USERPROFILE = Join-Path $root "profile"
           $env:LOCALAPPDATA = Join-Path $env:USERPROFILE "AppData\Local"
           $env:APPDATA = Join-Path $env:USERPROFILE "AppData\Roaming"
           $env:VP_DATA_DIR = Join-Path $root "data only"
+          $env:VP_BIN_DIR = Join-Path $env:VP_DATA_DIR "bin"
+          $env:VP_CACHE_DIR = Join-Path $root "cache"
           $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
           $env:VP_LOCAL_TGZ = Join-Path $root "empty.tgz"
           $env:VP_SKIP_DEPS_INSTALL = "1"
-          $env:VP_VERSION = "local-partial-override"
+          $env:VP_VERSION = "local-complete-overrides"
           $env:VP_NODE_MANAGER = "no"
           Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
-          Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
-          Remove-Item Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
 
@@ -1298,9 +1331,9 @@ jobs:
           $expected = Get-DirMap $payload
           if ($expected['layout'] -ne 'split') { throw "payload did not select split layout" }
           if ($expected['bin'] -ne (Join-Path $env:VP_DATA_DIR 'bin')) { throw "unexpected bin root" }
-          if ($expected['cache'] -eq (Join-Path $env:VP_DATA_DIR 'cache')) { throw "cache collapsed under data" }
+          if ($expected['cache'] -ne $env:VP_CACHE_DIR) { throw "unexpected cache root" }
 
-          Remove-Item Env:VP_DATA_DIR -ErrorAction Stop
+          Remove-Item Env:VP_BIN_DIR, Env:VP_DATA_DIR, Env:VP_CACHE_DIR -ErrorAction Stop
           $actual = Get-DirMap $trampoline
           foreach ($key in @('layout', 'data', 'bin', 'cache', 'config', 'state')) {
             if ($actual[$key] -ne $expected[$key]) {

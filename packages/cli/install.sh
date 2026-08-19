@@ -8,9 +8,10 @@
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
 #   VP_HOME - Optional pin for the monolithic layout. If unset, Vite+ reuses an
-#             existing ~/.vite-plus install. Otherwise, data, bin, and config
-#             use VP_*_DIR, XDG_*, or platform defaults.
-#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Absolute per-category overrides
+#             existing ~/.vite-plus install. Otherwise, the complete VP_*_DIR
+#             group, XDG_*, or platform defaults select the split roots.
+#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Complete group of absolute
+#                                             category overrides
 #   XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
@@ -142,6 +143,21 @@ absolute_override() {
   local val="$1"
   if [ -n "$val" ] && is_absolute_path "$val"; then
     printf '%s\n' "$val"
+  fi
+}
+
+validate_vp_dir_overrides() {
+  local count=0 value
+  for value in "${VP_BIN_DIR:-}" "${VP_DATA_DIR:-}" "${VP_CACHE_DIR:-}"; do
+    [ -z "$value" ] || count=$((count + 1))
+  done
+  if [ "$count" -ne 0 ] && [ "$count" -ne 3 ]; then
+    error "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+  fi
+  if [ "$count" -eq 3 ]; then
+    is_absolute_path "$VP_BIN_DIR" || error "VP_BIN_DIR must be an absolute path."
+    is_absolute_path "$VP_DATA_DIR" || error "VP_DATA_DIR must be an absolute path."
+    is_absolute_path "$VP_CACHE_DIR" || error "VP_CACHE_DIR must be an absolute path."
   fi
 }
 
@@ -994,8 +1010,9 @@ refresh_shims() {
   fi
 }
 
-# Return success only if this Vite+ install owns the existing Node entry. An
-# explicit VP_BIN_DIR can be shared. Entry existence does not permit replacement.
+# Return success only if this Vite+ install owns the existing Node entry. A bin
+# from an explicit override group can be shared. Entry existence does not permit
+# replacement.
 is_vite_plus_node_shim() {
   local bin_path="$1"
   local vp_bin="$2"
@@ -1166,6 +1183,7 @@ main() {
     error "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
   fi
 
+  validate_vp_dir_overrides
   enable_setup_vp_legacy_compatibility
   check_requirements
 
@@ -1361,8 +1379,8 @@ WRAPPER_EOF
     # Windows: copy trampoline as vp.exe (matching install.ps1)
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
       cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
-      # For separate VP_BIN_DIR and VP_DATA_DIR values, the trampoline reads
-      # <name>.shim instead of environment variables.
+      # For a complete split override group, the trampoline reads <name>.shim
+      # instead of inherited environment variables.
       printf 'vite-plus-shim-v1\nlayout=%s\ndata=%s\ncache=%s\n' \
         "$LAYOUT_KIND" "$INSTALL_DIR" "$CACHE_DIR" >"$SHIM_DIR/vp.shim"
     fi

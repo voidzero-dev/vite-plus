@@ -6,9 +6,9 @@
 ## `vpt cp assert_dirs.nu 'config-$USER-"quote"-'\''single'\''-`tick`-\slash/vite-plus/assert_dirs.nu'`
 
 
-## `HOME=${workspace}/shell-home USERPROFILE=${workspace}/shell-home VP_HOME= EXPECTED_VP_BIN_DIR=${workspace}/bin-$USER-"quote"-'single'-`tick`-\slash EXPECTED_VP_DATA_DIR=${workspace}/data-$USER-"quote"-'single'-`tick`-\slash EXPECTED_VP_CACHE_DIR=${workspace}/cache-$USER-"quote"-'single'-`tick`-\slash PATH=${workspace}/bin-$USER-"quote"-'single'-`tick`-\slash:${workspace}/bin-$USER-"quote"-'single'-`tick`-\slash:${PATH} nu 'config-$USER-"quote"-'\''single'\''-`tick`-\slash/vite-plus/assert_dirs.nu'`
+## `HOME=${workspace}/shell-home USERPROFILE=${workspace}/shell-home VP_HOME= EXPECTED_VP_BIN_DIR=${workspace}/bin-$USER-"quote"-'single'-`tick`-\slash PATH=${workspace}/bin-$USER-"quote"-'single'-`tick`-\slash:${workspace}/bin-$USER-"quote"-'single'-`tick`-\slash:${PATH} nu 'config-$USER-"quote"-'\''single'\''-`tick`-\slash/vite-plus/assert_dirs.nu'`
 
-Nushell loads env.nu and preserves paths that contain shell metacharacters
+Nushell loads env.nu, preserves a PATH with shell metacharacters, and omits internal directory variables
 
 ```
 Nushell metacharacter path checks passed

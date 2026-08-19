@@ -68,8 +68,9 @@ pub(crate) fn package_shim_target() -> AbsolutePathBuf {
 ///
 /// On Windows, accept a symlink to `vp` or `vp.exe`, or accept `vp-use.cmd`.
 /// Also accept a trampoline when its `<name>.shim` records this install's data
-/// root. A regular file does not prove ownership. A shared `VP_BIN_DIR` can
-/// contain unrelated executables such as `node.exe` and `npm.exe`.
+/// root. A regular file does not prove ownership. A bin from an explicit
+/// override group can contain unrelated executables such as `node.exe` and
+/// `npm.exe`.
 pub(crate) fn is_vp_shim_target(shim_path: &vt_path::AbsolutePath) -> bool {
     match std::fs::read_link(shim_path.as_path()) {
         Ok(target) => {

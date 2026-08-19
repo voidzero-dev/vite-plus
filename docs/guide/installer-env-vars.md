@@ -53,15 +53,21 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
 
-- **Purpose**: Absolute category overrides for a split install. `VP_BIN_DIR`
-  sets the executable directory. If `VP_BIN_DIR` is unset, Vite+ uses
-  `<VP_DATA_DIR>/bin`. Vite+ ignores these variables when `VP_HOME` is set. It
-  also ignores them when it reuses an existing `~/.vite-plus` install.
+- **Purpose**: Internal absolute directory overrides for integrations that
+  must pin a split install. Set all three variables together. The installer
+  rejects an incomplete group. Vite+ ignores the group when `VP_HOME` is set
+  or when it reuses an existing `~/.vite-plus` install.
 - **Default**: unset (XDG / platform defaults)
+- **Persistence**: The generated environment file does not export these
+  variables. An integration that uses them must provide the complete group to
+  each Vite+ process.
 - **Example**:
 
   ```bash
-  curl -fsSL https://vite.plus | VP_DATA_DIR=$HOME/vite-plus-data bash
+  export VP_DATA_DIR=$HOME/vite-plus-data
+  export VP_BIN_DIR=$VP_DATA_DIR/bin
+  export VP_CACHE_DIR=$HOME/.cache/vite-plus
+  curl -fsSL https://vite.plus | bash
   ```
 
 ### `NPM_CONFIG_REGISTRY`

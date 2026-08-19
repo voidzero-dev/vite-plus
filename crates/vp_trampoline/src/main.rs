@@ -63,8 +63,17 @@ enum ChildDirPins<'a> {
     SingleRoot,
     /// The versioned sidecar explicitly selected split roots.
     Split { cache: &'a std::path::Path },
-    /// A legacy sidecar and independent bin and data roots.
-    LegacySplit,
+    /// A legacy sidecar and independent roots. Old sidecars did not record
+    /// cache, so use the Windows platform fallback.
+    LegacySplit { cache: std::path::PathBuf },
+}
+
+fn legacy_split_cache(data: &std::path::Path) -> std::path::PathBuf {
+    env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .map(|path| path.join("vite-plus").join("cache"))
+        .unwrap_or_else(|| data.join("cache"))
 }
 
 fn child_dir_pins<'a>(bin_dir: &std::path::Path, pointer: &'a ShimPointer) -> ChildDirPins<'a> {
@@ -76,7 +85,9 @@ fn child_dir_pins<'a>(bin_dir: &std::path::Path, pointer: &'a ShimPointer) -> Ch
             // Their path shape is ambiguous, so preserve their old behavior.
             ChildDirPins::SingleRoot
         }
-        ShimLayout::Legacy => ChildDirPins::LegacySplit,
+        ShimLayout::Legacy => {
+            ChildDirPins::LegacySplit { cache: legacy_split_cache(&pointer.data) }
+        }
     }
 }
 
@@ -166,10 +177,11 @@ fn main() {
             cmd.env("VP_BIN_DIR", bin_dir);
             cmd.env("VP_CACHE_DIR", cache);
         }
-        ChildDirPins::LegacySplit => {
+        ChildDirPins::LegacySplit { cache } => {
             cmd.env_remove("VP_HOME");
             cmd.env("VP_DATA_DIR", &location.pointer.data);
             cmd.env("VP_BIN_DIR", bin_dir);
+            cmd.env("VP_CACHE_DIR", cache);
         }
     }
 
@@ -359,7 +371,7 @@ mod resolve_tests {
         let bin = std::path::PathBuf::from("/other/bin");
         let pointer = ShimPointer { data: data.clone(), layout: ShimLayout::Legacy };
         assert!(matches!(child_dir_pins(&data.join("bin"), &pointer), ChildDirPins::SingleRoot));
-        assert!(matches!(child_dir_pins(&bin, &pointer), ChildDirPins::LegacySplit));
+        assert!(matches!(child_dir_pins(&bin, &pointer), ChildDirPins::LegacySplit { .. }));
     }
 }
 
