@@ -751,7 +751,8 @@ fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
             "set \"__VP_USE_OUT=\"\r\n",
             "set \"__VP_USE_STATUS=\" & exit /b %__VP_USE_STATUS%\r\n",
         ),
-        vp_exe.as_path().display()
+        vp_exe.as_path().display(),
+        export_lines = export_lines
     )
 }
 
