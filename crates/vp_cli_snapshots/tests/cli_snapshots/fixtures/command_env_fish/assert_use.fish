@@ -53,4 +53,13 @@ if test "$VP_NODE_VERSION" != "22.18.0"
     exit 1
 end
 
+if vp env use --invalid-option >/dev/null 2>&1
+    echo "vp env use did not preserve a failing command status"
+    exit 1
+end
+if test "$VP_NODE_VERSION" != "22.18.0"
+    echo "failing vp env use changed VP_NODE_VERSION: $VP_NODE_VERSION"
+    exit 1
+end
+
 echo "Fish environment use checks passed"

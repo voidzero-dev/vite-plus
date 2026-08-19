@@ -17,6 +17,6 @@ requires = ["fish"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with spaces"']], snapshot = false },
   { argv = ["vpt", "cp", "assert_use.fish", 'vp "$project\with spaces"/assert_use.fish'], snapshot = false },
-  { argv = ["vpt", "write-file", 'vp "$project\with spaces"/.node-version', "22.18.0\n"], snapshot = false },
-  { argv = ["fish", "--no-config", "assert_use.fish"], cwd = 'vp "$project\with spaces"', comment = "verifies the Fish wrapper help, explicit use, unset, and file-based use branches", envs = [["PATH", "${workspace}/bin:${PATH}"]] },
+  { argv = ["vpt", "write-file", 'vp "$project\with spaces"/.node-version', "22.18.0"], snapshot = false },
+  { argv = ["fish", "--no-config", "assert_use.fish"], cwd = 'vp "$project\with spaces"', comment = "verifies the Fish wrapper help, explicit use, unset, file-based use, and failure branches", envs = [["PATH", "${workspace}/bin:${PATH}"]] },
 ]
