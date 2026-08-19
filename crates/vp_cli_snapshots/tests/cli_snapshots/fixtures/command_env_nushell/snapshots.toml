@@ -6,7 +6,8 @@ requires = ["nu"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "home\with spaces"']], snapshot = false },
   { argv = ["vpt", "cp", "assert.nu", 'vp "home\with spaces"/assert.nu'], snapshot = false },
-  { argv = ["nu", "assert.nu"], cwd = 'vp "home\with spaces"', comment = "loads the generated env.nu and verifies the Nushell wrapper", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
+  { argv = ["vpt", "write-file", 'vp "home\with spaces"/.node-version', "22.18.0\n"], snapshot = false },
+  { argv = ["nu", "assert.nu"], cwd = 'vp "home\with spaces"', comment = "loads the generated env.nu and verifies setup, explicit use, unset, and file-based use", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
 ]
 
 [[case]]
