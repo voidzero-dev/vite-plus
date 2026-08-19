@@ -1369,7 +1369,7 @@ jobs:
           if ($__vp_bin -cne $expectedBin) { throw "env.ps1 changed the Unicode bin path" }
           foreach ($name in @("vp", "node", "npm")) {
             $expected = Join-Path $expectedBin "$name.exe"
-            $actual = (Get-Command "$name.exe" -CommandType Application).Source
+            $actual = (Get-Command "$name.exe" -CommandType Application | Select-Object -First 1).Source
             if ($actual -cne $expected) { throw "$name resolves to '$actual' instead of '$expected'" }
           }
 
