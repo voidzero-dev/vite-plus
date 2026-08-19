@@ -103,10 +103,7 @@ async fn local_markers(cwd: &AbsolutePathBuf, provider: &NodeProvider) -> LocalM
 
 /// Collect the set of locally installed Node.js versions (without `v` prefix).
 fn installed_versions() -> std::collections::HashSet<String> {
-    let Ok(home_dir) = vp_shared::get_vp_home() else {
-        return std::collections::HashSet::new();
-    };
-    let node_dir = home_dir.join("js_runtime").join("node");
+    let node_dir = vp_shared::EnvConfig::get().dirs.data.join("js_runtime").join("node");
     super::list::list_installed_versions(node_dir.as_path()).into_iter().collect()
 }
 

@@ -28,6 +28,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 owo-colors = { workspace = true }
 oxc_resolver = { workspace = true }
+rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
@@ -45,7 +46,9 @@ uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 serial_test = { workspace = true }
+temp-env = { workspace = true }
 tempfile = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

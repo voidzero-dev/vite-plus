@@ -8,7 +8,11 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'packages/tools/src/install-global-cli.ts'
       - 'crates/vp_installer/**'
+      - 'crates/vp_trampoline/**'
+      - 'crates/vp_global_cli/**'
+      - 'crates/vp_shared/**'
       - 'crates/vp_pm_cli/**'
       - 'crates/vp_setup/**'
       - '.github/workflows/test-standalone-install.yml'
@@ -39,6 +43,12 @@ jobs:
             name: macOS ARM64
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        # This job installs the published CLI, which does not support the split
+        # layout. Set VP_HOME so the new installer writes a compatible
+        # single-root tree.
+        run: echo "VP_HOME=$HOME/.vite-plus" >> $GITHUB_ENV
 
       - name: Run install.sh
         run: cat packages/cli/install.sh | bash
@@ -114,6 +124,343 @@ jobs:
           vp upgrade --rollback
           vp --version
 
+  test-install-sh-layout:
+    name: Test install.sh layout (fresh split + grandfather)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VP_LOCAL_BINARY: ${{ github.workspace }}/target/release/vp
+      VP_SKIP_DEPS_INSTALL: '1'
+      VP_NODE_MANAGER: 'yes'
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+
+      - name: Shell config paths preserve metacharacters
+        run: |
+          # Sourced installer functions use these globals and literal
+          # metacharacters. Keep them unchanged.
+          # shellcheck disable=SC2016,SC2034
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y fish zsh
+
+          # Load installer helpers without invoking main.
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+
+          TEST_ROOT=$(mktemp -d)
+          export HOME="$TEST_ROOT/home"
+          export USERPROFILE='C:/Users/alice'
+          export XDG_CONFIG_HOME="$TEST_ROOT/shell-config"
+          mkdir -p "$HOME" "$XDG_CONFIG_HOME"
+
+          # Windows layout resolution uses USERPROFILE first. Shell source
+          # entries can use short paths only for the shell HOME.
+          is_windows_uname() { return 0; }
+          unset VP_HOME
+          use_legacy_layout
+          test "$CONFIG_DIR" = "$USERPROFILE/.vite-plus"
+          test "$CONFIG_DIR_REF_POSIX" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_FISH" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_NU" = "$CONFIG_DIR"
+
+          fake_vp() {
+            printf 'bin\t%s/bin\n' "$USERPROFILE"
+            printf 'data\t%s/AppData/Local/vite-plus/data\n' "$USERPROFILE"
+            printf 'cache\t%s/AppData/Local/vite-plus/cache\n' "$USERPROFILE"
+            printf 'config\t%s/AppData/Roaming/vite-plus\n' "$USERPROFILE"
+            printf 'state\t%s/AppData/Local/vite-plus/state\n' "$USERPROFILE"
+          }
+          apply_dirs_from_vp fake_vp
+          test "$CONFIG_DIR_REF_POSIX" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_FISH" = "$CONFIG_DIR"
+          test "$CONFIG_DIR_REF_NU" = "$CONFIG_DIR"
+
+          export USERPROFILE="$HOME"
+          SPECIAL=$(printf 'config-$USER-"-\047-`-\134')
+          CONFIG_DIR="$TEST_ROOT/$SPECIAL"
+          mkdir -p "$CONFIG_DIR"
+          set_config_dir_refs "$CONFIG_DIR" "$HOME"
+
+          SHELL_CONFIG_SUMMARY=()
+          SHELL_CONFIG_FAILED_SHELLS=()
+          SHELL_CONFIG_HAS_UPDATED=false
+          SHELL_CONFIG_HAS_CONFIGURED=false
+          SHELL_CONFIG_HAS_FAILURE=false
+
+          printf '%s\n' 'export VP_CONFIG_SOURCE_MARKER=bash-zsh' > "$CONFIG_DIR/env"
+          touch "$HOME/.bashrc"
+          configure_bash_path
+          configure_zsh_path
+          bash --noprofile --norc -c 'source "$HOME/.bashrc"; test "$VP_CONFIG_SOURCE_MARKER" = bash-zsh'
+          zsh -f -c 'source "$HOME/.zshenv"; test "$VP_CONFIG_SOURCE_MARKER" = bash-zsh'
+
+          printf '%s\n' 'set -gx VP_CONFIG_SOURCE_MARKER fish' > "$CONFIG_DIR/env.fish"
+          configure_fish_path
+          fish --no-config -c 'source "$XDG_CONFIG_HOME/fish/conf.d/vite-plus.fish"; test "$VP_CONFIG_SOURCE_MARKER" = fish'
+
+          NUSHELL_DIR="$TEST_ROOT/nushell"
+          discover_nushell_vendor_autoload_dir() { printf '%s\n' "$NUSHELL_DIR"; }
+          configure_nushell_path
+          python3 - "$NUSHELL_DIR/vite-plus.nu" "$CONFIG_DIR/env.nu" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          line = pathlib.Path(sys.argv[1]).read_text().splitlines()[1]
+          assert line.startswith('source '), line
+          assert json.loads(line.removeprefix('source ')) == sys.argv[2], line
+          PY
+
+      - name: Build local vp
+        run: cargo build --release -p vp_global_cli
+
+      - name: Incomplete directory overrides are rejected
+        run: |
+          set -euo pipefail
+          OUTPUT=$(mktemp)
+          if (
+            unset VP_HOME VP_BIN_DIR VP_CACHE_DIR
+            export VP_DATA_DIR="$RUNNER_TEMP/incomplete-vp-data"
+            bash packages/cli/install.sh
+          ) >"$OUTPUT" 2>&1; then
+            cat "$OUTPUT"
+            echo "install.sh accepted an incomplete directory override group"
+            exit 1
+          fi
+          cat "$OUTPUT"
+          grep -F "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together" "$OUTPUT"
+
+      - name: Existing setup-vp uses legacy layout
+        run: |
+          set -euo pipefail
+          LEGACY=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$LEGACY"
+          export USERPROFILE="$LEGACY"
+          export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
+          unset VP_VPDIRS_AWARE
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-setup-vp-legacy bash packages/cli/install.sh
+
+          test -e "$LEGACY/.vite-plus/current"
+          test -e "$LEGACY/.vite-plus/bin/vp"
+          test ! -d "$LEGACY/.local/share/vite-plus"
+          test "$(readlink "$LEGACY/.vite-plus/bin/vp")" = "$LEGACY/.vite-plus/current/bin/vp"
+          "$LEGACY/.vite-plus/bin/vp" --version
+
+      - name: Fresh home uses split layout
+        run: |
+          set -euo pipefail
+          FRESH=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$FRESH"
+          export USERPROFILE="$FRESH"
+          export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
+          export VP_VPDIRS_AWARE=1
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
+
+          test ! -d "$FRESH/.vite-plus"
+          test -e "$FRESH/.local/share/vite-plus/current"
+          test -e "$FRESH/.local/share/vite-plus/bin/vp"
+          test -f "$FRESH/.config/vite-plus/env"
+          test "$(readlink "$FRESH/.local/share/vite-plus/bin/vp")" = "$FRESH/.local/share/vite-plus/current/bin/vp"
+          "$FRESH/.local/share/vite-plus/bin/vp" --version
+
+          DUMP=$(VP_DUMP_DIRS=1 "$FRESH/.local/share/vite-plus/bin/vp")
+          dump_dir() { printf '%s\n' "$DUMP" | awk -F'\t' -v key="$1" '$1 == key { print $2; exit }'; }
+          test "$(dump_dir bin)" = "$FRESH/.local/share/vite-plus/bin"
+          test "$(dump_dir data)" = "$FRESH/.local/share/vite-plus"
+          test "$(dump_dir cache)" = "$FRESH/.cache/vite-plus"
+          test "$(dump_dir config)" = "$FRESH/.config/vite-plus"
+          test "$(dump_dir state)" = "$FRESH/.local/state/vite-plus"
+
+      - name: Custom shared bin preserves an unrelated Node executable
+        run: |
+          set -euo pipefail
+          FOREIGN=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          mkdir -p "$FOREIGN/.local/bin"
+          printf '#!/bin/sh\necho foreign-node\n' > "$FOREIGN/.local/bin/node"
+          chmod +x "$FOREIGN/.local/bin/node"
+          export HOME="$FOREIGN"
+          export USERPROFILE="$FOREIGN"
+          export GITHUB_ACTION_REPOSITORY=voidzero-dev/setup-vp
+          unset VP_VPDIRS_AWARE
+          export VP_BIN_DIR="$FOREIGN/.local/bin"
+          export VP_DATA_DIR="$FOREIGN/.local/share/vite-plus"
+          export VP_CACHE_DIR="$FOREIGN/.cache/vite-plus"
+          # Override the setting for this job. A custom bin can be shared. CI
+          # must not replace a Node executable that Vite+ does not own.
+          export VP_NODE_MANAGER=
+          unset VP_HOME
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-foreign-node bash packages/cli/install.sh
+
+          test ! -d "$FOREIGN/.vite-plus"
+          test -f "$FOREIGN/.local/bin/node"
+          test ! -L "$FOREIGN/.local/bin/node"
+          test "$("$FOREIGN/.local/bin/node")" = "foreign-node"
+
+      - name: Existing ~/.vite-plus is reused
+        run: |
+          set -euo pipefail
+          GRAND=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          # A prior install must contain a `current` link. An empty
+          # ~/.vite-plus directory is not an install.
+          mkdir -p "$GRAND/.vite-plus/0.0.1/bin"
+          ln -s 0.0.1 "$GRAND/.vite-plus/current"
+          echo keep > "$GRAND/.vite-plus/.keep"
+          export HOME="$GRAND"
+          export USERPROFILE="$GRAND"
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
+
+          test -f "$GRAND/.vite-plus/.keep"
+          test -e "$GRAND/.vite-plus/current"
+          test -e "$GRAND/.vite-plus/bin/vp"
+          test ! -d "$GRAND/.local/share/vite-plus"
+          test "$(readlink "$GRAND/.vite-plus/bin/vp")" = "$GRAND/.vite-plus/current/bin/vp"
+          "$GRAND/.vite-plus/bin/vp" --version
+
+      - name: Stray ~/.vite-plus does not capture a split install
+        run: |
+          set -euo pipefail
+          STRAY=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$STRAY"
+          export USERPROFILE="$STRAY"
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
+
+          # A local pre-split Vite+ can create ~/.vite-plus for caches, config,
+          # and managed runtimes. This tree has no `current` link, so it is not
+          # an install.
+          mkdir -p "$STRAY/.vite-plus/cache" "$STRAY/.vite-plus/js_runtime"
+          echo '{}' > "$STRAY/.vite-plus/config.json"
+
+          # Resolution must use the split roots with and without the environment
+          # script variables.
+          data_root() { VP_DUMP_DIRS=1 "$STRAY/.local/share/vite-plus/bin/vp" | awk -F'\t' '$1=="data"{print $2}'; }
+          test "$(data_root)" = "$STRAY/.local/share/vite-plus"
+          test "$(VP_DATA_DIR="$STRAY/.local/share/vite-plus" VP_BIN_DIR="$STRAY/.local/bin" VP_CACHE_DIR="$STRAY/.cache/vite-plus" data_root)" = "$STRAY/.local/share/vite-plus"
+
+          # A reinstall must continue to use the split roots. It must not change
+          # the stray tree. `vp upgrade` uses the same resolution chain.
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test2 bash packages/cli/install.sh
+
+          test -x "$STRAY/.local/share/vite-plus/local-test2/bin/vp"
+          test "$(readlink "$STRAY/.local/share/vite-plus/current")" = "local-test2"
+          test ! -e "$STRAY/.vite-plus/current"
+          test ! -e "$STRAY/.vite-plus/bin"
+          "$STRAY/.local/share/vite-plus/bin/vp" --version
+
+  test-install-sh-old-version:
+    name: Test install.sh pre-split release (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      VP_VERSION: '0.2.9'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux x64 glibc
+          - os: macos-latest
+            name: macOS ARM64
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Run install.sh for a pre-split release
+        # Do not set VP_HOME. A pre-VpDirs release must select the monolithic
+        # ~/.vite-plus root.
+        run: |
+          cat packages/cli/install.sh | bash | tee install-output.txt
+          grep -F "does not support the split directory layout" install-output.txt
+
+      - name: Verify monolithic layout
+        run: |
+          test -x "$HOME/.vite-plus/$VP_VERSION/bin/vp"
+          test -e "$HOME/.vite-plus/current"
+          test -f "$HOME/.vite-plus/env"
+          # No split-layout leftovers.
+          test ! -d "$HOME/.local/share/vite-plus"
+          test ! -d "$HOME/.config/vite-plus"
+          test ! -e "$HOME/.local/bin/vp"
+          ls -al "$HOME/.vite-plus/bin"
+          for shim in vp vpr vpx node npm npx corepack; do
+            test -e "$HOME/.vite-plus/bin/$shim"
+          done
+
+      - name: Verify PATH-resolved commands work
+        run: |
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          command -v vp | grep -F "$HOME/.vite-plus/bin/vp"
+          vp --version
+          node --version
+          npm --version
+          vp env doctor
+
+  test-install-ps1-old-version:
+    name: Test install.ps1 pre-split release (Windows x64)
+    # On a GitHub-hosted runner, %USERPROFILE% matches the operating-system
+    # profile. The old resolver and `vp env doctor` must report the install path.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      VP_VERSION: '0.2.9'
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Run install.ps1 for a pre-split release
+        # Do not set VP_HOME. A pre-VpDirs release must select the monolithic
+        # %USERPROFILE%\.vite-plus root.
+        shell: pwsh
+        run: |
+          # *>&1 adds the Write-Host information stream to the pipeline.
+          # Tee-Object can then record installer notices.
+          & ./packages/cli/install.ps1 *>&1 | Tee-Object -FilePath install-output.txt
+          if (-not (Select-String -Path install-output.txt -Pattern "does not support the split directory layout" -SimpleMatch -Quiet)) {
+            Write-Error "Expected the pre-split fallback notice in installer output"
+            exit 1
+          }
+
+      - name: Verify monolithic layout
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:USERPROFILE ".vite-plus"
+          if (-not (Test-Path "$root\$env:VP_VERSION\bin\vp.exe")) { Write-Error "payload missing"; exit 1 }
+          if (-not (Test-Path "$root\current")) { Write-Error "current link missing"; exit 1 }
+          # No split-layout leftovers.
+          foreach ($split in @((Join-Path $env:LOCALAPPDATA "vite-plus"), (Join-Path $env:APPDATA "vite-plus"))) {
+            if (Test-Path $split) { Write-Error "unexpected split dir: $split"; exit 1 }
+          }
+          Get-ChildItem -Force "$root\bin"
+          foreach ($shim in @("vp.exe", "vpr.exe", "vpx.exe", "node.exe", "npm.exe", "npx.exe")) {
+            if (-not (Test-Path "$root\bin\$shim")) { Write-Error "shim missing: $shim"; exit 1 }
+          }
+
+      - name: Verify PATH-resolved commands work
+        shell: pwsh
+        run: |
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          where.exe vp
+          vp --version
+          node --version
+          npm --version
+          vp env doctor
+
   test-install-sh-readonly-config:
     name: Test install.sh (readonly shell config)
     runs-on: ubuntu-latest
@@ -121,6 +468,9 @@ jobs:
       contents: read
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        run: echo "VP_HOME=$HOME/.vite-plus" >> $GITHUB_ENV
 
       - name: Make shell config files read-only
         run: |
@@ -169,6 +519,7 @@ jobs:
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
+              export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | bash
               if [ -f ~/.profile ]; then
                 source ~/.profile
@@ -228,6 +579,7 @@ jobs:
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
+              export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -285,6 +637,7 @@ jobs:
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
+              export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -419,6 +772,10 @@ jobs:
       contents: read
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Pin VP_HOME for pre-split published CLI
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
 
       - name: Run install.ps1
         shell: pwsh
@@ -664,6 +1021,10 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      - name: Pin VP_HOME for pre-split published CLI
+        shell: bash
+        run: echo "VP_HOME=$USERPROFILE\.vite-plus" >> $GITHUB_ENV
+
       - name: Run install.ps1
         shell: pwsh
         run: |
@@ -839,9 +1200,286 @@ jobs:
         with:
           target-dir: ${{ format('{0}/target', env.DEV_DRIVE) }}
 
-      - name: Build vp-setup.exe
+      - name: Build Windows installers
         shell: bash
-        run: cargo build --release -p vp_installer
+        run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
+
+      - name: Incomplete directory overrides are rejected in PowerShell
+        shell: pwsh
+        run: |
+          Remove-Item Env:VP_HOME, Env:VP_BIN_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          $env:VP_DATA_DIR = Join-Path $env:RUNNER_TEMP "incomplete-vp-data"
+          $stdout = Join-Path $env:RUNNER_TEMP "vp-incomplete-override.stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "vp-incomplete-override.stderr.txt"
+          $installer = (Resolve-Path ./packages/cli/install.ps1).Path
+          $process = Start-Process -FilePath (Get-Command pwsh).Source `
+            -ArgumentList @("-NoProfile", "-File", "`"$installer`"") `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
+            -Wait -PassThru
+          $text = @(
+            Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue
+            Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue
+          ) -join [Environment]::NewLine
+          Write-Host $text
+          if ($process.ExitCode -ne 1) {
+            throw "install.ps1 exited with $($process.ExitCode), expected 1"
+          }
+          if (-not $text.Contains("Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together")) {
+            throw "install.ps1 did not report the incomplete override group"
+          }
+
+      - name: Existing setup-vp uses legacy layout in PowerShell installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vite-plus-setup-vp-legacy-ps1"
+          $fakeTgz = Join-Path $root "vite-plus.tgz"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
+
+          $env:USERPROFILE = $root
+          $env:GITHUB_ACTION_REPOSITORY = "voidzero-dev/setup-vp"
+          Remove-Item Env:VP_VPDIRS_AWARE -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_DATA_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = $fakeTgz
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-setup-vp-legacy"
+          $env:VP_NODE_MANAGER = "no"
+          $env:CI = "true"
+
+          & ./packages/cli/install.ps1
+
+          $legacyRoot = Join-Path $root ".vite-plus"
+          $vp = Join-Path $legacyRoot "bin/vp.exe"
+          if (-not (Test-Path (Join-Path $legacyRoot "current"))) {
+            Write-Error "setup-vp compatibility install did not use $legacyRoot"
+          }
+          if (-not (Test-Path $vp)) {
+            Write-Error "setup-vp compatibility entrypoint not found: $vp"
+          }
+          & $vp --version
+
+      - name: PowerShell installer preserves an unrelated Node executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vite-plus-foreign-node-ps1"
+          $data = Join-Path $root "data"
+          $bin = Join-Path $root "bin"
+          $cache = Join-Path $root "cache"
+          $node = Join-Path $bin "node.exe"
+          $fakeTgz = Join-Path $root "vite-plus.tgz"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          [System.IO.File]::WriteAllText($node, "foreign-node")
+          New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
+
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          $env:VP_BIN_DIR = $bin
+          $env:VP_DATA_DIR = $data
+          $env:VP_CACHE_DIR = $cache
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = $fakeTgz
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-foreign-node"
+          $env:VP_NODE_MANAGER = ""
+          $env:CI = "true"
+
+          & ./packages/cli/install.ps1
+
+          if ([System.IO.File]::ReadAllText($node) -ne "foreign-node") {
+            Write-Error "install.ps1 replaced an unrelated node.exe"
+          }
+          if (Test-Path (Join-Path $bin "node.shim")) {
+            Write-Error "install.ps1 claimed an unrelated node.exe"
+          }
+
+      - name: Complete directory overrides keep the split layout through the trampoline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vp-complete-overrides"
+          $env:USERPROFILE = Join-Path $root "profile"
+          $env:LOCALAPPDATA = Join-Path $env:USERPROFILE "AppData\Local"
+          $env:APPDATA = Join-Path $env:USERPROFILE "AppData\Roaming"
+          $env:VP_DATA_DIR = Join-Path $root "data only"
+          $env:VP_BIN_DIR = Join-Path $env:VP_DATA_DIR "bin"
+          $env:VP_CACHE_DIR = Join-Path $root "cache"
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = Join-Path $root "empty.tgz"
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-complete-overrides"
+          $env:VP_NODE_MANAGER = "no"
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
+
+          & ./packages/cli/install.ps1
+
+          function Get-DirMap([string]$VpBinary) {
+            $env:VP_DUMP_DIRS = "1"
+            try {
+              $map = @{}
+              foreach ($line in @(& $VpBinary)) {
+                $parts = "$line" -split "`t", 2
+                if ($parts.Length -eq 2) { $map[$parts[0]] = $parts[1] }
+              }
+              return $map
+            } finally {
+              Remove-Item Env:VP_DUMP_DIRS -ErrorAction SilentlyContinue
+            }
+          }
+
+          $payload = Join-Path $env:VP_DATA_DIR "current\bin\vp.exe"
+          $trampoline = Join-Path $env:VP_DATA_DIR "bin\vp.exe"
+          $expected = Get-DirMap $payload
+          if ($expected['layout'] -ne 'split') { throw "payload did not select split layout" }
+          if ($expected['bin'] -ne (Join-Path $env:VP_DATA_DIR 'bin')) { throw "unexpected bin root" }
+          if ($expected['cache'] -ne $env:VP_CACHE_DIR) { throw "unexpected cache root" }
+
+          Remove-Item Env:VP_BIN_DIR, Env:VP_DATA_DIR, Env:VP_CACHE_DIR -ErrorAction Stop
+          $actual = Get-DirMap $trampoline
+          foreach ($key in @('layout', 'data', 'bin', 'cache', 'config', 'state')) {
+            if ($actual[$key] -ne $expected[$key]) {
+              throw "$key differs: payload='$($expected[$key])', trampoline='$($actual[$key])'"
+            }
+          }
+
+      - name: Windows PowerShell 5.1 sources env.ps1 from a Unicode path
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw "This test requires Windows PowerShell 5.1"
+          }
+
+          $suffix = "unicode-{0}{1}-{2}{3}" -f [char]0x6D4B, [char]0x8BD5, [char]0x8DEF, [char]0x5F84
+          $root = Join-Path $env:RUNNER_TEMP "vp-unicode-env"
+          $env:VP_HOME = Join-Path $root $suffix
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = Join-Path $root "empty.tgz"
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-unicode-env"
+          $env:VP_NODE_MANAGER = "yes"
+          $env:VP_NODE_VERSION = "22.13.1"
+          $env:CI = "true"
+          Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_DATA_DIR -ErrorAction SilentlyContinue
+          Remove-Item Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
+          $pathBeforeInstall = $env:Path
+
+          & ./packages/cli/install.ps1
+
+          $expectedHome = $env:VP_HOME
+          $expectedBin = Join-Path $expectedHome "bin"
+          $envFile = Join-Path $expectedHome "env.ps1"
+          $bom = [byte[]](0xEF, 0xBB, 0xBF)
+
+          function Assert-One-Utf8Bom([string]$Path) {
+            $bytes = [System.IO.File]::ReadAllBytes($Path)
+            if ($bytes.Length -lt 3 -or $bytes[0] -ne $bom[0] -or $bytes[1] -ne $bom[1] -or $bytes[2] -ne $bom[2]) {
+              throw "$Path does not start with a UTF-8 BOM"
+            }
+            if ($bytes.Length -ge 6 -and $bytes[3] -eq $bom[0] -and $bytes[4] -eq $bom[1] -and $bytes[5] -eq $bom[2]) {
+              throw "$Path starts with more than one UTF-8 BOM"
+            }
+          }
+
+          Assert-One-Utf8Bom $envFile
+          foreach ($name in @("env", "env.fish", "env.nu")) {
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $expectedHome $name))
+            if ($bytes.Length -ge 3 -and $bytes[0] -eq $bom[0] -and $bytes[1] -eq $bom[1] -and $bytes[2] -eq $bom[2]) {
+              throw "$name has an unexpected UTF-8 BOM"
+            }
+          }
+
+          # Remove the PATH change made by the installer. The generated file
+          # must restore the exact Unicode path by itself.
+          $env:Path = $pathBeforeInstall
+          $env:VP_HOME = "incorrect-before-source"
+          . $envFile
+
+          if ($env:VP_HOME -cne $expectedHome) { throw "env.ps1 changed the Unicode VP_HOME" }
+          if ($__vp_bin -cne $expectedBin) { throw "env.ps1 changed the Unicode bin path" }
+          foreach ($name in @("vp", "node", "npm")) {
+            $expected = Join-Path $expectedBin "$name.exe"
+            $actual = (Get-Command "$name.exe" -CommandType Application | Select-Object -First 1).Source
+            if ($actual -cne $expected) { throw "$name resolves to '$actual' instead of '$expected'" }
+          }
+
+          vp --version
+          node --version
+          npm --version
+
+          vp env setup --env-only
+          Assert-One-Utf8Bom $envFile
+
+          $env:VP_TEST_ENV_FILE = $envFile
+          $env:VP_TEST_EXPECTED_HOME = $expectedHome
+          & pwsh -NoProfile -Command '. $env:VP_TEST_ENV_FILE; if ($env:VP_HOME -cne $env:VP_TEST_EXPECTED_HOME) { throw "PowerShell 7 changed VP_HOME" }; vp --version'
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell 7 could not source env.ps1" }
+
+      - name: Split-layout implode removes the running trampoline safely
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vp-split-implode"
+          $data = Join-Path $root "data"
+          $bin = Join-Path $root "bin"
+          $cache = Join-Path $root "cache"
+          $fakeTgz = Join-Path $root "empty.tgz"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
+
+          Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
+          $env:VP_BIN_DIR = $bin
+          $env:VP_DATA_DIR = $data
+          $env:VP_CACHE_DIR = $cache
+          $env:VP_LOCAL_BINARY = Join-Path $env:DEV_DRIVE "target/release/vp.exe"
+          $env:VP_LOCAL_TGZ = $fakeTgz
+          $env:VP_SKIP_DEPS_INSTALL = "1"
+          $env:VP_VERSION = "local-split-implode"
+          $env:VP_NODE_MANAGER = "no"
+
+          & ./packages/cli/install.ps1
+
+          $vp = Join-Path $bin "vp.exe"
+          $sidecar = Join-Path $bin "vp.shim"
+          $unrelated = Join-Path $bin "unrelated.txt"
+          [System.IO.File]::WriteAllText($unrelated, "keep")
+
+          & $vp implode --yes
+          for ($i = 0; $i -lt 100 -and ((Test-Path $vp) -or (Test-Path $sidecar)); $i++) {
+            Start-Sleep -Milliseconds 100
+          }
+          if (Test-Path $vp) { throw "implode left vp.exe in the split bin" }
+          if (Test-Path $sidecar) { throw "implode left vp.shim in the split bin" }
+          if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
+            throw "implode changed an unrelated bin entry"
+          }
+
+          # Reinstall as soon as a second implode returns. The deferred cleanup
+          # for the old trampoline must not remove the replacement.
+          & ./packages/cli/install.ps1
+          & $vp implode --yes
+          & ./packages/cli/install.ps1
+          Start-Sleep -Seconds 2
+
+          if (-not (Test-Path $vp)) { throw "deferred cleanup removed the new vp.exe" }
+          if (-not (Test-Path $sidecar)) { throw "deferred cleanup removed the new vp.shim" }
+          if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
+            throw "the reinstall changed an unrelated bin entry"
+          }
+          & $vp --version
 
       - name: Install via vp-setup.exe (silent)
         shell: pwsh
