@@ -376,7 +376,7 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
             return Err(Error::CommandExecution(e));
         }
 
-        match spawn_deferred_delete(&trash_path) {
+        match spawn_deferred_delete(&trash_path, std::process::id()) {
             Ok(_) => {
                 output::success(&vt_str::format!(
                     "Scheduled removal of {} (will complete shortly)",
@@ -395,27 +395,51 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
     }
 }
 
-/// Build a `cmd.exe` script that retries `rmdir /S /Q` up to 10 times with
-/// 1-second pauses, exiting as soon as the directory is gone.
-#[cfg(windows)]
-fn build_deferred_delete_script(trash_path: &std::path::Path) -> Str {
-    let p = trash_path.to_string_lossy();
+/// Build a PowerShell script that waits for the process which renamed a root,
+/// then retries removal. Reparse points are removed without traversal so a
+/// stale junction cannot lead into a replacement installation.
+#[cfg(any(windows, test))]
+fn build_deferred_delete_script(trash_path: &std::path::Path, parent_pid: u32) -> Str {
+    let path = powershell_path_literal(trash_path);
     vt_str::format!(
-        "for /L %i in (1,1,10) do @(\
-            if not exist \"{p}\" exit /B 0 & \
-            rmdir /S /Q \"{p}\" 2>NUL & \
-            if not exist \"{p}\" exit /B 0 & \
-            timeout /T 1 /NOBREAK >NUL\
-        )"
+        "$ErrorActionPreference='SilentlyContinue';\
+         $root='{path}';$vpParent={parent_pid};\
+         Wait-Process -Id $vpParent -ErrorAction SilentlyContinue;\
+         function Remove-VpTree([string]$path){{\
+           try{{$item=Get-Item -LiteralPath $path -Force -ErrorAction Stop}}\
+           catch{{return $false}};\
+           try{{\
+             if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){{\
+               if($item.PSIsContainer){{[IO.Directory]::Delete($item.FullName)}}\
+               else{{[IO.File]::Delete($item.FullName)}}\
+             }}elseif($item.PSIsContainer){{\
+               foreach($child in @(Get-ChildItem -LiteralPath $item.FullName -Force \
+                 -ErrorAction Stop)){{\
+                 if(-not (Remove-VpTree $child.FullName)){{return $false}}\
+               }};\
+               [IO.Directory]::Delete($item.FullName)\
+             }}else{{[IO.File]::Delete($item.FullName)}}\
+           }}catch{{return $false}};\
+           return $true\
+         }};\
+         for($i=0;$i -lt 100;$i++){{\
+           if(-not (Test-Path -LiteralPath $root)){{exit 0}};\
+           if(Remove-VpTree $root){{exit 0}};\
+           Start-Sleep -Milliseconds 100\
+         }};exit 1"
     )
 }
 
-/// Spawn a detached `cmd.exe` process that retries deletion of `trash_path`.
+/// Spawn a detached PowerShell process that deletes `trash_path` after the
+/// process identified by `parent_pid` exits.
 #[cfg(windows)]
-fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::process::Child> {
-    let script = build_deferred_delete_script(trash_path);
-    std::process::Command::new("cmd.exe")
-        .args(["/C", &script])
+fn spawn_deferred_delete(
+    trash_path: &std::path::Path,
+    parent_pid: u32,
+) -> std::io::Result<std::process::Child> {
+    let script = build_deferred_delete_script(trash_path, parent_pid);
+    std::process::Command::new("powershell.exe")
+        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -824,14 +848,16 @@ mod tests {
     }
 
     #[test]
-    #[cfg(windows)]
     fn test_build_deferred_delete_script() {
-        let path = std::path::Path::new(r"C:\Users\test\.vite-plus.removing-1234");
-        let script = build_deferred_delete_script(path);
-        assert!(script.contains("rmdir /S /Q"));
-        assert!(script.contains(r"C:\Users\test\.vite-plus.removing-1234"));
-        assert!(script.contains("for /L %i in (1,1,10)"));
-        assert!(script.contains("timeout /T 1 /NOBREAK"));
+        let path = std::path::Path::new(r"C:\Users\test $&' 测试\.vite-plus.removing-1234");
+        let script = build_deferred_delete_script(path, 9876);
+        assert!(script.contains("$vpParent=9876"));
+        assert!(script.contains("Wait-Process -Id $vpParent"));
+        assert!(script.contains("Start-Sleep -Milliseconds 100"));
+        assert!(script.contains("[IO.FileAttributes]::ReparsePoint"));
+        assert!(script.contains("Get-ChildItem -LiteralPath"));
+        assert!(script.contains(r"C:\Users\test $&'' 测试\.vite-plus.removing-1234"));
+        assert!(!script.contains("timeout"));
     }
 
     #[test]
@@ -858,6 +884,77 @@ mod tests {
         if std::env::var_os("VP_IMPLODE_LOCK_TEST").is_some() {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn deferred_root_cleanup_child() {
+        let Some(root) = std::env::var_os("VP_IMPLODE_ROOT_TEST") else {
+            return;
+        };
+        let root = AbsolutePathBuf::new(root.into()).unwrap();
+        remove_vite_plus_dir(&root).unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn deferred_root_delete_waits_and_preserves_an_immediate_reinstall() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let parent = temp_dir.path().join("root $&' 测试");
+        let original = parent.join("data");
+        let old_version = original.join("version");
+        let locked_executable = old_version.join("bin/vp.exe");
+        std::fs::create_dir_all(locked_executable.parent().unwrap()).unwrap();
+        std::fs::copy(std::env::current_exe().unwrap(), &locked_executable).unwrap();
+
+        let current = original.join("current");
+        let junction_status = std::process::Command::new("cmd.exe")
+            .args(["/D", "/C", "mklink", "/J"])
+            .arg(&current)
+            .arg(&old_version)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(junction_status.success(), "test setup must create the current junction");
+
+        let mut child = std::process::Command::new(&locked_executable)
+            .args(["deferred_root_cleanup_child", "--nocapture"])
+            .env("VP_IMPLODE_ROOT_TEST", &original)
+            .spawn()
+            .unwrap();
+        let trash = original.with_extension(vt_str::format!("removing-{}", child.id()));
+        for _ in 0..50 {
+            if trash.exists() && !original.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(trash.exists(), "the child must rename the old root");
+        assert!(!original.exists(), "the original root must be free immediately");
+        assert!(child.try_wait().unwrap().is_none(), "the cleanup helper must wait for vp");
+
+        let replacement = original.join("version/replacement.txt");
+        std::fs::create_dir_all(replacement.parent().unwrap()).unwrap();
+        std::fs::write(&replacement, b"keep").unwrap();
+        assert!(child.wait().unwrap().success());
+
+        for _ in 0..150 {
+            let removing_roots = std::fs::read_dir(&parent)
+                .unwrap()
+                .flatten()
+                .map(|entry| entry.file_name())
+                .filter(|name| name.to_string_lossy().starts_with("data.removing-"))
+                .count();
+            if removing_roots == 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        assert!(!trash.exists(), "the renamed root must be removed");
+        assert_eq!(std::fs::read(&replacement).unwrap(), b"keep");
     }
 
     #[test]
