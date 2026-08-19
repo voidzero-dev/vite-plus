@@ -959,6 +959,18 @@ jobs:
       - name: Install Fish
         uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
 
+      - name: Ensure Zsh is installed
+        run: |
+          if ! command -v zsh >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              sudo apt-get update
+              sudo apt-get install --yes zsh
+            else
+              brew install zsh
+            fi
+          fi
+          zsh --version
+
       # https://github.com/marketplace/actions/setup-nu
       - name: Install Nushell
         uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
@@ -981,6 +993,9 @@ jobs:
 
       - name: Run PTY snapshot tests
         run: |
+          export VP_SNAP_SH_BIN="$(command -v sh)"
+          export VP_SNAP_BASH_BIN="$(command -v bash)"
+          export VP_SNAP_ZSH_BIN="$(command -v zsh)"
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
           VP_SNAP_FISH_BIN="$(command -v fish)" \

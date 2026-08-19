@@ -520,28 +520,23 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 }
 
 // POSIX env file (bash/zsh)
-// When sourced multiple times, removes existing entry and re-prepends to front
-// Uses parameter expansion to split PATH around the bin entry in O(1) operations
+// When sourced multiple times, removes existing entries and re-prepends to front
+// Uses parameter expansion to preserve PATH entries containing spaces
 // Includes vp() shell function wrapper for `vp env use` (evals stdout)
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
-case ":${PATH}:" in
-    *":${__vp_bin}:"*)
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-        __vp_after="${__vp_after%:}"
-        export PATH="${__vp_bin}${__vp_before:+:${__vp_before}}${__vp_after:+:${__vp_after}}"
-        unset __vp_tmp __vp_before __vp_after
-        ;;
-    *)
-        export PATH="$__vp_bin:$PATH"
-        ;;
-esac
-unset __vp_bin
+while case ":${PATH}:" in *":${__vp_bin}:"*) true ;; *) false ;; esac; do
+    __vp_tmp=":${PATH}:"
+    __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
+    __vp_before="${__vp_before#:}"
+    __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
+    __vp_after="${__vp_after%:}"
+    PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+done
+export PATH="${__vp_bin}${PATH:+:${PATH}}"
+unset __vp_bin __vp_tmp __vp_before __vp_after
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -1388,24 +1383,19 @@ mod tests {
 
                 let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-                // Verify PATH guard structure: case statement checks for duplicate
+                // Verify PATH guard structure: loop removes every duplicate.
                 assert!(
-                    env_content.contains("case \":${PATH}:\" in"),
-                    "env file should contain PATH guard case statement"
+                    env_content.contains("while case \":${PATH}:\" in"),
+                    "env file should contain a PATH cleanup loop"
                 );
                 assert!(
                     env_content.contains("*\":${__vp_bin}:\"*)"),
                     "env file should check for existing bin in PATH"
                 );
-                // Verify it re-prepends to front when already present
+                // Verify it re-prepends exactly once after cleanup.
                 assert!(
-                    env_content.contains("export PATH=\"${__vp_bin}"),
-                    "env file should re-prepend bin to front of PATH"
-                );
-                // Verify simple prepend for new entry
-                assert!(
-                    env_content.contains("export PATH=\"$__vp_bin:$PATH\""),
-                    "env file should prepend bin to PATH for new entry"
+                    env_content.contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}\""),
+                    "env file should prepend bin to PATH after removing duplicates"
                 );
             },
         )

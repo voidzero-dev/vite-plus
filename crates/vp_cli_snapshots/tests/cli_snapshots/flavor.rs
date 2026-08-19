@@ -6,7 +6,7 @@
 //!
 //! Each flavor gets one runner bin directory per run (created under the run
 //! temp root) for runner-owned helpers. `vpt` always lives there; optional
-//! external tools such as Fish and Nushell are linked there when available.
+//! external shells are linked there when available.
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +30,11 @@ impl Flavor {
 pub struct FlavorRuntime {
     pub runner_bin_dir: PathBuf,
     pub vpt: PathBuf,
+    /// Runner-owned POSIX shell binaries used by fixtures that execute the
+    /// generated `env` file.
+    pub sh: Option<PathBuf>,
+    pub bash: Option<PathBuf>,
+    pub zsh: Option<PathBuf>,
     /// Runner-owned Fish binary used by fixtures that execute generated
     /// `env.fish` files. CI supplies it through `VP_SNAP_FISH_BIN`.
     pub fish: Option<PathBuf>,
@@ -218,6 +223,18 @@ pub fn fish_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_FISH_BIN", "fish")
 }
 
+pub fn sh_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_SH_BIN", "sh")
+}
+
+pub fn bash_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_BASH_BIN", "bash")
+}
+
+pub fn zsh_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_ZSH_BIN", "zsh")
+}
+
 /// Resolves an optional Nushell binary for fixtures that exercise generated
 /// `env.nu` files.
 pub fn nushell_path() -> Result<Option<PathBuf>, String> {
@@ -321,6 +338,12 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
         .map_err(|e| format!("failed to create bin dir: {e}"))?;
 
     let vpt = install_runner_tool(&runner_bin_dir, "vpt", &vpt_path()?)?;
+    let sh =
+        sh_path()?.map(|path| install_runner_tool(&runner_bin_dir, "sh", &path)).transpose()?;
+    let bash =
+        bash_path()?.map(|path| install_runner_tool(&runner_bin_dir, "bash", &path)).transpose()?;
+    let zsh =
+        zsh_path()?.map(|path| install_runner_tool(&runner_bin_dir, "zsh", &path)).transpose()?;
     let fish =
         fish_path()?.map(|path| install_runner_tool(&runner_bin_dir, "fish", &path)).transpose()?;
     let nu = nushell_path()?
@@ -331,5 +354,5 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
         Flavor::Local => local_cli_package_dir()?,
         Flavor::Global => repo_root().join("packages/cli"),
     };
-    Ok(FlavorRuntime { runner_bin_dir, vpt, fish, nu, global_vp, cli_package_dir })
+    Ok(FlavorRuntime { runner_bin_dir, vpt, sh, bash, zsh, fish, nu, global_vp, cli_package_dir })
 }

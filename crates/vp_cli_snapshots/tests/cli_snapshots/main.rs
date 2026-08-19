@@ -319,6 +319,9 @@ impl PlatformFilter {
 #[derive(Clone, Copy, serde::Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 enum RequiredTool {
+    Sh,
+    Bash,
+    Zsh,
     Fish,
     Nu,
 }
@@ -328,6 +331,9 @@ impl RequiredTool {
     /// reports that error instead of silently hiding a bad override.
     fn is_missing(self) -> bool {
         match self {
+            Self::Sh => matches!(flavor::sh_path(), Ok(None)),
+            Self::Bash => matches!(flavor::bash_path(), Ok(None)),
+            Self::Zsh => matches!(flavor::zsh_path(), Ok(None)),
             Self::Fish => matches!(flavor::fish_path(), Ok(None)),
             Self::Nu => matches!(flavor::nushell_path(), Ok(None)),
         }
@@ -459,6 +465,9 @@ struct CaseInstall {
     path_env: OsString,
     tool_dirs: Vec<PathBuf>,
     vpt: PathBuf,
+    sh: Option<PathBuf>,
+    bash: Option<PathBuf>,
+    zsh: Option<PathBuf>,
     fish: Option<PathBuf>,
     nu: Option<PathBuf>,
 }
@@ -474,6 +483,24 @@ impl CaseInstall {
     ) -> Result<PathBuf, String> {
         if program == "vpt" {
             return Ok(self.vpt.clone());
+        }
+        if program == "sh" {
+            return self.sh.clone().ok_or_else(|| {
+                "`sh` is required by this snapshot case; install it or set VP_SNAP_SH_BIN"
+                    .to_owned()
+            });
+        }
+        if program == "bash" {
+            return self.bash.clone().ok_or_else(|| {
+                "`bash` is required by this snapshot case; install Bash or set VP_SNAP_BASH_BIN"
+                    .to_owned()
+            });
+        }
+        if program == "zsh" {
+            return self.zsh.clone().ok_or_else(|| {
+                "`zsh` is required by this snapshot case; install Zsh or set VP_SNAP_ZSH_BIN"
+                    .to_owned()
+            });
         }
         if program == "fish" {
             return self.fish.clone().ok_or_else(|| {
@@ -582,6 +609,9 @@ impl CaseHome {
             path_env: compose_path_env(&path_dirs),
             tool_dirs,
             vpt: runtime.vpt.clone(),
+            sh: runtime.sh.clone(),
+            bash: runtime.bash.clone(),
+            zsh: runtime.zsh.clone(),
             fish: runtime.fish.clone(),
             nu: runtime.nu.clone(),
         })
