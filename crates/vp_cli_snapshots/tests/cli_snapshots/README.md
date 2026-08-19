@@ -63,7 +63,7 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_GLOBAL_VP`         | Path to a prebuilt global `vp` binary (skips the target-dir lookup) |
 | `VP_SNAP_LOCAL_CLI_BIN_DIR` | Local CLI bin dir (default `<repo>/packages/cli/bin`)               |
 | `VP_SNAP_JS_RUNTIME_DIR`    | Provisioned managed runtime to seed case homes with                 |
-| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files      |
+| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files       |
 | `VP_SNAP_NU_BIN`            | Nushell binary for cases that execute generated `env.nu` files      |
 | `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)          |
 
