@@ -77,6 +77,8 @@ jobs:
       pr-url: ${{ steps.check.outputs.pr_url }}
       is-fork: ${{ steps.check.outputs.is_fork }}
       head-repo: ${{ steps.check.outputs.head_repo }}
+      installer-x64-id: ${{ steps.check.outputs.installer_x64_id }}
+      installer-arm64-id: ${{ steps.check.outputs.installer_arm64_id }}
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         id: check
@@ -187,6 +189,19 @@ jobs:
               );
               core.setOutput('eligible', 'false');
               return;
+            }
+
+            const installerTargets = {
+              installer_x64_id: 'vp-setup-x86_64-pc-windows-msvc',
+              installer_arm64_id: 'vp-setup-aarch64-pc-windows-msvc',
+            };
+            for (const [output, name] of Object.entries(installerTargets)) {
+              const artifact = artifacts.find((a) => a.name === name && !a.expired);
+              if (!artifact) {
+                core.setFailed(`run ${process.env.RUN_ID} has no active ${name} artifact`);
+                return;
+              }
+              core.setOutput(output, String(artifact.id));
             }
 
             const headRepo = pr.head.repo?.full_name ?? '(deleted fork)';
@@ -329,6 +344,9 @@ jobs:
           IS_FORK: ${{ needs.authorize.outputs.is-fork }}
           HEAD_REPO: ${{ needs.authorize.outputs.head-repo }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          INSTALLER_X64_ID: ${{ needs.authorize.outputs.installer-x64-id }}
+          INSTALLER_ARM64_ID: ${{ needs.authorize.outputs.installer-arm64-id }}
         with:
           script: |
             const version = process.env.BRIDGE_VERSION;
@@ -337,6 +355,10 @@ jobs:
             const isFork = process.env.IS_FORK === 'true';
             const marker = '<!-- pkg-pr-bridge-version -->';
             const bridge = 'https://registry-bridge.viteplus.dev/';
+            const installerScripts =
+              `https://raw.githubusercontent.com/${process.env.HEAD_REPO}/${process.env.HEAD_SHA}/packages/cli`;
+            const artifactUrl = (id) =>
+              `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.RUN_ID}/artifacts/${id}`;
             // Built as a line array (not a template literal) so the inline
             // backticks and the fenced json block don't need backslash-escaping.
             const body = [
@@ -366,11 +388,24 @@ jobs:
               '',
               '```bash',
               '# macOS / Linux',
-              `curl -fsSL https://vite.plus | VP_PR_VERSION=${pr} bash`,
+              `curl -fsSL ${installerScripts}/install.sh | VP_PR_VERSION=${pr} bash`,
               '```',
               '```powershell',
               '# Windows (PowerShell)',
-              `$env:VP_PR_VERSION="${pr}"; irm https://vite.plus/ps1 | iex`,
+              `$env:VP_PR_VERSION="${pr}"; irm ${installerScripts}/install.ps1 | iex`,
+              '```',
+              '',
+              '**Or download the standalone Windows installer built from this commit:**',
+              '',
+              '| Architecture | Installer |',
+              '| --- | --- |',
+              `| x64 | [\`vp-setup-x86_64-pc-windows-msvc.exe\`](${artifactUrl(process.env.INSTALLER_X64_ID)}) |`,
+              `| Arm64 | [\`vp-setup-aarch64-pc-windows-msvc.exe\`](${artifactUrl(process.env.INSTALLER_ARM64_ID)}) |`,
+              '',
+              'GitHub requires you to sign in and downloads each installer as a ZIP artifact. Extract `vp-setup.exe`, then run it against this preview build:',
+              '',
+              '```powershell',
+              `.\\vp-setup.exe --version "${version}" --registry "${bridge}"`,
               '```',
               '',
               `After installing, upgrade the current project's \`vite-plus\` to this test build with:`,
