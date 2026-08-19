@@ -37,8 +37,8 @@ importers:
         version: 0.17.0(vue@3.5.35(typescript@6.0.3))
     devDependencies:
       '@voidzero-dev/vitepress-theme':
-        specifier: 4.8.4
-        version: 4.8.4(focus-trap@8.2.1)(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.17(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.15)(typescript@6.0.3))(vue@3.5.35(typescript@6.0.3))
+        specifier: 5.0.5
+        version: 5.0.5(focus-trap@8.2.1)(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.17(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.15)(typescript@6.0.3))(vue@3.5.35(typescript@6.0.3))
       oxc-minify:
         specifier: ^0.120.0
         version: 0.120.0
@@ -871,8 +871,8 @@ packages:
       vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
       vue: ^3.2.25
 
-  '@voidzero-dev/vitepress-theme@4.8.4':
-    resolution: {integrity: sha512-o7R2g9OPu5iLW3R4PNkj+JRSIncO8f1hTY0YvO13OMP/kytKUn8MLhy4kTvx+IMRSLeqrGfrBpze/OEPKzcLUQ==}
+  '@voidzero-dev/vitepress-theme@5.0.5':
+    resolution: {integrity: sha512-5xJDXBRe7hQ2p7HNGdQ6Q4x5pbBtRBymfo6P+NGQKnabv6oA643yBieqIcHjT4L0UkMxt15gbQCS3Z2MJ8eSng==}
     peerDependencies:
       vitepress: ^2.0.0-alpha.16
       vue: ^3.5.0
@@ -2651,7 +2651,7 @@ snapshots:
       vite: 7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)
       vue: 3.5.35(typescript@6.0.3)
 
-  '@voidzero-dev/vitepress-theme@4.8.4(focus-trap@8.2.1)(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.17(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.15)(typescript@6.0.3))(vue@3.5.35(typescript@6.0.3))':
+  '@voidzero-dev/vitepress-theme@5.0.5(focus-trap@8.2.1)(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.17(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.15)(typescript@6.0.3))(vue@3.5.35(typescript@6.0.3))':
     dependencies:
       '@docsearch/css': 4.6.0
       '@docsearch/js': 4.6.0

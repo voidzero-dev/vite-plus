@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "bingo": "^0.9.3",
-    "zod": "^3.25.76"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
