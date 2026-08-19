@@ -2057,7 +2057,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2273,7 +2273,7 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "bstr",
@@ -2307,52 +2307,90 @@ dependencies = [
 [[package]]
 name = "fspy_client_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "allocator-api2",
  "anyhow",
  "bstr",
+ "fspy_nostd",
+ "fspy_nostd_alloc",
  "fspy_shared",
  "fspy_shared_unix",
  "itoa",
  "libc",
  "nix 0.31.3",
- "sigsafe",
- "sigsafe_alloc",
  "wincode",
 ]
 
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "cc",
  "winapi",
 ]
 
 [[package]]
+name = "fspy_ipc_str"
+version = "0.0.0"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
+dependencies = [
+ "allocator-api2",
+ "bumpalo",
+ "bytemuck",
+ "fspy_nostd",
+ "fspy_nostd_alloc",
+ "wincode",
+]
+
+[[package]]
+name = "fspy_nostd"
+version = "0.0.0"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
+dependencies = [
+ "atoi",
+ "bitflags 2.13.1",
+ "bstr",
+ "libc",
+ "rustix",
+ "syscalls",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "fspy_nostd_alloc"
+version = "0.0.0"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
+dependencies = [
+ "allocator-api2",
+ "bump-scope",
+ "fspy_nostd",
+]
+
+[[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "ctor",
  "fspy_client_unix",
+ "fspy_nostd",
+ "fspy_nostd_alloc",
  "fspy_shared",
  "fspy_shared_unix",
  "libc",
  "nix 0.31.3",
- "sigsafe",
- "sigsafe_alloc",
 ]
 
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "constcat",
  "fspy_detours_sys",
+ "fspy_nostd",
  "fspy_shared",
  "ntapi",
  "smallvec 2.0.0-alpha.12",
@@ -2366,7 +2404,7 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "futures-util",
  "libc",
@@ -2383,14 +2421,18 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
+ "allocator-api2",
  "bitflags 2.13.1",
  "bstr",
  "bumpalo",
  "bytemuck",
+ "fspy_ipc_str",
+ "fspy_nostd",
+ "fspy_nostd_alloc",
  "fspy_shm",
- "native_str",
+ "omnipath",
  "thiserror 2.0.19",
  "tracing",
  "uuid",
@@ -2402,18 +2444,18 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bstr",
  "elf",
+ "fspy_nostd",
  "fspy_seccomp_unotify",
  "fspy_shared",
  "memmap2",
  "nix 0.31.3",
  "phf 0.13.1",
- "sigsafe",
  "stackalloc",
  "wincode",
 ]
@@ -2421,10 +2463,9 @@ dependencies = [
 [[package]]
 name = "fspy_shm"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
- "memmap2",
- "uuid",
+ "fspy_nostd",
  "windows-sys 0.61.2",
 ]
 
@@ -2946,7 +2987,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3133,7 +3174,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3562,7 +3603,7 @@ dependencies = [
 [[package]]
 name = "materialized_artifact"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "materialized_artifact_macros",
  "tempfile",
@@ -3571,7 +3612,7 @@ dependencies = [
 [[package]]
 name = "materialized_artifact_macros"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3793,16 +3834,6 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
-]
-
-[[package]]
-name = "native_str"
-version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
-dependencies = [
- "bumpalo",
- "bytemuck",
- "wincode",
 ]
 
 [[package]]
@@ -4119,6 +4150,12 @@ dependencies = [
  "ctr",
  "subtle",
 ]
+
+[[package]]
+name = "omnipath"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80adb31078122c880307e9cdfd4e3361e6545c319f9b9dcafcb03acd3b51a575"
 
 [[package]]
 name = "once_cell"
@@ -5080,7 +5117,7 @@ dependencies = [
  "aes-gcm",
  "aes-kw",
  "argon2",
- "base64 0.22.1",
+ "base64 0.21.7",
  "bitfields",
  "block-padding",
  "blowfish",
@@ -5508,7 +5545,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -5518,7 +5555,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -5529,7 +5566,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test_client"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.4.3",
@@ -5836,7 +5873,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "append-only-vec",
@@ -6024,7 +6061,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_common"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6060,7 +6097,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6081,7 +6118,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev_common"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "derive_more",
  "rolldown_common",
@@ -6093,7 +6130,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "blake3",
  "rolldown_devtools_action",
@@ -6106,7 +6143,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools_action"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "serde",
  "ts-rs",
@@ -6114,7 +6151,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6126,7 +6163,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript_utils"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "memchr",
  "oxc",
@@ -6136,7 +6173,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_error"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6153,7 +6190,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "oxc_resolver",
  "vfs",
@@ -6161,7 +6198,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs_watcher"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "rolldown-notify",
  "rolldown-notify-debouncer-full",
@@ -6170,7 +6207,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6199,7 +6236,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_asset_module"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "rolldown_common",
@@ -6211,7 +6248,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_bundle_analyzer"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6225,7 +6262,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_chunk_import_map"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6238,7 +6275,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_copy_module"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6251,7 +6288,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_data_url"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "arcstr",
  "base64-simd",
@@ -6264,7 +6301,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_esm_external_require"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "nodejs-built-in-modules",
  "rolldown_common",
@@ -6275,7 +6312,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_hmr"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "rolldown_common",
  "rolldown_plugin",
@@ -6283,7 +6320,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_isolated_declaration"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6297,7 +6334,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_lazy_compilation"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6310,7 +6347,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_oxc_runtime"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "arcstr",
  "phf 0.14.0",
@@ -6321,7 +6358,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_replace"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "oxc",
@@ -6337,7 +6374,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_utils"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6490,7 +6527,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_vite_resolve"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6544,7 +6581,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_resolver"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6559,7 +6596,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_sourcemap"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "criterion2",
  "memchr",
@@ -6569,7 +6606,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_std_utils"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "regex",
  "sugar_path",
@@ -6615,7 +6652,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_tracing"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "tracing",
  "tracing-chrome",
@@ -6624,7 +6661,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_utils"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6662,7 +6699,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_watcher"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6682,7 +6719,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_workspace"
-version = "1.2.4"
+version = "1.2.2"
 
 [[package]]
 name = "ropey"
@@ -6773,7 +6810,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6829,7 +6866,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7278,28 +7315,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sigsafe"
-version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
-dependencies = [
- "atoi",
- "bstr",
- "libc",
- "rustix",
- "syscalls",
-]
-
-[[package]]
-name = "sigsafe_alloc"
-version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
-dependencies = [
- "allocator-api2",
- "bump-scope",
- "sigsafe",
-]
-
-[[package]]
 name = "simd-adler32"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7405,7 +7420,7 @@ dependencies = [
 [[package]]
 name = "snapshot_test"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "serde",
  "serde_json",
@@ -7435,7 +7450,7 @@ dependencies = [
 [[package]]
 name = "socket_ipc"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "nix 0.31.3",
  "tempfile",
@@ -7515,7 +7530,7 @@ dependencies = [
 
 [[package]]
 name = "string_wizard"
-version = "1.2.4"
+version = "1.2.2"
 dependencies = [
  "insta",
  "memchr",
@@ -7663,7 +7678,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8708,7 +8723,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 [[package]]
 name = "vt"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anstream",
  "anyhow",
@@ -8767,9 +8782,9 @@ dependencies = [
 [[package]]
 name = "vt_client"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
- "native_str",
+ "fspy_ipc_str",
  "rustc-hash",
  "socket_ipc",
  "vt_ipc_shared",
@@ -8780,7 +8795,7 @@ dependencies = [
 [[package]]
 name = "vt_client_napi"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "napi",
  "napi-build",
@@ -8792,7 +8807,7 @@ dependencies = [
 [[package]]
 name = "vt_glob"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "globset",
  "thiserror 2.0.19",
@@ -8802,7 +8817,7 @@ dependencies = [
 [[package]]
 name = "vt_graph"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8824,7 +8839,7 @@ dependencies = [
 [[package]]
 name = "vt_graph_ser"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "petgraph 0.8.3",
  "serde",
@@ -8833,9 +8848,9 @@ dependencies = [
 [[package]]
 name = "vt_ipc_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
- "native_str",
+ "fspy_ipc_str",
  "rustc-hash",
  "wincode",
 ]
@@ -8843,7 +8858,7 @@ dependencies = [
 [[package]]
 name = "vt_path"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "diff-struct",
  "os_str_bytes",
@@ -8858,7 +8873,7 @@ dependencies = [
 [[package]]
 name = "vt_plan"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8886,7 +8901,7 @@ dependencies = [
 [[package]]
 name = "vt_powershell"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "vt_path",
  "which",
@@ -8895,7 +8910,7 @@ dependencies = [
 [[package]]
 name = "vt_select"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -8906,10 +8921,10 @@ dependencies = [
 [[package]]
 name = "vt_server"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
+ "fspy_ipc_str",
  "futures",
- "native_str",
  "rustc-hash",
  "socket_ipc",
  "thiserror 2.0.19",
@@ -8925,7 +8940,7 @@ dependencies = [
 [[package]]
 name = "vt_shell"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "brush-parser 0.4.0",
  "diff-struct",
@@ -8938,7 +8953,7 @@ dependencies = [
 [[package]]
 name = "vt_str"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "compact_str 0.9.1",
  "diff-struct",
@@ -8949,7 +8964,7 @@ dependencies = [
 [[package]]
 name = "vt_workspace"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d05b1dcdbaabaa69643ee0b89cebe3cd390957e9#d05b1dcdbaabaa69643ee0b89cebe3cd390957e9"
+source = "git+https://github.com/taskylizard/vite-task.git?rev=eb9f4319ae2252361d08d3863699fc136a4d61fe#eb9f4319ae2252361d08d3863699fc136a4d61fe"
 dependencies = [
  "clap",
  "petgraph 0.8.3",
@@ -9160,7 +9175,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
