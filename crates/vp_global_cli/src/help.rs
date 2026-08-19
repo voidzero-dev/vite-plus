@@ -46,6 +46,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
             ..,
         ] => Some("https://viteplus.dev/guide/install"),
         ["dlx"] => Some("https://viteplus.dev/guide/vpx"),
+        ["release"] => Some("https://viteplus.dev/guide/release"),
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
         ["toolchain"] => Some("https://viteplus.dev/guide/upgrade"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
@@ -431,6 +432,10 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("build", "Build for production"),
                     row("pack", "Build library"),
                     row("preview", "Preview production build"),
+                    row(
+                        "release",
+                        "Version and publish workspace packages with trusted-publishing safeguards",
+                    ),
                 ],
             ),
             section_rows(

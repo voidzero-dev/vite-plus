@@ -137,6 +137,9 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
 // Global package management
 pub mod global;
 
+// Workspace release management
+pub mod release;
+
 // Category B: JS Script Commands
 pub mod config;
 pub mod create;

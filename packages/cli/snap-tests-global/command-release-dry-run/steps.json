@@ -1,0 +1,14 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    { "command": "git add -A && git commit -m 'chore: init'", "ignoreOutput": true },
+    {
+      "command": "printf '\\nexport const feature = 2;\\n' >> packages/pkg-a/src/index.js && git add packages/pkg-a/src/index.js && git commit -m 'feat: add release fixture'",
+      "ignoreOutput": true
+    },
+    "vp release --dry-run --skip-publish --no-run-checks --yes",
+    "git status --short",
+    "git tag --list 'v*'",
+    "git tag --list 'release/*'"
+  ]
+}

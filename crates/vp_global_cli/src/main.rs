@@ -632,6 +632,34 @@ mod tests {
     }
 
     #[test]
+    fn trusted_publishing_setup_rejects_release_mutation_flags() {
+        let error = try_parse_args_from(s(&[
+            "vp",
+            "release",
+            "--setup-trusted-publishing",
+            "--version",
+            "1.2.3",
+        ]))
+        .expect_err("setup mode must reject release mutation flags");
+
+        assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn trusted_publishing_setup_accepts_selection_and_preview_flags() {
+        try_parse_args_from(s(&[
+            "vp",
+            "release",
+            "--setup-trusted-publishing",
+            "--projects",
+            "@scope/package",
+            "--dry-run",
+            "--yes",
+        ]))
+        .expect("setup mode should accept its configuration flags");
+    }
+
+    #[test]
     fn affirmative_response_detection() {
         assert!(is_affirmative_response("y"));
         assert!(is_affirmative_response("yes"));

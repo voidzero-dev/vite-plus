@@ -17,11 +17,18 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 - **`vp build`:** Build applications for production with Vite + Rolldown
 - **`vp run`:** Run `package.json` scripts and monorepo tasks with caching and dependency-aware scheduling
 - **`vp pack`:** Build libraries for npm publishing or standalone app binaries
+- **`vp release`:** Version and publish workspace packages with native publish preflight during `--dry-run`, release checks before real publishes by default, retry-friendly exact version overrides via `--version`, optional changelog generation via `--changelog`, prerelease channels like `--preid alpha` / `beta` / `rc`, and `--projects` order respected between independent packages
 - **`vp toolchain`:** Show the versions of Vite+, Vite, Rolldown, Oxc, and other tools
 - **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
 
 All of this is configured from your project root and works across Vite's framework ecosystem.
 Vite+ is fully open-source under the MIT license.
+
+`vp release` detects likely checks from `build`, `pack`, `prepack`, `prepublishOnly`, `prepare`, and `vitePlus.release.checkScripts`. Real releases run those checks before publishing unless you pass `--no-run-checks`; dry-runs stay lightweight by default and can opt in with `--run-checks`. `--dry-run` also runs the native publisher in dry-run mode from a temporary release manifest state when the git worktree is clean. Use `--yes` for CI or other non-interactive runs, and `--version <x.y.z>` when retrying a partial publish at an exact version.
+
+`vp release --setup-trusted-publishing` configures npm Trusted Publishing for the selected workspace packages using a compatible managed npm CLI. pnpm 11.1.3+ and Yarn 4.10.3+ keep their native OIDC publish paths; older pnpm/modern Yarn and Bun keep their native pack semantics before Vite+ hands the immutable tarball to managed npm for OIDC authentication and upload.
+
+Real releases always create git tags after a successful publish. When every released package shares the same target version, `vp release` also creates a repository-level `v<version>` tag so GitHub Releases and repo-wide release notes can follow the same watermark. Preview-only flags such as `--skip-publish` and `--no-git-tag` are therefore limited to `--dry-run`.
 
 ## Getting Started
 
@@ -46,7 +53,7 @@ irm https://viteplus.dev/install.ps1 | iex
 Vite+ can be configured using a single `vite.config.ts` at the root of your project:
 
 ```ts
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   // Standard Vite configuration for dev/build/preview.
@@ -54,12 +61,12 @@ export default defineConfig({
 
   // Vitest configuration.
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ["src/**/*.test.ts"],
   },
 
   // Oxlint configuration.
   lint: {
-    ignorePatterns: ['dist/**'],
+    ignorePatterns: ["dist/**"],
   },
 
   // Oxfmt configuration.
@@ -71,16 +78,16 @@ export default defineConfig({
   // Vite Task configuration.
   run: {
     tasks: {
-      'generate:icons': {
-        command: 'node scripts/generate-icons.js',
-        envs: ['ICON_THEME'],
+      "generate:icons": {
+        command: "node scripts/generate-icons.js",
+        envs: ["ICON_THEME"],
       },
     },
   },
 
   // `vp staged` configuration.
   staged: {
-    '*': 'vp check --fix',
+    "*": "vp check --fix",
   },
 });
 ```
@@ -121,6 +128,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **build** - Build for production
 - **pack** - Build libraries
+- **release** - Version and publish workspace packages, with optional changelog generation
 - **preview** - Preview production build
 
 #### Manage Dependencies
@@ -180,7 +188,7 @@ Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) action t
 ```yaml
 - uses: voidzero-dev/setup-vp@<setup-vp-version>
   with:
-    node-version: '22'
+    node-version: "22"
     cache: true
 ```
 

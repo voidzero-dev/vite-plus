@@ -7,9 +7,11 @@
     clippy::print_stdout
 )]
 
+pub mod conventional_commit;
 mod env_config;
 pub mod env_vars;
 mod error;
+pub mod git;
 pub mod header;
 mod home;
 mod http;
@@ -19,13 +21,17 @@ pub mod output;
 mod package_json;
 mod path_env;
 mod process;
+mod release_manifest;
 mod stdio;
 pub mod string_similarity;
 mod tls;
 mod tracing;
+pub mod versioning;
 
+pub use conventional_commit::{ConventionalCommit, parse_conventional_commit};
 pub use env_config::{EnvConfig, TestEnvGuard};
 pub use error::format_error_chain;
+pub use git::{GitError, capture_git, is_clean_git_worktree, parse_github_repo_slug, run_git};
 pub use home::{VP_BINARY_NAME, get_vp_home};
 pub use http::{HttpClientError, download_timeout, shared_http_client};
 pub use interactivity::{
@@ -41,6 +47,16 @@ pub use path_env::{
     prepend_to_path_env,
 };
 pub use process::exit_code_from_status;
+pub use release_manifest::{
+    DependencyProtocolSummary, PackageJsonError, PackageManifest, PackageManifestDocument,
+    PublishConfig, ReleaseLifecycle, VitePlusMetadata, WorkspaceReference, WorkspaceVersionSpec,
+    parse_workspace_reference, read_package_manifest, replace_dependency_version_ranges,
+    replace_top_level_string_property,
+};
 pub use stdio::ensure_blocking_stdio;
 pub use tls::ensure_tls_provider;
 pub use tracing::init_tracing;
+pub use versioning::{
+    Version, VersionBump, VersionError, VersionPattern, VersionPrefix, build_prerelease,
+    bump_version, parse_version_pattern, prerelease_channel, prerelease_number, strip_prerelease,
+};

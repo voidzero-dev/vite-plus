@@ -28,7 +28,7 @@ pub struct PublishArgs {
     pub(crate) otp: Option<String>,
 
     /// Skip git checks
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(npm, yarn, bun))]
     pub(crate) no_git_checks: bool,
 
     /// Set the branch name to publish from
@@ -48,7 +48,7 @@ pub struct PublishArgs {
     pub(crate) force: bool,
 
     /// Output in JSON format
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, not_supported(npm, bun))]
     pub(crate) json: bool,
 
     /// Publish all workspace packages
@@ -106,7 +106,22 @@ impl Resolve<PublishArgs> for Npm {
 
 impl Resolve<PublishArgs> for Yarn {
     fn resolve(&self, args: &PublishArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_publish(args)
+        let can_use_native_publish = self.is_berry()
+            && args.target.is_none()
+            && !args.recursive
+            && args.filter.as_ref().is_none_or(Vec::is_empty)
+            && !args.force
+            && args.pass_through_args.is_empty();
+
+        if !can_use_native_publish {
+            return Npm::resolve_publish(args);
+        }
+
+        let mut cmd = CommandBuilder::new("yarn");
+        cmd.arg("npm").arg("publish");
+        push_common_publish_args(&mut cmd, args);
+        cmd.arg_if("--provenance", args.provenance).arg_if("--json", args.json);
+        cmd.into()
     }
 }
 
@@ -183,11 +198,11 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn2_publish_uses_npm() {
+    fn test_yarn2_publish_uses_native_yarn() {
         let command = expect_run(resolve(&yarn("4.0.0"), PublishArgs::default()).outcome);
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish"]);
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["npm", "publish"]);
     }
 
     #[test]
@@ -200,8 +215,8 @@ mod tests {
             .outcome,
         );
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--tag", "beta"]);
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["npm", "publish", "--tag", "beta"]);
     }
 
     #[test]
@@ -291,9 +306,9 @@ mod tests {
         let resolution = resolve(&yarn("4.0.0"), PublishArgs { json: true, ..Default::default() });
         let command = expect_run(resolution.outcome);
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish"]);
-        assert_eq!(resolution.diagnostics[0].message, "yarn does not support --json.");
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["npm", "publish", "--json"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
@@ -372,8 +387,8 @@ mod tests {
             resolve(&yarn("4.0.0"), PublishArgs { provenance: true, ..Default::default() }).outcome,
         );
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--provenance"]);
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["npm", "publish", "--provenance"]);
     }
 
     #[test]
@@ -419,14 +434,14 @@ mod tests {
     fn test_yarn_publish_otp() {
         let command = expect_run(
             resolve(
-                &yarn("1.22.0"),
+                &yarn("4.0.0"),
                 PublishArgs { otp: Some("999999".to_string()), ..Default::default() },
             )
             .outcome,
         );
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--otp", "999999"]);
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["npm", "publish", "--otp", "999999"]);
     }
 
     #[test]
@@ -469,14 +484,14 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_silently_ignores_no_git_checks() {
+    fn test_npm_warns_and_ignores_no_git_checks() {
         let resolution =
             resolve(&npm("11.0.0"), PublishArgs { no_git_checks: true, ..Default::default() });
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["publish"]);
-        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(resolution.diagnostics[0].message, "npm does not support --no-git-checks.");
     }
 
     #[test]

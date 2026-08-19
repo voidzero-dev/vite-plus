@@ -170,6 +170,115 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Version workspace packages locally, then publish them from trusted-publishing CI with readiness checks and optional changelog generation
+    Release {
+        /// Preview the release plan without changing files or publishing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// During dry-runs, omit publish simulation and show only versioning/changelog actions
+        #[arg(long)]
+        skip_publish: bool,
+
+        /// Treat this release as the first one and ignore existing release tags
+        #[arg(long)]
+        first_release: bool,
+
+        /// Generate root and per-package changelogs
+        #[arg(long, overrides_with = "no_changelog")]
+        changelog: bool,
+
+        /// Skip changelog generation
+        #[arg(long, overrides_with = "changelog")]
+        no_changelog: bool,
+
+        /// Override the computed release version. Useful when retrying a partial publish.
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+
+        /// Publish a prerelease using the provided identifier (for example: alpha, beta, rc)
+        #[arg(long, value_name = "TAG")]
+        preid: Option<String>,
+
+        /// Legacy TOTP code for npm 2FA publish flows. Prefer trusted publishing or passkey/security-key auth when possible.
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Configure npm Trusted Publishing for the selected workspace packages, then exit
+        #[arg(
+            long,
+            conflicts_with_all = [
+                "skip_publish",
+                "first_release",
+                "changelog",
+                "no_changelog",
+                "version",
+                "preid",
+                "otp",
+                "git_tag",
+                "no_git_tag",
+                "git_commit",
+                "no_git_commit",
+                "run_checks",
+                "no_run_checks"
+            ]
+        )]
+        setup_trusted_publishing: bool,
+
+        /// GitHub repository in owner/repository form (auto-detected from origin by default)
+        #[arg(long, value_name = "OWNER/REPOSITORY", requires = "setup_trusted_publishing")]
+        trusted_publisher_repository: Option<String>,
+
+        /// GitHub Actions workflow path or filename (auto-detected by default)
+        #[arg(long, value_name = "FILE", requires = "setup_trusted_publishing")]
+        trusted_publisher_workflow: Option<String>,
+
+        /// Restrict trusted publishing to a GitHub Actions environment
+        #[arg(long, value_name = "NAME", requires = "setup_trusted_publishing")]
+        trusted_publisher_environment: Option<String>,
+
+        /// Registry passed to npm trust (defaults to the configured npm registry)
+        #[arg(long, value_name = "URL", requires = "setup_trusted_publishing")]
+        trusted_publisher_registry: Option<String>,
+
+        /// Also permit npm's staged publishing flow for this trusted publisher
+        #[arg(long, requires = "setup_trusted_publishing")]
+        allow_stage_publish: bool,
+
+        /// Release only matching workspace packages. When multiple values are provided,
+        /// their order is used as a tie-breaker between independent packages.
+        #[arg(long, value_name = "PATTERN", value_delimiter = ',')]
+        projects: Option<Vec<String>>,
+
+        /// Create git tags for released packages
+        #[arg(long, overrides_with = "no_git_tag")]
+        git_tag: bool,
+
+        /// Skip git tag creation in preview mode
+        #[arg(long, overrides_with = "git_tag")]
+        no_git_tag: bool,
+
+        /// Create a git commit for release changes
+        #[arg(long, overrides_with = "no_git_commit")]
+        git_commit: bool,
+
+        /// Skip the release commit
+        #[arg(long, overrides_with = "git_commit")]
+        no_git_commit: bool,
+
+        /// Run detected release checks before publishing. Real releases do this by default.
+        #[arg(long, overrides_with = "no_run_checks")]
+        run_checks: bool,
+
+        /// Skip release checks before publishing
+        #[arg(long, overrides_with = "run_checks")]
+        no_run_checks: bool,
+
+        /// Skip the final confirmation prompt
+        #[arg(long, short = 'y', alias = "force")]
+        yes: bool,
+    },
+
     /// Run tasks
     #[command(disable_help_flag = true)]
     Run {
@@ -1064,6 +1173,67 @@ pub async fn run_command_with_options(
         Commands::Pack { args } => {
             maybe_print_runtime_header("pack", &args, render_options.show_header);
             commands::delegate::execute(cwd, "pack", &args, raw_subcommand).await
+        }
+
+        Commands::Release {
+            dry_run,
+            skip_publish,
+            first_release,
+            changelog,
+            no_changelog,
+            version,
+            preid,
+            otp,
+            setup_trusted_publishing,
+            trusted_publisher_repository,
+            trusted_publisher_workflow,
+            trusted_publisher_environment,
+            trusted_publisher_registry,
+            allow_stage_publish,
+            projects,
+            git_tag: _,
+            no_git_tag,
+            git_commit: _,
+            no_git_commit,
+            run_checks,
+            no_run_checks,
+            yes,
+        } => {
+            let run_checks = if setup_trusted_publishing {
+                false
+            } else if dry_run {
+                run_checks
+            } else {
+                !no_run_checks || run_checks
+            };
+            let trusted_publishing_setup = setup_trusted_publishing.then_some({
+                commands::release::TrustedPublishingSetupOptions {
+                    repository: trusted_publisher_repository,
+                    workflow: trusted_publisher_workflow,
+                    environment: trusted_publisher_environment,
+                    registry: trusted_publisher_registry,
+                    allow_stage_publish,
+                }
+            });
+            commands::release::execute(
+                cwd,
+                commands::release::ReleaseOptions {
+                    dry_run,
+                    skip_publish,
+                    first_release,
+                    changelog: changelog && !no_changelog,
+                    version,
+                    preid,
+                    otp,
+                    projects,
+                    git_tag: !no_git_tag,
+                    git_commit: !no_git_commit,
+                    run_checks,
+                    yes,
+                },
+                trusted_publishing_setup,
+            )
+            .await
         }
 
         Commands::Run { args } => {

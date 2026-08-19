@@ -245,9 +245,38 @@ impl PackageManager {
         PackageManagerBuilder::new(cwd)
     }
 
+    /// Creates a package manager backed by an already prepared install directory.
+    ///
+    /// Higher-level workflows can use this after [`download_package_manager`] when they need a
+    /// specific tool version independently of the package manager declared by the workspace.
+    #[must_use]
+    pub fn from_install(
+        package_manager_type: PackageManagerType,
+        version: impl Into<Str>,
+        install_dir: impl AsRef<AbsolutePath>,
+    ) -> Self {
+        Self {
+            client: package_manager_type,
+            version: version.into(),
+            install_dir: install_dir.as_ref().to_absolute_path_buf(),
+        }
+    }
+
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.install_dir.join("bin")
+    }
+
+    /// Returns the detected package-manager family.
+    #[must_use]
+    pub const fn package_manager_type(&self) -> PackageManagerType {
+        self.client
+    }
+
+    /// Returns the exact managed package-manager version.
+    #[must_use]
+    pub fn version(&self) -> &str {
+        &self.version
     }
 }
 
