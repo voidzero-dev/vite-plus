@@ -10,8 +10,11 @@ VITE+ - The Unified Toolchain for the Web
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
-    vite-plus  latest → <version>
-    vite              → <version>
+    vite-plus                   latest → <version>
+    vite                               → <version>
+    vitest                      4.1.10 → <version>
+    @vitest/browser-playwright  4.1.10 → <version>
+    @vitest/coverage-v8         4.1.10 → <version>
 • Package manager settings configured
 ```
 

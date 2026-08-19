@@ -133,7 +133,7 @@ const NODE_VERSION_FILE_NVMRC_RE = /(node-version-file:[ \t]*)(['"]?)(\.\/)?\.nv
  * Collect GitHub Actions YAML files that may carry a `node-version-file:`
  * reference: top-level workflows (`.github/workflows/*.{yml,yaml}`, which GitHub
  * runs only when flat in that directory) and composite action definitions
- * (`.github/actions/**​/action.{yml,yaml}`, which may nest at any depth). Returns
+ * (`.github/actions/**\/action.{yml,yaml}`, which may nest at any depth). Returns
  * absolute paths; a missing `.github` tree just yields an empty list. `nocase`
  * keeps the match case-insensitive on case-sensitive filesystems.
  */

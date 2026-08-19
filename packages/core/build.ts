@@ -498,11 +498,42 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
-// Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
-// `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
-// import every color the Vite+ branding uses, so after the logger patches we
-// add any missing ones, resolving their (minified) export aliases from main's
-// own `export { ... }` map so the fix survives rolldown renaming them.
+// Collect the module-scope binding names a chunk declares itself, so we can tell
+// whether an identifier is already in scope without importing it. Depending on
+// rolldown's chunking, ansis is either kept in a shared chunk (imported) or
+// inlined into this chunk as a top-level
+// `const { ..., bold, red, ... } = __toESM(...)` destructuring of its CJS
+// namespace, which binds the colors locally.
+function collectModuleScopeBindings(source: string): Set<string> {
+  const bound = new Set<string>();
+
+  // Destructuring declarations: `const { a, b: c, d = 1 } = ...`.
+  for (const [, pattern] of source.matchAll(/^(?:const|let|var)\s*\{([^{}]*)\}\s*=/gm)) {
+    for (const part of pattern.split(',')) {
+      // `a: b` binds `b`, `a = 1` binds `a`, plain `a` binds `a`.
+      const colon = part.indexOf(':');
+      const name = (colon === -1 ? part : part.slice(colon + 1)).split('=')[0].trim();
+      if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) {
+        bound.add(name);
+      }
+    }
+  }
+
+  // Simple declarations: `const a = ...`, `function a() {}`, `class a {}`.
+  for (const [, name] of source.matchAll(
+    /^(?:const|let|var|function\*?|class)\s+([A-Za-z_$][A-Za-z0-9_$]*)\b/gm,
+  )) {
+    bound.add(name);
+  }
+
+  return bound;
+}
+
+// Ensure the given ansis color helpers (e.g. `bold`, `red`) are in scope in a
+// bundled chunk. tsdown's logger module does not reference every color the Vite+
+// branding uses, so after the logger patches we add any missing ones, resolving
+// their (minified) export aliases from the re-exporting chunk's own
+// `export { ... }` map so the fix survives rolldown renaming them.
 async function ensureAnsisImports(
   content: string,
   names: string[],
@@ -515,12 +546,10 @@ async function ensureAnsisImports(
   // chunk actually re-exports it.
   const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
   const imports = [...content.matchAll(importRe)];
-  if (imports.length === 0) {
-    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
-  }
 
-  // Every binding already in scope across all imports (its local name).
-  const localNames = new Set<string>();
+  // Every binding already in scope: the chunk's own module-scope declarations
+  // plus the local names of all its imports.
+  const localNames = collectModuleScopeBindings(content);
   for (const [, bindings] of imports) {
     for (const binding of bindings.split(',')) {
       const trimmed = binding.trim();
@@ -533,7 +562,13 @@ async function ensureAnsisImports(
   }
   const missing = names.filter((name) => !localNames.has(name));
   if (missing.length === 0) {
+    // Nothing to add — rolldown inlined the colors into this chunk (or the
+    // logger module already imported them).
     return content;
+  }
+
+  if (imports.length === 0) {
+    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
   }
 
   // Group missing colors by the imported chunk that re-exports them. Chunks

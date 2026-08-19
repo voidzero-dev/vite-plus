@@ -20,9 +20,9 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.144.0
-  '@oxc-project/types': =0.144.0
-  '@oxlint/plugins': =1.73.0
+  '@oxc-project/runtime': =0.145.0
+  '@oxc-project/types': =0.145.0
+  '@oxlint/plugins': =1.79.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
@@ -47,17 +47,17 @@ catalog:
   '@types/ws': ^8.18.0
   '@typescript/native-preview': 7.0.0-dev.20260605.1
   '@vitejs/plugin-react': ^5.1.2
-  '@vitest/browser': 4.1.10
-  '@vitest/browser-playwright': 4.1.10
-  '@vitest/browser-preview': 4.1.10
-  '@vitest/browser-webdriverio': 4.1.10
-  '@vitest/expect': 4.1.10
-  '@vitest/mocker': 4.1.10
-  '@vitest/pretty-format': 4.1.10
-  '@vitest/runner': 4.1.10
-  '@vitest/snapshot': 4.1.10
-  '@vitest/spy': 4.1.10
-  '@vitest/utils': 4.1.10
+  '@vitest/browser': 4.1.11
+  '@vitest/browser-playwright': 4.1.11
+  '@vitest/browser-preview': 4.1.11
+  '@vitest/browser-webdriverio': 4.1.11
+  '@vitest/expect': 4.1.11
+  '@vitest/mocker': 4.1.11
+  '@vitest/pretty-format': 4.1.11
+  '@vitest/runner': 4.1.11
+  '@vitest/snapshot': 4.1.11
+  '@vitest/spy': 4.1.11
+  '@vitest/utils': 4.1.11
   '@voidzero-dev/vitepress-theme': 4.8.4
   '@vueuse/core': ^14.0.0
   acorn: ^8.17.0
@@ -97,11 +97,11 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.144.0
-  oxc-parser: =0.144.0
-  oxc-transform: =0.144.0
-  oxfmt: =0.63.0
-  oxlint: =1.78.0
+  oxc-minify: =0.145.0
+  oxc-parser: =0.145.0
+  oxc-transform: =0.145.0
+  oxfmt: =0.64.0
+  oxlint: =1.79.0
   oxlint-tsgolint: =7.0.2001
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -133,7 +133,7 @@ catalog:
   vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0
   vitepress-plugin-og: ^0.0.5
-  vitest: 4.1.10
+  vitest: 4.1.11
   vue: ^3.5.35
   web-tree-sitter: ^0.26.0
   ws: ^8.20.1

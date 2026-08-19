@@ -207,7 +207,7 @@ Add package-manager overrides so that other packages use the Vite+ versions. Ali
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.10"
+  "vitest": "4.1.11"
 }
 ```
 
@@ -216,7 +216,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 4.1.10
+  vitest: 4.1.11
 ```
 
 Or, if you are using Yarn:
@@ -224,7 +224,7 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.10"
+  "vitest": "4.1.11"
 }
 ```
 

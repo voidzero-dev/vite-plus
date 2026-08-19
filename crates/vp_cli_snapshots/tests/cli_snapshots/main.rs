@@ -510,6 +510,20 @@ impl CaseHome {
         let vp_home = this.vp_home();
         std::fs::create_dir_all(&vp_home).unwrap();
         std::fs::create_dir_all(root.join("npm-global/lib")).unwrap();
+        // Pin pnpm's release-age gate off for every case. pnpm applies a
+        // default `minimumReleaseAge` and, on a real install, records the
+        // immature versions it auto-approved as exact `name@version` entries
+        // under `minimumReleaseAgeExclude` in the project's
+        // pnpm-workspace.yaml. That list is a function of npm publish times,
+        // not of anything a case asserts, so cases doing real installs (those
+        // unsetting `VP_SKIP_INSTALL`) would otherwise snapshot a block that
+        // appears only while a bundled dependency is under 24h old and
+        // vanishes once it ages out — green on the upstream-bump PR, red the
+        // next day. Only the global config file is honoured here; the npmrc
+        // key and `NPM_CONFIG_MINIMUM_RELEASE_AGE` are both ignored.
+        let pnpm_config_dir = this.xdg_config_home().join("pnpm");
+        std::fs::create_dir_all(&pnpm_config_dir).unwrap();
+        std::fs::write(pnpm_config_dir.join("config.yaml"), "minimumReleaseAge: 0\n").unwrap();
         // Best-effort: if linking fails, the case downloads the runtime.
         if seed_runtime && let Some(seed) = flavor::js_runtime_seed_dir() {
             flavor::link_dir(&seed, &vp_home.join(flavor::JS_RUNTIME_DIR));
@@ -654,6 +668,7 @@ impl CaseHome {
         env.insert("VP_CLI_TEST".into(), "1".into());
         env.insert("NODE_NO_WARNINGS".into(), "1".into());
         env.insert("VP_HOME".into(), self.vp_home().into_os_string());
+        env.insert("XDG_CONFIG_HOME".into(), self.xdg_config_home().into_os_string());
         if cfg!(windows) {
             env.insert("USERPROFILE".into(), self.home.clone().into_os_string());
             env.insert(
@@ -686,6 +701,13 @@ impl CaseHome {
 
     fn vp_home(&self) -> PathBuf {
         self.home.join(flavor::VP_HOME_DIR)
+    }
+
+    /// Case-scoped config root. pnpm resolves its global config through
+    /// `XDG_CONFIG_HOME` rather than `HOME`, so this must be exported
+    /// explicitly for the pinned `minimumReleaseAge` to apply.
+    fn xdg_config_home(&self) -> PathBuf {
+        self.home.join(".config")
     }
 
     fn npm_prefix(&self) -> PathBuf {
