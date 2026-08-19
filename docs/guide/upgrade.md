@@ -55,8 +55,11 @@ does not move the installation into the split platform directories. You can
 continue to use the existing layout.
 
 To use the split layout now, remove the existing installation and install Vite+
-again. Run `vp implode` with the same `VP_HOME` setting that the current
-installation uses. Then unset `VP_HOME` before you run the installer:
+again. Run `vp implode` from a shell that uses the current installation. The
+command removes the generated environment file and shell profile entries, but
+directory variables that were already exported remain in the current shell.
+Unset all Vite+ directory variables before you run the installer. Alternatively,
+start a new shell after `vp implode` and run the installer there.
 
 ::: warning
 `vp implode` removes all Vite+-managed Node.js runtimes, global packages,
@@ -66,7 +69,7 @@ recreate that data.
 
 ```bash
 vp implode
-unset VP_HOME
+unset VP_HOME VP_DATA_DIR VP_BIN_DIR VP_CACHE_DIR
 curl -fsSL https://vite.plus | bash
 ```
 
@@ -74,14 +77,15 @@ On Windows:
 
 ```powershell
 vp implode
-Remove-Item Env:\VP_HOME -ErrorAction SilentlyContinue
+Remove-Item Env:\VP_HOME, Env:\VP_DATA_DIR, Env:\VP_BIN_DIR, Env:\VP_CACHE_DIR -ErrorAction SilentlyContinue
 irm https://vite.plus/ps1 | iex
 ```
 
-Remove any persistent `VP_HOME` definition from your shell profile or system
-environment as well. A fresh install with `VP_HOME` set uses the single-root
-layout by design. If the installer resolves to Vite+ 0.2.x or earlier, it also
-uses the single-root layout and prints a notice.
+Remove any persistent `VP_HOME`, `VP_DATA_DIR`, `VP_BIN_DIR`, or `VP_CACHE_DIR`
+definition from your shell profile or system environment as well. A fresh
+install continues to honor any of these variables. `VP_HOME` selects the
+single-root layout by design. If the installer resolves to Vite+ 0.2.x or
+earlier, it also uses the single-root layout and prints a notice.
 
 ### Rollback
 
