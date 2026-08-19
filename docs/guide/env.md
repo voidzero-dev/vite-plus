@@ -39,6 +39,8 @@ vp env off
 
 This switches to system-first mode, where the shims prefer your system Node.js and only fall back to the Vite+-managed runtime when needed.
 
+In managed mode, the generated shell environment sets `PNPM_CONFIG_RUNTIME=false` so pnpm does not download a second copy of Node.js. `vp env off` removes the setting, and `vp env on` restores it. Run `vp env doctor` to check that the current shell matches the selected mode.
+
 ## Commands
 
 ### Setup
@@ -48,7 +50,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
 
-PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
+PowerShell needs to dot-source the generated setup script in the current shell before `vp env use`, `vp env on`, and `vp env off` can update that shell session:
 
 ```powershell
 . "$env:USERPROFILE\.vite-plus\env.ps1"
@@ -76,7 +78,7 @@ node --version
 vp-use --unset
 ```
 
-Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+Only `vp env use` needs this alternate command. Other `vp env` commands still update Vite+'s configuration, but Command Prompt does not load the generated shell environment files, so `PNPM_CONFIG_RUNTIME` is not applied there. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
 
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 

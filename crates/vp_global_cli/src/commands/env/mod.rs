@@ -33,6 +33,8 @@ use crate::{
     error::Error,
 };
 
+const PNPM_CONFIG_RUNTIME: &str = "PNPM_CONFIG_RUNTIME";
+
 fn print_env_header() {
     vp_shared::header::print_header();
 }

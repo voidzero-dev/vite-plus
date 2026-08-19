@@ -1198,6 +1198,9 @@ WRAPPER_EOF
 
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
+  if [ "$NODE_MANAGER_ENABLED" = "false" ]; then
+    "$vp_bin" env off > /dev/null
+  fi
 
   prompt_remove_previous_install_dir "$previous_install_dir"
 

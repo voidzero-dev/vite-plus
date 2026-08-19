@@ -6,7 +6,11 @@ use owo_colors::OwoColorize;
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
-use super::config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version};
+use super::{
+    PNPM_CONFIG_RUNTIME,
+    config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version},
+    setup::SHIM_TOOLS,
+};
 use crate::{
     commands::shell::{ALL_SHELL_PROFILES, IDE_SHELL_PROFILES, ShellProfile, resolve_profile_path},
     error::Error,
@@ -32,8 +36,6 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("mise", "MISE_DIR"),
     ("n", "N_PREFIX"),
 ];
-
-use super::setup::SHIM_TOOLS;
 
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
@@ -85,6 +87,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     // Section: Configuration
     print_section("Configuration");
     let (shim_mode, system_node_path) = check_shim_mode().await;
+    check_pnpm_runtime(shim_mode);
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
@@ -258,6 +261,45 @@ async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
     }
 
     (config.shim_mode, system_node_path)
+}
+
+fn check_pnpm_runtime(shim_mode: ShimMode) {
+    let value =
+        std::env::var_os(PNPM_CONFIG_RUNTIME).map(|value| value.to_string_lossy().into_owned());
+
+    match (shim_mode, value.as_deref()) {
+        (ShimMode::Managed, Some(value)) if value.eq_ignore_ascii_case("false") => {
+            print_check(
+                &output::CHECK.green().to_string(),
+                "pnpm runtime",
+                &format!("{PNPM_CONFIG_RUNTIME}={value}"),
+            );
+        }
+        (ShimMode::SystemFirst, None) => {
+            print_check(
+                &output::CHECK.green().to_string(),
+                "pnpm runtime",
+                &format!("{PNPM_CONFIG_RUNTIME} unset"),
+            );
+        }
+        (ShimMode::Managed, value) => {
+            let value = value.unwrap_or("unset");
+            print_check(
+                &output::WARN_SIGN.yellow().to_string(),
+                "pnpm runtime",
+                &format!("{PNPM_CONFIG_RUNTIME}={value} (expected false)").yellow().to_string(),
+            );
+            print_hint("Re-source the Vite+ environment file or restart your shell.");
+        }
+        (ShimMode::SystemFirst, Some(value)) => {
+            print_check(
+                &output::WARN_SIGN.yellow().to_string(),
+                "pnpm runtime",
+                &format!("{PNPM_CONFIG_RUNTIME}={value} (expected unset)").yellow().to_string(),
+            );
+            print_hint("Re-source the Vite+ environment file or restart your shell.");
+        }
+    }
 }
 
 /// Check profile files for env sourcing and classify where it was found.
