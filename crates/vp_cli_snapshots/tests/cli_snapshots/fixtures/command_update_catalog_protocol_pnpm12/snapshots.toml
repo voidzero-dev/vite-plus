@@ -1,0 +1,31 @@
+[[case]]
+name = "command_update_catalog_protocol_pnpm12"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+comment = "#2309 on pnpm 12. pnpm 12 fixes the clobber upstream (a bare override key no longer strips a `catalog:` importer spec), so this pins that the range-qualified key vite-plus writes is also correct there rather than only being a pnpm 9-11 workaround."
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+    "--package-manager",
+    "pnpm",
+  ], comment = "migrate pins the toolchain through the workspace catalog", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "pnpm-workspace.yaml",
+  ], comment = "the range-qualified override key is written on pnpm 12 too", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "update must not resolve the catalog reference away (screen omitted: pnpm 12's update summary reports a package-count delta that churns with the bundled dependency graph)", snapshot = false, continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` stays `catalog:`", continue-on-failure = true },
+]

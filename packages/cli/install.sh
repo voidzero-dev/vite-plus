@@ -7,7 +7,12 @@
 #
 # Environment variables:
 #   VP_VERSION - Version to install (default: latest)
-#   VP_HOME - Installation directory (default: ~/.vite-plus)
+#   VP_HOME - Optional pin for the monolithic layout. If unset, Vite+ reuses an
+#             existing ~/.vite-plus install. Otherwise, the complete VP_*_DIR
+#             group, XDG_*, or platform defaults select the split roots.
+#   VP_BIN_DIR / VP_DATA_DIR / VP_CACHE_DIR - Complete group of absolute
+#                                             category overrides
+#   XDG_DATA_HOME / XDG_CONFIG_HOME / … - Unix split defaults
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
@@ -19,15 +24,8 @@
 set -e
 
 VP_VERSION="${VP_VERSION:-latest}"
-INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
-# Use $HOME-relative path for shell config references (portable across sessions)
-if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
-  INSTALL_DIR_REF_POSIX="\$HOME${INSTALL_DIR#"$HOME"}"
-  INSTALL_DIR_REF_NU="~${INSTALL_DIR#"$HOME"}"
-else
-  INSTALL_DIR_REF_POSIX="$INSTALL_DIR"
-  INSTALL_DIR_REF_NU="$INSTALL_DIR"
-fi
+# After these helper definitions, the selected payload resolves category roots
+# through VP_DUMP_DIRS. Pre-split payloads use the legacy layout.
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
@@ -130,6 +128,138 @@ write_release_age_override() {
   if [ ! -f "$VERSION_DIR/.npmrc" ] || ! grep -q '^minimum-release-age=' "$VERSION_DIR/.npmrc" 2>/dev/null; then
     printf 'minimum-release-age=0\n' >> "$VERSION_DIR/.npmrc"
   fi
+}
+
+is_absolute_path() {
+  case "$1" in
+    /*) return 0 ;;
+    [A-Za-z]:[\\/]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Print $1 when it is a non-empty absolute path; otherwise print nothing.
+absolute_override() {
+  local val="$1"
+  if [ -n "$val" ] && is_absolute_path "$val"; then
+    printf '%s\n' "$val"
+  fi
+}
+
+validate_vp_dir_overrides() {
+  local count=0 value
+  for value in "${VP_BIN_DIR:-}" "${VP_DATA_DIR:-}" "${VP_CACHE_DIR:-}"; do
+    [ -z "$value" ] || count=$((count + 1))
+  done
+  if [ "$count" -ne 0 ] && [ "$count" -ne 3 ]; then
+    error "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+  fi
+  if [ "$count" -eq 3 ]; then
+    is_absolute_path "$VP_BIN_DIR" || error "VP_BIN_DIR must be an absolute path."
+    is_absolute_path "$VP_DATA_DIR" || error "VP_DATA_DIR must be an absolute path."
+    is_absolute_path "$VP_CACHE_DIR" || error "VP_CACHE_DIR must be an absolute path."
+  fi
+}
+
+is_windows_uname() {
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolution_home_dir() {
+  if is_windows_uname; then
+    printf '%s\n' "${USERPROFILE:-$HOME}"
+  else
+    printf '%s\n' "${HOME:-$USERPROFILE}"
+  fi
+}
+
+# Released setup-vp versions add ~/.vite-plus/bin to the GitHub Actions PATH.
+# They do this after the installer exits. Use the monolithic layout until
+# setup-vp declares support for VP_DUMP_DIRS.
+enable_setup_vp_legacy_compatibility() {
+  [ "${GITHUB_ACTION_REPOSITORY:-}" = "voidzero-dev/setup-vp" ] || return 0
+  [ "${VP_VPDIRS_AWARE:-}" != "1" ] || return 0
+  [ -z "${VP_HOME:-}" ] || return 0
+  [ -z "${VP_BIN_DIR:-}" ] || return 0
+  [ -z "${VP_DATA_DIR:-}" ] || return 0
+  [ -z "${VP_CACHE_DIR:-}" ] || return 0
+
+  local resolution_home
+  resolution_home="$(resolution_home_dir)"
+  [ -n "$resolution_home" ] || error "Vite+ could not resolve the user home directory."
+  VP_HOME="$resolution_home/.vite-plus"
+  export VP_HOME
+}
+
+# Escape a path fragment for a Bash/Zsh double-quoted string. `$HOME` is
+# added separately when the config directory is under the user home.
+escape_posix_double_quoted() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\$/\\\$}"
+  value="${value//\`/\\\`}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+# Fish double-quoted strings do not evaluate backticks, but `$`, `"`, and
+# backslashes still need escaping.
+escape_fish_double_quoted() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\$/\\\$}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+# Nushell expands values only in interpolated strings (`$"..."`). In a plain
+# double-quoted string only backslashes and double quotes need escaping.
+escape_nu_double_quoted() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+set_config_dir_refs() {
+  local dir="$1"
+  local shell_home="$2"
+  local suffix
+  if [ -n "$shell_home" ] && case "$dir" in "$shell_home"/*) true;; *) false;; esac; then
+    suffix="${dir#"$shell_home"}"
+    CONFIG_DIR_REF_POSIX="\$HOME$(escape_posix_double_quoted "$suffix")"
+    CONFIG_DIR_REF_FISH="\$HOME$(escape_fish_double_quoted "$suffix")"
+    CONFIG_DIR_REF_NU="~$(escape_nu_double_quoted "$suffix")"
+  else
+    CONFIG_DIR_REF_POSIX="$(escape_posix_double_quoted "$dir")"
+    CONFIG_DIR_REF_FISH="$(escape_fish_double_quoted "$dir")"
+    CONFIG_DIR_REF_NU="$(escape_nu_double_quoted "$dir")"
+  fi
+}
+
+# Monolithic mapping: every category on one root.
+set_monolithic_layout() {
+  LAYOUT_KIND="single-root"
+  INSTALL_DIR="$1"
+  SHIM_DIR="$1/bin"
+  CACHE_DIR="$1/cache"
+  CONFIG_DIR="$1"
+  STATE_DIR="$1"
+}
+
+# Pre-split releases resolve all paths from VP_HOME, which defaults to
+# ~/.vite-plus. Install them in this monolithic root. This keeps environment
+# setup, shims, upgrades, and installer paths consistent.
+use_legacy_layout() {
+  local resolution_home vp_home
+  resolution_home="$(resolution_home_dir)"
+  [ -n "$resolution_home" ] || error "Vite+ could not resolve the user home directory."
+  vp_home="$(absolute_override "${VP_HOME:-}")"
+  set_monolithic_layout "${vp_home:-$resolution_home/.vite-plus}"
+  set_config_dir_refs "$CONFIG_DIR" "${HOME:-}"
 }
 
 normalize_existing_dir() {
@@ -608,9 +738,11 @@ append_source_to_file() {
     fi
   done
 
-  echo "" >> "$shell_config"
-  echo "# Vite+ bin (https://viteplus.dev)" >> "$shell_config"
-  echo "$source_line" >> "$shell_config"
+  {
+    printf '\n'
+    printf '%s\n' "# Vite+ bin (https://viteplus.dev)"
+    printf '%s\n' "$source_line"
+  } >> "$shell_config"
   return 0
 }
 
@@ -688,7 +820,7 @@ configure_zsh_path() {
   fi
 
   result=0
-  append_source_to_file "$zshenv" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+  append_source_to_file "$zshenv" ". \"$CONFIG_DIR_REF_POSIX/env\"" "$CONFIG_DIR/env" "$CONFIG_DIR_REF_POSIX/env" || result=$?
   case "$result" in
     0) updated+=("$(abbreviate_path "$zshenv")") ;;
     2) already+=("$(abbreviate_path "$zshenv")") ;;
@@ -697,7 +829,7 @@ configure_zsh_path() {
 
   if [ -f "$zshrc" ]; then
     result=0
-    append_source_to_file "$zshrc" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    append_source_to_file "$zshrc" ". \"$CONFIG_DIR_REF_POSIX/env\"" "$CONFIG_DIR/env" "$CONFIG_DIR_REF_POSIX/env" || result=$?
     case "$result" in
       0) updated+=("$(abbreviate_path "$zshrc")") ;;
       2) already+=("$(abbreviate_path "$zshrc")") ;;
@@ -741,7 +873,7 @@ configure_bash_path() {
     fi
     existing=1
     result=0
-    append_source_to_file "$file" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    append_source_to_file "$file" ". \"$CONFIG_DIR_REF_POSIX/env\"" "$CONFIG_DIR/env" "$CONFIG_DIR_REF_POSIX/env" || result=$?
     case "$result" in
       0) updated+=("$(abbreviate_path "$file")") ;;
       2) already+=("$(abbreviate_path "$file")") ;;
@@ -776,7 +908,7 @@ configure_bash_path() {
 configure_fish_path() {
   local fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish"
   local fish_content="# Vite+ bin (https://viteplus.dev)
-source \"$INSTALL_DIR_REF_POSIX/env.fish\"
+source \"$CONFIG_DIR_REF_FISH/env.fish\"
 "
 
   local result=0
@@ -811,7 +943,7 @@ configure_nushell_path() {
 
   local nushell_autoload="$nushell_dir/vite-plus.nu"
   local nushell_content="# Vite+ bin (https://viteplus.dev)
-source '$INSTALL_DIR_REF_NU/env.nu'
+source \"$CONFIG_DIR_REF_NU/env.nu\"
 "
 
   local result=0
@@ -878,12 +1010,53 @@ refresh_shims() {
   fi
 }
 
+# Return success only if this Vite+ install owns the existing Node entry. A bin
+# from an explicit override group can be shared. Entry existence does not permit
+# replacement.
+is_vite_plus_node_shim() {
+  local bin_path="$1"
+  local vp_bin="$2"
+
+  # Unix shims are symlinks to the active vp binary. `-ef` follows the link. It
+  # accepts the old relative target and the absolute split-layout target.
+  if [ -L "$bin_path/node" ] && [ "$bin_path/node" -ef "$vp_bin" ]; then
+    return 0
+  fi
+
+  # install.sh can also run under Git Bash/MSYS. Windows trampolines carry a
+  # per-executable sidecar that records the owning data root.
+  if [ -f "$bin_path/node.exe" ] && [ -f "$bin_path/node.shim" ]; then
+    local pointer=""
+    pointer="$(shim_pointer_data "$bin_path/node.shim")" || return 1
+    [ "$pointer" = "$INSTALL_DIR" ] && return 0
+  fi
+
+  return 1
+}
+
+shim_pointer_data() {
+  local file="$1" first="" line=""
+  IFS= read -r first < "$file" || [ -n "$first" ] || return 1
+  first="${first%$'\r'}"
+  if [ "$first" != "vite-plus-shim-v1" ]; then
+    printf '%s\n' "$first"
+    return 0
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      data=*) printf '%s\n' "${line#data=}"; return 0 ;;
+    esac
+  done < "$file"
+  return 1
+}
+
 # Setup Node.js version manager (node/npm/npx/corepack shims)
 # Sets NODE_MANAGER_ENABLED global
 # Arguments: bin_dir - path to the version's bin directory containing vp
 setup_node_manager() {
   local bin_dir="$1"
-  local bin_path="$INSTALL_DIR/bin"
+  local bin_path="$SHIM_DIR"
   NODE_MANAGER_ENABLED="false"
 
   # Resolve vp binary name (vp on Unix, vp.exe on Windows)
@@ -902,11 +1075,17 @@ setup_node_manager() {
     return 0
   fi
 
-  # Check if Vite+ is already managing Node.js (bin/node or bin/node.exe exists)
-  if [ -e "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
-    refresh_shims "$vp_bin"
-    NODE_MANAGER_ENABLED="already"
-    return 0
+  # Check if an existing Node entry is a Vite+ shim. A foreign entry in a custom
+  # bin directory prevents automatic enablement. The prompt below can get
+  # permission to replace the entry.
+  local unmanaged_node_in_bin="false"
+  if [ -e "$bin_path/node" ] || [ -L "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
+    if is_vite_plus_node_shim "$bin_path" "$vp_bin"; then
+      refresh_shims "$vp_bin"
+      NODE_MANAGER_ENABLED="already"
+      return 0
+    fi
+    unmanaged_node_in_bin="true"
   fi
 
   # Auto-enable on CI or devcontainer environments
@@ -914,7 +1093,7 @@ setup_node_manager() {
   # CODESPACES: set by GitHub Codespaces (https://docs.github.com/en/codespaces)
   # REMOTE_CONTAINERS: set by VS Code Dev Containers extension
   # DEVPOD: set by DevPod (https://devpod.sh)
-  if [ -n "$CI" ] || [ -n "$CODESPACES" ] || [ -n "$REMOTE_CONTAINERS" ] || [ -n "$DEVPOD" ]; then
+  if [ "$unmanaged_node_in_bin" = "false" ] && { [ -n "$CI" ] || [ -n "$CODESPACES" ] || [ -n "$REMOTE_CONTAINERS" ] || [ -n "$DEVPOD" ]; }; then
     refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
@@ -927,7 +1106,7 @@ setup_node_manager() {
   fi
 
   # Auto-enable if no node available on system
-  if [ "$node_available" = "false" ]; then
+  if [ "$node_available" = "false" ] && [ "$unmanaged_node_in_bin" = "false" ]; then
     refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
@@ -937,7 +1116,8 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$INSTALL_DIR")/bin/ and automatically uses the right version."
+    echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_DIR")."
+    echo "It selects the required version automatically."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
@@ -1003,13 +1183,11 @@ main() {
     error "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
   fi
 
+  validate_vp_dir_overrides
+  enable_setup_vp_legacy_compatibility
   check_requirements
 
-  local previous_install_dir
-  previous_install_dir="$(detect_previous_install_dir || true)"
-  if [ -n "$previous_install_dir" ] && is_nested_install_dir "$previous_install_dir" "$INSTALL_DIR"; then
-    error "Previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Choose a separate VP_HOME or remove the previous install first."
-  fi
+  local previous_install_dir=""
 
   local platform
   platform=$(detect_platform)
@@ -1023,6 +1201,13 @@ main() {
     # Use version as-is (default to "local-dev")
     if [ "$VP_VERSION" = "latest" ] || [ "$VP_VERSION" = "test" ]; then
       VP_VERSION="local-dev"
+    fi
+    if [ -z "$LOCAL_BINARY" ] || [ ! -f "$LOCAL_BINARY" ]; then
+      error "Set VP_LOCAL_BINARY when you use VP_LOCAL_TGZ."
+    fi
+    if ! apply_dirs_from_vp "$LOCAL_BINARY"; then
+      use_legacy_layout
+      info "The local vite-plus binary does not support the split directory layout. Vite+ will install it in $(abbreviate_path "$INSTALL_DIR")."
     fi
   elif [ -n "$PR_VERSION" ]; then
     # Registry bridge mode: resolve the requested PR/SHA to the bridge's
@@ -1044,40 +1229,16 @@ main() {
     VP_VERSION="$RESOLVED_VERSION"
   fi
 
-  # Set up version-specific directories
-  VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
-  BIN_DIR="$VERSION_DIR/bin"
-  CURRENT_LINK="$INSTALL_DIR/current"
-
   local binary_name="vp"
   if [[ "$platform" == win32* ]]; then
     binary_name="vp.exe"
   fi
 
-  # Create bin directory
-  mkdir -p "$BIN_DIR"
-
-  if [ -n "$LOCAL_TGZ" ]; then
-    # Local development mode: only need the binary
-    info "Using local tarball: $LOCAL_TGZ"
-
-    # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
-    if [ -n "$LOCAL_BINARY" ]; then
-      cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
-      # On Windows, also copy the trampoline shim binary if available
-      if [[ "$platform" == win32* ]]; then
-        local shim_src
-        shim_src="$(dirname "$LOCAL_BINARY")/vp-shim.exe"
-        if [ -f "$shim_src" ]; then
-          cp "$shim_src" "$BIN_DIR/vp-shim.exe"
-        fi
-      fi
-    else
-      error "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
-    fi
-    chmod +x "$BIN_DIR/$binary_name"
-  else
-    # Download CLI platform tarball — npm registry or registry bridge (when PR_VERSION is set)
+  # Download the CLI platform tarball before Vite+ selects the final layout.
+  # The downloaded binary reports the layout that it supports.
+  local platform_temp_dir=""
+  if [ -z "$LOCAL_TGZ" ]; then
+    # npm registry or registry bridge (when PR_VERSION is set)
     get_platform_suffix "$platform"
     local platform_url
     if [ -n "$PR_VERSION" ]; then
@@ -1090,10 +1251,50 @@ main() {
     fi
 
     # Create temp directory for extraction
-    local platform_temp_dir
     platform_temp_dir=$(mktemp -d)
     download_and_extract "$platform_url" "$platform_temp_dir" 1
+    chmod +x "$platform_temp_dir/$binary_name"
 
+    # Ask the downloaded binary for its layout through VP_DUMP_DIRS. A pre-split
+    # release cannot report a layout. Give that release the monolithic root so
+    # the installed PATH commands work.
+    if ! apply_dirs_from_vp "$platform_temp_dir/$binary_name"; then
+      use_legacy_layout
+      info "vite-plus ${VP_VERSION} does not support the split directory layout. Vite+ will install it in $(abbreviate_path "$INSTALL_DIR")."
+    fi
+  fi
+
+  # Run layout migration checks after the payload resolves the category roots.
+  # A pre-split payload selects the legacy layout first.
+  previous_install_dir="$(detect_previous_install_dir || true)"
+  if [ -n "$previous_install_dir" ] && is_nested_install_dir "$previous_install_dir" "$INSTALL_DIR"; then
+    error "The previous Vite+ install at $previous_install_dir overlaps with VP_HOME $INSTALL_DIR. Set VP_HOME to a directory that does not overlap. Alternatively, remove the previous install."
+  fi
+
+  # Set up version-specific directories
+  VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
+  BIN_DIR="$VERSION_DIR/bin"
+  CURRENT_LINK="$INSTALL_DIR/current"
+
+  # Create bin directory
+  mkdir -p "$BIN_DIR"
+
+  if [ -n "$LOCAL_TGZ" ]; then
+    # Local development mode: only need the binary
+    info "Vite+ uses the local tarball: $LOCAL_TGZ"
+
+    # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
+    cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
+    # On Windows, also copy the trampoline shim binary if available
+    if [[ "$platform" == win32* ]]; then
+      local shim_src
+      shim_src="$(dirname "$LOCAL_BINARY")/vp-shim.exe"
+      if [ -f "$shim_src" ]; then
+        cp "$shim_src" "$BIN_DIR/vp-shim.exe"
+      fi
+    fi
+    chmod +x "$BIN_DIR/$binary_name"
+  else
     # Copy binary to BIN_DIR
     cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
     chmod +x "$BIN_DIR/$binary_name"
@@ -1172,16 +1373,19 @@ WRAPPER_EOF
   # Create/update current symlink (use relative path for portability)
   ln -sfn "$VP_VERSION" "$CURRENT_LINK"
 
-  # Create bin directory and vp entrypoint (always done)
-  mkdir -p "$INSTALL_DIR/bin"
+  # Create user bin directory and vp entrypoint (always done)
+  mkdir -p "$SHIM_DIR"
   if [[ "$platform" == win32* ]]; then
     # Windows: copy trampoline as vp.exe (matching install.ps1)
     if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
-      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$INSTALL_DIR/bin/vp.exe"
+      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$SHIM_DIR/vp.exe"
+      # For a complete split override group, the trampoline reads <name>.shim
+      # instead of inherited environment variables.
+      printf 'vite-plus-shim-v1\nlayout=%s\ndata=%s\ncache=%s\n' \
+        "$LAYOUT_KIND" "$INSTALL_DIR" "$CACHE_DIR" >"$SHIM_DIR/vp.shim"
     fi
   else
-    # Unix: symlink to current/bin/vp
-    ln -sf "../current/bin/vp" "$INSTALL_DIR/bin/vp"
+    ln -sfn "$INSTALL_DIR/current/bin/vp" "$SHIM_DIR/vp"
   fi
 
   # Cleanup old versions
@@ -1204,9 +1408,9 @@ WRAPPER_EOF
   # Configure shell PATH after the install is otherwise complete.
   configure_shell_path
 
-  # Use ~ shorthand if install dir is under HOME, otherwise show full path
-  local display_dir="${INSTALL_DIR/#$HOME/~}"
-  local display_location="${display_dir}/bin"
+  # Use ~ when the shim directory is under HOME. Otherwise, show the full path.
+  local display_location
+  display_location="$(abbreviate_path "$SHIM_DIR")"
 
   # Print success message
   echo ""
@@ -1251,11 +1455,11 @@ WRAPPER_EOF
     echo ""
     echo "  Manual setup instructions:"
     echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
-    echo "        . \"$INSTALL_DIR_REF_POSIX/env\""
+    printf '        . "%s/env"\n' "$CONFIG_DIR_REF_POSIX"
     echo "    - Fish: create ${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish with:"
-    echo "        source \"$INSTALL_DIR_REF_POSIX/env.fish\""
+    printf '        source "%s/env.fish"\n' "$CONFIG_DIR_REF_FISH"
     echo "    - Nushell: create a vendor autoload file with:"
-    echo "        source '$INSTALL_DIR_REF_NU/env.nu'"
+    printf '        source "%s/env.nu"\n' "$CONFIG_DIR_REF_NU"
     echo ""
     echo "  Or run vp directly:"
     echo ""
@@ -1263,6 +1467,28 @@ WRAPPER_EOF
   fi
 
   echo ""
+}
+
+apply_dirs_from_vp() {
+  local vp="$1"
+  local out
+  out="$(VP_DUMP_DIRS=1 "$vp" 2>/dev/null)" || return 1
+  INSTALL_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "data" { print $2; exit }')"
+  SHIM_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "bin" { print $2; exit }')"
+  CACHE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "cache" { print $2; exit }')"
+  CONFIG_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "config" { print $2; exit }')"
+  STATE_DIR="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "state" { print $2; exit }')"
+  LAYOUT_KIND="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "layout" { print $2; exit }')"
+  [ -n "$INSTALL_DIR" ] && [ -n "$SHIM_DIR" ] && [ -n "$CACHE_DIR" ] && [ -n "$CONFIG_DIR" ] && [ -n "$STATE_DIR" ] || return 1
+  if [ "$LAYOUT_KIND" != "single-root" ] && [ "$LAYOUT_KIND" != "split" ]; then
+    if [ "$SHIM_DIR" = "$INSTALL_DIR/bin" ] && [ "$CACHE_DIR" = "$INSTALL_DIR/cache" ] \
+      && [ "$CONFIG_DIR" = "$INSTALL_DIR" ] && [ "$STATE_DIR" = "$INSTALL_DIR" ]; then
+      LAYOUT_KIND="single-root"
+    else
+      LAYOUT_KIND="split"
+    fi
+  fi
+  set_config_dir_refs "$CONFIG_DIR" "${HOME:-}"
 }
 
 main "$@"

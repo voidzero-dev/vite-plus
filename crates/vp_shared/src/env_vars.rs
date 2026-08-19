@@ -9,11 +9,62 @@
 //!
 //! Standard system variables (`PATH`, `HOME`, `CI`, etc.) are intentionally
 //! excluded — they're well-known and benefit less from constant definitions.
+//! The `XDG_*_HOME` base-directory variables are the exception: they
+//! participate in `VpDirs` path resolution, so they get constants too.
 
 // ── Config: read once at startup via EnvConfig ──────────────────────────
 
-/// Override for the vite-plus home directory (default: `~/.vite-plus`).
+/// Override pinning every category root under one directory.
+///
+/// This is the highest-priority layout rule. When set, `bin` uses
+/// `<root>/bin`, and `cache` uses `<root>/cache`. Data, config, and state use
+/// `<root>`. Old environment scripts and custom-location installs export this
+/// variable. Fresh installs do not set it. Prefer `VP_*_DIR` or `XDG_*`.
 pub const VP_HOME: &str = "VP_HOME";
+
+/// Override directory for executables and shims.
+///
+/// Applies only when `VP_DATA_DIR` and `VP_CACHE_DIR` are also absolute. A
+/// single-root install from `VP_HOME` or the existing-install check ignores
+/// the complete group.
+pub const VP_BIN_DIR: &str = "VP_BIN_DIR";
+
+/// Override directory for CLI versions, Node.js runtimes, and package managers.
+/// These files use most of the disk space. Applies only as part of the complete
+/// `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
+pub const VP_DATA_DIR: &str = "VP_DATA_DIR";
+
+/// Override directory for the disposable cache. Applies only as part of the
+/// complete `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
+pub const VP_CACHE_DIR: &str = "VP_CACHE_DIR";
+
+// ── XDG base directories: read by VpDirs resolution ────────────────────
+
+/// XDG base directory for user configuration.
+pub const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+
+/// XDG base directory for user data.
+pub const XDG_DATA_HOME: &str = "XDG_DATA_HOME";
+
+/// XDG base directory for user state.
+pub const XDG_STATE_HOME: &str = "XDG_STATE_HOME";
+
+/// XDG base directory for disposable caches.
+pub const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
+
+/// All environment variables that the `VpDirs` resolution chain reads. Tests
+/// clear them to isolate resolution from the developer shell. The Vite+
+/// environment script usually exports `VP_HOME` in that shell.
+pub const LAYOUT_OVERRIDE_VARS: &[&str] = &[
+    VP_HOME,
+    VP_BIN_DIR,
+    VP_DATA_DIR,
+    VP_CACHE_DIR,
+    XDG_DATA_HOME,
+    XDG_CACHE_HOME,
+    XDG_CONFIG_HOME,
+    XDG_STATE_HOME,
+];
 
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vt=trace"`).
 pub const VP_LOG: &str = "VP_LOG";
@@ -130,6 +181,24 @@ pub const NODE_EXTRA_CA_CERTS: &str = "NODE_EXTRA_CA_CERTS";
 pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 
 // ── Testing / Development ───────────────────────────────────────────────
+
+/// When set to `1`, the global CLI prints the layout mode and the five category
+/// roots from [`crate::EnvConfig`], then exits. It prints one value on each
+/// line. Installers use this variable when they have a `vp` binary. Thus, they
+/// do not implement directory resolution again.
+pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
+
+/// Keys in [`VP_DUMP_DIRS`] output. Each value uses one `<key>\t<value>` line.
+/// The `vp_global_cli` printer and `vp-setup` parser share these values.
+/// `install.sh` and `install.ps1` use the same keys.
+pub mod dump_dirs {
+    pub const LAYOUT: &str = "layout";
+    pub const DATA: &str = "data";
+    pub const BIN: &str = "bin";
+    pub const CACHE: &str = "cache";
+    pub const CONFIG: &str = "config";
+    pub const STATE: &str = "state";
+}
 
 /// Override the trampoline binary path for tests.
 ///

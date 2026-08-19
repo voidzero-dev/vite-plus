@@ -50,8 +50,8 @@ catalog:
   vitest: <version>
   '@vitest/browser-webdriverio': <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

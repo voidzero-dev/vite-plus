@@ -1,0 +1,58 @@
+[[case]]
+name = "command_update_catalog_protocol_legacy_key"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+comment = "#2309 repair path. Migrate first so the catalog holds a real PINNED toolchain version (the reporter's shape), then downgrade the override key to the pre-fix bare spelling a project migrated by an older Vite+ still carries."
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+    "--package-manager",
+    "pnpm",
+  ], comment = "migrate pins the toolchain through the workspace catalog", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "replace-file-content",
+    "pnpm-workspace.yaml",
+    "vite@*:",
+    "vite:",
+  ], comment = "rewind the override key to the pre-#2309 bare spelling (fails if migrate stopped writing the ranged key)", snapshot = false, continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "pnpm-workspace.yaml",
+  ], comment = "the pre-fix shape: bare override key over an exactly pinned catalog alias", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "nothing to update, yet the bare key still resolves the catalog reference away", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` lost `catalog:` for the pinned alias; `vite-plus` (no override) kept it", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+  ], comment = "the bare key reads as pending, so one migrate repairs it", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "pnpm-workspace.yaml",
+  ], comment = "the bare key is replaced by the range-qualified one", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "update is now a no-op on the catalog reference", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` stays `catalog:` across the update", continue-on-failure = true },
+]

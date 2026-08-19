@@ -13,9 +13,10 @@ use crate::error::Error;
 
 /// Execute the clean command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
-    let node_dir = home_dir.join("js_runtime").join("node");
-    let package_manager_dir = home_dir.join("package_manager");
+    let config = vp_shared::EnvConfig::get();
+    let data_dir = &config.dirs.data;
+    let node_dir = data_dir.join("js_runtime").join("node");
+    let package_manager_dir = data_dir.join("package_manager");
     let protected_versions = protected_node_versions(&cwd).await?;
 
     let corepack_cleaned = run_corepack_cache_clean(&cwd).await?;

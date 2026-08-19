@@ -7,6 +7,13 @@ license.workspace = true
 publish = false
 rust-version.workspace = true
 
+[features]
+# Test configuration helpers (`EnvConfig::with_vars`/`with_vars_async`/
+# `scoped`/`scoped_async`). Downstream crates enable this through
+# `[dev-dependencies]` so the helpers exist for their test builds but stay out
+# of release binaries.
+test-utils = ["dep:temp-env", "dep:tempfile"]
+
 [dependencies]
 directories = { workspace = true }
 nix = { workspace = true, features = ["fs", "poll", "term"] }
@@ -15,6 +22,8 @@ serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }
 supports-color = "3"
+temp-env = { workspace = true, optional = true, features = ["async_closure"] }
+tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -32,6 +41,10 @@ webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
+tempfile = { workspace = true }
+# Enables the `test-utils` feature for this crate's own tests and doctests
+# (a package's dev-dependencies are active when it is the tested target).
+vp_shared = { path = ".", features = ["test-utils"] }
 
 [lints]
 workspace = true

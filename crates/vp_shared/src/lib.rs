@@ -7,11 +7,11 @@
     clippy::print_stdout
 )]
 
+mod dirs;
 mod env_config;
 pub mod env_vars;
 mod error;
 pub mod header;
-mod home;
 mod http;
 mod interactivity;
 mod json_edit;
@@ -24,9 +24,12 @@ pub mod string_similarity;
 mod tls;
 mod tracing;
 
-pub use env_config::{EnvConfig, TestEnvGuard};
+pub use dirs::{
+    SHIM_POINTER_EXTENSION, SHIM_POINTER_HEADER, VP_BINARY_NAME, VpDirs, VpDirsLayout,
+    shim_pointer_file_name,
+};
+pub use env_config::EnvConfig;
 pub use error::format_error_chain;
-pub use home::{VP_BINARY_NAME, get_vp_home};
 pub use http::{HttpClientError, download_timeout, shared_http_client};
 pub use interactivity::{
     is_ci_environment, is_interactive_terminal, is_stderr_terminal, is_stdin_terminal,

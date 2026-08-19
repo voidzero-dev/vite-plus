@@ -50,6 +50,7 @@ doctest = false
 [dev-dependencies]
 httpmock = { workspace = true }
 test-log = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

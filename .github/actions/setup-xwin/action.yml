@@ -34,7 +34,7 @@ runs:
     - run: rustup target add x86_64-pc-windows-msvc
       shell: bash
 
-    - uses: taiki-e/install-action@c93ccc03e00cd0e08e494f5fd058a6c55a6a1907 # v2.82.8
+    - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
       with:
         tool: ${{ inputs.tools != '' && format('{0},cargo-xwin', inputs.tools) || 'cargo-xwin' }}
 

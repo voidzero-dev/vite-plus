@@ -6,6 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getVpDirs } from '../../../binding/index.js';
 import {
   detectExistingEditors,
   selectEditor,
@@ -651,9 +652,8 @@ describe('writeEditorConfigs', () => {
     const workspaceXml = fs.readFileSync(path.join(projectRoot, '.idea', 'workspace.xml'), 'utf8');
     expect(workspaceXml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     expect(workspaceXml).toContain('"javascript.preferred.runtime.type.id": "node"');
-    expect(workspaceXml).toContain(
-      `"nodejs_interpreter_path": "$USER_HOME$/.vite-plus/bin/node.exe"`,
-    );
+    const nodeShim = path.join(getVpDirs().bin, process.platform === 'win32' ? 'node.exe' : 'node');
+    expect(workspaceXml).toContain(`"nodejs_interpreter_path": ${JSON.stringify(nodeShim)}`);
     expect(workspaceXml).toContain('"nodejs_package_manager_path": "pnpm"');
 
     const oxfmtSettingsXml = fs.readFileSync(

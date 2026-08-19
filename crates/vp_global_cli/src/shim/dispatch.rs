@@ -890,37 +890,37 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                if let Ok(home_dir) = vp_shared::get_vp_home() {
-                    let node_dir =
-                        home_dir.join("js_runtime").join("node").join(&*resolution.version);
-                    let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
-                    check_npm_global_install_result(
-                        &parsed.packages,
-                        original_path.as_deref(),
-                        &npm_prefix,
-                        &node_dir,
-                        &resolution.version,
-                    );
-                }
+                let node_dir = vp_shared::EnvConfig::get()
+                    .dirs
+                    .data
+                    .join("js_runtime")
+                    .join("node")
+                    .join(&*resolution.version);
+                let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
+                check_npm_global_install_result(
+                    &parsed.packages,
+                    original_path.as_deref(),
+                    &npm_prefix,
+                    &node_dir,
+                    &resolution.version,
+                );
             }
             return exit_code;
         }
 
         if let Some(parsed) = parse_npm_global_uninstall(args) {
             // Collect bin names before uninstall (package.json will be gone after)
-            let context = if let Ok(home_dir) = vp_shared::get_vp_home() {
-                let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
-                let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
-                let bins = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
-                Some((bins, npm_prefix))
-            } else {
-                None
-            };
+            let node_dir = vp_shared::EnvConfig::get()
+                .dirs
+                .data
+                .join("js_runtime")
+                .join("node")
+                .join(&*resolution.version);
+            let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
+            let bin_names = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                if let Some((bin_names, npm_prefix)) = context {
-                    remove_npm_global_uninstall_links(&bin_names, &npm_prefix);
-                }
+                remove_npm_global_uninstall_links(&bin_names, &npm_prefix);
             }
             return exit_code;
         }
@@ -1189,7 +1189,7 @@ fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
 pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
     // Fast-path: VP_NODE_VERSION env var set by `vp env use`
     // Skip all disk I/O for cache when session override is active
-    if let Some(env_version) = vp_shared::EnvConfig::get().node_version {
+    if let Some(env_version) = vp_shared::EnvConfig::get().node_version.as_deref() {
         let env_version = env_version.trim();
         if !env_version.is_empty() {
             let provider = vp_js_runtime::NodeProvider::new();
@@ -1287,13 +1287,15 @@ async fn cached_project_source_still_current(
         && entry.source_path.as_deref() == Some(current_source_path.as_str()))
 }
 
+/// Directory of the managed Node.js installation for `version`
+/// (`<DATA>/js_runtime/node/<version>`).
+fn node_install_dir(version: &str) -> AbsolutePathBuf {
+    vp_shared::EnvConfig::get().dirs.data.join("js_runtime").join("node").join(version)
+}
+
 /// Ensure Node.js is installed.
 pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, String> {
-    let home_dir = vp_shared::get_vp_home()
-        .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
-        .join("js_runtime")
-        .join("node")
-        .join(version);
+    let home_dir = node_install_dir(version);
 
     #[cfg(windows)]
     let binary_path = home_dir.join("node.exe");
@@ -1318,11 +1320,7 @@ pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, S
 
 /// Locate a tool binary within the Node.js installation.
 pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
-    let home_dir = vp_shared::get_vp_home()
-        .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
-        .join("js_runtime")
-        .join("node")
-        .join(version);
+    let home_dir = node_install_dir(version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {
@@ -1420,7 +1418,6 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::*;
@@ -1442,36 +1439,6 @@ mod tests {
         path
     }
 
-    /// Helper to save and restore PATH and VP_BYPASS around a test.
-    struct EnvGuard {
-        original_path: Option<std::ffi::OsString>,
-        original_bypass: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn new() -> Self {
-            Self {
-                original_path: std::env::var_os("PATH"),
-                original_bypass: std::env::var_os(env_vars::VP_BYPASS),
-            }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            unsafe {
-                match &self.original_path {
-                    Some(v) => std::env::set_var("PATH", v),
-                    None => std::env::remove_var("PATH"),
-                }
-                match &self.original_bypass {
-                    Some(v) => std::env::set_var(env_vars::VP_BYPASS, v),
-                    None => std::env::remove_var(env_vars::VP_BYPASS),
-                }
-            }
-        }
-    }
-
     fn cache_entry(source: &str, source_path: Option<&AbsolutePathBuf>) -> ResolveCacheEntry {
         ResolveCacheEntry {
             version: "24.18.0".to_string(),
@@ -1485,7 +1452,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_hash_pinned_modern_yarn_rechecks_cached_cli() {
         let temp = TempDir::new().unwrap();
         let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
@@ -1499,6 +1465,7 @@ mod tests {
         )
         .unwrap();
 
+        // VP_HOME pins <DATA> to the root, so the cached install lands here.
         let bin_dir =
             vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
@@ -1507,45 +1474,48 @@ mod tests {
         std::fs::write(bin_dir.join("yarn.ps1"), "shim").unwrap();
         std::fs::write(bin_dir.join("yarn.js"), "corrupt").unwrap();
 
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            vp_home.as_path(),
-        ));
-
-        let result = resolve_matching_package_manager_tool(&cwd, "yarn").await;
-        assert!(
-            matches!(
-                result,
-                Err(Error::Install(vp_error::Error::PackageManagerHashMismatch { .. }))
-            ),
-            "the global Yarn shim must reject a corrupted pinned cache: {result:?}"
-        );
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_path())],
+            |_| async {
+                let result = resolve_matching_package_manager_tool(&cwd, "yarn").await;
+                assert!(
+                    matches!(
+                        result,
+                        Err(Error::Install(vp_error::Error::PackageManagerHashMismatch { .. }))
+                    ),
+                    "the global Yarn shim must reject a corrupted pinned cache: {result:?}"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_with_cache_bypasses_stale_lts_after_dev_engines_is_added() {
         let temp = TempDir::new().unwrap();
         let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
         let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
         std::fs::create_dir(&cwd).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            vp_home.as_path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_path())],
+            |_| async {
+                let mut cache = ResolveCache::default();
+                cache.insert(&cwd, cache_entry("lts", None));
+                cache.save(&cache::get_cache_path().unwrap());
 
-        let mut cache = ResolveCache::default();
-        cache.insert(&cwd, cache_entry("lts", None));
-        cache.save(&cache::get_cache_path().unwrap());
+                std::fs::write(
+                    cwd.join("package.json"),
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+                )
+                .unwrap();
 
-        std::fs::write(
-            cwd.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+                let resolved = resolve_with_cache(&cwd).await.unwrap();
+
+                assert_eq!(resolved.version, "22.22.0");
+                assert_eq!(resolved.source, "devEngines.runtime");
+            },
         )
-        .unwrap();
-
-        let resolved = resolve_with_cache(&cwd).await.unwrap();
-
-        assert_eq!(resolved.version, "22.22.0");
-        assert_eq!(resolved.source, "devEngines.runtime");
+        .await;
     }
 
     #[tokio::test]
@@ -1553,43 +1523,37 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
         std::fs::create_dir(&cwd).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vite_plus_home: Some(temp.path().join("vp-home")),
-            node_version: Some("22".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp.path().join("vp-home").as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22")),
+            ],
+            |_| async {
+                let resolved = resolve_with_cache(&cwd).await.unwrap();
 
-        let resolved = resolve_with_cache(&cwd).await.unwrap();
-
-        assert!(resolved.version.starts_with("22."));
-        assert!(vp_js_runtime::NodeProvider::is_exact_version(&resolved.version));
-        assert_eq!(resolved.source, config::VERSION_ENV_VAR);
+                assert!(resolved.version.starts_with("22."));
+                assert!(vp_js_runtime::NodeProvider::is_exact_version(&resolved.version));
+                assert_eq!(resolved.source, config::VERSION_ENV_VAR);
+            },
+        )
+        .await;
     }
 
     #[test]
-    #[serial]
     fn test_find_system_tool_works_without_bypass() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let dir = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir).unwrap();
         create_fake_executable(&dir, "mytesttool");
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &dir);
-            std::env::remove_var(env_vars::VP_BYPASS);
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(result.is_some(), "Should find tool when no bypass is set");
-        assert!(result.unwrap().as_path().starts_with(&dir));
+        temp_env::with_vars([("PATH", Some(dir.as_os_str())), (env_vars::VP_BYPASS, None)], || {
+            let result = find_system_tool("mytesttool");
+            assert!(result.is_some(), "Should find tool when no bypass is set");
+            assert!(result.unwrap().as_path().starts_with(&dir));
+        });
     }
 
     #[test]
-    #[serial]
     fn test_find_system_tool_skips_single_bypass_path() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1599,18 +1563,16 @@ mod tests {
         create_fake_executable(&dir_b, "mytesttool");
 
         let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            // Bypass dir_a — should skip it and find dir_b's tool
-            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(result.is_some(), "Should find tool in non-bypassed directory");
-        assert!(
-            result.unwrap().as_path().starts_with(&dir_b),
-            "Should find tool in dir_b, not dir_a"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
+            || {
+                let result = find_system_tool("mytesttool");
+                assert!(result.is_some(), "Should find tool in non-bypassed directory");
+                assert!(
+                    result.unwrap().as_path().starts_with(&dir_b),
+                    "Should find tool in dir_b, not dir_a"
+                );
+            },
         );
     }
 
@@ -1635,24 +1597,21 @@ mod tests {
     /// search continues to the real tool later in PATH.
     #[cfg(unix)]
     #[test]
-    #[serial]
     fn test_find_system_tool_skips_self_symlink_and_keeps_searching() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let (dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
         let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::remove_var(env_vars::VP_BYPASS);
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(result.is_some(), "Should skip the self symlink and keep searching");
-        assert!(
-            result.unwrap().as_path().starts_with(&dir_b),
-            "Should find the real tool in dir_b, not the self symlink in dir_a"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
+            || {
+                let result = find_system_tool("mytesttool");
+                assert!(result.is_some(), "Should skip the self symlink and keep searching");
+                assert!(
+                    result.unwrap().as_path().starts_with(&dir_b),
+                    "Should find the real tool in dir_b, not the self symlink in dir_a"
+                );
+            },
         );
     }
 
@@ -1662,32 +1621,30 @@ mod tests {
     /// instead of reaching dir_b.
     #[cfg(unix)]
     #[test]
-    #[serial]
     fn test_find_system_tool_skips_self_symlink_in_relative_path_entry() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let (_dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
         let path = std::env::join_paths([std::path::Path::new("bin_a"), dir_b.as_path()]).unwrap();
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::remove_var(env_vars::VP_BYPASS);
-        }
-
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let result = find_system_tool_in("mytesttool", &cwd);
-        assert!(result.is_some(), "Should skip the relative self-symlink entry and keep searching");
-        assert!(
-            result.unwrap().as_path().starts_with(&dir_b),
-            "Should find the real tool in dir_b, not the self symlink in relative bin_a"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
+            || {
+                let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                let result = find_system_tool_in("mytesttool", &cwd);
+                assert!(
+                    result.is_some(),
+                    "Should skip the relative self-symlink entry and keep searching"
+                );
+                assert!(
+                    result.unwrap().as_path().starts_with(&dir_b),
+                    "Should find the real tool in dir_b, not the self symlink in relative bin_a"
+                );
+            },
         );
     }
 
     #[test]
-    #[serial]
     fn test_find_system_tool_filters_multiple_bypass_paths() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1702,38 +1659,32 @@ mod tests {
         let path =
             std::env::join_paths([dir_a.as_path(), dir_b.as_path(), dir_c.as_path()]).unwrap();
         let bypass = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VP_BYPASS, &bypass);
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(result.is_some(), "Should find tool in dir_c");
-        assert!(
-            result.unwrap().as_path().starts_with(&dir_c),
-            "Should find tool in dir_c since dir_a and dir_b are bypassed"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
+            || {
+                let result = find_system_tool("mytesttool");
+                assert!(result.is_some(), "Should find tool in dir_c");
+                assert!(
+                    result.unwrap().as_path().starts_with(&dir_c),
+                    "Should find tool in dir_c since dir_a and dir_b are bypassed"
+                );
+            },
         );
     }
 
     #[test]
-    #[serial]
     fn test_find_system_tool_returns_none_when_all_paths_bypassed() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir_a).unwrap();
         create_fake_executable(&dir_a, "mytesttool");
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", dir_a.as_os_str());
-            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(result.is_none(), "Should return None when all paths are bypassed");
+        temp_env::with_vars(
+            [("PATH", Some(dir_a.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
+            || {
+                let result = find_system_tool("mytesttool");
+                assert!(result.is_none(), "Should return None when all paths are bypassed");
+            },
+        );
     }
 
     /// Simulates the SystemFirst loop prevention: Installation A sets VP_BYPASS
@@ -1741,9 +1692,7 @@ mod tests {
     /// both A's dir (from bypass) and its own dir (from get_bin_dir), finding the real tool
     /// in a third directory or returning None.
     #[test]
-    #[serial]
     fn test_find_system_tool_cumulative_bypass_prevents_loop() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let install_a_bin = temp.path().join("install_a_bin");
         let install_b_bin = temp.path().join("install_b_bin");
@@ -1769,26 +1718,22 @@ mod tests {
         // install_b_bin in the bypass as well (simulating cumulative append).
         let bypass =
             std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VP_BYPASS, &bypass);
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(result.is_some(), "Should find tool in real_system directory");
-        assert!(
-            result.unwrap().as_path().starts_with(&real_system_bin),
-            "Should find the real system tool, not any vite-plus installation"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
+            || {
+                let result = find_system_tool("mytesttool");
+                assert!(result.is_some(), "Should find tool in real_system directory");
+                assert!(
+                    result.unwrap().as_path().starts_with(&real_system_bin),
+                    "Should find the real system tool, not any vite-plus installation"
+                );
+            },
         );
     }
 
     /// When both installations are bypassed and no real system tool exists, should return None.
     #[test]
-    #[serial]
     fn test_find_system_tool_returns_none_with_no_real_system_tool() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let install_a_bin = temp.path().join("install_a_bin");
         let install_b_bin = temp.path().join("install_b_bin");
@@ -1801,17 +1746,15 @@ mod tests {
             std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();
         let bypass =
             std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VP_BYPASS, &bypass);
-        }
-
-        let result = find_system_tool("mytesttool");
-        assert!(
-            result.is_none(),
-            "Should return None when all dirs are bypassed and no real system tool exists"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
+            || {
+                let result = find_system_tool("mytesttool");
+                assert!(
+                    result.is_none(),
+                    "Should return None when all dirs are bypassed and no real system tool exists"
+                );
+            },
         );
     }
 
@@ -2192,33 +2135,28 @@ mod tests {
     // --- resolve_npm_prefix tests ---
 
     #[test]
-    #[serial]
     fn test_resolve_npm_prefix_relative() {
         let temp = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
 
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PWD", temp_path.as_path());
-        }
-
-        let parsed = NpmGlobalCommand {
-            packages: vec!["pkg".to_string()],
-            explicit_prefix: Some("./custom".to_string()),
-        };
-        // Use a dummy npm_path and node_dir (should not be reached)
-        let dummy_dir = temp_path.join("dummy");
-        let result = resolve_npm_prefix(&parsed, &dummy_dir, &dummy_dir);
-        // Should resolve relative to cwd, not fall back to get_npm_global_prefix
-        assert!(
-            result.as_path().ends_with("custom"),
-            "Expected path ending with 'custom', got: {}",
-            result.as_path().display()
-        );
+        temp_env::with_var("PWD", Some(temp_path.as_path().as_os_str()), || {
+            let parsed = NpmGlobalCommand {
+                packages: vec!["pkg".to_string()],
+                explicit_prefix: Some("./custom".to_string()),
+            };
+            // Use a dummy npm_path and node_dir (should not be reached)
+            let dummy_dir = temp_path.join("dummy");
+            let result = resolve_npm_prefix(&parsed, &dummy_dir, &dummy_dir);
+            // Should resolve relative to cwd, not fall back to get_npm_global_prefix
+            assert!(
+                result.as_path().ends_with("custom"),
+                "Expected path ending with 'custom', got: {}",
+                result.as_path().display()
+            );
+        });
     }
 
     #[test]
-    #[serial]
     fn test_resolve_npm_prefix_absolute() {
         let temp = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();

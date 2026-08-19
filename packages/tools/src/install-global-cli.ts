@@ -21,6 +21,36 @@ const isWindows = process.platform === 'win32';
 const LOCAL_DEV_PREFIX = 'local-dev';
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 
+function pinCiLegacyHome() {
+  // CI workflows still use `~/.vite-plus/bin/vp` (#2371). Set VP_HOME so the
+  // bootstrap uses the monolithic root. The resolver uses `~/.vite-plus` only
+  // when it contains an install with a `current` link. An empty directory does
+  // not select the monolithic layout.
+  if (process.env.CI == null || process.env.VP_HOME != null) {
+    return;
+  }
+  process.env.VP_HOME = path.join(os.homedir(), '.vite-plus');
+}
+
+function readDataDirFromVp(vpBinary: string): string {
+  const output = execFileSync(vpBinary, [], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      VP_DUMP_DIRS: '1',
+    },
+  });
+  const dataDir = output
+    .split(/\r?\n/)
+    .map((line) => line.split('\t'))
+    .find((parts) => parts[0] === 'data' && parts[1])?.[1]
+    ?.trim();
+  if (!dataDir) {
+    throw new Error(`vp did not print a data directory (VP_DUMP_DIRS=1): ${output}`);
+  }
+  return dataDir;
+}
+
 function localDevVersion(): string {
   const now = new Date();
   const date = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
@@ -82,10 +112,6 @@ export function installGlobalCli() {
   }
 
   try {
-    const installDir = process.env.VP_HOME
-      ? path.resolve(process.env.VP_HOME)
-      : path.join(os.homedir(), '.vite-plus');
-
     // Locate the Rust vp binary (built by cargo or copied by CI)
     const binaryName = isWindows ? 'vp.exe' : 'vp';
     const binaryPath = findVpBinary(binaryName);
@@ -107,8 +133,10 @@ export function installGlobalCli() {
     }
 
     const localDevVer = localDevVersion();
+    pinCiLegacyHome();
+    const installDir = readDataDirFromVp(binaryPath);
 
-    // Clean up old local-dev directories to avoid accumulation
+    // Clean up old local-dev directories under the EnvConfig data root.
     if (existsSync(installDir)) {
       const currentInstallPath = getCurrentInstallPath(installDir);
       for (const entry of readdirSync(installDir)) {
@@ -134,7 +162,6 @@ export function installGlobalCli() {
       ...(process.env as Record<string, string>),
       VP_LOCAL_TGZ: tgzPath,
       VP_LOCAL_BINARY: binaryPath,
-      VP_HOME: installDir,
       VP_VERSION: localDevVer,
       CI: 'true',
       // Skip vp install in install.sh — we handle deps ourselves:

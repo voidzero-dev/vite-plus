@@ -270,6 +270,7 @@ sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
 syn = { version = "2", default-features = false }
 tar = "0.4.43"
+temp-env = "0.3.6"
 tempfile = "3.14.0"
 terminal_size = "0.4.2"
 test-log = { version = "0.2.18", features = ["trace"] }
@@ -310,7 +311,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.143.0", features = [
+oxc = { version = "0.144.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -322,17 +323,17 @@ oxc = { version = "0.143.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.143.0", features = ["pool"] }
-oxc_ast = "0.143.0"
-oxc_ecmascript = "0.143.0"
-oxc_parser = "0.143.0"
-oxc_span = "0.143.0"
-oxc_napi = "0.143.0"
-oxc_str = "0.143.0"
-oxc_minify_napi = "0.143.0"
-oxc_parser_napi = "0.143.0"
-oxc_transform_napi = "0.143.0"
-oxc_traverse = "0.143.0"
+oxc_allocator = { version = "0.144.0", features = ["pool"] }
+oxc_ast = "0.144.0"
+oxc_ecmascript = "0.144.0"
+oxc_parser = "0.144.0"
+oxc_span = "0.144.0"
+oxc_napi = "0.144.0"
+oxc_str = "0.144.0"
+oxc_minify_napi = "0.144.0"
+oxc_parser_napi = "0.144.0"
+oxc_transform_napi = "0.144.0"
+oxc_traverse = "0.144.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }

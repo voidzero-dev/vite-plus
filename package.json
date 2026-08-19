@@ -20,7 +20,7 @@
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
     "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
-    "prepare": "husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "@emnapi/core": "catalog:",
@@ -30,17 +30,11 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
-    "husky": "catalog:",
-    "lint-staged": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "workspace:*",
     "vitest": "catalog:"
-  },
-  "lint-staged": {
-    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",
-    "*.rs": "cargo fmt --"
   },
   "engines": {
     "node": ">=22.18.0"

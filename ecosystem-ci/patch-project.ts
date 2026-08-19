@@ -111,11 +111,72 @@ if (project === 'vinext') {
   // headroom so the ecosystem run isn't flaky.
   const viteConfigPath = join(repoRoot, 'vite.config.ts');
   const viteConfig = await readFile(viteConfigPath, 'utf-8');
-  const patchedConfig = viteConfig.replace('testTimeout: 30000', 'testTimeout: 60000');
-  if (patchedConfig === viteConfig) {
+  const testTimeout = 'testTimeout: 30000';
+  const reactRulesAnchor = '"react/rules-of-hooks": "error",';
+  if (!viteConfig.includes(testTimeout)) {
     throw new Error(`vinext patch: \`testTimeout: 30000\` not found in ${viteConfigPath}`);
   }
+  if (!viteConfig.includes(reactRulesAnchor)) {
+    throw new Error(`vinext patch: React lint rules not found in ${viteConfigPath}`);
+  }
+  // Oxlint 1.79 enables split React Compiler rules by default. Keep the new
+  // diagnostics opt-in for this pinned ecosystem fixture.
+  const patchedConfig = viteConfig
+    .replace(testTimeout, 'testTimeout: 60000')
+    .replace(
+      reactRulesAnchor,
+      [
+        reactRulesAnchor,
+        '      "react/globals": "off",',
+        '      "react/refs": "off",',
+        '      "react/set-state-in-effect": "off",',
+      ].join('\n'),
+    );
   await writeFile(viteConfigPath, patchedConfig, 'utf-8');
+
+  // Oxlint 1.79 runs no-redeclare in ES modules. The declarations intentionally
+  // use TypeScript interface/class merging, so extend their existing disables.
+  const documentPath = join(repoRoot, 'packages/vinext/src/shims/document.tsx');
+  const document = await readFile(documentPath, 'utf-8');
+  const declarationMergeDisable =
+    '// oxlint-disable-next-line typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging';
+  if (document.split(declarationMergeDisable).length !== 3) {
+    throw new Error(`vinext patch: declaration merge directives not found in ${documentPath}`);
+  }
+  const patchedDocument = document.replaceAll(
+    declarationMergeDisable,
+    '// oxlint-disable-next-line eslint/no-redeclare, typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging',
+  );
+  await writeFile(documentPath, patchedDocument, 'utf-8');
+
+  // Oxlint 1.79 reports bare underscore parameters. Give this intentionally
+  // unused parameter a descriptive underscore-prefixed name.
+  const appRscHandlerTestPath = join(repoRoot, 'tests/app-rsc-handler.test.ts');
+  const appRscHandlerTest = await readFile(appRscHandlerTestPath, 'utf-8');
+  const unusedMiddlewareParameter = '(_: { nextUrl: URL })';
+  const patchedAppRscHandlerTest = appRscHandlerTest.replace(
+    unusedMiddlewareParameter,
+    '(_request: { nextUrl: URL })',
+  );
+  if (patchedAppRscHandlerTest === appRscHandlerTest) {
+    throw new Error(
+      `vinext patch: unused middleware parameter not found in ${appRscHandlerTestPath}`,
+    );
+  }
+  await writeFile(appRscHandlerTestPath, patchedAppRscHandlerTest, 'utf-8');
+
+  // Oxlint 1.79 checks comments for irregular whitespace. Escape the glob
+  // separator instead of retaining its invisible zero-width character.
+  const trailingSlashTestPath = join(repoRoot, 'tests/app-route-handler-trailing-slash.test.ts');
+  const trailingSlashTest = await readFile(trailingSlashTestPath, 'utf-8');
+  const patchedTrailingSlashTest = trailingSlashTest.replace(
+    'app/**\u200b/route.ts',
+    'app/**\\/route.ts',
+  );
+  if (patchedTrailingSlashTest === trailingSlashTest) {
+    throw new Error(`vinext patch: zero-width separator not found in ${trailingSlashTestPath}`);
+  }
+  await writeFile(trailingSlashTestPath, patchedTrailingSlashTest, 'utf-8');
 
   // oxlint 1.77 applies `.gitignore` to explicitly passed paths too
   // (oxc-project/oxc#25133). vinext's prefer-shared-utils rule test symlinks a
