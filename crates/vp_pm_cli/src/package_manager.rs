@@ -229,7 +229,7 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
-        let (workspace_root, _cwd) = find_workspace_root(&self.cwd)?;
+        let (workspace_root, _) = find_workspace_root(&self.cwd)?;
         let (package_manager_type, version_or_req, hash, _) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
