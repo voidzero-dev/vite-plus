@@ -84,17 +84,17 @@ async fn dispatch_with_manager(
     };
 
     let policy = manager_policy(&command);
-    match policy {
-        ManagerPolicy::RequireProject => require_package_json(cwd)?,
-        ManagerPolicy::AllowNpmFallback => {}
-    }
-
     let manager = match source {
         ManagerSource::Detect => match policy {
             ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
             ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
         },
-        source => resolve_manager(source).await?,
+        source => {
+            if policy == ManagerPolicy::RequireProject {
+                require_package_json(cwd)?;
+            }
+            resolve_manager(source).await?
+        }
     };
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
