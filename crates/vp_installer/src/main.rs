@@ -616,41 +616,10 @@ fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error
             .ok_or("The installation directory must be an absolute path")?;
         // Safety: called in main() before any threads are spawned (or under
         // EnvConfig::with_vars in tests, which serializes env mutation).
-        unsafe { std::env::set_var("VP_HOME", abs.as_path()) };
+        unsafe { std::env::set_var(vp_shared::env_vars::VP_HOME, abs.as_path()) };
     }
-    validate_dir_env()?;
+    vp_shared::validate_vp_dir_env()?;
     Ok(vp_shared::EnvConfig::get().dirs.clone())
-}
-
-fn validate_dir_env() -> Result<(), Box<dyn std::error::Error>> {
-    use vp_shared::env_vars;
-
-    let env_path = |name| std::env::var_os(name).filter(|value| !value.is_empty());
-    if let Some(home) = env_path(env_vars::VP_HOME)
-        && !std::path::Path::new(&home).is_absolute()
-    {
-        return Err(format!("{} must be an absolute path.", env_vars::VP_HOME).into());
-    }
-
-    let split_dirs = [
-        (env_vars::VP_BIN_DIR, env_path(env_vars::VP_BIN_DIR)),
-        (env_vars::VP_DATA_DIR, env_path(env_vars::VP_DATA_DIR)),
-        (env_vars::VP_CACHE_DIR, env_path(env_vars::VP_CACHE_DIR)),
-    ];
-    let configured_count = split_dirs.iter().filter(|(_, value)| value.is_some()).count();
-    if configured_count != 0 && configured_count != split_dirs.len() {
-        return Err(
-            "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
-                .into(),
-        );
-    }
-    for (name, value) in split_dirs {
-        if value.is_some_and(|path| !std::path::Path::new(&path).is_absolute()) {
-            return Err(format!("{name} must be an absolute path.").into());
-        }
-    }
-
-    Ok(())
 }
 
 #[allow(clippy::print_stdout)]
@@ -961,11 +930,9 @@ mod tests {
     }
 
     #[test]
-    fn incomplete_vp_dir_groups_are_rejected_without_creating_roots() {
+    fn invalid_vp_dir_env_is_rejected_without_creating_roots() {
         let tmp = tempfile::tempdir().unwrap();
-        let bin = tmp.path().join("requested-bin");
         let data = tmp.path().join("requested-data");
-        let cache = tmp.path().join("requested-cache");
 
         with_clean_home(tmp.path(), || {
             let default_dirs = EnvConfig::get().dirs.clone();
@@ -977,91 +944,28 @@ mod tests {
                 default_dirs.state.as_path().to_path_buf(),
             ];
             let default_existed = default_roots.each_ref().map(|root| root.exists());
-            let paths = [bin.as_os_str(), data.as_os_str(), cache.as_os_str()];
-            let cases = [
-                [Some(paths[0]), None, None],
-                [None, Some(paths[1]), None],
-                [None, None, Some(paths[2])],
-                [Some(paths[0]), Some(paths[1]), None],
-                [Some(paths[0]), None, Some(paths[2])],
-                [None, Some(paths[1]), Some(paths[2])],
-            ];
+            EnvConfig::with_vars(
+                [
+                    (env_vars::VP_HOME, None),
+                    (env_vars::VP_BIN_DIR, None),
+                    (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                    (env_vars::VP_CACHE_DIR, None),
+                ],
+                |_| {
+                    let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
+                    assert_eq!(
+                        error,
+                        "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+                    );
+                },
+            );
 
-            for values in cases {
-                EnvConfig::with_vars(
-                    [
-                        (env_vars::VP_HOME, None),
-                        (env_vars::VP_BIN_DIR, values[0]),
-                        (env_vars::VP_DATA_DIR, values[1]),
-                        (env_vars::VP_CACHE_DIR, values[2]),
-                    ],
-                    |_| {
-                        let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
-                        assert_eq!(
-                            error,
-                            "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
-                        );
-                    },
-                );
-            }
-
-            for requested in [&bin, &data, &cache] {
-                assert!(!requested.exists(), "validation created {}", requested.display());
-            }
+            assert!(!data.exists(), "validation created {}", data.display());
             for (root, existed) in default_roots.iter().zip(default_existed) {
                 if !existed {
                     assert!(!root.exists(), "validation created default root {}", root.display());
                 }
             }
-        });
-    }
-
-    #[test]
-    fn relative_directory_overrides_are_rejected() {
-        let tmp = tempfile::tempdir().unwrap();
-        with_clean_home(tmp.path(), || {
-            EnvConfig::with_vars(
-                [
-                    (env_vars::VP_HOME, Some(std::ffi::OsStr::new("relative-home"))),
-                    (env_vars::VP_BIN_DIR, None),
-                    (env_vars::VP_DATA_DIR, None),
-                    (env_vars::VP_CACHE_DIR, None),
-                ],
-                |_| {
-                    let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
-                    assert_eq!(error, "VP_HOME must be an absolute path.");
-                },
-            );
-
-            let bin = tmp.path().join("bin");
-            let data = tmp.path().join("data");
-            let cache = tmp.path().join("cache");
-            let relative = std::ffi::OsStr::new("relative-dir");
-            let cases = [
-                (env_vars::VP_BIN_DIR, [relative, data.as_os_str(), cache.as_os_str()]),
-                (env_vars::VP_DATA_DIR, [bin.as_os_str(), relative, cache.as_os_str()]),
-                (env_vars::VP_CACHE_DIR, [bin.as_os_str(), data.as_os_str(), relative]),
-            ];
-            for (name, values) in cases {
-                EnvConfig::with_vars(
-                    [
-                        (env_vars::VP_HOME, None),
-                        (env_vars::VP_BIN_DIR, Some(values[0])),
-                        (env_vars::VP_DATA_DIR, Some(values[1])),
-                        (env_vars::VP_CACHE_DIR, Some(values[2])),
-                    ],
-                    |_| {
-                        let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
-                        assert_eq!(error, format!("{name} must be an absolute path."));
-                    },
-                );
-            }
-
-            for root in [&bin, &data, &cache] {
-                assert!(!root.exists(), "validation created {}", root.display());
-            }
-            assert!(!tmp.path().join("relative-home").exists());
-            assert!(!tmp.path().join("relative-dir").exists());
         });
     }
 

@@ -10,9 +10,16 @@
 //! `<CONFIG>/`, and `<STATE>/` for category roots. They do not use a concrete
 //! path for each layout. See `rfcs/directory-layout.md`.
 
+mod env_overrides;
 mod resolution;
 
+pub use env_overrides::{VpDirEnvError, validate_vp_dir_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
+
+/// Absolute `VP_HOME` override from the process environment, if set.
+pub(crate) fn vp_home_override() -> Option<AbsolutePathBuf> {
+    env_overrides::DirEnvOverrides::from_env().home()
+}
 
 /// Platform-specific binary name for the `vp` CLI.
 pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
@@ -146,8 +153,7 @@ impl VpDirs {
     /// payload cannot report category roots through `VP_DUMP_DIRS`.
     #[must_use]
     pub fn legacy_single_root(home: &AbsolutePath) -> Self {
-        let root = resolution::vp_home_override()
-            .unwrap_or_else(|| home.join(resolution::VP_HOME_DIR_NAME));
+        let root = vp_home_override().unwrap_or_else(|| home.join(resolution::VP_HOME_DIR_NAME));
         resolution::single_root_dirs(root)
     }
 
