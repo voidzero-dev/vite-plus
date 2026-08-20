@@ -87,19 +87,21 @@ impl DirEnvOverrides {
     }
 }
 
-/// An invalid Vite+ directory override configuration.
+/// An error in the Vite+ directory overrides.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum VpDirEnvError {
-    #[error("Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset.")]
+    #[error(
+        "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR. Otherwise, do not set any of them."
+    )]
     IncompleteSplitGroup,
-    #[error("{name} must be an absolute path.")]
+    #[error("Set {name} to an absolute path.")]
     RelativePath { name: &'static str },
 }
 
 /// Validate Vite+ directory overrides for an installer.
 ///
-/// Runtime resolution ignores relative or incomplete overrides and continues
-/// to the next source. Installers use this stricter check before they resolve
+/// `VpDirs` ignores invalid overrides during runtime resolution. It then checks
+/// the next directory source. Installers call this function before they resolve
 /// or create installation roots.
 pub fn validate_vp_dir_env() -> Result<(), VpDirEnvError> {
     DirEnvOverrides::from_env().validate()

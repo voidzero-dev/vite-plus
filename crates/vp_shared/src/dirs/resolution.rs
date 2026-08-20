@@ -43,8 +43,8 @@ trait DirResolution {
     fn state_dir(&self) -> Option<AbsolutePathBuf>;
 }
 
-/// Absolute path from a non-Vite+ process environment variable, or `None` if
-/// unset or relative.
+/// Return an absolute path from a non-Vite+ environment variable. Return `None`
+/// if the variable is unset or relative.
 #[cfg(not(target_os = "windows"))]
 fn process_env_var(name: &str) -> Option<AbsolutePathBuf> {
     std::env::var_os(name).and_then(|path| AbsolutePathBuf::new(path.into()))

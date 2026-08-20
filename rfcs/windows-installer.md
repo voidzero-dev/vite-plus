@@ -207,15 +207,16 @@ vp-setup.exe --version 0.3.0 --no-node-manager --registry https://registry.npmmi
 
 CLI flags take precedence over environment variables.
 
-`vp-setup.exe` requires an absolute `VP_HOME`. Callers that set a split root
-must set all three `VP_*_DIR` variables to absolute paths. The installer calls
-the shared `vp_shared::validate_vp_dir_env` check before it resolves or creates
-installation roots. The installer returns exit code 1 for invalid configuration.
+`vp-setup.exe` requires an absolute `VP_HOME`. If callers set one split root,
+they must set all three `VP_*_DIR` variables. Each variable must contain an
+absolute path. The installer calls `vp_shared::validate_vp_dir_env` before it
+resolves or creates installation roots. The installer returns exit code 1 for
+invalid configuration.
 
-The installer supports version 0.3.0 and later, including 0.3.0 prereleases.
-It also supports preview versions that use the `0.0.0-commit.<sha>` format. It
-rejects older versions before it downloads the platform payload or creates an
-installation root.
+The installer supports Vite+ 0.3.0 and later. This includes 0.3.0 prereleases.
+It also supports internal preview versions that use the
+`0.0.0-commit.<sha>` format. It rejects older versions before it downloads the
+platform payload or creates an installation root.
 
 ## Installation Flow
 
@@ -477,14 +478,19 @@ test-vp-setup-exe:
       # verifies from all three shells after a single install
 ```
 
-The workflow path filter covers the installer, shared directory resolution,
-setup helpers, shims, global CLI, install scripts, and the workflow file.
+The workflow path filter includes these files:
 
-The job checks invalid directory overrides and the minimum supported version.
-Invalid overrides must leave requested and default roots absent. A request for
-version `0.2.9` must fail without creating an installation root. The successful
-install uses a local registry package with the `0.0.0-commit.<sha>` preview
-version format.
+- the installer and setup helpers
+- shared directory resolution
+- shims and the global CLI
+- install scripts
+- the workflow file
+
+The job tests invalid directory overrides and versions older than 0.3.0. The
+installer must not create requested or default roots for invalid overrides. A
+request for version `0.2.9` must fail without creating an installation root.
+For the successful test, the job installs a local
+`0.0.0-commit.<sha>` preview package.
 
 ## Code Signing
 

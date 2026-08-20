@@ -28,8 +28,9 @@ pub use vp_shared::VP_BINARY_NAME;
 
 /// Return `true` if `version` supports the split directory layout.
 ///
-/// Version 0.3.0 and later support it, including prereleases. Preview builds
-/// (`0.0.0-commit.<sha>`) also support it because they track the current branch.
+/// Vite+ 0.3.0 and later versions support this layout. This includes
+/// prereleases. Internal `0.0.0-commit.<sha>` builds also support it because
+/// they contain code from the current branch.
 #[must_use]
 pub fn supports_split_layout(version: &str) -> bool {
     let Ok(version) = node_semver::Version::parse(version) else {

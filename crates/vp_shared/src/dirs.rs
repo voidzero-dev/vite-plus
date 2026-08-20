@@ -16,7 +16,8 @@ mod resolution;
 pub use env_overrides::{VpDirEnvError, validate_vp_dir_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-/// Absolute `VP_HOME` override from the process environment, if set.
+/// Return the absolute `VP_HOME` value from the process environment. Return
+/// `None` if the variable is unset or relative.
 pub(crate) fn vp_home_override() -> Option<AbsolutePathBuf> {
     env_overrides::DirEnvOverrides::from_env().home()
 }

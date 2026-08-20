@@ -146,12 +146,20 @@ Thus, `user_home` and `dirs` cannot use different home directories. Directory
 resolution reads only `VP_HOME`, `VP_*_DIR`, and `XDG_*`. It does not read
 `HOME` or `USERPROFILE`.
 
-`crates/vp_shared/src/dirs/env_overrides.rs` classifies `VP_HOME`,
-`VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` as unset, absolute, or
-relative. Runtime resolution accepts absolute candidates and skips invalid
-candidates. `validate_vp_dir_env` applies the installer policy to the same
-classification. The function returns an error for a relative `VP_HOME`, an
-incomplete split group, or a relative path in a complete split group.
+`DirEnvOverrides` reads `VP_HOME`, `VP_BIN_DIR`, `VP_DATA_DIR`, and
+`VP_CACHE_DIR`. It records one of these states for each variable:
+
+- unset
+- absolute path
+- relative path
+
+Runtime resolution uses only absolute paths. `validate_vp_dir_env` uses the
+same states to apply the installer policy. The function returns an error for
+these conditions:
+
+- `VP_HOME` contains a relative path.
+- The split group is incomplete.
+- A variable in the complete split group contains a relative path.
 
 Directory resolution has no test-only branches. Tests use the process
 environment to run the production resolution chain. See
@@ -257,9 +265,9 @@ resolved user home. Thus, a known home always produces a complete layout.
 | **`XDG_*`** (Unix)                                | Vite+ uses absolute XDG category roots with the app name `vite-plus`. Bin resolves to `<DATA>/bin`. |
 | **Platform defaults**                             | [Category mapping](#category-mapping) defines the Unix and Windows defaults.                        |
 
-Runtime resolution ignores relative `VP_*` and `XDG_*` values. This behavior
-follows the XDG Base Directory Specification. Installers apply stricter rules
-before they create installation roots.
+`VpDirs` ignores relative `VP_*` and `XDG_*` values during runtime resolution.
+This behavior follows the XDG Base Directory Specification. Installers apply
+stricter rules before they create installation roots.
 
 ### Category mapping
 
@@ -330,10 +338,10 @@ resolution chain:
    for the **split** layout.
 
 The script installers reject an incomplete or relative `VP_*_DIR` group.
-`vp-setup` rejects those groups and a relative `VP_HOME`. It calls
-`vp_shared::validate_vp_dir_env` before `EnvConfig` resolves paths. A validation
-error makes `vp-setup` exit with status 1 before it creates a requested or
-default installation root.
+`vp-setup` rejects the same groups. It also rejects a relative `VP_HOME`.
+`vp-setup` calls `vp_shared::validate_vp_dir_env` before `EnvConfig` resolves
+paths. If validation fails, `vp-setup` returns status 1. It does not create a
+requested or default installation root.
 
 Each platform has one install script. There is no separate script for each
 layout. Local bootstrap does not set `VP_HOME`. It resolves the install data
@@ -429,22 +437,22 @@ The `test-install-sh-layout` CI job tests this case. It creates a split install
 and a stray `~/.vite-plus` tree. It then checks that resolution and a reinstall
 remain split.
 
-**Probe failure.** A payload can fail to run because it is for the wrong
-platform or requires a missing VC++ runtime. The script installer then selects
-the monolithic root. The dependency-install step reports the applicable error
-as before.
+**Probe failure.** A payload can fail on the wrong platform. It can also fail
+if Windows does not have the required VC++ runtime. The script installer then
+selects the monolithic root. The dependency-install step reports the applicable
+error as before.
 
 The monolithic root works for old and new releases. A split-aware binary keeps
 an existing `~/.vite-plus` install. Thus, an incorrect pre-split result still
 produces a compatible layout. An incorrect split-aware result is not possible.
 Only a binary that implements `VP_DUMP_DIRS` can print the roots.
 
-**`vp-setup` behavior.** `vp-setup` supports version 0.3.0 and later, including
-0.3.0 prereleases. It also supports preview versions that use the
-`0.0.0-commit.<sha>` format. The installer rejects an older target after version
-resolution and before it downloads the platform payload or creates an
-installation root. It uses the directories from `EnvConfig` without a payload
-probe or a monolithic fallback.
+**`vp-setup` behavior.** `vp-setup` supports Vite+ 0.3.0 and later. This
+includes 0.3.0 prereleases. It also supports internal preview versions that use
+the `0.0.0-commit.<sha>` format. The installer resolves the target version
+first. It rejects an older version before it downloads the platform payload or
+creates an installation root. It uses the directories from `EnvConfig`. It does
+not probe the payload or use a monolithic fallback.
 
 **`vp upgrade`.** On a split install, `vp upgrade` rejects a target earlier than
 0.3.0 before the download. It tells the user to run `vp upgrade` to install the
@@ -461,14 +469,18 @@ define the boundary.
 pre-split release without `VP_HOME`. They check the monolithic layout, the
 absence of split roots, and commands that run through `PATH`.
 
-The `test-vp-setup-exe` job rejects each incomplete split-variable combination,
-a relative `VP_HOME`, and a relative complete split group. It checks that
-validation creates no requested or default roots. It also checks that
-`vp-setup` rejects version `0.2.9` without creating an installation root. The
-successful install uses a local `0.0.0-commit.<sha>` preview package.
+The `test-vp-setup-exe` job checks these invalid configurations:
 
-The script fallback keeps fresh default installs of `latest` functional before
-the 0.3.0 release becomes available.
+- Each incomplete split-variable combination.
+- A relative `VP_HOME`.
+- A complete split group that contains relative paths.
+
+The job checks that validation creates no requested or default roots. It also
+checks that `vp-setup` rejects version `0.2.9` without creating an installation
+root. The successful test installs a local `0.0.0-commit.<sha>` preview package.
+
+`install.sh` and `install.ps1` use their fallback to install `latest` before
+Vite+ 0.3.0 is available.
 
 ### Global CLI → JS children
 

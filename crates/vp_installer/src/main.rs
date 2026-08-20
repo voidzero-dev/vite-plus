@@ -179,15 +179,14 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         print_info(&format!("detected platform: {platform_suffix}"));
     }
 
-    // Check local version first to potentially skip HTTP requests.
-    // This operation is read-only. Create the install root only after the
-    // installer resolves and validates the target version.
+    // Read the installed version first. This operation does not create a
+    // directory. Create the installation root after target-version validation.
     let current_version = install::read_current_version(&dirs.data).await;
 
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
 
-    // Resolve the target version — use resolve_version_string first so we can
-    // skip the platform package fetch if the version is already installed
+    // Resolve the target version first. If it matches the installed version,
+    // skip the platform package request.
     if !opts.quiet {
         print_info(&format!("resolving version '{version_or_tag}'..."));
     }
@@ -195,7 +194,7 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         registry::resolve_version_string(version_or_tag, opts.registry.as_deref()).await?;
     if !vp_setup::supports_split_layout(&target_version) {
         return Err(format!(
-            "vite-plus {target_version} is not supported by vp-setup. Install vite-plus 0.3.0 or later."
+            "vp-setup does not support vite-plus {target_version}. Install vite-plus 0.3.0 or later."
         )
         .into());
     }
@@ -413,7 +412,10 @@ async fn install_new_version(
     }
     #[cfg(windows)]
     if !tokio::fs::try_exists(version_dir.join("bin").join("vp-shim.exe")).await.unwrap_or(false) {
-        return Err("Trampoline not found after extraction. The download may be corrupted.".into());
+        return Err(
+            "vp-setup did not find vp-shim.exe after extraction. The downloaded package can be corrupt."
+                .into(),
+        );
     }
 
     install::generate_wrapper_package_json(version_dir, version).await?;
@@ -518,13 +520,13 @@ async fn download_with_progress(
     Ok(data)
 }
 
-/// Validate installer directory overrides and resolve category roots from
+/// Validate installer directory overrides. Then resolve category roots from
 /// [`vp_shared::EnvConfig`].
 ///
 /// `--install-dir` is the only override that the installer owns. It pins
-/// `VP_HOME`, so EnvConfig produces a single-root layout. Unlike runtime
-/// resolution, the installer rejects a relative `VP_HOME` and rejects an
-/// incomplete or relative `VP_*_DIR` group instead of ignoring it.
+/// `VP_HOME`, so EnvConfig produces a single-root layout. Runtime resolution
+/// ignores invalid overrides. The installer rejects a relative `VP_HOME`. It
+/// also rejects an incomplete or relative `VP_*_DIR` group.
 fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
@@ -872,7 +874,7 @@ mod tests {
                     let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
                     assert_eq!(
                         error,
-                        "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+                        "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR. Otherwise, do not set any of them."
                     );
                 },
             );

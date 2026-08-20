@@ -1236,7 +1236,7 @@ jobs:
           $defaultRoot = Join-Path $env:LOCALAPPDATA "vite-plus"
           $defaultRootExisted = Test-Path $defaultRoot
           $dirVars = @("VP_HOME", "VP_BIN_DIR", "VP_DATA_DIR", "VP_CACHE_DIR")
-          $togetherError = "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together"
+          $togetherError = "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR"
           $cases = @(
             @{ Name = "bin"; Values = @{ VP_BIN_DIR = Join-Path $root "bin" }; Error = $togetherError }
             @{ Name = "data"; Values = @{ VP_DATA_DIR = Join-Path $root "data" }; Error = $togetherError }
@@ -1244,8 +1244,8 @@ jobs:
             @{ Name = "bin-data"; Values = @{ VP_BIN_DIR = Join-Path $root "bin"; VP_DATA_DIR = Join-Path $root "data" }; Error = $togetherError }
             @{ Name = "bin-cache"; Values = @{ VP_BIN_DIR = Join-Path $root "bin"; VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
             @{ Name = "data-cache"; Values = @{ VP_DATA_DIR = Join-Path $root "data"; VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
-            @{ Name = "relative-home"; Values = @{ VP_HOME = "relative-home" }; Error = "VP_HOME must be an absolute path" }
-            @{ Name = "relative-split"; Values = @{ VP_BIN_DIR = "relative-bin"; VP_DATA_DIR = "relative-data"; VP_CACHE_DIR = "relative-cache" }; Error = "VP_BIN_DIR must be an absolute path" }
+            @{ Name = "relative-home"; Values = @{ VP_HOME = "relative-home" }; Error = "Set VP_HOME to an absolute path" }
+            @{ Name = "relative-split"; Values = @{ VP_BIN_DIR = "relative-bin"; VP_DATA_DIR = "relative-data"; VP_CACHE_DIR = "relative-cache" }; Error = "Set VP_BIN_DIR to an absolute path" }
           )
 
           foreach ($case in $cases) {
@@ -1275,8 +1275,8 @@ jobs:
             }
           }
 
-          # Each installer process must fail in this test. Reset the native
-          # exit code after the assertions so the PowerShell step succeeds.
+          # Each installer process must fail in this test. Reset the native exit
+          # code after the assertions. This lets the PowerShell step succeed.
           $global:LASTEXITCODE = 0
 
       - name: vp-setup.exe rejects releases before 0.3.0
@@ -1300,10 +1300,10 @@ jobs:
             throw "vp-setup.exe did not report its minimum supported version"
           }
           if ($output -match "(?i)preview") {
-            throw "vp-setup.exe exposed preview-build guidance"
+            throw "vp-setup.exe mentioned preview builds"
           }
           if (Test-Path $installRoot) {
-            throw "vp-setup.exe created unsupported-version root $installRoot"
+            throw "vp-setup.exe created an installation root for version 0.2.9: $installRoot"
           }
           $global:LASTEXITCODE = 0
 
