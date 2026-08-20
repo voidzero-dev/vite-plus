@@ -1,0 +1,10 @@
+{
+  "name": "pm-dedupe-bun-1-4",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "packageManager": "bun@1.4.0"
+}

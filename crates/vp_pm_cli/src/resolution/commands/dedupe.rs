@@ -51,12 +51,17 @@ impl Resolve<DedupeArgs> for Yarn {
 
 impl Resolve<DedupeArgs> for Bun {
     fn resolve(&self, args: &DedupeArgs, diag: &mut Diagnostics) -> CommandResolution {
-        diag.warn(
-            DiagnosticKind::FallbackCommand,
-            "bun does not support dedupe, falling back to bun install",
-        );
         let mut cmd = CommandBuilder::new("bun");
-        cmd.arg("install").extend(args.pass_through_args.iter());
+        if self.supports_v1_4_commands() {
+            cmd.arg("dedupe").arg_if("--check", args.check);
+        } else {
+            diag.warn(
+                DiagnosticKind::FallbackCommand,
+                "bun dedupe requires bun >= 1.4, falling back to bun install",
+            );
+            cmd.arg("install");
+        }
+        cmd.extend(args.pass_through_args.iter());
         cmd.into()
     }
 }
@@ -148,9 +153,28 @@ mod tests {
         assert_eq!(resolution.diagnostics.len(), 1);
         assert_eq!(
             resolution.diagnostics[0].message,
-            "bun does not support dedupe, falling back to bun install"
+            "bun dedupe requires bun >= 1.4, falling back to bun install"
         );
         assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::FallbackCommand);
+    }
+
+    #[test]
+    fn test_bun_dedupe_basic() {
+        let resolution = resolve(&bun("1.4.0"), DedupeArgs::default());
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["dedupe"]);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_bun_dedupe_check() {
+        let resolution = resolve(&bun("1.4.0"), DedupeArgs { check: true, ..Default::default() });
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["dedupe", "--check"]);
     }
 
     #[test]
