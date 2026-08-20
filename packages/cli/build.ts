@@ -1369,11 +1369,6 @@ async function updateCliPackageJson(pkgPath: string, generatedExports: Record<st
     ...generatedExports,
   };
 
-  // Ensure dist/test is included in files
-  if (!pkg.files.includes('dist/test')) {
-    pkg.files.push('dist/test');
-  }
-
   const { code, errors } = await format(pkgPath, JSON.stringify(pkg, null, 2) + '\n', {
     sortPackageJson: true,
   });
