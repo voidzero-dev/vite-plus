@@ -152,21 +152,11 @@ vp create vite:monorepo --no-interactive --package-manager bun
 
 This ensures monorepo consistency while allowing standalone projects to override ambient detection explicitly.
 
-## Auto-Update Behavior
+## Non-Mutating Resolution
 
-After detection and download, Vite+ writes the resolved version back to `package.json` so future runs are deterministic:
+Detection and download never rewrite `package.json`. A `devEngines.packageManager` range remains the source of truth, while lockfile, config, and interactive detection resolve a managed package manager for the current command without adding a manifest field.
 
-- Detection from the `packageManager` field or an exact `devEngines.packageManager` version: already exact, no write needed.
-- Detection from a `devEngines.packageManager` range: no write; the range is the user's source of truth and is never frozen into an exact pin.
-- Detection from lockfiles, config files, or interactive selection: the exact resolved version is written to `devEngines.packageManager` with `onFail: "download"`.
-
-The write preserves existing entries Vite+ does not act on (e.g. another package manager declared with `onFail: "ignore"`): the resolved entry is appended to an existing array, an existing single entry is converted to array form with the original kept first, and a single entry is only written when the field is absent or malformed.
-
-This ensures:
-
-- Future runs use a deterministic version (Priority 1 or 2 match)
-- Team members get consistent versions
-- CI environments use deterministic versions
+Projects that require a deterministic declaration can pin it explicitly with `vp env pin <package-manager>@<version>`. Commands that modify dependencies, including `vp install` and `vp add`, require an existing `package.json` instead of creating one automatically.
 
 ## Version Resolution
 
