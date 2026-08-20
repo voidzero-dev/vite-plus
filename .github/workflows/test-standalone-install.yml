@@ -1274,6 +1274,10 @@ jobs:
             }
           }
 
+          # Each installer process must fail in this test. Reset the native
+          # exit code after the assertions so the PowerShell step succeeds.
+          $global:LASTEXITCODE = 0
+
       - name: vp-setup.exe pre-split fallback leaves no split roots
         shell: pwsh
         run: |
