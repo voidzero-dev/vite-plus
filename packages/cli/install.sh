@@ -1411,9 +1411,10 @@ WRAPPER_EOF
   # Configure shell PATH after the install is otherwise complete.
   configure_shell_path
 
-  # Use ~ when the shim directory is under HOME. Otherwise, show the full path.
-  local display_location
-  display_location="$(abbreviate_path "$SHIM_DIR")"
+  # Use ~ when an install location is under HOME. Otherwise, show the full path.
+  local display_data_dir display_bin_dir
+  display_data_dir="$(abbreviate_path "$INSTALL_DIR")"
+  display_bin_dir="$(abbreviate_path "$SHIM_DIR")"
 
   # Print success message
   echo ""
@@ -1437,6 +1438,11 @@ WRAPPER_EOF
   echo -e "  Run ${BRIGHT_BLUE}vp help${NC} to see available commands."
 
   echo ""
+  echo -e "  ${BOLD}Install locations:${NC}"
+  echo "    Data directory: $display_data_dir"
+  echo "    Bin directory:  $display_bin_dir"
+
+  echo ""
   echo "  Shell configuration:"
   local summary_line
   for summary_line in "${SHELL_CONFIG_SUMMARY[@]}"; do
@@ -1454,8 +1460,6 @@ WRAPPER_EOF
     echo ""
     echo -e "  ${YELLOW}note${NC}: Some shells still need manual setup."
     echo ""
-    echo -e "  vp was installed to: ${BOLD}${display_location}${NC}"
-    echo ""
     echo "  Manual setup instructions:"
     echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
     printf '        . "%s/env"\n' "$CONFIG_DIR_REF_POSIX"
@@ -1466,7 +1470,7 @@ WRAPPER_EOF
     echo ""
     echo "  Or run vp directly:"
     echo ""
-    echo -e "    ${display_location}/vp"
+    echo -e "    ${display_bin_dir}/vp"
   fi
 
   echo ""
