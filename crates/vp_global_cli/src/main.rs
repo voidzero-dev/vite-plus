@@ -458,9 +458,8 @@ async fn main() -> ExitCode {
 
     let should_run_upgrade_check =
         parse_result.as_ref().is_ok_and(upgrade_check::should_run_for_command);
-    if should_run_upgrade_check {
-        upgrade_check::spawn_background_check_if_needed();
-    }
+    let spawned_upgrade_check =
+        should_run_upgrade_check && upgrade_check::spawn_background_check_if_needed();
 
     let exit_code = match parse_result {
         Err(e) => {
@@ -528,7 +527,7 @@ async fn main() -> ExitCode {
         },
     };
 
-    if should_run_upgrade_check {
+    if should_run_upgrade_check && !spawned_upgrade_check {
         upgrade_check::display_cached_upgrade_notice();
     }
 

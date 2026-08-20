@@ -189,16 +189,21 @@ async fn resolve_version_string() -> Option<String> {
     registry::resolve_version_string("latest", None).await.ok()
 }
 
-pub(crate) fn spawn_background_check_if_needed() {
+/// Spawn a detached upgrade check when the cache is stale.
+///
+/// Returns `true` when a helper was spawned. The foreground command uses this
+/// to avoid consuming a notice produced by its own background check before the
+/// user has had a chance to run another command.
+pub(crate) fn spawn_background_check_if_needed() -> bool {
     let config = vp_shared::EnvConfig::get();
     let cache_dir = &config.dirs.cache;
     let current_version = env!("CARGO_PKG_VERSION");
     if !should_check(read_cache(cache_dir).as_ref(), current_version, now_secs()) {
-        return;
+        return false;
     }
 
     let Ok(current_exe) = std::env::current_exe() else {
-        return;
+        return false;
     };
     let mut command = Command::new(current_exe);
     command
@@ -211,6 +216,9 @@ pub(crate) fn spawn_background_check_if_needed() {
     if let Ok(mut child) = command.spawn() {
         // A long-running foreground command must still reap a helper that exits first.
         let _ = std::thread::spawn(move || child.wait());
+        true
+    } else {
+        false
     }
 }
 
