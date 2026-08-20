@@ -52,10 +52,9 @@ fn main() {
 
     let opts = cli::parse();
 
-    // Resolve the category roots before the tokio runtime starts. EnvConfig
-    // reads an existing VP_HOME value. The --install-dir option sets VP_HOME
-    // here. Thus, the unsafe set_var runs while the process has one thread.
-    let dirs = match prepare_dirs(&opts) {
+    // Validate and resolve the category roots before the installer creates any
+    // directories.
+    let dirs = match prepare_dirs() {
         Ok(dirs) => dirs,
         Err(e) => {
             print_error(&format!("Failed to resolve install directory: {e}"));
@@ -468,21 +467,7 @@ async fn download_with_progress(
 
 /// Validate installer directory overrides. Then resolve category roots from
 /// [`vp_shared::EnvConfig`].
-///
-/// `--install-dir` is the only override that the installer owns. It pins
-/// `VP_HOME`, so EnvConfig produces a single-root layout. Runtime resolution
-/// ignores invalid overrides. The installer rejects a relative `VP_HOME`. It
-/// also rejects an incomplete or relative `VP_*_DIR` group.
-fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error>> {
-    if let Some(ref dir) = opts.install_dir {
-        let path = std::path::PathBuf::from(dir);
-        let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
-        let abs = AbsolutePathBuf::new(abs)
-            .ok_or("The installation directory must be an absolute path")?;
-        // Safety: called in main() before any threads are spawned (or under
-        // EnvConfig::with_vars in tests, which serializes env mutation).
-        unsafe { std::env::set_var(vp_shared::env_vars::VP_HOME, abs.as_path()) };
-    }
+fn prepare_dirs() -> Result<VpDirs, Box<dyn std::error::Error>> {
     vp_shared::validate_vp_dir_env()?;
     Ok(vp_shared::EnvConfig::get().dirs.clone())
 }
@@ -644,19 +629,6 @@ mod tests {
 
     use super::*;
 
-    fn opts(install_dir: Option<String>) -> cli::Options {
-        cli::Options {
-            yes: true,
-            quiet: true,
-            version: None,
-            tag: "latest".into(),
-            install_dir,
-            registry: None,
-            no_node_manager: true,
-            no_modify_path: true,
-        }
-    }
-
     fn with_clean_home<R>(home: &std::path::Path, f: impl FnOnce() -> R) -> R {
         let mut vars =
             vec![("HOME", Some(home.as_os_str())), ("USERPROFILE", Some(home.as_os_str()))];
@@ -704,7 +676,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         with_clean_home(tmp.path(), || {
             let expected = EnvConfig::get().dirs.clone();
-            let dirs = prepare_dirs(&opts(None)).unwrap();
+            let dirs = prepare_dirs().unwrap();
             assert_eq!(dirs, expected);
             assert!(std::env::var_os(env_vars::VP_HOME).is_none());
             #[cfg(not(windows))]
@@ -734,7 +706,7 @@ mod tests {
         std::fs::create_dir_all(legacy.join("current")).unwrap();
 
         with_clean_home(tmp.path(), || {
-            let dirs = prepare_dirs(&opts(None)).unwrap();
+            let dirs = prepare_dirs().unwrap();
             assert_eq!(dirs.data.as_path(), legacy.as_path());
             assert_eq!(dirs.bin.as_path(), legacy.join("bin").as_path());
             assert_eq!(dirs.config.as_path(), legacy.as_path());
@@ -745,17 +717,18 @@ mod tests {
     }
 
     #[test]
-    fn custom_install_dir_pins_vp_home_to_single_root() {
+    fn vp_home_pins_single_root() {
         let tmp = tempfile::tempdir().unwrap();
         let custom = tmp.path().join("custom");
-        std::fs::create_dir_all(&custom).unwrap();
 
         with_clean_home(tmp.path(), || {
-            let dirs = prepare_dirs(&opts(Some(custom.to_string_lossy().into_owned()))).unwrap();
-            assert_eq!(std::env::var_os(env_vars::VP_HOME).as_deref(), Some(custom.as_os_str()));
-            assert_eq!(dirs.data.as_path(), custom.as_path());
-            assert_eq!(dirs.bin.as_path(), custom.join("bin").as_path());
-            assert_eq!(dirs.config.as_path(), custom.as_path());
+            EnvConfig::with_vars([(env_vars::VP_HOME, Some(custom.as_os_str()))], |_| {
+                let dirs = prepare_dirs().unwrap();
+                assert_eq!(dirs.data.as_path(), custom.as_path());
+                assert_eq!(dirs.bin.as_path(), custom.join("bin").as_path());
+                assert_eq!(dirs.cache.as_path(), custom.join("cache").as_path());
+                assert_eq!(dirs.config.as_path(), custom.as_path());
+            });
         });
     }
 
@@ -781,7 +754,7 @@ mod tests {
                 (env_vars::XDG_STATE_HOME, None),
             ],
             |config| {
-                let dirs = prepare_dirs(&opts(None)).unwrap();
+                let dirs = prepare_dirs().unwrap();
                 assert_eq!(dirs.data.as_path(), data.as_path());
                 assert_eq!(dirs.bin.as_path(), bin.as_path());
                 assert_eq!(dirs.cache.as_path(), cache.as_path());
@@ -814,7 +787,7 @@ mod tests {
                     (env_vars::VP_CACHE_DIR, None),
                 ],
                 |_| {
-                    let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
+                    let error = prepare_dirs().unwrap_err().to_string();
                     assert_eq!(
                         error,
                         "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR. Otherwise, do not set any of them."

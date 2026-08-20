@@ -188,7 +188,6 @@ vp-setup.exe --version 0.3.0 --no-node-manager --registry https://registry.npmmi
 | `-q` / `--quiet`       | Suppress output except errors | false                        |
 | `--version <VER>`      | Install specific version      | latest                       |
 | `--tag <TAG>`          | npm dist-tag                  | latest                       |
-| `--install-dir <PATH>` | Installation directory        | resolved Vite+ layout        |
 | `--registry <URL>`     | npm registry URL              | `https://registry.npmjs.org` |
 | `--no-node-manager`    | Skip Node.js manager setup    | auto-detect                  |
 | `--no-modify-path`     | Don't modify User PATH        | modify                       |

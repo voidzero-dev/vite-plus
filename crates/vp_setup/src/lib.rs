@@ -37,7 +37,10 @@ pub fn supports_split_layout(version: &str) -> bool {
         return false;
     };
     if version.major == 0 && version.minor == 0 && version.patch == 0 {
-        return !version.pre_release.is_empty() || !version.build.is_empty();
+        return matches!(
+            version.pre_release.as_slice(),
+            [node_semver::Identifier::AlphaNumeric(label), _, ..] if label == "commit"
+        );
     }
     version.major > 0 || version.minor >= 3
 }
@@ -53,6 +56,10 @@ mod tests {
         assert!(supports_split_layout("0.4.2"));
         assert!(supports_split_layout("1.0.0"));
         assert!(supports_split_layout("0.0.0-commit.0123abc"));
+        assert!(!supports_split_layout("0.0.0-alpha.1"));
+        assert!(!supports_split_layout("0.0.0-dev"));
+        assert!(!supports_split_layout("0.0.0+foo"));
+        assert!(!supports_split_layout("0.0.0-commit"));
         assert!(!supports_split_layout("0.2.9"));
         assert!(!supports_split_layout("0.2.0"));
         assert!(!supports_split_layout("0.1.14-alpha.1"));

@@ -38,7 +38,6 @@ These variables control the installer scripts and the standalone Windows install
   Unix, it uses `~/.local/share/vite-plus` and its Vite+-owned `bin`
   subdirectory. On Windows, it uses `%LOCALAPPDATA%\vite-plus\data` and
   `%LOCALAPPDATA%\vite-plus\bin`.
-- **CLI equivalent**: `--install-dir`
 - **Example**:
 
   ```bash
