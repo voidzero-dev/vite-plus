@@ -293,7 +293,7 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
 }
 
 async fn check_package_manager_session_override() {
-    let environment = vp_shared::EnvConfig::get().package_manager;
+    let environment = vp_shared::EnvConfig::get().package_manager.clone();
     let session = config::read_session_package_manager().await;
     if let Some(value) = environment.or(session) {
         print_check(" ", "PM session", &value);
@@ -1099,6 +1099,7 @@ fn check_conflicts() {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::*;

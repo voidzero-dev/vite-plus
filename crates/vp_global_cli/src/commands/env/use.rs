@@ -103,7 +103,7 @@ pub async fn execute(
         let unset_package_manager = match scope {
             EnvScope::PackageManager(expected) => current_override(
                 config::read_session_package_manager().await,
-                vp_shared::EnvConfig::get().package_manager,
+                vp_shared::EnvConfig::get().package_manager.clone(),
             )
             .and_then(|value| super::spec::parse_package_manager_spec(&value).ok())
             .is_some_and(|(kind, _)| kind == expected),
@@ -180,7 +180,7 @@ pub async fn execute(
             Some((version, _)) => {
                 current_override(
                     config::read_session_version().await,
-                    vp_shared::EnvConfig::get().node_version,
+                    vp_shared::EnvConfig::get().node_version.clone(),
                 )
                 .as_deref()
                     == Some(version)
@@ -191,7 +191,7 @@ pub async fn execute(
             Some((kind, version, _, hash)) => {
                 current_override(
                     config::read_session_package_manager().await,
-                    vp_shared::EnvConfig::get().package_manager,
+                    vp_shared::EnvConfig::get().package_manager.clone(),
                 )
                 .as_deref()
                     == Some(package_manager_spec(*kind, version, hash.as_deref()).as_str())

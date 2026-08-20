@@ -72,8 +72,9 @@ impl CurrentSpecs {
 }
 
 async fn current_specs() -> Result<CurrentSpecs, Error> {
+    let config = vp_shared::EnvConfig::get();
     let (session, session_source, session_source_path) =
-        if let Some(spec) = vp_shared::EnvConfig::get().package_manager {
+        if let Some(spec) = config.package_manager.as_deref() {
             (
                 Some(parse_package_manager_spec_with_hash(spec.trim())?),
                 Some(config::PACKAGE_MANAGER_ENV_VAR),
