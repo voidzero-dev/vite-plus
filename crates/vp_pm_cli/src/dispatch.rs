@@ -12,10 +12,7 @@ use crate::{
     cli::{PackageManagerCommand, PmCommand},
     download_package_manager,
     error::Error,
-    helpers::{
-        build_package_manager, build_package_manager_or_npm_default, ensure_package_json,
-        require_package_json,
-    },
+    helpers::{build_package_manager, build_package_manager_or_npm_default, require_package_json},
     resolution::{DlxArgs, StageCommand, run_resolution},
 };
 
@@ -27,7 +24,6 @@ pub struct DispatchResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ManagerPolicy {
-    CreateIfMissing,
     RequireProject,
     AllowNpmFallback,
 }
@@ -95,16 +91,13 @@ async fn dispatch_with_manager(
 
     let policy = manager_policy(&command);
     match policy {
-        ManagerPolicy::CreateIfMissing => ensure_package_json(cwd).await?,
         ManagerPolicy::RequireProject => require_package_json(cwd)?,
         ManagerPolicy::AllowNpmFallback => {}
     }
 
     let manager = match source {
         ManagerSource::Detect => match policy {
-            ManagerPolicy::CreateIfMissing | ManagerPolicy::RequireProject => {
-                build_package_manager(cwd).await?
-            }
+            ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
             ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
         },
         source => resolve_manager(cwd, source).await?,
@@ -197,10 +190,9 @@ async fn dispatch_dlx(
 
 fn manager_policy(command: &PackageManagerCommand) -> ManagerPolicy {
     match command {
-        PackageManagerCommand::Install(_) | PackageManagerCommand::Add(_) => {
-            ManagerPolicy::CreateIfMissing
-        }
-        PackageManagerCommand::Remove(_)
+        PackageManagerCommand::Install(_)
+        | PackageManagerCommand::Add(_)
+        | PackageManagerCommand::Remove(_)
         | PackageManagerCommand::Update(_)
         | PackageManagerCommand::Dedupe(_)
         | PackageManagerCommand::Outdated(_)
@@ -259,10 +251,14 @@ mod tests {
     }
 
     #[test]
-    fn manager_policy_covers_project_creation_and_requirement() {
+    fn manager_policy_requires_a_project_for_install_and_mutation() {
         assert_eq!(
             manager_policy(&parse_command(&["vp", "install"])),
-            ManagerPolicy::CreateIfMissing
+            ManagerPolicy::RequireProject
+        );
+        assert_eq!(
+            manager_policy(&parse_command(&["vp", "add", "react"])),
+            ManagerPolicy::RequireProject
         );
         assert_eq!(
             manager_policy(&parse_command(&["vp", "remove", "react"])),
