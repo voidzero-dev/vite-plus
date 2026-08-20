@@ -16,7 +16,7 @@ loads the generated env file in Zsh and verifies PATH, wrapper, completions, and
 
 ```
 Using Node.js <version> (resolved from 20.18.0)
-Reverted to file-based Node.js version resolution
+Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 POSIX environment checks passed (zsh)
 ```
