@@ -354,6 +354,11 @@ fn dump_dirs_from_env_config() -> bool {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    #[cfg(windows)]
+    if let Some(code) = commands::implode::maybe_run_deferred_delete_helper(std::env::args_os()) {
+        return ExitCode::from(code);
+    }
+
     vp_shared::ensure_blocking_stdio();
 
     // Initialize tracing

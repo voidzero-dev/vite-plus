@@ -1418,6 +1418,26 @@ jobs:
           }
           & $vp --version
 
+          $longDirectory = Join-Path $legacyRoot "current\node_modules\.pnpm"
+          $segment = "package-" + ("x" * 60)
+          while ((Join-Path $longDirectory "payload.txt").Length -le 300) {
+            $longDirectory = Join-Path $longDirectory $segment
+          }
+          $longFile = Join-Path $longDirectory "payload.txt"
+          [System.IO.Directory]::CreateDirectory($longDirectory) | Out-Null
+          [System.IO.File]::WriteAllText($longFile, "long-path")
+          if ($longFile.Length -le 260) { throw "test path is not longer than MAX_PATH: $longFile" }
+
+          $env:VP_HOME = $legacyRoot
+          & $vp implode --yes
+          for ($i = 0; $i -lt 150; $i++) {
+            $removingRoots = @(Get-ChildItem -LiteralPath $root -Filter ".vite-plus.removing-*" -Force -ErrorAction SilentlyContinue)
+            if ($removingRoots.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 100
+          }
+          if (Test-Path $legacyRoot) { throw "implode left the monolithic root" }
+          if ($removingRoots.Count -ne 0) { throw "implode left a renamed monolithic root" }
+
       - name: PowerShell installer preserves an unrelated Node executable
         shell: pwsh
         run: |
@@ -1591,7 +1611,7 @@ jobs:
           & pwsh -NoProfile -Command '. $env:VP_TEST_ENV_FILE; if ($env:VP_HOME -cne $env:VP_TEST_EXPECTED_HOME) { throw "PowerShell 7 changed VP_HOME" }; vp --version'
           if ($LASTEXITCODE -ne 0) { throw "PowerShell 7 could not source env.ps1" }
 
-      - name: Split-layout implode removes the running trampoline safely
+      - name: Split-layout implode removes long paths and the running trampoline safely
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -1621,12 +1641,27 @@ jobs:
           $unrelated = Join-Path $bin "unrelated.txt"
           [System.IO.File]::WriteAllText($unrelated, "keep")
 
+          $longDirectory = Join-Path $data "current\node_modules\.pnpm"
+          $segment = "package-" + ("x" * 60)
+          while ((Join-Path $longDirectory "payload.txt").Length -le 300) {
+            $longDirectory = Join-Path $longDirectory $segment
+          }
+          $longFile = Join-Path $longDirectory "payload.txt"
+          [System.IO.Directory]::CreateDirectory($longDirectory) | Out-Null
+          [System.IO.File]::WriteAllText($longFile, "long-path")
+          if ($longFile.Length -le 260) { throw "test path is not longer than MAX_PATH: $longFile" }
+
           & $vp implode --yes
-          for ($i = 0; $i -lt 100 -and ((Test-Path $vp) -or (Test-Path $sidecar)); $i++) {
+          for ($i = 0; $i -lt 150; $i++) {
+            $removingRoots = @(Get-ChildItem -LiteralPath $root -Filter "data.removing-*" -Force -ErrorAction SilentlyContinue)
+            if (-not (Test-Path $vp) -and -not (Test-Path $sidecar) -and $removingRoots.Count -eq 0) {
+              break
+            }
             Start-Sleep -Milliseconds 100
           }
           if (Test-Path $vp) { throw "implode left vp.exe in the split bin" }
           if (Test-Path $sidecar) { throw "implode left vp.shim in the split bin" }
+          if ($removingRoots.Count -ne 0) { throw "implode left a renamed split data root" }
           if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
             throw "implode changed an unrelated bin entry"
           }
@@ -1636,10 +1671,15 @@ jobs:
           & ./packages/cli/install.ps1
           & $vp implode --yes
           & ./packages/cli/install.ps1
-          Start-Sleep -Seconds 2
+          for ($i = 0; $i -lt 150; $i++) {
+            $removingRoots = @(Get-ChildItem -LiteralPath $root -Filter "data.removing-*" -Force -ErrorAction SilentlyContinue)
+            if ($removingRoots.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 100
+          }
 
           if (-not (Test-Path $vp)) { throw "deferred cleanup removed the new vp.exe" }
           if (-not (Test-Path $sidecar)) { throw "deferred cleanup removed the new vp.shim" }
+          if ($removingRoots.Count -ne 0) { throw "implode left a renamed split data root after reinstall" }
           if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
             throw "the reinstall changed an unrelated bin entry"
           }
