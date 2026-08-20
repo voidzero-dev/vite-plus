@@ -8526,6 +8526,7 @@ dependencies = [
  "futures",
  "indexmap",
  "indicatif",
+ "indoc",
  "node-semver",
  "owo-colors",
  "oxc_resolver",

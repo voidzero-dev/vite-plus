@@ -17,6 +17,9 @@
 
 use std::process::ExitStatus;
 
+#[cfg(windows)]
+use indoc::formatdoc;
+
 use crate::{error::Error, help};
 
 /// Shells that get a generated `<CONFIG>/env.*` setup script.
@@ -520,28 +523,23 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 }
 
 // POSIX env file (bash/zsh)
-// When sourced multiple times, removes existing entry and re-prepends to front
-// Uses parameter expansion to split PATH around the bin entry in O(1) operations
+// When sourced multiple times, removes existing entries and re-prepends to front
+// Uses parameter expansion to preserve PATH entries containing spaces
 // Includes vp() shell function wrapper for `vp env use` (evals stdout)
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
-case ":${PATH}:" in
-    *":${__vp_bin}:"*)
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-        __vp_after="${__vp_after%:}"
-        export PATH="${__vp_bin}${__vp_before:+:${__vp_before}}${__vp_after:+:${__vp_after}}"
-        unset __vp_tmp __vp_before __vp_after
-        ;;
-    *)
-        export PATH="$__vp_bin:$PATH"
-        ;;
-esac
-unset __vp_bin
+while case ":${PATH}:" in *":${__vp_bin}:"*) true ;; *) false ;; esac; do
+    __vp_tmp=":${PATH}:"
+    __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
+    __vp_before="${__vp_before#:}"
+    __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
+    __vp_after="${__vp_after%:}"
+    PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+done
+export PATH="${__vp_bin}${PATH:+:${PATH}}"
+unset __vp_bin __vp_tmp __vp_before __vp_after
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -573,8 +571,9 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
-and set -e PATH[$__vp_idx]
+__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
 set -gx PATH "__VP_BIN__" $PATH
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
@@ -587,7 +586,10 @@ function vp
         set -lx VP_ENV_USE_EVAL_ENABLE 1
         set -lx VP_SHELL fish
         set -l __vp_out (command vp $argv); or return $status
-        eval (string join ';' $__vp_out)
+        for __vp_command in $__vp_out
+            eval $__vp_command; or return $status
+        end
+        return 0
     else
         command vp $argv
     end
@@ -734,11 +736,26 @@ fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
     let export_lines: String =
-        exports.into_iter().map(|(name, value)| format!("set {name}={value}\r\n")).collect();
-    format!(
-        "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\n{export_lines}for /f \"delims=\" %%i in ('\"{}\" env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n",
-        vp_exe.as_path().display()
-    )
+        exports.into_iter().map(|(name, value)| format!("set {name}={value}\n")).collect();
+    formatdoc! {
+        r#"
+        @echo off
+        setlocal
+        set VP_ENV_USE_EVAL_ENABLE=1
+        set VP_SHELL=cmd
+        {export_lines}set "__VP_USE_OUT=%TEMP%\vp-use-%RANDOM%-%RANDOM%.tmp"
+        "{vp_exe}" env use %* > "%__VP_USE_OUT%"
+        set "__VP_USE_STATUS=%ERRORLEVEL%"
+        endlocal & set "__VP_USE_OUT=%__VP_USE_OUT%" & set "__VP_USE_STATUS=%__VP_USE_STATUS%"
+        {export_lines}if "%__VP_USE_STATUS%"=="0" for /f "usebackq delims=" %%i in ("%__VP_USE_OUT%") do %%i
+        del /q "%__VP_USE_OUT%" >nul 2>&1
+        set "__VP_USE_OUT="
+        set "__VP_USE_STATUS=" & exit /b %__VP_USE_STATUS%
+        "#,
+        vp_exe = vp_exe.as_path().display(),
+        export_lines = export_lines
+    }
+    .replace('\n', "\r\n")
 }
 
 fn render_home_relative_path(path: &std::path::Path, home_dir: &std::path::Path) -> String {
@@ -1384,24 +1401,19 @@ mod tests {
 
                 let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-                // Verify PATH guard structure: case statement checks for duplicate
+                // Verify PATH guard structure: loop removes every duplicate.
                 assert!(
-                    env_content.contains("case \":${PATH}:\" in"),
-                    "env file should contain PATH guard case statement"
+                    env_content.contains("while case \":${PATH}:\" in"),
+                    "env file should contain a PATH cleanup loop"
                 );
                 assert!(
                     env_content.contains("*\":${__vp_bin}:\"*)"),
                     "env file should check for existing bin in PATH"
                 );
-                // Verify it re-prepends to front when already present
+                // Verify it re-prepends exactly once after cleanup.
                 assert!(
-                    env_content.contains("export PATH=\"${__vp_bin}"),
-                    "env file should re-prepend bin to front of PATH"
-                );
-                // Verify simple prepend for new entry
-                assert!(
-                    env_content.contains("export PATH=\"$__vp_bin:$PATH\""),
-                    "env file should prepend bin to PATH for new entry"
+                    env_content.contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}\""),
+                    "env file should prepend bin to PATH after removing duplicates"
                 );
             },
         )
@@ -1590,6 +1602,12 @@ mod tests {
                 assert!(
                     cmd_content.contains(&format!("\"{}\" env use %*", expected_exe.display())),
                     "vp-use.cmd should invoke the install-local vp.exe, got: {cmd_content}"
+                );
+                assert!(cmd_content.contains("setlocal\r\n"));
+                assert!(cmd_content.contains("set VP_SHELL=cmd\r\n"));
+                assert!(
+                    cmd_content.contains("exit /b %__VP_USE_STATUS%"),
+                    "vp-use.cmd should preserve the vp env use exit status"
                 );
             },
         )
