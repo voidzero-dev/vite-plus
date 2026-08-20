@@ -8,7 +8,7 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    PackageManager,
+    PackageManager, PackageManagerType,
     cli::{PackageManagerCommand, PmCommand},
     download_package_manager,
     error::Error,
@@ -82,7 +82,7 @@ async fn dispatch_with_manager(
             };
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
             let status = run_resolution(cwd, resolution, render_diagnostics).await?;
-            return Ok(DispatchResult { status, package_manager: manager.client });
+            return Ok(DispatchResult { status, why_hint_packages: None });
         }
         command => command,
     };
