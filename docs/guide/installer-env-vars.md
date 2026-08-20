@@ -195,8 +195,8 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 ### `VP_LOG`
 
 - **Purpose**: Log filter string for `tracing_subscriber`
-- **Installer behavior**: `VP_LOG=trace` shows shell configuration failures
-  that `install.sh` hides when `CI=true`.
+- **Installer behavior**: When `CI=true`, `install.sh` hides shell file errors.
+  Set `VP_LOG=trace` to show these errors.
 - **Default**: None
 - **Example**:
   ```bash

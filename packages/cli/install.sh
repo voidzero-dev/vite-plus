@@ -71,7 +71,7 @@ trace() {
   echo -e "${DIM}trace${NC}: $1"
 }
 
-shell_config_warn() {
+report_shell_config_error() {
   if [ "${CI:-}" = "true" ]; then
     trace "$1"
   else
@@ -744,7 +744,7 @@ append_source_to_file() {
   fi
 
   if [ ! -w "$shell_config" ]; then
-    shell_config_warn "Cannot write to $shell_config (permission denied), skipping."
+    report_shell_config_error "Vite+ cannot write to $shell_config. Vite+ skips this file."
     return 3
   fi
 
@@ -771,12 +771,12 @@ write_managed_snippet() {
 
   snippet_dir=$(dirname "$snippet_file")
   if ! mkdir -p "$snippet_dir" 2>/dev/null; then
-    shell_config_warn "Cannot create $snippet_dir, skipping."
+    report_shell_config_error "Vite+ cannot create $snippet_dir. Vite+ skips this shell configuration."
     return 3
   fi
 
   if [ -f "$snippet_file" ] && [ ! -w "$snippet_file" ]; then
-    shell_config_warn "Cannot write to $snippet_file (permission denied), skipping."
+    report_shell_config_error "Vite+ cannot write to $snippet_file. Vite+ skips this file."
     return 3
   fi
 
@@ -785,7 +785,7 @@ write_managed_snippet() {
   fi
 
   if ! printf '%s' "$snippet_content" > "$snippet_file"; then
-    shell_config_warn "Cannot write to $snippet_file, skipping."
+    report_shell_config_error "Vite+ cannot write to $snippet_file. Vite+ skips this file."
     return 3
   fi
   return 0
@@ -820,7 +820,7 @@ configure_zsh_path() {
   local result
 
   if ! mkdir -p "$zsh_dir" 2>/dev/null; then
-    shell_config_warn "Cannot create $zsh_dir, skipping zsh."
+    report_shell_config_error "Vite+ cannot create $zsh_dir. Vite+ skips zsh configuration."
     SHELL_CONFIG_HAS_FAILURE="true"
     SHELL_CONFIG_FAILED_SHELLS+=("zsh")
     record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zsh_dir"))"
@@ -828,7 +828,7 @@ configure_zsh_path() {
   fi
 
   if [ ! -f "$zshenv" ] && ! touch "$zshenv" 2>/dev/null; then
-    shell_config_warn "Cannot create $zshenv, skipping zsh."
+    report_shell_config_error "Vite+ cannot create $zshenv. Vite+ skips zsh configuration."
     SHELL_CONFIG_HAS_FAILURE="true"
     SHELL_CONFIG_FAILED_SHELLS+=("zsh")
     record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zshenv"))"
@@ -1455,8 +1455,9 @@ WRAPPER_EOF
   echo "    Data directory: $display_data_dir"
   echo "    Bin directory:  $display_bin_dir"
 
-  # CI jobs must configure PATH through their runner. Shell files do not affect
-  # later job steps, so keep shell configuration details out of normal CI logs.
+  # CI jobs configure PATH through the runner.
+  # Shell files do not change PATH for later steps.
+  # Do not print shell details in normal CI output.
   if [ "${CI:-}" = "true" ]; then
     echo ""
     return
