@@ -6,7 +6,9 @@
 //!
 //! Each flavor gets one runner bin directory per run (created under the run
 //! temp root) for runner-owned helpers. `vpt` always lives there; optional
-//! external tools such as Nushell are linked there when available.
+//! external shells are linked there when available. PowerShell and system
+//! `cmd.exe` keep their original installation paths because they depend on
+//! files provided beside them or by the operating system.
 
 use std::path::{Path, PathBuf};
 
@@ -30,9 +32,23 @@ impl Flavor {
 pub struct FlavorRuntime {
     pub runner_bin_dir: PathBuf,
     pub vpt: PathBuf,
+    /// Runner-owned POSIX shell binaries used by fixtures that execute the
+    /// generated `env` file.
+    pub sh: Option<PathBuf>,
+    pub bash: Option<PathBuf>,
+    pub zsh: Option<PathBuf>,
+    /// Runner-owned Fish binary used by fixtures that execute generated
+    /// `env.fish` files. CI supplies it through `VP_SNAP_FISH_BIN`.
+    pub fish: Option<PathBuf>,
     /// Runner-owned Nushell binary used by fixtures that execute generated
     /// `env.nu` files. CI supplies it through `VP_SNAP_NU_BIN`.
     pub nu: Option<PathBuf>,
+    /// Canonical PowerShell binary used by fixtures that execute generated
+    /// `env.ps1` files. CI supplies it through `VP_SNAP_PWSH_BIN`.
+    pub pwsh: Option<PathBuf>,
+    /// Canonical system cmd.exe used by fixtures that execute generated batch
+    /// files. CI supplies it through `VP_SNAP_CMD_BIN`; it is not relocated.
+    pub cmd: Option<PathBuf>,
     /// Source global `vp` binary to install into each case's `VP_HOME/current`.
     pub global_vp: PathBuf,
     /// Source package installed into each case's `VP_HOME/current/node_modules`.
@@ -193,21 +209,62 @@ fn vpt_path() -> Result<PathBuf, String> {
     })
 }
 
-/// Resolves an optional Nushell binary for fixtures that exercise generated
-/// `env.nu` files. The explicit override keeps CI deterministic; a developer's
-/// PATH is the local fallback.
-pub fn nushell_path() -> Result<Option<PathBuf>, String> {
-    if let Some(nu) = std::env::var_os("VP_SNAP_NU_BIN") {
-        let nu = PathBuf::from(nu);
-        if nu.is_file() {
-            return std::fs::canonicalize(&nu).map(Some).map_err(|e| {
-                format!("failed to canonicalize VP_SNAP_NU_BIN {}: {e}", nu.display())
-            });
+/// Resolves an optional external tool. The explicit override keeps CI
+/// deterministic; a developer's PATH is the local fallback.
+fn optional_tool_path(env_var: &str, binary: &str) -> Result<Option<PathBuf>, String> {
+    if let Some(tool) = std::env::var_os(env_var) {
+        let tool = PathBuf::from(tool);
+        if tool.is_file() {
+            return std::fs::canonicalize(&tool)
+                .map(Some)
+                .map_err(|e| format!("failed to canonicalize {env_var} {}: {e}", tool.display()));
         }
-        return Err(format!("VP_SNAP_NU_BIN is set but {} does not exist", nu.display()));
+        return Err(format!("{env_var} is set but {} does not exist", tool.display()));
     }
 
-    Ok(which::which("nu").ok())
+    Ok(which::which(binary).ok())
+}
+
+/// Resolves an optional Fish binary for fixtures that exercise generated
+/// `env.fish` files.
+pub fn fish_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_FISH_BIN", "fish")
+}
+
+pub fn sh_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_SH_BIN", "sh")
+}
+
+pub fn bash_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_BASH_BIN", "bash")
+}
+
+pub fn zsh_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_ZSH_BIN", "zsh")
+}
+
+/// Resolves an optional Nushell binary for fixtures that exercise generated
+/// `env.nu` files.
+pub fn nushell_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_NU_BIN", "nu")
+}
+
+/// Resolves an optional PowerShell binary for fixtures that exercise generated
+/// `env.ps1` files.
+pub fn powershell_path() -> Result<Option<PathBuf>, String> {
+    optional_tool_path("VP_SNAP_PWSH_BIN", "pwsh")
+}
+
+/// Resolves an optional cmd.exe for fixtures that exercise generated batch
+/// files. Keep the canonical system executable in place instead of copying it
+/// into the runner bin directory.
+pub fn cmd_path() -> Result<Option<PathBuf>, String> {
+    let path = optional_tool_path("VP_SNAP_CMD_BIN", "cmd.exe")?;
+    path.map(|path| {
+        std::fs::canonicalize(&path)
+            .map_err(|e| format!("failed to canonicalize cmd.exe {}: {e}", path.display()))
+    })
+    .transpose()
 }
 
 /// Home-layout names, shared with `CaseHome` in main.rs so the product's
@@ -307,13 +364,37 @@ pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, Strin
         .map_err(|e| format!("failed to create bin dir: {e}"))?;
 
     let vpt = install_runner_tool(&runner_bin_dir, "vpt", &vpt_path()?)?;
+    let sh =
+        sh_path()?.map(|path| install_runner_tool(&runner_bin_dir, "sh", &path)).transpose()?;
+    let bash =
+        bash_path()?.map(|path| install_runner_tool(&runner_bin_dir, "bash", &path)).transpose()?;
+    let zsh =
+        zsh_path()?.map(|path| install_runner_tool(&runner_bin_dir, "zsh", &path)).transpose()?;
+    let fish =
+        fish_path()?.map(|path| install_runner_tool(&runner_bin_dir, "fish", &path)).transpose()?;
     let nu = nushell_path()?
         .map(|path| install_runner_tool(&runner_bin_dir, "nu", &path))
         .transpose()?;
+    let cmd = cmd_path()?;
+    // Keep PowerShell at its canonical installation path. Relocating only
+    // pwsh.exe can break its lookup of adjacent runtime and managed files.
+    let pwsh = powershell_path()?;
     let global_vp = global_vp_path()?;
     let cli_package_dir = match flavor {
         Flavor::Local => local_cli_package_dir()?,
         Flavor::Global => repo_root().join("packages/cli"),
     };
-    Ok(FlavorRuntime { runner_bin_dir, vpt, nu, global_vp, cli_package_dir })
+    Ok(FlavorRuntime {
+        runner_bin_dir,
+        vpt,
+        sh,
+        bash,
+        zsh,
+        fish,
+        nu,
+        pwsh,
+        cmd,
+        global_vp,
+        cli_package_dir,
+    })
 }

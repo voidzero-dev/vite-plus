@@ -418,7 +418,6 @@ async fn execute_pm_command(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
         )));
     }
-    let hint_command = command.clone();
     let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {
         Ok(result) => result,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
@@ -431,7 +430,7 @@ async fn execute_pm_command(
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
     };
     if result.status.success()
-        && let Some(packages) = hint_command.why_hint_packages(result.package_manager)
+        && let Some(packages) = result.why_hint_packages.as_deref()
     {
         print_toolchain_why_hint(options, packages);
     }

@@ -638,10 +638,9 @@ async fn run_package_manager_command(
     }
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    let hint_command = command.clone();
     let result = vp_pm_cli::dispatch_with_metadata(&cwd, command).await?;
     if result.status.success()
-        && let Some(packages) = hint_command.why_hint_packages(result.package_manager)
+        && let Some(packages) = result.why_hint_packages.as_deref()
     {
         print_toolchain_why_hint(&cwd, packages);
     }
