@@ -51,10 +51,12 @@ static TOOL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 // bun banners append the build's short commit hash after the version
 // ("bun pm trust v1.4.0 (34cbb9a40)"), which changes with every bun release.
-// The version is already masked to `<version>` by the passes above; anchor on
-// that token so parenthesized hex elsewhere stays assertable.
-static BUN_BUILD_HASH_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"(<version> )\([0-9a-f]{6,12}\)").unwrap());
+// The version is already masked to `<version>` by the passes above; require
+// the leading `bun <subcommand>` context so version-plus-hash lines from
+// other tools stay assertable.
+static BUN_BUILD_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(\bbun(?: [a-z-]+)* <version> )\([0-9a-f]{6,12}\)").unwrap()
+});
 // The workspace's own vite-plus / @voidzero-dev/vite-plus-core version is
 // written verbatim into scaffolded catalogs and manifests (`vite-plus: 0.2.3`,
 // `"vite-plus": "0.2.3"`, `npm:@voidzero-dev/vite-plus-core@0.2.3`). Unlike
