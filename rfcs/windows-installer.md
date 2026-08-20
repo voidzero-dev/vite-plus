@@ -182,15 +182,15 @@ vp-setup.exe --version 0.3.0 --no-node-manager --registry https://registry.npmmi
 
 ### CLI Flags
 
-| Flag                   | Description                   | Default                      |
-| ---------------------- | ----------------------------- | ---------------------------- |
-| `-y` / `--yes`         | Accept defaults, no prompts   | interactive                  |
-| `-q` / `--quiet`       | Suppress output except errors | false                        |
-| `--version <VER>`      | Install specific version      | latest                       |
-| `--tag <TAG>`          | npm dist-tag                  | latest                       |
-| `--registry <URL>`     | npm registry URL              | `https://registry.npmjs.org` |
-| `--no-node-manager`    | Skip Node.js manager setup    | auto-detect                  |
-| `--no-modify-path`     | Don't modify User PATH        | modify                       |
+| Flag                | Description                   | Default                      |
+| ------------------- | ----------------------------- | ---------------------------- |
+| `-y` / `--yes`      | Accept defaults, no prompts   | interactive                  |
+| `-q` / `--quiet`    | Suppress output except errors | false                        |
+| `--version <VER>`   | Install specific version      | latest                       |
+| `--tag <TAG>`       | npm dist-tag                  | latest                       |
+| `--registry <URL>`  | npm registry URL              | `https://registry.npmjs.org` |
+| `--no-node-manager` | Skip Node.js manager setup    | auto-detect                  |
+| `--no-modify-path`  | Don't modify User PATH        | modify                       |
 
 ### Environment Variables (compatible with `install.ps1`)
 
