@@ -1,0 +1,6 @@
+{
+  "name": "command-add-bun-with-workspace",
+  "version": "1.0.0",
+  "workspaces": ["packages/*"],
+  "packageManager": "bun@1.4.0"
+}
