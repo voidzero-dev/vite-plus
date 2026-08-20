@@ -38,7 +38,7 @@ The upgrade-command RFC explicitly listed "auto-update on every command invocati
 $ vp build
 ...build output...
 
-A new version of vp is available. Run `vp upgrade` to update.
+vp update available: 0.1.0 → 0.2.0, run `vp upgrade`
 ```
 
 ### Story 2: Already Up to Date (no notice)
@@ -114,6 +114,7 @@ Format (single JSON line for simplicity):
 ```json
 {
   "checked_for": "0.1.0",
+  "latest": "0.2.0",
   "status": "available",
   "checked_at": 1711500000,
   "prompted_at": 1711500000
@@ -121,7 +122,8 @@ Format (single JSON line for simplicity):
 ```
 
 - `checked_for`: The installed `vp` version this result applies to
-- `status`: `available`, `current`, or `unknown`; the target version is not persisted
+- `latest`: The version returned by the npm registry during the latest successful check
+- `status`: `available`, `current`, or `unknown`
 - `checked_at`: Unix timestamp (seconds) of when the latest check attempt began or completed
 - `prompted_at`: Unix timestamp (seconds) of when the user was last shown the notice
 
@@ -141,13 +143,13 @@ This means: the registry is queried at most once per day, and even if an update 
 The upgrade notice is printed to **stderr** (like tips), after the command output and before the tip line:
 
 ```
-A new version of vp is available. Run `vp upgrade` to update.
+vp update available: 0.1.0 → 0.2.0, run `vp upgrade`
 ```
 
 Styling:
 
 - Single line, no indentation
-- Does not reveal either the installed or target version
+- Dimmed text with version numbers highlighted (current in dim, new in green bold) and `vp upgrade` highlighted
 
 The notice is printed **after** the command output and **before** any tip, so it feels like a natural postscript rather than an interruption.
 

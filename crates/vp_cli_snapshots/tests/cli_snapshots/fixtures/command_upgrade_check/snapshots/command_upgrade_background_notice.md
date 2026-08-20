@@ -31,7 +31,7 @@ All vp commands and shims will now prefer system Node.js, falling back to manage
 
 Run `vp env on` to always use Vite+ managed Node.js.
 
-A new version of vp is available. Run `vp upgrade` to update.
+vp update available: <version> → 999.0.0, run vp upgrade
 ```
 
 ## `vp env off`

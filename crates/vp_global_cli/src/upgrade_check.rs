@@ -3,7 +3,7 @@
 //! Eligible foreground commands launch `vp upgrade --background-check` as a
 //! detached process when the cache is stale. That command records a retry
 //! cooldown before touching the network, then queries the npm registry and
-//! caches only whether an update is available under the configured cache root.
+//! caches the discovered version under the configured cache root.
 
 use std::{
     fs::{File, OpenOptions},
@@ -12,6 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use vp_setup::registry;
 
@@ -19,7 +20,6 @@ const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const PROMPT_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const CACHE_FILE_NAME: &str = "upgrade-check.json";
 const LOCK_FILE_NAME: &str = "upgrade-check.lock";
-const UPGRADE_NOTICE: &str = "A new version of vp is available. Run `vp upgrade` to update.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -33,6 +33,7 @@ enum UpgradeCheckStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UpgradeCheckCache {
     checked_for: String,
+    latest: String,
     status: UpgradeCheckStatus,
     checked_at: u64,
     prompted_at: u64,
@@ -68,6 +69,18 @@ impl UpgradeCheckLock {
             return Err(std::io::ErrorKind::NotFound.into());
         }
 
+        persist_cache(&self.cache_dir, cache)
+    }
+
+    fn publish_completed_cache(self, cache: &UpgradeCheckCache) -> std::io::Result<()> {
+        if !self.is_current() {
+            return Err(std::io::ErrorKind::NotFound.into());
+        }
+
+        // The fresh pending cache prevents another worker from starting while
+        // the completed state is published. Unlocking first ensures readers
+        // never observe an available notice that they cannot claim yet.
+        self._file.unlock()?;
         persist_cache(&self.cache_dir, cache)
     }
 }
@@ -253,6 +266,10 @@ pub async fn run_background_check() {
         .map_or(0, |cache| cache.prompted_at);
     let pending = UpgradeCheckCache {
         checked_for: current_version.to_owned(),
+        latest: cache
+            .as_ref()
+            .filter(|cache| cache.checked_for == current_version)
+            .map_or_else(String::new, |cache| cache.latest.clone()),
         status: UpgradeCheckStatus::Unknown,
         checked_at: now,
         prompted_at,
@@ -264,14 +281,19 @@ pub async fn run_background_check() {
         return;
     }
 
-    let status = resolve_version_string().await.map_or(UpgradeCheckStatus::Unknown, |latest| {
-        status_for_versions(current_version, &latest)
-    });
-    let completed = UpgradeCheckCache { status, checked_at: now_secs(), ..pending };
-    let _ = lock.write_cache(&completed);
+    let completed = match resolve_version_string().await {
+        Some(latest) => UpgradeCheckCache {
+            status: status_for_versions(current_version, &latest),
+            latest,
+            checked_at: now_secs(),
+            ..pending
+        },
+        None => UpgradeCheckCache { checked_at: now_secs(), ..pending },
+    };
+    let _ = lock.publish_completed_cache(&completed);
 }
 
-/// Print a generic one-line upgrade notice from cache and record the prompt time.
+/// Print a one-line upgrade notice from cache and record the prompt time.
 #[expect(clippy::print_stderr, clippy::disallowed_macros)]
 pub fn display_cached_upgrade_notice() {
     if checks_disabled() {
@@ -294,7 +316,15 @@ pub fn display_cached_upgrade_notice() {
         return;
     };
 
-    eprintln!("\n{UPGRADE_NOTICE}");
+    eprintln!(
+        "\n{} {} {} {}{} {}",
+        "vp update available:".bright_black(),
+        current_version.bright_black(),
+        "\u{2192}".bright_black(),
+        cache.latest.bright_green().bold(),
+        ", run".bright_black(),
+        "vp upgrade".bright_green().bold(),
+    );
 
     cache.prompted_at = now;
     let _ = lock.write_cache(&cache);
@@ -346,6 +376,7 @@ mod tests {
 
         let cache = UpgradeCheckCache {
             checked_for: "1.2.3".to_owned(),
+            latest: "2.0.0".to_owned(),
             status: UpgradeCheckStatus::Available,
             checked_at: 1000,
             prompted_at: 900,
@@ -357,6 +388,7 @@ mod tests {
         assert_eq!(cache_path(&dir_path), expected_path);
         assert!(expected_path.as_path().exists());
         assert_eq!(loaded.checked_for, "1.2.3");
+        assert_eq!(loaded.latest, "2.0.0");
         assert_eq!(loaded.status, UpgradeCheckStatus::Available);
         assert_eq!(loaded.checked_at, 1000);
         assert_eq!(loaded.prompted_at, 900);
@@ -368,6 +400,7 @@ mod tests {
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         let mut cache = UpgradeCheckCache {
             checked_for: "1.2.3".to_owned(),
+            latest: String::new(),
             status: UpgradeCheckStatus::Unknown,
             checked_at: 1000,
             prompted_at: 0,
@@ -375,11 +408,13 @@ mod tests {
         write_cache(&dir_path, &cache).unwrap();
 
         cache.status = UpgradeCheckStatus::Available;
+        cache.latest = "2.0.0".to_owned();
         cache.checked_at = 2000;
         write_cache(&dir_path, &cache).unwrap();
 
         let loaded = read_cache(&dir_path).unwrap();
         assert_eq!(loaded.status, UpgradeCheckStatus::Available);
+        assert_eq!(loaded.latest, "2.0.0");
         assert_eq!(loaded.checked_at, 2000);
     }
 
@@ -426,6 +461,7 @@ mod tests {
         std::fs::rename(&install_path, &moved_path).unwrap();
         let cache = UpgradeCheckCache {
             checked_for: "1.2.3".to_owned(),
+            latest: "2.0.0".to_owned(),
             status: UpgradeCheckStatus::Available,
             checked_at: 1000,
             prompted_at: 0,
@@ -472,6 +508,7 @@ mod tests {
             let now = now_secs();
             let cache = UpgradeCheckCache {
                 checked_for: "1.0.0".to_owned(),
+                latest: "1.0.0".to_owned(),
                 status: UpgradeCheckStatus::Current,
                 checked_at: now,
                 prompted_at: 0,
@@ -487,6 +524,7 @@ mod tests {
             let stale_time = now - CHECK_INTERVAL_SECS - 1;
             let cache = UpgradeCheckCache {
                 checked_for: "1.0.0".to_owned(),
+                latest: "1.0.0".to_owned(),
                 status: UpgradeCheckStatus::Current,
                 checked_at: stale_time,
                 prompted_at: 0,
@@ -501,6 +539,7 @@ mod tests {
             let now = now_secs();
             let cache = UpgradeCheckCache {
                 checked_for: "1.0.0".to_owned(),
+                latest: "1.0.0".to_owned(),
                 status: UpgradeCheckStatus::Current,
                 checked_at: now,
                 prompted_at: 0,
@@ -522,6 +561,7 @@ mod tests {
     fn notice_is_due_when_never_prompted() {
         let cache = UpgradeCheckCache {
             checked_for: "1.0.0".to_owned(),
+            latest: "2.0.0".to_owned(),
             status: UpgradeCheckStatus::Available,
             checked_at: now_secs(),
             prompted_at: 0,
@@ -534,6 +574,7 @@ mod tests {
         let now = now_secs();
         let cache = UpgradeCheckCache {
             checked_for: "1.0.0".to_owned(),
+            latest: "2.0.0".to_owned(),
             status: UpgradeCheckStatus::Available,
             checked_at: now,
             prompted_at: now,
@@ -547,6 +588,7 @@ mod tests {
         let stale = now - PROMPT_INTERVAL_SECS - 1;
         let cache = UpgradeCheckCache {
             checked_for: "1.0.0".to_owned(),
+            latest: "2.0.0".to_owned(),
             status: UpgradeCheckStatus::Available,
             checked_at: now,
             prompted_at: stale,
