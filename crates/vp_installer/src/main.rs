@@ -31,6 +31,39 @@ use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
 use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
+#[derive(Debug)]
+struct AbandonedSplitData {
+    data: AbsolutePathBuf,
+    empty_parent: Option<std::path::PathBuf>,
+}
+
+impl AbandonedSplitData {
+    async fn capture(data: AbsolutePathBuf) -> Option<Self> {
+        if tokio::fs::try_exists(&data).await.unwrap_or(true) {
+            return None;
+        }
+
+        let empty_parent = if let Some(parent) = data.as_path().parent()
+            && !tokio::fs::try_exists(parent).await.unwrap_or(true)
+        {
+            Some(parent.to_path_buf())
+        } else {
+            None
+        };
+        Some(Self { data, empty_parent })
+    }
+
+    async fn remove(self) {
+        let _ = tokio::fs::remove_dir_all(&self.data).await;
+        if let Some(parent) = self.empty_parent {
+            // Remove only the parent that did not exist before probing. A
+            // concurrent file or directory makes this non-recursive removal
+            // fail and preserves the parent.
+            let _ = tokio::fs::remove_dir(parent).await;
+        }
+    }
+}
+
 /// Restrict DLL search to system32 only to prevent DLL hijacking
 /// when the installer is run from a Downloads folder.
 #[cfg(windows)]
@@ -250,6 +283,11 @@ async fn do_install(
         // use split roots. Use that monolithic root when the payload cannot
         // report split category roots.
         let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
+        let split_data_cleanup = if legacy.data == dirs.data {
+            None
+        } else {
+            AbandonedSplitData::capture(dirs.data.clone()).await
+        };
         let abandoned_split_data = if legacy.data == dirs.data {
             // Pre-split and split-aware payloads use the same monolithic root
             // here. Skip the probe because it extracts and starts the payload.
@@ -273,10 +311,8 @@ async fn do_install(
                     legacy.data.as_path().display()
                 ));
             }
-            let split_data = dirs.data.clone();
-            let preexisted = tokio::fs::try_exists(&split_data).await.unwrap_or(true);
             dirs = legacy;
-            (!preexisted).then_some(split_data)
+            split_data_cleanup
         };
 
         let install_dir = &dirs.data;
@@ -300,9 +336,10 @@ async fn do_install(
 
         // The managed node and pnpm use paths from the process EnvConfig. The
         // installer pinned this configuration before the payload selected the
-        // monolithic root. Remove the split data root if this run created it.
+        // monolithic root. Remove the split data root and its empty application
+        // parent if this run created them.
         if let Some(split_data) = abandoned_split_data {
-            let _ = tokio::fs::remove_dir_all(&split_data).await;
+            split_data.remove().await;
         }
         result?;
     }
@@ -566,11 +603,13 @@ async fn download_with_progress(
     Ok(data)
 }
 
-/// Resolve install category roots from [`vp_shared::EnvConfig`].
+/// Validate installer directory overrides and resolve category roots from
+/// [`vp_shared::EnvConfig`].
 ///
 /// `--install-dir` is the only override that the installer owns. It pins
-/// `VP_HOME`, so EnvConfig produces a single-root layout. This function never
-/// reads directory environment variables (`VP_HOME`, `VP_*_DIR`, `XDG_*`).
+/// `VP_HOME`, so EnvConfig produces a single-root layout. Unlike runtime
+/// resolution, the installer rejects a relative `VP_HOME` and rejects an
+/// incomplete or relative `VP_*_DIR` group instead of ignoring it.
 fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
@@ -581,7 +620,39 @@ fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error
         // EnvConfig::with_vars in tests, which serializes env mutation).
         unsafe { std::env::set_var("VP_HOME", abs.as_path()) };
     }
+    validate_dir_env()?;
     Ok(vp_shared::EnvConfig::get().dirs.clone())
+}
+
+fn validate_dir_env() -> Result<(), Box<dyn std::error::Error>> {
+    use vp_shared::env_vars;
+
+    let env_path = |name| std::env::var_os(name).filter(|value| !value.is_empty());
+    if let Some(home) = env_path(env_vars::VP_HOME)
+        && !std::path::Path::new(&home).is_absolute()
+    {
+        return Err(format!("{} must be an absolute path.", env_vars::VP_HOME).into());
+    }
+
+    let split = [
+        (env_vars::VP_BIN_DIR, env_path(env_vars::VP_BIN_DIR)),
+        (env_vars::VP_DATA_DIR, env_path(env_vars::VP_DATA_DIR)),
+        (env_vars::VP_CACHE_DIR, env_path(env_vars::VP_CACHE_DIR)),
+    ];
+    let set_count = split.iter().filter(|(_, value)| value.is_some()).count();
+    if set_count != 0 && set_count != split.len() {
+        return Err(
+            "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+                .into(),
+        );
+    }
+    for (name, value) in split {
+        if value.is_some_and(|path| !std::path::Path::new(&path).is_absolute()) {
+            return Err(format!("{name} must be an absolute path.").into());
+        }
+    }
+
+    Ok(())
 }
 
 #[allow(clippy::print_stdout)]
@@ -889,5 +960,134 @@ mod tests {
                 assert!(std::env::var_os(env_vars::VP_HOME).is_none());
             },
         );
+    }
+
+    #[test]
+    fn incomplete_vp_dir_groups_are_rejected_without_creating_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("requested-bin");
+        let data = tmp.path().join("requested-data");
+        let cache = tmp.path().join("requested-cache");
+
+        with_clean_home(tmp.path(), || {
+            let default_dirs = EnvConfig::get().dirs.clone();
+            let default_roots = [
+                default_dirs.bin.as_path().to_path_buf(),
+                default_dirs.data.as_path().to_path_buf(),
+                default_dirs.cache.as_path().to_path_buf(),
+                default_dirs.config.as_path().to_path_buf(),
+                default_dirs.state.as_path().to_path_buf(),
+            ];
+            let default_existed = default_roots.each_ref().map(|root| root.exists());
+            let paths = [bin.as_os_str(), data.as_os_str(), cache.as_os_str()];
+
+            for mask in 1_u8..7 {
+                let values = std::array::from_fn::<_, 3, _>(|index| {
+                    ((mask & (1 << index)) != 0).then_some(paths[index])
+                });
+                EnvConfig::with_vars(
+                    [
+                        (env_vars::VP_HOME, None),
+                        (env_vars::VP_BIN_DIR, values[0]),
+                        (env_vars::VP_DATA_DIR, values[1]),
+                        (env_vars::VP_CACHE_DIR, values[2]),
+                    ],
+                    |_| {
+                        let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
+                        assert_eq!(
+                            error,
+                            "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
+                        );
+                    },
+                );
+            }
+
+            for requested in [&bin, &data, &cache] {
+                assert!(!requested.exists(), "validation created {}", requested.display());
+            }
+            for (root, existed) in default_roots.iter().zip(default_existed) {
+                if !existed {
+                    assert!(!root.exists(), "validation created default root {}", root.display());
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn relative_directory_overrides_are_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        with_clean_home(tmp.path(), || {
+            EnvConfig::with_vars(
+                [
+                    (env_vars::VP_HOME, Some(std::ffi::OsStr::new("relative-home"))),
+                    (env_vars::VP_BIN_DIR, None),
+                    (env_vars::VP_DATA_DIR, None),
+                    (env_vars::VP_CACHE_DIR, None),
+                ],
+                |_| {
+                    let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
+                    assert_eq!(error, "VP_HOME must be an absolute path.");
+                },
+            );
+
+            let absolute =
+                [tmp.path().join("bin"), tmp.path().join("data"), tmp.path().join("cache")];
+            let names = [env_vars::VP_BIN_DIR, env_vars::VP_DATA_DIR, env_vars::VP_CACHE_DIR];
+            for (relative_index, name) in names.into_iter().enumerate() {
+                let values = std::array::from_fn::<_, 3, _>(|index| {
+                    if index == relative_index {
+                        std::ffi::OsStr::new("relative-dir")
+                    } else {
+                        absolute[index].as_os_str()
+                    }
+                });
+                EnvConfig::with_vars(
+                    [
+                        (env_vars::VP_HOME, None),
+                        (env_vars::VP_BIN_DIR, Some(values[0])),
+                        (env_vars::VP_DATA_DIR, Some(values[1])),
+                        (env_vars::VP_CACHE_DIR, Some(values[2])),
+                    ],
+                    |_| {
+                        let error = prepare_dirs(&opts(None)).unwrap_err().to_string();
+                        assert_eq!(error, format!("{name} must be an absolute path."));
+                    },
+                );
+            }
+
+            for root in absolute {
+                assert!(!root.exists(), "validation created {}", root.display());
+            }
+            assert!(!tmp.path().join("relative-home").exists());
+            assert!(!tmp.path().join("relative-dir").exists());
+        });
+    }
+
+    #[tokio::test]
+    async fn abandoned_split_data_cleanup_removes_new_empty_parent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let parent = tmp.path().join("vite-plus");
+        let data = AbsolutePathBuf::new(parent.join("data")).unwrap();
+        let cleanup = AbandonedSplitData::capture(data.clone()).await.unwrap();
+
+        tokio::fs::create_dir_all(&data).await.unwrap();
+        cleanup.remove().await;
+
+        assert!(!parent.exists());
+    }
+
+    #[tokio::test]
+    async fn abandoned_split_data_cleanup_preserves_existing_parent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let parent = tmp.path().join("vite-plus");
+        std::fs::create_dir(&parent).unwrap();
+        let data = AbsolutePathBuf::new(parent.join("data")).unwrap();
+        let cleanup = AbandonedSplitData::capture(data.clone()).await.unwrap();
+
+        tokio::fs::create_dir_all(&data).await.unwrap();
+        cleanup.remove().await;
+
+        assert!(parent.is_dir());
+        assert!(!data.as_path().exists());
     }
 }

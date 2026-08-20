@@ -1225,6 +1225,89 @@ jobs:
         shell: bash
         run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
 
+      - name: vp-setup.exe rejects invalid directory overrides
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $false
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          $root = Join-Path $env:RUNNER_TEMP "vp-setup-invalid-dirs"
+          $defaultRoot = Join-Path $env:LOCALAPPDATA "vite-plus"
+          $defaultRootExisted = Test-Path $defaultRoot
+          $dirVars = @("VP_HOME", "VP_BIN_DIR", "VP_DATA_DIR", "VP_CACHE_DIR")
+          $togetherError = "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together"
+          $cases = @(
+            @{ Name = "bin"; Values = @{ VP_BIN_DIR = Join-Path $root "bin" }; Error = $togetherError }
+            @{ Name = "data"; Values = @{ VP_DATA_DIR = Join-Path $root "data" }; Error = $togetherError }
+            @{ Name = "cache"; Values = @{ VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
+            @{ Name = "bin-data"; Values = @{ VP_BIN_DIR = Join-Path $root "bin"; VP_DATA_DIR = Join-Path $root "data" }; Error = $togetherError }
+            @{ Name = "bin-cache"; Values = @{ VP_BIN_DIR = Join-Path $root "bin"; VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
+            @{ Name = "data-cache"; Values = @{ VP_DATA_DIR = Join-Path $root "data"; VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
+            @{ Name = "relative-home"; Values = @{ VP_HOME = "relative-home" }; Error = "VP_HOME must be an absolute path" }
+            @{ Name = "relative-split"; Values = @{ VP_BIN_DIR = "relative-bin"; VP_DATA_DIR = "relative-data"; VP_CACHE_DIR = "relative-cache" }; Error = "VP_BIN_DIR must be an absolute path" }
+          )
+
+          foreach ($case in $cases) {
+            foreach ($name in $dirVars) {
+              [Environment]::SetEnvironmentVariable($name, $null)
+            }
+            foreach ($entry in $case.Values.GetEnumerator()) {
+              [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+            }
+
+            $output = (& $installer --yes --quiet --no-node-manager --no-modify-path 2>&1) | Out-String
+            $exitCode = $LASTEXITCODE
+            Write-Host $output
+            if ($exitCode -ne 1) {
+              throw "$($case.Name) exited with $exitCode, expected 1"
+            }
+            if (-not $output.Contains($case.Error)) {
+              throw "$($case.Name) did not report '$($case.Error)'"
+            }
+            foreach ($value in $case.Values.Values) {
+              if ([System.IO.Path]::IsPathRooted($value) -and (Test-Path $value)) {
+                throw "$($case.Name) created requested root $value"
+              }
+            }
+            if (-not $defaultRootExisted -and (Test-Path $defaultRoot)) {
+              throw "$($case.Name) created default root $defaultRoot"
+            }
+          }
+
+      - name: vp-setup.exe pre-split fallback leaves no split roots
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          $profile = Join-Path $env:RUNNER_TEMP "vp-setup-0.2.9-profile"
+          $localSplitRoot = Join-Path $env:LOCALAPPDATA "vite-plus"
+          $roamingSplitRoot = Join-Path $env:APPDATA "vite-plus"
+          Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
+          foreach ($splitRoot in @($localSplitRoot, $roamingSplitRoot)) {
+            if (Test-Path $splitRoot) {
+              throw "fresh-install test requires an absent split root: $splitRoot"
+            }
+          }
+          New-Item -ItemType Directory -Force -Path $profile | Out-Null
+
+          Remove-Item Env:VP_HOME, Env:VP_BIN_DIR, Env:VP_DATA_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+          $env:USERPROFILE = $profile
+          $env:HOME = $profile
+          & $installer --yes --version 0.2.9 --no-node-manager --no-modify-path
+          if ($LASTEXITCODE -ne 0) {
+            throw "vp-setup.exe exited with $LASTEXITCODE"
+          }
+
+          $legacyRoot = Join-Path $profile ".vite-plus"
+          if (-not (Test-Path (Join-Path $legacyRoot "current/bin/vp.exe"))) {
+            throw "pre-split payload missing from $legacyRoot"
+          }
+          foreach ($splitRoot in @($localSplitRoot, $roamingSplitRoot)) {
+            if (Test-Path $splitRoot) {
+              throw "vp-setup.exe left split root $splitRoot"
+            }
+          }
+
       - name: Incomplete directory overrides are rejected in PowerShell
         shell: pwsh
         run: |
