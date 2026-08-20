@@ -63,15 +63,6 @@ impl VpDirsLayout {
             Self::Split => "split",
         }
     }
-
-    #[must_use]
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "single-root" => Some(Self::SingleRoot),
-            "split" => Some(Self::Split),
-            _ => None,
-        }
-    }
 }
 
 /// On-disk category roots for the vite-plus install.
@@ -124,19 +115,6 @@ impl VpDirs {
             state: resolution::state_dir(home)?,
             layout: resolution::layout(home),
         })
-    }
-
-    /// Construct category roots reported by another Vite+ binary.
-    #[must_use]
-    pub fn from_resolved_parts(
-        bin: AbsolutePathBuf,
-        data: AbsolutePathBuf,
-        cache: AbsolutePathBuf,
-        config: AbsolutePathBuf,
-        state: AbsolutePathBuf,
-        layout: VpDirsLayout,
-    ) -> Self {
-        Self { bin, data, cache, config, state, layout }
     }
 
     /// Return the resolution mode that selected these roots.

@@ -212,6 +212,11 @@ must set all three `VP_*_DIR` variables to absolute paths. The installer calls
 the shared `vp_shared::validate_vp_dir_env` check before it resolves or creates
 installation roots. The installer returns exit code 1 for invalid configuration.
 
+The installer supports version 0.3.0 and later, including 0.3.0 prereleases.
+It also supports preview versions that use the `0.0.0-commit.<sha>` format. It
+rejects older versions before it downloads the platform payload or creates an
+installation root.
+
 ## Installation Flow
 
 The installer replicates the same result as `install.ps1`, implemented in Rust via `vp_setup`.
@@ -463,11 +468,11 @@ test-vp-setup-exe:
     - uses: oxc-project/setup-rust@v1
     - name: Build vp-setup.exe
       run: cargo build --release -p vp_installer
-    - name: Install via vp-setup.exe (silent)
+    - name: Start local preview registry
+      # packs the current vp.exe and vp-shim.exe as 0.0.0-commit.<sha>
+    - name: Install local preview via vp-setup.exe (silent)
       shell: pwsh
-      run: ./target/release/vp-setup.exe
-      env:
-        VP_VERSION: alpha
+      run: ./target/release/vp-setup.exe --version $VP_SETUP_TEST_VERSION --registry $VP_SETUP_TEST_REGISTRY
     - name: Verify installation (pwsh/cmd/bash)
       # verifies from all three shells after a single install
 ```
@@ -475,9 +480,11 @@ test-vp-setup-exe:
 The workflow path filter covers the installer, shared directory resolution,
 setup helpers, shims, global CLI, install scripts, and the workflow file.
 
-The job checks invalid directory overrides and a pinned `0.2.9` install.
-Invalid overrides must leave requested and default roots absent. The old-version
-case must produce a working monolithic install and leave no empty split root.
+The job checks invalid directory overrides and the minimum supported version.
+Invalid overrides must leave requested and default roots absent. A request for
+version `0.2.9` must fail without creating an installation root. The successful
+install uses a local registry package with the `0.0.0-commit.<sha>` preview
+version format.
 
 ## Code Signing
 
@@ -585,7 +592,7 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 - Silent mode (`-y`) installation
 - Custom registry, custom install dir
 - Invalid `VP_HOME` and `VP_*_DIR` configuration
-- Pre-split fallback without an empty split root
+- Rejection of releases before 0.3.0
 - Upgrade over existing installation
 - Verify `vp --version` works after install
 - Verify PATH is modified correctly

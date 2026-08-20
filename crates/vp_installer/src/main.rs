@@ -31,39 +31,6 @@ use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
 use vp_shared::VpDirs;
 use vt_path::AbsolutePathBuf;
 
-#[derive(Debug)]
-struct AbandonedSplitData {
-    data: AbsolutePathBuf,
-    parent_to_remove: Option<std::path::PathBuf>,
-}
-
-impl AbandonedSplitData {
-    async fn capture(data: AbsolutePathBuf) -> Option<Self> {
-        if tokio::fs::try_exists(&data).await.unwrap_or(true) {
-            return None;
-        }
-
-        let parent_to_remove = if let Some(parent) = data.as_path().parent()
-            && !tokio::fs::try_exists(parent).await.unwrap_or(true)
-        {
-            Some(parent.to_path_buf())
-        } else {
-            None
-        };
-        Some(Self { data, parent_to_remove })
-    }
-
-    async fn remove(self) {
-        let _ = tokio::fs::remove_dir_all(&self.data).await;
-        if let Some(parent) = self.parent_to_remove {
-            // Remove only the parent that did not exist before probing. A
-            // concurrent file or directory makes this non-recursive removal
-            // fail and preserves the parent.
-            let _ = tokio::fs::remove_dir(parent).await;
-        }
-    }
-}
-
 /// Restrict DLL search to system32 only to prevent DLL hijacking
 /// when the installer is run from a Downloads folder.
 #[cfg(windows)]
@@ -185,10 +152,7 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     }
 
     let code = match do_install(&opts, &dirs).await {
-        Ok(effective_dirs) => {
-            // do_install uses the monolithic root for a pre-split payload.
-            // Report the directories that it used.
-            let (data_dir_display, bin_dir_display) = dir_displays(&effective_dirs);
+        Ok(()) => {
             print_success(&opts, &data_dir_display, &bin_dir_display);
             0
         }
@@ -207,14 +171,9 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     code
 }
 
-/// Install the resolved version and return the directories that the installer
-/// used. The installer uses the monolithic root for a pre-split payload.
+/// Install the resolved version.
 #[allow(clippy::print_stdout)]
-async fn do_install(
-    opts: &cli::Options,
-    dirs: &VpDirs,
-) -> Result<VpDirs, Box<dyn std::error::Error>> {
-    let mut dirs = dirs.clone();
+async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
     let platform_suffix = platform::detect_platform_suffix()?;
     if !opts.quiet {
         print_info(&format!("detected platform: {platform_suffix}"));
@@ -222,8 +181,7 @@ async fn do_install(
 
     // Check local version first to potentially skip HTTP requests.
     // This operation is read-only. Create the install root only after the
-    // downloaded payload confirms the layout. Thus, a pre-split fallback does
-    // not leave empty split directories.
+    // installer resolves and validates the target version.
     let current_version = install::read_current_version(&dirs.data).await;
 
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
@@ -235,6 +193,12 @@ async fn do_install(
     }
     let target_version =
         registry::resolve_version_string(version_or_tag, opts.registry.as_deref()).await?;
+    if !vp_setup::supports_split_layout(&target_version) {
+        return Err(format!(
+            "vite-plus {target_version} is not supported by vp-setup. Install vite-plus 0.3.0 or later."
+        )
+        .into());
+    }
 
     // Same version only if the binary is intact — a corrupted install needs a full reinstall.
     // `is_install_dir_for_version` also matches `{version}+force.*` dirs left by a forced
@@ -278,41 +242,6 @@ async fn do_install(
         }
         integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
-        // A pre-split release resolves every path from VP_HOME. Its default is
-        // ~/.vite-plus. Its environment setup, shims, and trampolines cannot
-        // use split roots. Use that monolithic root when the payload cannot
-        // report split category roots.
-        let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
-        let abandoned_split_data = if legacy.data == dirs.data {
-            // Pre-split and split-aware payloads use the same monolithic root
-            // here. Skip the probe because it extracts and starts the payload.
-            None
-        } else {
-            let split_data_cleanup = AbandonedSplitData::capture(dirs.data.clone()).await;
-            if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
-                // Use the payload's resolution, as install.sh and install.ps1 do.
-                // This keeps the written layout equal to the resolved layout.
-                dirs = VpDirs::from_resolved_parts(
-                    probed.bin,
-                    probed.data,
-                    probed.cache,
-                    probed.config,
-                    probed.state,
-                    probed.layout,
-                );
-                None
-            } else {
-                if !opts.quiet {
-                    print_info(&format!(
-                        "vite-plus {target_version} does not support the split directory layout. Vite+ will install it in {}.",
-                        legacy.data.as_path().display()
-                    ));
-                }
-                dirs = legacy;
-                split_data_cleanup
-            }
-        };
-
         let install_dir = &dirs.data;
         let version_dir = install_dir.join(&target_version);
         tokio::fs::create_dir_all(&version_dir).await?;
@@ -332,13 +261,6 @@ async fn do_install(
             let _ = tokio::fs::remove_dir_all(&version_dir).await;
         }
 
-        // The managed node and pnpm use paths from the process EnvConfig. The
-        // installer pinned this configuration before the payload selected the
-        // monolithic root. Remove the split data root and its empty application
-        // parent if this run created them.
-        if let Some(split_data) = abandoned_split_data {
-            split_data.remove().await;
-        }
         result?;
     }
 
@@ -371,7 +293,7 @@ async fn do_install(
         }
     }
 
-    Ok(dirs)
+    Ok(())
 }
 
 /// Auto-detect whether the Node.js version manager should be enabled.
@@ -489,6 +411,10 @@ async fn install_new_version(
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         return Err("Binary not found after extraction. The download may be corrupted.".into());
     }
+    #[cfg(windows)]
+    if !tokio::fs::try_exists(version_dir.join("bin").join("vp-shim.exe")).await.unwrap_or(false) {
+        return Err("Trampoline not found after extraction. The download may be corrupted.".into());
+    }
 
     install::generate_wrapper_package_json(version_dir, version).await?;
 
@@ -545,17 +471,8 @@ async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>
         let shim_src = dirs.data.join("current").join("bin").join("vp-shim.exe");
         let shim_dst = bin_dir.join("vp.exe");
 
-        // Prefer vp-shim.exe (trampoline); fall back to vp.exe for pre-trampoline releases
-        let src = if tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
-            shim_src
-        } else {
-            dirs.data.join("current").join("bin").join("vp.exe")
-        };
-
-        if tokio::fs::try_exists(&src).await.unwrap_or(false) {
-            replace_windows_exe(&src, &shim_dst, &bin_dir).await?;
-            dirs.write_shim_pointer("vp")?;
-        }
+        replace_windows_exe(&shim_src, &shim_dst, &bin_dir).await?;
+        dirs.write_shim_pointer("vp")?;
 
         // Best-effort cleanup of old shim files
         if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
@@ -967,33 +884,5 @@ mod tests {
                 }
             }
         });
-    }
-
-    #[tokio::test]
-    async fn abandoned_split_data_cleanup_removes_new_empty_parent() {
-        let tmp = tempfile::tempdir().unwrap();
-        let parent = tmp.path().join("vite-plus");
-        let data = AbsolutePathBuf::new(parent.join("data")).unwrap();
-        let cleanup = AbandonedSplitData::capture(data.clone()).await.unwrap();
-
-        tokio::fs::create_dir_all(&data).await.unwrap();
-        cleanup.remove().await;
-
-        assert!(!parent.exists());
-    }
-
-    #[tokio::test]
-    async fn abandoned_split_data_cleanup_preserves_existing_parent() {
-        let tmp = tempfile::tempdir().unwrap();
-        let parent = tmp.path().join("vite-plus");
-        std::fs::create_dir(&parent).unwrap();
-        let data = AbsolutePathBuf::new(parent.join("data")).unwrap();
-        let cleanup = AbandonedSplitData::capture(data.clone()).await.unwrap();
-
-        tokio::fs::create_dir_all(&data).await.unwrap();
-        cleanup.remove().await;
-
-        assert!(parent.is_dir());
-        assert!(!data.as_path().exists());
     }
 }

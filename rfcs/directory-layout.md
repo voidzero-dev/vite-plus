@@ -399,11 +399,11 @@ However, the installer still exits with status 0:
 - Shell startup sources an env script from a config dir the binary never writes.
 - The binary's own env setup builds a second, incomplete `~/.vite-plus` tree.
 
-**Detection.** Each installer downloads the platform payload before it selects
-the final layout. This includes `install.sh`, `install.ps1`, and `vp-setup`. The
-installer then runs the payload binary once with `VP_DUMP_DIRS=1`. The shell and
-PowerShell installers validate the split override group, but they do not
-resolve `VP_*_DIR`, XDG variables, platform defaults, or legacy installs:
+**Detection.** `install.sh` and `install.ps1` download the platform payload
+before they select the final layout. Each script then runs the payload binary
+once with `VP_DUMP_DIRS=1`. The scripts validate the split override group, but
+they do not resolve `VP_*_DIR`, XDG variables, platform defaults, or legacy
+installs:
 
 - A current split-aware binary prints the layout mode and one tab-separated line
   for each category root. The categories are `bin`, `data`, `cache`, `config`,
@@ -429,31 +429,22 @@ The `test-install-sh-layout` CI job tests this case. It creates a split install
 and a stray `~/.vite-plus` tree. It then checks that resolution and a reinstall
 remain split.
 
-**Probe failure.** A payload can fail to run because it is for the wrong platform
-or requires a missing VC++ runtime. The installer then selects the monolithic
-root. The dependency-install step reports the applicable error as before.
+**Probe failure.** A payload can fail to run because it is for the wrong
+platform or requires a missing VC++ runtime. The script installer then selects
+the monolithic root. The dependency-install step reports the applicable error
+as before.
 
 The monolithic root works for old and new releases. A split-aware binary keeps
 an existing `~/.vite-plus` install. Thus, an incorrect pre-split result still
 produces a compatible layout. An incorrect split-aware result is not possible.
 Only a binary that implements `VP_DUMP_DIRS` can print the roots.
 
-**`vp-setup` behavior.** `vp-setup` resolves `EnvConfig` when the process starts.
-Therefore, a pre-split fallback occurs during the install. After the probe,
-`do_install` changes to the monolithic mapping. It returns the effective
-directories for the success summary.
-
-The wrapper install uses managed Node.js and pnpm. These tools get their paths
-from the process-wide `EnvConfig`, which resolves before the fallback. Therefore,
-the tools first go into the unused split data root. `do_install` removes this
-root if the current run created it. Before the probe, `vp-setup` records
-whether the split data parent exists. After a legacy fallback, it removes that
-parent with a non-recursive operation if the current run created it and left it
-empty. Existing parents and parents with new contents remain in place.
-
-The interactive menu has one known limit. It shows the split directories before
-the download. For a pinned pre-split version, the user confirms those
-directories. The installer then uses the monolithic root and prints the notice.
+**`vp-setup` behavior.** `vp-setup` supports version 0.3.0 and later, including
+0.3.0 prereleases. It also supports preview versions that use the
+`0.0.0-commit.<sha>` format. The installer rejects an older target after version
+resolution and before it downloads the platform payload or creates an
+installation root. It uses the directories from `EnvConfig` without a payload
+probe or a monolithic fallback.
 
 **`vp upgrade`.** On a split install, `vp upgrade` rejects a target earlier than
 0.3.0 before the download. It tells the user to run `vp upgrade` to install the
@@ -472,10 +463,11 @@ absence of split roots, and commands that run through `PATH`.
 
 The `test-vp-setup-exe` job rejects each incomplete split-variable combination,
 a relative `VP_HOME`, and a relative complete split group. It checks that
-validation creates no requested or default roots. The pinned `0.2.9` case
-checks that the legacy install works and that no empty split root remains.
+validation creates no requested or default roots. It also checks that
+`vp-setup` rejects version `0.2.9` without creating an installation root. The
+successful install uses a local `0.0.0-commit.<sha>` preview package.
 
-This mechanism also keeps fresh default installs of `latest` functional before
+The script fallback keeps fresh default installs of `latest` functional before
 the 0.3.0 release becomes available.
 
 ### Global CLI → JS children

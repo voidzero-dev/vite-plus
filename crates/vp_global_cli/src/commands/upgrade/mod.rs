@@ -101,7 +101,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // binary. A monolithic install accepts each release. This includes a
     // VP_HOME pin and an existing ~/.vite-plus install.
     let legacy = vp_shared::VpDirs::legacy_single_root(&config.user_home);
-    if legacy.data != config.dirs.data && !supports_split_layout(&resolved.version) {
+    if legacy.data != config.dirs.data && !vp_setup::supports_split_layout(&resolved.version) {
         return Err(Error::Upgrade(
             format!(
                 "vite-plus {} does not support this split directory layout. \
@@ -279,36 +279,4 @@ async fn execute_rollback(
     }
 
     Ok(ExitStatus::default())
-}
-
-/// Return `true` if `version` supports the split layout.
-///
-/// Version 0.3.0 and later support it, including prereleases. Preview builds
-/// (`0.0.0-commit.<sha>`) also support it because they track the current branch.
-fn supports_split_layout(version: &str) -> bool {
-    let Ok(version) = node_semver::Version::parse(version) else {
-        return false;
-    };
-    if version.major == 0 && version.minor == 0 && version.patch == 0 {
-        return !version.pre_release.is_empty() || !version.build.is_empty();
-    }
-    version.major > 0 || version.minor >= 3
-}
-
-#[cfg(test)]
-mod tests {
-    use super::supports_split_layout;
-
-    #[test]
-    fn split_layout_support_by_version() {
-        assert!(supports_split_layout("0.3.0"));
-        assert!(supports_split_layout("0.3.0-alpha.1"));
-        assert!(supports_split_layout("0.4.2"));
-        assert!(supports_split_layout("1.0.0"));
-        assert!(supports_split_layout("0.0.0-commit.0123abc"));
-        assert!(!supports_split_layout("0.2.9"));
-        assert!(!supports_split_layout("0.2.0"));
-        assert!(!supports_split_layout("0.1.14-alpha.1"));
-        assert!(!supports_split_layout("not-a-version"));
-    }
 }

@@ -9,6 +9,7 @@ on:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - 'packages/tools/src/install-global-cli.ts'
+      - 'packages/tools/src/local-npm-registry.ts'
       - 'crates/vp_installer/**'
       - 'crates/vp_trampoline/**'
       - 'crates/vp_global_cli/**'
@@ -1278,40 +1279,33 @@ jobs:
           # exit code after the assertions so the PowerShell step succeeds.
           $global:LASTEXITCODE = 0
 
-      - name: vp-setup.exe pre-split fallback leaves no split roots
+      - name: vp-setup.exe rejects releases before 0.3.0
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $false
           $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
-          $profile = Join-Path $env:RUNNER_TEMP "vp-setup-0.2.9-profile"
-          $localSplitRoot = Join-Path $env:LOCALAPPDATA "vite-plus"
-          $roamingSplitRoot = Join-Path $env:APPDATA "vite-plus"
-          $splitRoots = @($localSplitRoot, $roamingSplitRoot)
-          Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
-          foreach ($splitRoot in $splitRoots) {
-            if (Test-Path $splitRoot) {
-              throw "fresh-install test requires an absent split root: $splitRoot"
-            }
-          }
-          New-Item -ItemType Directory -Force -Path $profile | Out-Null
+          $installRoot = Join-Path $env:RUNNER_TEMP "vp-setup-unsupported-version"
+          Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
+          $env:VP_HOME = $installRoot
+          Remove-Item Env:VP_BIN_DIR, Env:VP_DATA_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
 
-          Remove-Item Env:VP_HOME, Env:VP_BIN_DIR, Env:VP_DATA_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
-          $env:USERPROFILE = $profile
-          $env:HOME = $profile
-          & $installer --yes --version 0.2.9 --no-node-manager --no-modify-path
-          if ($LASTEXITCODE -ne 0) {
-            throw "vp-setup.exe exited with $LASTEXITCODE"
+          $output = (& $installer --yes --quiet --version 0.2.9 --no-node-manager --no-modify-path 2>&1) | Out-String
+          $exitCode = $LASTEXITCODE
+          Write-Host $output
+          if ($exitCode -ne 1) {
+            throw "vp-setup.exe exited with $exitCode, expected 1"
           }
-
-          $legacyRoot = Join-Path $profile ".vite-plus"
-          if (-not (Test-Path (Join-Path $legacyRoot "current/bin/vp.exe"))) {
-            throw "pre-split payload missing from $legacyRoot"
+          if (-not $output.Contains("Install vite-plus 0.3.0 or later")) {
+            throw "vp-setup.exe did not report its minimum supported version"
           }
-          foreach ($splitRoot in $splitRoots) {
-            if (Test-Path $splitRoot) {
-              throw "vp-setup.exe left split root $splitRoot"
-            }
+          if ($output -match "(?i)preview") {
+            throw "vp-setup.exe exposed preview-build guidance"
           }
+          if (Test-Path $installRoot) {
+            throw "vp-setup.exe created unsupported-version root $installRoot"
+          }
+          $global:LASTEXITCODE = 0
 
       - name: Incomplete directory overrides are rejected in PowerShell
         shell: pwsh
@@ -1590,9 +1584,58 @@ jobs:
           }
           & $vp --version
 
-      - name: Install via vp-setup.exe (silent)
+      - name: Start local preview registry for vp-setup.exe
+        shell: bash
+        run: |
+          test_version="0.0.0-commit.${GITHUB_SHA}"
+          registry_root="$RUNNER_TEMP/vp-setup-local-registry"
+          packages_dir="$registry_root/packages"
+          main_dir="$registry_root/vite-plus"
+          platform_dir="$registry_root/vite-plus-cli-win32-x64-msvc"
+          rm -rf "$registry_root"
+          mkdir -p "$packages_dir" "$main_dir" "$platform_dir"
+
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const [dir, version] = process.argv.slice(1);
+            fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "vite-plus", version }));
+          ' "$main_dir" "$test_version"
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const [dir, version] = process.argv.slice(1);
+            const manifest = {
+              name: "@voidzero-dev/vite-plus-cli-win32-x64-msvc",
+              version,
+              files: ["vp.exe", "vp-shim.exe"],
+            };
+            fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(manifest));
+          ' "$platform_dir" "$test_version"
+          cp "$DEV_DRIVE/target/release/vp.exe" "$DEV_DRIVE/target/release/vp-shim.exe" "$platform_dir/"
+          npm pack "$main_dir" --pack-destination "$packages_dir"
+          npm pack "$platform_dir" --pack-destination "$packages_dir"
+
+          registry_log="$registry_root/registry.out"
+          node "$GITHUB_WORKSPACE/packages/tools/src/local-npm-registry.ts" --serve --packages-dir "$packages_dir" > "$registry_log" 2>&1 &
+          server_pid=$!
+          until grep -q '"registry"' "$registry_log" 2>/dev/null; do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat "$registry_log"
+              exit 1
+            fi
+            sleep 0.2
+          done
+          handshake=$(grep -m1 '"registry"' "$registry_log")
+          registry=$(echo "$handshake" | node -e 'process.stdin.on("data", data => process.stdout.write(JSON.parse(data).registry))')
+          echo "VP_SETUP_TEST_REGISTRY=$registry" >> "$GITHUB_ENV"
+          echo "VP_SETUP_TEST_VERSION=$test_version" >> "$GITHUB_ENV"
+
+      - name: Install local preview via vp-setup.exe (silent)
         shell: pwsh
-        run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
+        run: |
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          & $installer --version $env:VP_SETUP_TEST_VERSION --registry $env:VP_SETUP_TEST_REGISTRY
 
       - name: Set PATH
         shell: bash
