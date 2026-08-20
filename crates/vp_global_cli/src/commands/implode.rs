@@ -437,7 +437,10 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf, cleanup_source: &Path) -> Re
         "Scheduled removal of {} (will complete shortly)",
         home_dir.as_path().display()
     ));
-    output::note(&vt_str::format!("If cleanup cannot complete, see {}", failure_log.display()));
+    output::note(&vt_str::format!(
+        "Cleanup failures will be recorded at {}",
+        failure_log.display()
+    ));
     Ok(())
 }
 
@@ -531,6 +534,12 @@ fn parse_deferred_delete_args(
 }
 
 /// Run the private native cleanup mode before normal CLI initialization.
+///
+/// Windows access control is the authorization boundary: another process that
+/// runs as the same user can already delete any accessible tree. To prevent
+/// accidental deletion through this private mode, the parser accepts only an
+/// absolute path with the exact `removing-<parent_pid>-<nonce>` suffix that the
+/// parent creates before it starts the helper. It also rejects extra arguments.
 #[cfg(windows)]
 pub(crate) fn maybe_run_deferred_delete_helper(
     mut process_args: impl Iterator<Item = std::ffi::OsString>,
