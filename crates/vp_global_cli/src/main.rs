@@ -527,6 +527,7 @@ async fn main() -> ExitCode {
         },
     };
 
+    // A command never consumes a notice produced by the helper it just spawned.
     if should_run_upgrade_check && !spawned_upgrade_check {
         upgrade_check::display_cached_upgrade_notice();
     }

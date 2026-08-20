@@ -97,10 +97,10 @@ Foreground `vp` starts
        │
        └── run the requested command without waiting for registry I/O
                   │
-                  └── after completion, read cache and optionally print notice
+                  └── if no helper was launched, optionally print a cached notice
 ```
 
-The foreground process performs only argument and cache checks before launching the helper, avoiding a new process while the cache is fresh. The helper is placed in a separate process group with standard streams disconnected, so it can finish after the foreground command and its shell prompt return. If the check is still running when the command finishes, the notice can appear after a later command.
+The foreground process performs only argument and cache checks before launching the helper, avoiding a new process while the cache is fresh. The helper is placed in a separate process group with standard streams disconnected, so it can finish after the foreground command and its shell prompt return. A command that launches a helper does not consume its result; a later eligible command can display the notice.
 
 ### Cache File
 
@@ -207,7 +207,7 @@ if options.background_check {
 
 `--background-check` is hidden because it is an implementation detail of the foreground launcher. The foreground `vp` process configures and spawns this command as a detached child before running the requested command. The hidden command repeats the cheap policy and cache checks to close races between concurrent foreground invocations.
 
-Foreground commands call `display_cached_upgrade_notice` after completing. This path performs no network work and only acquires the lock when an available, unprompted cached result exists.
+Foreground commands that did not launch a helper call `display_cached_upgrade_notice` after completing. This path performs no network work and only acquires the lock when an available, unprompted cached result exists.
 
 ## Design Decisions
 

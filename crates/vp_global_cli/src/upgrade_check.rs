@@ -71,18 +71,6 @@ impl UpgradeCheckLock {
 
         persist_cache(&self.cache_dir, cache)
     }
-
-    fn publish_completed_cache(self, cache: &UpgradeCheckCache) -> std::io::Result<()> {
-        if !self.is_current() {
-            return Err(std::io::ErrorKind::NotFound.into());
-        }
-
-        // The fresh pending cache prevents another worker from starting while
-        // the completed state is published. Unlocking first ensures readers
-        // never observe an available notice that they cannot claim yet.
-        self._file.unlock()?;
-        persist_cache(&self.cache_dir, cache)
-    }
 }
 
 fn cache_path(cache_dir: &vt_path::AbsolutePath) -> vt_path::AbsolutePathBuf {
@@ -189,11 +177,6 @@ async fn resolve_version_string() -> Option<String> {
     registry::resolve_version_string("latest", None).await.ok()
 }
 
-/// Spawn a detached upgrade check when the cache is stale.
-///
-/// Returns `true` when a helper was spawned. The foreground command uses this
-/// to avoid consuming a notice produced by its own background check before the
-/// user has had a chance to run another command.
 pub(crate) fn spawn_background_check_if_needed() -> bool {
     let config = vp_shared::EnvConfig::get();
     let cache_dir = &config.dirs.cache;
@@ -213,13 +196,12 @@ pub(crate) fn spawn_background_check_if_needed() -> bool {
         .stderr(Stdio::null());
     configure_background_process(&mut command);
 
-    if let Ok(mut child) = command.spawn() {
-        // A long-running foreground command must still reap a helper that exits first.
-        let _ = std::thread::spawn(move || child.wait());
-        true
-    } else {
-        false
-    }
+    let Ok(mut child) = command.spawn() else {
+        return false;
+    };
+    // A long-running foreground command must still reap a helper that exits first.
+    let _ = std::thread::spawn(move || child.wait());
+    true
 }
 
 fn configure_background_process(command: &mut Command) {
@@ -298,7 +280,7 @@ pub async fn run_background_check() {
         },
         None => UpgradeCheckCache { checked_at: now_secs(), ..pending },
     };
-    let _ = lock.publish_completed_cache(&completed);
+    let _ = lock.write_cache(&completed);
 }
 
 /// Print a one-line upgrade notice from cache and record the prompt time.
