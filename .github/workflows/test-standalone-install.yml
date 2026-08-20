@@ -237,7 +237,7 @@ jobs:
           OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
           test "$RESULT" -eq 3
           echo "$OUTPUT" | grep -F "trace"
-          echo "$OUTPUT" | grep -F "Vite+ cannot write"
+          echo "$OUTPUT" | grep -F "permission denied"
 
           CI=false
           unset VP_LOG
@@ -245,7 +245,7 @@ jobs:
           OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
           test "$RESULT" -eq 3
           echo "$OUTPUT" | grep -F "warn"
-          echo "$OUTPUT" | grep -F "Vite+ cannot write"
+          echo "$OUTPUT" | grep -F "permission denied"
 
       - name: Incomplete directory overrides are rejected
         run: |
@@ -563,7 +563,7 @@ jobs:
           # CI gets PATH from the runner environment.
           # VP_LOG=trace shows shell file errors.
           # Normal output does not show these errors.
-          if echo "$output" | grep -Eqi "Vite[+] cannot (write|create)|Shell configuration:|Some shells still need manual setup"; then
+          if echo "$output" | grep -Eqi "permission denied|Shell configuration:|Some shells still need manual setup"; then
             echo "Installer printed shell configuration details in CI"
             exit 1
           fi
