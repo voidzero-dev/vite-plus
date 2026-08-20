@@ -1759,74 +1759,84 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
         let bin_dir = home.join("bin");
-        let _env_guard = vp_shared::EnvConfig::test_guard(
-            vp_shared::EnvConfig::for_test_with_home(home.as_path()),
-        );
-        #[cfg(windows)]
-        let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                #[cfg(windows)]
+                let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
 
-        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
-        let mut package_dirs = Vec::new();
-        for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
-            let mut metadata = PackageMetadata::new(
-                package_name.to_string(),
-                "1.0.0".to_string(),
-                "22.0.0".to_string(),
-                None,
-                vec![package_name.to_string()],
-                Default::default(),
-                "npm".to_string(),
-            );
-            metadata.install_id = "123e4567-e89b-42d3-a456-426614174000".to_string();
-            metadata.save().await.unwrap();
-            let package_dir = metadata.installation_dir().unwrap();
-            tokio::fs::create_dir_all(&package_dir).await.unwrap();
-            package_dirs.push(package_dir);
+                tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+                let mut package_dirs = Vec::new();
+                for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
+                    let mut metadata = PackageMetadata::new(
+                        package_name.to_string(),
+                        "1.0.0".to_string(),
+                        "22.0.0".to_string(),
+                        None,
+                        vec![package_name.to_string()],
+                        Default::default(),
+                        "npm".to_string(),
+                    );
+                    metadata.install_id = "123e4567-e89b-42d3-a456-426614174000".to_string();
+                    metadata.save().await.unwrap();
+                    let package_dir = metadata.installation_dir().unwrap();
+                    tokio::fs::create_dir_all(&package_dir).await.unwrap();
+                    package_dirs.push(package_dir);
 
-            BinConfig::new(
-                package_name.to_string(),
-                package_name.to_string(),
-                "1.0.0".to_string(),
-                "22.0.0".to_string(),
-            )
-            .save()
-            .await
-            .unwrap();
-        }
+                    BinConfig::new(
+                        package_name.to_string(),
+                        package_name.to_string(),
+                        "1.0.0".to_string(),
+                        "22.0.0".to_string(),
+                    )
+                    .save()
+                    .await
+                    .unwrap();
+                }
 
-        #[cfg(unix)]
-        tokio::fs::write(bin_dir.join("corepack"), "legacy corepack shim").await.unwrap();
-        #[cfg(windows)]
-        for suffix in [".exe", ".cmd", ".ps1", ""] {
-            tokio::fs::write(bin_dir.join(format!("corepack{suffix}")), "legacy corepack shim")
-                .await
-                .unwrap();
-        }
+                #[cfg(unix)]
+                tokio::fs::write(bin_dir.join("corepack"), "legacy corepack shim").await.unwrap();
+                #[cfg(windows)]
+                for suffix in [".exe", ".cmd", ".ps1", ""] {
+                    tokio::fs::write(
+                        bin_dir.join(format!("corepack{suffix}")),
+                        "legacy corepack shim",
+                    )
+                    .await
+                    .unwrap();
+                }
 
-        let status = execute(true, false).await.unwrap();
+                let status = execute(true, false).await.unwrap();
 
-        assert!(status.success());
-        for (package_name, package_dir) in LEGACY_PACKAGE_MANAGER_PACKAGES.iter().zip(package_dirs)
-        {
-            assert!(PackageMetadata::load(package_name).await.unwrap().is_none());
-            assert!(BinConfig::load(package_name).await.unwrap().is_none());
-            assert!(!package_dir.as_path().exists());
-        }
-        for tool in ["pnpm", "yarn", "bun"] {
-            assert!(
-                std::fs::symlink_metadata(bin_dir.join(shim_filename(tool)).as_path()).is_ok(),
-                "{tool} should be recreated as a default shim"
-            );
-        }
-        let corepack_suffixes: &[&str] =
-            if cfg!(windows) { &[".exe", ".cmd", ".ps1", ""] } else { &[""] };
-        for suffix in corepack_suffixes {
-            assert!(
-                std::fs::symlink_metadata(bin_dir.join(format!("corepack{suffix}")).as_path())
-                    .is_err(),
-                "legacy corepack shim should be removed"
-            );
-        }
+                assert!(status.success());
+                for (package_name, package_dir) in
+                    LEGACY_PACKAGE_MANAGER_PACKAGES.iter().zip(package_dirs)
+                {
+                    assert!(PackageMetadata::load(package_name).await.unwrap().is_none());
+                    assert!(BinConfig::load(package_name).await.unwrap().is_none());
+                    assert!(!package_dir.as_path().exists());
+                }
+                for tool in ["pnpm", "yarn", "bun"] {
+                    assert!(
+                        std::fs::symlink_metadata(bin_dir.join(shim_filename(tool)).as_path())
+                            .is_ok(),
+                        "{tool} should be recreated as a default shim"
+                    );
+                }
+                let corepack_suffixes: &[&str] =
+                    if cfg!(windows) { &[".exe", ".cmd", ".ps1", ""] } else { &[""] };
+                for suffix in corepack_suffixes {
+                    assert!(
+                        std::fs::symlink_metadata(
+                            bin_dir.join(format!("corepack{suffix}")).as_path(),
+                        )
+                        .is_err(),
+                        "legacy corepack shim should be removed"
+                    );
+                }
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
