@@ -1282,8 +1282,9 @@ jobs:
           $profile = Join-Path $env:RUNNER_TEMP "vp-setup-0.2.9-profile"
           $localSplitRoot = Join-Path $env:LOCALAPPDATA "vite-plus"
           $roamingSplitRoot = Join-Path $env:APPDATA "vite-plus"
+          $splitRoots = @($localSplitRoot, $roamingSplitRoot)
           Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
-          foreach ($splitRoot in @($localSplitRoot, $roamingSplitRoot)) {
+          foreach ($splitRoot in $splitRoots) {
             if (Test-Path $splitRoot) {
               throw "fresh-install test requires an absent split root: $splitRoot"
             }
@@ -1302,7 +1303,7 @@ jobs:
           if (-not (Test-Path (Join-Path $legacyRoot "current/bin/vp.exe"))) {
             throw "pre-split payload missing from $legacyRoot"
           }
-          foreach ($splitRoot in @($localSplitRoot, $roamingSplitRoot)) {
+          foreach ($splitRoot in $splitRoots) {
             if (Test-Path $splitRoot) {
               throw "vp-setup.exe left split root $splitRoot"
             }

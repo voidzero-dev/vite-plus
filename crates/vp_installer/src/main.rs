@@ -34,7 +34,7 @@ use vt_path::AbsolutePathBuf;
 #[derive(Debug)]
 struct AbandonedSplitData {
     data: AbsolutePathBuf,
-    empty_parent: Option<std::path::PathBuf>,
+    parent_to_remove: Option<std::path::PathBuf>,
 }
 
 impl AbandonedSplitData {
@@ -43,19 +43,19 @@ impl AbandonedSplitData {
             return None;
         }
 
-        let empty_parent = if let Some(parent) = data.as_path().parent()
+        let parent_to_remove = if let Some(parent) = data.as_path().parent()
             && !tokio::fs::try_exists(parent).await.unwrap_or(true)
         {
             Some(parent.to_path_buf())
         } else {
             None
         };
-        Some(Self { data, empty_parent })
+        Some(Self { data, parent_to_remove })
     }
 
     async fn remove(self) {
         let _ = tokio::fs::remove_dir_all(&self.data).await;
-        if let Some(parent) = self.empty_parent {
+        if let Some(parent) = self.parent_to_remove {
             // Remove only the parent that did not exist before probing. A
             // concurrent file or directory makes this non-recursive removal
             // fail and preserves the parent.
@@ -283,36 +283,34 @@ async fn do_install(
         // use split roots. Use that monolithic root when the payload cannot
         // report split category roots.
         let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
-        let split_data_cleanup = if legacy.data == dirs.data {
-            None
-        } else {
-            AbandonedSplitData::capture(dirs.data.clone()).await
-        };
         let abandoned_split_data = if legacy.data == dirs.data {
             // Pre-split and split-aware payloads use the same monolithic root
             // here. Skip the probe because it extracts and starts the payload.
             None
-        } else if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
-            // Use the payload's resolution, as install.sh and install.ps1 do.
-            // This keeps the written layout equal to the resolved layout.
-            dirs = VpDirs::from_resolved_parts(
-                probed.bin,
-                probed.data,
-                probed.cache,
-                probed.config,
-                probed.state,
-                probed.layout,
-            );
-            None
         } else {
-            if !opts.quiet {
-                print_info(&format!(
-                    "vite-plus {target_version} does not support the split directory layout. Vite+ will install it in {}.",
-                    legacy.data.as_path().display()
-                ));
+            let split_data_cleanup = AbandonedSplitData::capture(dirs.data.clone()).await;
+            if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
+                // Use the payload's resolution, as install.sh and install.ps1 do.
+                // This keeps the written layout equal to the resolved layout.
+                dirs = VpDirs::from_resolved_parts(
+                    probed.bin,
+                    probed.data,
+                    probed.cache,
+                    probed.config,
+                    probed.state,
+                    probed.layout,
+                );
+                None
+            } else {
+                if !opts.quiet {
+                    print_info(&format!(
+                        "vite-plus {target_version} does not support the split directory layout. Vite+ will install it in {}.",
+                        legacy.data.as_path().display()
+                    ));
+                }
+                dirs = legacy;
+                split_data_cleanup
             }
-            dirs = legacy;
-            split_data_cleanup
         };
 
         let install_dir = &dirs.data;
@@ -634,19 +632,19 @@ fn validate_dir_env() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("{} must be an absolute path.", env_vars::VP_HOME).into());
     }
 
-    let split = [
+    let split_dirs = [
         (env_vars::VP_BIN_DIR, env_path(env_vars::VP_BIN_DIR)),
         (env_vars::VP_DATA_DIR, env_path(env_vars::VP_DATA_DIR)),
         (env_vars::VP_CACHE_DIR, env_path(env_vars::VP_CACHE_DIR)),
     ];
-    let set_count = split.iter().filter(|(_, value)| value.is_some()).count();
-    if set_count != 0 && set_count != split.len() {
+    let configured_count = split_dirs.iter().filter(|(_, value)| value.is_some()).count();
+    if configured_count != 0 && configured_count != split_dirs.len() {
         return Err(
             "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
                 .into(),
         );
     }
-    for (name, value) in split {
+    for (name, value) in split_dirs {
         if value.is_some_and(|path| !std::path::Path::new(&path).is_absolute()) {
             return Err(format!("{name} must be an absolute path.").into());
         }
@@ -980,11 +978,16 @@ mod tests {
             ];
             let default_existed = default_roots.each_ref().map(|root| root.exists());
             let paths = [bin.as_os_str(), data.as_os_str(), cache.as_os_str()];
+            let cases = [
+                [Some(paths[0]), None, None],
+                [None, Some(paths[1]), None],
+                [None, None, Some(paths[2])],
+                [Some(paths[0]), Some(paths[1]), None],
+                [Some(paths[0]), None, Some(paths[2])],
+                [None, Some(paths[1]), Some(paths[2])],
+            ];
 
-            for mask in 1_u8..7 {
-                let values = std::array::from_fn::<_, 3, _>(|index| {
-                    ((mask & (1 << index)) != 0).then_some(paths[index])
-                });
+            for values in cases {
                 EnvConfig::with_vars(
                     [
                         (env_vars::VP_HOME, None),
@@ -1030,17 +1033,16 @@ mod tests {
                 },
             );
 
-            let absolute =
-                [tmp.path().join("bin"), tmp.path().join("data"), tmp.path().join("cache")];
-            let names = [env_vars::VP_BIN_DIR, env_vars::VP_DATA_DIR, env_vars::VP_CACHE_DIR];
-            for (relative_index, name) in names.into_iter().enumerate() {
-                let values = std::array::from_fn::<_, 3, _>(|index| {
-                    if index == relative_index {
-                        std::ffi::OsStr::new("relative-dir")
-                    } else {
-                        absolute[index].as_os_str()
-                    }
-                });
+            let bin = tmp.path().join("bin");
+            let data = tmp.path().join("data");
+            let cache = tmp.path().join("cache");
+            let relative = std::ffi::OsStr::new("relative-dir");
+            let cases = [
+                (env_vars::VP_BIN_DIR, [relative, data.as_os_str(), cache.as_os_str()]),
+                (env_vars::VP_DATA_DIR, [bin.as_os_str(), relative, cache.as_os_str()]),
+                (env_vars::VP_CACHE_DIR, [bin.as_os_str(), data.as_os_str(), relative]),
+            ];
+            for (name, values) in cases {
                 EnvConfig::with_vars(
                     [
                         (env_vars::VP_HOME, None),
@@ -1055,7 +1057,7 @@ mod tests {
                 );
             }
 
-            for root in absolute {
+            for root in [&bin, &data, &cache] {
                 assert!(!root.exists(), "validation created {}", root.display());
             }
             assert!(!tmp.path().join("relative-home").exists());
