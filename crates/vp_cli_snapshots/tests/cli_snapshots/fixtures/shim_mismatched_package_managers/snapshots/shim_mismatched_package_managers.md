@@ -8,3 +8,4 @@ Yarn resolves independently of the project's pnpm declaration
 ## `bun --version`
 
 Bun resolves independently of the project's pnpm declaration
+

@@ -1857,7 +1857,7 @@ mod tests {
             test_env_vars(home.as_path(), temp_dir.path()),
             |_| async {
                 #[cfg(windows)]
-                let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
+                let trampoline = write_fake_trampoline(temp_dir.path());
 
                 tokio::fs::create_dir_all(&bin_dir).await.unwrap();
                 let mut package_dirs = Vec::new();
@@ -1900,7 +1900,14 @@ mod tests {
                     .unwrap();
                 }
 
+                #[cfg(not(windows))]
                 let status = execute(true, false).await.unwrap();
+                #[cfg(windows)]
+                let status = vp_shared::EnvConfig::with_vars_async(
+                    [(vp_shared::env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str())],
+                    |_| async { execute(true, false).await.unwrap() },
+                )
+                .await;
 
                 assert!(status.success());
                 for (package_name, package_dir) in
