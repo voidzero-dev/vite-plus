@@ -2,6 +2,7 @@ use std::{
     io::Write as _,
     process::{Command, Stdio},
 };
+
 use vt_path::AbsolutePathBuf;
 
 fn installer_command() -> Command {

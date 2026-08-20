@@ -8559,8 +8559,8 @@ name = "vp_installer"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "console",
  "indicatif",
- "owo-colors",
  "tempfile",
  "tokio",
  "vp_pm_cli",
