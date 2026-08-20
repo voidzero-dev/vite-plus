@@ -1631,11 +1631,64 @@ jobs:
           echo "VP_SETUP_TEST_REGISTRY=$registry" >> "$GITHUB_ENV"
           echo "VP_SETUP_TEST_VERSION=$test_version" >> "$GITHUB_ENV"
 
-      - name: Install local preview via vp-setup.exe (silent)
+      - name: Create a dangling current junction
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $current = Join-Path $env:VP_HOME "current"
+          $removedTarget = Join-Path $env:RUNNER_TEMP "vp-setup-removed-target"
+          Remove-Item -Recurse -Force $env:VP_HOME, $removedTarget -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:VP_HOME, $removedTarget | Out-Null
+
+          & cmd.exe /d /c "mklink /J `"$current`" `"$removedTarget`""
+          if ($LASTEXITCODE -ne 0) {
+            throw "cmd.exe could not create the test junction"
+          }
+          Remove-Item -Recurse -Force $removedTarget
+          & fsutil.exe reparsepoint query $current | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "the dangling current entry is not a reparse point"
+          }
+
+      - name: Repair the dangling junction without ANSI output
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
           $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
-          & $installer --version $env:VP_SETUP_TEST_VERSION --registry $env:VP_SETUP_TEST_REGISTRY
+          $stdout = Join-Path $env:RUNNER_TEMP "vp-setup-no-color.stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "vp-setup-no-color.stderr.txt"
+          $env:NO_COLOR = "1"
+          try {
+            $process = Start-Process -FilePath $installer `
+              -ArgumentList @(
+                "--yes",
+                "--version", $env:VP_SETUP_TEST_VERSION,
+                "--registry", $env:VP_SETUP_TEST_REGISTRY,
+                "--no-node-manager",
+                "--no-modify-path"
+              ) `
+              -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
+              -Wait -PassThru -NoNewWindow
+          } finally {
+            Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue
+          }
+
+          Get-Content -Raw $stdout | Write-Host
+          Get-Content -Raw $stderr | Write-Host
+          if ($process.ExitCode -ne 0) {
+            throw "vp-setup.exe exited with $($process.ExitCode)"
+          }
+          foreach ($path in @($stdout, $stderr)) {
+            if ([System.IO.File]::ReadAllBytes($path) -contains [byte]0x1b) {
+              throw "$path contains an ANSI escape"
+            }
+          }
+          if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/vp.exe"))) {
+            throw "vp-setup.exe did not repair the dangling current junction"
+          }
+          if (-not (Test-Path (Join-Path $env:VP_HOME "bin/vp.exe"))) {
+            throw "vp-setup.exe did not create the global vp.exe"
+          }
 
       - name: Set PATH
         shell: bash

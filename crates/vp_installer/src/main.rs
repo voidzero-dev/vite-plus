@@ -25,7 +25,7 @@ mod windows_path;
 use std::io::{self, Write};
 
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Stream, Style};
 use vp_pm_cli::HttpClient;
 use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
 use vp_shared::VpDirs;
@@ -567,28 +567,47 @@ fn show_interactive_menu(opts: &mut cli::Options, data_dir: &str, bin_dir: &str)
         let version = opts.version.as_deref().unwrap_or(&opts.tag);
 
         println!();
-        println!("  {}", "Welcome to Vite+ Installer!".bold());
+        println!(
+            "  {}",
+            "Welcome to Vite+ Installer!".if_supports_color(Stream::Stdout, |text| text.bold())
+        );
         println!();
-        println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
+        println!(
+            "  This will install the {} CLI and monorepo task runner.",
+            "vp".if_supports_color(Stream::Stdout, |text| text.cyan())
+        );
         println!();
-        println!("    Data directory:    {}", data_dir.cyan());
-        println!("    Bin directory:     {}", bin_dir.cyan());
+        println!(
+            "    Data directory:    {}",
+            data_dir.if_supports_color(Stream::Stdout, |text| text.cyan())
+        );
+        println!(
+            "    Bin directory:     {}",
+            bin_dir.if_supports_color(Stream::Stdout, |text| text.cyan())
+        );
+        let path_modification = if opts.no_modify_path {
+            "no".to_string()
+        } else {
+            format!("{bin_dir} \u{2192} User PATH")
+        };
         println!(
             "    PATH modification: {}",
-            if opts.no_modify_path {
-                "no".to_string()
-            } else {
-                format!("{bin_dir} \u{2192} User PATH")
-            }
-            .cyan()
+            path_modification.if_supports_color(Stream::Stdout, |text| text.cyan())
         );
-        println!("    Version:           {}", version.cyan());
+        println!(
+            "    Version:           {}",
+            version.if_supports_color(Stream::Stdout, |text| text.cyan())
+        );
         println!(
             "    Node.js manager:   {}",
-            if opts.no_node_manager { "disabled" } else { "enabled" }.cyan()
+            if opts.no_node_manager { "disabled" } else { "enabled" }
+                .if_supports_color(Stream::Stdout, |text| text.cyan())
         );
         println!();
-        println!("  1) {} (default)", "Proceed with installation".bold());
+        println!(
+            "  1) {} (default)",
+            "Proceed with installation".if_supports_color(Stream::Stdout, |text| text.bold())
+        );
         println!("  2) Customize installation");
         println!("  3) Cancel");
         println!();
@@ -612,17 +631,28 @@ fn show_customize_menu(opts: &mut cli::Options) {
         let registry_display = opts.registry.as_deref().unwrap_or("(default)");
 
         println!();
-        println!("  {}", "Customize installation:".bold());
+        println!(
+            "  {}",
+            "Customize installation:".if_supports_color(Stream::Stdout, |text| text.bold())
+        );
         println!();
-        println!("    1) Version:        [{}]", version_display.cyan());
-        println!("    2) npm registry:   [{}]", registry_display.cyan());
+        println!(
+            "    1) Version:        [{}]",
+            version_display.if_supports_color(Stream::Stdout, |text| text.cyan())
+        );
+        println!(
+            "    2) npm registry:   [{}]",
+            registry_display.if_supports_color(Stream::Stdout, |text| text.cyan())
+        );
         println!(
             "    3) Node.js manager: [{}]",
-            if opts.no_node_manager { "disabled" } else { "enabled" }.cyan()
+            if opts.no_node_manager { "disabled" } else { "enabled" }
+                .if_supports_color(Stream::Stdout, |text| text.cyan())
         );
         println!(
             "    4) Modify PATH:    [{}]",
-            if opts.no_modify_path { "no" } else { "yes" }.cyan()
+            if opts.no_modify_path { "no" } else { "yes" }
+                .if_supports_color(Stream::Stdout, |text| text.cyan())
         );
         println!();
 
@@ -665,11 +695,15 @@ fn print_success(opts: &cli::Options, data_dir: &str, bin_dir: &str) {
     }
 
     println!();
-    println!("  {} Vite+ has been installed successfully!", "\u{2714}".green().bold());
+    println!(
+        "  {} Vite+ has been installed successfully!",
+        "\u{2714}"
+            .if_supports_color(Stream::Stdout, |text| { Style::new().green().bold().style(text) })
+    );
     println!();
     println!("  To get started, restart your terminal, then run:");
     println!();
-    println!("    {}", "vp --help".cyan());
+    println!("    {}", "vp --help".if_supports_color(Stream::Stdout, |text| text.cyan()));
     println!();
     println!("  Data directory: {data_dir}");
     println!("  Bin directory:  {bin_dir}");
@@ -679,19 +713,19 @@ fn print_success(opts: &cli::Options, data_dir: &str, bin_dir: &str) {
 
 #[allow(clippy::print_stderr)]
 fn print_info(msg: &str) {
-    eprint!("{}", "info: ".blue());
+    eprint!("{}", "info: ".if_supports_color(Stream::Stderr, |text| text.blue()));
     eprintln!("{msg}");
 }
 
 #[allow(clippy::print_stderr)]
 fn print_warn(msg: &str) {
-    eprint!("{}", "warn: ".yellow());
+    eprint!("{}", "warn: ".if_supports_color(Stream::Stderr, |text| text.yellow()));
     eprintln!("{msg}");
 }
 
 #[allow(clippy::print_stderr)]
 fn print_error(msg: &str) {
-    eprint!("{}", "error: ".red());
+    eprint!("{}", "error: ".if_supports_color(Stream::Stderr, |text| text.red()));
     eprintln!("{msg}");
 }
 

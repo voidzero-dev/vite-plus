@@ -330,6 +330,9 @@ Each phase maps to `vp_setup` library functions shared with `vp upgrade`:
 
 **Failure recovery**: Before the **Activate** phase, failures clean up the version directory and leave the existing installation untouched. After **Activate**, all CONFIGURE steps are best-effort — failures log a warning but do not cause exit code 1. Rerunning the installer always retries CONFIGURE.
 
+On Windows, activation checks the `current` entry without following its target.
+The installer removes a dangling junction before it creates the new junction.
+
 ## Node.js Manager Auto-Detection
 
 The Node.js manager decision (`enabled`/`disabled`) is pre-computed before the interactive menu is shown, so the user sees the resolved value and can override it via the customize submenu. No prompts occur during the installation phase.
@@ -389,6 +392,10 @@ fn init_dll_security() {
 ### Console Allocation
 
 The binary uses the console subsystem (default for Rust binaries on Windows). When double-clicked, Windows allocates a console window automatically. No special handling needed.
+
+The installer applies colors only when the output stream supports them. If the
+`NO_COLOR` variable is present, stdout and stderr contain no ANSI escape
+sequences. This rule also applies when callers redirect output to files.
 
 ### Existing Installation Handling
 
@@ -490,7 +497,9 @@ The job tests invalid directory overrides and versions older than 0.3.0. The
 installer must not create requested or default roots for invalid overrides. A
 request for version `0.2.9` must fail without creating an installation root.
 For the successful test, the job installs a local
-`0.0.0-commit.<sha>` preview package.
+`0.0.0-commit.<sha>` preview package. This test starts with a dangling `current`
+junction. It also sets `NO_COLOR` and checks the redirected output for ANSI
+escape sequences.
 
 ## Code Signing
 
@@ -599,6 +608,8 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 - Custom registry, custom install dir
 - Invalid `VP_HOME` and `VP_*_DIR` configuration
 - Rejection of releases before 0.3.0
+- Repair of a dangling `current` junction
+- `NO_COLOR` output without ANSI escape sequences
 - Upgrade over existing installation
 - Verify `vp --version` works after install
 - Verify PATH is modified correctly
