@@ -375,7 +375,7 @@ Both are intentionally separated from this PR: the per-entry fallback threads `o
 | Project with `.node-version`                                           | `.node-version` wins; pin updates it                      | Unchanged                                                    |
 | Project with `packageManager` field                                    | Field wins; no auto-write                                 | Unchanged (plus consistency warning if devEngines conflicts) |
 | Project with `devEngines.packageManager` + lockfile                    | devEngines ignored; auto-pin **injects** `packageManager` | devEngines drives selection; no injected field               |
-| Project with lockfile only (neither field)                             | Auto-pin writes `packageManager` exact                    | Detection does not modify `package.json`                      |
+| Project with lockfile only (neither field)                             | Auto-pin writes `packageManager` exact                    | Detection does not modify `package.json`                     |
 | Project with both `engines.node` and `devEngines.runtime`, disagreeing | `engines.node` wins                                       | `devEngines.runtime` wins; doctor warns                      |
 | `vp env pin` in a dir with `package.json`, no `.node-version`          | Creates `.node-version`                                   | Writes `devEngines.runtime`                                  |
 | `vp migrate` of `.nvmrc` / Volta pins                                  | Creates `.node-version`                                   | Writes `devEngines.runtime` (aliases converted to semver)    |
