@@ -87,12 +87,13 @@ static DEV_ENGINES_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static VP_BANNER_VERSION_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Vite\+ )\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?").unwrap());
 // The upgrade checker includes the running CLI's bare version in its diagnostic
-// (`found vite-plus@<remote> (current: 0.2.4)`) and action line (`Update
-// available: 0.2.4 → <remote>`). The remote version belongs to the fixture and
-// stays assertable; only the current version changes on every Vite+ release.
+// (`found vite-plus@<remote> (current: 0.2.4)`) and action lines (`Update
+// available: 0.2.4 → <remote>` and `vp update available: 0.2.4 → <remote>`).
+// The remote version belongs to the fixture and stays assertable; only the
+// current version changes on every Vite+ release.
 static VP_CURRENT_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"(found vite-plus@[^\n]+ \(current: |Update available: )\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?",
+        r"(found vite-plus@[^\n]+ \(current: |(?:Update|vp update) available: )\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?",
     )
     .unwrap()
 });

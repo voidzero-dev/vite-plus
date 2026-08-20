@@ -121,6 +121,7 @@ fn masks_current_vite_plus_version_in_upgrade_check_output() {
     let input = concat!(
         "info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)\n",
         "Update available: 0.2.4 → 0.1.21-alpha.7\n",
+        "vp update available: 0.2.4 → 0.3.0, run vp upgrade\n",
     )
     .to_owned();
     assert_eq!(
@@ -128,6 +129,7 @@ fn masks_current_vite_plus_version_in_upgrade_check_output() {
         concat!(
             "info: found vite-plus@0.1.21-alpha.7 (current: <version>)\n",
             "Update available: <version> → 0.1.21-alpha.7\n",
+            "vp update available: <version> → 0.3.0, run vp upgrade\n",
         )
     );
 }

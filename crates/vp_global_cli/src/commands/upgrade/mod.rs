@@ -29,11 +29,18 @@ pub struct UpgradeOptions {
     pub silent: bool,
     /// Custom npm registry URL
     pub registry: Option<String>,
+    /// Refresh cached update status in a background helper
+    pub background_check: bool,
 }
 
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
+    if options.background_check {
+        crate::upgrade_check::run_background_check().await;
+        return Ok(ExitStatus::default());
+    }
+
     let config = vp_shared::EnvConfig::get();
     let install_dir = &config.dirs.data;
 

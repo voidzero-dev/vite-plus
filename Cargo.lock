@@ -8532,6 +8532,7 @@ dependencies = [
  "owo-colors",
  "oxc_resolver",
  "rustc-hash",
+ "same-file",
  "serde",
  "serde_json",
  "serial_test",

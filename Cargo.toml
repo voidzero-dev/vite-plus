@@ -251,6 +251,7 @@ rolldown-notify = "10.2.0"
 rolldown-notify-debouncer-full = "0.7.5"
 rustc-hash = "2.1.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+same-file = "1.0.6"
 schemars = "1.0.0"
 self_cell = "1.2.0"
 node-semver = "2.2.0"
