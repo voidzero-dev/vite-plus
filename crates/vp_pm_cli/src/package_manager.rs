@@ -717,8 +717,9 @@ const LATEST_VERSION_CACHE_TTL: Duration = Duration::from_secs(3600);
 fn latest_version_cache_path(
     package_manager_type: PackageManagerType,
 ) -> io::Result<AbsolutePathBuf> {
-    Ok(vp_shared::get_vp_home()?
-        .join("cache")
+    Ok(vp_shared::EnvConfig::get()
+        .dirs
+        .cache
         .join("package_manager_latest")
         .join(package_manager_type.to_string()))
 }
@@ -2089,50 +2090,62 @@ mod tests {
             when.method(GET).path("/bun/latest");
             then.status(200).json_body(serde_json::json!({ "version": "1.0.0" }));
         });
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            npm_registry: server.base_url(),
-            vite_plus_home: Some(vp_home.as_path().to_path_buf()),
-            ..EnvConfig::for_test()
-        });
+        let registry = server.base_url();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.as_path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "1.0.0"
+                );
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "1.0.0"
+                );
+                first.assert_hits(1);
 
-        assert_eq!(
-            resolve_package_manager_version(PackageManagerType::Bun, "latest").await.unwrap(),
-            "1.0.0"
-        );
-        assert_eq!(
-            resolve_package_manager_version(PackageManagerType::Bun, "latest").await.unwrap(),
-            "1.0.0"
-        );
-        first.assert_hits(1);
+                let cache_path = latest_version_cache_path(PackageManagerType::Bun).unwrap();
+                let expire_cache = || {
+                    fs::File::options()
+                        .write(true)
+                        .open(&cache_path)
+                        .unwrap()
+                        .set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH))
+                        .unwrap();
+                };
+                expire_cache();
+                first.delete();
 
-        let cache_path = latest_version_cache_path(PackageManagerType::Bun).unwrap();
-        let expire_cache = || {
-            fs::File::options()
-                .write(true)
-                .open(&cache_path)
-                .unwrap()
-                .set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH))
-                .unwrap();
-        };
-        expire_cache();
-        first.delete();
+                let mut refreshed = server.mock(|when, then| {
+                    when.method(GET).path("/bun/latest");
+                    then.status(200).json_body(serde_json::json!({ "version": "2.0.0" }));
+                });
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "2.0.0"
+                );
+                refreshed.assert_hits(1);
 
-        let mut refreshed = server.mock(|when, then| {
-            when.method(GET).path("/bun/latest");
-            then.status(200).json_body(serde_json::json!({ "version": "2.0.0" }));
-        });
-        assert_eq!(
-            resolve_package_manager_version(PackageManagerType::Bun, "latest").await.unwrap(),
-            "2.0.0"
-        );
-        refreshed.assert_hits(1);
-
-        expire_cache();
-        refreshed.delete();
-        assert_eq!(
-            resolve_package_manager_version(PackageManagerType::Bun, "latest").await.unwrap(),
-            "2.0.0"
-        );
+                expire_cache();
+                refreshed.delete();
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "2.0.0"
+                );
+            },
+        )
+        .await;
     }
 
     #[cfg(windows)]
