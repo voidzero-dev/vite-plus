@@ -2,9 +2,16 @@ use std::{
     io::Write as _,
     process::{Command, Stdio},
 };
+use vt_path::AbsolutePathBuf;
 
 fn installer_command() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_vp-setup"));
+    // nextest rewrites this variable when it runs a relocated test archive.
+    let runtime_path = std::env::var_os("CARGO_BIN_EXE_vp-setup")
+        .and_then(|path| AbsolutePathBuf::new(path.into()));
+    let installer = runtime_path
+        .filter(|path| path.as_path().is_file())
+        .unwrap_or_else(|| AbsolutePathBuf::new(env!("CARGO_BIN_EXE_vp-setup").into()).unwrap());
+    let mut command = Command::new(installer.as_path());
     command
         .env("NO_COLOR", "1")
         .env_remove("CI")
