@@ -66,6 +66,19 @@ warn() {
   echo -e "${YELLOW}warn${NC}: $1"
 }
 
+trace() {
+  [ "${VP_LOG:-}" = "trace" ] || return 0
+  echo -e "${DIM}trace${NC}: $1"
+}
+
+shell_config_warn() {
+  if [ "${CI:-}" = "true" ]; then
+    trace "$1"
+  else
+    warn "$1"
+  fi
+}
+
 error() {
   echo -e "${RED}error${NC}: $1"
   exit 1
@@ -731,7 +744,7 @@ append_source_to_file() {
   fi
 
   if [ ! -w "$shell_config" ]; then
-    warn "Cannot write to $shell_config (permission denied), skipping."
+    shell_config_warn "Cannot write to $shell_config (permission denied), skipping."
     return 3
   fi
 
@@ -758,12 +771,12 @@ write_managed_snippet() {
 
   snippet_dir=$(dirname "$snippet_file")
   if ! mkdir -p "$snippet_dir" 2>/dev/null; then
-    warn "Cannot create $snippet_dir, skipping."
+    shell_config_warn "Cannot create $snippet_dir, skipping."
     return 3
   fi
 
   if [ -f "$snippet_file" ] && [ ! -w "$snippet_file" ]; then
-    warn "Cannot write to $snippet_file (permission denied), skipping."
+    shell_config_warn "Cannot write to $snippet_file (permission denied), skipping."
     return 3
   fi
 
@@ -772,7 +785,7 @@ write_managed_snippet() {
   fi
 
   if ! printf '%s' "$snippet_content" > "$snippet_file"; then
-    warn "Cannot write to $snippet_file, skipping."
+    shell_config_warn "Cannot write to $snippet_file, skipping."
     return 3
   fi
   return 0
@@ -807,7 +820,7 @@ configure_zsh_path() {
   local result
 
   if ! mkdir -p "$zsh_dir" 2>/dev/null; then
-    warn "Cannot create $zsh_dir, skipping zsh."
+    shell_config_warn "Cannot create $zsh_dir, skipping zsh."
     SHELL_CONFIG_HAS_FAILURE="true"
     SHELL_CONFIG_FAILED_SHELLS+=("zsh")
     record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zsh_dir"))"
@@ -815,7 +828,7 @@ configure_zsh_path() {
   fi
 
   if [ ! -f "$zshenv" ] && ! touch "$zshenv" 2>/dev/null; then
-    warn "Cannot create $zshenv, skipping zsh."
+    shell_config_warn "Cannot create $zshenv, skipping zsh."
     SHELL_CONFIG_HAS_FAILURE="true"
     SHELL_CONFIG_FAILED_SHELLS+=("zsh")
     record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zshenv"))"
@@ -1441,6 +1454,13 @@ WRAPPER_EOF
   echo -e "  ${BOLD}Install locations:${NC}"
   echo "    Data directory: $display_data_dir"
   echo "    Bin directory:  $display_bin_dir"
+
+  # CI jobs must configure PATH through their runner. Shell files do not affect
+  # later job steps, so keep shell configuration details out of normal CI logs.
+  if [ "${CI:-}" = "true" ]; then
+    echo ""
+    return
+  fi
 
   echo ""
   echo "  Shell configuration:"

@@ -218,6 +218,35 @@ jobs:
       - name: Build local vp
         run: cargo build --release -p vp_global_cli
 
+      - name: CI hides shell config permission warnings
+        run: |
+          set -euo pipefail
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+
+          SHELL_CONFIG=$(mktemp)
+          chmod 444 "$SHELL_CONFIG"
+
+          CI=true
+          RESULT=0
+          OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
+          test "$RESULT" -eq 3
+          test -z "$OUTPUT"
+
+          VP_LOG=trace
+          RESULT=0
+          OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
+          test "$RESULT" -eq 3
+          echo "$OUTPUT" | grep -F "trace"
+          echo "$OUTPUT" | grep -F "permission denied"
+
+          CI=false
+          unset VP_LOG
+          RESULT=0
+          OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
+          test "$RESULT" -eq 3
+          echo "$OUTPUT" | grep -F "warn"
+          echo "$OUTPUT" | grep -F "permission denied"
+
       - name: Incomplete directory overrides are rejected
         run: |
           set -euo pipefail
@@ -531,10 +560,12 @@ jobs:
           echo "$output" | grep -q "Install locations:"
           echo "$output" | grep -q "Data directory: ~/.vite-plus"
           echo "$output" | grep -q "Bin directory:  ~/.vite-plus/bin"
-          # Verify fallback message shows manual instructions
-          echo "$output" | grep -q "Or run vp directly:"
-          # Verify the permission warning was shown
-          echo "$output" | grep -qi "permission denied"
+          # CI uses the runner environment for PATH. Shell config failures are
+          # available at trace level, not in the normal installer output.
+          if echo "$output" | grep -Eqi "permission denied|Shell configuration:|Some shells still need manual setup"; then
+            echo "Installer printed shell configuration noise in CI"
+            exit 1
+          fi
 
       - name: Verify vp works via direct path
         run: |
