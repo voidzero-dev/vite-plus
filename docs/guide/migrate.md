@@ -4,7 +4,7 @@
 
 ## Overview
 
-This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, and Prettier setups into Vite+.
+This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, and tsup setups into Vite+.
 
 Use it when you want to take an existing project and move it onto the Vite+ defaults instead of wiring each tool by hand.
 
@@ -70,7 +70,7 @@ After running the migration:
 - Run `vp install`
 - Run `vp check`
 - Run `vp test`
-- Run `vp build`
+- Run `vp build` (or `vp pack` if you are building a library)
 
 ## Manual Installation & Migration
 

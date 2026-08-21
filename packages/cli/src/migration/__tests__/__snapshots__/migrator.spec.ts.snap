@@ -84,6 +84,7 @@ exports[`rewritePackageJson > should rewrite package.json scripts and extract st
     "ready_new": "vp install && vp fmt && vp lint --type-aware && vp test -r && vp build -r",
     "test": "vp test",
     "test_run": "vp test run && vp test --ui",
+    "unmigrated_pack": "tsup --config tsup.config.ts",
     "version": "vp --version",
     "version_short": "vp -v",
     "wrapped_build": "bunx --bun vp build",

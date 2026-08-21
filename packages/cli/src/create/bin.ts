@@ -11,11 +11,13 @@ import {
   detectEslintProject,
   detectFramework,
   detectPrettierProject,
+  detectTsupProject,
   hasFrameworkShim,
   injectCreateDefaultTemplate,
   installGitHooks,
   promptEslintMigration,
   promptPrettierMigration,
+  promptTsupMigration,
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
@@ -1253,7 +1255,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // and relies on `rewrite*Project` to add tarball overrides BEFORE the
   // first install, so install-first would break CI's local-tarball resolve.
   const shouldMigrateLintFmtTools =
-    detectEslintProject(fullPath).hasDependency || detectPrettierProject(fullPath).hasDependency;
+    detectEslintProject(fullPath).hasDependency ||
+    detectPrettierProject(fullPath).hasDependency ||
+    detectTsupProject(fullPath).hasDependency;
 
   let installSummary: CommandRunSummary | undefined;
 
@@ -1293,10 +1297,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (installSummary.pendingBuilds && installSummary.pendingBuilds.length > 0) {
       migratePendingBuilds = installSummary.pendingBuilds;
     }
-    updateCreateProgress('Migrating lint and format tools');
+    updateCreateProgress('Migrating lint, format & pack tools');
     pauseCreateProgress();
     await promptEslintMigration(fullPath, /* interactive */ false);
     await promptPrettierMigration(fullPath, /* interactive */ false);
+    await promptTsupMigration(fullPath, /* interactive */ false, packageManager);
     resumeCreateProgress();
   };
 

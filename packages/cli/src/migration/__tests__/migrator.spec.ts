@@ -175,6 +175,7 @@ describe('rewritePackageJson', () => {
         fmt_config: 'oxfmt --config .oxfmt.json',
         pack: 'tsdown',
         pack_watch: 'tsdown --watch',
+        unmigrated_pack: 'tsup --config tsup.config.ts',
         preview: 'vite preview',
         optimize: 'vite optimize',
         build: 'pnpm install && vite build -r && vite run build --watch && tsdown && tsc || exit 1',
