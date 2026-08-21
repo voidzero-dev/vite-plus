@@ -30,6 +30,7 @@ vi.mock('../../utils/prompts.ts', () => ({
 import { PackageManager } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { readJsonFile } from '../../utils/json.ts';
 import { confirmTsupMigration, detectTsupProject, migrateTsupToTsdown } from '../migrator/tsup.ts';
 import { createMigrationReport } from '../report.ts';
 
@@ -214,13 +215,80 @@ describe('tsup migration', () => {
     expect(fs.readFileSync(packageBPath, 'utf8')).toBe(originalPackageB);
   });
 
-  it('rewrites explicit tsup config paths after migration', async () => {
+  it('preserves a root config shared by multiple workspace packages', async () => {
+    const originalRootConfig = fs.readFileSync(path.join(projectPath, 'tsup.config.ts'), 'utf8');
+    const packages = [
+      { name: 'a', path: 'packages/a' },
+      { name: 'b', path: 'packages/b' },
+    ];
+    for (const workspacePackage of packages) {
+      const packagePath = path.join(projectPath, workspacePackage.path);
+      fs.mkdirSync(packagePath, { recursive: true });
+      fs.writeFileSync(
+        path.join(packagePath, 'package.json'),
+        `${JSON.stringify(
+          {
+            name: workspacePackage.name,
+            scripts: { build: 'tsup --config ../../tsup.config.ts' },
+            devDependencies: { tsup: '^8.5.0' },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+    }
+    mockRunCommandSilently.mockImplementation(async ({ cwd }) => {
+      const packageJsonPath = path.join(cwd, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      packageJson.devDependencies.tsdown = '0.22.14';
+      delete packageJson.devDependencies.tsup;
+      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+      fs.writeFileSync(path.join(cwd, 'tsdown.config.ts'), 'export default {};\n');
+      fs.unlinkSync(path.join(cwd, 'tsup.config.ts'));
+      return { exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    });
+    const report = createMigrationReport();
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, 'tsup.config.ts', packages, {
+        silent: true,
+        report,
+      }),
+    ).resolves.toBe(true);
+
+    expect(mockRunCommandSilently).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(path.join(projectPath, 'tsup.config.ts'), 'utf8')).toBe(
+      originalRootConfig,
+    );
+    expect(fs.existsSync(path.join(projectPath, 'tsdown.config.ts'))).toBe(true);
+    expect(readJsonFile(path.join(projectPath, 'package.json')).devDependencies).toMatchObject({
+      tsup: '^8.5.0',
+      tsdown: '0.22.14',
+    });
+    for (const workspacePackage of packages) {
+      expect(
+        readJsonFile(path.join(projectPath, workspacePackage.path, 'package.json')),
+      ).toMatchObject({
+        scripts: { build: 'tsup --config ../../tsup.config.ts' },
+        devDependencies: { tsup: '^8.5.0' },
+      });
+    }
+    expect(report.warnings).toContain(
+      'tsup.config.ts is shared by packages/a, packages/b. It was preserved and must be migrated manually.',
+    );
+  });
+
+  it('removes explicit standard tsup config options after migration', async () => {
     fs.writeFileSync(
       path.join(projectPath, 'package.json'),
       `${JSON.stringify(
         {
           name: 'fixture',
-          scripts: { build: 'tsup --config ./tsup.config.ts' },
+          scripts: {
+            build: 'tsup --config ./tsup.config.ts',
+            watch: 'tsup --watch --config=tsup.config.ts',
+            wrapped: 'cross-env NODE_ENV=test tsup -c "tsup.config.ts" --watch',
+          },
           devDependencies: { tsup: '^8.5.0' },
         },
         null,
@@ -230,7 +298,9 @@ describe('tsup migration', () => {
     mockRunCommandSilently.mockImplementation(async () => {
       const packageJsonPath = path.join(projectPath, 'package.json');
       const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      packageJson.scripts.build = 'tsdown --config ./tsup.config.ts';
+      for (const name of Object.keys(packageJson.scripts)) {
+        packageJson.scripts[name] = packageJson.scripts[name].replace('tsup', 'tsdown');
+      }
       packageJson.devDependencies.tsdown = '0.22.14';
       delete packageJson.devDependencies.tsup;
       fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
@@ -246,7 +316,11 @@ describe('tsup migration', () => {
     ).resolves.toBe(true);
 
     const packageJson = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
-    expect(packageJson.scripts.build).toBe('tsdown --config ./tsdown.config.ts');
+    expect(packageJson.scripts).toEqual({
+      build: 'tsdown',
+      watch: 'tsdown --watch',
+      wrapped: 'cross-env NODE_ENV=test tsdown --watch',
+    });
   });
 
   it('adds successful tsdown-migrate warnings to the migration report', async () => {

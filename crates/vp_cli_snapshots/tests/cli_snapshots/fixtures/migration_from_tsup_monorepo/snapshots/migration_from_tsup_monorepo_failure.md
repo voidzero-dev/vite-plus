@@ -1,6 +1,6 @@
 # migration_from_tsup_monorepo_failure
 
-## `vpt chmod +x tsdown-migrate-stub.mjs`
+## `vpt chmod +x tsdown-migrate-failure-stub.mjs`
 
 stub a failure after package a succeeds
 
@@ -51,6 +51,7 @@ package a manifest is restored
 ```
 {
   "name": "a",
+  "type": "module",
   "scripts": {
     "build": "tsup --config tsup.config.ts"
   },
@@ -84,6 +85,7 @@ package b manifest is restored
 ```
 {
   "name": "b",
+  "type": "module",
   "scripts": {
     "build": "tsup"
   },

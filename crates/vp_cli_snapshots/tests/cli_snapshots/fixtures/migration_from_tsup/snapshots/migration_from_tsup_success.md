@@ -73,7 +73,7 @@ tsup is removed and its script uses vp pack
 {
   "name": "migration-from-tsup",
   "scripts": {
-    "build": "vp pack --config tsdown.config.ts"
+    "build": "vp pack"
   },
   "devDependencies": {
     "vite": "catalog:",

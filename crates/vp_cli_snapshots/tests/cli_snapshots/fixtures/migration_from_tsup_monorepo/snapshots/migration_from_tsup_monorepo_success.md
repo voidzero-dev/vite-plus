@@ -1,15 +1,8 @@
 # migration_from_tsup_monorepo_success
 
-## `vpt chmod +x tsdown-migrate-stub.mjs`
-
-stub tsdown-migrate so the migration stays offline
-
-```
-```
-
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
-all workspace-only tsup configs should migrate automatically
+the real tsdown-migrate package should migrate all workspace-only tsup configs
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -55,8 +48,9 @@ package a uses vp pack
 ```
 {
   "name": "a",
+  "type": "module",
   "scripts": {
-    "build": "vp pack --config tsdown.config.ts"
+    "build": "vp pack"
   },
   "devDependencies": {
     "vite": "catalog:",
@@ -96,6 +90,7 @@ package b uses vp pack
 ```
 {
   "name": "b",
+  "type": "module",
   "scripts": {
     "build": "vp pack"
   },
@@ -104,4 +99,52 @@ package b uses vp pack
     "vite-plus": "catalog:"
   }
 }
+```
+
+## `cd packages/a && vp run build`
+
+package a migrated vp pack script builds successfully
+
+```
+~/packages/a$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.cjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
+ℹ dist/index.d.cts  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
+✔ Build complete in <duration>
+```
+
+## `vpt list-dir packages/a/dist`
+
+package a build artifacts are created
+
+```
+index.cjs
+index.d.cts
+```
+
+## `cd packages/b && vp run build`
+
+package b migrated vp pack script builds successfully
+
+```
+~/packages/b$ vp pack ⊘ cache disabled
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.cjs  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
+ℹ dist/index.d.cts  <size> kB │ gzip: <size> kB
+ℹ 1 files, total: <size> kB
+✔ Build complete in <duration>
+```
+
+## `vpt list-dir packages/b/dist`
+
+package b build artifacts are created
+
+```
+index.cjs
+index.d.cts
 ```
