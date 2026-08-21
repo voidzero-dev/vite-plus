@@ -34,6 +34,7 @@ vite-plus/
 ├── crates/vp_command/       # Shared command execution helpers
 ├── crates/vp_error/         # Shared error types
 ├── crates/vp_global_cli/    # Standalone global vp binary and top-level command routing
+├── crates/vp_global_only_cli/ # clap definitions for global-only commands (env, upgrade, implode)
 ├── crates/vp_installer/     # Installer binary support
 ├── crates/vp_js_runtime/    # Managed Node.js runtime support
 ├── crates/vp_migration/     # Rust migration helpers
@@ -59,7 +60,7 @@ install is present. Call sites must not construct category paths or read
 
 - **JS-backed CLI behavior**: start at `packages/cli/src/bin.ts` and nearby `packages/cli/src/**` files.
 - **Local CLI / NAPI-backed behavior**: start at `packages/cli/binding/src/lib.rs` and `packages/cli/binding/src/cli/mod.rs`.
-- **Global `vp` routing, aliases, and runtime bootstrap**: start at `crates/vp_global_cli/src/main.rs` and `crates/vp_global_cli/src/cli.rs`.
+- **Global `vp` routing, aliases, and runtime bootstrap**: start at `crates/vp_global_cli/src/main.rs` and `crates/vp_global_cli/src/cli.rs`; the `env`, `upgrade`, and `implode` argument definitions live in `crates/vp_global_only_cli/`.
 - **Package-manager behavior**: start at `crates/vp_pm_cli/`.
 - **Managed Node runtime / shims**: start at `crates/vp_js_runtime/`.
 - **Static `vite.config.ts` extraction**: start at `crates/vp_static_config/README.md` and `packages/cli/src/resolve-vite-config.ts`.
