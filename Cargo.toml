@@ -209,7 +209,7 @@ libtest-mimic = "0.8.2"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.62"
 mime = "0.3.17"
-napi = { version = "3.0.0", default-features = false, features = [
+napi = { version = "3.12.2", default-features = false, features = [
   "async",
   "error_anyhow",
   "anyhow",
