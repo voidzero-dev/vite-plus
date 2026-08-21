@@ -112,7 +112,86 @@ describe('tsup migration', () => {
     expect(fs.readFileSync(tsupConfigPath, 'utf8')).toBe(originalTsupConfig);
     expect(fs.readFileSync(tsdownConfigPath, 'utf8')).toBe(originalTsdownConfig);
     expect(mockWarn).toHaveBeenCalledWith(
-      'Automatic tsup migration was skipped because these tsdown config files already exist:\n  tsdown.config.ts',
+      'Automatic tsup migration was skipped because these tsdown configs already exist:\n  tsdown.config.ts',
+    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+  });
+
+  it('refuses to overwrite an inline tsdown config', async () => {
+    fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const originalPackageJson = {
+      name: 'fixture',
+      scripts: { build: 'tsup' },
+      devDependencies: { tsup: '^8.5.0' },
+      tsup: { entry: ['src/index.ts'] },
+      tsdown: { entry: ['src/existing.ts'] },
+    };
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(originalPackageJson, null, 2)}\n`);
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'package.json#tsup', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(readJsonFile(packageJsonPath)).toEqual(originalPackageJson);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Automatic tsup migration was skipped because these tsdown configs already exist:\n  package.json#tsdown',
+    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+  });
+
+  it('refuses to migrate a script that uses a custom tsup config', async () => {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const originalPackageJson = {
+      name: 'fixture',
+      scripts: { build: 'tsup --config configs/legacy.ts' },
+      devDependencies: { tsup: '^8.5.0' },
+    };
+    fs.mkdirSync(path.join(projectPath, 'configs'));
+    fs.writeFileSync(path.join(projectPath, 'configs/legacy.ts'), 'export default {};\n');
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(originalPackageJson, null, 2)}\n`);
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(readJsonFile(packageJsonPath)).toEqual(originalPackageJson);
+    expect(fs.existsSync(path.join(projectPath, 'tsup.config.ts'))).toBe(true);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#build -> configs/legacy.ts',
+    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+  });
+
+  it('refuses to remove selectors for multiple standard tsup configs', async () => {
+    fs.writeFileSync(path.join(projectPath, 'tsup.config.js'), 'export default {};\n');
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const originalPackageJson = {
+      name: 'fixture',
+      scripts: {
+        buildTs: 'tsup --config tsup.config.ts',
+        buildJs: 'tsup --config tsup.config.js',
+      },
+      devDependencies: { tsup: '^8.5.0' },
+    };
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(originalPackageJson, null, 2)}\n`);
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(readJsonFile(packageJsonPath)).toEqual(originalPackageJson);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#buildJs -> tsup.config.js',
     );
     expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
   });
@@ -446,6 +525,7 @@ describe('tsup migration', () => {
             build: 'tsup --config ./tsup.config.ts',
             watch: 'tsup --watch --config=tsup.config.ts',
             wrapped: 'cross-env NODE_ENV=test tsup -c "tsup.config.ts" --watch',
+            quotedData: "echo 'tsdown'",
           },
           devDependencies: { tsup: '^8.5.0' },
         },
@@ -478,53 +558,7 @@ describe('tsup migration', () => {
       build: 'tsdown',
       watch: 'tsdown --watch',
       wrapped: 'cross-env NODE_ENV=test tsdown --watch',
-    });
-  });
-
-  it('rewrites tsdown commands nested in quoted runner arguments', async () => {
-    fs.writeFileSync(
-      path.join(projectPath, 'package.json'),
-      `${JSON.stringify(
-        {
-          name: 'fixture',
-          scripts: {
-            build: 'concurrently "tsup --watch --config=tsup.config.ts" "tsc --watch"',
-            wrapped: 'concurrently "pnpm exec tsup --watch" "tsc --watch"',
-            singleQuoted: "concurrently 'tsup' 'tsc'",
-          },
-          devDependencies: { tsup: '^8.5.0' },
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    mockRunCommandSilently.mockImplementation(async () => {
-      const packageJsonPath = path.join(projectPath, 'package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      for (const scriptName of Object.keys(packageJson.scripts)) {
-        packageJson.scripts[scriptName] = packageJson.scripts[scriptName].replaceAll(
-          'tsup',
-          'tsdown',
-        );
-      }
-      packageJson.devDependencies.tsdown = '0.22.14';
-      delete packageJson.devDependencies.tsup;
-      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
-      fs.writeFileSync(path.join(projectPath, 'tsdown.config.ts'), 'export default {};\n');
-      fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
-      return { exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
-    });
-
-    await expect(
-      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, 'tsup.config.ts', undefined, {
-        silent: true,
-      }),
-    ).resolves.toBe(true);
-
-    expect(readJsonFile(path.join(projectPath, 'package.json')).scripts).toEqual({
-      build: 'concurrently "vp pack --watch" "tsc --watch"',
-      wrapped: 'concurrently "pnpm exec vp pack --watch" "tsc --watch"',
-      singleQuoted: "concurrently 'vp pack' 'tsc'",
+      quotedData: "echo 'tsdown'",
     });
   });
 

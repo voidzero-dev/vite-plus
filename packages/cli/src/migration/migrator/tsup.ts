@@ -4,7 +4,6 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
@@ -96,17 +95,6 @@ const TSDOWN_STANDARD_CONFIG_OPTION_RE = new RegExp(
 );
 const TSUP_CONFIG_OPTION_RE =
   /\btsup(?:-node)?\b(?:(?!&&|\|\||[;|]).)*?\s+(?:--config(?:=|\s+)|-c\s+)(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))(?=\s|$|[;&|])/g;
-const QUOTED_SHELL_ARGUMENT_RE = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'/g;
-const NESTED_TSDOWN_TOKEN_RE = /(?:^|[\s;&|])tsdown(?=$|[\s;&|])/;
-const NESTED_TSDOWN_TOKEN_GLOBAL_RE = /(^|[\s;&|])tsdown(?=$|[\s;&|])/g;
-const REPLACE_TSDOWN_SCRIPT_RULE = `---
-id: replace-tsdown-after-migration
-language: bash
-rule:
-  kind: command_name
-  regex: '^tsdown$'
-fix: vp pack
-`;
 
 interface SharedTsupConsumer {
   label: string;
@@ -118,29 +106,19 @@ interface SharedTsupConfig {
   consumers: Map<string, SharedTsupConsumer>;
 }
 
-function removeStandardTsdownConfigOption(script: string): string {
-  return script.replace(TSDOWN_STANDARD_CONFIG_OPTION_RE, '$1');
+interface TsdownConfigCollision {
+  configPath: string;
+  targetPath: string;
 }
 
-function rewriteNestedTsdownCommands(script: string): string {
-  return script.replace(
-    QUOTED_SHELL_ARGUMENT_RE,
-    (quoted, doubleQuoted: string | undefined, singleQuoted: string | undefined) => {
-      const quote = doubleQuoted === undefined ? "'" : '"';
-      const originalCommand = doubleQuoted ?? singleQuoted ?? '';
-      if (!NESTED_TSDOWN_TOKEN_RE.test(originalCommand)) {
-        return quoted;
-      }
-      const command = removeStandardTsdownConfigOption(originalCommand);
-      const rewritten = rewriteScripts(JSON.stringify({ command }), REPLACE_TSDOWN_SCRIPT_RULE);
-      const parsed = rewritten ? (JSON.parse(rewritten) as { command: string }).command : command;
-      // Command wrappers are not all represented as nested `command_name`
-      // nodes. Replace any executable token the Bash rewrite did not consume
-      // so no quoted runner command depends on the removed tsdown package.
-      const migrated = parsed.replace(NESTED_TSDOWN_TOKEN_GLOBAL_RE, '$1vp pack');
-      return `${quote}${migrated}${quote}`;
-    },
-  );
+interface UnsupportedTsupConfigConsumer {
+  configPath: string;
+  packagePath: string;
+  scriptName: string;
+}
+
+function removeStandardTsdownConfigOption(script: string): string {
+  return script.replace(TSDOWN_STANDARD_CONFIG_OPTION_RE, '$1');
 }
 
 function resolveScriptConfigPath(packagePath: string, configPath: string): string {
@@ -197,15 +175,62 @@ function collectSharedTsupConfigs(
   return sharedConfigs;
 }
 
-function collectTsupConfigCollisions(tsupTargets: string[]): string[] {
-  const collisions: string[] = [];
+function collectTsupConfigCollisions(tsupTargets: string[]): TsdownConfigCollision[] {
+  const collisions: TsdownConfigCollision[] = [];
   for (const target of tsupTargets) {
     const tsdownConfig = detectConfigs(target).tsdownConfig;
     if (tsdownConfig) {
-      collisions.push(path.join(target, tsdownConfig));
+      collisions.push({ configPath: path.join(target, tsdownConfig), targetPath: target });
+    }
+    const packageJsonPath = path.join(target, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = readJsonFile(packageJsonPath);
+      if (Object.hasOwn(packageJson, 'tsdown')) {
+        collisions.push({ configPath: `${packageJsonPath}#tsdown`, targetPath: target });
+      }
     }
   }
   return collisions;
+}
+
+function collectUnsupportedTsupConfigConsumers(
+  tsupTargets: string[],
+): UnsupportedTsupConfigConsumer[] {
+  const migratedConfigPaths = new Set(
+    tsupTargets.flatMap((target) =>
+      TSUP_CONFIG_FILES.map((file) => path.join(target, file)).filter((file) =>
+        fs.existsSync(file),
+      ),
+    ),
+  );
+  const unsupported: UnsupportedTsupConfigConsumer[] = [];
+
+  for (const target of tsupTargets) {
+    const packageJsonPath = path.join(target, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      continue;
+    }
+    const detectedConfig = detectConfigs(target).tsupConfig;
+    const defaultConfigPath =
+      detectedConfig && detectedConfig !== TSUP_PACKAGE_JSON_CONFIG
+        ? path.join(target, detectedConfig)
+        : undefined;
+    const packageJson = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
+
+    for (const [scriptName, script] of Object.entries(packageJson.scripts ?? {})) {
+      for (const match of script.matchAll(TSUP_CONFIG_OPTION_RE)) {
+        const configPath = resolveScriptConfigPath(target, match[1] ?? match[2] ?? match[3]);
+        const isDefaultConfig = configPath === defaultConfigPath;
+        const isSharedMigratedConfig =
+          migratedConfigPaths.has(configPath) && path.dirname(configPath) !== target;
+        if (!isDefaultConfig && !isSharedMigratedConfig) {
+          unsupported.push({ configPath, packagePath: target, scriptName });
+        }
+      }
+    }
+  }
+
+  return unsupported;
 }
 
 function restoreSharedTsupUsage(
@@ -373,15 +398,14 @@ export async function migrateTsupToTsdown(
   const tsupTargets = targets.filter((target) =>
     target === rootPath ? !!tsupConfigFile : !!detectConfigs(target).tsupConfig,
   );
-  const sharedConfigs = collectSharedTsupConfigs(projectPath, packages, tsupTargets);
   const configCollisions = collectTsupConfigCollisions(tsupTargets);
   if (configCollisions.length > 0) {
     prompts.log.warn(
-      `Automatic tsup migration was skipped because these tsdown config files already exist:\n${configCollisions
-        .map((configPath) => `  ${displayRelative(configPath, projectPath)}`)
+      `Automatic tsup migration was skipped because these tsdown configs already exist:\n${configCollisions
+        .map(({ configPath }) => `  ${displayRelative(configPath, projectPath)}`)
         .join('\n')}`,
     );
-    const firstCollisionTarget = path.dirname(configCollisions[0]);
+    const firstCollisionTarget = configCollisions[0].targetPath;
     const targetLabel =
       firstCollisionTarget === rootPath
         ? 'the project root'
@@ -389,6 +413,25 @@ export async function migrateTsupToTsdown(
     showTsdownMigrationOptions(targetLabel);
     return false;
   }
+  const unsupportedConfigConsumers = collectUnsupportedTsupConfigConsumers(tsupTargets);
+  if (unsupportedConfigConsumers.length > 0) {
+    prompts.log.warn(
+      `Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n${unsupportedConfigConsumers
+        .map(
+          ({ configPath, packagePath, scriptName }) =>
+            `  ${displayRelative(path.join(packagePath, 'package.json'), projectPath)}#${scriptName} -> ${displayRelative(configPath, projectPath)}`,
+        )
+        .join('\n')}`,
+    );
+    const firstConsumerTarget = unsupportedConfigConsumers[0].packagePath;
+    const targetLabel =
+      firstConsumerTarget === rootPath
+        ? 'the project root'
+        : displayRelative(firstConsumerTarget, projectPath);
+    showTsdownMigrationOptions(targetLabel);
+    return false;
+  }
+  const sharedConfigs = collectSharedTsupConfigs(projectPath, packages, tsupTargets);
 
   let preservedDependencyTargets = new Set<string>();
 
@@ -539,7 +582,7 @@ function rewriteTsupPackageJson(packageJsonPath: string, preserveTsupDependency 
     // loads standard tsdown config files and does not accept `--config`, so
     // remove that redundant option before the generic tsdown -> vp pack rule.
     for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
-      const rewritten = removeStandardTsdownConfigOption(rewriteNestedTsdownCommands(script));
+      const rewritten = removeStandardTsdownConfigOption(script);
       if (rewritten !== script) {
         pkg.scripts![name] = rewritten;
         changed = true;
