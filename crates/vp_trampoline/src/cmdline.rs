@@ -6,6 +6,10 @@ const SPACE: u16 = b' ' as u16;
 const TAB: u16 = b'\t' as u16;
 const QUOTE: u16 = b'"' as u16;
 const DOT: u16 = b'.' as u16;
+const COLON: u16 = b':' as u16;
+const QUESTION: u16 = b'?' as u16;
+const BACKSLASH: u16 = b'\\' as u16;
+const FORWARD_SLASH: u16 = b'/' as u16;
 
 /// Must match `vp_shared::SHIM_POINTER_HEADER`.
 pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
@@ -85,6 +89,33 @@ pub fn skip_program_argument(cmdline: &[u16]) -> usize {
     i
 }
 
+fn is_path_separator(unit: u16) -> bool {
+    unit == BACKSLASH || unit == FORWARD_SLASH
+}
+
+/// End index of a parent directory, preserving the separator when it is part
+/// of a Windows root.
+///
+/// Removing the separator from `C:\vp.exe` would produce the drive-relative
+/// path `C:`. Device roots such as `\\?\Volume{...}\vp.exe` have the same
+/// constraint. Other parents omit their trailing separator, matching
+/// `Path::parent`.
+pub fn parent_dir_len(path: &[u16], last_separator: usize) -> usize {
+    let drive_root = last_separator >= 1 && path[last_separator - 1] == COLON;
+    let device_root = last_separator >= 4
+        && is_path_separator(path[0])
+        && is_path_separator(path[1])
+        && (path[2] == QUESTION || path[2] == DOT)
+        && is_path_separator(path[3])
+        && !path[4..last_separator].iter().any(|&unit| is_path_separator(unit));
+
+    if last_separator == 0 || drive_root || device_root {
+        last_separator + 1
+    } else {
+        last_separator
+    }
+}
+
 /// Length of the file stem, matching `Path::file_stem`: everything before the
 /// last `.`, except that a leading `.` never starts an extension.
 pub fn file_stem_len(name: &[u16]) -> usize {
@@ -144,6 +175,26 @@ mod tests {
     fn keeps_argument_tail_verbatim() {
         let cl = wide(r#"npx "a  b\" literal" --flag"#);
         assert_eq!(&cl[skip_program_argument(&cl)..], &wide(r#" "a  b\" literal" --flag"#)[..]);
+    }
+
+    #[test]
+    fn parent_directory_preserves_windows_roots() {
+        fn parent(path: &str) -> Vec<u16> {
+            let path = wide(path);
+            let last_separator = path.iter().rposition(|&unit| is_path_separator(unit)).unwrap();
+            path[..parent_dir_len(&path, last_separator)].to_vec()
+        }
+
+        assert_eq!(parent(r"C:\vp.exe"), wide("C:\\"));
+        assert_eq!(parent(r"C:\bin\vp.exe"), wide(r"C:\bin"));
+        assert_eq!(parent(r"\\?\C:\vp.exe"), wide("\\\\?\\C:\\"));
+        assert_eq!(
+            parent(r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\vp.exe"),
+            wide("\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\")
+        );
+        assert_eq!(parent(r"\\?\UNC\server\share\vp.exe"), wide(r"\\?\UNC\server\share"));
+        assert_eq!(parent(r"\\server\share\vp.exe"), wide(r"\\server\share"));
+        assert_eq!(parent(r"\vp.exe"), wide("\\"));
     }
 
     #[test]
