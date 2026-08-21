@@ -39,7 +39,9 @@ zero concurrency should fail before starting lint-staged
 ```
 VITE+ - The Unified Toolchain for the Web
 
-error: Option "--concurrent" must be true, false, or a number greater than 0.
+error: invalid value '0' for '--concurrent [<number|boolean>]': must be true, false, or an integer from 1 to 4294967295
+
+For more information, try '--help'.
 ```
 
 ## `vp staged --no-cwd`
@@ -51,7 +53,11 @@ negated string options should report a CLI error
 ```
 VITE+ - The Unified Toolchain for the Web
 
-error: Option "--no-cwd" is not supported. Use "--cwd <path>".
+error: unexpected argument '--no-cwd' found
+
+Usage: vp staged [OPTIONS]
+
+For more information, try '--help'.
 ```
 
 ## `vp staged --no-diff`
@@ -63,5 +69,9 @@ negated diff should report a CLI error
 ```
 VITE+ - The Unified Toolchain for the Web
 
-error: Option "--no-diff" is not supported. Use "--diff <string>".
+error: unexpected argument '--no-diff' found
+
+Usage: vp staged [OPTIONS]
+
+For more information, try '--help'.
 ```
