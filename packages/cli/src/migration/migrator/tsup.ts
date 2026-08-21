@@ -68,7 +68,9 @@ async function runTsdownMigrateStep(
   try {
     const result = await runCommandSilently({
       command: vpBin,
-      args: ['dlx', 'tsdown-migrate@rc', '--yes', `--package-manager ${packageManager}`], // remove pin to rc tag once it graduates to main version
+      // Stable 0.22.x predates non-TTY support. Remove the RC tag after 0.23.0
+      // becomes the latest release.
+      args: ['dlx', 'tsdown-migrate@rc', '--yes', '--package-manager', packageManager],
       cwd,
       envs: process.env,
     });

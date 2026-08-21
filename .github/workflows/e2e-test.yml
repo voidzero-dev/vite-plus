@@ -284,6 +284,11 @@ jobs:
               vp run lint
               vp run test:run
               npx tsc --noEmit
+          - name: decoders
+            node-version: 24
+            command: |
+              vp pack
+              vp test
           - name: vite-vue-vercel
             node-version: 24
             command: |

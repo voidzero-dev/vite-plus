@@ -54,6 +54,11 @@
     "branch": "main",
     "hash": "439d7df1a5d594458e95071612c5edd93ff736a5"
   },
+  "decoders": {
+    "repository": "https://github.com/nvie/decoders.git",
+    "branch": "main",
+    "hash": "ba339327758fcfda9d2f361e2786513aca901717"
+  },
   "vite-vue-vercel": {
     "repository": "https://github.com/fengmk2/vite-vue-vercel.git",
     "branch": "main",
