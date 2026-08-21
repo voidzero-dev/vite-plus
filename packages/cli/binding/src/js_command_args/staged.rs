@@ -6,7 +6,7 @@ use napi_derive::napi;
 
 use super::parse::{CliParseError, ParseResult, parse_args};
 
-const CONCURRENT_VALUE_ERROR: &str = "must be true, false, or an integer from 1 to 4294967295";
+const CONCURRENT_VALUE_ERROR: &str = "use true, false, or an integer from 1 through 4294967295";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Concurrent {
@@ -166,16 +166,20 @@ mod tests {
     fn parsed(argv: &[&str]) -> StagedCliArgs {
         match parse(argv) {
             ParseResult::Ok(value) => value,
-            ParseResult::Help => panic!("expected parsed arguments, got help"),
-            ParseResult::Error(error) => panic!("expected parsed arguments: {}", error.message),
+            ParseResult::Help => panic!("The parser returned help. The test expected arguments."),
+            ParseResult::Error(error) => panic!("The parser returned an error: {}", error.message),
         }
     }
 
     fn parse_error(argv: &[&str]) -> CliParseError {
         match parse(argv) {
             ParseResult::Error(error) => error,
-            ParseResult::Ok(_) => panic!("expected an argument error"),
-            ParseResult::Help => panic!("expected an argument error, got help"),
+            ParseResult::Ok(_) => {
+                panic!("The parser returned arguments. The test expected an error.")
+            }
+            ParseResult::Help => {
+                panic!("The parser returned help. The test expected an error.")
+            }
         }
     }
 
