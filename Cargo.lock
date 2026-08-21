@@ -8544,6 +8544,7 @@ dependencies = [
  "uuid",
  "vp_command",
  "vp_error",
+ "vp_global_only_cli",
  "vp_js_runtime",
  "vp_pm_cli",
  "vp_setup",
@@ -8552,6 +8553,13 @@ dependencies = [
  "vt_path",
  "vt_str",
  "vt_workspace",
+]
+
+[[package]]
+name = "vp_global_only_cli"
+version = "0.0.0"
+dependencies = [
+ "clap",
 ]
 
 [[package]]

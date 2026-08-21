@@ -334,8 +334,10 @@ pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
 
     match &args.command {
         Some(
-            crate::cli::Commands::Upgrade { .. }
-            | crate::cli::Commands::Implode { .. }
+            crate::cli::Commands::GlobalOnly(
+                vp_global_only_cli::GlobalOnlyCommand::Upgrade { .. }
+                | vp_global_only_cli::GlobalOnlyCommand::Implode { .. },
+            )
             | crate::cli::Commands::Lint { .. }
             | crate::cli::Commands::Fmt { .. },
         ) => false,

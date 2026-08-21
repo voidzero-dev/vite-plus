@@ -291,6 +291,7 @@ uuid = "1.17.0"
 vfs = "0.13.0"
 vp_command = { path = "crates/vp_command" }
 vp_error = { path = "crates/vp_error" }
+vp_global_only_cli = { path = "crates/vp_global_only_cli" }
 vp_js_runtime = { path = "crates/vp_js_runtime" }
 vp_migration = { path = "crates/vp_migration" }
 vp_pm_cli = { path = "crates/vp_pm_cli" }
