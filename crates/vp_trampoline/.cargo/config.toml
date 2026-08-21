@@ -5,12 +5,15 @@
 
 [unstable]
 # Recompile std with this crate's release profile (opt-level = "z" and
-# panic = "immediate-abort"). This is the main size lever: ~222KB -> ~82KB on
-# x86_64-pc-windows-msvc. Requires the rust-src rustup component.
+# panic = "immediate-abort"). Together with the no_main raw-Win32 source this
+# takes the sidecar-aware exe to 13 KiB on x86_64-pc-windows-msvc. Requires the
+# rust-src rustup component.
 build-std = ["std", "panic_abort"]
 # Replace std's default features (drops panic-unwind and backtrace, enables
-# the size-optimized code paths).
-build-std-features = ["optimize_for_size"]
+# the size-optimized code paths). compiler-builtins-mem provides memcpy and
+# friends from compiler_builtins instead of the CRT, which the #![no_main]
+# entry point needs.
+build-std-features = ["optimize_for_size", "compiler-builtins-mem"]
 # Let `cargo test` run with the abort-family panic strategy.
 panic-abort-tests = true
 
