@@ -406,7 +406,8 @@ jobs:
           - name: tiptap
             node-version: 24
             command: |
-              vp run build:demos
+              vp run build && vp run build:demos
+              vp run lint
               vp run test:unit
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
