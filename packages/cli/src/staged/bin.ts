@@ -34,7 +34,7 @@ if (parsedArgs.status === 'help') {
           },
           {
             label: '-p, --concurrent [number|boolean]',
-            description: 'Number of tasks to run concurrently, or false for serial',
+            description: 'Run tasks at the same time. Use false to run one task at a time',
           },
           {
             label: '--continue-on-error',
