@@ -4,11 +4,13 @@ vp = "local"
 env = { VP_CLI_BIN = "../../tsdown-migrate-stub.mjs" }
 steps = [
   { argv = ["vpt", "chmod", "+x", "tsdown-migrate-stub.mjs"], comment = "stub tsdown-migrate so the migration stays offline", continue-on-failure = true },
-  { argv = ["vpt", "rm", "-rf", "packages/b"], comment = "keep the success case to one workspace package", snapshot = false, continue-on-failure = true },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "workspace-only tsup configs should migrate automatically", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "all workspace-only tsup configs should migrate automatically", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "packages/a/tsup.config.ts", "--assert-not", "file"], comment = "package a original config is removed", continue-on-failure = true },
   { argv = ["vpt", "print-file", "packages/a/tsdown.config.ts"], comment = "package a gets a converted config", continue-on-failure = true },
   { argv = ["vpt", "print-file", "packages/a/package.json"], comment = "package a uses vp pack", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/b/tsup.config.ts", "--assert-not", "file"], comment = "package b original config is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/b/tsdown.config.ts"], comment = "package b gets a converted config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/b/package.json"], comment = "package b uses vp pack", continue-on-failure = true },
 ]
 
 [[case]]
