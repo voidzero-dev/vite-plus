@@ -218,6 +218,23 @@ jobs:
       - name: Build local vp
         run: cargo build --release -p vp_global_cli
 
+      - name: Shell installer rejects an unversioned Node sidecar
+        run: |
+          set -euo pipefail
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+
+          TEST_ROOT=$(mktemp -d)
+          TEST_BIN="$TEST_ROOT/bin"
+          INSTALL_DIR="$TEST_ROOT/data"
+          mkdir -p "$TEST_BIN"
+          touch "$TEST_BIN/node.exe" "$TEST_ROOT/vp.exe"
+          printf '%s\n' "$INSTALL_DIR" > "$TEST_BIN/node.shim"
+
+          if is_vite_plus_node_shim "$TEST_BIN" "$TEST_ROOT/vp.exe"; then
+            echo "install.sh accepted an unversioned node.shim"
+            exit 1
+          fi
+
       - name: CI hides shell file warnings
         run: |
           set -euo pipefail
@@ -1438,7 +1455,7 @@ jobs:
           if (Test-Path $legacyRoot) { throw "implode left the monolithic root" }
           if ($removingRoots.Count -ne 0) { throw "implode left a renamed monolithic root" }
 
-      - name: PowerShell installer preserves an unrelated Node executable
+      - name: PowerShell installer rejects an unversioned Node sidecar
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -1447,10 +1464,12 @@ jobs:
           $bin = Join-Path $root "bin"
           $cache = Join-Path $root "cache"
           $node = Join-Path $bin "node.exe"
+          $pointer = Join-Path $bin "node.shim"
           $fakeTgz = Join-Path $root "vite-plus.tgz"
           Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $bin | Out-Null
           [System.IO.File]::WriteAllText($node, "foreign-node")
+          [System.IO.File]::WriteAllText($pointer, "$data`n")
           New-Item -ItemType File -Force -Path $fakeTgz | Out-Null
 
           Remove-Item Env:VP_HOME -ErrorAction SilentlyContinue
@@ -1469,8 +1488,8 @@ jobs:
           if ([System.IO.File]::ReadAllText($node) -ne "foreign-node") {
             Write-Error "install.ps1 replaced an unrelated node.exe"
           }
-          if (Test-Path (Join-Path $bin "node.shim")) {
-            Write-Error "install.ps1 claimed an unrelated node.exe"
+          if ([System.IO.File]::ReadAllText($pointer) -ne "$data`n") {
+            Write-Error "install.ps1 changed the unversioned node.shim"
           }
 
       - name: Complete directory overrides keep the split layout through the trampoline
