@@ -28,6 +28,7 @@ tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 vp_command = { workspace = true }
+vp_cli_help = { workspace = true }
 vp_error = { workspace = true }
 vp_migration = { workspace = true }
 vp_pm_cli = { workspace = true }

@@ -14,14 +14,12 @@ import type { Options } from 'lint-staged';
 
 import { parseStagedArgs } from '../../binding/index.js';
 import { resolveViteConfig } from '../resolve-vite-config.ts';
-import { renderCliDoc } from '../utils/help.ts';
 import { errorMsg, log, printHeader } from '../utils/terminal.ts';
 
 const parsedArgs = parseStagedArgs(process.argv.slice(3));
 
-if (parsedArgs.status === 'help') {
-  printHeader();
-  log(renderCliDoc(parsedArgs.doc));
+if (parsedArgs.status === 'exit') {
+  process.exit(parsedArgs.code);
 } else if (parsedArgs.status === 'error') {
   printHeader();
   errorMsg(parsedArgs.error.message.replace(/^error:\s*/, ''));
