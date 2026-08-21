@@ -128,22 +128,24 @@ flowchart TD
     resolve -->|not found| globalBin["global dist/bin.js"]
     localBin --> binTs
     globalBin --> binTs["bin.ts"]
-    binTs --> js["B: create, migrate, config, hooks, staged, --version<br/>→ dist/*.js"]
+    binTs --> js["B: create, migrate, config, hooks, staged<br/>→ dist/*.js"]
     binTs --> napi["C: dev, build, test, lint, fmt, check, pack, run, exec, preview, cache<br/>→ NAPI"]
     binTs --> napiPm["install, add, remove, ...<br/>→ NAPI → vp_pm_cli"]
 
     G --> toolchain["toolchain<br/>commands::toolchain"]
     toolchain -->|"--global"| manifest["render global toolchain.json"]
     toolchain --> C
+    G --> version["--version<br/>commands::version"]
     G --> env["env<br/>commands::env"]
     G --> selfmgmt["upgrade, implode<br/>commands::{upgrade, implode}"]
 ```
 
 - **Category A (Package Manager)**: `install`, `add`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>` — clap definitions and dispatch live in the shared `crates/vp_pm_cli/` crate. Both the global CLI and the local CLI binding flatten `vp_pm_cli::PackageManagerCommand` into their top-level argument parser and call `vp_pm_cli::dispatch` to run the underlying package manager (pnpm/npm/yarn/bun). The global CLI additionally intercepts the `--global` projections (`PackageManagerCommand::managed_global_command`) and serves them from the vite-plus-managed install store in `commands::global` before delegating.
-- **Category B (JS Script Commands)**: `create`, `migrate`, `config`, `hooks`, `staged`, and `--version` — implemented in JavaScript. Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it with the managed Node.js runtime, falling back to the global installation's `dist/bin.js` when no local installation exists. The unified `bin.ts` entry point then loads the rolldown-bundled module for the command.
+- **Category B (JS Script Commands)**: `create`, `migrate`, `config`, `hooks`, `staged` — implemented in JavaScript. Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it with the managed Node.js runtime, falling back to the global installation's `dist/bin.js` when no local installation exists. The unified `bin.ts` entry point then loads the rolldown-bundled module for the command.
 - **Category C (Local CLI Delegation)**: `dev`, `build`, `test`, `lint`, `fmt`, `check`, `pack`, `run`, `exec`, `preview`, `cache` — forwarded to the local vite-plus CLI through `commands::delegate`, which resolves `bin.js` the same way as Category B; `bin.ts` then routes them to the NAPI binding. `lint --init` and `fmt --init`/`--migrate` are forced to the global installation (`commands::delegate::execute_global`).
 - **Rust-native global commands**: the remaining top-level variants are implemented in the global binary itself and have no local counterpart.
   - `toolchain` (`commands::toolchain`) is a hybrid: without `--global` it delegates to the local CLI like Category C, with `--global` it renders the global installation's `toolchain.json` directly.
+  - `--version` (`commands::version`) prints the `vp` binary version and the bundled tool versions directly from Rust; it never reaches `bin.ts`.
   - `env` (`commands::env`) manages Node.js versions, shims, and pins.
   - `upgrade` and `implode` (`commands::upgrade`, `commands::implode`) are the self-management commands for the `vp` binary and its install directory.
 
