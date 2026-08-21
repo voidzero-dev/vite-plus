@@ -2,7 +2,7 @@
 
 ## Summary
 
-The local Vite+ CLI runs in Node.js. It uses JavaScript for five commands:
+The local Vite+ CLI runs in Node.js. Five commands use JavaScript:
 
 - `create`
 - `migrate`
@@ -12,23 +12,25 @@ The local Vite+ CLI runs in Node.js. It uses JavaScript for five commands:
 
 This RFC moves argument parsing for these commands to Rust `clap`. The existing NAPI binding connects Node.js to Rust.
 
-JavaScript continues to run each command. It keeps prompts, file operations, and calls to JavaScript libraries.
+JavaScript continues to run each command. JavaScript keeps the prompts, file operations, and calls to JavaScript libraries.
 
-The global Rust CLI continues to forward the arguments without parsing them. This rule protects compatibility with different local Vite+ versions.
+The global Rust CLI continues to forward the arguments without parsing them. Argument forwarding keeps different local Vite+ versions compatible.
 
 ## Terms
 
 | Term                | Meaning                                                         |
 | ------------------- | --------------------------------------------------------------- |
 | Argument grammar    | The valid options, values, aliases, and positions for a command |
+| `clap`              | The Rust library that parses command-line arguments             |
 | Local CLI           | The Node.js CLI from the selected `vite-plus` package           |
+| `mri`               | The JavaScript library that parses command-line arguments       |
 | NAPI binding        | The native interface between Node.js and Rust                   |
 | Positional argument | A value that does not have an option name                       |
 | Parse outcome       | A typed object with an `ok`, `exit`, or `error` status          |
 
 ## Motivation
 
-The local entry point is `packages/cli/src/bin.ts`. It sends most commands to the Rust CLI through NAPI.
+The local entry point is `packages/cli/src/bin.ts`. The entry point sends most commands to the Rust CLI through NAPI.
 
 The five commands in this RFC run in JavaScript. Each command uses `mri` and local TypeScript code to parse arguments.
 
@@ -37,21 +39,21 @@ Thus, Vite+ has two argument parsers:
 - Rust commands use `clap`.
 - JavaScript commands use `mri`.
 
-[Issue #2488](https://github.com/voidzero-dev/vite-plus/issues/2488) showed a defect in this design. `mri` returns `false` for `--no-concurrent`.
+[Issue #2488](https://github.com/voidzero-dev/vite-plus/issues/2488) showed a defect in the two-parser design. `mri` returns `false` for `--no-concurrent`.
 
-The old `staged` code converted `false` to `0`. It then gave `concurrent: 0` to `lint-staged`.
+The old `staged` code converted `false` to `0`. The code then gave `concurrent: 0` to `lint-staged`.
 
-The task queue did not start. [PR #2501](https://github.com/voidzero-dev/vite-plus/pull/2501) added JavaScript checks for this value.
+The task queue did not start. [PR #2501](https://github.com/voidzero-dev/vite-plus/pull/2501) added JavaScript checks for the zero concurrency value.
 
-That fix protects `staged`, but the two parsers remain. The other commands have related risks:
+The new checks prevent the task-queue failure. Vite+ still has two parsers. The other commands have related risks:
 
-- `vp config --no-hooks-dir` can return `false` where JavaScript expects a path.
+- For `vp config --no-hooks-dir`, `mri` can return `false` where JavaScript expects a path.
 - `mri` accepts many unknown options and unused positional arguments.
 - `create` and `migrate` use TypeScript assertions on values from `mri`.
 - TypeScript assertions do not check values at run time.
 - Each command defines its own rules for negation and repeated options.
 
-Vite+ already includes a native binding and `clap`. This design uses those components and adds no new runtime parser.
+The new parser uses the existing native binding and `clap`. The new parser does not add a runtime parser.
 
 ## Goals
 
@@ -90,7 +92,7 @@ This RFC does not:
 | `packages/cli/src/help.ts`      | Keep static help for tool-backed commands                  |
 | JavaScript command modules      | Apply defaults and run command operations                  |
 
-The global CLI must keep these command arguments as `Vec<String>`. It must not parse the local option grammar.
+The global CLI must keep these command arguments as `Vec<String>`. The global CLI must not parse the local option grammar.
 
 A global binary can run an older or newer local package. Global parsing can reject a valid option from that package.
 
@@ -127,7 +129,7 @@ typed NAPI parse outcome
 JavaScript command operations
 ```
 
-JavaScript sends raw arguments to one NAPI parser. It does not parse the returned values again.
+JavaScript sends raw arguments to one NAPI parser. JavaScript does not parse the returned values again.
 
 ## Rust module structure
 
@@ -186,12 +188,12 @@ where
 The implementation can change Rust ownership details. It must keep these rules:
 
 - Use the same parse path for each command.
-- Add a synthetic argument at index zero.
-- Use a fallible match conversion.
+- Add the command name at index zero.
+- Use a match conversion that can return an error.
 - Return parse errors as data.
 - Do not call `get_matches`, `parse`, `exit`, or a print function.
 
-Tests can call this function directly. They do not need to change `process.argv`.
+Tests can call this function directly. The tests do not need to change `process.argv`.
 
 See these `clap` APIs:
 
@@ -237,7 +239,7 @@ The statuses have these meanings:
 
 Map `clap::error::ErrorKind::DisplayHelp` to `exit` with code 0. Map all other argument errors to `error`.
 
-JavaScript prints the Vite+ header before a diagnostic. It exits with code 1 for invalid arguments.
+JavaScript prints the Vite+ header before a diagnostic. JavaScript exits with code 1 for invalid arguments.
 
 Rust does not call `clap::Error::exit()` or `std::process::exit()`. JavaScript controls the Node.js process lifetime.
 
@@ -273,7 +275,7 @@ Use these rules for NAPI output:
 - Keep Rust-only enums inside the parser.
 - Use integers that JavaScript can represent exactly.
 
-JavaScript can keep types for larger command inputs. Do not use an assertion to hide an unchecked parser value.
+TypeScript can define types for larger command inputs. Do not use a type assertion to hide an unchecked value.
 
 ## Help
 
@@ -281,9 +283,9 @@ Use `vp_cli_help` as the Rust help model and renderer.
 
 `clap` owns the `-h` and `--help` actions. The parser reports either action as `DisplayHelp`.
 
-The NAPI function builds a help document from the command metadata. Rust prints the Vite+ header and help document to stdout. It then returns `exit` with code 0.
+The NAPI function builds a help document from the command metadata. Rust prints the Vite+ header and help document to stdout. The function then returns `exit` with code 0.
 
-The shared adapter reads public metadata from the built `clap::Command`. It reads these values:
+The shared adapter reads these public values from the built `clap::Command`:
 
 - usage;
 - command summary;
@@ -296,17 +298,25 @@ The shared adapter reads public metadata from the built `clap::Command`. It read
 
 The global CLI uses the same document types and formatter. The formatter keeps help text within the terminal width. JavaScript does not receive the document or the rendered text.
 
-The upstream tool help workflow does not change. `dev`, `build`, `preview`, `test`, `lint`, `fmt`, and `pack` continue to use `commandHelpDocs` and `renderCliDoc()`.
+The upstream tool help workflow does not change. `commandHelpDocs` and `renderCliDoc()` continue to provide help for these commands:
+
+- `dev`
+- `build`
+- `preview`
+- `test`
+- `lint`
+- `fmt`
+- `pack`
 
 The daily dependency upgrade continues to use `.claude/skills/sync-upstream-cli-help/SKILL.md`. This RFC does not move these static documents to `clap` or `vp_cli_help`.
 
-A help flag takes priority over a later invalid option. This behavior matches the current JavaScript command.
+A help flag takes priority over a later invalid option. The current JavaScript command gives help the same priority.
 
 The `clap` schema owns option names, value names, aliases, and descriptions. JavaScript does not keep a second option list.
 
-Documentation URLs and custom examples do not define accepted arguments. A command can add this presentation data before Rust prints the document.
+Documentation URLs and custom examples do not define accepted arguments. A command module can add documentation URLs and examples before Rust prints the document.
 
-The shared adapter uses the `clap::Arg` display form for option labels. This form shows optional values with square brackets.
+The shared adapter uses the `clap::Arg` display form for option labels. The display form shows optional values with square brackets.
 
 ## Strict parsing and negation
 
@@ -318,9 +328,9 @@ The new schemas reject these inputs:
 - repeated scalar options, unless this RFC defines another rule;
 - `--no-*` forms that the schema does not define.
 
-This behavior is stricter than `mri`. The documented CLI defines the supported inputs.
+`clap` parsing is stricter than `mri` parsing. The documented CLI defines the supported inputs.
 
-Define each supported negative option in `clap`. Use overrides when a positive and negative form set the same value.
+Define each supported negative option in `clap`. Use `clap` overrides when a positive form and a negative form set one field.
 
 Use these repetition rules:
 
@@ -339,7 +349,7 @@ Do not add automatic negation. For example, reject `--no-cwd`, `--no-diff`, and 
 
 ### `staged`
 
-Migrate `staged` first. It tests these parser features:
+Migrate `staged` first. This command uses these parser features:
 
 - aliases;
 - explicit negation;
@@ -419,7 +429,7 @@ The schema includes these options:
 
 `--no-stash` is the supported negative stash option. Do not infer `--stash` or `--no-debug` from `mri`.
 
-`packages/cli/src/staged/bin.ts` reads the NAPI outcome. It converts an `ok` value to `lint-staged` options.
+`packages/cli/src/staged/bin.ts` reads the NAPI outcome. The module converts an `ok` value to `lint-staged` options.
 
 Remove `packages/cli/src/staged/args.ts` when it has no callers.
 
@@ -434,7 +444,7 @@ Use these options:
 -h / --help
 ```
 
-Keep the positive `--hooks` and `--agent` forms. These forms match the current defaults, but the current parser accepts them.
+Keep the positive `--hooks` and `--agent` forms. The current parser accepts these forms. The forms also match the current defaults.
 
 Reject `--no-hooks-dir`. Reject `--hooks-dir` when it has no path.
 
@@ -450,11 +460,17 @@ Rust returns the hooks-directory string without changes. JavaScript keeps these 
 
 Define `enable`, `disable`, and `status` as `clap` subcommands. Put `--hooks-dir <path>` on each subcommand.
 
-The current grammar puts `--hooks-dir` after the subcommand. Keep this order.
+The current grammar puts `--hooks-dir` after the subcommand. Keep `--hooks-dir` after the subcommand.
 
-`vp hooks` and help flags show the current top-level help. Reject unknown subcommands, unknown options, and extra positional arguments.
+These commands show the current top-level help:
 
-Reject invalid arguments before `enable` or `disable` changes the repository. Remove `packages/cli/src/hooks/args.ts` after the migration.
+- `vp hooks`
+- `vp hooks -h`
+- `vp hooks --help`
+
+Reject unknown subcommands, unknown options, and extra positional arguments.
+
+Parse all arguments before JavaScript changes the repository for `enable` or `disable`. Remove `packages/cli/src/hooks/args.ts` after the migration.
 
 ### `migrate`
 
@@ -485,7 +501,7 @@ JavaScript keeps agent and editor lookup. The JavaScript catalogs define compati
 
 ### `create`
 
-Migrate `create` last. It has this grammar:
+Migrate `create` last. The command has this grammar:
 
 ```text
 vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
@@ -507,9 +523,9 @@ Vite+ accepts these options before `--`:
 -h / --help
 ```
 
-Define the final `templateArgs` positional with `last = true`. This setting requires `--` before template arguments.
+Define the final `templateArgs` positional with `last = true`. The `last = true` setting requires `--` before template arguments.
 
-`clap` treats each later token as a value. This includes options that start with `-` and another literal `--`.
+`clap` treats each later token as a value. A later token can start with `-` or be another literal `--`.
 
 See the `clap` [argument escape and `last` rules](https://docs.rs/clap/latest/clap/_concepts/).
 
@@ -523,7 +539,7 @@ vp create -- --template react-ts
 
 Remove the manual JavaScript split only after equivalent tests pass. Reject a second positional argument before `--`.
 
-The current code ignores that second positional argument. This RFC intentionally rejects it.
+The current code ignores the second positional argument. The new parser rejects it.
 
 Accept only `pnpm`, `npm`, `yarn`, or `bun` for `--package-manager`.
 
@@ -531,7 +547,7 @@ Reuse `PackageManagerType::from_name()` from `vp_pm_cli`. Do not define a second
 
 Keep agent and editor name lookup in JavaScript. Reject the undocumented `--all` option.
 
-The current `mri` configuration accepts `--all`, but no command code reads it.
+The current `mri` configuration accepts `--all`. No command code reads this option.
 
 ## JavaScript-owned rules
 
@@ -633,13 +649,13 @@ Remove `mri` if no unrelated command uses it. Then update the lockfile.
 
 Remove unused TypeScript parser types and conversion functions.
 
-### Phase 6: Global clap adapter cleanup
+### Phase 6: Clean up the global clap adapter
 
-The global CLI uses the shared help model and formatter in Phase 1. It still converts some rendered `clap` text into help documents.
+The global CLI uses the shared help model and formatter in Phase 1. The global CLI still converts some rendered `clap` text into help documents.
 
-Replace that text conversion with the shared `clap` metadata adapter after the five command migrations.
+Replace the rendered-text conversion with the shared `clap` metadata adapter after the five command migrations.
 
-Do not make this cleanup a requirement for the local parser migration.
+Do not require the global adapter cleanup for the local parser migration.
 
 ## Tests
 
@@ -698,7 +714,7 @@ For each command migration, test these cases:
 - a missing value;
 - an unsupported negative option.
 
-Keep the `vp staged --no-concurrent` test. It must show that staged tasks run.
+Keep the `vp staged --no-concurrent` test. The test must show that staged tasks run.
 
 Add `create` tests that compare each template argument after `--`. Use local and global test modes when a fixture supports both.
 
@@ -708,9 +724,9 @@ Add `create` tests that compare each template argument after `--`. Use local and
 
 An option change requires a new Rust binding build. Vite+ already requires this binding for the local CLI.
 
-The change adds build time, but it adds no JavaScript runtime dependency. Small command modules keep tests focused.
+The change adds build time. The change adds no JavaScript runtime dependency. Each command module has focused tests.
 
-### Help metadata conversion and output
+### Help conversion and output
 
 `clap` does not provide the Vite+ help document shape. The shared adapter converts public command metadata.
 
@@ -736,41 +752,43 @@ Release notes must identify the new strict checks. A diagnostic must show the re
 
 ### Keep `mri`
 
-PR #2501 shows that local checks can fix one defect. This option gives the smallest first change.
+PR #2501 shows that local checks can fix one defect. Adding local checks is the smallest first change.
 
 Each command still needs a parser contract next to `clap`. TypeScript still receives unchecked values.
 
-This option fixes symptoms but keeps two parsers.
+Local checks fix individual defects. Vite+ still has two parsers.
 
 ### Use `util.parseArgs`
 
 Supported Node.js versions include `util.parseArgs`. The [Node.js API](https://nodejs.org/api/util.html#utilparseargsconfig) supports strict checks and negative Boolean options.
 
-It also supports strings, repeated values, token order, and unknown-option checks.
+`util.parseArgs` also supports strings, repeated values, token order, and unknown-option checks.
 
 Vite+ still has two runtime parsers. Concurrency needs custom conversion. `create` also needs token handling for `--`.
 
-This option is useful when a project has no native `clap` binding. Vite+ already has that binding.
+`util.parseArgs` is useful when a project has no native `clap` binding. Vite+ already has a native `clap` binding.
 
 ### Add another JavaScript CLI framework
 
-`cac`, Commander, and similar packages can add strict checks. They also add another dependency and command grammar.
+`cac`, Commander, and similar packages can add strict checks. These packages also add a dependency and a command grammar.
 
-Rust commands continue to use `clap`. Therefore, Vite+ still has two parsers.
+Rust commands continue to use `clap`. Vite+ still has two parsers.
 
 ### Parse local options in the global CLI
 
-The global CLI can reject arguments before it starts Node.js. This design links option support to the global binary version.
+The global CLI can reject arguments before it starts Node.js. Global parsing links option support to the global binary version.
 
-That design breaks the version difference rule. The selected local package must define its supported options.
+Global parsing breaks the version difference rule. The selected local package must define its supported options.
 
 ### Add commands to the top-level `CLIArgs`
 
 The binding can parse all local arguments into one enum. JavaScript must select a command before it calls the current `run()` executor.
 
-This design needs a new parse-and-dispatch protocol. It also creates one large NAPI union for unrelated commands.
+Adding commands to the top-level `CLIArgs` enum requires a new parse-and-dispatch protocol. The enum also creates a large NAPI union.
 
-Command-specific functions match the current dispatch point. They can still use one shared parser.
+The NAPI union contains unrelated commands.
+
+Command-specific functions match the current dispatch point. These functions can still use one shared parser.
 
 ### Parse through `run()`
 
@@ -780,33 +798,33 @@ Command-specific parser functions keep parsing separate from execution.
 
 ### Move command operations to Rust
 
-This option removes the parser language boundary. It also moves prompts, JavaScript library calls, and established file logic.
+Moving command operations to Rust removes the parser language boundary. The implementation must also move prompts, JavaScript library calls, and established file logic.
 
-That work is larger than the parser change.
+Moving command operations to Rust is larger than the parser change.
 
 ### Generate both languages from a neutral schema
 
-A generator can define parsing and help for both languages. It must support subcommands, overrides, optional values, and custom parsers.
+A generator can define parsing and help for both languages. The generator must support subcommands, overrides, optional values, and custom parsers.
 
-It must also support NAPI types and the JavaScript help layout. The generator becomes a third schema system.
+The generator must also support NAPI types and the JavaScript help layout. The generator adds a third schema system.
 
 `clap` and generated NAPI declarations provide the required contract with less code.
 
 ### Return rendered clap help
 
-The NAPI function can return the complete text from `Command::render_help()`. This option removes the metadata adapter.
+The NAPI function can return the complete text from `Command::render_help()`. Returning complete text removes the metadata adapter.
 
-It also gives `clap` control of layout, wrapping, and styles. Vite+ then loses its shared Rust presentation.
+`clap` then controls the layout, wrapping, and styles. Vite+ loses its shared Rust presentation.
 
 The shared adapter keeps one argument source and one Vite+ renderer. Rust prints the result without a NAPI string conversion.
 
 ### Throw NAPI errors
 
-A synchronous NAPI `Result<T>` can throw an error with a stable code. This design gives the success case a smaller type.
+A synchronous NAPI `Result<T>` can throw an error with a stable code. This contract gives the success case a smaller type.
 
 TypeScript declarations do not show thrown errors. JavaScript must also separate user errors from native failures.
 
-The parse outcome keeps user errors in typed control flow. It reserves native exceptions for binding failures.
+The parse outcome keeps user errors in typed control flow. The contract reserves native exceptions for binding failures.
 
 ## Acceptance criteria
 
