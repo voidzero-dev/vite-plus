@@ -156,7 +156,7 @@ jobs:
           const { existsSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
           const { gzipSync } = require('node:zlib');
 
-          const measureDirectory = (directory) => {
+          const measureDirectory = (directory, includeFile = () => true) => {
             let files = 0;
             let raw = 0;
             const visit = (currentDirectory) => {
@@ -164,7 +164,7 @@ jobs:
                 const entryPath = `${currentDirectory}/${entry.name}`;
                 if (entry.isDirectory()) {
                   visit(entryPath);
-                } else if (entry.isFile()) {
+                } else if (entry.isFile() && includeFile(entryPath)) {
                   files += 1;
                   raw += readFileSync(entryPath).length;
                 }
@@ -206,11 +206,18 @@ jobs:
             };
           }
           if (process.env.PLATFORM === 'linux') {
-            const distDirectory = 'packages/cli/dist';
-            if (!existsSync(distDirectory)) {
-              throw new Error(`Expected final dist package at ${distDirectory}`);
+            const cliDistDirectory = 'packages/cli/dist';
+            const coreDistDirectory = 'packages/core/dist';
+            for (const directory of [cliDistDirectory, coreDistDirectory]) {
+              if (!existsSync(directory)) {
+                throw new Error(`Expected final dist package at ${directory}`);
+              }
             }
-            artifacts.dist = measureDirectory(distDirectory);
+            artifacts.cliDist = measureDirectory(cliDistDirectory);
+            artifacts.coreDist = measureDirectory(
+              coreDistDirectory,
+              (file) => !file.endsWith('.node'),
+            );
           }
 
           const result = {
@@ -376,8 +383,30 @@ jobs:
             };
 
             const shortSha = process.env.HEAD_SHA.slice(0, 7);
+            const distArtifacts = [
+              {
+                name: '`packages/cli/dist`',
+                baseRaw: baseLinux.artifacts.cliDist.raw,
+                headRaw: headLinux.artifacts.cliDist.raw,
+              },
+              {
+                name: '`packages/core/dist`',
+                baseRaw: baseLinux.artifacts.coreDist.raw,
+                headRaw: headLinux.artifacts.coreDist.raw,
+              },
+              {
+                name: 'Combined package dist',
+                baseRaw:
+                  baseLinux.artifacts.cliDist.raw + baseLinux.artifacts.coreDist.raw,
+                headRaw:
+                  headLinux.artifacts.cliDist.raw + headLinux.artifacts.coreDist.raw,
+              },
+            ];
             const rows = [
-              `| \`packages/cli/dist\` | All files | ${formatSize(baseLinux.artifacts.dist.raw)} | ${formatSize(headLinux.artifacts.dist.raw)} | ${formatDelta(baseLinux.artifacts.dist.raw, headLinux.artifacts.dist.raw)} |`,
+              ...distArtifacts.map(
+                (artifact) =>
+                  `| ${artifact.name} | Directory total | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
+              ),
               ...artifacts.flatMap((artifact) => [
                 `| ${artifact.name} | Binary | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
                 `| ${artifact.name} | gzip -9 | ${formatSize(artifact.baseGzip)} | ${formatSize(artifact.headGzip)} | ${formatDelta(artifact.baseGzip, artifact.headGzip)} |`,
@@ -389,7 +418,7 @@ jobs:
               `### CLI artifact sizes (\`${shortSha}\`)`,
               '',
               'Final release artifacts built by the canonical `build-upstream` and `build-windows-cli` actions.',
-              'The `packages/cli/dist` row is the total size of all files from the Linux build.',
+              'The dist rows use the Linux build. The core total excludes `.node` files to match the release artifact.',
               '',
               '| Artifact | Format | Base | PR | Change |',
               '| --- | --- | ---: | ---: | ---: |',
