@@ -11,11 +11,12 @@
 # toolchain and the rust-src component (both come from the repo
 # rust-toolchain.toml).
 #
-# Size on x86_64-pc-windows-msvc: ~82KB, down from ~222KB when it was a
-# workspace member built with the precompiled std. build-std recompiles std
-# with this profile, and panic = "immediate-abort" compiles out the panic
-# formatting, unwinding, and backtrace machinery. Background and further
-# options: rfcs/trampoline-exe-for-shims.md.
+# Size on x86_64-pc-windows-msvc: 13 KiB, down from ~222 KiB when the
+# sidecar-aware implementation used the precompiled std. build-std recompiles
+# std with this profile, panic = "immediate-abort" compiles out the panic
+# formatting, unwinding, and backtrace machinery, and the Windows build uses
+# #![no_main] with raw Win32 calls (src/win.rs) instead of
+# std::process::Command. Background: rfcs/trampoline-exe-for-shims.md.
 cargo-features = ["panic-immediate-abort"]
 
 [package]
