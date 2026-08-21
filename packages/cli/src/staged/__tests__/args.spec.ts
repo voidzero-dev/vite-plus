@@ -83,8 +83,27 @@ describe('staged arguments', () => {
     });
   });
 
-  it('returns help as data', () => {
-    expect(parseStagedArgs(['--help'])).toEqual({ status: 'help' });
-    expect(parseStagedArgs(['--help', '--unknown'])).toEqual({ status: 'help' });
+  it('returns structured help data', () => {
+    const outcome = parseStagedArgs(['--help']);
+    expect(outcome.status).toBe('help');
+    if (outcome.status !== 'help') {
+      throw new Error(`The parser returned ${outcome.status}. The test expected help.`);
+    }
+
+    expect(outcome.doc).toMatchObject({
+      usage: 'vp staged [OPTIONS]',
+      summary: 'Run linters on staged files using staged config from vite.config.ts.',
+      documentationUrl: 'https://viteplus.dev/guide/commit-hooks',
+    });
+    expect(outcome.doc.sections).toHaveLength(1);
+    expect(outcome.doc.sections[0]?.rows).toContainEqual({
+      label: '-p, --concurrent [<number|boolean>]',
+      description: 'Run tasks at the same time. Use false to run one task at a time',
+    });
+    expect(outcome.doc.sections[0]?.rows).toContainEqual({
+      label: '--no-concurrent',
+      description: 'Run one task at a time',
+    });
+    expect(parseStagedArgs(['--help', '--unknown'])).toEqual(outcome);
   });
 });

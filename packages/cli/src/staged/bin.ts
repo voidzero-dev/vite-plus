@@ -20,60 +20,8 @@ import { errorMsg, log, printHeader } from '../utils/terminal.ts';
 const parsedArgs = parseStagedArgs(process.argv.slice(3));
 
 if (parsedArgs.status === 'help') {
-  const helpMessage = renderCliDoc({
-    usage: 'vp staged [options]',
-    summary: 'Run linters on staged files using staged config from vite.config.ts.',
-    documentationUrl: 'https://viteplus.dev/guide/commit-hooks',
-    sections: [
-      {
-        title: 'Options',
-        rows: [
-          {
-            label: '--allow-empty',
-            description: 'Allow empty commits when tasks revert all staged changes',
-          },
-          {
-            label: '-p, --concurrent [number|boolean]',
-            description: 'Run tasks at the same time. Use false to run one task at a time',
-          },
-          {
-            label: '--continue-on-error',
-            description: 'Run all tasks to completion even if one fails',
-          },
-          { label: '--cwd <path>', description: 'Working directory to run all tasks in' },
-          { label: '-d, --debug', description: 'Enable debug output' },
-          {
-            label: '--diff <string>',
-            description: 'Override the default --staged flag of git diff',
-          },
-          {
-            label: '--diff-filter <string>',
-            description: 'Override the default --diff-filter=ACMR flag of git diff',
-          },
-          {
-            label: '--fail-on-changes',
-            description: 'Fail with exit code 1 when tasks modify tracked files',
-          },
-          {
-            label: '--hide-partially-staged',
-            description: 'Hide unstaged changes from partially staged files',
-          },
-          {
-            label: '--hide-unstaged',
-            description: 'Hide all unstaged changes before running tasks',
-          },
-          { label: '--no-stash', description: 'Disable the backup stash' },
-          { label: '-q, --quiet', description: 'Disable console output' },
-          { label: '-r, --relative', description: 'Pass filepaths relative to cwd to tasks' },
-          { label: '--revert', description: 'Revert to original state in case of errors' },
-          { label: '-v, --verbose', description: 'Show task output even when tasks succeed' },
-          { label: '-h, --help', description: 'Show this help message' },
-        ],
-      },
-    ],
-  });
   printHeader();
-  log(helpMessage);
+  log(renderCliDoc(parsedArgs.doc));
 } else if (parsedArgs.status === 'error') {
   printHeader();
   errorMsg(parsedArgs.error.message.replace(/^error:\s*/, ''));
