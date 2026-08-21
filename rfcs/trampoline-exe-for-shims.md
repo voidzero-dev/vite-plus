@@ -197,15 +197,15 @@ infer the layout from directory paths.
 
 ### Size Optimization
 
-| Technique                                                              | Status |
-| ---------------------------------------------------------------------- | ------ |
-| Zero external dependencies (raw FFI, no `windows` crate)               | Done   |
-| No `core::fmt` (diagnostics via `WriteFile` + manual decimal formatter) | Done   |
-| Own profile: `opt-level="z"`, `lto="fat"`, `codegen-units=1`, `strip`  | Done   |
-| build-std: recompile `std` with this profile (`-Zbuild-std`)           | Done   |
-| `panic = "immediate-abort"` (no panic formatting, unwinding, backtrace) | Done   |
-| `#![no_main]` + `mainCRTStartup` (no CRT startup, no `std` runtime init) | Done |
-| Raw `CreateProcessW` instead of `std::process::Command`                | Done   |
+| Technique                                                                | Status |
+| ------------------------------------------------------------------------ | ------ |
+| Zero external dependencies (raw FFI, no `windows` crate)                 | Done   |
+| No `core::fmt` (diagnostics via `WriteFile` + manual decimal formatter)  | Done   |
+| Own profile: `opt-level="z"`, `lto="fat"`, `codegen-units=1`, `strip`    | Done   |
+| build-std: recompile `std` with this profile (`-Zbuild-std`)             | Done   |
+| `panic = "immediate-abort"` (no panic formatting, unwinding, backtrace)  | Done   |
+| `#![no_main]` + `mainCRTStartup` (no CRT startup, no `std` runtime init) | Done   |
+| Raw `CreateProcessW` instead of `std::process::Command`                  | Done   |
 
 **Binary size**: 13,312 B on x86_64-pc-windows-msvc and 13,824 B on
 aarch64-pc-windows-msvc, including sidecar parsing and error diagnostics. The
@@ -217,15 +217,15 @@ only KERNEL32.
 
 The sidecar controls the directory environment inherited by `vp.exe`:
 
-| Variable            | When                    | Purpose                                                      |
-| ------------------- | ----------------------- | ------------------------------------------------------------ |
-| `VP_HOME`           | Single-root layout      | Pins all Vite+ directories to the sidecar's data root        |
-| `VP_HOME`           | Split layout            | Removed so it cannot override the category roots             |
-| `VP_DATA_DIR`       | Split layout            | Pins the payload and state root                              |
-| `VP_BIN_DIR`        | Split layout            | Pins the directory that contains the shim                    |
-| `VP_CACHE_DIR`      | Split layout            | Pins the cache root                                          |
-| `VP_SHIM_TOOL`      | Tool shims, except `vp` | Selects shim dispatch for the named tool                     |
-| `VP_TOOL_RECURSION` | Removed for tool shims  | Forces fresh version resolution for nested shim calls        |
+| Variable            | When                    | Purpose                                               |
+| ------------------- | ----------------------- | ----------------------------------------------------- |
+| `VP_HOME`           | Single-root layout      | Pins all Vite+ directories to the sidecar's data root |
+| `VP_HOME`           | Split layout            | Removed so it cannot override the category roots      |
+| `VP_DATA_DIR`       | Split layout            | Pins the payload and state root                       |
+| `VP_BIN_DIR`        | Split layout            | Pins the directory that contains the shim             |
+| `VP_CACHE_DIR`      | Split layout            | Pins the cache root                                   |
+| `VP_SHIM_TOOL`      | Tool shims, except `vp` | Selects shim dispatch for the named tool              |
+| `VP_TOOL_RECURSION` | Removed for tool shims  | Forces fresh version resolution for nested shim calls |
 
 ### Ctrl+C Handling
 

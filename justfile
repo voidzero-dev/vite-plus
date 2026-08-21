@@ -73,8 +73,8 @@ watch-check:
 # vp_cli_snapshots is excluded: its suite needs a built global binary and
 # node, and runs via `just snapshot-test` instead.
 # vp_trampoline is excluded from the workspace and tests from its own
-# directory (build-std). Its only test module is unix-only, so the Windows
-# recipe skips it instead of paying for a no-test build-std compile.
+# directory on Unix. Its portable parser and layout tests run there, while
+# Windows shim behavior is covered by the Windows CLI snapshot suite.
 # Single source of truth for cargo test, used by CI too.
 [unix]
 test:
