@@ -58,27 +58,20 @@ The new parser uses the existing native binding and `clap`. The new parser does 
 ## Goals
 
 1. Use `clap` to parse the five JavaScript command grammars.
-2. Return typed values through generated NAPI declarations.
-3. Build and print option help from the same `clap` command.
-4. Reject invalid arguments before command work starts.
-5. Keep the local CLI in Node.js.
-6. Keep command work in JavaScript.
-7. Preserve all template arguments after `--` for `vp create`.
-8. Keep environment defaults and file-system rules in JavaScript.
-9. Migrate one command at a time.
-10. Migrate `staged` first.
+2. Return typed values and reject invalid arguments before command work starts.
+3. Build and print option help from the same `clap` grammar.
+4. Keep the local CLI, command work, defaults, and file-system rules in JavaScript.
+5. Preserve all template arguments after `--` for `vp create`.
 
 ## Non-goals
 
 This RFC does not:
 
-- move command work to Rust;
-- replace the Node.js local CLI;
+- move the local CLI or command work to Rust;
 - make the global CLI parse local command options;
 - send these commands through the existing `run()` executor;
 - replace `renderCliDoc()` for commands outside this migration;
-- generate Rust schemas from TypeScript;
-- add a neutral schema language;
+- generate Rust schemas from TypeScript or a neutral schema language;
 - change `-C`, `vpr`, command routing, or package-manager routing.
 
 ## Ownership
