@@ -397,6 +397,12 @@ jobs:
               # submit a fix PR to varletjs/varlet after the next vite-plus release.
               vp run lint || true
               vp run test:coverage
+          - name: nuxt-devtools
+            node-version: 24
+            command: |
+              vp run build
+              vp run typecheck
+              vp run test:unit
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: namespace-profile-windows-4c-8g

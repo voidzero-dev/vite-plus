@@ -4,6 +4,7 @@ import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
+import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
@@ -233,6 +234,14 @@ const vitestOverrides = {
   '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
+// A flagged fixture directly exercises Vite DevTools. Align its dependency
+// with the version used to build vite-plus-core so an upstream bump tests the
+// new version instead of the fixture's pinned lockfile version.
+const viteDevtoolsOverride =
+  'viteDevtools' in repoConfig && repoConfig.viteDevtools
+    ? { '@vitejs/devtools': vitePlusCorePkg.devDependencies['@vitejs/devtools'] }
+    : {};
+
 // E2E intentionally installs just-published toolchain packages (e.g.
 // @oxlint/migrate during `vp migrate`, freshly bumped @oxc-project/runtime
 // during `vp install`). Disable pnpm's minimumReleaseAge gate so a same-day
@@ -263,6 +272,7 @@ const migrateEnv: NodeJS.ProcessEnv = {
   VP_OVERRIDE_PACKAGES: JSON.stringify({
     vite: `npm:@voidzero-dev/vite-plus-core@${vitePlusVersion}`,
     ...vitestOverrides,
+    ...viteDevtoolsOverride,
   }),
   // The vp binary was built before the pack step pinned the package versions,
   // so align the version migrate pins with the tgz the registry serves.
