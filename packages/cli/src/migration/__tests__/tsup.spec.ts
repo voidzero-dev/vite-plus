@@ -51,7 +51,7 @@ describe('tsup migration', () => {
 
     expect(mockRunCommandSilently).toHaveBeenCalledWith({
       command: 'vp',
-      args: ['dlx', 'tsdown-migrate@rc', '--yes', '--package-manager', 'npm'],
+      args: ['dlx', 'tsdown-migrate@0.23.0-rc.0', '--yes', '--package-manager', 'npm'],
       cwd: projectPath,
       envs: process.env,
     });

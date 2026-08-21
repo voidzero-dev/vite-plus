@@ -13,6 +13,10 @@ import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
 
+// Stable 0.22.x predates non-TTY support. The dependency upgrade script replaces
+// this RC with the matching stable version when the bundled tsdown version advances.
+const TSDOWN_MIGRATE_VERSION = '0.23.0-rc.0';
+
 export function detectTsupProject(
   projectPath: string,
   packages?: WorkspacePackage[],
@@ -68,9 +72,13 @@ async function runTsdownMigrateStep(
   try {
     const result = await runCommandSilently({
       command: vpBin,
-      // Stable 0.22.x predates non-TTY support. Remove the RC tag after 0.23.0
-      // becomes the latest release.
-      args: ['dlx', 'tsdown-migrate@rc', '--yes', '--package-manager', packageManager],
+      args: [
+        'dlx',
+        `tsdown-migrate@${TSDOWN_MIGRATE_VERSION}`,
+        '--yes',
+        '--package-manager',
+        packageManager,
+      ],
       cwd,
       envs: process.env,
     });

@@ -140,15 +140,20 @@ jobs:
                help documents. If it is `false`, do not modify help documents.
             5. Compare tsdown CLI options with `vp pack` and sync new/removed options per
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            6. Follow `.claude/skills/sync-upstream-dependency-docs/SKILL.md` to
+            6. If the stable `tsdown` version changed, confirm that
+               `TSDOWN_MIGRATE_VERSION` in
+               `packages/cli/src/migration/migrator/tsup.ts` uses the same stable
+               version. Do not use a prerelease version or an npm dist-tag. The
+               upgrade script must stop if the two stable versions do not match.
+            7. Follow `.claude/skills/sync-upstream-dependency-docs/SKILL.md` to
                update version-specific documentation for dependencies changed in this run.
-            7. Install the global CLI:
+            8. Install the global CLI:
                - `pnpm bootstrap-cli:ci`
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            8. If any Rust code or `Cargo.toml` was modified, run `cargo check
+            9. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            9. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
-            10. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+            10. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            11. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
             ### Generated artifacts and build diffs
