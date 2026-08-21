@@ -6,6 +6,7 @@ use std::{
     fs::{self, File},
     io::{self, BufReader, Write},
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use crossterm::{
@@ -423,6 +424,37 @@ pub fn package_manager_bin_path(install_dir: &AbsolutePath, bin_name: &str) -> A
     if cfg!(windows) { bin_path.with_extension("cmd") } else { bin_path }
 }
 
+/// Return a managed package-manager binary, downloading its release when needed.
+///
+/// This function returns the cached path when the shim already exists. A pin
+/// that covers a file inside the install is the exception: it goes through
+/// [`verify_cached_cli_hash`], which compares the pin against the record vp
+/// wrote at install time. The rule stays here, so the shim hot path holds no
+/// package-manager specifics.
+pub async fn ensure_package_manager_bin(
+    package_manager_type: PackageManagerType,
+    version_or_latest: &str,
+    expected_hash: Option<&str>,
+    bin_name: &str,
+) -> Result<AbsolutePathBuf, Error> {
+    let version = resolve_package_manager_version(package_manager_type, version_or_latest).await?;
+
+    let verifies_cached_cli =
+        expected_hash.is_some() && package_manager_type.uses_cli_binary_hash(&version);
+    if !verifies_cached_cli
+        && let Some(install_dir) = package_manager_install_dir(package_manager_type, &version)
+    {
+        let bin_path = package_manager_bin_path(&install_dir, bin_name);
+        if bin_path.as_path().exists() {
+            return Ok(bin_path);
+        }
+    }
+
+    let (install_dir, _, _) =
+        download_package_manager(package_manager_type, &version, expected_hash).await?;
+    Ok(package_manager_bin_path(&install_dir, bin_name))
+}
+
 fn get_package_manager_from_package_json(
     workspace_root: &WorkspaceRoot,
 ) -> Result<Option<PackageManagerResolution>, Error> {
@@ -680,7 +712,44 @@ fn find_extracted_package_dir(target_dir: &Path) -> io::Result<PathBuf> {
     ))
 }
 
+const LATEST_VERSION_CACHE_TTL: Duration = Duration::from_secs(3600);
+
+fn latest_version_cache_path(
+    package_manager_type: PackageManagerType,
+) -> io::Result<AbsolutePathBuf> {
+    Ok(vp_shared::EnvConfig::get()
+        .dirs
+        .cache
+        .join("package_manager_latest")
+        .join(package_manager_type.to_string()))
+}
+
+fn read_latest_version_cache(path: &AbsolutePath) -> Option<(Str, bool)> {
+    let version = fs::read_to_string(path).ok()?;
+    let version = version.trim();
+    Version::parse(version).ok()?;
+    let is_fresh = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age < LATEST_VERSION_CACHE_TTL);
+    Some((version.into(), is_fresh))
+}
+
+fn write_latest_version_cache(path: &AbsolutePath, version: &str) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, version)
+}
+
 async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<Str, Error> {
+    let cache_path = latest_version_cache_path(package_manager_type)?;
+    let cached = read_latest_version_cache(&cache_path);
+    if let Some((version, true)) = &cached {
+        return Ok(version.clone());
+    }
+
     let package_name = if matches!(package_manager_type, PackageManagerType::Yarn) {
         // yarn latest version should use `@yarnpkg/cli-dist` as package name
         "@yarnpkg/cli-dist".to_string()
@@ -688,8 +757,20 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
         package_manager_type.to_string()
     };
     let url = get_npm_package_version_url(&package_name, "latest");
-    let package_json: PackageJson = HttpClient::new().get_json(&url).await?;
-    Ok(package_json.version)
+    match HttpClient::new().get_json::<PackageJson>(&url).await {
+        Ok(package_json) => {
+            let _ = write_latest_version_cache(&cache_path, &package_json.version);
+            Ok(package_json.version)
+        }
+        Err(error) => {
+            let Some((version, _)) = cached else { return Err(error) };
+            tracing::warn!(
+                "Failed to refresh latest {package_manager_type} version: {error}; using cached {}",
+                version
+            );
+            Ok(version)
+        }
+    }
 }
 
 /// Abbreviated registry metadata: only the version list is needed.
@@ -839,6 +920,20 @@ async fn resolve_package_manager_range(
     resolve_latest_satisfying_version(package_manager_type, &range, version_req).await
 }
 
+/// Resolve an exact, range, or floating `latest` package-manager version.
+pub async fn resolve_package_manager_version(
+    package_manager_type: PackageManagerType,
+    version: &str,
+) -> Result<Str, Error> {
+    if version == "latest" {
+        get_latest_version(package_manager_type).await
+    } else if Version::parse(version).is_ok() {
+        Ok(version.into())
+    } else {
+        resolve_package_manager_range(package_manager_type, version).await
+    }
+}
+
 /// Download the package manager and extract it to the vite-plus home directory.
 /// Return the install directory, e.g. `<DATA>/package_manager/pnpm/10.0.0/pnpm`
 pub async fn download_package_manager(
@@ -846,15 +941,7 @@ pub async fn download_package_manager(
     version_or_latest: &str,
     expected_hash: Option<&str>,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
-    let version: Str = if version_or_latest == "latest" {
-        get_latest_version(package_manager_type).await?
-    } else if Version::parse(version_or_latest).is_ok() {
-        version_or_latest.into()
-    } else {
-        // semver range (e.g. from devEngines.packageManager): prefer an already
-        // downloaded satisfying version, otherwise resolve from the registry
-        resolve_package_manager_range(package_manager_type, version_or_latest).await?
-    };
+    let version = resolve_package_manager_version(package_manager_type, version_or_latest).await?;
 
     // Reject anything that is not strict semver `major.minor.patch[-prerelease][+build]`.
     // This prevents path traversal via the version being interpolated into
@@ -1007,36 +1094,6 @@ pub async fn download_package_manager(
     create_shim_files(package_manager_type, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version))
-}
-
-/// Resolve the executable path of a managed package manager. Install that
-/// package manager when the cache cannot serve it.
-///
-/// This function returns the cached path when the shim already exists. A pin
-/// that covers a file inside the install is the exception: it goes through
-/// [`verify_cached_cli_hash`], which compares the pin against the record vp
-/// wrote at install time. The rule stays here, so the shim hot path holds no
-/// package-manager specifics.
-pub async fn ensure_package_manager_bin(
-    package_manager_type: PackageManagerType,
-    version: &str,
-    expected_hash: Option<&str>,
-    bin_name: &str,
-) -> Result<AbsolutePathBuf, Error> {
-    let verifies_cached_cli =
-        expected_hash.is_some() && package_manager_type.uses_cli_binary_hash(version);
-    if !verifies_cached_cli
-        && let Some(install_dir) = package_manager_install_dir(package_manager_type, version)
-    {
-        let bin_path = package_manager_bin_path(&install_dir, bin_name);
-        if bin_path.as_path().exists() {
-            return Ok(bin_path);
-        }
-    }
-
-    let (install_dir, _, _) =
-        download_package_manager(package_manager_type, version, expected_hash).await?;
-    Ok(package_manager_bin_path(&install_dir, bin_name))
 }
 
 /// Verify a cached CLI against a pin that covers it.
@@ -1872,7 +1929,7 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, time::UNIX_EPOCH};
 
     use semver::VersionReq;
     use tempfile::{TempDir, tempdir};
@@ -2020,6 +2077,75 @@ mod tests {
 
         // nothing usable is cached; resolution falls through to the registry
         assert_eq!(find_cached_pnpm(&vp_home), None);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_latest_version_cache_refreshes_and_falls_back_after_expiry() {
+        use httpmock::prelude::*;
+
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let server = MockServer::start();
+        let mut first = server.mock(|when, then| {
+            when.method(GET).path("/bun/latest");
+            then.status(200).json_body(serde_json::json!({ "version": "1.0.0" }));
+        });
+        let registry = server.base_url();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.as_path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "1.0.0"
+                );
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "1.0.0"
+                );
+                first.assert_hits(1);
+
+                let cache_path = latest_version_cache_path(PackageManagerType::Bun).unwrap();
+                let expire_cache = || {
+                    fs::File::options()
+                        .write(true)
+                        .open(&cache_path)
+                        .unwrap()
+                        .set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH))
+                        .unwrap();
+                };
+                expire_cache();
+                first.delete();
+
+                let mut refreshed = server.mock(|when, then| {
+                    when.method(GET).path("/bun/latest");
+                    then.status(200).json_body(serde_json::json!({ "version": "2.0.0" }));
+                });
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "2.0.0"
+                );
+                refreshed.assert_hits(1);
+
+                expire_cache();
+                refreshed.delete();
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Bun, "latest")
+                        .await
+                        .unwrap(),
+                    "2.0.0"
+                );
+            },
+        )
+        .await;
     }
 
     #[cfg(windows)]

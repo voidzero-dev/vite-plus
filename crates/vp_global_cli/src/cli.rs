@@ -681,7 +681,6 @@ async fn managed_install(
             force,
             concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
             update: false,
-            only_bins: None,
         },
     )
     .await
@@ -879,7 +878,6 @@ async fn managed_update(
             force: false,
             concurrency,
             update: true,
-            only_bins: None,
         },
     )
     .await
