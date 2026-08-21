@@ -49,6 +49,14 @@ static TOOL_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// bun banners append the build's short commit hash after the version
+// ("bun pm trust v1.4.0 (34cbb9a40)"), which changes with every bun release.
+// The version is already masked to `<version>` by the passes above; require
+// the leading `bun <subcommand>` context so version-plus-hash lines from
+// other tools stay assertable.
+static BUN_BUILD_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(\bbun(?: [a-z-]+)* <version> )\([0-9a-f]{6,12}\)").unwrap()
+});
 // The workspace's own vite-plus / @voidzero-dev/vite-plus-core version is
 // written verbatim into scaffolded catalogs and manifests (`vite-plus: 0.2.3`,
 // `"vite-plus": "0.2.3"`, `npm:@voidzero-dev/vite-plus-core@0.2.3`). Unlike
@@ -428,6 +436,10 @@ pub fn redact_output(
 
     // Redact bare runtime-tool versions by name context (see TOOL_VERSION_RE)
     output = TOOL_VERSION_RE.replace_all(&output, "$1$2<version>").into_owned();
+
+    // Redact bun's build hash next to an already-masked version
+    // (see BUN_BUILD_HASH_RE), which changes with every bun release.
+    output = BUN_BUILD_HASH_RE.replace_all(&output, "$1(<hash>)").into_owned();
 
     // Redact the workspace's own vite-plus/core version by package context
     // (see VP_VERSION_RE), which bumps on every release.

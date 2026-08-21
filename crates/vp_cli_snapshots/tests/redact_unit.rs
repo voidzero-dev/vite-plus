@@ -77,6 +77,17 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
 }
 
 #[test]
+fn masks_bun_build_hash_only_in_bun_banners() {
+    // bun banners append the build's short commit hash after the version,
+    // which changes with every bun release.
+    let input = "bun pm trust v1.4.0 (34cbb9a40)\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "bun pm trust <version> (<hash>)\n");
+    // Parenthesized hex without a preceding masked version stays verbatim.
+    let unrelated = "commit (deadbeef1) applied\n".to_owned();
+    assert_eq!(redact_output(unrelated.clone(), &[], true), unrelated);
+}
+
+#[test]
 fn masks_managed_node_versions_in_environment_output() {
     let input = concat!(
         "Node: 24.18.1\n",
