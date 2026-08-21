@@ -1,4 +1,4 @@
-name: E2E Test
+name: Ecosystem CI
 
 permissions: {}
 
@@ -402,6 +402,11 @@ jobs:
             command: |
               vp run build
               vp run typecheck
+              vp run test:unit
+          - name: tiptap
+            node-version: 24
+            command: |
+              vp run build:demos
               vp run test:unit
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
