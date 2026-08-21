@@ -12,6 +12,8 @@ use crate::cmdline::{self, ShimLayout};
 type Handle = *mut c_void;
 
 const CP_UTF8: u32 = 65001;
+const BACKSLASH: u16 = b'\\' as u16;
+const QUESTION: u16 = b'?' as u16;
 const GENERIC_READ: u32 = 0x8000_0000;
 const FILE_SHARE_READ: u32 = 0x0000_0001;
 const FILE_SHARE_WRITE: u32 = 0x0000_0002;
@@ -27,6 +29,10 @@ const WAIT_FAILED: u32 = 0xFFFF_FFFF;
 const ERROR_FILE_NOT_FOUND: u32 = 2;
 const ERROR_PATH_NOT_FOUND: u32 = 3;
 const ERROR_ENVVAR_NOT_FOUND: u32 = 203;
+// Match the conservative threshold used by Rust's Windows path handling.
+// CreateDirectoryW reserves extra space below MAX_PATH, so std normalizes all
+// paths at this length even when the immediate API accepts a few more units.
+const LEGACY_MAX_PATH: usize = 248;
 const MAX_SHIM_POINTER_BYTES: i64 = 1024 * 1024;
 const INVALID_HANDLE_VALUE: Handle = -1isize as Handle;
 
@@ -65,6 +71,12 @@ type HandlerRoutine = unsafe extern "system" fn(ctrl_type: u32) -> i32;
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn GetModuleFileNameW(module: Handle, filename: *mut u16, size: u32) -> u32;
+    fn GetFullPathNameW(
+        file_name: *const u16,
+        buffer_length: u32,
+        buffer: *mut u16,
+        file_part: *mut *mut u16,
+    ) -> u32;
     fn GetCommandLineW() -> *const u16;
     fn GetLastError() -> u32;
     fn CreateFileW(
@@ -175,6 +187,44 @@ fn join_path(base: &[u16], suffix: &[u16]) -> Vec<u16> {
     }
     path.extend_from_slice(suffix);
     path
+}
+
+fn is_verbatim(path: &[u16]) -> bool {
+    matches!(
+        path,
+        [BACKSLASH, BACKSLASH, QUESTION, BACKSLASH, ..]
+            | [BACKSLASH, QUESTION, QUESTION, BACKSLASH, ..]
+    )
+}
+
+/// Return a NUL-terminated path suitable for Win32 file and process APIs.
+///
+/// This mirrors the standard library behavior that the raw implementation
+/// replaced: long paths are made absolute and normalized before entering the
+/// extended-length namespace.
+fn win32_api_path(path: &[u16]) -> Vec<u16> {
+    let path_nul = nul_terminated(path);
+    if is_verbatim(path) || path_nul.len() < LEGACY_MAX_PATH {
+        return path_nul;
+    }
+
+    let required =
+        unsafe { GetFullPathNameW(path_nul.as_ptr(), 0, ptr::null_mut(), ptr::null_mut()) };
+    if required == 0 {
+        fail_path_call(b"GetFullPathNameW", path, unsafe { GetLastError() });
+    }
+    let mut absolute = Vec::with_capacity(required as usize);
+    let len = unsafe {
+        GetFullPathNameW(path_nul.as_ptr(), required, absolute.as_mut_ptr(), ptr::null_mut())
+    };
+    if len == 0 || len >= required {
+        fail_path_call(b"GetFullPathNameW", path, unsafe { GetLastError() });
+    }
+    unsafe { absolute.set_len(len as usize) };
+
+    let mut extended = cmdline::verbatim_path(&absolute);
+    extended.push(0);
+    extended
 }
 
 fn utf8_path(text: &str) -> Option<Vec<u16>> {
@@ -318,7 +368,7 @@ fn pointer_path(exe: &[u16], last_separator: usize, file_name: &[u16]) -> Vec<u1
 }
 
 fn read_pointer_file(path: &[u16]) -> Vec<u8> {
-    let path_nul = nul_terminated(path);
+    let path_nul = win32_api_path(path);
     let handle = unsafe {
         CreateFileW(
             path_nul.as_ptr(),
@@ -433,7 +483,7 @@ pub fn run() -> ! {
     // 3. Build the child command line from the active payload plus the raw
     // caller argument tail. Forwarding the tail preserves the caller's quoting.
     let vp_exe = join_path(&data, without_nul(w!("current\\bin\\vp.exe")));
-    let vp_exe_nul = nul_terminated(&vp_exe);
+    let vp_exe_nul = win32_api_path(&vp_exe);
     let tail = unsafe {
         let command_line = GetCommandLineW();
         if command_line.is_null() {
