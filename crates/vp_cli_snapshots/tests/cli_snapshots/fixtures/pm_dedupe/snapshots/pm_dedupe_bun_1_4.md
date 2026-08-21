@@ -13,7 +13,7 @@ VITE+ - The Unified Toolchain for the Web
 bun 1.4 runs bun dedupe directly
 
 ```
-bun dedupe <version> (34cbb9a40)
+bun dedupe <version> (<hash>)
 🎉 No duplicates — checked 2 packages, every one already resolves to a single version [<duration>]
 ```
 
@@ -22,6 +22,6 @@ bun dedupe <version> (34cbb9a40)
 check mode reports without changing the lockfile
 
 ```
-bun dedupe <version> (34cbb9a40)
+bun dedupe <version> (<hash>)
 🎉 No duplicates — checked 2 packages, every one already resolves to a single version [<duration>]
 ```

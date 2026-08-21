@@ -13,7 +13,7 @@ VITE+ - The Unified Toolchain for the Web
 should prune extraneous dependencies
 
 ```
-bun prune <version> (34cbb9a40)
+bun prune <version> (<hash>)
 
 Done! Checked 2 packages across 1 folder (nothing to prune) [<duration>]
 ```
@@ -23,7 +23,7 @@ Done! Checked 2 packages across 1 folder (nothing to prune) [<duration>]
 should prune dev dependencies
 
 ```
-bun prune <version> (34cbb9a40)
+bun prune <version> (<hash>)
 
 - test-vite-plus-package@1.0.0
 1 package removed (checked 2) [<duration>]
@@ -35,7 +35,7 @@ should warn because bun prune has no optional flag
 
 ```
 warn: bun does not support --no-optional.
-bun prune <version> (34cbb9a40)
+bun prune <version> (<hash>)
 
 Done! Checked 1 package across 1 folder (nothing to prune) [<duration>]
 ```

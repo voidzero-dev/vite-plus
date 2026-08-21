@@ -13,7 +13,7 @@ VITE+ - The Unified Toolchain for the Web
 should audit dependencies
 
 ```
-bun audit <version> (34cbb9a40)
+bun audit <version> (<hash>)
 
 No vulnerabilities found (checked 1 package) [<duration>]
 ```
@@ -23,7 +23,7 @@ No vulnerabilities found (checked 1 package) [<duration>]
 bun 1.4 runs bun audit fix
 
 ```
-bun audit fix <version> (34cbb9a40)
+bun audit fix <version> (<hash>)
 
 No vulnerabilities found (checked 1 package) [<duration>]
 ```
