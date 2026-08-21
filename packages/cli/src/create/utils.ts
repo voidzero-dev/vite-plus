@@ -7,20 +7,9 @@ import { editJsonFile } from '../utils/json.ts';
 import { getRandomProjectName } from './random-name.ts';
 
 export type CreateEditorOption = string | false | undefined;
-type ParsedCreateEditorOption = CreateEditorOption | CreateEditorOption[];
 
 function hasExplicitEditorOptIn(editor: CreateEditorOption): boolean {
   return typeof editor === 'string' && editor.trim() !== '';
-}
-
-export function normalizeEditorOption(editor: ParsedCreateEditorOption): CreateEditorOption {
-  if (!Array.isArray(editor)) {
-    return editor;
-  }
-  if (editor.includes(false)) {
-    return false;
-  }
-  return editor.findLast((value): value is string => typeof value === 'string');
 }
 
 export function shouldConfigureEditorsForCreate({

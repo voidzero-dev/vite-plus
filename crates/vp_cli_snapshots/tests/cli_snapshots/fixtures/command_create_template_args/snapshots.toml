@@ -1,0 +1,8 @@
+[[case]]
+name = "command_create_template_args"
+vp = ["local", "global"]
+comment = "Create forwards every token after the first -- without changes."
+steps = [
+  { argv = ["vp", "create", "recorder", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks", "--", "--directory", "output", "--flag=value", "-x", "--", "literal"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/output/template-args.json"], continue-on-failure = true },
+]
