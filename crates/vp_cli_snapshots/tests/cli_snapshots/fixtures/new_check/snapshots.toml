@@ -1,6 +1,6 @@
 [[case]]
 name = "new_check"
-vp = "global"
+vp = ["local", "global"]
 steps = [
   { argv = ["vp", "create", "--help"], comment = "show help", continue-on-failure = true },
   { argv = ["vp", "create", "--list"], comment = "list templates", continue-on-failure = true },
