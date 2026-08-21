@@ -1,0 +1,11 @@
+[[case]]
+name = "command_install_does_not_create_package_json"
+comment = "Package-manager commands never create a manifest implicitly."
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "stat-file", "package.json", "--assert-not", "file"], comment = "verify no package.json exists", continue-on-failure = true },
+  { tty = false, argv = ["vp", "install", "--silent"], comment = "install should require package.json", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "package.json", "--assert-not", "file"], comment = "install should not create package.json", continue-on-failure = true },
+  { tty = false, argv = ["vp", "add", "testnpm2", "-D"], comment = "add should require package.json", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "package.json", "--assert-not", "file"], comment = "add should not create package.json", continue-on-failure = true },
+]

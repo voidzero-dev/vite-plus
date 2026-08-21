@@ -7,7 +7,7 @@ should output nothing without package.json
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```
 
 ## `vp pm list`
@@ -17,5 +17,5 @@ should output nothing without package.json
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```

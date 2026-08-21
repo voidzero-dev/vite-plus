@@ -7,7 +7,7 @@ should show friendly error
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```
 
 ## `vp pm prune`
@@ -17,7 +17,7 @@ should show friendly error
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```
 
 ## `vp outdated`
@@ -27,7 +27,7 @@ should show friendly error
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```
 
 ## `vp why lodash`
@@ -37,5 +37,5 @@ should show friendly error
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```

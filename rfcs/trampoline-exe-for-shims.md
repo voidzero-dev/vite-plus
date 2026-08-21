@@ -6,7 +6,7 @@ Implemented
 
 ## Summary
 
-Replace Windows `.cmd` wrapper scripts with lightweight trampoline `.exe` binaries for all shim tools (`vp`, `node`, `npm`, `npx`, `corepack`, `vpx`, `vpr`, and globally installed package binaries). This eliminates the `Terminate batch job (Y/N)?` prompt that appears when users press Ctrl+C, providing the same clean signal behavior as direct `.exe` invocation.
+Replace Windows `.cmd` wrapper scripts with lightweight trampoline `.exe` binaries for all shim tools (`vp`, `node`, `npm`, `npx`, `vpx`, `vpr`, and globally installed package binaries). This eliminates the `Terminate batch job (Y/N)?` prompt that appears when users press Ctrl+C, providing the same clean signal behavior as direct `.exe` invocation.
 
 ## Motivation
 
@@ -65,7 +65,6 @@ On Unix, shims are symlinks to the `vp` binary. The binary detects the tool name
 ├── node     → ../current/bin/vp     (symlink)
 ├── npm      → ../current/bin/vp     (symlink)
 ├── npx      → ../current/bin/vp     (symlink)
-├── corepack → ../current/bin/vp     (symlink)
 ├── vpx      → ../current/bin/vp     (symlink)
 └── vpr      → ../current/bin/vp     (symlink)
 ```
@@ -78,7 +77,6 @@ On Unix, shims are symlinks to the `vp` binary. The binary detects the tool name
 ├── node.exe     # Trampoline → sets VP_SHIM_TOOL=node, spawns vp.exe
 ├── npm.exe      # Trampoline → sets VP_SHIM_TOOL=npm, spawns vp.exe
 ├── npx.exe      # Trampoline → sets VP_SHIM_TOOL=npx, spawns vp.exe
-├── corepack.exe # Trampoline → sets VP_SHIM_TOOL=corepack, spawns vp.exe
 ├── vpx.exe      # Trampoline → sets VP_SHIM_TOOL=vpx, spawns vp.exe
 ├── vpr.exe      # Trampoline → sets VP_SHIM_TOOL=vpr, spawns vp.exe
 └── tsc.exe      # Trampoline → sets VP_SHIM_TOOL=tsc, spawns vp.exe (package shim)
@@ -213,7 +211,7 @@ When `vp env setup --refresh` is invoked through the trampoline (`~/.vite-plus/b
 
 During `vp upgrade`, after the `current` link is swapped to the new version, `vp env setup --refresh` is invoked to regenerate all trampoline `.exe` files. This ensures that when the trampoline binary (`vp-shim.exe`) changes between versions, all shims pick up the new version:
 
-1. **Core shims** (`vp.exe`, `node.exe`, `npm.exe`, `npx.exe`, `corepack.exe`, `vpx.exe`, `vpr.exe`) are refreshed by the standard `--refresh` logic.
+1. **Core shims** (`vp.exe`, `node.exe`, `npm.exe`, `npx.exe`, `vpx.exe`, `vpr.exe`) are refreshed by the standard `--refresh` logic.
 2. **Package shims** (e.g., `tsc.exe`, `eslint.exe`, installed via `vp install -g`) are discovered by scanning `~/.vite-plus/bins/` for `BinConfig` entries with `source: Vp`, and each `.exe` is replaced with the new trampoline.
 
 Package shims installed via npm interception (`source: Npm`) use `.cmd` wrappers, not trampoline `.exe` files, and are not affected by this refresh.

@@ -8,10 +8,11 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    PackageManager,
+    PackageManager, PackageManagerType,
     cli::{PackageManagerCommand, PmCommand},
+    download_package_manager,
     error::Error,
-    helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
+    helpers::{build_package_manager, build_package_manager_or_npm_default, require_package_json},
     resolution::{DlxArgs, StageCommand, run_resolution},
 };
 
@@ -23,9 +24,14 @@ pub struct DispatchResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ManagerPolicy {
-    CreateIfMissing,
     RequireProject,
     AllowNpmFallback,
+}
+
+enum ManagerSource<'a> {
+    Detect,
+    Selected((PackageManagerType, &'a str, Option<&'a str>)),
+    Resolved(PackageManager),
 }
 
 pub async fn dispatch(
@@ -39,28 +45,80 @@ pub async fn dispatch_with_metadata(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
 ) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(cwd, command, ManagerSource::Detect).await
+}
+
+pub async fn dispatch_with_package_manager(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    package_manager: (PackageManagerType, &str, Option<&str>),
+) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(cwd, command, ManagerSource::Selected(package_manager)).await
+}
+
+pub async fn dispatch_with_resolved_package_manager(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    manager: PackageManager,
+) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(cwd, command, ManagerSource::Resolved(manager)).await
+}
+
+async fn dispatch_with_manager(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    source: ManagerSource<'_>,
+) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let command = match command {
         PackageManagerCommand::Dlx(args) => {
-            return dispatch_dlx(cwd, args, render_diagnostics).await;
+            let manager = match source {
+                ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
+                source => resolve_manager(source).await?,
+            };
+            let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
+            let status = run_resolution(cwd, resolution, render_diagnostics).await?;
+            return Ok(DispatchResult { status, why_hint_packages: None });
         }
         command => command,
     };
 
-    let manager = match manager_policy(&command) {
-        ManagerPolicy::CreateIfMissing => {
-            ensure_package_json(cwd).await?;
-            build_package_manager(cwd).await?
+    let policy = manager_policy(&command);
+    let manager = match source {
+        ManagerSource::Detect => match policy {
+            ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
+            ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
+        },
+        source => {
+            if policy == ManagerPolicy::RequireProject {
+                require_package_json(cwd)?;
+            }
+            resolve_manager(source).await?
         }
-        ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
-        ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
     };
-
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
     let resolution = command.resolve_for_manager(&manager)?;
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
     Ok(DispatchResult { status, why_hint_packages })
+}
+
+async fn resolve_manager(source: ManagerSource<'_>) -> Result<PackageManager, Error> {
+    match source {
+        ManagerSource::Selected(package_manager) => {
+            build_selected_package_manager(package_manager).await
+        }
+        ManagerSource::Resolved(manager) => Ok(manager),
+        ManagerSource::Detect => unreachable!("detected managers are resolved from the cwd"),
+    }
+}
+
+async fn build_selected_package_manager(
+    (kind, version, hash): (PackageManagerType, &str, Option<&str>),
+) -> Result<PackageManager, Error> {
+    let (install_dir, _, version) =
+        download_package_manager(kind, version, hash).await.map_err(Error::Install)?;
+    Ok(PackageManager { client: kind, version, install_dir })
 }
 
 async fn dispatch_dlx(
@@ -85,10 +143,9 @@ async fn dispatch_dlx(
 
 fn manager_policy(command: &PackageManagerCommand) -> ManagerPolicy {
     match command {
-        PackageManagerCommand::Install(_) | PackageManagerCommand::Add(_) => {
-            ManagerPolicy::CreateIfMissing
-        }
-        PackageManagerCommand::Remove(_)
+        PackageManagerCommand::Install(_)
+        | PackageManagerCommand::Add(_)
+        | PackageManagerCommand::Remove(_)
         | PackageManagerCommand::Update(_)
         | PackageManagerCommand::Dedupe(_)
         | PackageManagerCommand::Outdated(_)
@@ -147,10 +204,14 @@ mod tests {
     }
 
     #[test]
-    fn manager_policy_covers_project_creation_and_requirement() {
+    fn manager_policy_requires_a_project_for_install_and_mutation() {
         assert_eq!(
             manager_policy(&parse_command(&["vp", "install"])),
-            ManagerPolicy::CreateIfMissing
+            ManagerPolicy::RequireProject
+        );
+        assert_eq!(
+            manager_policy(&parse_command(&["vp", "add", "react"])),
+            ManagerPolicy::RequireProject
         );
         assert_eq!(
             manager_policy(&parse_command(&["vp", "remove", "react"])),

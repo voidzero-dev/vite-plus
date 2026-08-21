@@ -19,7 +19,9 @@ Vite+ detects the package manager from the workspace root in this order:
 9. `bunfig.toml`
 10. `yarn.config.cjs`
 
-If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran. When detection comes from lockfiles or config files, the resolved version is written to `devEngines.packageManager` so future runs are deterministic; projects that already declare `packageManager` or `devEngines.packageManager` are left as-is.
+If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran, but package-manager detection never rewrites `package.json`. Use `vp env pin <package-manager>@<version>` when the project should declare an exact version explicitly.
+
+Project-mutating commands such as `vp install` and `vp add` require an existing `package.json`; they do not create one automatically.
 
 The [`devEngines.packageManager`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines) field accepts a single object or an array of objects, and its `version` may be a semver range:
 

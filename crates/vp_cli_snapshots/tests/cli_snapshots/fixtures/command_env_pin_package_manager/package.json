@@ -1,0 +1,21 @@
+{
+  "name": "command-env-pin-package-manager",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "devEngines": {
+    "packageManager": [
+      {
+        "name": "npm",
+        "version": "11.0.0",
+        "onFail": "error"
+      },
+      {
+        "name": "pnpm",
+        "version": "10.17.0",
+        "onFail": "download"
+      }
+    ]
+  }
+}

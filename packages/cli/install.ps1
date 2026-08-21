@@ -827,7 +827,7 @@ function Test-VitePlusNodeShim {
     return (Normalize-InstallDir $pointer) -eq (Normalize-InstallDir $InstallDir)
 }
 
-# Setup Node.js version manager (node/npm/npx/corepack shims)
+# Setup Vite+ environment shims
 # Returns: "true" = enabled, "false" = not enabled, "already" = already configured
 function Setup-NodeManager {
     param([string]$BinDir)
@@ -881,7 +881,7 @@ function Setup-NodeManager {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "Vite+ adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to $NodeManagerBinDisplay."
+        Write-Host "Vite+ adds ``node``, ``npm``, ``npx``, ``pnpm``, ``pnpx``, ``yarn``, ``yarnpkg``, ``bun``, and ``bunx`` shims to $NodeManagerBinDisplay."
         Write-Host "It selects the required version automatically."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
@@ -1202,14 +1202,14 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     Write-Host ""
     Write-Host "  ${BOLD}Get started:${NC}"
     Write-Host "    ${BRIGHT_BLUE}vp create${NC}       Create a new project"
-    Write-Host "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js versions"
+    Write-Host "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js and package managers"
     Write-Host "    ${BRIGHT_BLUE}vp install${NC}      Install dependencies"
     Write-Host "    ${BRIGHT_BLUE}vp migrate${NC}      Migrate to Vite+"
 
     # Show Node.js manager status
     if ($nodeManagerResult -eq "true" -or $nodeManagerResult -eq "already") {
         Write-Host ""
-        Write-Host "  Vite+ is now managing Node.js via ${BRIGHT_BLUE}vp env${NC}."
+        Write-Host "  Vite+ is now managing Node.js and package managers via ${BRIGHT_BLUE}vp env${NC}."
         Write-Host "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup, or ${BRIGHT_BLUE}vp env off${NC} to opt out."
     }
 

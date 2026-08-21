@@ -127,6 +127,16 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
   VP_NODE_VERSION=22 vp env exec node -v
   ```
 
+### `VP_PACKAGE_MANAGER`
+
+- **Purpose**: Override the selected package manager and version
+- **Default**: None (resolved from the project or global default)
+- **Format**: `npm|pnpm|yarn|bun@<version>`
+- **Example**:
+  ```bash
+  VP_PACKAGE_MANAGER=pnpm@10.18.0 vp install
+  ```
+
 ### `VP_NODE_SKIP_SIGNATURE_VERIFY`
 
 - **Purpose**: Skip PGP signature verification of Node.js downloads

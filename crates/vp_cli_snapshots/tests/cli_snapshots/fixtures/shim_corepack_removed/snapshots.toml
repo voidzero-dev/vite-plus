@@ -1,0 +1,6 @@
+[[case]]
+name = "shim_corepack_removed"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "corepack"], comment = "Corepack is no longer a managed global package", continue-on-failure = true },
+]

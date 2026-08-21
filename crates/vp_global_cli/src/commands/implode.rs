@@ -15,11 +15,12 @@ use vt_str::Str;
 use crate::{
     cli::exit_status,
     commands::{
-        env::setup::{SHIM_TOOLS, shim_filename},
+        env::setup::shim_filename,
         global::install::is_vp_shim_target,
         shell::{ALL_SHELL_PROFILES, ShellProfileKind, abbreviate_home_path, resolve_profile_path},
     },
     error::Error,
+    shim::DEFAULT_SHIM_TOOLS,
 };
 
 /// Comment marker written by the install script above the sourcing line.
@@ -151,7 +152,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 fn remove_shim_files(dirs: &vp_shared::VpDirs) {
     let mut names = recorded_bin_shim_names(dirs);
     names.insert(shim_filename("vp"));
-    names.extend(SHIM_TOOLS.iter().map(|tool| shim_filename(tool)));
+    names.extend(DEFAULT_SHIM_TOOLS.iter().map(|tool| shim_filename(tool)));
     #[cfg(windows)]
     names.insert("vp-use.cmd".to_string());
 
