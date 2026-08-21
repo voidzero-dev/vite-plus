@@ -4,5 +4,6 @@ vp = ["local", "global"]
 steps = [
   { argv = ["vp", "hooks", "-h"], continue-on-failure = true },
   { argv = ["vp", "hooks", "--help"], continue-on-failure = true },
+  { argv = ["vp", "hooks", "enable", "--help"], continue-on-failure = true },
   { argv = ["vp", "help", "hooks"], continue-on-failure = true },
 ]

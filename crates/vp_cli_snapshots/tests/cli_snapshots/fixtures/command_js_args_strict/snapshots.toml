@@ -1,0 +1,21 @@
+[[case]]
+name = "command_js_args_strict"
+vp = ["local", "global"]
+comment = "JavaScript-owned commands reject invalid arguments before command work starts."
+steps = [
+  { argv = ["vp", "staged", "--unknown"], continue-on-failure = true },
+  { argv = ["vp", "staged", "--cwd"], continue-on-failure = true },
+  { argv = ["vp", "staged", "--no-cwd"], continue-on-failure = true },
+  { argv = ["vp", "config", "--unknown"], continue-on-failure = true },
+  { argv = ["vp", "config", "--hooks-dir"], continue-on-failure = true },
+  { argv = ["vp", "config", "--no-hooks-dir"], continue-on-failure = true },
+  { argv = ["vp", "hooks", "unknown"], continue-on-failure = true },
+  { argv = ["vp", "hooks", "enable", "--hooks-dir"], continue-on-failure = true },
+  { argv = ["vp", "hooks", "enable", "--no-hooks-dir"], continue-on-failure = true },
+  { argv = ["vp", "migrate", "--unknown"], continue-on-failure = true },
+  { argv = ["vp", "migrate", "--agent"], continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-full"], continue-on-failure = true },
+  { argv = ["vp", "create", "--unknown"], continue-on-failure = true },
+  { argv = ["vp", "create", "--directory"], continue-on-failure = true },
+  { argv = ["vp", "create", "--no-directory"], continue-on-failure = true },
+]

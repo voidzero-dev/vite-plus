@@ -9,10 +9,12 @@ const hooks = vi.hoisted(() => ({
   }),
 }));
 const terminal = vi.hoisted(() => ({ log: vi.fn(), printHeader: vi.fn() }));
+const binding = vi.hoisted(() => ({
+  parseConfigArgs: vi.fn(() => ({ status: 'ok', value: { agent: false } })),
+}));
 
-vi.mock('mri', () => ({ default: () => ({ agent: false }) }));
+vi.mock('../../../binding/index.js', () => binding);
 vi.mock('../../utils/agent.ts', () => ({ updateExistingAgentInstructions: vi.fn() }));
-vi.mock('../../utils/help.ts', () => ({ renderCliDoc: vi.fn() }));
 vi.mock('../../utils/prompts.ts', () => ({
   defaultInteractive: () => false,
   promptGitHooks: vi.fn(),
@@ -27,6 +29,7 @@ beforeEach(() => {
 it('skips Git-backed hook resolution when hooks are disabled by environment', async () => {
   await import('../bin.ts');
 
+  expect(binding.parseConfigArgs).toHaveBeenCalledWith([]);
   expect(hooks.isGitHooksEnvDisabled).toHaveBeenCalledOnce();
   expect(hooks.resolveHooksLocation).not.toHaveBeenCalled();
   expect(hooks.isHooksUserDisabled).not.toHaveBeenCalled();

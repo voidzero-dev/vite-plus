@@ -11,7 +11,9 @@ Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used in this clone)
+  --hooks             Install the hook dispatcher
   --no-hooks          Skip hook dispatcher installation
+  --agent             Update coding agent instructions
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
 
@@ -32,7 +34,9 @@ Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used in this clone)
+  --hooks             Install the hook dispatcher
   --no-hooks          Skip hook dispatcher installation
+  --agent             Update coding agent instructions
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
 
@@ -53,7 +57,9 @@ Configure Vite+ for the current project (hook dispatcher + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used in this clone)
+  --hooks             Install the hook dispatcher
   --no-hooks          Skip hook dispatcher installation
+  --agent             Update coding agent instructions
   --no-agent          Skip updating coding agent instructions
   -h, --help          Show this help message
 
