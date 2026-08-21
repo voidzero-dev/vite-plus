@@ -397,7 +397,7 @@ pub fn run() -> ! {
         stderr_write(b"\"\n");
         unsafe { ExitProcess(1) }
     };
-    let bin_dir = &exe[..last_separator];
+    let bin_dir = &exe[..cmdline::parent_dir_len(&exe, last_separator)];
     let file_name = &exe[last_separator + 1..];
     let tool = &file_name[..cmdline::file_stem_len(file_name)];
     let pointer_path = pointer_path(&exe, last_separator, file_name);
