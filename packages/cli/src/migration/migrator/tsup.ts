@@ -6,13 +6,19 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
-import { TSDOWN_MIGRATE_VERSION } from '../../utils/constants.ts';
+import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
+
+function showTsdownMigrationSkill(): void {
+  prompts.log.info(
+    `You can use the tsdown migration skill to migrate manually: ${TSDOWN_MIGRATION_SKILL_URL}`,
+  );
+}
 
 export function detectTsupProject(
   projectPath: string,
@@ -86,12 +92,14 @@ async function runTsdownMigrateStep(
         prompts.log.warn(`⚠ ${stderr}`);
       }
       prompts.log.info(manualHint);
+      showTsdownMigrationSkill();
       return false;
     }
     return true;
   } catch {
     spinner.stop(failMessage);
     prompts.log.info(manualHint);
+    showTsdownMigrationSkill();
     return false;
   }
 }
@@ -239,6 +247,9 @@ export async function confirmTsupMigration(interactive: boolean): Promise<boolea
     });
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
+    }
+    if (!confirmed) {
+      showTsdownMigrationSkill();
     }
     return confirmed;
   }

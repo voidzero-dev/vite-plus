@@ -4,6 +4,21 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { mockConfirm, mockInfo } = vi.hoisted(() => ({
+  mockConfirm: vi.fn(),
+  mockInfo: vi.fn(),
+}));
+
+vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
+  confirm: mockConfirm,
+  isCancel: () => false,
+  log: {
+    info: mockInfo,
+    success: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 vi.mock('../../utils/command.ts', () => ({
   runCommandSilently: vi.fn(),
 }));
@@ -13,8 +28,8 @@ vi.mock('../../utils/prompts.ts', () => ({
 
 import { PackageManager } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
-import { TSDOWN_MIGRATE_VERSION } from '../../utils/constants.ts';
-import { migrateTsupToTsdown } from '../migrator/tsup.ts';
+import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { confirmTsupMigration, migrateTsupToTsdown } from '../migrator/tsup.ts';
 
 const mockRunCommandSilently = vi.mocked(runCommandSilently);
 
@@ -36,11 +51,14 @@ describe('tsup migration', () => {
       stdout: Buffer.alloc(0),
       stderr: Buffer.alloc(0),
     });
+    mockConfirm.mockResolvedValue(true);
   });
 
   afterEach(() => {
     fs.rmSync(projectPath, { recursive: true, force: true });
     mockRunCommandSilently.mockReset();
+    mockConfirm.mockReset();
+    mockInfo.mockReset();
   });
 
   it('passes the package manager as a separate CLI argument', async () => {
@@ -50,17 +68,44 @@ describe('tsup migration', () => {
       }),
     ).resolves.toBe(true);
 
-    expect(mockRunCommandSilently).toHaveBeenCalledWith({
-      command: 'vp',
-      args: [
-        'dlx',
-        `tsdown-migrate@${TSDOWN_MIGRATE_VERSION}`,
-        '--yes',
-        '--package-manager',
-        'npm',
-      ],
-      cwd: projectPath,
-      envs: process.env,
+    expect(mockRunCommandSilently).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: [
+          'dlx',
+          `tsdown-migrate@${TSDOWN_MIGRATE_VERSION}`,
+          '--yes',
+          '--package-manager',
+          'npm',
+        ],
+      }),
+    );
+  });
+
+  it('shows the migration skill when automatic migration is declined', async () => {
+    mockConfirm.mockResolvedValue(false);
+
+    await expect(confirmTsupMigration(true)).resolves.toBe(false);
+
+    expect(mockInfo).toHaveBeenCalledWith(
+      `You can use the tsdown migration skill to migrate manually: ${TSDOWN_MIGRATION_SKILL_URL}`,
+    );
+  });
+
+  it('shows the migration skill when automatic migration fails', async () => {
+    mockRunCommandSilently.mockResolvedValue({
+      exitCode: 1,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
     });
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockInfo).toHaveBeenCalledWith(
+      `You can use the tsdown migration skill to migrate manually: ${TSDOWN_MIGRATION_SKILL_URL}`,
+    );
   });
 });
