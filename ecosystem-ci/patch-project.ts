@@ -213,6 +213,21 @@ if (project === 'dify') {
   await writeFile(workspacePath, patched, 'utf-8');
 }
 
+if (project === 'nuxt-devtools') {
+  // The fixture's lockfile is generated earlier in this trusted CI job against
+  // the local registry. Trust that lockfile when package scripts invoke pnpm
+  // again: the registry's unpublished 0.0.0 tarballs do not have npm trust
+  // metadata, so a second supply-chain verification rejects them.
+  const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
+  const workspace = await readFile(workspacePath, 'utf-8');
+  const trustPolicy = 'trustPolicy: no-downgrade';
+  if (!workspace.includes(trustPolicy)) {
+    throw new Error(`nuxt-devtools patch: \`${trustPolicy}\` not found in ${workspacePath}`);
+  }
+  const patched = workspace.replace(trustPolicy, `${trustPolicy}\ntrustLockfile: true`);
+  await writeFile(workspacePath, patched, 'utf-8');
+}
+
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
