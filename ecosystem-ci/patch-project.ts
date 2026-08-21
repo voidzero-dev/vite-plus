@@ -4,6 +4,7 @@ import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
+import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
@@ -212,6 +213,37 @@ if (project === 'dify') {
   await writeFile(workspacePath, patched, 'utf-8');
 }
 
+if (project === 'nuxt-devtools') {
+  // The fixture's lockfile is generated earlier in this trusted CI job against
+  // the local registry. Trust that lockfile when package scripts invoke pnpm
+  // again: the registry's unpublished 0.0.0 tarballs do not have npm trust
+  // metadata, so a second supply-chain verification rejects them.
+  //
+  // Nuxt DevTools uses one YAML anchor for its Vite DevTools package family.
+  // Align that source with vite-plus-core so pnpm resolves the core package,
+  // kit, and optional integration peers as one compatible release family.
+  const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
+  const workspace = await readFile(workspacePath, 'utf-8');
+  const trustPolicy = 'trustPolicy: no-downgrade';
+  if (!workspace.includes(trustPolicy)) {
+    throw new Error(`nuxt-devtools patch: \`${trustPolicy}\` not found in ${workspacePath}`);
+  }
+  const viteDevtoolsVersionSource = /^([ \t]*vite-devtools:[ \t]+&vite-devtools[ \t]+)\S+[ \t]*$/m;
+  if (!viteDevtoolsVersionSource.test(workspace)) {
+    throw new Error(
+      `nuxt-devtools patch: Vite DevTools version source not found in ${workspacePath}`,
+    );
+  }
+  const viteDevtoolsVersion = vitePlusCorePkg.devDependencies['@vitejs/devtools'];
+  const patched = workspace
+    .replace(trustPolicy, `${trustPolicy}\ntrustLockfile: true`)
+    .replace(
+      viteDevtoolsVersionSource,
+      (_line, prefix: string) => `${prefix}${viteDevtoolsVersion}`,
+    );
+  await writeFile(workspacePath, patched, 'utf-8');
+}
+
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
@@ -275,6 +307,22 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
   stdio: 'inherit',
   env: migrateEnv,
 });
+
+if (project === 'tiptap') {
+  // Keep Tiptap's upstream lint semantics. Migration enables type-aware type
+  // checking, which reports TypeScript diagnostics that upstream CI does not check.
+  const viteConfigPath = join(repoRoot, 'vite.config.mts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const typeAwareOptions =
+    /,\s*(?:"options"|options):\s*\{\s*(?:"typeAware"|typeAware):\s*true,\s*(?:"typeCheck"|typeCheck):\s*true\s*\}/;
+  const patched = viteConfig.replace(typeAwareOptions, '');
+  if (patched === viteConfig) {
+    throw new Error(
+      `tiptap patch: migrated type-aware lint options not found in ${viteConfigPath}`,
+    );
+  }
+  await writeFile(viteConfigPath, patched, 'utf-8');
+}
 
 // Install through the local registry. `vp migrate` already pinned
 // `vite-plus@<version>` in package.json exactly like a real migration, so no

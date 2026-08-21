@@ -111,9 +111,10 @@ A step is a bare argv array or a table:
   comment = "...",            # rendered under the step heading
   envs = [["K", "V"]],        # per-step env; values expand `${NAME}`:
                               #   `${workspace}` is the step's working dir,
+                              #   `${PATH_SEPARATOR}` is `:` on Unix and `;` on Windows,
                               #   any other name resolves from the case env
-                              #   (`PATH = "${workspace}/bin:${PATH}"` is
-                              #   the shell's `PATH="$(pwd)/bin:$PATH"`)
+                              #   (`PATH = "${workspace}/bin${PATH_SEPARATOR}${PATH}"`
+                              #   is the shell's `PATH="$(pwd)/bin:$PATH"`)
   timeout = 120000,           # ms, default 50s
   snapshot = false,           # omit the screen while the step succeeds
                               #   (failures always keep their output)

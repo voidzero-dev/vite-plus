@@ -913,7 +913,8 @@ fn wait_with_deadline(
 /// Expands `${NAME}` references in a step env value. `${workspace}` resolves
 /// to the step's working directory and any other name to the case env, so a
 /// fixture can express the shell forms `VP_HOME="$(pwd)/home"` and
-/// `PATH="$(pwd)/home/bin:$PATH"` without a shell. Unknown names stay
+/// `PATH="$(pwd)/home/bin:$PATH"` without a shell. `${PATH_SEPARATOR}`
+/// expands to the platform's PATH-list separator. Unknown names stay
 /// verbatim, like vpt's argument expansion.
 fn expand_env_value(value: &str, cwd: &Path, case_env: &BTreeMap<String, OsString>) -> OsString {
     let mut out = OsString::new();
@@ -928,6 +929,8 @@ fn expand_env_value(value: &str, cwd: &Path, case_env: &BTreeMap<String, OsStrin
         let name = &from_ref[2..end];
         if name == "workspace" {
             out.push(cwd.as_os_str());
+        } else if name == "PATH_SEPARATOR" {
+            out.push(if cfg!(windows) { ";" } else { ":" });
         } else if let Some(resolved) = case_env.get(name) {
             out.push(resolved);
         } else {

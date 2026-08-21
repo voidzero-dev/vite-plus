@@ -237,6 +237,8 @@ jobs:
             - Version changes (old -> new) in JSON: `${{ env.UPGRADE_DEPS_META_DIR }}/versions.json`
             - Baseline commit message: `${{ env.UPGRADE_DEPS_META_DIR }}/commit-message.txt`
             - Baseline PR body: `${{ env.UPGRADE_DEPS_META_DIR }}/pr-body.md`
+            - Read the baseline PR body before you write. Preserve each factual detail unless
+              `git diff` shows that the detail is no longer correct.
             - The working directory is the project root; all upgraded files are staged or modified.
               Use `git status` and `git diff` (including `git diff --stat` and focused per-file diffs)
               to discover what actually changed beyond the raw version bumps.
@@ -261,13 +263,20 @@ jobs:
               add a trailing `Code changes:` block listing each change with a file path.
 
             ### PR body format (Markdown)
-            Use these sections in order:
-            1. `## Summary` — 2-4 bullets describing what this PR does at a high level,
-               naming the most impactful upgrades (e.g., rolldown tag bump, vite bump,
-               vitest/tsdown bumps) and any required code adjustments.
+            Use this content in order:
+            1. Add 2-4 overview bullets without a `Summary` heading. Describe the most impactful
+               upgrades and all required code adjustments.
             2. `## Dependency updates` — a Markdown table with columns `Package | From | To`.
-               Use short 7-char SHAs for rolldown/vite hashes, and include the tag in the `To`
-               column when available. Omit packages whose old and new values are equal.
+               Link each target version to its changelog when a verified link is available.
+               Format the target version as inline code inside the Markdown link.
+               - Prefer an exact target-version release page in the official repository.
+               - If no release page exists, link to the target version in the official changelog.
+               - Use `gh api`, npm package metadata, and upstream repository files to verify links.
+               - Do not guess a URL. Keep the target version unlinked if you cannot verify a link.
+               Include the version and a short 7-char SHA in both `From` and `To` for `rolldown`
+               and `vite`. Link each SHA label to the full commit in the official repository.
+               Omit packages whose old and new values are equal.
+               Keep the baseline list of unchanged dependencies after the table.
             3. `## Code changes` — bullet list of the actual non-version edits, each naming
                the file(s) touched. If the only changes are version bumps + lockfile + generated
                bindings, write `- None beyond version bumps, lockfile, and formatter output.`.

@@ -137,5 +137,16 @@
     "branch": "dev",
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
     "forceFreshMigration": true
+  },
+  "nuxt-devtools": {
+    "repository": "https://github.com/nuxt/devtools.git",
+    "branch": "main",
+    "hash": "a24195182241ddcce07f9d9e7972608eafbc93fb"
+  },
+  "tiptap": {
+    "repository": "https://github.com/ueberdosis/tiptap.git",
+    "branch": "main",
+    "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
+    "forceFreshMigration": true
   }
 }

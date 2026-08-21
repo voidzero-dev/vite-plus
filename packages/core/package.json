@@ -128,7 +128,7 @@
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@vitejs/devtools": "^0.5.0",
+    "@vitejs/devtools": "^0.5.1",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -150,7 +150,7 @@
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@vitejs/devtools": "^0.4.0",
+    "@vitejs/devtools": "^0.4.0 || ^0.5.0",
     "esbuild": "^0.27.0 || ^0.28.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
@@ -226,7 +226,7 @@
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.2.1",
+    "vite": "8.2.2",
     "rolldown": "1.2.5",
     "tsdown": "0.22.14"
   }
