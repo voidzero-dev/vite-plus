@@ -82,5 +82,4 @@ describe('staged arguments', () => {
       stash: false,
     });
   });
-
 });

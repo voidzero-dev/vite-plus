@@ -3,9 +3,8 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import mri from 'mri';
 
-import { vitePlusHeader } from '../../binding/index.js';
+import { parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
   detectEslintProject,
@@ -37,6 +36,7 @@ import {
   detectGatedBuilds,
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
+import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
@@ -89,105 +89,8 @@ import {
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
-  normalizeEditorOption,
   shouldConfigureEditorsForCreate,
 } from './utils.ts';
-
-const helpMessage = renderCliDoc({
-  usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
-  summary: 'Use any builtin, local or remote template with Vite+.',
-  documentationUrl: 'https://viteplus.dev/guide/create',
-  sections: [
-    {
-      title: 'Arguments',
-      rows: [
-        {
-          label: 'TEMPLATE',
-          description: [
-            `Template name. Run \`${accent('vp create --list')}\` to see available templates.`,
-            `- Default: ${accent('vite:monorepo')}, ${accent('vite:application')}, ${accent('vite:library')}, ${accent('vite:generator')}`,
-            '- Remote: vite, @tanstack/start, create-next-app,',
-            '  create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.',
-            '- Local: a `create.templates` entry name from vite.config.ts (monorepo)',
-            `- Org scope: ${accent('@your-org')} → picker from ${accent('@your-org/create')}'s ${accent('createConfig.templates')} manifest`,
-            `- Org entry: ${accent('@your-org:web')} → manifest entry "web" from ${accent('@your-org/create')}`,
-            `When omitted, uses \`create.defaultTemplate\` from vite.config.ts if set.`,
-          ],
-        },
-      ],
-    },
-    {
-      title: 'Options',
-      rows: [
-        { label: '--directory DIR', description: 'Target directory for the generated project.' },
-        {
-          label: '--agent NAME',
-          description: 'Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.',
-        },
-        { label: '--no-agent', description: 'Skip writing coding agent instructions' },
-        {
-          label: '--editor NAME',
-          description: 'Write editor config files for the specified editor.',
-        },
-        { label: '--no-editor', description: 'Skip writing editor config files' },
-        { label: '--git', description: 'Initialize a git repository' },
-        { label: '--no-git', description: 'Skip git repository initialization' },
-        {
-          label: '--hooks',
-          description: 'Set up pre-commit hooks (default in non-interactive mode)',
-        },
-        { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
-        {
-          label: '--package-manager NAME',
-          description: 'Use specified package manager (pnpm, npm, yarn, bun)',
-        },
-        {
-          label: '--approve-builds',
-          description: 'Approve and run gated dependency build scripts without prompting',
-        },
-        { label: '--verbose', description: 'Show detailed scaffolding output' },
-        { label: '--no-interactive', description: 'Run in non-interactive mode' },
-        { label: '--list', description: 'List all available templates' },
-        { label: '-h, --help', description: 'Show this help message' },
-      ],
-    },
-    {
-      title: 'Template Options',
-      lines: ['  Any arguments after -- are passed directly to the template.'],
-    },
-    {
-      title: 'Examples',
-      lines: [
-        `  ${muted('# Interactive mode')}`,
-        `  ${accent('vp create')}`,
-        '',
-        `  ${muted('# Use existing templates (shorthand expands to create-* packages)')}`,
-        `  ${accent('vp create vite')}`,
-        `  ${accent('vp create @tanstack/start')}`,
-        `  ${accent('vp create svelte')}`,
-        `  ${accent('vp create vite -- --template react-ts')}`,
-        '',
-        `  ${muted('# Full package names also work')}`,
-        `  ${accent('vp create create-vite')}`,
-        `  ${accent('vp create create-next-app')}`,
-        '',
-        `  ${muted('# Create Vite+ monorepo, application, library, or generator scaffolds')}`,
-        `  ${accent('vp create vite:monorepo')}`,
-        `  ${accent('vp create vite:application')}`,
-        `  ${accent('vp create vite:library')}`,
-        `  ${accent('vp create vite:generator')}`,
-        '',
-        `  ${muted('# Use templates from GitHub (via degit)')}`,
-        `  ${accent('vp create github:user/repo')}`,
-        `  ${accent('vp create https://github.com/user/template-repo')}`,
-        '',
-        `  ${muted('# Pick from an org that publishes @scope/create with createConfig.templates')}`,
-        `  ${accent('vp create @your-org')} ${muted('# interactive picker')}`,
-        `  ${accent('vp create @your-org:web')} ${muted('# direct manifest-entry selection')}`,
-      ],
-    },
-  ],
-});
 
 const listTemplatesMessage = renderCliDoc({
   usage: 'vp create --list',
@@ -238,13 +141,12 @@ export interface Options {
   directory?: string;
   interactive: boolean;
   list: boolean;
-  help: boolean;
   verbose: boolean;
   agent?: string | string[] | false;
   editor?: string | false;
   git?: boolean;
   hooks?: boolean;
-  packageManager?: string;
+  packageManager?: PackageManager;
   /**
    * Approve and run gated dependency build scripts without prompting. Useful in
    * non-interactive runs that need a ready-to-use project.
@@ -252,66 +154,24 @@ export interface Options {
   approveBuilds?: boolean;
 }
 
-type ParsedAgentOption = string | false | Array<string | false>;
-
-function normalizeAgentOption(agent: ParsedAgentOption | undefined): Options['agent'] {
-  if (!Array.isArray(agent)) {
-    return agent;
-  }
-  if (agent.includes(false)) {
-    return false;
-  }
-  return agent.filter((value): value is string => typeof value === 'string');
-}
-
-// Parse CLI arguments: split on '--' separator
 function parseArgs() {
-  const args = process.argv.slice(3); // Skip 'node', 'vite'
-  const separatorIndex = args.indexOf('--');
-
-  // Arguments before -- are Vite+ options
-  const viteArgs = separatorIndex >= 0 ? args.slice(0, separatorIndex) : args;
-
-  // Arguments after -- are template options
-  const templateArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
-
-  const parsed = mri<{
-    directory?: string;
-    interactive?: boolean;
-    list?: boolean;
-    help?: boolean;
-    verbose?: boolean;
-    agent?: ParsedAgentOption;
-    editor?: string | false | Array<string | false>;
-    git?: boolean;
-    hooks?: boolean;
-    'package-manager'?: string;
-    'approve-builds'?: boolean;
-  }>(viteArgs, {
-    alias: { h: 'help' },
-    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose', 'git', 'approve-builds'],
-    string: ['directory', 'agent', 'editor', 'package-manager'],
-    default: { interactive: defaultInteractive() },
-  });
-
-  const templateName = parsed._[0] as string | undefined;
+  const parsed = unwrapCliParseOutcome(parseCreateArgs(process.argv.slice(3)));
 
   return {
-    templateName,
+    templateName: parsed.templateName,
     options: {
       directory: parsed.directory,
-      interactive: parsed.interactive,
-      list: parsed.list || false,
-      help: parsed.help || false,
-      verbose: parsed.verbose || false,
-      agent: normalizeAgentOption(parsed.agent),
-      editor: normalizeEditorOption(parsed.editor),
+      interactive: parsed.interactive ?? defaultInteractive(),
+      list: parsed.list ?? false,
+      verbose: parsed.verbose ?? false,
+      agent: parsed.agent,
+      editor: parsed.editor,
       git: parsed.git,
       hooks: parsed.hooks,
-      packageManager: parsed['package-manager'],
-      approveBuilds: parsed['approve-builds'] || false,
-    } as Options,
-    templateArgs,
+      packageManager: parsed.packageManager,
+      approveBuilds: parsed.approveBuilds ?? false,
+    } satisfies Options,
+    templateArgs: parsed.templateArgs,
   };
 }
 
@@ -430,14 +290,6 @@ function showCreateSummary(options: {
 async function main() {
   const { templateName, options, templateArgs } = parseArgs();
   let compactOutput = !options.verbose;
-
-  // #region Handle help flag
-  if (options.help) {
-    printHeader();
-    log(helpMessage);
-    return;
-  }
-  // #endregion
 
   // #region Handle list flag
   if (options.list) {
@@ -804,17 +656,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   // Resolve package manager: existing monorepo > CLI flag > ambient detection > prompt/default
-  if (
-    options.packageManager &&
-    !Object.values(PackageManager).includes(options.packageManager as PackageManager)
-  ) {
-    const valid = Object.values(PackageManager).join(', ');
-    prompts.log.error(
-      `Invalid package manager: ${options.packageManager}. Must be one of: ${valid}`,
-    );
-    cancelAndExit('Invalid --package-manager value', 1);
-  }
-  const requestedPackageManager = options.packageManager as PackageManager | undefined;
+  const requestedPackageManager = options.packageManager;
   const detectedPackageManager = workspaceInfoOptional.packageManager;
   const packageManager =
     (isMonorepo

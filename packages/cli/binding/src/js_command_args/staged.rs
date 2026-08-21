@@ -253,6 +253,7 @@ mod tests {
             (&["--concurrent=false"][..], Concurrent::Disabled),
             (&["--concurrent=1"][..], Concurrent::Limit(NonZeroU32::MIN)),
             (&["-p", "2"][..], Concurrent::Limit(NonZeroU32::new(2).expect("2 is non-zero"))),
+            (&["--concurrent=4294967295"][..], Concurrent::Limit(NonZeroU32::MAX)),
         ];
 
         for (argv, expected) in cases {

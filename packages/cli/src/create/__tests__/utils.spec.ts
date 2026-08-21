@@ -10,7 +10,6 @@ import {
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
   getProjectDirFromPackageName,
-  normalizeEditorOption,
   renameFiles,
   shouldConfigureEditorsForCreate,
 } from '../utils.js';
@@ -23,13 +22,6 @@ describe('getProjectDirFromPackageName', () => {
 });
 
 describe('editor configuration policy', () => {
-  it('normalizes repeated editor options to a single editor value', () => {
-    expect(normalizeEditorOption('vscode')).toBe('vscode');
-    expect(normalizeEditorOption(['vscode', 'zed'])).toBe('zed');
-    expect(normalizeEditorOption(['vscode', false])).toBe(false);
-    expect(normalizeEditorOption([undefined, 'vscode'])).toBe('vscode');
-  });
-
   it('allows automatic editor configuration outside existing monorepos', () => {
     expect(shouldConfigureEditorsForCreate({ isMonorepo: false, editor: undefined })).toBe(true);
   });
