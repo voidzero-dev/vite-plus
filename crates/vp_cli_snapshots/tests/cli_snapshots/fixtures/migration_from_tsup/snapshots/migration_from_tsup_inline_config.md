@@ -23,10 +23,12 @@ tsup configuration detected. Auto-migrating to tsdown...
 Automatic tsup migration was skipped because these inline tsup configs cannot be migrated automatically:
   package.json#tsup
 
-Choose one of these manual migration methods:
-  1. Run `vp dlx tsdown-migrate` in the project root.
-  2. Use the tsdown migration skill:
-     https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
+Resolve this inline configuration manually:
+  1. Move each `package.json#tsup` configuration into `pack` in `vite.config.*`.
+  2. Do not run `tsdown-migrate`. Vite+ Pack does not read `package.json#tsdown`.
+
+Use the tsdown migration skill for guidance:
+  https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
 Complete the tsup migration manually, then re-run `vp migrate`.
 ```
 

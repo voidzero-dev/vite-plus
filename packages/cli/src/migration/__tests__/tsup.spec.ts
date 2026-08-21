@@ -45,6 +45,15 @@ function manualMigrationOptions(targetLabel = 'the project root'): string {
   ].join('\n');
 }
 
+function migrationSkillGuidance(instructions: string[]): string {
+  return [
+    ...instructions,
+    '',
+    'Use the tsdown migration skill for guidance:',
+    `  ${TSDOWN_MIGRATION_SKILL_URL}`,
+  ].join('\n');
+}
+
 describe('tsup migration', () => {
   let projectPath: string;
 
@@ -114,7 +123,13 @@ describe('tsup migration', () => {
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these tsdown configs already exist:\n  tsdown.config.ts',
     );
-    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+    expect(mockInfo).toHaveBeenCalledWith(
+      migrationSkillGuidance([
+        'Resolve this configuration conflict manually:',
+        '  1. Merge the tsup and tsdown configurations into `pack` in `vite.config.*`.',
+        '  2. Do not run `tsdown-migrate`. It can overwrite the existing tsdown configuration.',
+      ]),
+    );
   });
 
   it('refuses to overwrite an inline tsdown config', async () => {
@@ -140,7 +155,13 @@ describe('tsup migration', () => {
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these tsdown configs already exist:\n  package.json#tsdown',
     );
-    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+    expect(mockInfo).toHaveBeenCalledWith(
+      migrationSkillGuidance([
+        'Resolve this configuration conflict manually:',
+        '  1. Merge the tsup and tsdown configurations into `pack` in `vite.config.*`.',
+        '  2. Do not run `tsdown-migrate`. It can overwrite the existing tsdown configuration.',
+      ]),
+    );
   });
 
   it('refuses to migrate an inline tsup config', async () => {
@@ -165,7 +186,13 @@ describe('tsup migration', () => {
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these inline tsup configs cannot be migrated automatically:\n  package.json#tsup',
     );
-    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+    expect(mockInfo).toHaveBeenCalledWith(
+      migrationSkillGuidance([
+        'Resolve this inline configuration manually:',
+        '  1. Move each `package.json#tsup` configuration into `pack` in `vite.config.*`.',
+        '  2. Do not run `tsdown-migrate`. Vite+ Pack does not read `package.json#tsdown`.',
+      ]),
+    );
   });
 
   it('refuses to migrate a script that uses a custom tsup config', async () => {
@@ -191,7 +218,14 @@ describe('tsup migration', () => {
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#build -> configs/legacy.ts',
     );
-    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+    expect(mockInfo).toHaveBeenCalledWith(
+      migrationSkillGuidance([
+        'Resolve these config paths manually:',
+        '  1. Migrate each listed config into `pack` in `vite.config.*`.',
+        '  2. Update each listed script.',
+        '  3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.',
+      ]),
+    );
   });
 
   it('refuses a default config path that cleanup cannot remove', async () => {
@@ -215,7 +249,14 @@ describe('tsup migration', () => {
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#build -> ././tsup.config.ts',
     );
-    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+    expect(mockInfo).toHaveBeenCalledWith(
+      migrationSkillGuidance([
+        'Resolve these config paths manually:',
+        '  1. Migrate each listed config into `pack` in `vite.config.*`.',
+        '  2. Update each listed script.',
+        '  3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.',
+      ]),
+    );
   });
 
   it('refuses to remove selectors for multiple standard tsup configs', async () => {
@@ -242,7 +283,14 @@ describe('tsup migration', () => {
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#buildJs -> tsup.config.js',
     );
-    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+    expect(mockInfo).toHaveBeenCalledWith(
+      migrationSkillGuidance([
+        'Resolve these config paths manually:',
+        '  1. Migrate each listed config into `pack` in `vite.config.*`.',
+        '  2. Update each listed script.',
+        '  3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.',
+      ]),
+    );
   });
 
   it('detects a workspace-only tsup config', () => {

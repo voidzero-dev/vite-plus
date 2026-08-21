@@ -28,10 +28,13 @@ Automatic tsup migration was skipped because these scripts use configs that cann
   package.json#build -> configs/legacy.ts
   package.json#irregular -> ././tsup.config.ts
 
-Choose one of these manual migration methods:
-  1. Run `vp dlx tsdown-migrate` in the project root.
-  2. Use the tsdown migration skill:
-     https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
+Resolve these config paths manually:
+  1. Migrate each listed config into `pack` in `vite.config.*`.
+  2. Update each listed script.
+  3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.
+
+Use the tsdown migration skill for guidance:
+  https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
 Complete the tsup migration manually, then re-run `vp migrate`.
 ```
 

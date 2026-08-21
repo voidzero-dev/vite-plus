@@ -31,6 +31,17 @@ function showTsdownMigrationOptions(
   prompts.log.info(lines.join('\n'));
 }
 
+function showTsdownMigrationSkillGuidance(instructions: string[]): void {
+  prompts.log.info(
+    [
+      ...instructions,
+      '',
+      'Use the tsdown migration skill for guidance:',
+      `  ${TSDOWN_MIGRATION_SKILL_URL}`,
+    ].join('\n'),
+  );
+}
+
 export function detectTsupProject(
   projectPath: string,
   packages?: WorkspacePackage[],
@@ -108,7 +119,6 @@ interface SharedTsupConfig {
 
 interface TsupConfigLocation {
   configPath: string;
-  targetPath: string;
 }
 
 interface UnsupportedTsupConfigConsumer {
@@ -180,13 +190,13 @@ function collectTsupConfigCollisions(tsupTargets: string[]): TsupConfigLocation[
   for (const target of tsupTargets) {
     const tsdownConfig = detectConfigs(target).tsdownConfig;
     if (tsdownConfig) {
-      collisions.push({ configPath: path.join(target, tsdownConfig), targetPath: target });
+      collisions.push({ configPath: path.join(target, tsdownConfig) });
     }
     const packageJsonPath = path.join(target, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
       const packageJson = readJsonFile(packageJsonPath);
       if (Object.hasOwn(packageJson, 'tsdown')) {
-        collisions.push({ configPath: `${packageJsonPath}#tsdown`, targetPath: target });
+        collisions.push({ configPath: `${packageJsonPath}#tsdown` });
       }
     }
   }
@@ -199,7 +209,7 @@ function collectInlineTsupConfigs(tsupTargets: string[]): TsupConfigLocation[] {
     if (!fs.existsSync(packageJsonPath) || !Object.hasOwn(readJsonFile(packageJsonPath), 'tsup')) {
       return [];
     }
-    return [{ configPath: `${packageJsonPath}#tsup`, targetPath: target }];
+    return [{ configPath: `${packageJsonPath}#tsup` }];
   });
 }
 
@@ -427,12 +437,11 @@ export async function migrateTsupToTsdown(
         .map(({ configPath }) => `  ${displayRelative(configPath, projectPath)}`)
         .join('\n')}`,
     );
-    const firstCollisionTarget = configCollisions[0].targetPath;
-    const targetLabel =
-      firstCollisionTarget === rootPath
-        ? 'the project root'
-        : displayRelative(firstCollisionTarget, projectPath);
-    showTsdownMigrationOptions(targetLabel);
+    showTsdownMigrationSkillGuidance([
+      'Resolve this configuration conflict manually:',
+      '  1. Merge the tsup and tsdown configurations into `pack` in `vite.config.*`.',
+      '  2. Do not run `tsdown-migrate`. It can overwrite the existing tsdown configuration.',
+    ]);
     return false;
   }
   const inlineTsupConfigs = collectInlineTsupConfigs(tsupTargets);
@@ -442,12 +451,11 @@ export async function migrateTsupToTsdown(
         .map(({ configPath }) => `  ${displayRelative(configPath, projectPath)}`)
         .join('\n')}`,
     );
-    const firstInlineTarget = inlineTsupConfigs[0].targetPath;
-    const targetLabel =
-      firstInlineTarget === rootPath
-        ? 'the project root'
-        : displayRelative(firstInlineTarget, projectPath);
-    showTsdownMigrationOptions(targetLabel);
+    showTsdownMigrationSkillGuidance([
+      'Resolve this inline configuration manually:',
+      '  1. Move each `package.json#tsup` configuration into `pack` in `vite.config.*`.',
+      '  2. Do not run `tsdown-migrate`. Vite+ Pack does not read `package.json#tsdown`.',
+    ]);
     return false;
   }
   const unsupportedConfigConsumers = collectUnsupportedTsupConfigConsumers(tsupTargets);
@@ -460,12 +468,12 @@ export async function migrateTsupToTsdown(
         )
         .join('\n')}`,
     );
-    const firstConsumerTarget = unsupportedConfigConsumers[0].packagePath;
-    const targetLabel =
-      firstConsumerTarget === rootPath
-        ? 'the project root'
-        : displayRelative(firstConsumerTarget, projectPath);
-    showTsdownMigrationOptions(targetLabel);
+    showTsdownMigrationSkillGuidance([
+      'Resolve these config paths manually:',
+      '  1. Migrate each listed config into `pack` in `vite.config.*`.',
+      '  2. Update each listed script.',
+      '  3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.',
+    ]);
     return false;
   }
   const sharedConfigs = collectSharedTsupConfigs(projectPath, packages, tsupTargets);

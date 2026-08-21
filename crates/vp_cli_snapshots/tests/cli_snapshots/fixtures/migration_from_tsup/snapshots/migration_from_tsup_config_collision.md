@@ -18,10 +18,12 @@ tsup configuration detected. Auto-migrating to tsdown...
 Automatic tsup migration was skipped because these tsdown configs already exist:
   tsdown.config.ts
 
-Choose one of these manual migration methods:
-  1. Run `vp dlx tsdown-migrate` in the project root.
-  2. Use the tsdown migration skill:
-     https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
+Resolve this configuration conflict manually:
+  1. Merge the tsup and tsdown configurations into `pack` in `vite.config.*`.
+  2. Do not run `tsdown-migrate`. It can overwrite the existing tsdown configuration.
+
+Use the tsdown migration skill for guidance:
+  https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
 Complete the tsup migration manually, then re-run `vp migrate`.
 ```
 
