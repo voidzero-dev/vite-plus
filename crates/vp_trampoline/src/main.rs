@@ -40,11 +40,7 @@ const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
 
 enum ShimLayout {
     SingleRoot,
-    Split {
-        cache: std::path::PathBuf,
-    },
-    /// One-line sidecars from earlier PR previews did not record provenance.
-    Legacy,
+    Split { cache: std::path::PathBuf },
 }
 
 struct ShimPointer {
@@ -63,31 +59,12 @@ enum ChildDirPins<'a> {
     SingleRoot,
     /// The versioned sidecar explicitly selected split roots.
     Split { cache: &'a std::path::Path },
-    /// A legacy sidecar and independent roots. Old sidecars did not record
-    /// cache, so use the Windows platform fallback.
-    LegacySplit { cache: std::path::PathBuf },
 }
 
-fn legacy_split_cache(data: &std::path::Path) -> std::path::PathBuf {
-    env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .map(|path| path.join("vite-plus").join("cache"))
-        .unwrap_or_else(|| data.join("cache"))
-}
-
-fn child_dir_pins<'a>(bin_dir: &std::path::Path, pointer: &'a ShimPointer) -> ChildDirPins<'a> {
+fn child_dir_pins(pointer: &ShimPointer) -> ChildDirPins<'_> {
     match &pointer.layout {
         ShimLayout::SingleRoot => ChildDirPins::SingleRoot,
         ShimLayout::Split { cache } => ChildDirPins::Split { cache },
-        ShimLayout::Legacy if bin_dir == pointer.data.join("bin").as_path() => {
-            // Compatibility with one-line sidecars from earlier PR previews.
-            // Their path shape is ambiguous, so preserve their old behavior.
-            ChildDirPins::SingleRoot
-        }
-        ShimLayout::Legacy => {
-            ChildDirPins::LegacySplit { cache: legacy_split_cache(&pointer.data) }
-        }
     }
 }
 
@@ -112,10 +89,7 @@ fn read_shim_pointer(exe_path: &std::path::Path) -> Option<ShimPointer> {
     }
     let mut lines = text.lines();
     if lines.next()? != SHIM_POINTER_HEADER {
-        return Some(ShimPointer {
-            data: std::path::PathBuf::from(text),
-            layout: ShimLayout::Legacy,
-        });
+        return None;
     }
 
     let mut layout = None;
@@ -167,17 +141,11 @@ fn main() {
     //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
     let mut cmd = Command::new(&location.exe);
     cmd.args(env::args_os().skip(1));
-    match child_dir_pins(bin_dir, &location.pointer) {
+    match child_dir_pins(&location.pointer) {
         ChildDirPins::SingleRoot => {
             cmd.env("VP_HOME", &location.pointer.data);
         }
         ChildDirPins::Split { cache } => {
-            cmd.env_remove("VP_HOME");
-            cmd.env("VP_DATA_DIR", &location.pointer.data);
-            cmd.env("VP_BIN_DIR", bin_dir);
-            cmd.env("VP_CACHE_DIR", cache);
-        }
-        ChildDirPins::LegacySplit { cache } => {
             cmd.env_remove("VP_HOME");
             cmd.env("VP_DATA_DIR", &location.pointer.data);
             cmd.env("VP_BIN_DIR", bin_dir);
@@ -263,7 +231,8 @@ mod resolve_tests {
         let data = root.join("data-root");
         fs::create_dir_all(&bin).unwrap();
         fs::create_dir_all(&data).unwrap();
-        fs::write(bin.join("vp.shim"), format!("{}\n", data.display())).unwrap();
+        fs::write(bin.join("vp.shim"), versioned_pointer("split", &data, &root.join("cache")))
+            .unwrap();
 
         assert!(resolve_vp_exe(&bin.join("vp.exe")).is_none());
         let _ = fs::remove_dir_all(&root);
@@ -278,12 +247,28 @@ mod resolve_tests {
         fs::create_dir_all(&bin).unwrap();
         write_exe(&data.join("current").join("bin").join("vp.exe"));
         write_exe(&root.join("data").join("current").join("bin").join("vp.exe"));
-        fs::write(bin.join("vp.shim"), format!("{}\n", data.display())).unwrap();
+        fs::write(bin.join("vp.shim"), versioned_pointer("split", &data, &root.join("cache")))
+            .unwrap();
 
         let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
         assert_eq!(location.exe, data.join("current").join("bin").join("vp.exe"));
         assert_eq!(location.pointer.data, data);
-        assert!(matches!(location.pointer.layout, ShimLayout::Legacy));
+        assert!(matches!(location.pointer.layout, ShimLayout::Split { .. }));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn unversioned_pointer_is_rejected() {
+        let root =
+            std::env::temp_dir().join(format!("vp-trampoline-unversioned-{}", process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let bin = root.join("bin");
+        let data = root.join("data");
+        fs::create_dir_all(&bin).unwrap();
+        write_exe(&data.join("current").join("bin").join("vp.exe"));
+        fs::write(bin.join("vp.shim"), format!("{}\n", data.display())).unwrap();
+
+        assert!(resolve_vp_exe(&bin.join("vp.exe")).is_none());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -297,8 +282,16 @@ mod resolve_tests {
         fs::create_dir_all(&bin).unwrap();
         write_exe(&node_data.join("current").join("bin").join("vp.exe"));
         write_exe(&decoy_data.join("current").join("bin").join("vp.exe"));
-        fs::write(bin.join("vp.shim"), format!("{}\n", decoy_data.display())).unwrap();
-        fs::write(bin.join("node.shim"), format!("{}\n", node_data.display())).unwrap();
+        fs::write(
+            bin.join("vp.shim"),
+            versioned_pointer("split", &decoy_data, &root.join("cache")),
+        )
+        .unwrap();
+        fs::write(
+            bin.join("node.shim"),
+            versioned_pointer("split", &node_data, &root.join("cache")),
+        )
+        .unwrap();
 
         let location = resolve_vp_exe(&bin.join("node.exe")).unwrap();
         assert_eq!(location.exe, node_data.join("current").join("bin").join("vp.exe"));
@@ -340,7 +333,7 @@ mod resolve_tests {
 
         let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
         assert!(matches!(
-            child_dir_pins(&bin, &location.pointer),
+            child_dir_pins(&location.pointer),
             ChildDirPins::Split { cache: value } if value == cache
         ));
         let _ = fs::remove_dir_all(&root);
@@ -361,17 +354,8 @@ mod resolve_tests {
         .unwrap();
 
         let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
-        assert!(matches!(child_dir_pins(&bin, &location.pointer), ChildDirPins::SingleRoot));
+        assert!(matches!(child_dir_pins(&location.pointer), ChildDirPins::SingleRoot));
         let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn legacy_pointer_preserves_path_based_behavior() {
-        let data = std::path::PathBuf::from("/data/root");
-        let bin = std::path::PathBuf::from("/other/bin");
-        let pointer = ShimPointer { data: data.clone(), layout: ShimLayout::Legacy };
-        assert!(matches!(child_dir_pins(&data.join("bin"), &pointer), ChildDirPins::SingleRoot));
-        assert!(matches!(child_dir_pins(&bin, &pointer), ChildDirPins::LegacySplit { .. }));
     }
 }
 

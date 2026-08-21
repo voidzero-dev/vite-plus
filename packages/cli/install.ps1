@@ -326,8 +326,7 @@ function Get-ShimPointerData {
     }
     $lines = $contents -split "`r?`n"
     if ($lines[0] -ne "vite-plus-shim-v1") {
-        # Compatibility with one-line sidecars from earlier PR previews.
-        return $contents
+        return $null
     }
     foreach ($line in $lines) {
         if ($line.StartsWith("data=")) {
