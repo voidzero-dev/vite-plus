@@ -24,7 +24,7 @@ The global Rust CLI continues to forward the arguments without parsing them. Thi
 | Local CLI           | The Node.js CLI from the selected `vite-plus` package           |
 | NAPI binding        | The native interface between Node.js and Rust                   |
 | Positional argument | A value that does not have an option name                       |
-| Parse outcome       | A typed object with an `ok`, `help`, or `error` status          |
+| Parse outcome       | A typed object with an `ok`, `exit`, or `error` status          |
 
 ## Motivation
 
@@ -57,7 +57,7 @@ Vite+ already includes a native binding and `clap`. This design uses those compo
 
 1. Use `clap` to parse the five JavaScript command grammars.
 2. Return typed values through generated NAPI declarations.
-3. Build option help from the same `clap` command.
+3. Build and print option help from the same `clap` command.
 4. Reject invalid arguments before command work starts.
 5. Keep the local CLI in Node.js.
 6. Keep command work in JavaScript.
@@ -74,7 +74,7 @@ This RFC does not:
 - replace the Node.js local CLI;
 - make the global CLI parse local command options;
 - send these commands through the existing `run()` executor;
-- replace the current `renderCliDoc()` output;
+- replace `renderCliDoc()` for commands outside this migration;
 - generate Rust schemas from TypeScript;
 - add a neutral schema language;
 - change `-C`, `vpr`, command routing, or package-manager routing.
@@ -85,8 +85,9 @@ This RFC does not:
 | ------------------------------- | ---------------------------------------------------------- |
 | Global `vp` binary              | Select the local package and forward the command arguments |
 | Local `packages/cli/src/bin.ts` | Apply `-C` and `vpr` rules, then select the command        |
-| `binding/src/js_command_args/`  | Parse commands and build structured help documents         |
-| JavaScript command modules      | Render help, apply defaults, and run command operations    |
+| `binding/src/js_command_args/`  | Parse command arguments and request help output            |
+| `vp_cli_help`                   | Build, format, and print Vite+ help                        |
+| JavaScript command modules      | Apply defaults and run command operations                  |
 
 The global CLI must keep these command arguments as `Vec<String>`. It must not parse the local option grammar.
 
@@ -132,6 +133,10 @@ JavaScript sends raw arguments to one NAPI parser. It does not parse the returne
 Add these files:
 
 ```text
+crates/vp_cli_help/
+  Cargo.toml
+  src/lib.rs
+
 packages/cli/binding/src/js_command_args/
   mod.rs
   parse.rs
@@ -142,9 +147,11 @@ packages/cli/binding/src/js_command_args/
   staged.rs
 ```
 
+The `vp_cli_help` crate contains the shared help model, `clap` adapter, formatter, and output function. The global CLI and the NAPI binding use this crate.
+
 The `js_command_args` name shows that these files support JavaScript commands. The existing `binding/src/cli/` module parses and runs Rust commands.
 
-`parse.rs` contains the shared parser, help conversion, and error conversion. Each command file contains these items:
+`parse.rs` contains the shared parser and error conversion. Each command file contains these items:
 
 - its `clap` type;
 - its value conversion;
@@ -210,26 +217,8 @@ Each function returns a command-specific union:
 ```ts
 type ParseStagedArgsOutcome =
   | { status: 'ok'; value: StagedArgs }
-  | { status: 'help'; doc: CliHelpDoc }
+  | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
-
-interface CliHelpDoc {
-  usage: string;
-  summary?: string;
-  sections: CliHelpSection[];
-  documentationUrl?: string;
-}
-
-interface CliHelpSection {
-  title: string;
-  lines?: string[];
-  rows?: CliHelpRow[];
-}
-
-interface CliHelpRow {
-  label: string;
-  description: string;
-}
 
 interface CliParseError {
   kind: string;
@@ -242,12 +231,14 @@ A union has one object shape for each status. napi-rs generates this union from 
 The statuses have these meanings:
 
 - `ok`: The value contains valid arguments.
-- `help`: The document contains structured help from the same `clap` command.
+- `exit`: Rust printed help. JavaScript exits with the specified code.
 - `error`: JavaScript prints the `clap` diagnostic.
 
-Map `clap::error::ErrorKind::DisplayHelp` to `help`. Map all other argument errors to `error`.
+Map `clap::error::ErrorKind::DisplayHelp` to `exit` with code 0. Map all other argument errors to `error`.
 
 JavaScript prints the Vite+ header before a diagnostic. It exits with code 1 for invalid arguments.
+
+Rust does not call `clap::Error::exit()` or `std::process::exit()`. JavaScript controls the Node.js process lifetime.
 
 Do not throw a NAPI exception for user input. A native exception must identify a binding or conversion failure.
 
@@ -285,11 +276,11 @@ JavaScript can keep types for larger command inputs. Do not use an assertion to 
 
 ## Help
 
-Keep `renderCliDoc()` as the help renderer.
+Use `vp_cli_help` as the Rust help model and renderer.
 
 `clap` owns the `-h` and `--help` actions. The parser reports either action as `DisplayHelp`.
 
-The NAPI function returns `help` and discards the rendered `clap` text. The outcome includes a structured `CliHelpDoc`.
+The NAPI function builds a help document from the command metadata. Rust prints the Vite+ header and help document to stdout. It then returns `exit` with code 0.
 
 The shared adapter reads public metadata from the built `clap::Command`. It reads these values:
 
@@ -302,13 +293,13 @@ The shared adapter reads public metadata from the built `clap::Command`. It read
 - help descriptions;
 - help headings.
 
-JavaScript gives this document to `renderCliDoc()`. Thus, Vite+ keeps its help layout and terminal wrapping.
+The global CLI uses the same document types and formatter. The formatter keeps help text within the terminal width. JavaScript does not receive the document or the rendered text.
 
 A help flag takes priority over a later invalid option. This behavior matches the current JavaScript command.
 
 The `clap` schema owns option names, value names, aliases, and descriptions. JavaScript does not keep a second option list.
 
-Documentation URLs and custom examples do not define accepted arguments. A command can add this presentation data to the help document.
+Documentation URLs and custom examples do not define accepted arguments. A command can add this presentation data before Rust prints the document.
 
 The shared adapter uses the `clap::Arg` display form for option labels. This form shows optional values with square brackets.
 
@@ -569,7 +560,7 @@ This RFC preserves these behaviors:
 - The local CLI runs in Node.js.
 - The global CLI selects the local `dist/bin.js`.
 - The local CLI handles `-C` and `vpr`.
-- JavaScript renders `vp help <command>`.
+- The selected local CLI prints help for its JavaScript commands.
 - Documented aliases continue to work.
 - Documented positive and negative options continue to work.
 - `create` does not change arguments after `--`.
@@ -599,17 +590,19 @@ Use small, focused pull requests when repository rules permit them.
 
 ### Phase 1: Shared parser and `staged`
 
-1. Add `binding/src/js_command_args/`.
-2. Add the shared parser.
-3. Add the NAPI outcome and error types.
-4. Add the structured help document types.
-5. Add the `clap` metadata adapter.
-6. Add `StagedArgs` and concurrency parsing.
-7. Export `parseStagedArgs`.
-8. Generate and inspect `binding/index.d.cts`.
-9. Replace the JavaScript parser and help rows for `staged`.
-10. Keep the #2488 and #2501 regression tests.
-11. Review the result before another migration.
+1. Add the `vp_cli_help` crate.
+2. Move the global help model and formatter to the new crate.
+3. Add `binding/src/js_command_args/`.
+4. Add the shared parser and error conversion.
+5. Add the NAPI outcome and error types.
+6. Add the shared `clap` metadata adapter.
+7. Add `StagedArgs` and concurrency parsing.
+8. Export `parseStagedArgs`.
+9. Generate and inspect `binding/index.d.cts`.
+10. Print `staged` help in Rust.
+11. Remove the JavaScript parser and help rows for `staged`.
+12. Keep the #2488 and #2501 regression tests.
+13. Review the result before another migration.
 
 ### Phase 2: `config` and `hooks`
 
@@ -635,11 +628,11 @@ Remove `mri` if no unrelated command uses it. Then update the lockfile.
 
 Remove unused TypeScript parser types and conversion functions.
 
-### Phase 6: Optional global help cleanup
+### Phase 6: Global clap adapter cleanup
 
-The global CLI currently converts rendered `clap` text into its help document. This conversion depends on text layout.
+The global CLI uses the shared help model and formatter in Phase 1. It still converts some rendered `clap` text into help documents.
 
-Evaluate a shared Rust help adapter after the five command migrations. The global CLI can then read the same direct metadata.
+Replace that text conversion with the shared `clap` metadata adapter after the five command migrations.
 
 Do not make this cleanup a requirement for the local parser migration.
 
@@ -678,7 +671,7 @@ Build the binding. Then check these results:
 - Each parser returns the generated status and field names.
 - Omitted Rust `Option` fields become optional JavaScript properties.
 - Staged concurrency returns `boolean | number | undefined`.
-- Help returns a typed document from the `clap` command.
+- Help prints in Rust and returns `exit` with code 0.
 - Errors do not return success objects.
 - `index.d.cts` contains the exact runtime types.
 
@@ -710,15 +703,17 @@ Add `create` tests that compare each template argument after `--`. Use local and
 
 An option change requires a new Rust binding build. Vite+ already requires this binding for the local CLI.
 
-The change adds build time, but it adds no runtime dependency. Small command modules keep tests focused.
+The change adds build time, but it adds no JavaScript runtime dependency. Small command modules keep tests focused.
 
-### Help metadata conversion
+### Help metadata conversion and output
 
-`clap` does not provide a structured help document for `renderCliDoc()`. The shared adapter converts public command metadata.
+`clap` does not provide the Vite+ help document shape. The shared adapter converts public command metadata.
 
 Keep the adapter small. Test optional values, aliases, positionals, headings, subcommands, hidden items, and display order.
 
 Do not parse the complete rendered `clap` help text. Its headings, spaces, and wrapping are presentation details.
+
+Native stdout is process-wide. Unit tests call the renderer with data and check its returned string. PTY tests check the final stdout output.
 
 ### NAPI value conversion
 
@@ -796,9 +791,9 @@ It must also support NAPI types and the JavaScript help layout. The generator be
 
 The NAPI function can return the complete text from `Command::render_help()`. This option removes the metadata adapter.
 
-It also gives `clap` control of layout, wrapping, and styles. Vite+ then loses the shared `renderCliDoc()` presentation.
+It also gives `clap` control of layout, wrapping, and styles. Vite+ then loses its shared Rust presentation.
 
-Structured metadata keeps one argument source and the current Vite+ renderer.
+The shared adapter keeps one argument source and one Vite+ renderer. Rust prints the result without a NAPI string conversion.
 
 ### Throw NAPI errors
 
@@ -815,7 +810,7 @@ The complete migration must meet these criteria:
 1. The five JavaScript commands parse arguments through `clap`.
 2. JavaScript starts command work only after an `ok` outcome.
 3. Generated NAPI declarations describe each outcome and value.
-4. Each help outcome contains a typed document from the same `clap` command.
+4. Each help request prints from the same `clap` command and returns exit code 0.
 5. JavaScript command files do not duplicate option rows.
 6. The five commands do not use `mri` directly.
 7. Invalid arguments fail before command work.

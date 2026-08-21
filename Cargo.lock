@@ -8438,6 +8438,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "vp_cli_help",
  "vp_command",
  "vp_error",
  "vp_migration",
@@ -8450,6 +8451,16 @@ dependencies = [
  "vt_select",
  "vt_str",
  "vt_workspace",
+]
+
+[[package]]
+name = "vp_cli_help"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "owo-colors",
+ "terminal_size",
+ "vp_shared",
 ]
 
 [[package]]
@@ -8542,6 +8553,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "vp_cli_help",
  "vp_command",
  "vp_error",
  "vp_js_runtime",
