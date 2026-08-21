@@ -1,12 +1,13 @@
 use std::{num::NonZeroU32, str::FromStr};
 
-use clap::{ArgAction, Args};
+use clap::{Arg, ArgAction, Args, Command};
 use napi::bindgen_prelude::Either;
 use napi_derive::napi;
 
-use super::parse::{CliParseError, ParseResult, parse_args};
+use super::parse::{CliHelpDoc, CliParseError, ParseResult, help_doc, parse_args};
 
 const CONCURRENT_VALUE_ERROR: &str = "use true, false, or an integer from 1 through 4294967295";
+const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Concurrent {
@@ -31,7 +32,11 @@ impl FromStr for Concurrent {
 
 #[derive(Debug, Args)]
 struct StagedCliArgs {
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Allow empty commits when tasks revert all staged changes"
+    )]
     allow_empty: bool,
 
     #[arg(
@@ -41,51 +46,101 @@ struct StagedCliArgs {
         num_args = 0..=1,
         default_missing_value = "true",
         allow_negative_numbers = true,
-        overrides_with = "no_concurrent"
+        overrides_with = "no_concurrent",
+        help = "Run tasks at the same time. Use false to run one task at a time"
     )]
     concurrent: Option<Concurrent>,
 
-    #[arg(long = "no-concurrent", overrides_with = "concurrent")]
+    #[arg(long = "no-concurrent", overrides_with = "concurrent", help = "Run one task at a time")]
     no_concurrent: bool,
 
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Run all tasks to completion even if one fails"
+    )]
     continue_on_error: bool,
 
-    #[arg(long, value_name = "path")]
+    #[arg(long, value_name = "path", help = "Working directory to run all tasks in")]
     cwd: Option<String>,
 
-    #[arg(short = 'd', long, action = ArgAction::SetTrue)]
+    #[arg(short = 'd', long, action = ArgAction::SetTrue, help = "Enable debug output")]
     debug: bool,
 
-    #[arg(long, value_name = "string")]
+    #[arg(long, value_name = "string", help = "Override the default --staged flag of git diff")]
     diff: Option<String>,
 
-    #[arg(long, value_name = "string")]
+    #[arg(
+        long,
+        value_name = "string",
+        help = "Override the default --diff-filter=ACMR flag of git diff"
+    )]
     diff_filter: Option<String>,
 
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Fail with exit code 1 when tasks modify tracked files"
+    )]
     fail_on_changes: bool,
 
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Hide unstaged changes from partially staged files"
+    )]
     hide_partially_staged: bool,
 
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Hide all unstaged changes before running tasks"
+    )]
     hide_unstaged: bool,
 
-    #[arg(long = "no-stash")]
+    #[arg(long = "no-stash", help = "Disable the backup stash")]
     no_stash: bool,
 
-    #[arg(short = 'q', long, action = ArgAction::SetTrue)]
+    #[arg(short = 'q', long, action = ArgAction::SetTrue, help = "Disable console output")]
     quiet: bool,
 
-    #[arg(short = 'r', long, action = ArgAction::SetTrue)]
+    #[arg(
+        short = 'r',
+        long,
+        action = ArgAction::SetTrue,
+        help = "Pass filepaths relative to cwd to tasks"
+    )]
     relative: bool,
 
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Revert to original state in case of errors"
+    )]
     revert: bool,
 
-    #[arg(short = 'v', long, action = ArgAction::SetTrue)]
+    #[arg(
+        short = 'v',
+        long,
+        action = ArgAction::SetTrue,
+        help = "Show task output even when tasks succeed"
+    )]
     verbose: bool,
+}
+
+fn staged_command() -> Command {
+    StagedCliArgs::augment_args(
+        Command::new("vp staged")
+            .about("Run linters on staged files using staged config from vite.config.ts.")
+            .disable_help_flag(true),
+    )
+    .arg(
+        Arg::new("help")
+            .short('h')
+            .long("help")
+            .action(ArgAction::Help)
+            .help("Show this help message"),
+    )
 }
 
 #[napi(object, object_from_js = false)]
@@ -142,15 +197,17 @@ impl From<StagedCliArgs> for StagedArgs {
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseStagedArgsOutcome {
     Ok { value: StagedArgs },
-    Help,
+    Help { doc: CliHelpDoc },
     Error { error: CliParseError },
 }
 
 #[napi]
 pub fn parse_staged_args(argv: Vec<String>) -> ParseStagedArgsOutcome {
-    match parse_args::<StagedCliArgs>("vp staged", argv) {
+    match parse_args::<StagedCliArgs>(staged_command(), argv) {
         ParseResult::Ok(value) => ParseStagedArgsOutcome::Ok { value: value.into() },
-        ParseResult::Help => ParseStagedArgsOutcome::Help,
+        ParseResult::Help(command) => {
+            ParseStagedArgsOutcome::Help { doc: help_doc(*command, Some(DOCUMENTATION_URL)) }
+        }
         ParseResult::Error(error) => ParseStagedArgsOutcome::Error { error },
     }
 }
@@ -160,13 +217,15 @@ mod tests {
     use super::*;
 
     fn parse(argv: &[&str]) -> ParseResult<StagedCliArgs> {
-        parse_args("vp staged", argv.iter().map(|value| (*value).to_owned()).collect())
+        parse_args(staged_command(), argv.iter().map(|value| (*value).to_owned()).collect())
     }
 
     fn parsed(argv: &[&str]) -> StagedCliArgs {
         match parse(argv) {
             ParseResult::Ok(value) => value,
-            ParseResult::Help => panic!("The parser returned help. The test expected arguments."),
+            ParseResult::Help(_) => {
+                panic!("The parser returned help. The test expected arguments.")
+            }
             ParseResult::Error(error) => panic!("The parser returned an error: {}", error.message),
         }
     }
@@ -177,7 +236,7 @@ mod tests {
             ParseResult::Ok(_) => {
                 panic!("The parser returned arguments. The test expected an error.")
             }
-            ParseResult::Help => {
+            ParseResult::Help(_) => {
                 panic!("The parser returned help. The test expected an error.")
             }
         }
@@ -264,9 +323,9 @@ mod tests {
 
     #[test]
     fn returns_help_without_printing() {
-        assert!(matches!(parse(&["--help"]), ParseResult::Help));
-        assert!(matches!(parse(&["-h"]), ParseResult::Help));
-        assert!(matches!(parse(&["--help", "--unknown"]), ParseResult::Help));
+        assert!(matches!(parse(&["--help"]), ParseResult::Help(_)));
+        assert!(matches!(parse(&["-h"]), ParseResult::Help(_)));
+        assert!(matches!(parse(&["--help", "--unknown"]), ParseResult::Help(_)));
     }
 
     #[test]
