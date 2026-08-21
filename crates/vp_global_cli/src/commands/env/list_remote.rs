@@ -9,7 +9,7 @@ use vt_path::AbsolutePathBuf;
 
 use super::{
     config,
-    list::{list_complete_package_manager_versions, list_installed_versions},
+    list::{list_complete_package_manager_versions, list_installed_versions, use_color},
     package_manager,
     spec::{EnvScope, parse_package_manager_spec},
 };
@@ -173,11 +173,7 @@ pub async fn execute(
             println!();
             println!("{}", package_manager::title(kind));
             for entry in versions {
-                println!(
-                    "  {}{}",
-                    entry.version,
-                    marker(entry.installed, entry.current, entry.default)
-                );
+                println!("  {}", format_package_manager_version(&entry, use_color()));
             }
         }
     }
@@ -190,38 +186,65 @@ fn print_node_versions(versions: &[NodeVersionJson]) {
         return;
     }
 
-    let colorize = vp_shared::is_stdout_terminal() && std::env::var_os("NO_COLOR").is_none();
+    let colorize = use_color();
     for entry in versions {
         println!("  {}", format_node_version(entry, colorize));
     }
 }
 
+fn format_package_manager_version(entry: &PackageManagerVersionJson, colorize: bool) -> String {
+    format_remote_version(
+        &entry.version,
+        "",
+        entry.installed,
+        entry.current,
+        entry.default,
+        colorize,
+    )
+}
+
 fn format_node_version(entry: &NodeVersionJson, colorize: bool) -> String {
     let display = format!("v{}", entry.version);
     let lts = entry.lts.as_ref().map(|name| format!(" ({name})")).unwrap_or_default();
+    format_remote_version(&display, &lts, entry.installed, entry.current, entry.default, colorize)
+}
+
+fn format_remote_version(
+    display: &str,
+    annotation: &str,
+    installed: bool,
+    current: bool,
+    default: bool,
+    colorize: bool,
+) -> String {
     let mut labels = Vec::new();
-    if entry.current {
+    if current {
         labels.push("current");
     }
-    if entry.default {
+    if default {
         labels.push("default");
     }
     let labels = if labels.is_empty() { String::new() } else { format!(" {}", labels.join(" ")) };
 
     if colorize {
-        let display = if entry.current {
+        let display = if current {
             display.bright_blue().to_string()
-        } else if entry.installed {
+        } else if installed {
             display.green().to_string()
         } else {
-            display
+            display.to_string()
         };
-        let lts = if lts.is_empty() { lts } else { lts.bright_blue().to_string() };
+        let annotation = if annotation.is_empty() {
+            String::new()
+        } else {
+            annotation.bright_blue().to_string()
+        };
         let labels = if labels.is_empty() { labels } else { labels.dimmed().to_string() };
-        format!("{display}{lts}{labels}")
+        format!("{display}{annotation}{labels}")
     } else {
-        let marker = if entry.installed { "* " } else { "  " };
-        format!("{marker}{display}{lts}{labels}")
+        // Preserve installed state in redirected output, where color is unavailable.
+        let marker = if installed { "* " } else { "  " };
+        format!("{marker}{display}{annotation}{labels}")
     }
 }
 
@@ -359,20 +382,6 @@ fn matches_pattern(version: &str, pattern: Option<&str>) -> bool {
     version.starts_with(pattern) || version.starts_with(&format!("{pattern}."))
 }
 
-fn marker(installed: bool, current: bool, default: bool) -> String {
-    let mut markers = Vec::new();
-    if installed {
-        markers.push("installed");
-    }
-    if current {
-        markers.push("current");
-    }
-    if default {
-        markers.push("default");
-    }
-    if markers.is_empty() { String::new() } else { format!(" ({})", markers.join(", ")) }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,6 +399,19 @@ mod tests {
         };
 
         assert_eq!(format_node_version(&entry, false), "  v22.11.0 (Jod)");
+    }
+
+    #[test]
+    fn human_package_manager_version_keeps_plain_text_markers() {
+        let entry = PackageManagerVersionJson {
+            version: "10.18.0".into(),
+            latest: false,
+            installed: true,
+            current: true,
+            default: true,
+        };
+
+        assert_eq!(format_package_manager_version(&entry, false), "* 10.18.0 current default");
     }
 
     #[test]

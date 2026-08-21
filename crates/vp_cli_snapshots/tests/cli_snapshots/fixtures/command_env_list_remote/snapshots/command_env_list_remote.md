@@ -66,15 +66,28 @@ default marked: true
 
 ## `vp env list-remote node 22.11.0`
 
-Human-readable Node.js results keep the v prefix and LTS codename
+Human-readable Node.js results keep the v prefix, LTS codename, and interactive formatting
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
 Node.js
-  <version> (Jod)
+  <version>\x1b[94m (Jod)
 
-note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
+\x1b[2mnote: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
+```
+
+## `vp env list-remote pnpm 10.18.0`
+
+Human-readable package-manager results retain current-version formatting
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+pnpm
+  \x1b[94m10.18.0\x1b[39;2m current default
+
+\x1b[2mnote: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
 ```
 
 ## `vp env list-remote node 999`
