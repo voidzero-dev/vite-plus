@@ -10,9 +10,12 @@
 ## `vpt json-edit package.json scripts.build 'tsup --config configs/legacy.ts'`
 
 
+## `vpt json-edit package.json scripts.irregular 'tsup --config ././tsup.config.ts'`
+
+
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
-a custom config should stop automatic migration before any files change
+unsupported config paths should stop automatic migration before any files change
 
 **Exit code:** 1
 
@@ -23,6 +26,7 @@ tsup configuration detected. Auto-migrating to tsdown...
 
 Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:
   package.json#build -> configs/legacy.ts
+  package.json#irregular -> ././tsup.config.ts
 
 Choose one of these manual migration methods:
   1. Run `vp dlx tsdown-migrate` in the project root.
@@ -56,7 +60,7 @@ export default {};
 
 ## `vpt print-file package.json`
 
-the custom-config script and tsup dependency are unchanged
+the unsupported scripts and tsup dependency are unchanged
 
 ```
 {
@@ -66,7 +70,8 @@ the custom-config script and tsup dependency are unchanged
   },
   "name": "migration-from-tsup",
   "scripts": {
-    "build": "tsup --config configs/legacy.ts"
+    "build": "tsup --config configs/legacy.ts",
+    "irregular": "tsup --config ././tsup.config.ts"
   }
 }
 ```

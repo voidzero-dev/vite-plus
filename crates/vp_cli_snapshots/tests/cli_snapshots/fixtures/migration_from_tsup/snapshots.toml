@@ -47,14 +47,26 @@ steps = [
 ]
 
 [[case]]
+name = "migration_from_tsup_inline_config"
+vp = "local"
+steps = [
+  { argv = ["vpt", "rm", "tsup.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsup"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "tsup", '{"entry":["src/index.ts"]}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "an inline tsup config should stop automatic migration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the inline tsup config is unchanged" },
+]
+
+[[case]]
 name = "migration_from_tsup_custom_config"
 vp = "local"
 steps = [
   { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
   { argv = ["vpt", "write-file", "configs/legacy.ts", "export default {};\n"], snapshot = false },
   { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsup --config configs/legacy.ts"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a custom config should stop automatic migration before any files change", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.irregular", "tsup --config ././tsup.config.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "unsupported config paths should stop automatic migration before any files change", continue-on-failure = true },
   { argv = ["vpt", "print-file", "tsup.config.ts"], comment = "the standard config is unchanged" },
   { argv = ["vpt", "print-file", "configs/legacy.ts"], comment = "the custom config is unchanged" },
-  { argv = ["vpt", "print-file", "package.json"], comment = "the custom-config script and tsup dependency are unchanged" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the unsupported scripts and tsup dependency are unchanged" },
 ]

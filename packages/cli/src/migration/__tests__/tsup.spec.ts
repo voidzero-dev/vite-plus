@@ -143,6 +143,31 @@ describe('tsup migration', () => {
     expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
   });
 
+  it('refuses to migrate an inline tsup config', async () => {
+    fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const originalPackageJson = {
+      name: 'fixture',
+      scripts: { build: 'tsup' },
+      devDependencies: { tsup: '^8.5.0' },
+      tsup: { entry: ['src/index.ts'] },
+    };
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(originalPackageJson, null, 2)}\n`);
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'package.json#tsup', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(readJsonFile(packageJsonPath)).toEqual(originalPackageJson);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Automatic tsup migration was skipped because these inline tsup configs cannot be migrated automatically:\n  package.json#tsup',
+    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+  });
+
   it('refuses to migrate a script that uses a custom tsup config', async () => {
     const packageJsonPath = path.join(projectPath, 'package.json');
     const originalPackageJson = {
@@ -165,6 +190,30 @@ describe('tsup migration', () => {
     expect(fs.existsSync(path.join(projectPath, 'tsup.config.ts'))).toBe(true);
     expect(mockWarn).toHaveBeenCalledWith(
       'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#build -> configs/legacy.ts',
+    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+  });
+
+  it('refuses a default config path that cleanup cannot remove', async () => {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const originalPackageJson = {
+      name: 'fixture',
+      scripts: { build: 'tsup --config ././tsup.config.ts' },
+      devDependencies: { tsup: '^8.5.0' },
+    };
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(originalPackageJson, null, 2)}\n`);
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(readJsonFile(packageJsonPath)).toEqual(originalPackageJson);
+    expect(fs.existsSync(path.join(projectPath, 'tsup.config.ts'))).toBe(true);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n  package.json#build -> ././tsup.config.ts',
     );
     expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
   });

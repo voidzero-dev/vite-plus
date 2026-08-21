@@ -106,13 +106,13 @@ interface SharedTsupConfig {
   consumers: Map<string, SharedTsupConsumer>;
 }
 
-interface TsdownConfigCollision {
+interface TsupConfigLocation {
   configPath: string;
   targetPath: string;
 }
 
 interface UnsupportedTsupConfigConsumer {
-  configPath: string;
+  configArgument: string;
   packagePath: string;
   scriptName: string;
 }
@@ -175,8 +175,8 @@ function collectSharedTsupConfigs(
   return sharedConfigs;
 }
 
-function collectTsupConfigCollisions(tsupTargets: string[]): TsdownConfigCollision[] {
-  const collisions: TsdownConfigCollision[] = [];
+function collectTsupConfigCollisions(tsupTargets: string[]): TsupConfigLocation[] {
+  const collisions: TsupConfigLocation[] = [];
   for (const target of tsupTargets) {
     const tsdownConfig = detectConfigs(target).tsdownConfig;
     if (tsdownConfig) {
@@ -191,6 +191,25 @@ function collectTsupConfigCollisions(tsupTargets: string[]): TsdownConfigCollisi
     }
   }
   return collisions;
+}
+
+function collectInlineTsupConfigs(tsupTargets: string[]): TsupConfigLocation[] {
+  return tsupTargets.flatMap((target) => {
+    const packageJsonPath = path.join(target, 'package.json');
+    if (!fs.existsSync(packageJsonPath) || !Object.hasOwn(readJsonFile(packageJsonPath), 'tsup')) {
+      return [];
+    }
+    return [{ configPath: `${packageJsonPath}#tsup`, targetPath: target }];
+  });
+}
+
+function isRemovableDefaultConfigArgument(configArgument: string, defaultConfig?: string): boolean {
+  return (
+    !!defaultConfig &&
+    (configArgument === defaultConfig ||
+      configArgument === `./${defaultConfig}` ||
+      configArgument === `.\\${defaultConfig}`)
+  );
 }
 
 function collectUnsupportedTsupConfigConsumers(
@@ -219,12 +238,15 @@ function collectUnsupportedTsupConfigConsumers(
 
     for (const [scriptName, script] of Object.entries(packageJson.scripts ?? {})) {
       for (const match of script.matchAll(TSUP_CONFIG_OPTION_RE)) {
-        const configPath = resolveScriptConfigPath(target, match[1] ?? match[2] ?? match[3]);
-        const isDefaultConfig = configPath === defaultConfigPath;
+        const configArgument = match[1] ?? match[2] ?? match[3];
+        const configPath = resolveScriptConfigPath(target, configArgument);
+        const isDefaultConfig =
+          configPath === defaultConfigPath &&
+          isRemovableDefaultConfigArgument(configArgument, detectedConfig);
         const isSharedMigratedConfig =
           migratedConfigPaths.has(configPath) && path.dirname(configPath) !== target;
         if (!isDefaultConfig && !isSharedMigratedConfig) {
-          unsupported.push({ configPath, packagePath: target, scriptName });
+          unsupported.push({ configArgument, packagePath: target, scriptName });
         }
       }
     }
@@ -413,13 +435,28 @@ export async function migrateTsupToTsdown(
     showTsdownMigrationOptions(targetLabel);
     return false;
   }
+  const inlineTsupConfigs = collectInlineTsupConfigs(tsupTargets);
+  if (inlineTsupConfigs.length > 0) {
+    prompts.log.warn(
+      `Automatic tsup migration was skipped because these inline tsup configs cannot be migrated automatically:\n${inlineTsupConfigs
+        .map(({ configPath }) => `  ${displayRelative(configPath, projectPath)}`)
+        .join('\n')}`,
+    );
+    const firstInlineTarget = inlineTsupConfigs[0].targetPath;
+    const targetLabel =
+      firstInlineTarget === rootPath
+        ? 'the project root'
+        : displayRelative(firstInlineTarget, projectPath);
+    showTsdownMigrationOptions(targetLabel);
+    return false;
+  }
   const unsupportedConfigConsumers = collectUnsupportedTsupConfigConsumers(tsupTargets);
   if (unsupportedConfigConsumers.length > 0) {
     prompts.log.warn(
       `Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n${unsupportedConfigConsumers
         .map(
-          ({ configPath, packagePath, scriptName }) =>
-            `  ${displayRelative(path.join(packagePath, 'package.json'), projectPath)}#${scriptName} -> ${displayRelative(configPath, projectPath)}`,
+          ({ configArgument, packagePath, scriptName }) =>
+            `  ${displayRelative(path.join(packagePath, 'package.json'), projectPath)}#${scriptName} -> ${configArgument}`,
         )
         .join('\n')}`,
     );
