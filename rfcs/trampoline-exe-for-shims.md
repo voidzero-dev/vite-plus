@@ -335,7 +335,7 @@ Requires administrator privileges or Developer Mode. Not reliable for all users.
 
 ### 4. Copy `vp.exe` as Each Shim (Rejected)
 
-~5-10MB per copy. The trampoline achieves the same result in less than 14 KiB.
+~5-10MB per copy. The trampoline achieves the same result in 14 KiB.
 
 ### 5. `windows` Crate for FFI (Rejected)
 

@@ -11,7 +11,7 @@
 # toolchain and the rust-src component (both come from the repo
 # rust-toolchain.toml).
 #
-# Size on x86_64-pc-windows-msvc: 13 KiB, down from ~222 KiB when the
+# Size on x86_64-pc-windows-msvc: 14 KiB, down from ~222 KiB when the
 # sidecar-aware implementation used the precompiled std. build-std recompiles
 # std with this profile, panic = "immediate-abort" compiles out the panic
 # formatting, unwinding, and backtrace machinery, and the Windows build uses

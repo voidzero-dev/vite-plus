@@ -6,7 +6,7 @@
 [unstable]
 # Recompile std with this crate's release profile (opt-level = "z" and
 # panic = "immediate-abort"). Together with the no_main raw-Win32 source this
-# takes the sidecar-aware exe to 13 KiB on x86_64-pc-windows-msvc. Requires the
+# takes the sidecar-aware exe to 14 KiB on x86_64-pc-windows-msvc. Requires the
 # rust-src rustup component.
 build-std = ["std", "panic_abort"]
 # Replace std's default features (drops panic-unwind and backtrace, enables

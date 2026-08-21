@@ -10,6 +10,12 @@ const COLON: u16 = b':' as u16;
 const QUESTION: u16 = b'?' as u16;
 const BACKSLASH: u16 = b'\\' as u16;
 const FORWARD_SLASH: u16 = b'/' as u16;
+const U: u16 = b'U' as u16;
+const N: u16 = b'N' as u16;
+const C: u16 = b'C' as u16;
+
+const VERBATIM_PREFIX: &[u16] = &[BACKSLASH, BACKSLASH, QUESTION, BACKSLASH];
+const UNC_PREFIX: &[u16] = &[BACKSLASH, BACKSLASH, QUESTION, BACKSLASH, U, N, C, BACKSLASH];
 
 /// Must match `vp_shared::SHIM_POINTER_HEADER`.
 pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
@@ -91,6 +97,31 @@ pub fn skip_program_argument(cmdline: &[u16]) -> usize {
 
 fn is_path_separator(unit: u16) -> bool {
     unit == BACKSLASH || unit == FORWARD_SLASH
+}
+
+/// Add the Win32 extended-length prefix to a normalized absolute path.
+///
+/// The caller must resolve `.` and `..` components and replace `/` separators
+/// before calling this function because the extended-length namespace treats
+/// the rest of the path verbatim.
+pub fn verbatim_path(path: &[u16]) -> Vec<u16> {
+    let (prefix, tail) = match path {
+        // Keep paths that already use an extended-length or NT namespace.
+        [BACKSLASH, BACKSLASH, QUESTION, BACKSLASH, ..]
+        | [BACKSLASH, QUESTION, QUESTION, BACKSLASH, ..] => return path.to_vec(),
+        // C:\path => \\?\C:\path
+        [_, COLON, BACKSLASH, ..] => (VERBATIM_PREFIX, path),
+        // \\.\device => \\?\device
+        [BACKSLASH, BACKSLASH, DOT, BACKSLASH, tail @ ..] => (VERBATIM_PREFIX, tail),
+        // \\server\share => \\?\UNC\server\share
+        [BACKSLASH, BACKSLASH, tail @ ..] => (UNC_PREFIX, tail),
+        _ => return path.to_vec(),
+    };
+
+    let mut extended = Vec::with_capacity(prefix.len() + tail.len());
+    extended.extend_from_slice(prefix);
+    extended.extend_from_slice(tail);
+    extended
 }
 
 /// End index of a parent directory, preserving the separator when it is part
@@ -195,6 +226,26 @@ mod tests {
         assert_eq!(parent(r"\\?\UNC\server\share\vp.exe"), wide(r"\\?\UNC\server\share"));
         assert_eq!(parent(r"\\server\share\vp.exe"), wide(r"\\server\share"));
         assert_eq!(parent(r"\vp.exe"), wide("\\"));
+    }
+
+    #[test]
+    fn prefixes_normalized_absolute_paths_for_win32() {
+        assert_eq!(verbatim_path(&wide(r"C:\data\vp.exe")), wide(r"\\?\C:\data\vp.exe"));
+        assert_eq!(
+            verbatim_path(&wide(r"\\server\share\vp.exe")),
+            wide(r"\\?\UNC\server\share\vp.exe")
+        );
+        assert_eq!(
+            verbatim_path(&wide(r"\\.\Volume{123}\vp.exe")),
+            wide(r"\\?\Volume{123}\vp.exe")
+        );
+    }
+
+    #[test]
+    fn keeps_existing_namespaces_and_relative_paths() {
+        for path in [r"\\?\C:\data\vp.exe", r"\??\C:\data\vp.exe", r"data\vp.exe"] {
+            assert_eq!(verbatim_path(&wide(path)), wide(path));
+        }
     }
 
     #[test]
