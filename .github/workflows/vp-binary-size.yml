@@ -153,8 +153,26 @@ jobs:
           TARGET: ${{ matrix.settings.target }}
         run: |
           node <<'NODE'
-          const { existsSync, readFileSync, writeFileSync } = require('node:fs');
+          const { existsSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
           const { gzipSync } = require('node:zlib');
+
+          const measureDirectory = (directory) => {
+            let files = 0;
+            let raw = 0;
+            const visit = (currentDirectory) => {
+              for (const entry of readdirSync(currentDirectory, { withFileTypes: true })) {
+                const entryPath = `${currentDirectory}/${entry.name}`;
+                if (entry.isDirectory()) {
+                  visit(entryPath);
+                } else if (entry.isFile()) {
+                  files += 1;
+                  raw += readFileSync(entryPath).length;
+                }
+              }
+            };
+            visit(directory);
+            return { path: directory, files, raw };
+          };
 
           const target = process.env.TARGET;
           const paths =
@@ -186,6 +204,13 @@ jobs:
               raw: contents.length,
               gzip: gzipSync(contents, { level: 9 }).length,
             };
+          }
+          if (process.env.PLATFORM === 'linux') {
+            const distDirectory = 'packages/cli/dist';
+            if (!existsSync(distDirectory)) {
+              throw new Error(`Expected final dist package at ${distDirectory}`);
+            }
+            artifacts.dist = measureDirectory(distDirectory);
           }
 
           const result = {
@@ -351,16 +376,20 @@ jobs:
             };
 
             const shortSha = process.env.HEAD_SHA.slice(0, 7);
-            const rows = artifacts.flatMap((artifact) => [
-              `| ${artifact.name} | Binary | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
-              `| ${artifact.name} | gzip -9 | ${formatSize(artifact.baseGzip)} | ${formatSize(artifact.headGzip)} | ${formatDelta(artifact.baseGzip, artifact.headGzip)} |`,
-            ]);
+            const rows = [
+              `| \`packages/cli/dist\` | All files | ${formatSize(baseLinux.artifacts.dist.raw)} | ${formatSize(headLinux.artifacts.dist.raw)} | ${formatDelta(baseLinux.artifacts.dist.raw, headLinux.artifacts.dist.raw)} |`,
+              ...artifacts.flatMap((artifact) => [
+                `| ${artifact.name} | Binary | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
+                `| ${artifact.name} | gzip -9 | ${formatSize(artifact.baseGzip)} | ${formatSize(artifact.headGzip)} | ${formatDelta(artifact.baseGzip, artifact.headGzip)} |`,
+              ]),
+            ];
             const body = [
               marker,
               '',
-              `### Native binary sizes (\`${shortSha}\`)`,
+              `### CLI artifact sizes (\`${shortSha}\`)`,
               '',
               'Final release artifacts built by the canonical `build-upstream` and `build-windows-cli` actions.',
+              'The `packages/cli/dist` row is the total size of all files from the Linux build.',
               '',
               '| Artifact | Format | Base | PR | Change |',
               '| --- | --- | ---: | ---: | ---: |',
