@@ -133,8 +133,8 @@ flowchart TD
     binTs --> napiPm["install, add, remove, ...<br/>→ NAPI → vp_pm_cli"]
 
     G --> toolchain["toolchain<br/>commands::toolchain"]
-    toolchain -->|"--global"| manifest["render global toolchain.json"]
-    toolchain --> C
+    toolchain -->|"local vite-plus found"| C
+    toolchain -->|"--global or no local"| manifest["render global toolchain.json in Rust"]
     G --> version["--version<br/>commands::version"]
     G --> env["env<br/>commands::env"]
     G --> selfmgmt["upgrade, implode<br/>commands::{upgrade, implode}"]
@@ -144,7 +144,7 @@ flowchart TD
 - **Category B (JS Script Commands)**: `create`, `migrate`, `config`, `hooks`, `staged` — implemented in JavaScript. Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it with the managed Node.js runtime, falling back to the global installation's `dist/bin.js` when no local installation exists. The unified `bin.ts` entry point then loads the rolldown-bundled module for the command.
 - **Category C (Local CLI Delegation)**: `dev`, `build`, `test`, `lint`, `fmt`, `check`, `pack`, `run`, `exec`, `preview`, `cache` — forwarded to the local vite-plus CLI through `commands::delegate`, which resolves `bin.js` the same way as Category B; `bin.ts` then routes them to the NAPI binding. `lint --init` and `fmt --init`/`--migrate` are forced to the global installation (`commands::delegate::execute_global`).
 - **Rust-native global commands**: the remaining top-level variants are implemented in the global binary itself and have no local counterpart.
-  - `toolchain` (`commands::toolchain`) is a hybrid: without `--global` it delegates to the local CLI like Category C, with `--global` it renders the global installation's `toolchain.json` directly.
+  - `toolchain` (`commands::toolchain`) is a hybrid: when `--global` is absent and a project-local `vite-plus` resolves, it delegates to the local CLI like Category C; otherwise (`--global`, or no local installation) it loads and renders the global installation's `toolchain.json` directly in Rust rather than falling back through the global `bin.js`.
   - `--version` (`commands::version`) prints the `vp` binary version and the bundled tool versions directly from Rust; it never reaches `bin.ts`.
   - `env` (`commands::env`) manages Node.js versions, shims, and pins.
   - `upgrade` and `implode` (`commands::upgrade`, `commands::implode`) are the self-management commands for the `vp` binary and its install directory.
