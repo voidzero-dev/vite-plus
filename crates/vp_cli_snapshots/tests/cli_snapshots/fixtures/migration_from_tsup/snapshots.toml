@@ -22,3 +22,25 @@ steps = [
   { argv = ["vpt", "stat-file", "tsdown.config.ts", "--assert-not", "file"], comment = "no converted config is left behind", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "the tsup dependency and script are preserved", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_from_tsup_config_collision"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { existing: true };\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "an existing tsdown config should stop automatic migration before it overwrites files", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsup.config.ts"], comment = "the original tsup config is unchanged" },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"], comment = "the existing tsdown config is unchanged" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the tsup dependency and script are unchanged" },
+]
+
+[[case]]
+name = "migration_from_tsup_nested_runner"
+vp = "local"
+env = { VP_CLI_BIN = "./tsdown-migrate-stub.mjs" }
+steps = [
+  { argv = ["vpt", "chmod", "+x", "tsdown-migrate-stub.mjs"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", 'concurrently "tsup --watch --config=tsup.config.ts" "tsc --watch"'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a nested tsdown command should migrate to vp pack" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the quoted runner command uses vp pack" },
+]

@@ -95,6 +95,28 @@ describe('tsup migration', () => {
     );
   });
 
+  it('refuses to overwrite an existing tsdown config', async () => {
+    const tsupConfigPath = path.join(projectPath, 'tsup.config.ts');
+    const tsdownConfigPath = path.join(projectPath, 'tsdown.config.ts');
+    const originalTsupConfig = fs.readFileSync(tsupConfigPath, 'utf8');
+    const originalTsdownConfig = 'export default { existing: true };\n';
+    fs.writeFileSync(tsdownConfigPath, originalTsdownConfig);
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(fs.readFileSync(tsupConfigPath, 'utf8')).toBe(originalTsupConfig);
+    expect(fs.readFileSync(tsdownConfigPath, 'utf8')).toBe(originalTsdownConfig);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Automatic tsup migration was skipped because these tsdown config files already exist:\n  tsdown.config.ts',
+    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
+  });
+
   it('detects a workspace-only tsup config', () => {
     fs.writeFileSync(
       path.join(projectPath, 'package.json'),
@@ -278,6 +300,142 @@ describe('tsup migration', () => {
     );
   });
 
+  it('preserves a workspace config consumed by the root package', async () => {
+    fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'workspace',
+          private: true,
+          scripts: { build: 'tsup --config packages/a/tsup.config.ts' },
+          devDependencies: { tsup: '^8.5.0' },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const packagePath = path.join(projectPath, 'packages/a');
+    fs.mkdirSync(packagePath, { recursive: true });
+    fs.writeFileSync(
+      path.join(packagePath, 'package.json'),
+      '{"name":"a","devDependencies":{"tsup":"^8.5.0"}}\n',
+    );
+    const originalConfig = 'export default { entry: ["src/index.ts"] };\n';
+    fs.writeFileSync(path.join(packagePath, 'tsup.config.ts'), originalConfig);
+    mockRunCommandSilently.mockImplementation(async ({ cwd }) => {
+      const packageJsonPath = path.join(cwd, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      packageJson.devDependencies.tsdown = '0.22.14';
+      delete packageJson.devDependencies.tsup;
+      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+      fs.writeFileSync(path.join(cwd, 'tsdown.config.ts'), 'export default {};\n');
+      fs.unlinkSync(path.join(cwd, 'tsup.config.ts'));
+      return { exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    });
+    const report = createMigrationReport();
+
+    await expect(
+      migrateTsupToTsdown(
+        projectPath,
+        false,
+        PackageManager.pnpm,
+        undefined,
+        [{ name: 'a', path: 'packages/a' }],
+        { silent: true, report },
+      ),
+    ).resolves.toBe(true);
+
+    expect(fs.readFileSync(path.join(packagePath, 'tsup.config.ts'), 'utf8')).toBe(originalConfig);
+    expect(fs.existsSync(path.join(packagePath, 'tsdown.config.ts'))).toBe(true);
+    expect(readJsonFile(path.join(projectPath, 'package.json'))).toMatchObject({
+      scripts: { build: 'tsup --config packages/a/tsup.config.ts' },
+      devDependencies: { tsup: '^8.5.0' },
+    });
+    expect(readJsonFile(path.join(packagePath, 'package.json')).devDependencies).toMatchObject({
+      tsup: '^8.5.0',
+      tsdown: '0.22.14',
+    });
+    expect(report.warnings).toContain(
+      'packages/a/tsup.config.ts is shared by the project root. It was preserved and must be migrated manually.',
+    );
+  });
+
+  it('preserves shared usage when a migration target consumes another target config', async () => {
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      '{"name":"workspace","private":true}\n',
+    );
+    fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+    const packages = [
+      { name: 'a', path: 'packages/a' },
+      { name: 'b', path: 'packages/b' },
+    ];
+    for (const workspacePackage of packages) {
+      const packagePath = path.join(projectPath, workspacePackage.path);
+      fs.mkdirSync(packagePath, { recursive: true });
+      fs.writeFileSync(
+        path.join(packagePath, 'package.json'),
+        `${JSON.stringify(
+          {
+            name: workspacePackage.name,
+            scripts:
+              workspacePackage.name === 'a'
+                ? { local: 'tsup', shared: 'tsup --config ../b/tsup.config.ts' }
+                : { local: 'tsup' },
+            devDependencies: { tsup: '^8.5.0' },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      fs.writeFileSync(
+        path.join(packagePath, 'tsup.config.ts'),
+        `export default { name: '${workspacePackage.name}' };\n`,
+      );
+    }
+    mockRunCommandSilently.mockImplementation(async ({ cwd }) => {
+      const packageJsonPath = path.join(cwd, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      for (const scriptName of Object.keys(packageJson.scripts)) {
+        packageJson.scripts[scriptName] = packageJson.scripts[scriptName].replaceAll(
+          'tsup',
+          'tsdown',
+        );
+      }
+      packageJson.devDependencies.tsdown = '0.22.14';
+      delete packageJson.devDependencies.tsup;
+      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+      fs.writeFileSync(path.join(cwd, 'tsdown.config.ts'), 'export default {};\n');
+      fs.unlinkSync(path.join(cwd, 'tsup.config.ts'));
+      return { exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    });
+    const report = createMigrationReport();
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, undefined, packages, {
+        silent: true,
+        report,
+      }),
+    ).resolves.toBe(true);
+
+    expect(readJsonFile(path.join(projectPath, 'packages/a/package.json'))).toMatchObject({
+      scripts: { local: 'tsdown', shared: 'tsup --config ../b/tsup.config.ts' },
+      devDependencies: { tsup: '^8.5.0', tsdown: '0.22.14' },
+    });
+    expect(fs.existsSync(path.join(projectPath, 'packages/a/tsup.config.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(projectPath, 'packages/a/tsdown.config.ts'))).toBe(true);
+    expect(readJsonFile(path.join(projectPath, 'packages/b/package.json'))).toMatchObject({
+      scripts: { local: 'tsdown' },
+      devDependencies: { tsup: '^8.5.0', tsdown: '0.22.14' },
+    });
+    expect(fs.existsSync(path.join(projectPath, 'packages/b/tsup.config.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(projectPath, 'packages/b/tsdown.config.ts'))).toBe(true);
+    expect(report.warnings).toContain(
+      'packages/b/tsup.config.ts is shared by packages/a. It was preserved and must be migrated manually.',
+    );
+  });
+
   it('removes explicit standard tsup config options after migration', async () => {
     fs.writeFileSync(
       path.join(projectPath, 'package.json'),
@@ -320,6 +478,53 @@ describe('tsup migration', () => {
       build: 'tsdown',
       watch: 'tsdown --watch',
       wrapped: 'cross-env NODE_ENV=test tsdown --watch',
+    });
+  });
+
+  it('rewrites tsdown commands nested in quoted runner arguments', async () => {
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'fixture',
+          scripts: {
+            build: 'concurrently "tsup --watch --config=tsup.config.ts" "tsc --watch"',
+            wrapped: 'concurrently "pnpm exec tsup --watch" "tsc --watch"',
+            singleQuoted: "concurrently 'tsup' 'tsc'",
+          },
+          devDependencies: { tsup: '^8.5.0' },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    mockRunCommandSilently.mockImplementation(async () => {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      for (const scriptName of Object.keys(packageJson.scripts)) {
+        packageJson.scripts[scriptName] = packageJson.scripts[scriptName].replaceAll(
+          'tsup',
+          'tsdown',
+        );
+      }
+      packageJson.devDependencies.tsdown = '0.22.14';
+      delete packageJson.devDependencies.tsup;
+      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+      fs.writeFileSync(path.join(projectPath, 'tsdown.config.ts'), 'export default {};\n');
+      fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+      return { exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    });
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(true);
+
+    expect(readJsonFile(path.join(projectPath, 'package.json')).scripts).toEqual({
+      build: 'concurrently "vp pack --watch" "tsc --watch"',
+      wrapped: 'concurrently "pnpm exec vp pack --watch" "tsc --watch"',
+      singleQuoted: "concurrently 'vp pack' 'tsc'",
     });
   });
 
