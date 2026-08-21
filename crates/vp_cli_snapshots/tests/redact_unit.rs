@@ -77,6 +77,17 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
 }
 
 #[test]
+fn masks_bun_build_hash_only_in_bun_banners() {
+    // bun banners append the build's short commit hash after the version,
+    // which changes with every bun release.
+    let input = "bun pm trust v1.4.0 (34cbb9a40)\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "bun pm trust <version> (<hash>)\n");
+    // Parenthesized hex without a preceding masked version stays verbatim.
+    let unrelated = "commit (deadbeef1) applied\n".to_owned();
+    assert_eq!(redact_output(unrelated.clone(), &[], true), unrelated);
+}
+
+#[test]
 fn masks_managed_node_versions_in_environment_output() {
     let input = concat!(
         "Node: 24.18.1\n",
@@ -121,6 +132,7 @@ fn masks_current_vite_plus_version_in_upgrade_check_output() {
     let input = concat!(
         "info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)\n",
         "Update available: 0.2.4 → 0.1.21-alpha.7\n",
+        "vp update available: 0.2.4 → 0.3.0, run vp upgrade\n",
     )
     .to_owned();
     assert_eq!(
@@ -128,6 +140,7 @@ fn masks_current_vite_plus_version_in_upgrade_check_output() {
         concat!(
             "info: found vite-plus@0.1.21-alpha.7 (current: <version>)\n",
             "Update available: <version> → 0.1.21-alpha.7\n",
+            "vp update available: <version> → 0.3.0, run vp upgrade\n",
         )
     );
 }

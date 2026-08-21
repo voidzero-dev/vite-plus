@@ -15,7 +15,7 @@ export const VITE_CONFIG_FILES = [
   'vite.config.cts',
 ] as const;
 
-export const VITEST_VERSION = '4.1.10';
+export const VITEST_VERSION = '4.1.11';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)

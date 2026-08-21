@@ -46,6 +46,7 @@ napi-build = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lib]
 crate-type = ["cdylib"]

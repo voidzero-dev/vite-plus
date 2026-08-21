@@ -400,7 +400,7 @@ async fn restore_vp_owned_shims(bin_dir: &AbsolutePath, owned_shims: &[OwnedShim
 
 /// Check whether a default shim (npm/npx) is still an intact Vite+ shim.
 ///
-/// Vite+ shims always link to the vp binary (relative `../current/bin/vp` or
+/// Vite+ shims always link to the vp binary (`<DATA>/current/bin/vp` or
 /// an absolute path in dev layouts); corepack launchers link to corepack's
 /// `dist/*.js` files. Broken symlinks count as not intact.
 #[cfg(unix)]
@@ -474,10 +474,7 @@ async fn npm_link_source(_bin_dir: &AbsolutePath, _name: &str) -> Option<Absolut
 #[cfg(unix)]
 async fn is_vp_shim(bin_dir: &AbsolutePath, name: &str) -> bool {
     let shim_path = bin_dir.join(name);
-    match tokio::fs::read_link(&shim_path).await {
-        Ok(target) => crate::commands::global::install::is_vp_shim_target(&target, &shim_path),
-        Err(_) => false,
-    }
+    crate::commands::global::install::is_vp_shim_target(&shim_path)
 }
 
 /// Check whether the bin entry is an intact Vite+ package shim.

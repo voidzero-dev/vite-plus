@@ -910,11 +910,6 @@ export default toolchain;
   console.log(`  Created ./versions (${Object.keys(versions).length} tools)`);
 }
 
-/**
- * Copy the docs source tree into docs/, preserving relative paths.
- * Generated VitePress output and installed dependencies are excluded so the package
- * only ships authoring sources and referenced assets.
- */
 async function copyBundledDocs() {
   console.log('\nCopying bundled docs...');
 
@@ -926,17 +921,22 @@ async function copyBundledDocs() {
     return;
   }
 
-  const skipPrefixes = ['node_modules', '.vitepress/cache', '.vitepress/dist'];
   await rm(docsTargetDir, { recursive: true, force: true });
+  const skipPrefixes = ['node_modules', '.vitepress/cache', '.vitepress/dist'];
   await cp(docsSourceDir, docsTargetDir, {
     recursive: true,
-    filter: (src) => {
-      const rel = relative(docsSourceDir, src).replaceAll('\\', '/');
-      return !skipPrefixes.some((prefix) => rel === prefix || rel.startsWith(`${prefix}/`));
+    filter: (source) => {
+      const relativePath = relative(docsSourceDir, source).replaceAll('\\', '/');
+      return (
+        !skipPrefixes.some(
+          (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`),
+        ) &&
+        (statSync(source).isDirectory() || source.endsWith('.md'))
+      );
     },
   });
 
-  console.log('  Copied docs to docs/ (with paths preserved)');
+  console.log('  Copied Markdown docs to docs/');
 }
 
 async function syncReadmeFromRoot() {
@@ -1368,11 +1368,6 @@ async function updateCliPackageJson(pkgPath: string, generatedExports: Record<st
     ...pkg.exports,
     ...generatedExports,
   };
-
-  // Ensure dist/test is included in files
-  if (!pkg.files.includes('dist/test')) {
-    pkg.files.push('dist/test');
-  }
 
   const { code, errors } = await format(pkgPath, JSON.stringify(pkg, null, 2) + '\n', {
     sortPackageJson: true,

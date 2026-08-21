@@ -990,7 +990,7 @@ function rewriteYamlCatalogAtPath(
     removeYamlMapVitestEntry(catalog);
   }
   for (const [key, value] of Object.entries(managed)) {
-    // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
+    // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
     // ignore setting catalog if value starts with 'file:'
     if (value.startsWith('file:') || (!addMissing && !catalog.has(key))) {
       continue;

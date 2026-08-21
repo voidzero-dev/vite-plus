@@ -28,7 +28,6 @@
     "binding/index.d.cts",
     "binding/index.d.ts",
     "binding/index.js",
-    "dist/test",
     "docs",
     "rules",
     "templates"

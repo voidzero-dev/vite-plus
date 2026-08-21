@@ -1,0 +1,9 @@
+[[case]]
+name = "pm_audit_bun"
+vp = "global"
+cwd = "bun"
+steps = [
+  { argv = ["vp", "install", "--", "--silent"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "audit"], comment = "should audit dependencies" },
+  { argv = ["vp", "pm", "audit", "--fix"], comment = "bun 1.4 runs bun audit fix" },
+]

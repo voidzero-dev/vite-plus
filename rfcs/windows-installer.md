@@ -182,27 +182,40 @@ vp-setup.exe --version 0.3.0 --no-node-manager --registry https://registry.npmmi
 
 ### CLI Flags
 
-| Flag                   | Description                   | Default                      |
-| ---------------------- | ----------------------------- | ---------------------------- |
-| `-y` / `--yes`         | Accept defaults, no prompts   | interactive                  |
-| `-q` / `--quiet`       | Suppress output except errors | false                        |
-| `--version <VER>`      | Install specific version      | latest                       |
-| `--tag <TAG>`          | npm dist-tag                  | latest                       |
-| `--install-dir <PATH>` | Installation directory        | `%USERPROFILE%\.vite-plus`   |
-| `--registry <URL>`     | npm registry URL              | `https://registry.npmjs.org` |
-| `--no-node-manager`    | Skip Node.js manager setup    | auto-detect                  |
-| `--no-modify-path`     | Don't modify User PATH        | modify                       |
+| Flag                | Description                   | Default                      |
+| ------------------- | ----------------------------- | ---------------------------- |
+| `-y` / `--yes`      | Accept defaults, no prompts   | interactive                  |
+| `-q` / `--quiet`    | Suppress output except errors | false                        |
+| `--version <VER>`   | Install specific version      | latest                       |
+| `--tag <TAG>`       | npm dist-tag                  | latest                       |
+| `--registry <URL>`  | npm registry URL              | `https://registry.npmjs.org` |
+| `--no-node-manager` | Skip Node.js manager setup    | auto-detect                  |
+| `--no-modify-path`  | Don't modify User PATH        | modify                       |
 
 ### Environment Variables (compatible with `install.ps1`)
 
 | Variable                  | Maps to             |
 | ------------------------- | ------------------- |
 | `VP_VERSION`              | `--version`         |
-| `VP_HOME`                 | `--install-dir`     |
+| `VP_HOME`                 | single-root layout  |
+| `VP_BIN_DIR`              | split bin root      |
+| `VP_DATA_DIR`             | split data root     |
+| `VP_CACHE_DIR`            | split cache root    |
 | `NPM_CONFIG_REGISTRY`     | `--registry`        |
 | `VP_NODE_MANAGER=yes\|no` | `--no-node-manager` |
 
 CLI flags take precedence over environment variables.
+
+`vp-setup.exe` requires an absolute `VP_HOME`. If callers set one split root,
+they must set all three `VP_*_DIR` variables. Each variable must contain an
+absolute path. The installer calls `vp_shared::validate_vp_dir_env` before it
+resolves or creates installation roots. The installer returns exit code 1 for
+invalid configuration.
+
+The installer supports Vite+ 0.3.0 and later. This includes 0.3.0 prereleases.
+It also supports internal preview versions that use the
+`0.0.0-commit.<sha>` format. It rejects older versions before it downloads the
+platform payload or creates an installation root.
 
 ## Installation Flow
 
@@ -215,7 +228,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  ┌─ detect platform ──────── win32-x64-msvc                 │
 │  │                           win32-arm64-msvc                │
 │  │                                                          │
-│  ├─ check existing ──────── read %VP_HOME%\current           │
+│  ├─ check existing ──────── read <DATA>\current              │
 │  │                                                          │
 │  └─ resolve version ──────── resolve_version_string()        │
 │                              1 HTTP call: "latest" → "0.3.0" │
@@ -242,7 +255,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 ┌─────────────────────────────────────────────────────────────┐
 │                      INSTALL                                │
 │                                                             │
-│  ┌─ extract binary ──────── %VP_HOME%\{version}\bin\         │
+│  ┌─ extract binary ──────── <DATA>\{version}\bin\            │
 │  │                          vp.exe + vp-shim.exe             │
 │  │                                                          │
 │  ├─ generate package.json ─ wrapper with vite-plus dep       │
@@ -274,7 +287,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │       CONFIGURE         (best-effort, always runs,           │
 │                          even for same-version repair)        │
 │                                                             │
-│  ┌─ create bin shims ────── copy vp-shim.exe → bin\vp.exe   │
+│  ┌─ create bin shims ────── copy vp-shim.exe → <BIN>\vp.exe │
 │  │                          (rename-to-.old if running)      │
 │  │                                                          │
 │  ├─ Node.js manager ────── if enabled (pre-computed):        │
@@ -284,7 +297,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  │                                                          │
 │  └─ modify User PATH ────── if --no-modify-path not set:     │
 │                              HKCU\Environment\Path           │
-│                              prepend %VP_HOME%\bin           │
+│                              prepend <BIN>                   │
 │                              broadcast WM_SETTINGCHANGE      │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -315,6 +328,9 @@ Each phase maps to `vp_setup` library functions shared with `vp upgrade`:
 **Same-version repair**: When the resolved version matches the installed version, the DOWNLOAD/INSTALL/ACTIVATE phases are skipped entirely (saving 1 HTTP request + all I/O). The CONFIGURE phase always runs to repair shims, env files, and PATH if needed.
 
 **Failure recovery**: Before the **Activate** phase, failures clean up the version directory and leave the existing installation untouched. After **Activate**, all CONFIGURE steps are best-effort — failures log a warning but do not cause exit code 1. Rerunning the installer always retries CONFIGURE.
+
+On Windows, activation checks the `current` entry without following its target.
+The installer removes a dangling junction before it creates the new junction.
 
 ## Node.js Manager Auto-Detection
 
@@ -375,6 +391,10 @@ fn init_dll_security() {
 ### Console Allocation
 
 The binary uses the console subsystem (default for Rust binaries on Windows). When double-clicked, Windows allocates a console window automatically. No special handling needed.
+
+The installer applies colors only when the output stream supports them. If the
+`NO_COLOR` variable is present, stdout and stderr contain no ANSI escape
+sequences. This rule also applies when callers redirect output to files.
 
 ### Existing Installation Handling
 
@@ -455,17 +475,30 @@ test-vp-setup-exe:
     - uses: oxc-project/setup-rust@v1
     - name: Build vp-setup.exe
       run: cargo build --release -p vp_installer
-    - name: Install via vp-setup.exe (silent)
+    - name: Start local preview registry
+      # packs the current vp.exe and vp-shim.exe as 0.0.0-commit.<sha>
+    - name: Install local preview via vp-setup.exe (silent)
       shell: pwsh
-      run: ./target/release/vp-setup.exe
-      env:
-        VP_VERSION: alpha
+      run: ./target/release/vp-setup.exe --version $VP_SETUP_TEST_VERSION --registry $VP_SETUP_TEST_REGISTRY
     - name: Verify installation (pwsh/cmd/bash)
       # verifies from all three shells after a single install
 ```
 
-The workflow triggers on changes to `crates/vp_installer/**`, `crates/vp_pm_cli/**`, and
-`crates/vp_setup/**`.
+The workflow path filter includes these files:
+
+- the installer and setup helpers
+- shared directory resolution
+- shims and the global CLI
+- install scripts
+- the workflow file
+
+The job tests invalid directory overrides and versions older than 0.3.0. The
+installer must not create requested or default roots for invalid overrides. A
+request for version `0.2.9` must fail without creating an installation root.
+For the successful test, the job installs a local
+`0.0.0-commit.<sha>` preview package. This test starts with a dangling `current`
+junction. It also sets `NO_COLOR` and checks the redirected output for ANSI
+escape sequences.
 
 ## Code Signing
 
@@ -572,6 +605,10 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 - Fresh install from cmd.exe, PowerShell, Git Bash
 - Silent mode (`-y`) installation
 - Custom registry, custom install dir
+- Invalid `VP_HOME` and `VP_*_DIR` configuration
+- Rejection of releases before 0.3.0
+- Repair of a dangling `current` junction
+- `NO_COLOR` output without ANSI escape sequences
 - Upgrade over existing installation
 - Verify `vp --version` works after install
 - Verify PATH is modified correctly

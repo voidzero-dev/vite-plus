@@ -336,12 +336,37 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
     true
 }
 
+fn dump_dirs_from_env_config() -> bool {
+    if env::var_os(vp_shared::env_vars::VP_DUMP_DIRS).as_deref() != Some(std::ffi::OsStr::new("1"))
+    {
+        return false;
+    }
+    use vp_shared::env_vars::dump_dirs;
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    println!("{}\t{}", dump_dirs::LAYOUT, dirs.layout().as_str());
+    println!("{}\t{}", dump_dirs::DATA, dirs.data.as_path().display());
+    println!("{}\t{}", dump_dirs::BIN, dirs.bin.as_path().display());
+    println!("{}\t{}", dump_dirs::CACHE, dirs.cache.as_path().display());
+    println!("{}\t{}", dump_dirs::CONFIG, dirs.config.as_path().display());
+    println!("{}\t{}", dump_dirs::STATE, dirs.state.as_path().display());
+    true
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
+    #[cfg(windows)]
+    if let Some(code) = commands::implode::maybe_run_deferred_delete_helper(std::env::args_os()) {
+        return ExitCode::from(code);
+    }
+
     vp_shared::ensure_blocking_stdio();
 
     // Initialize tracing
     vp_shared::init_tracing();
+
+    if dump_dirs_from_env_config() {
+        return ExitCode::SUCCESS;
+    }
 
     let mut args: Vec<String> = std::env::args().collect();
 
@@ -436,13 +461,10 @@ async fn main() -> ExitCode {
     // Parse CLI arguments (using custom help formatting)
     let parse_result = try_parse_args_from(normalized_args);
 
-    // Spawn background upgrade check for eligible commands
-    let upgrade_handle = match &parse_result {
-        Ok(args) if upgrade_check::should_run_for_command(args) => {
-            Some(tokio::spawn(upgrade_check::check_for_update()))
-        }
-        _ => None,
-    };
+    let should_run_upgrade_check =
+        parse_result.as_ref().is_ok_and(upgrade_check::should_run_for_command);
+    let spawned_upgrade_check =
+        should_run_upgrade_check && upgrade_check::spawn_background_check_if_needed();
 
     let exit_code = match parse_result {
         Err(e) => {
@@ -510,12 +532,9 @@ async fn main() -> ExitCode {
         },
     };
 
-    // Display upgrade notice if a newer version is available
-    if let Some(handle) = upgrade_handle
-        && let Ok(Ok(Some(result))) =
-            tokio::time::timeout(std::time::Duration::from_millis(500), handle).await
-    {
-        upgrade_check::display_upgrade_notice(&result);
+    // A command never consumes a notice produced by the helper it just spawned.
+    if should_run_upgrade_check && !spawned_upgrade_check {
+        upgrade_check::display_cached_upgrade_notice();
     }
 
     exit_code

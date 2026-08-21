@@ -23,7 +23,7 @@ use crate::{
 ///
 /// The variants intentionally hold the production resolver argument types
 /// directly. Aliases match the existing public `vp` command surface.
-#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
+#[derive(Subcommand, Debug, PartialEq, Eq)]
 pub enum PackageManagerCommand {
     /// Install all dependencies, or add packages if package names are provided
     #[command(visible_alias = "i")]
@@ -70,7 +70,7 @@ pub enum PackageManagerCommand {
 }
 
 /// Commands nested below `vp pm`.
-#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
+#[derive(Subcommand, Debug, PartialEq, Eq)]
 pub enum PmCommand {
     /// Clean install dependencies for CI environments
     Ci(CiArgs),

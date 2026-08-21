@@ -40,7 +40,7 @@ Documentation: https://viteplus.dev/guide/install
 should update package within semver range
 
 ```
-bun update <version> (af24e281)
+bun update <version> (<hash>)
 
  test-vite-plus-package@1.0.0
  test-vite-plus-package-optional@1.0.0
@@ -74,7 +74,7 @@ installed testnpm2@1.0.1
 should update to absolute latest version
 
 ```
-bun update <version> (af24e281)
+bun update <version> (<hash>)
 
 installed testnpm2@1.0.1
 

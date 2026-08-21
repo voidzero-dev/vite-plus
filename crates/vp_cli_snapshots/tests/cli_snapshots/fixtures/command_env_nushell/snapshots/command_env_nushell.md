@@ -6,12 +6,17 @@
 ## `vpt cp assert.nu 'vp "home\with spaces"/assert.nu'`
 
 
+## `vpt write-file 'vp "home\with spaces"/.node-version' '22.18.0
+'`
+
+
 ## `cd 'vp "home\with spaces"' && EXPECTED_VP_HOME=${workspace} PATH=${workspace}/bin:${workspace}/bin:${PATH} nu assert.nu`
 
-loads the generated env.nu and verifies the Nushell wrapper
+loads the generated env.nu and verifies setup, explicit use, unset, and file-based use
 
 ```
 Using Node.js <version> (resolved from 20.18.0)
 Reverted to file-based Node.js version resolution
+Using Node.js <version> (resolved from .node-version)
 Nushell environment checks passed
 ```

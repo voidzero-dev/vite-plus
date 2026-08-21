@@ -33,7 +33,7 @@ pub struct UpdateArgs {
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN")]
+    #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
@@ -152,6 +152,7 @@ impl Resolve<UpdateArgs> for Bun {
     fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("update")
+            .repeated("--filter", args.filter.iter())
             .arg_if("--latest", args.latest)
             .arg_if("--interactive", args.interactive)
             .arg_if("--production", args.prod);
@@ -598,5 +599,27 @@ mod tests {
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--recursive"]);
+    }
+
+    #[test]
+    fn test_bun_update_with_filter() {
+        let options = UpdateArgs { filter: vec!["web".to_string()], ..Default::default() };
+        let resolution = resolve(&bun("1.4.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["update", "--filter", "web"]);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_bun_update_drops_filter_before_1_4() {
+        let options = UpdateArgs { filter: vec!["web".to_string()], ..Default::default() };
+        let resolution = resolve(&bun("1.3.11"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["update"]);
+        assert_eq!(resolution.diagnostics[0].message, "bun <1.4 does not support --filter.");
     }
 }

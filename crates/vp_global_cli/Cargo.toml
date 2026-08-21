@@ -24,13 +24,17 @@ serde_json = { workspace = true }
 node-semver = { workspace = true }
 thiserror = { workspace = true }
 tar = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 owo-colors = { workspace = true }
+same-file = { workspace = true }
 oxc_resolver = { workspace = true }
+rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
+indoc = { workspace = true }
 vp_error = { workspace = true }
 vp_js_runtime = { workspace = true }
 vp_pm_cli = { workspace = true }
@@ -45,7 +49,9 @@ uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 serial_test = { workspace = true }
+temp-env = { workspace = true }
 tempfile = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

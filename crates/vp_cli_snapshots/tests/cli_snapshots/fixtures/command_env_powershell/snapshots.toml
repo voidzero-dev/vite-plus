@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_powershell"
+vp = "global"
+skip-platforms = ["linux", "macos"]
+requires = ["pwsh"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-File", "assert.ps1"], comment = "dot-sources env.ps1 and verifies PowerShell environment setup and wrapper behavior", envs = [["EXPECTED_VP_HOME", "${VP_HOME}"]] },
+]

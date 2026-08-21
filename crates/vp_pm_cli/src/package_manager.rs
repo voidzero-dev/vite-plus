@@ -411,9 +411,9 @@ pub fn package_manager_install_dir(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Option<AbsolutePathBuf> {
-    let home_dir = vp_shared::get_vp_home().ok()?;
     let bin_name = package_manager_type.to_string();
-    Some(home_dir.join("package_manager").join(&bin_name).join(version).join(&bin_name))
+    let data_dir = &vp_shared::EnvConfig::get().dirs.data;
+    Some(data_dir.join("package_manager").join(&bin_name).join(version).join(&bin_name))
 }
 
 /// Return the executable shim path for a package manager binary inside an install directory.
@@ -769,14 +769,14 @@ async fn resolve_latest_satisfying_version(
 }
 
 /// Find the highest already-downloaded package manager version satisfying `range`
-/// under `$VP_HOME/package_manager/<name>/`.
+/// under `<DATA>/package_manager/<name>/`.
 fn find_cached_package_manager_version(
     package_manager_type: PackageManagerType,
     range: &node_semver::Range,
 ) -> Result<Option<Str>, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
     let bin_name = package_manager_type.to_string();
-    let versions_dir = home_dir.join("package_manager").join(&bin_name);
+    let versions_dir =
+        vp_shared::EnvConfig::get().dirs.data.join("package_manager").join(&bin_name);
     let entries = match fs::read_dir(&versions_dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -840,7 +840,7 @@ async fn resolve_package_manager_range(
 }
 
 /// Download the package manager and extract it to the vite-plus home directory.
-/// Return the install directory, e.g. `$VP_HOME/package_manager/pnpm/10.0.0/pnpm`
+/// Return the install directory, e.g. `<DATA>/package_manager/pnpm/10.0.0/pnpm`
 pub async fn download_package_manager(
     package_manager_type: PackageManagerType,
     version_or_latest: &str,
@@ -858,7 +858,7 @@ pub async fn download_package_manager(
 
     // Reject anything that is not strict semver `major.minor.patch[-prerelease][+build]`.
     // This prevents path traversal via the version being interpolated into
-    // `$VP_HOME/package_manager/{name}/{version}` below, since `AbsolutePath::join`
+    // `<DATA>/package_manager/{name}/{version}` below, since `AbsolutePath::join`
     // does not normalize `..` components. Also guards against registry-controlled
     // "latest" lookups returning a malicious value.
     let parsed_version = Version::parse(&version).map_err(|_| {
@@ -878,7 +878,8 @@ pub async fn download_package_manager(
         package_name = "@yarnpkg/cli-dist".into();
     }
 
-    let home_dir = vp_shared::get_vp_home()?;
+    let config = vp_shared::EnvConfig::get();
+    let data_dir = &config.dirs.data;
     let bin_name = package_manager_type.to_string();
 
     // For bun, use platform-specific download flow.
@@ -886,7 +887,7 @@ pub async fn download_package_manager(
     // not the platform-specific binary, so we don't pass it through; the
     // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Bun) {
-        return download_bun_package_manager(&version, &home_dir).await;
+        return download_bun_package_manager(&version, data_dir).await;
     }
 
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
@@ -894,16 +895,16 @@ pub async fn download_package_manager(
     // A declared hash names the main tarball and is verified against it; the
     // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
-        return download_pnpm_native_package_manager(&version, &home_dir, expected_hash).await;
+        return download_pnpm_native_package_manager(&version, data_dir, expected_hash).await;
     }
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
-    // $VP_HOME/package_manager/pnpm/10.0.0
-    let target_dir = home_dir.join("package_manager").join(&bin_name).join(&version);
+    // <DATA>/package_manager/pnpm/10.0.0
+    let target_dir = data_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
 
     // If all shims already exist, return the target directory
-    // $VP_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
+    // <DATA>/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
         verify_cached_cli_hash(
             package_manager_type,
@@ -916,7 +917,7 @@ pub async fn download_package_manager(
         return Ok((install_dir, package_name, version));
     }
 
-    // $VP_HOME/package_manager/pnpm/{tmp_name}
+    // <DATA>/package_manager/pnpm/{tmp_name}
     // Use tempfile::TempDir for robust temporary directory creation
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
@@ -1161,14 +1162,14 @@ fn bun_requires_baseline() -> bool {
 /// Unlike JS-based package managers (pnpm/npm/yarn), bun is a native binary
 /// distributed via platform-specific npm packages (`@oven/bun-{os}-{arch}`).
 ///
-/// Layout: `$VP_HOME/package_manager/bun/{version}/bun/bin/bun.native`
+/// Layout: `<DATA>/package_manager/bun/{version}/bun/bin/bun.native`
 async fn download_bun_package_manager(
     version: &Str,
     home_dir: &AbsolutePath,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "bun".into();
 
-    // $VP_HOME/package_manager/bun/{version}
+    // <DATA>/package_manager/bun/{version}
     let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
     let install_dir = target_dir.join("bun");
 
@@ -1343,7 +1344,7 @@ async fn fetch_platform_integrity(
 
 /// Download pnpm >= 12 (native binary) via its platform-specific npm package.
 ///
-/// Layout: `$VP_HOME/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
+/// Layout: `<DATA>/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
 async fn download_pnpm_native_package_manager(
     version: &Str,
     home_dir: &AbsolutePath,
@@ -1352,7 +1353,7 @@ async fn download_pnpm_native_package_manager(
     let package_name: Str = "pnpm".into();
     let platform_package_name = get_pnpm_platform_package_name()?;
 
-    // $VP_HOME/package_manager/pnpm/{version}
+    // <DATA>/package_manager/pnpm/{version}
     let target_dir = home_dir.join("package_manager").join("pnpm").join(version.as_str());
     let install_dir = target_dir.join("pnpm");
 
@@ -1875,12 +1876,21 @@ mod tests {
 
     use semver::VersionReq;
     use tempfile::{TempDir, tempdir};
-    use vp_shared::EnvConfig;
+    use vp_shared::{EnvConfig, env_vars};
 
     use super::*;
 
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")
+    }
+
+    /// Shared VP_HOME root for download-heavy tests: keeps the package-manager
+    /// download cache warm across tests and runs (matching main's real global
+    /// cache); concurrent installs under the same root are lock-protected.
+    fn shared_vp_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("vp-pm-cli-tests-vp-home");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     /// Build an `@yarnpkg/cli-dist` style tarball around `yarn_js`.
@@ -1965,10 +1975,10 @@ mod tests {
     }
 
     /// Create a fake managed package manager install under
-    /// `<vp_home>/package_manager/<name>/<version>/<name>/bin/`.
-    fn write_pm_install(vp_home: &AbsolutePath, name: &str, version: &str, state: InstallState) {
+    /// `<data>/package_manager/<name>/<version>/<name>/bin/`.
+    fn write_pm_install(data_dir: &AbsolutePath, name: &str, version: &str, state: InstallState) {
         let bin_dir =
-            vp_home.join("package_manager").join(name).join(version).join(name).join("bin");
+            data_dir.join("package_manager").join(name).join(version).join(name).join("bin");
         fs::create_dir_all(&bin_dir).unwrap();
         let bin_file = bin_dir.join(name);
         if matches!(state, InstallState::BinOnly | InstallState::Complete) {
@@ -1982,7 +1992,7 @@ mod tests {
 
     fn find_cached_pnpm(vp_home: &AbsolutePath) -> Option<Str> {
         let range = node_semver::Range::parse("^11.0.0").unwrap();
-        EnvConfig::test_scope(EnvConfig::for_test_with_home(vp_home.as_path()), || {
+        EnvConfig::with_vars([(env_vars::VP_HOME, vp_home.as_path())], |_| {
             find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
         })
         .unwrap()
@@ -1992,7 +2002,7 @@ mod tests {
     fn test_find_cached_package_manager_version_skips_install_without_bin() {
         let temp_dir = create_temp_dir();
         let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
+        // VP_HOME pins <DATA> to the root, so installs land directly under it.
         // 11.6.0 has no bin shim at all: incomplete on every platform, so the
         // complete 11.5.1 wins even though 11.6.0 is higher and satisfies the range
         write_pm_install(&vp_home, "pnpm", "11.5.1", InstallState::Complete);
@@ -2005,7 +2015,7 @@ mod tests {
     fn test_find_cached_package_manager_version_none_when_no_complete_install() {
         let temp_dir = create_temp_dir();
         let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
+        // VP_HOME pins <DATA> to the root, so installs land directly under it.
         write_pm_install(&vp_home, "pnpm", "11.6.0", InstallState::NoBin);
 
         // nothing usable is cached; resolution falls through to the registry
@@ -2017,7 +2027,7 @@ mod tests {
     fn test_find_cached_package_manager_version_skips_missing_windows_shims() {
         let temp_dir = create_temp_dir();
         let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
+        // VP_HOME pins <DATA> to the root, so installs land directly under it.
         // On Windows the `.cmd`/`.ps1` wrappers are the files actually invoked, so
         // a bin-only 11.6.0 is incomplete and the complete 11.5.1 wins
         write_pm_install(&vp_home, "pnpm", "11.5.1", InstallState::Complete);
@@ -2031,7 +2041,7 @@ mod tests {
     fn test_find_cached_package_manager_version_accepts_bin_only_off_windows() {
         let temp_dir = create_temp_dir();
         let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
+        // VP_HOME pins <DATA> to the root, so installs land directly under it.
         // Off Windows only the plain bin is invoked, so a bin-only 11.6.0 is a
         // usable install and the highest satisfying version wins
         write_pm_install(&vp_home, "pnpm", "11.5.1", InstallState::Complete);
@@ -2431,165 +2441,215 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_pnpm_workspace_yaml() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let workspace_content = "packages:\n  - 'packages/*'";
+                create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
 
-        let result =
-            PackageManager::builder(temp_dir_path).build().await.expect("Should detect pnpm");
-        assert_eq!(result.client.to_string(), "pnpm");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect pnpm");
+                assert_eq!(result.client.to_string(), "pnpm");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_pnpm_lock_yaml() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package", "version": "1.0.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package", "version": "1.0.0"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create pnpm-lock.yaml
-        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'")
-            .expect("Failed to write pnpm-lock.yaml");
+                // Create pnpm-lock.yaml
+                fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'")
+                    .expect("Failed to write pnpm-lock.yaml");
 
-        let result =
-            PackageManager::builder(temp_dir_path).build().await.expect("Should detect pnpm");
-        assert_eq!(result.client.to_string(), "pnpm");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect pnpm");
+                assert_eq!(result.client.to_string(), "pnpm");
 
-        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
-        let package_json_path = temp_dir.path().join("package.json");
-        let package_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        println!("package_json: {package_json:?}");
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
-        assert!(Version::parse(entry["version"].as_str().unwrap()).is_ok());
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-        // the legacy field is not written
-        assert!(package_json.get("packageManager").is_none());
-        // keep other fields
-        assert_eq!(package_json["version"].as_str().unwrap(), "1.0.0");
-        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
+                let package_json_path = temp_dir.path().join("package.json");
+                let package_json: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+                println!("package_json: {package_json:?}");
+                let entry = &package_json["devEngines"]["packageManager"];
+                assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
+                assert!(Version::parse(entry["version"].as_str().unwrap()).is_ok());
+                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+                // the legacy field is not written
+                assert!(package_json.get("packageManager").is_none());
+                // keep other fields
+                assert_eq!(package_json["version"].as_str().unwrap(), "1.0.0");
+                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_yarn_lock() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create yarn.lock
-        fs::write(temp_dir_path.join("yarn.lock"), "# yarn lockfile v1")
-            .expect("Failed to write yarn.lock");
+                // Create yarn.lock
+                fs::write(temp_dir_path.join("yarn.lock"), "# yarn lockfile v1")
+                    .expect("Failed to write yarn.lock");
 
-        let result = PackageManager::builder(temp_dir_path.to_absolute_path_buf())
-            .build()
-            .await
-            .expect("Should detect yarn");
-        assert_eq!(result.client.to_string(), "yarn");
-        assert!(
-            result.get_bin_prefix().ends_with("yarn/bin"),
-            "bin_prefix should end with yarn/bin, but got {:?}",
-            result.get_bin_prefix()
-        );
-        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
-        let package_json_path = temp_dir_path.join("package.json");
-        let package_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        println!("package_json: {package_json:?}");
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-        // keep other fields
-        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                let result = PackageManager::builder(temp_dir_path.to_absolute_path_buf())
+                    .build()
+                    .await
+                    .expect("Should detect yarn");
+                assert_eq!(result.client.to_string(), "yarn");
+                assert!(
+                    result.get_bin_prefix().ends_with("yarn/bin"),
+                    "bin_prefix should end with yarn/bin, but got {:?}",
+                    result.get_bin_prefix()
+                );
+                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
+                let package_json_path = temp_dir_path.join("package.json");
+                let package_json: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+                println!("package_json: {package_json:?}");
+                let entry = &package_json["devEngines"]["packageManager"];
+                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+                // keep other fields
+                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_lock_json() {
-        use std::process::Command;
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                use std::process::Command;
 
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create package-lock.json
-        fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 2}"#)
-            .expect("Failed to write package-lock.json");
+                // Create package-lock.json
+                fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 2}"#)
+                    .expect("Failed to write package-lock.json");
 
-        let result =
-            PackageManager::builder(temp_dir_path).build().await.expect("Should detect npm");
-        assert_eq!(result.client.to_string(), "npm");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect npm");
+                assert_eq!(result.client.to_string(), "npm");
 
-        // check shim files
-        let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(bin_prefix.join("npm")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("npm.cmd")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("npm.ps1")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("npx")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("npx.cmd")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("npx.ps1")).unwrap());
+                // check shim files
+                let bin_prefix = result.get_bin_prefix();
+                assert!(is_exists_file(bin_prefix.join("npm")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("npm.cmd")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("npm.ps1")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("npx")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("npx.cmd")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("npx.ps1")).unwrap());
 
-        // run npm --version
-        let mut paths =
-            env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-        paths.insert(0, bin_prefix.into_path_buf());
-        let output = Command::new("npm")
-            .arg("--version")
-            .env("PATH", env::join_paths(&paths).unwrap())
-            .output()
-            .expect("Failed to run npm");
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-        // println!("npm --version: {:?}", String::from_utf8_lossy(&output.stdout));
+                // run npm --version
+                let mut paths =
+                    env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
+                paths.insert(0, bin_prefix.into_path_buf());
+                let output = Command::new("npm")
+                    .arg("--version")
+                    .env("PATH", env::join_paths(&paths).unwrap())
+                    .output()
+                    .expect("Failed to run npm");
+                assert!(
+                    output.status.success(),
+                    "stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                // println!("npm --version: {:?}", String::from_utf8_lossy(&output.stdout));
 
-        // run npx --version
-        let output = Command::new("npx")
-            .arg("--version")
-            .env("PATH", env::join_paths(&paths).unwrap())
-            .output()
-            .expect("Failed to run npx");
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+                // run npx --version
+                let output = Command::new("npx")
+                    .arg("--version")
+                    .env("PATH", env::join_paths(&paths).unwrap())
+                    .output()
+                    .expect("Failed to run npx");
+                assert!(
+                    output.status.success(),
+                    "stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_manager_field() {
-        use std::process::Command;
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                use std::process::Command;
 
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content =
+                    r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect pnpm with version");
-        assert_eq!(result.client.to_string(), "pnpm");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect pnpm with version");
+                assert_eq!(result.client.to_string(), "pnpm");
 
-        // check shim files
-        let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(bin_prefix.join("pnpm.cjs")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("pnpm.cmd")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("pnpm.ps1")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("pnpx.cjs")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("pnpx.cmd")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("pnpx.ps1")).unwrap());
+                // check shim files
+                let bin_prefix = result.get_bin_prefix();
+                assert!(is_exists_file(bin_prefix.join("pnpm.cjs")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("pnpm.cmd")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("pnpm.ps1")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("pnpx.cjs")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("pnpx.cmd")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("pnpx.ps1")).unwrap());
 
-        // run pnpm --version
-        let mut paths =
-            env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-        paths.insert(0, bin_prefix.into_path_buf());
-        let output = Command::new("pnpm")
-            .arg("--version")
-            .env("PATH", env::join_paths(paths).unwrap())
-            .output()
-            .expect("Failed to run pnpm");
-        // println!("pnpm --version: {:?}", output);
-        assert!(output.status.success());
-        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "8.15.0");
+                // run pnpm --version
+                let mut paths =
+                    env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
+                paths.insert(0, bin_prefix.into_path_buf());
+                let output = Command::new("pnpm")
+                    .arg("--version")
+                    .env("PATH", env::join_paths(paths).unwrap())
+                    .output()
+                    .expect("Failed to run pnpm");
+                // println!("pnpm --version: {:?}", output);
+                assert!(output.status.success());
+                assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "8.15.0");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3241,6 +3301,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_success_package_manager_with_hash() {
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.as_os_str())], |_| async move {
         use std::process::Command;
 
         let temp_dir = create_temp_dir();
@@ -3280,10 +3342,15 @@ mod tests {
         // println!("pnpm --version: {:?}", output);
         assert!(output.status.success());
         assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "1.22.22");
+
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_failed_package_manager_with_hash() {
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.as_os_str())], |_| async move {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "packageManager": "yarn@1.22.21+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"}"#;
@@ -3308,10 +3375,15 @@ mod tests {
             }
             other => panic!("Expected PackageManagerHashMismatch error, got {other:?}"),
         }
+
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_success_package_manager_with_sha1_and_sha224() {
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.as_os_str())], |_| async move {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "packageManager": "yarn@1.22.20+sha1.167c8ab8d9c8c3826d3725d9579aaea8b47a2b18"}"#;
@@ -3333,69 +3405,86 @@ mod tests {
             .await
             .expect("Should detect pnpm with version and hash");
         assert_eq!(result.client.to_string(), "pnpm");
+
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_yarn_package_manager_field() {
-        use std::process::Command;
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                use std::process::Command;
 
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package", "packageManager": "yarn@4.0.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package", "packageManager": "yarn@4.0.0"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        let result = PackageManager::builder(temp_dir_path.clone())
-            .build()
-            .await
-            .expect("Should detect yarn with version");
-        assert_eq!(result.client.to_string(), "yarn");
+                let result = PackageManager::builder(temp_dir_path.clone())
+                    .build()
+                    .await
+                    .expect("Should detect yarn with version");
+                assert_eq!(result.client.to_string(), "yarn");
 
-        assert_eq!(result.version, "4.0.0");
-        assert!(
-            result.get_bin_prefix().ends_with("yarn/bin"),
-            "bin_prefix should end with yarn/bin, but got {:?}",
-            result.get_bin_prefix()
-        );
+                assert_eq!(result.version, "4.0.0");
+                assert!(
+                    result.get_bin_prefix().ends_with("yarn/bin"),
+                    "bin_prefix should end with yarn/bin, but got {:?}",
+                    result.get_bin_prefix()
+                );
 
-        // check shim files
-        let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(bin_prefix.join("yarn.js")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("yarn")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("yarn.cmd")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("yarn.ps1")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("yarnpkg")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("yarnpkg.cmd")).unwrap());
-        assert!(is_exists_file(bin_prefix.join("yarnpkg.ps1")).unwrap());
+                // check shim files
+                let bin_prefix = result.get_bin_prefix();
+                assert!(is_exists_file(bin_prefix.join("yarn.js")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("yarn")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("yarn.cmd")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("yarn.ps1")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("yarnpkg")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("yarnpkg.cmd")).unwrap());
+                assert!(is_exists_file(bin_prefix.join("yarnpkg.ps1")).unwrap());
 
-        // run yarn --version
-        let mut cmd = "yarn";
-        if cfg!(windows) {
-            cmd = "yarn.cmd";
-        }
-        let mut paths =
-            env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-        paths.insert(0, bin_prefix.into_path_buf());
-        let output = Command::new(cmd)
-            .arg("--version")
-            .env("PATH", env::join_paths(paths).unwrap())
-            .output()
-            .expect("Failed to run yarn");
-        assert!(output.status.success());
-        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "4.0.0");
+                // run yarn --version
+                let mut cmd = "yarn";
+                if cfg!(windows) {
+                    cmd = "yarn.cmd";
+                }
+                let mut paths =
+                    env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
+                paths.insert(0, bin_prefix.into_path_buf());
+                let output = Command::new(cmd)
+                    .arg("--version")
+                    .env("PATH", env::join_paths(paths).unwrap())
+                    .output()
+                    .expect("Failed to run yarn");
+                assert!(output.status.success());
+                assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "4.0.0");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_npm_package_manager_field() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package", "packageManager": "npm@10.0.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package", "packageManager": "npm@10.0.0"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect npm with version");
-        assert_eq!(result.client.to_string(), "npm");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect npm with version");
+                assert_eq!(result.client.to_string(), "npm");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3417,22 +3506,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_not_exists_version_in_package_manager_field() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content =
-            r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content =
+                    r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        let result = PackageManager::builder(temp_dir_path).build().await;
-        assert!(result.is_err());
-        println!("result: {result:?}");
-        // Check if it's the expected error type
-        if let Err(Error::PackageManagerVersionNotFound { name, version, .. }) = result {
-            assert_eq!(name, "yarn");
-            assert_eq!(version, "10000000000.0.0");
-        } else {
-            panic!("Expected PackageManagerVersionNotFound error, got {result:?}");
-        }
+                let result = PackageManager::builder(temp_dir_path).build().await;
+                assert!(result.is_err());
+                println!("result: {result:?}");
+                // Check if it's the expected error type
+                if let Err(Error::PackageManagerVersionNotFound { name, version, .. }) = result {
+                    assert_eq!(name, "yarn");
+                    assert_eq!(version, "10000000000.0.0");
+                } else {
+                    panic!("Expected PackageManagerVersionNotFound error, got {result:?}");
+                }
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3450,26 +3546,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_default_fallback() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        let result = PackageManager::builder(temp_dir_path.clone())
-            .package_manager_type(PackageManagerType::Yarn)
-            .build()
-            .await
-            .expect("Should use default");
-        assert_eq!(result.client.to_string(), "yarn");
-        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
-        let package_json_path = temp_dir_path.join("package.json");
-        let package_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-        // keep other fields
-        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                let result = PackageManager::builder(temp_dir_path.clone())
+                    .package_manager_type(PackageManagerType::Yarn)
+                    .build()
+                    .await
+                    .expect("Should use default");
+                assert_eq!(result.client.to_string(), "yarn");
+                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
+                let package_json_path = temp_dir_path.join("package.json");
+                let package_json: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+                let entry = &package_json["devEngines"]["packageManager"];
+                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+                // keep other fields
+                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3491,60 +3594,81 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_prioritizes_package_manager_field_over_lock_files() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package", "packageManager": "yarn@4.0.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package", "packageManager": "yarn@4.0.0"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create pnpm-lock.yaml (should be ignored due to packageManager field)
-        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'")
-            .expect("Failed to write pnpm-lock.yaml");
+                // Create pnpm-lock.yaml (should be ignored due to packageManager field)
+                fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'")
+                    .expect("Failed to write pnpm-lock.yaml");
 
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect yarn from packageManager field");
-        assert_eq!(result.client.to_string(), "yarn");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect yarn from packageManager field");
+                assert_eq!(result.client.to_string(), "yarn");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_prioritizes_pnpm_workspace_over_lock_files() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create yarn.lock (should be ignored due to pnpm-workspace.yaml)
-        fs::write(temp_dir_path.join("yarn.lock"), "# yarn lockfile v1")
-            .expect("Failed to write yarn.lock");
+                // Create yarn.lock (should be ignored due to pnpm-workspace.yaml)
+                fs::write(temp_dir_path.join("yarn.lock"), "# yarn lockfile v1")
+                    .expect("Failed to write yarn.lock");
 
-        // Create pnpm-workspace.yaml (should take precedence)
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
+                // Create pnpm-workspace.yaml (should take precedence)
+                let workspace_content = "packages:\n  - 'packages/*'";
+                create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
 
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect pnpm from workspace file");
-        assert_eq!(result.client.to_string(), "pnpm");
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect pnpm from workspace file");
+                assert_eq!(result.client.to_string(), "pnpm");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_from_subdirectory() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let workspace_content = "packages:\n  - 'packages/*'";
+                create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
 
-        let sub_dir = temp_dir_path.join("packages").join("app");
-        fs::create_dir_all(&sub_dir).expect("Failed to create subdirectory");
+                let sub_dir = temp_dir_path.join("packages").join("app");
+                fs::create_dir_all(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = PackageManager::builder(sub_dir)
-            .build()
-            .await
-            .expect("Should detect pnpm from parent workspace");
-        assert_eq!(result.client.to_string(), "pnpm");
-        assert!(result.get_bin_prefix().ends_with("pnpm/bin"));
+                let result = PackageManager::builder(sub_dir)
+                    .build()
+                    .await
+                    .expect("Should detect pnpm from parent workspace");
+                assert_eq!(result.client.to_string(), "pnpm");
+                assert!(result.get_bin_prefix().ends_with("pnpm/bin"));
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3567,46 +3691,63 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_package_manager() {
-        let result = download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
-        assert!(result.is_ok());
-        let (target_dir, package_name, version) = result.unwrap();
-        println!("result: {target_dir:?}");
-        assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
-        assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
-        assert_eq!(package_name, "@yarnpkg/cli-dist");
-        assert_eq!(version, "4.9.2");
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let result =
+                    download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
+                assert!(result.is_ok());
+                let (target_dir, package_name, version) = result.unwrap();
+                println!("result: {target_dir:?}");
+                assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
+                assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
+                assert_eq!(package_name, "@yarnpkg/cli-dist");
+                assert_eq!(version, "4.9.2");
 
-        // again should skip download
-        let result = download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
-        assert!(result.is_ok());
-        let (target_dir, package_name, version) = result.unwrap();
-        assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
-        assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
-        assert_eq!(package_name, "@yarnpkg/cli-dist");
-        assert_eq!(version, "4.9.2");
-        remove_dir_all_force(target_dir).await.unwrap();
+                // again should skip download
+                let result =
+                    download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
+                assert!(result.is_ok());
+                let (target_dir, package_name, version) = result.unwrap();
+                assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
+                assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
+                assert_eq!(package_name, "@yarnpkg/cli-dist");
+                assert_eq!(version, "4.9.2");
+                remove_dir_all_force(target_dir).await.unwrap();
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_download_package_manager_pnpm_v12_native() {
-        let result =
-            download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
-        assert!(result.is_ok(), "{result:?}");
-        let (target_dir, package_name, version) = result.unwrap();
-        // native binary plus pnpm/pnpx shims, no JS entrypoint
-        let native_name = if cfg!(windows) { "bin/pnpm.native.exe" } else { "bin/pnpm.native" };
-        assert!(is_exists_file(target_dir.join(native_name)).unwrap());
-        assert!(is_exists_file(target_dir.join("bin/pnpm")).unwrap());
-        assert!(is_exists_file(target_dir.join("bin/pnpm.cmd")).unwrap());
-        assert!(is_exists_file(target_dir.join("bin/pnpx")).unwrap());
-        assert_eq!(package_name, "pnpm");
-        assert_eq!(version, "12.0.0-beta.0");
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let result =
+                    download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
+                assert!(result.is_ok(), "{result:?}");
+                let (target_dir, package_name, version) = result.unwrap();
+                // native binary plus pnpm/pnpx shims, no JS entrypoint
+                let native_name =
+                    if cfg!(windows) { "bin/pnpm.native.exe" } else { "bin/pnpm.native" };
+                assert!(is_exists_file(target_dir.join(native_name)).unwrap());
+                assert!(is_exists_file(target_dir.join("bin/pnpm")).unwrap());
+                assert!(is_exists_file(target_dir.join("bin/pnpm.cmd")).unwrap());
+                assert!(is_exists_file(target_dir.join("bin/pnpx")).unwrap());
+                assert_eq!(package_name, "pnpm");
+                assert_eq!(version, "12.0.0-beta.0");
 
-        // again should hit the completeness fast-path and skip download
-        let result =
-            download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
-        assert!(result.is_ok(), "{result:?}");
-        remove_dir_all_force(target_dir).await.unwrap();
+                // again should hit the completeness fast-path and skip download
+                let result =
+                    download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await;
+                assert!(result.is_ok(), "{result:?}");
+                remove_dir_all_force(target_dir).await.unwrap();
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3624,41 +3765,49 @@ mod tests {
         });
         let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
 
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            npm_registry: server.base_url().into(),
-            vite_plus_home: Some(vp_home.path().to_path_buf()),
-            ..EnvConfig::for_test()
-        });
-
-        let (install_dir, _, _) =
-            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                let (install_dir, _, _) = download_package_manager(
+                    PackageManagerType::Yarn,
+                    "4.17.1",
+                    Some(&expected_hash),
+                )
                 .await
                 .expect("Corepack's Yarn binary hash should be accepted");
-        assert_eq!(mock.hits(), 1);
-        assert_eq!(
-            fs::read_to_string(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD)).unwrap(),
-            expected_hash,
-            "the install must record the pin it verified"
-        );
+                assert_eq!(mock.hits(), 1);
+                assert_eq!(
+                    fs::read_to_string(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD))
+                        .unwrap(),
+                    expected_hash,
+                    "the install must record the pin it verified"
+                );
 
-        // The same pin on a warm cache reads the record instead of the CLI.
-        download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
-            .await
-            .expect("a recorded pin should be accepted from the cache");
-        assert_eq!(mock.hits(), 1, "a cached install must not download again");
+                // The same pin on a warm cache reads the record instead of the CLI.
+                download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                    .await
+                    .expect("a recorded pin should be accepted from the cache");
+                assert_eq!(mock.hits(), 1, "a cached install must not download again");
 
-        // A different pin does not match the record, so vp hashes the cached
-        // CLI and reports the mismatch.
-        let other_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
-        let result =
-            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&other_hash)).await;
-        let Err(error @ Error::PackageManagerHashMismatch { .. }) = result else {
-            panic!("a pin the cached CLI does not match must fail: {result:?}");
-        };
-        let message = error.to_string();
-        assert!(message.contains("yarn@4.17.1"), "{message}");
-        assert!(message.contains("bin/yarn.js"), "{message}");
-        assert_eq!(mock.hits(), 1, "a cached install must be checked without downloading");
+                // A different pin does not match the record, so vp hashes the cached
+                // CLI and reports the mismatch.
+                let other_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
+                let result =
+                    download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&other_hash))
+                        .await;
+                let Err(error @ Error::PackageManagerHashMismatch { .. }) = result else {
+                    panic!("a pin the cached CLI does not match must fail: {result:?}");
+                };
+                let message = error.to_string();
+                assert!(message.contains("yarn@4.17.1"), "{message}");
+                assert!(message.contains("bin/yarn.js"), "{message}");
+                assert_eq!(mock.hits(), 1, "a cached install must be checked without downloading");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3676,27 +3825,36 @@ mod tests {
         });
         let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
 
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            npm_registry: server.base_url().into(),
-            vite_plus_home: Some(vp_home.path().to_path_buf()),
-            ..EnvConfig::for_test()
-        });
-
-        let (install_dir, _, _) =
-            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                let (install_dir, _, _) = download_package_manager(
+                    PackageManagerType::Yarn,
+                    "4.17.1",
+                    Some(&expected_hash),
+                )
                 .await
                 .expect("Corepack's Yarn binary hash should be accepted");
 
-        // An install by an older vp has no record. vp falls back to the CLI.
-        fs::remove_file(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD)).unwrap();
-        fs::write(install_dir.join("bin/yarn.js"), "corrupt").unwrap();
-        let result =
-            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+                // An install by an older vp has no record. vp falls back to the CLI.
+                fs::remove_file(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD)).unwrap();
+                fs::write(install_dir.join("bin/yarn.js"), "corrupt").unwrap();
+                let result = download_package_manager(
+                    PackageManagerType::Yarn,
+                    "4.17.1",
+                    Some(&expected_hash),
+                )
                 .await;
-        assert!(
-            matches!(result, Err(Error::PackageManagerHashMismatch { .. })),
-            "a cache without a record must be hashed: {result:?}"
-        );
+                assert!(
+                    matches!(result, Err(Error::PackageManagerHashMismatch { .. })),
+                    "a cache without a record must be hashed: {result:?}"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3718,22 +3876,31 @@ mod tests {
         });
         let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
 
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            npm_registry: server.base_url().into(),
-            vite_plus_home: Some(vp_home.path().to_path_buf()),
-            ..EnvConfig::for_test()
-        });
-
-        let (install_dir, _, _) =
-            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                let (install_dir, _, _) = download_package_manager(
+                    PackageManagerType::Yarn,
+                    "4.17.1",
+                    Some(&expected_hash),
+                )
                 .await
                 .expect("the authenticated Yarn CLI should install");
 
-        assert_eq!(fs::read_to_string(&victim).unwrap(), "original");
-        assert!(
-            fs::symlink_metadata(install_dir.join("bin/yarn")).unwrap().file_type().is_file(),
-            "the generated shim must not reuse an archive-provided symlink"
-        );
+                assert_eq!(fs::read_to_string(&victim).unwrap(), "original");
+                assert!(
+                    fs::symlink_metadata(install_dir.join("bin/yarn"))
+                        .unwrap()
+                        .file_type()
+                        .is_file(),
+                    "the generated shim must not reuse an archive-provided symlink"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3777,139 +3944,176 @@ mod tests {
         });
 
         let vp_home = create_temp_dir();
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            npm_registry: format!("http://{addr}").into(),
-            vite_plus_home: Some(vp_home.path().to_path_buf()),
-            ..EnvConfig::for_test()
-        });
-
-        let result =
-            download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&format!("http://{addr}"))),
+            ],
+            |_| async {
+                let result = download_package_manager(
+                    PackageManagerType::Yarn,
+                    "4.17.1",
+                    Some(&expected_hash),
+                )
                 .await;
-        server.abort();
+                server.abort();
 
-        assert!(result.is_ok(), "a fresh authenticated response should recover: {result:?}");
-        assert_eq!(
-            attempts.load(Ordering::SeqCst),
-            2,
-            "the bad CLI response should be retried exactly once"
-        );
+                assert!(
+                    result.is_ok(),
+                    "a fresh authenticated response should recover: {result:?}"
+                );
+                assert_eq!(
+                    attempts.load(Ordering::SeqCst),
+                    2,
+                    "the bad CLI response should be retried exactly once"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_get_latest_version() {
-        let result = get_latest_version(PackageManagerType::Yarn).await;
-        assert!(result.is_ok());
-        let version = result.unwrap();
-        // println!("version: {:?}", version);
-        assert!(!version.is_empty());
-        // check version should >= 4.0.0
-        let version_req = VersionReq::parse(">=4.0.0");
-        assert!(version_req.is_ok());
-        let version_req = version_req.unwrap();
-        assert!(version_req.matches(&Version::parse(&version).unwrap()));
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let result = get_latest_version(PackageManagerType::Yarn).await;
+                assert!(result.is_ok());
+                let version = result.unwrap();
+                // println!("version: {:?}", version);
+                assert!(!version.is_empty());
+                // check version should >= 4.0.0
+                let version_req = VersionReq::parse(">=4.0.0");
+                assert!(version_req.is_ok());
+                let version_req = version_req.unwrap();
+                assert!(version_req.matches(&Version::parse(&version).unwrap()));
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_yarnrc_yml() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create .yarnrc.yml
-        fs::write(
-            temp_dir_path.join(".yarnrc.yml"),
-            "nodeLinker: node-modules\nyarnPath: .yarn/releases/yarn-4.0.0.cjs",
+                // Create .yarnrc.yml
+                fs::write(
+                    temp_dir_path.join(".yarnrc.yml"),
+                    "nodeLinker: node-modules\nyarnPath: .yarn/releases/yarn-4.0.0.cjs",
+                )
+                .expect("Failed to write .yarnrc.yml");
+
+                let result = PackageManager::builder(temp_dir_path.clone())
+                    .build()
+                    .await
+                    .expect("Should detect yarn from .yarnrc.yml");
+                assert_eq!(result.client.to_string(), "yarn");
+                assert!(
+                    result.get_bin_prefix().ends_with("yarn/bin"),
+                    "bin_prefix should end with yarn/bin, but got {:?}",
+                    result.get_bin_prefix()
+                );
+                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
+                let package_json_path = temp_dir.path().join("package.json");
+                let package_json: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+                let entry = &package_json["devEngines"]["packageManager"];
+                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+                // keep other fields
+                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+            },
         )
-        .expect("Failed to write .yarnrc.yml");
-
-        let result = PackageManager::builder(temp_dir_path.clone())
-            .build()
-            .await
-            .expect("Should detect yarn from .yarnrc.yml");
-        assert_eq!(result.client.to_string(), "yarn");
-        assert!(
-            result.get_bin_prefix().ends_with("yarn/bin"),
-            "bin_prefix should end with yarn/bin, but got {:?}",
-            result.get_bin_prefix()
-        );
-        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
-        let package_json_path = temp_dir.path().join("package.json");
-        let package_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-        // keep other fields
-        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_pnpmfile_cjs() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create pnpmfile.cjs
-        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
-            .expect("Failed to write pnpmfile.cjs");
+                // Create pnpmfile.cjs
+                fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+                    .expect("Failed to write pnpmfile.cjs");
 
-        let result = PackageManager::builder(temp_dir_path.clone())
-            .build()
-            .await
-            .expect("Should detect pnpm from pnpmfile.cjs");
-        assert_eq!(result.client.to_string(), "pnpm");
-        assert!(
-            result.get_bin_prefix().ends_with("pnpm/bin"),
-            "bin_prefix should end with pnpm/bin, but got {:?}",
-            result.get_bin_prefix()
-        );
-        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
-        let package_json_path = temp_dir_path.join("package.json");
-        let package_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-        // keep other fields
-        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                let result = PackageManager::builder(temp_dir_path.clone())
+                    .build()
+                    .await
+                    .expect("Should detect pnpm from pnpmfile.cjs");
+                assert_eq!(result.client.to_string(), "pnpm");
+                assert!(
+                    result.get_bin_prefix().ends_with("pnpm/bin"),
+                    "bin_prefix should end with pnpm/bin, but got {:?}",
+                    result.get_bin_prefix()
+                );
+                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
+                let package_json_path = temp_dir_path.join("package.json");
+                let package_json: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+                let entry = &package_json["devEngines"]["packageManager"];
+                assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
+                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+                // keep other fields
+                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_yarn_config_cjs() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create yarn.config.cjs
-        fs::write(
-            temp_dir_path.join("yarn.config.cjs"),
-            "module.exports = { nodeLinker: 'node-modules' }",
+                // Create yarn.config.cjs
+                fs::write(
+                    temp_dir_path.join("yarn.config.cjs"),
+                    "module.exports = { nodeLinker: 'node-modules' }",
+                )
+                .expect("Failed to write yarn.config.cjs");
+
+                let result = PackageManager::builder(temp_dir_path.clone())
+                    .build()
+                    .await
+                    .expect("Should detect yarn from yarn.config.cjs");
+                assert_eq!(result.client.to_string(), "yarn");
+                assert!(
+                    result.get_bin_prefix().ends_with("yarn/bin"),
+                    "bin_prefix should end with yarn/bin, but got {:?}",
+                    result.get_bin_prefix()
+                );
+                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
+                let package_json_path = temp_dir_path.join("package.json");
+                let package_json: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+                let entry = &package_json["devEngines"]["packageManager"];
+                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+                // keep other fields
+                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+            },
         )
-        .expect("Failed to write yarn.config.cjs");
-
-        let result = PackageManager::builder(temp_dir_path.clone())
-            .build()
-            .await
-            .expect("Should detect yarn from yarn.config.cjs");
-        assert_eq!(result.client.to_string(), "yarn");
-        assert!(
-            result.get_bin_prefix().ends_with("yarn/bin"),
-            "bin_prefix should end with yarn/bin, but got {:?}",
-            result.get_bin_prefix()
-        );
-        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
-        let package_json_path = temp_dir_path.join("package.json");
-        let package_json: serde_json::Value =
-            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-        // keep other fields
-        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+        .await;
     }
 
     #[test]
@@ -3954,31 +4158,38 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_pnpmfile_over_yarn_config() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let package_content = r#"{"name": "test-package"}"#;
+                create_package_json(&temp_dir_path, package_content);
 
-        // Create both pnpmfile.cjs and yarn.config.cjs
-        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
-            .expect("Failed to write pnpmfile.cjs");
+                // Create both pnpmfile.cjs and yarn.config.cjs
+                fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+                    .expect("Failed to write pnpmfile.cjs");
 
-        fs::write(
-            temp_dir_path.join("yarn.config.cjs"),
-            "module.exports = { nodeLinker: 'node-modules' }",
+                fs::write(
+                    temp_dir_path.join("yarn.config.cjs"),
+                    "module.exports = { nodeLinker: 'node-modules' }",
+                )
+                .expect("Failed to write yarn.config.cjs");
+
+                // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+                let result = PackageManager::builder(temp_dir_path)
+                    .build()
+                    .await
+                    .expect("Should detect pnpm from pnpmfile.cjs");
+                assert_eq!(
+                    result.client.to_string(),
+                    "pnpm",
+                    "pnpmfile.cjs should be detected before yarn.config.cjs"
+                );
+            },
         )
-        .expect("Failed to write yarn.config.cjs");
-
-        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect pnpm from pnpmfile.cjs");
-        assert_eq!(
-            result.client.to_string(),
-            "pnpm",
-            "pnpmfile.cjs should be detected before yarn.config.cjs"
-        );
+        .await;
     }
     // Tests for bun package manager detection
     #[tokio::test]
@@ -4132,20 +4343,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_bun_package_manager_preserves_existing_install() {
-        let temp_dir = create_temp_dir();
-        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let version: Str = "1.3.14".into();
-        write_pm_install(&vp_home, "bun", version.as_str(), InstallState::Complete);
-        let native_bin = vp_home
-            .join("package_manager")
-            .join("bun")
-            .join(version.as_str())
-            .join("bun/bin/bun.native");
-        fs::write(&native_bin, "existing bun").unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async move {
+                let temp_dir = create_temp_dir();
+                let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+                let version: Str = "1.3.14".into();
+                write_pm_install(&vp_home, "bun", version.as_str(), InstallState::Complete);
+                let native_bin = vp_home
+                    .join("package_manager")
+                    .join("bun")
+                    .join(version.as_str())
+                    .join("bun/bin/bun.native");
+                fs::write(&native_bin, "existing bun").unwrap();
 
-        download_bun_package_manager(&version, &vp_home).await.unwrap();
+                download_bun_package_manager(&version, &vp_home).await.unwrap();
 
-        assert_eq!(fs::read_to_string(native_bin).unwrap(), "existing bun");
+                assert_eq!(fs::read_to_string(native_bin).unwrap(), "existing bun");
+            },
+        )
+        .await;
     }
 
     #[test]
@@ -4251,29 +4469,34 @@ mod tests {
                 .body("this is not a valid gzip archive");
         });
 
-        let _guard = EnvConfig::test_guard(EnvConfig {
-            npm_registry: server.base_url().into(),
-            vite_plus_home: Some(vp_home.path().to_path_buf()),
-            ..EnvConfig::for_test()
-        });
-
-        let result = download_package_manager(PackageManagerType::Pnpm, "10.0.0", None).await;
-        assert!(result.is_err(), "corrupt tarball should fail the install, got {result:?}");
-
-        // The per-install temp dir must be gone after the failure.
+        // VP_HOME pins <DATA> to the root, so installs land directly under it.
         let pnpm_dir = vp_home.path().join("package_manager").join("pnpm");
-        let leftovers: Vec<_> = fs::read_dir(&pnpm_dir)
-            .map(|rd| {
-                rd.filter_map(Result::ok)
-                    .filter(|e| e.path().is_dir())
-                    .map(|e| e.file_name())
-                    .collect()
-            })
-            .unwrap_or_default();
-        assert!(
-            leftovers.is_empty(),
-            "failed install leaked temp dir(s) in {pnpm_dir:?}: {leftovers:?}"
-        );
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+            ],
+            |_| async {
+                let result =
+                    download_package_manager(PackageManagerType::Pnpm, "10.0.0", None).await;
+                assert!(result.is_err(), "corrupt tarball should fail the install, got {result:?}");
+
+                // The per-install temp dir must be gone after the failure.
+                let leftovers: Vec<_> = fs::read_dir(&pnpm_dir)
+                    .map(|rd| {
+                        rd.filter_map(Result::ok)
+                            .filter(|e| e.path().is_dir())
+                            .map(|e| e.file_name())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                assert!(
+                    leftovers.is_empty(),
+                    "failed install leaked temp dir(s) in {pnpm_dir:?}: {leftovers:?}"
+                );
+            },
+        )
+        .await;
     }
 
     #[test]

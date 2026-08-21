@@ -146,19 +146,20 @@ cli
     }
 
     async function runBuild() {
-      const viteConfig = await resolveViteConfig(process.cwd(), {
-        traverseUp: flags.config !== false,
-      });
+      const viteConfig =
+        flags.config === false
+          ? undefined
+          : await resolveViteConfig(process.cwd(), { traverseUp: true });
 
       const configDeps = new Set<string>();
-      if (viteConfig.configFile) {
+      if (viteConfig?.configFile) {
         configDeps.add(viteConfig.configFile);
       }
 
       const configs: ResolvedConfig[] = [];
-      const packConfigs = Array.isArray(viteConfig.pack)
+      const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
-        : [viteConfig.pack ?? {}];
+        : [viteConfig?.pack ?? {}];
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
         // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
@@ -167,6 +168,7 @@ cli
           merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
         }
         const resolvedConfig = await resolveUserConfig(merged, flags, configDeps);
+        resolvedConfig.forEach((config) => config.configDeps.forEach((dep) => configDeps.add(dep)));
         configs.push(...resolvedConfig);
       }
 

@@ -102,7 +102,7 @@ impl NodeProvider {
     ///
     /// # Arguments
     /// * `version_req` - A semver range requirement (e.g., "^20.18.0")
-    /// * `cache_dir` - The cache directory path (e.g., `~/.cache/vite-plus/js_runtime`)
+    /// * `cache_dir` - The cache directory path (e.g., `<DATA>/js_runtime`)
     ///
     /// # Returns
     /// The highest LTS cached version that satisfies the requirement, or the
@@ -563,7 +563,7 @@ fn calculate_expires_at(max_age: Option<u64>) -> u64 {
 /// Returns the value of `VP_NODE_DIST_MIRROR` environment variable if set,
 /// otherwise returns the default `https://nodejs.org/dist`.
 fn get_dist_url() -> Str {
-    vp_shared::EnvConfig::get().node_dist_mirror.map_or_else(
+    vp_shared::EnvConfig::get().node_dist_mirror.as_deref().map_or_else(
         || DEFAULT_NODE_DIST_URL.into(),
         |url| Str::from(url.trim_end_matches('/').to_string()),
     )
@@ -685,8 +685,19 @@ impl JsRuntimeProvider for NodeProvider {
 
 #[cfg(test)]
 mod tests {
+    use vp_shared::env_vars;
+
     use super::*;
     use crate::platform::{Arch, Os};
+
+    /// Shared VP_HOME for tests that fetch the real Node.js version index:
+    /// pinning isolates them from concurrent `with_vars` scopes, and one
+    /// shared root keeps the index cache warm across tests and runs.
+    fn shared_vp_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("vp-js-runtime-tests-vp-home");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn test_platform_string() {
@@ -721,11 +732,12 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        // for_test() leaves node_dist_mirror unset, so this exercises the
+        // VP_NODE_DIST_MIRROR is left unset, so this exercises the
         // official (default) source where signature verification is required.
-        let info = vp_shared::EnvConfig::test_scope(vp_shared::EnvConfig::for_test(), || {
-            provider.get_download_info("22.13.1", platform)
-        });
+        let info =
+            vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
+                provider.get_download_info("22.13.1", platform)
+            });
 
         #[cfg(not(target_env = "musl"))]
         {
@@ -774,12 +786,15 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        let info = vp_shared::EnvConfig::test_scope(
-            vp_shared::EnvConfig {
-                node_dist_mirror: Some("https://mirror.example/node".into()),
-                ..vp_shared::EnvConfig::for_test()
-            },
-            || provider.get_download_info("22.13.1", platform),
+        let info = vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (
+                    env_vars::VP_NODE_DIST_MIRROR,
+                    std::ffi::OsStr::new("https://mirror.example/node"),
+                ),
+            ],
+            |_| provider.get_download_info("22.13.1", platform),
         );
 
         if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
@@ -802,12 +817,15 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        let info = vp_shared::EnvConfig::test_scope(
-            vp_shared::EnvConfig {
-                node_dist_mirror: Some("https://nodejs.org/download/release".into()),
-                ..vp_shared::EnvConfig::for_test()
-            },
-            || provider.get_download_info("22.13.1", platform),
+        let info = vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (
+                    env_vars::VP_NODE_DIST_MIRROR,
+                    std::ffi::OsStr::new("https://nodejs.org/download/release"),
+                ),
+            ],
+            |_| provider.get_download_info("22.13.1", platform),
         );
 
         if let HashVerification::ShasumsFile { signature, .. } = &info.hash_verification {
@@ -910,34 +928,30 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
     #[test]
     fn test_get_dist_url_default() {
-        vp_shared::EnvConfig::test_scope(vp_shared::EnvConfig::for_test(), || {
-            assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL);
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
+            assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL)
         });
     }
 
     #[test]
     fn test_get_dist_url_with_mirror() {
-        vp_shared::EnvConfig::test_scope(
-            vp_shared::EnvConfig {
-                node_dist_mirror: Some("https://nodejs.org/dist".into()),
-                ..vp_shared::EnvConfig::for_test()
-            },
-            || {
-                assert_eq!(get_dist_url(), "https://nodejs.org/dist");
-            },
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new("https://nodejs.org/dist")),
+            ],
+            |_| assert_eq!(get_dist_url(), "https://nodejs.org/dist"),
         );
     }
 
     #[test]
     fn test_get_dist_url_trims_trailing_slash() {
-        vp_shared::EnvConfig::test_scope(
-            vp_shared::EnvConfig {
-                node_dist_mirror: Some("https://nodejs.org/dist/".into()),
-                ..vp_shared::EnvConfig::for_test()
-            },
-            || {
-                assert_eq!(get_dist_url(), "https://nodejs.org/dist");
-            },
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new("https://nodejs.org/dist/")),
+            ],
+            |_| assert_eq!(get_dist_url(), "https://nodejs.org/dist"),
         );
     }
 
@@ -959,19 +973,26 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
     #[tokio::test]
     async fn test_fetch_version_index() {
-        let provider = NodeProvider::new();
-        let versions = provider.fetch_version_index().await.unwrap();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
+                let versions = provider.fetch_version_index().await.unwrap();
 
-        // Should have at least some versions
-        assert!(!versions.is_empty());
+                // Should have at least some versions
+                assert!(!versions.is_empty());
 
-        // First entry should be the latest version
-        let first = &versions[0];
-        assert!(first.version.starts_with('v'));
+                // First entry should be the latest version
+                let first = &versions[0];
+                assert!(first.version.starts_with('v'));
 
-        // Should contain some known versions
-        let has_v20 = versions.iter().any(|v| v.version.starts_with("v20."));
-        assert!(has_v20, "Should contain Node.js v20.x versions");
+                // Should contain some known versions
+                let has_v20 = versions.iter().any(|v| v.version.starts_with("v20."));
+                assert!(has_v20, "Should contain Node.js v20.x versions");
+            },
+        )
+        .await;
     }
 
     #[test]
@@ -1223,50 +1244,58 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
         let temp_dir = TempDir::new().unwrap();
         let cache_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
 
-        // Initially, no cache exists
-        let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
-        assert!(result.is_none());
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, Some(vp_home.as_os_str())), (env_vars::VP_NODE_DIST_MIRROR, None)],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // Create mock cached versions
-        let node_cache = cache_dir.join("node");
-        tokio::fs::create_dir_all(&node_cache).await.unwrap();
+                // Initially, no cache exists
+                let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
+                assert!(result.is_none());
 
-        // Create version directories with mock binary
-        let platform = Platform::current();
-        let binary_path = provider.binary_relative_path(platform);
+                // Create mock cached versions
+                let node_cache = cache_dir.join("node");
+                tokio::fs::create_dir_all(&node_cache).await.unwrap();
 
-        for version in ["20.17.0", "20.18.0", "20.19.0", "21.0.0"] {
-            let version_dir = node_cache.join(version);
-            let binary_full_path = version_dir.join(&binary_path);
-            tokio::fs::create_dir_all(binary_full_path.parent().unwrap()).await.unwrap();
-            tokio::fs::write(&binary_full_path, "mock binary").await.unwrap();
-        }
+                // Create version directories with mock binary
+                let platform = Platform::current();
+                let binary_path = provider.binary_relative_path(platform);
 
-        // Create incomplete installation (no binary)
-        let incomplete_dir = node_cache.join("20.20.0");
-        tokio::fs::create_dir_all(&incomplete_dir).await.unwrap();
+                for version in ["20.17.0", "20.18.0", "20.19.0", "21.0.0"] {
+                    let version_dir = node_cache.join(version);
+                    let binary_full_path = version_dir.join(&binary_path);
+                    tokio::fs::create_dir_all(binary_full_path.parent().unwrap()).await.unwrap();
+                    tokio::fs::write(&binary_full_path, "mock binary").await.unwrap();
+                }
 
-        // Test: ^20.18.0 should find highest matching version (20.19.0)
-        let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
-        assert_eq!(result, Some("20.19.0".into()));
+                // Create incomplete installation (no binary)
+                let incomplete_dir = node_cache.join("20.20.0");
+                tokio::fs::create_dir_all(&incomplete_dir).await.unwrap();
 
-        // Test: ~20.18.0 should find highest 20.18.x (only 20.18.0)
-        let result = provider.find_cached_version("~20.18.0", &cache_dir).await.unwrap();
-        assert_eq!(result, Some("20.18.0".into()));
+                // Test: ^20.18.0 should find highest matching version (20.19.0)
+                let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
+                assert_eq!(result, Some("20.19.0".into()));
 
-        // Test: ^21.0.0 should find 21.0.0
-        let result = provider.find_cached_version("^21.0.0", &cache_dir).await.unwrap();
-        assert_eq!(result, Some("21.0.0".into()));
+                // Test: ~20.18.0 should find highest 20.18.x (only 20.18.0)
+                let result = provider.find_cached_version("~20.18.0", &cache_dir).await.unwrap();
+                assert_eq!(result, Some("20.18.0".into()));
 
-        // Test: ^22.0.0 should find nothing
-        let result = provider.find_cached_version("^22.0.0", &cache_dir).await.unwrap();
-        assert!(result.is_none());
+                // Test: ^21.0.0 should find 21.0.0
+                let result = provider.find_cached_version("^21.0.0", &cache_dir).await.unwrap();
+                assert_eq!(result, Some("21.0.0".into()));
 
-        // Test: ^20.20.0 should find nothing (20.20.0 exists but no binary)
-        let result = provider.find_cached_version("^20.20.0", &cache_dir).await.unwrap();
-        assert!(result.is_none());
+                // Test: ^22.0.0 should find nothing
+                let result = provider.find_cached_version("^22.0.0", &cache_dir).await.unwrap();
+                assert!(result.is_none());
+
+                // Test: ^20.20.0 should find nothing (20.20.0 exists but no binary)
+                let result = provider.find_cached_version("^20.20.0", &cache_dir).await.unwrap();
+                assert!(result.is_none());
+            },
+        )
+        .await;
     }
 
     #[test]
@@ -1438,75 +1467,128 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
     #[tokio::test]
     async fn test_resolve_lts_alias_latest() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // lts/* should resolve to the latest LTS version
-        let version = provider.resolve_lts_alias("lts/*").await.unwrap();
+                // lts/* should resolve to the latest LTS version
+                let version = provider.resolve_lts_alias("lts/*").await.unwrap();
 
-        // Should be a valid semver version
-        let parsed = Version::parse(&version).expect("Should parse as semver");
+                // Should be a valid semver version
+                let parsed = Version::parse(&version).expect("Should parse as semver");
 
-        // As of 2026, latest LTS is at least v24.x (Krypton)
-        assert!(parsed.major >= 24, "Latest LTS should be at least v24.x, got {}", version);
+                // As of 2026, latest LTS is at least v24.x (Krypton)
+                assert!(parsed.major >= 24, "Latest LTS should be at least v24.x, got {}", version);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_lts_alias_codename_iron() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // lts/iron should resolve to v20.x
-        let version = provider.resolve_lts_alias("lts/iron").await.unwrap();
-        let parsed = Version::parse(&version).expect("Should parse as semver");
-        assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {}", version);
+                // lts/iron should resolve to v20.x
+                let version = provider.resolve_lts_alias("lts/iron").await.unwrap();
+                let parsed = Version::parse(&version).expect("Should parse as semver");
+                assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {}", version);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_lts_alias_codename_jod() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // lts/jod should resolve to v22.x
-        let version = provider.resolve_lts_alias("lts/jod").await.unwrap();
-        let parsed = Version::parse(&version).expect("Should parse as semver");
-        assert_eq!(parsed.major, 22, "lts/jod should resolve to v22.x, got {}", version);
+                // lts/jod should resolve to v22.x
+                let version = provider.resolve_lts_alias("lts/jod").await.unwrap();
+                let parsed = Version::parse(&version).expect("Should parse as semver");
+                assert_eq!(parsed.major, 22, "lts/jod should resolve to v22.x, got {}", version);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_lts_alias_codename_case_insensitive() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // Should be case-insensitive for codenames
-        let version_lower = provider.resolve_lts_alias("lts/iron").await.unwrap();
-        let version_mixed = provider.resolve_lts_alias("lts/Iron").await.unwrap();
+                // Should be case-insensitive for codenames
+                let version_lower = provider.resolve_lts_alias("lts/iron").await.unwrap();
+                let version_mixed = provider.resolve_lts_alias("lts/Iron").await.unwrap();
 
-        assert_eq!(version_lower, version_mixed, "LTS codename should be case-insensitive");
+                assert_eq!(version_lower, version_mixed, "LTS codename should be case-insensitive");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_lts_alias_offset() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // lts/-1 should resolve to the second-highest LTS line
-        // As of 2026: lts/* = 24.x (Krypton), lts/-1 = 22.x (Jod)
-        let version = provider.resolve_lts_alias("lts/-1").await.unwrap();
-        let parsed = Version::parse(&version).expect("Should parse as semver");
-        assert_eq!(parsed.major, 22, "lts/-1 should resolve to v22.x (Jod), got {}", version);
+                // lts/-1 should resolve to the second-highest LTS line
+                // As of 2026: lts/* = 24.x (Krypton), lts/-1 = 22.x (Jod)
+                let version = provider.resolve_lts_alias("lts/-1").await.unwrap();
+                let parsed = Version::parse(&version).expect("Should parse as semver");
+                assert_eq!(
+                    parsed.major, 22,
+                    "lts/-1 should resolve to v22.x (Jod), got {}",
+                    version
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_lts_alias_unknown_codename() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // Unknown codename should error
-        let result = provider.resolve_lts_alias("lts/unknown").await;
-        assert!(result.is_err(), "Unknown LTS codename should return error");
+                // Unknown codename should error
+                let result = provider.resolve_lts_alias("lts/unknown").await;
+                assert!(result.is_err(), "Unknown LTS codename should return error");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_lts_alias_invalid_offset() {
-        let provider = NodeProvider::new();
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                let provider = NodeProvider::new();
 
-        // Too large offset should error (there aren't 100 LTS lines)
-        let result = provider.resolve_lts_alias("lts/-100").await;
-        assert!(result.is_err(), "Invalid LTS offset should return error");
+                // Too large offset should error (there aren't 100 LTS lines)
+                let result = provider.resolve_lts_alias("lts/-100").await;
+                assert!(result.is_err(), "Invalid LTS offset should return error");
+            },
+        )
+        .await;
     }
 }

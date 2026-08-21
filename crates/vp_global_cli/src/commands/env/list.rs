@@ -44,8 +44,7 @@ pub(super) fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String>
 
 /// Execute the list command (local installed versions).
 pub async fn execute(cwd: AbsolutePathBuf, json_output: bool) -> Result<ExitStatus, Error> {
-    let home_dir = vp_shared::get_vp_home()?;
-    let node_dir = home_dir.join("js_runtime").join("node");
+    let node_dir = vp_shared::EnvConfig::get().dirs.data.join("js_runtime").join("node");
 
     let versions = list_installed_versions(node_dir.as_path());
 

@@ -4,10 +4,8 @@ import path from 'node:path';
 import { hasConfigKey, mergeJsonConfig } from '../binding/index.js';
 import { createDefaultVitePlusLintConfig } from './oxlint-plugin-config.ts';
 import { fmt as resolveFmt } from './resolve-fmt.ts';
-import { runCommandSilently } from './utils/command.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_CONFIG_FILES, VITE_PLUS_NAME } from './utils/constants.ts';
 import { warnMsg } from './utils/terminal.ts';
-import { fixBaseUrlInTsconfig, hasBaseUrlInTsconfig } from './utils/tsconfig.ts';
 
 interface InitCommandSpec {
   configKey: 'lint' | 'fmt';
@@ -130,6 +128,7 @@ export default defineConfig({});
 }
 
 async function vpFmt(cwd: string, filePath: string): Promise<void> {
+  const { runCommandSilently } = await import('./utils/command.ts');
   const { binPath, envs } = await resolveFmt();
   const result = await runCommandSilently({
     command: binPath,
@@ -223,6 +222,7 @@ export async function applyToolInitConfigToViteConfig(
 
   if (spec.configKey === 'lint' && hasTriggerFlag(args, ['--init'])) {
     const lintInitConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
+    const { fixBaseUrlInTsconfig, hasBaseUrlInTsconfig } = await import('./utils/tsconfig.ts');
     await fixBaseUrlInTsconfig(projectPath);
     // Skip typeAware/typeCheck when tsconfig still has baseUrl (unsupported by tsgolint)
     const hasBaseUrl = hasBaseUrlInTsconfig(projectPath);

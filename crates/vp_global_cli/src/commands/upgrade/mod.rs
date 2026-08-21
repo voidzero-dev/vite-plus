@@ -11,7 +11,7 @@ use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
 
-use crate::{commands::env::config::get_vp_home, error::Error};
+use crate::error::Error;
 
 /// Options for the upgrade command.
 pub struct UpgradeOptions {
@@ -29,16 +29,24 @@ pub struct UpgradeOptions {
     pub silent: bool,
     /// Custom npm registry URL
     pub registry: Option<String>,
+    /// Refresh cached update status in a background helper
+    pub background_check: bool,
 }
 
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
-    let install_dir = get_vp_home()?;
+    if options.background_check {
+        crate::upgrade_check::run_background_check().await;
+        return Ok(ExitStatus::default());
+    }
+
+    let config = vp_shared::EnvConfig::get();
+    let install_dir = &config.dirs.data;
 
     // Handle --rollback
     if options.rollback {
-        return execute_rollback(&install_dir, options.silent).await;
+        return execute_rollback(install_dir, options.silent).await;
     }
 
     // Step 1: Detect platform
@@ -85,6 +93,25 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
+    // Step 6: Reject a target that cannot use the current layout.
+    //
+    // A pre-split payload resolves each path from VP_HOME. Its default is
+    // ~/.vite-plus. On a split install, it would move configuration, runtimes,
+    // and later upgrades to that root. The split PATH would still use this
+    // binary. A monolithic install accepts each release. This includes a
+    // VP_HOME pin and an existing ~/.vite-plus install.
+    let legacy = vp_shared::VpDirs::legacy_single_root(&config.user_home);
+    if legacy.data != config.dirs.data && !vp_setup::supports_split_layout(&resolved.version) {
+        return Err(Error::Upgrade(
+            format!(
+                "vite-plus {} does not support this split directory layout. \
+                 Run `vp upgrade` to install the latest version. To use one directory, set VP_HOME.",
+                resolved.version
+            )
+            .into(),
+        ));
+    }
+
     if !options.silent {
         output::info(&format!(
             "downloading vite-plus@{} for {}...",
@@ -113,7 +140,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // version directory on Windows because the running `vp.exe` is locked.
     // Install into a unique semver build-metadata directory instead, then
     // repoint `current` after the install has completed.
-    let active_install_dir = install::read_current_version(&install_dir).await;
+    let active_install_dir = install::read_current_version(install_dir).await;
     let install_dir_name = install::target_install_dir_name(
         &resolved.version,
         active_install_dir.as_deref(),
@@ -126,7 +153,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     let result = install_platform_and_main(
         &platform_data,
         &version_dir,
-        &install_dir,
+        install_dir,
         &install_dir_name,
         &resolved.version,
         current_version,

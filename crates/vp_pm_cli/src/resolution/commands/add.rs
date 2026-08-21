@@ -20,7 +20,7 @@ pub struct AddArgs {
     pub(crate) save_catalog_name: Option<String>,
 
     /// Save the new dependency to the default catalog
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, not_supported(npm, yarn, bun < "1.4"))]
     pub(crate) save_catalog: bool,
 
     /// A list of package names allowed to run postinstall
@@ -28,7 +28,7 @@ pub struct AddArgs {
     pub(crate) allow_build: Option<String>,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Add to workspace root
@@ -230,7 +230,7 @@ impl Resolve<AddArgs> for Bun {
             return Npm::resolve_add(args);
         }
         let mut cmd = CommandBuilder::new("bun");
-        cmd.arg("add");
+        cmd.arg("add").repeated("--filter", args.filter.iter());
         match args.save_dependency.target() {
             Some(SaveDependencyTarget::Dev) => {
                 cmd.arg("--dev");
@@ -244,6 +244,7 @@ impl Resolve<AddArgs> for Bun {
             Some(SaveDependencyTarget::Production) | None => {}
         }
         cmd.arg_if("--exact", args.save_exact)
+            .arg_if("--catalog", args.save_catalog)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -564,12 +565,25 @@ mod tests {
         assert_eq!(
             resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>(),
             vec![
-                "bun does not support --save-catalog.",
+                "bun <1.4 does not support --save-catalog.",
                 "bun does not support --allow-build.",
-                "bun does not support --filter.",
+                "bun <1.4 does not support --filter.",
                 "bun does not support --workspace-root.",
                 "bun does not support --workspace."
             ]
         );
+    }
+
+    #[test]
+    fn bun_1_4_supports_filter_and_catalog() {
+        let mut options = add_args(&["react"]);
+        options.filter = vec!["app".to_string()];
+        options.save_catalog = true;
+        let resolution = resolve(&bun("1.4.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["add", "--filter", "app", "--catalog", "react"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 }

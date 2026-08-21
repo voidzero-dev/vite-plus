@@ -8,7 +8,7 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    PackageManager, PackageManagerType,
+    PackageManager,
     cli::{PackageManagerCommand, PmCommand},
     error::Error,
     helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
@@ -18,7 +18,7 @@ use crate::{
 #[derive(Debug)]
 pub struct DispatchResult {
     pub status: ExitStatus,
-    pub package_manager: PackageManagerType,
+    pub why_hint_packages: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,9 +57,10 @@ pub async fn dispatch_with_metadata(
     };
 
     let package_manager = manager.client;
+    let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
     let resolution = command.resolve_for_manager(&manager)?;
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
-    Ok(DispatchResult { status, package_manager })
+    Ok(DispatchResult { status, why_hint_packages })
 }
 
 async fn dispatch_dlx(
@@ -69,15 +70,14 @@ async fn dispatch_dlx(
 ) -> Result<DispatchResult, Error> {
     match PackageManager::builder(cwd).build_with_default().await {
         Ok(manager) => {
-            let package_manager = manager.client;
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
             let status = run_resolution(cwd, resolution, render_diagnostics).await?;
-            Ok(DispatchResult { status, package_manager })
+            Ok(DispatchResult { status, why_hint_packages: None })
         }
         Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
             let status =
                 run_resolution(cwd, args.resolve_npx_fallback(), render_diagnostics).await?;
-            Ok(DispatchResult { status, package_manager: PackageManagerType::Npm })
+            Ok(DispatchResult { status, why_hint_packages: None })
         }
         Err(error) => Err(Error::Install(error)),
     }
