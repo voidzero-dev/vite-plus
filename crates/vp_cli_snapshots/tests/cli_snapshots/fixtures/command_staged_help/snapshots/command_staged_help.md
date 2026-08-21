@@ -11,7 +11,7 @@ Run linters on staged files using staged config from vite.config.ts.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
-  -p, --concurrent <number|boolean>  Number of tasks to run concurrently, or false for serial
+  -p, --concurrent [number|boolean]  Number of tasks to run concurrently, or false for serial
   --continue-on-error                Run all tasks to completion even if one fails
   --cwd <path>                       Working directory to run all tasks in
   -d, --debug                        Enable debug output
@@ -41,7 +41,7 @@ Run linters on staged files using staged config from vite.config.ts.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
-  -p, --concurrent <number|boolean>  Number of tasks to run concurrently, or false for serial
+  -p, --concurrent [number|boolean]  Number of tasks to run concurrently, or false for serial
   --continue-on-error                Run all tasks to completion even if one fails
   --cwd <path>                       Working directory to run all tasks in
   -d, --debug                        Enable debug output
@@ -71,7 +71,7 @@ Run linters on staged files using staged config from vite.config.ts.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
-  -p, --concurrent <number|boolean>  Number of tasks to run concurrently, or false for serial
+  -p, --concurrent [number|boolean]  Number of tasks to run concurrently, or false for serial
   --continue-on-error                Run all tasks to completion even if one fails
   --cwd <path>                       Working directory to run all tasks in
   -d, --debug                        Enable debug output

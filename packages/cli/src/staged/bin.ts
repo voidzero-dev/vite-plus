@@ -12,14 +12,14 @@
 import lintStaged from 'lint-staged';
 import type { Options } from 'lint-staged';
 
+import { parseStagedArgs } from '../../binding/index.js';
 import { resolveViteConfig } from '../resolve-vite-config.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { errorMsg, log, printHeader } from '../utils/terminal.ts';
-import { normalizeStagedArgs, parseStagedArgs } from './args.ts';
 
-const args = parseStagedArgs(process.argv.slice(3));
+const parsedArgs = parseStagedArgs(process.argv.slice(3));
 
-if (args.help) {
+if (parsedArgs.status === 'help') {
   const helpMessage = renderCliDoc({
     usage: 'vp staged [options]',
     summary: 'Run linters on staged files using staged config from vite.config.ts.',
@@ -33,7 +33,7 @@ if (args.help) {
             description: 'Allow empty commits when tasks revert all staged changes',
           },
           {
-            label: '-p, --concurrent <number|boolean>',
+            label: '-p, --concurrent [number|boolean]',
             description: 'Number of tasks to run concurrently, or false for serial',
           },
           {
@@ -74,36 +74,33 @@ if (args.help) {
   });
   printHeader();
   log(helpMessage);
+} else if (parsedArgs.status === 'error') {
+  printHeader();
+  errorMsg(parsedArgs.error.message.replace(/^error:\s*/, ''));
+  process.exit(1);
 } else {
-  let normalizedArgs;
-  try {
-    normalizedArgs = normalizeStagedArgs(args);
-  } catch (err) {
-    printHeader();
-    errorMsg(err instanceof Error ? err.message : String(err));
-    process.exit(1);
-  }
+  const args = parsedArgs.value;
 
   const options: Options = {};
 
   // Boolean flags — only include if explicitly set
-  if (args['allow-empty'] != null) {
-    options.allowEmpty = args['allow-empty'];
+  if (args.allowEmpty != null) {
+    options.allowEmpty = args.allowEmpty;
   }
   if (args.debug != null) {
     options.debug = args.debug;
   }
-  if (args['continue-on-error'] != null) {
-    options.continueOnError = args['continue-on-error'];
+  if (args.continueOnError != null) {
+    options.continueOnError = args.continueOnError;
   }
-  if (args['fail-on-changes'] != null) {
-    options.failOnChanges = args['fail-on-changes'];
+  if (args.failOnChanges != null) {
+    options.failOnChanges = args.failOnChanges;
   }
-  if (args['hide-partially-staged'] != null) {
-    options.hidePartiallyStaged = args['hide-partially-staged'];
+  if (args.hidePartiallyStaged != null) {
+    options.hidePartiallyStaged = args.hidePartiallyStaged;
   }
-  if (args['hide-unstaged'] != null) {
-    options.hideUnstaged = args['hide-unstaged'];
+  if (args.hideUnstaged != null) {
+    options.hideUnstaged = args.hideUnstaged;
   }
   if (args.quiet != null) {
     options.quiet = args.quiet;
@@ -124,7 +121,7 @@ if (args.help) {
   // Read "staged" from vite.config.ts and pass it as an inline config object to lint-staged.
   let stagedConfig;
   try {
-    const viteConfig = await resolveViteConfig(normalizedArgs.cwd ?? process.cwd());
+    const viteConfig = await resolveViteConfig(args.cwd ?? process.cwd());
     stagedConfig = viteConfig.staged;
   } catch (err) {
     // Surface real errors (syntax errors, missing imports, etc.)
@@ -145,17 +142,17 @@ if (args.help) {
     log('  });');
     process.exit(1);
   }
-  if (normalizedArgs.cwd != null) {
-    options.cwd = normalizedArgs.cwd;
+  if (args.cwd != null) {
+    options.cwd = args.cwd;
   }
-  if (normalizedArgs.diff != null) {
-    options.diff = normalizedArgs.diff;
+  if (args.diff != null) {
+    options.diff = args.diff;
   }
-  if (normalizedArgs.diffFilter != null) {
-    options.diffFilter = normalizedArgs.diffFilter;
+  if (args.diffFilter != null) {
+    options.diffFilter = args.diffFilter;
   }
-  if (normalizedArgs.concurrent != null) {
-    options.concurrent = normalizedArgs.concurrent;
+  if (args.concurrent != null) {
+    options.concurrent = args.concurrent;
   }
 
   const success = await lintStaged(options);

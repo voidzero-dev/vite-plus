@@ -3461,6 +3461,11 @@ export interface CliOptions {
   resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
 }
 
+export interface CliParseError {
+  kind: string;
+  message: string;
+}
+
 /**
  * Detect the workspace root and package manager type and version
  *
@@ -3649,6 +3654,13 @@ export declare function mergeTsdownConfig(
   tsdownConfigPath: string,
 ): MergeJsonConfigResult;
 
+export declare function parseStagedArgs(argv: Array<string>): ParseStagedArgsOutcome;
+
+export type ParseStagedArgsOutcome =
+  | { status: 'ok'; value: StagedArgs }
+  | { status: 'help' }
+  | { status: 'error'; error: CliParseError };
+
 /** Access modes for a path. */
 export interface PathAccess {
   /** Whether the path was read */
@@ -3832,6 +3844,24 @@ export interface RunCommandResult {
  * the same TTY + git-hook gating without duplicating the rules in JS.
  */
 export declare function shouldPrintVitePlusHeader(): boolean;
+
+export interface StagedArgs {
+  allowEmpty?: boolean;
+  concurrent?: boolean | number;
+  continueOnError?: boolean;
+  cwd?: string;
+  debug?: boolean;
+  diff?: string;
+  diffFilter?: string;
+  failOnChanges?: boolean;
+  hidePartiallyStaged?: boolean;
+  hideUnstaged?: boolean;
+  quiet?: boolean;
+  relative?: boolean;
+  revert?: boolean;
+  stash?: boolean;
+  verbose?: boolean;
+}
 
 /**
  * Set the value of a top-level config key in a vite config file (upsert)
