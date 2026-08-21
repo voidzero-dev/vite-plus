@@ -110,53 +110,29 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 
 The Rust `vp` binary (`crates/vp_global_cli/`) routes commands in four categories:
 
-```
-                       vp <command>
-                            │
-              ┌─────────────┴──────────────┐
-              │                            │
-              ▼                            ▼
-     ┌────────────────┐         ┌────────────────┐
-     │   Category A   │         │   Category B   │
-     │    Pkg Mgr     │         │   JavaScript   │
-     │    (Rust)      │         │   (Node.js)    │
-     └───────┬────────┘         └───────┬────────┘
-             │                          │
-       vp_pm_cli::                oxc_resolver finds
-       dispatch                     local vite-plus
-             │                          │
-             ▼                    ┌─────┴─────┐
-     ┌────────────────┐          │  found?   │
-     │ install        │          └─────┬─────┘
-     │ add            │           yes ╱ ╲ no
-     │ remove         │             ╱     ╲
-     │ update         │            ▼       ▼
-     │ ...            │      ┌────────┐ ┌────────┐
-     └────────────────┘      │ local  │ │ global │
-                             │ bin.js │ │ bin.js │
-                             └───┬────┘ └───┬────┘
-                                 └─────┬────┘
-                                       │
-                                       ▼
-                              ┌────────────────┐
-                              │     bin.ts      │
-                              │   routes to:    │
-                              ├────────────────┤
-                              │ build, test,    │
-                              │ lint, fmt, run  │
-                              │   → NAPI        │
-                              ├────────────────┤
-                              │ install, add,   │
-                              │ remove, update  │
-                              │ dlx, pm <…>     │
-                              │   → NAPI        │
-                              │   → vp_pm_cli │
-                              ├────────────────┤
-                              │ create, migrate │
-                              │ --version       │
-                              │   → dist/       │
-                              │     global/*.js │
-                              └────────────────┘
+```mermaid
+flowchart TD
+    vp["vp &lt;command&gt;"]
+
+    vp --> A["Category A<br/>Package Manager (Rust)"]
+    vp --> B["Category B<br/>JavaScript (Node.js)"]
+    vp --> C["Category C<br/>Local CLI Delegation"]
+    vp --> D["Category D<br/>Global-only (Rust)"]
+
+    A --> pm["vp_pm_cli::dispatch<br/>install, add, remove, update, ..."]
+
+    B --> resolve
+    C --> resolve["oxc_resolver finds local vite-plus"]
+    resolve -->|found| localBin["local dist/bin.js"]
+    resolve -->|not found| globalBin["global dist/bin.js"]
+    localBin --> binTs
+    globalBin --> binTs["bin.ts"]
+    binTs --> js["B: create, migrate, config, hooks, staged, --version<br/>→ dist/*.js"]
+    binTs --> napi["C: build, test, lint, fmt, run, ...<br/>→ NAPI"]
+    binTs --> napiPm["install, add, remove, ...<br/>→ NAPI → vp_pm_cli"]
+
+    D --> globalOnly["vp_global_only_cli::GlobalOnlyCommand<br/>env, upgrade, implode"]
+    globalOnly --> impl["commands::{env, upgrade, implode}"]
 ```
 
 - **Category A (Package Manager)**: `install`, `add`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>` — clap definitions and dispatch live in the shared `crates/vp_pm_cli/` crate. Both the global CLI and the local CLI binding flatten `vp_pm_cli::PackageManagerCommand` into their top-level argument parser and call `vp_pm_cli::dispatch` to run the underlying package manager (pnpm/npm/yarn/bun). The global CLI additionally intercepts `--global` for vite-plus-managed installs (`commands::env::global_install`) before delegating.
