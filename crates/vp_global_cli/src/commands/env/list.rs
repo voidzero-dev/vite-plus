@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
+use owo_colors::OwoColorize;
 use serde::Serialize;
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
@@ -137,7 +138,7 @@ pub async fn execute(
     }
 
     if let Some(node) = node {
-        print_section("Node.js", &node);
+        print_section("Node.js", &node, true);
     }
     if let Some(mut package_managers) = package_managers {
         for kind in package_manager::selected(scope) {
@@ -148,6 +149,7 @@ pub async fn execute(
             print_section(
                 package_manager::title(kind),
                 &package_managers.remove(&name).unwrap_or_default(),
+                false,
             );
         }
     }
@@ -173,12 +175,13 @@ pub(super) fn list_complete_package_manager_versions(
     .collect()
 }
 
-fn print_section(title: &str, versions: &[InstalledVersionJson]) {
+fn print_section(title: &str, versions: &[InstalledVersionJson], node: bool) {
     println!("{title}");
     if versions.is_empty() {
         println!("  No versions installed.");
         return;
     }
+    let colorize = use_color();
     for version in versions {
         let mut markers = Vec::new();
         if version.current {
@@ -187,8 +190,23 @@ fn print_section(title: &str, versions: &[InstalledVersionJson]) {
         if version.default {
             markers.push("default");
         }
-        let suffix =
-            if markers.is_empty() { String::new() } else { format!(" ({})", markers.join(", ")) };
-        println!("  * {}{suffix}", version.version);
+        let suffix = if markers.is_empty() {
+            String::new()
+        } else if colorize {
+            format!(" {}", markers.join(" ").dimmed())
+        } else {
+            format!(" {}", markers.join(" "))
+        };
+        let display = if node { format!("v{}", version.version) } else { version.version.clone() };
+        let line = format!("* {display}");
+        if version.current && colorize {
+            println!("  {}{suffix}", line.bright_blue());
+        } else {
+            println!("  {line}{suffix}");
+        }
     }
+}
+
+pub(super) fn use_color() -> bool {
+    vp_shared::is_stdout_terminal() && std::env::var_os("NO_COLOR").is_none()
 }
