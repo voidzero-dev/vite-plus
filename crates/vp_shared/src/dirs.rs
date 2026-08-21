@@ -10,9 +10,17 @@
 //! `<CONFIG>/`, and `<STATE>/` for category roots. They do not use a concrete
 //! path for each layout. See `rfcs/directory-layout.md`.
 
+mod env_overrides;
 mod resolution;
 
+pub use env_overrides::{VpDirEnvError, validate_vp_dir_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
+
+/// Return the absolute `VP_HOME` value from the process environment. Return
+/// `None` if the variable is unset or relative.
+pub(crate) fn vp_home_override() -> Option<AbsolutePathBuf> {
+    env_overrides::DirEnvOverrides::from_env().home()
+}
 
 /// Platform-specific binary name for the `vp` CLI.
 pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
@@ -54,15 +62,6 @@ impl VpDirsLayout {
         match self {
             Self::SingleRoot => "single-root",
             Self::Split => "split",
-        }
-    }
-
-    #[must_use]
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "single-root" => Some(Self::SingleRoot),
-            "split" => Some(Self::Split),
-            _ => None,
         }
     }
 }
@@ -119,19 +118,6 @@ impl VpDirs {
         })
     }
 
-    /// Construct category roots reported by another Vite+ binary.
-    #[must_use]
-    pub fn from_resolved_parts(
-        bin: AbsolutePathBuf,
-        data: AbsolutePathBuf,
-        cache: AbsolutePathBuf,
-        config: AbsolutePathBuf,
-        state: AbsolutePathBuf,
-        layout: VpDirsLayout,
-    ) -> Self {
-        Self { bin, data, cache, config, state, layout }
-    }
-
     /// Return the resolution mode that selected these roots.
     #[must_use]
     pub const fn layout(&self) -> VpDirsLayout {
@@ -146,8 +132,7 @@ impl VpDirs {
     /// payload cannot report category roots through `VP_DUMP_DIRS`.
     #[must_use]
     pub fn legacy_single_root(home: &AbsolutePath) -> Self {
-        let root = resolution::vp_home_override()
-            .unwrap_or_else(|| home.join(resolution::VP_HOME_DIR_NAME));
+        let root = vp_home_override().unwrap_or_else(|| home.join(resolution::VP_HOME_DIR_NAME));
         resolution::single_root_dirs(root)
     }
 

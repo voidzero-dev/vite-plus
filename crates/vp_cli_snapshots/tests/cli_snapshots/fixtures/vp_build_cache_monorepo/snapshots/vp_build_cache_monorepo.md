@@ -20,7 +20,8 @@ should hit cache from root
 
 ```
 ~/packages/app$ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -38,7 +39,8 @@ should hit cache from sub dir
 
 ```
 ~/packages/app$ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -81,7 +83,8 @@ should miss cache after source change
 
 ```
 ~/packages/app$ vp build ○ cache miss: 'packages/app/index.html' modified, executing
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -110,7 +113,8 @@ should hit cache from sub dir
 
 ```
 ~/packages/web$ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -128,7 +132,8 @@ should hit cache from root after sub dir build
 
 ```
 ~/packages/web$ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB

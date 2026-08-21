@@ -29,8 +29,7 @@
 
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::{APP_DIR_NAME, VpDirsLayout};
-use crate::env_vars;
+use super::{APP_DIR_NAME, VpDirsLayout, env_overrides::DirEnvOverrides, vp_home_override};
 
 /// Directory name of the single-root install probed under the user home.
 pub(super) const VP_HOME_DIR_NAME: &str = ".vite-plus";
@@ -44,15 +43,11 @@ trait DirResolution {
     fn state_dir(&self) -> Option<AbsolutePathBuf>;
 }
 
-/// Absolute path from the process environment, or `None` if unset /
-/// relative.
+/// Return an absolute path from a non-Vite+ environment variable. Return `None`
+/// if the variable is unset or relative.
+#[cfg(not(target_os = "windows"))]
 fn process_env_var(name: &str) -> Option<AbsolutePathBuf> {
     std::env::var_os(name).and_then(|path| AbsolutePathBuf::new(path.into()))
-}
-
-/// Absolute `VP_HOME` override from the process environment, if set.
-pub(super) fn vp_home_override() -> Option<AbsolutePathBuf> {
-    process_env_var(env_vars::VP_HOME)
 }
 
 /// Complete category overrides from the `VP_*_DIR` environment variables.
@@ -64,18 +59,13 @@ struct VpEnvs {
 
 impl VpEnvs {
     fn resolver(_home: &AbsolutePath) -> Self {
-        let dirs = (
-            process_env_var(env_vars::VP_BIN_DIR),
-            process_env_var(env_vars::VP_DATA_DIR),
-            process_env_var(env_vars::VP_CACHE_DIR),
-        );
-        match dirs {
-            (Some(bin_dir), Some(data_dir), Some(cache_dir)) => Self {
+        match DirEnvOverrides::from_env().split_dirs() {
+            Some((bin_dir, data_dir, cache_dir)) => Self {
                 bin_dir: Some(bin_dir),
                 data_dir: Some(data_dir),
                 cache_dir: Some(cache_dir),
             },
-            _ => Self { bin_dir: None, data_dir: None, cache_dir: None },
+            None => Self { bin_dir: None, data_dir: None, cache_dir: None },
         }
     }
 }

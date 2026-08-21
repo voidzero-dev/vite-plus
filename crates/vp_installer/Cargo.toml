@@ -13,8 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
+console = { workspace = true }
 indicatif = { workspace = true }
-owo-colors = { workspace = true, features = ["supports-colors"] }
 tokio = { workspace = true, features = ["full"] }
 vp_pm_cli = { workspace = true }
 vt_path = { workspace = true }

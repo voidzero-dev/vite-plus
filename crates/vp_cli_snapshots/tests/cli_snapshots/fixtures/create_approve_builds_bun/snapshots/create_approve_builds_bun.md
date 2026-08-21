@@ -98,7 +98,7 @@ no trustedDependencies, the build was not run
 the guidance's `vp pm approve-builds` command approves the gated build
 
 ```
-bun pm trust <version> (0d9b296a)
+bun pm trust <version> (<hash>)
 
 ./node_modules/core-js @3.39.0
  ✓ [postinstall]: node -e "try{require('./postinstall')}catch(e){}"

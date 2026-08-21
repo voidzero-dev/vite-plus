@@ -5,3 +5,18 @@ skip-platforms = ["windows", { os = "linux", libc = "musl" }]
 steps = [
   { argv = ["vp", "upgrade", "--check", "--tag", "alpha"], comment = "alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_upgrade_background_notice"
+vp = "global"
+local-registry = true
+unset-env = ["VP_CLI_TEST"]
+comment = "A foreground command launches a detached update check without waiting for it, then later commands show the cached notice at most once per prompt interval."
+steps = [
+  { argv = ["vp", "env", "list"], comment = "The foreground command launches the detached checker and returns without waiting for registry I/O.", snapshot = false },
+  { argv = ["node", "-e", "(async()=>{const fs=require('node:fs');const path=require('node:path');const file=path.join(process.env.VP_HOME,'cache','upgrade-check.json');const deadline=Date.now()+5000;for(;;){try{if(JSON.parse(fs.readFileSync(file,'utf8')).status==='available')return}catch{}if(Date.now()>=deadline)process.exit(1);await new Promise(resolve=>setTimeout(resolve,25))}})()"], snapshot = false },
+  { argv = ["vpt", "grep-file", "$VP_HOME/cache/upgrade-check.json", '"status":"available"'], snapshot = false },
+  { argv = ["vp", "env", "list", "--json"], comment = "Machine-readable output does not consume the pending notice.", snapshot = false },
+  { argv = ["vp", "env", "off"], comment = "The next interactive command displays the cached update notice." },
+  { argv = ["vp", "env", "off"], comment = "A subsequent command stays quiet after the notice timestamp is recorded." },
+]

@@ -25,6 +25,16 @@ use crate::{
 /// Comment marker written by the install script above the sourcing line.
 const VITE_PLUS_COMMENT: &str = "# Vite+ bin";
 
+/// Private mode used by a temporary copy of `vp.exe` to remove renamed roots.
+#[cfg(windows)]
+const DEFERRED_DELETE_MODE: &str = "__vite-plus-deferred-delete";
+
+#[cfg(windows)]
+const DEFERRED_DELETE_ATTEMPTS: usize = 100;
+
+#[cfg(windows)]
+const DEFERRED_DELETE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+
 fn lexical_path(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
     for component in path.components() {
@@ -84,6 +94,18 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         return Ok(exit_status(0));
     }
 
+    // A native helper must live outside every root that it removes. Copy the
+    // running executable before changing any path because the data root can
+    // contain that executable.
+    #[cfg(windows)]
+    let cleanup_source = match prepare_deferred_delete_source(&delete_set) {
+        Ok(source) => source,
+        Err(e) => {
+            output::error(&vt_str::format!("Failed to prepare the removal helper: {e}"));
+            return Err(Error::CommandExecution(e));
+        }
+    };
+
     // Clean shell profiles with the stored content. Do not read them again.
     clean_affected_profiles(&affected_profiles, &source_matcher);
 
@@ -102,7 +124,10 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     remove_shim_files(dirs);
     for root in &delete_set {
         if root.as_path().exists() {
+            #[cfg(unix)]
             remove_vite_plus_dir(root)?;
+            #[cfg(windows)]
+            remove_vite_plus_dir(root, &cleanup_source)?;
         }
     }
 
@@ -342,104 +367,315 @@ fn clean_affected_profiles(
 }
 
 /// Remove a vite-plus root directory.
+#[cfg(unix)]
 fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
-    #[cfg(unix)]
-    {
-        match std::fs::remove_dir_all(home_dir) {
-            Ok(()) => {
-                output::success(&vt_str::format!("Removed {}", home_dir.as_path().display()));
-                Ok(())
-            }
-            Err(e) => {
-                output::error(&vt_str::format!(
-                    "Failed to remove {}: {e}",
-                    home_dir.as_path().display()
-                ));
-                Err(Error::CommandExecution(e))
-            }
+    match std::fs::remove_dir_all(home_dir) {
+        Ok(()) => {
+            output::success(&vt_str::format!("Removed {}", home_dir.as_path().display()));
+            Ok(())
+        }
+        Err(e) => {
+            output::error(&vt_str::format!(
+                "Failed to remove {}: {e}",
+                home_dir.as_path().display()
+            ));
+            Err(Error::CommandExecution(e))
         }
     }
+}
 
-    #[cfg(windows)]
-    {
-        // On Windows, the running `vp` binary is always locked, so direct
-        // removal will fail.  Rename the directory first so the original path
-        // is immediately free for reinstall, then schedule deletion of the
-        // renamed directory via a detached process.
-        let trash_path =
-            home_dir.as_path().with_extension(vt_str::format!("removing-{}", std::process::id()));
-        if let Err(e) = std::fs::rename(home_dir, &trash_path) {
+/// Rename a Vite+ root and start a native helper that removes it after this
+/// process exits. The helper uses Rust's Windows filesystem implementation,
+/// which supports extended-length paths and does not follow reparse points.
+#[cfg(windows)]
+fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf, cleanup_source: &Path) -> Result<(), Error> {
+    let parent_pid = std::process::id();
+    let suffix = deferred_delete_suffix(parent_pid);
+    let trash_path = home_dir.as_path().with_extension(&suffix);
+    let failure_log = deferred_cleanup_error_path(&trash_path);
+    let helper_path = match copy_deferred_delete_helper(cleanup_source) {
+        Ok(path) => path,
+        Err(e) => {
             output::error(&vt_str::format!(
-                "Failed to rename {} for removal: {e}",
+                "Failed to prepare removal of {}: {e}",
                 home_dir.as_path().display()
             ));
             return Err(Error::CommandExecution(e));
         }
+    };
 
-        match spawn_deferred_delete(&trash_path, std::process::id()) {
-            Ok(_) => {
-                output::success(&vt_str::format!(
-                    "Scheduled removal of {} (will complete shortly)",
-                    home_dir.as_path().display()
-                ));
-            }
-            Err(e) => {
-                output::error(&vt_str::format!(
-                    "Failed to schedule removal of {}: {e}",
-                    home_dir.as_path().display()
-                ));
-                return Err(Error::CommandExecution(e));
-            }
+    if let Err(e) = std::fs::rename(home_dir, &trash_path) {
+        let _ = std::fs::remove_file(&helper_path);
+        output::error(&vt_str::format!(
+            "Failed to rename {} for removal: {e}",
+            home_dir.as_path().display()
+        ));
+        return Err(Error::CommandExecution(e));
+    }
+
+    let helper = match spawn_deferred_delete(&helper_path, &trash_path, parent_pid, &suffix) {
+        Ok(helper) => helper,
+        Err(e) => {
+            let _ = std::fs::remove_file(&helper_path);
+            let _ = std::fs::rename(&trash_path, home_dir);
+            output::error(&vt_str::format!(
+                "Failed to schedule removal of {}: {e}",
+                home_dir.as_path().display()
+            ));
+            return Err(Error::CommandExecution(e));
         }
-        Ok(())
+    };
+
+    if let Err(e) = spawn_deferred_helper_delete(&helper_path, helper.id()) {
+        output::warn(&vt_str::format!(
+            "Vite+ could not schedule removal of temporary helper {}: {e}",
+            helper_path.display()
+        ));
+    }
+
+    output::success(&vt_str::format!(
+        "Scheduled removal of {} (will complete shortly)",
+        home_dir.as_path().display()
+    ));
+    output::note(&vt_str::format!(
+        "Cleanup failures will be recorded at {}",
+        failure_log.display()
+    ));
+    Ok(())
+}
+
+#[cfg(windows)]
+fn prepare_deferred_delete_source(
+    delete_set: &[AbsolutePathBuf],
+) -> std::io::Result<tempfile::TempPath> {
+    let system_temp = lexical_path(&std::env::temp_dir());
+    let helper_dir = if system_temp.is_absolute()
+        && !delete_set.iter().any(|root| system_temp.starts_with(root.as_path()))
+    {
+        system_temp
+    } else {
+        delete_set
+            .iter()
+            .find(|root| root.as_path().exists())
+            .and_then(|root| root.as_path().parent())
+            .ok_or_else(|| std::io::Error::other("no directory is available outside the roots"))?
+            .to_path_buf()
+    };
+    let source_path = tempfile::Builder::new()
+        .prefix("vite-plus-cleanup-source-")
+        .suffix(".exe")
+        .tempfile_in(helper_dir)?
+        .into_temp_path();
+    std::fs::copy(std::env::current_exe()?, &source_path)?;
+    Ok(source_path)
+}
+
+#[cfg(windows)]
+fn copy_deferred_delete_helper(source: &Path) -> std::io::Result<PathBuf> {
+    let helper_dir = source
+        .parent()
+        .ok_or_else(|| std::io::Error::other("the cleanup source has no parent directory"))?;
+    let temporary = tempfile::Builder::new()
+        .prefix("vite-plus-cleanup-")
+        .suffix(".exe")
+        .tempfile_in(helper_dir)?;
+    let (file, path) = temporary.keep().map_err(|e| e.error)?;
+    drop(file);
+    if let Err(e) = std::fs::copy(source, &path) {
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
+    }
+    Ok(path)
+}
+
+#[cfg(windows)]
+fn deferred_delete_suffix(parent_pid: u32) -> Str {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    vt_str::format!("removing-{parent_pid}-{nonce}")
+}
+
+#[cfg(any(windows, test))]
+fn deferred_cleanup_error_path(trash_path: &Path) -> PathBuf {
+    let mut name = trash_path.file_name().unwrap_or_default().to_os_string();
+    name.push(".cleanup-error.txt");
+    trash_path.with_file_name(name)
+}
+
+#[cfg(any(windows, test))]
+struct DeferredDeleteArgs {
+    parent_pid: u32,
+    trash_path: PathBuf,
+}
+
+#[cfg(any(windows, test))]
+fn parse_deferred_delete_args(
+    mut args: impl Iterator<Item = std::ffi::OsString>,
+) -> Option<DeferredDeleteArgs> {
+    let parent_pid = args.next()?.to_str()?.parse::<u32>().ok()?;
+    let suffix = args.next()?;
+    let trash_path = PathBuf::from(args.next()?);
+    if args.next().is_some() || !trash_path.is_absolute() {
+        return None;
+    }
+
+    let suffix = suffix.to_str()?;
+    let expected_prefix = vt_str::format!("removing-{parent_pid}-");
+    if !suffix.starts_with(&*expected_prefix)
+        || suffix.len() == expected_prefix.len()
+        || trash_path.extension() != Some(std::ffi::OsStr::new(suffix))
+    {
+        return None;
+    }
+
+    Some(DeferredDeleteArgs { parent_pid, trash_path })
+}
+
+/// Run the private native cleanup mode before normal CLI initialization.
+///
+/// Windows access control is the authorization boundary: another process that
+/// runs as the same user can already delete any accessible tree. To prevent
+/// accidental deletion through this private mode, the parser accepts only an
+/// absolute path with the exact `removing-<parent_pid>-<nonce>` suffix that the
+/// parent creates before it starts the helper. It also rejects extra arguments.
+#[cfg(windows)]
+pub(crate) fn maybe_run_deferred_delete_helper(
+    mut process_args: impl Iterator<Item = std::ffi::OsString>,
+) -> Option<u8> {
+    process_args.next();
+    if process_args.next().as_deref() != Some(std::ffi::OsStr::new(DEFERRED_DELETE_MODE)) {
+        return None;
+    }
+
+    let Some(args) = parse_deferred_delete_args(process_args) else {
+        return Some(1);
+    };
+    wait_for_process(args.parent_pid);
+
+    match remove_tree_with_retries(&args.trash_path) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(deferred_cleanup_error_path(&args.trash_path));
+            Some(0)
+        }
+        Err(e) => {
+            write_deferred_cleanup_error(&args.trash_path, &e);
+            Some(1)
+        }
     }
 }
 
-/// Build a PowerShell script that waits for the process which renamed a root,
-/// then retries removal. Reparse points are removed without traversal so a
-/// stale junction cannot lead into a replacement installation.
+#[cfg(windows)]
+fn remove_tree_with_retries(path: &Path) -> std::io::Result<()> {
+    let mut last_error = None;
+    for attempt in 0..DEFERRED_DELETE_ATTEMPTS {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => last_error = Some(e),
+        }
+        if attempt + 1 < DEFERRED_DELETE_ATTEMPTS {
+            std::thread::sleep(DEFERRED_DELETE_RETRY_DELAY);
+        }
+    }
+    Err(last_error.expect("at least one removal attempt must run"))
+}
+
+#[cfg(windows)]
+fn write_deferred_cleanup_error(trash_path: &Path, error: &std::io::Error) {
+    let message = vt_str::format!(
+        "Vite+ could not remove this directory after retrying for 10 seconds.\n\
+         Directory: {}\n\
+         Error: {error}\n\
+         Close programs that use files in this directory, then delete it manually.\n",
+        trash_path.display()
+    );
+    let _ = std::fs::write(deferred_cleanup_error_path(trash_path), message.as_bytes());
+}
+
+#[cfg(windows)]
+fn wait_for_process(process_id: u32) {
+    use std::ffi::c_void;
+
+    type Handle = *mut c_void;
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    const INFINITE: u32 = u32::MAX;
+
+    unsafe extern "system" {
+        fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> Handle;
+        fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
+        fn CloseHandle(handle: Handle) -> i32;
+    }
+
+    unsafe {
+        let handle = OpenProcess(SYNCHRONIZE, 0, process_id);
+        if !handle.is_null() {
+            WaitForSingleObject(handle, INFINITE);
+            CloseHandle(handle);
+        }
+    }
+}
+
+/// Build the shallow PowerShell script that removes the temporary native
+/// helper after it exits. The root tree itself is never passed to PowerShell.
 #[cfg(any(windows, test))]
-fn build_deferred_delete_script(trash_path: &std::path::Path, parent_pid: u32) -> Str {
-    let path = powershell_path_literal(trash_path);
+fn build_deferred_helper_delete_script(helper_path: &Path, helper_pid: u32) -> Str {
+    let path = powershell_path_literal(helper_path);
     vt_str::format!(
         "$ErrorActionPreference='SilentlyContinue';\
-         $root='{path}';$vpParent={parent_pid};\
-         Wait-Process -Id $vpParent -ErrorAction SilentlyContinue;\
-         function Remove-VpTree([string]$path){{\
-           try{{$item=Get-Item -LiteralPath $path -Force -ErrorAction Stop}}\
-           catch{{return $false}};\
-           try{{\
-             if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){{\
-               if($item.PSIsContainer){{[IO.Directory]::Delete($item.FullName)}}\
-               else{{[IO.File]::Delete($item.FullName)}}\
-             }}elseif($item.PSIsContainer){{\
-               foreach($child in @(Get-ChildItem -LiteralPath $item.FullName -Force \
-                 -ErrorAction Stop)){{\
-                 if(-not (Remove-VpTree $child.FullName)){{return $false}}\
-               }};\
-               [IO.Directory]::Delete($item.FullName)\
-             }}else{{[IO.File]::Delete($item.FullName)}}\
-           }}catch{{return $false}};\
-           return $true\
-         }};\
+         $helper='{path}';$helperPid={helper_pid};\
+         Wait-Process -Id $helperPid -ErrorAction SilentlyContinue;\
          for($i=0;$i -lt 100;$i++){{\
-           if(-not (Test-Path -LiteralPath $root)){{exit 0}};\
-           if(Remove-VpTree $root){{exit 0}};\
+           Remove-Item -LiteralPath $helper -Force;\
+           if(-not (Test-Path -LiteralPath $helper)){{exit 0}};\
            Start-Sleep -Milliseconds 100\
          }};exit 1"
     )
 }
 
-/// Spawn a detached PowerShell process that deletes `trash_path` after the
-/// process identified by `parent_pid` exits.
 #[cfg(windows)]
 fn spawn_deferred_delete(
-    trash_path: &std::path::Path,
+    helper_path: &Path,
+    trash_path: &Path,
     parent_pid: u32,
+    suffix: &str,
 ) -> std::io::Result<std::process::Child> {
-    let script = build_deferred_delete_script(trash_path, parent_pid);
-    std::process::Command::new("powershell.exe")
-        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", &script])
+    let mut command = std::process::Command::new(helper_path);
+    #[cfg(not(test))]
+    command.args([DEFERRED_DELETE_MODE, &parent_pid.to_string(), suffix]).arg(trash_path);
+    #[cfg(test)]
+    command
+        .args(["deferred_delete_helper_child", "--nocapture"])
+        .env("VP_IMPLODE_HELPER_PARENT_PID", parent_pid.to_string())
+        .env("VP_IMPLODE_HELPER_SUFFIX", suffix)
+        .env("VP_IMPLODE_HELPER_TRASH", trash_path);
+    if let Some(helper_dir) = helper_path.parent() {
+        command.current_dir(helper_dir);
+    }
+    use std::os::windows::process::CommandExt;
+    command
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+}
+
+#[cfg(windows)]
+fn spawn_deferred_helper_delete(
+    helper_path: &Path,
+    helper_pid: u32,
+) -> std::io::Result<std::process::Child> {
+    let script = build_deferred_helper_delete_script(helper_path, helper_pid);
+    use std::os::windows::process::CommandExt;
+    let mut command = std::process::Command::new("powershell.exe");
+    command.args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", &script]);
+    if let Some(helper_dir) = helper_path.parent() {
+        command.current_dir(helper_dir);
+    }
+    command
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -825,6 +1061,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn test_remove_vite_plus_dir_success() {
         let temp_dir = tempfile::tempdir().unwrap();
         let dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -838,6 +1075,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn test_remove_vite_plus_dir_nonexistent() {
         let temp_dir = tempfile::tempdir().unwrap();
         let dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -848,16 +1086,62 @@ mod tests {
     }
 
     #[test]
-    fn test_build_deferred_delete_script() {
-        let path = std::path::Path::new(r"C:\Users\test $&' 测试\.vite-plus.removing-1234");
-        let script = build_deferred_delete_script(path, 9876);
-        assert!(script.contains("$vpParent=9876"));
-        assert!(script.contains("Wait-Process -Id $vpParent"));
+    fn test_deferred_delete_args_require_the_unique_renamed_root() {
+        let suffix = "removing-9876-123456";
+        let path = test_absolute_path(
+            "/home/test/data.removing-9876-123456",
+            r"C:\Users\test $&' 测试\data.removing-9876-123456",
+        );
+        let parsed = parse_deferred_delete_args(
+            [
+                std::ffi::OsString::from("9876"),
+                suffix.into(),
+                path.as_path().as_os_str().to_os_string(),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(parsed.parent_pid, 9876);
+        assert_eq!(parsed.trash_path, path.as_path());
+
+        let unrenamed = test_absolute_path("/home/test/data", r"C:\Users\test\data");
+        assert!(
+            parse_deferred_delete_args(
+                [
+                    std::ffi::OsString::from("9876"),
+                    suffix.into(),
+                    unrenamed.as_path().as_os_str().to_os_string(),
+                ]
+                .into_iter()
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn test_build_deferred_helper_delete_script_is_shallow() {
+        let path = std::path::Path::new(r"C:\Temp\vite-plus-cleanup $&' 测试.exe");
+        let script = build_deferred_helper_delete_script(path, 9876);
+        assert!(script.contains("$helperPid=9876"));
+        assert!(script.contains("Wait-Process -Id $helperPid"));
+        assert!(script.contains("Remove-Item -LiteralPath $helper"));
         assert!(script.contains("Start-Sleep -Milliseconds 100"));
-        assert!(script.contains("[IO.FileAttributes]::ReparsePoint"));
-        assert!(script.contains("Get-ChildItem -LiteralPath"));
-        assert!(script.contains(r"C:\Users\test $&'' 测试\.vite-plus.removing-1234"));
-        assert!(!script.contains("timeout"));
+        assert!(script.contains(r"C:\Temp\vite-plus-cleanup $&'' 测试.exe"));
+        assert!(!script.contains("Remove-VpTree"));
+        assert!(!script.contains("Get-ChildItem"));
+    }
+
+    #[test]
+    fn test_deferred_cleanup_error_path_is_next_to_the_renamed_root() {
+        let trash = test_absolute_path(
+            "/home/test/data.removing-9876-123456",
+            r"C:\Users\test\data.removing-9876-123456",
+        );
+        let expected = test_absolute_path(
+            "/home/test/data.removing-9876-123456.cleanup-error.txt",
+            r"C:\Users\test\data.removing-9876-123456.cleanup-error.txt",
+        );
+        assert_eq!(deferred_cleanup_error_path(trash.as_path()), expected.as_path());
     }
 
     #[test]
@@ -893,8 +1177,29 @@ mod tests {
             return;
         };
         let root = AbsolutePathBuf::new(root.into()).unwrap();
-        remove_vite_plus_dir(&root).unwrap();
+        let cleanup_source = prepare_deferred_delete_source(std::slice::from_ref(&root)).unwrap();
+        remove_vite_plus_dir(&root, &cleanup_source).unwrap();
         std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn deferred_delete_helper_child() {
+        let (Some(parent_pid), Some(suffix), Some(trash_path)) = (
+            std::env::var_os("VP_IMPLODE_HELPER_PARENT_PID"),
+            std::env::var_os("VP_IMPLODE_HELPER_SUFFIX"),
+            std::env::var_os("VP_IMPLODE_HELPER_TRASH"),
+        ) else {
+            return;
+        };
+        let args = [
+            std::ffi::OsString::from("vp"),
+            std::ffi::OsString::from(DEFERRED_DELETE_MODE),
+            parent_pid,
+            suffix,
+            trash_path,
+        ];
+        assert_eq!(maybe_run_deferred_delete_helper(args.into_iter()), Some(0));
     }
 
     #[test]
@@ -908,6 +1213,20 @@ mod tests {
         std::fs::create_dir_all(locked_executable.parent().unwrap()).unwrap();
         std::fs::copy(std::env::current_exe().unwrap(), &locked_executable).unwrap();
 
+        let long_file = old_version
+            .join("node_modules/.pnpm")
+            .join("peer-dependencies-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .join("node_modules")
+            .join("package-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            .join("dist/client/orchestrator.js");
+        std::fs::create_dir_all(long_file.parent().unwrap()).unwrap();
+        std::fs::write(&long_file, b"long-path").unwrap();
+        use std::os::windows::ffi::OsStrExt;
+        assert!(
+            long_file.as_os_str().encode_wide().count() > 260,
+            "test setup must create a path longer than MAX_PATH"
+        );
+
         let current = original.join("current");
         let junction_status = std::process::Command::new("cmd.exe")
             .args(["/D", "/C", "mklink", "/J"])
@@ -919,18 +1238,41 @@ mod tests {
             .unwrap();
         assert!(junction_status.success(), "test setup must create the current junction");
 
+        let dangling_target = parent.join("removed-junction-target");
+        let dangling = original.join("dangling-pnpm-junction");
+        std::fs::create_dir_all(&dangling_target).unwrap();
+        let dangling_status = std::process::Command::new("cmd.exe")
+            .args(["/D", "/C", "mklink", "/J"])
+            .arg(&dangling)
+            .arg(&dangling_target)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(dangling_status.success(), "test setup must create the dangling junction");
+        std::fs::remove_dir(&dangling_target).unwrap();
+
         let mut child = std::process::Command::new(&locked_executable)
             .args(["deferred_root_cleanup_child", "--nocapture"])
             .env("VP_IMPLODE_ROOT_TEST", &original)
             .spawn()
             .unwrap();
-        let trash = original.with_extension(vt_str::format!("removing-{}", child.id()));
+        let trash_prefix = vt_str::format!("data.removing-{}-", child.id());
+        let mut trash = None;
         for _ in 0..50 {
-            if trash.exists() && !original.exists() {
+            trash = std::fs::read_dir(&parent).ok().and_then(|entries| {
+                entries.flatten().map(|entry| entry.path()).find(|path| {
+                    path.file_name()
+                        .is_some_and(|name| name.to_string_lossy().starts_with(&*trash_prefix))
+                })
+            });
+            if trash.is_some() && !original.exists() {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        let trash = trash.expect("the child must rename the old root");
+        let failure_log = deferred_cleanup_error_path(&trash);
         assert!(trash.exists(), "the child must rename the old root");
         assert!(!original.exists(), "the original root must be free immediately");
         assert!(child.try_wait().unwrap().is_none(), "the cleanup helper must wait for vp");
@@ -954,6 +1296,7 @@ mod tests {
         }
 
         assert!(!trash.exists(), "the renamed root must be removed");
+        assert!(!failure_log.exists(), "successful cleanup must not write a failure log");
         assert_eq!(std::fs::read(&replacement).unwrap(), b"keep");
     }
 

@@ -9,6 +9,7 @@ on:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - 'packages/tools/src/install-global-cli.ts'
+      - 'packages/tools/src/local-npm-registry.ts'
       - 'crates/vp_installer/**'
       - 'crates/vp_trampoline/**'
       - 'crates/vp_global_cli/**'
@@ -217,6 +218,35 @@ jobs:
       - name: Build local vp
         run: cargo build --release -p vp_global_cli
 
+      - name: CI hides shell file warnings
+        run: |
+          set -euo pipefail
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+
+          SHELL_CONFIG=$(mktemp)
+          chmod 444 "$SHELL_CONFIG"
+
+          CI=true
+          RESULT=0
+          OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
+          test "$RESULT" -eq 3
+          test -z "$OUTPUT"
+
+          VP_LOG=trace
+          RESULT=0
+          OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
+          test "$RESULT" -eq 3
+          echo "$OUTPUT" | grep -F "trace"
+          echo "$OUTPUT" | grep -F "permission denied"
+
+          CI=false
+          unset VP_LOG
+          RESULT=0
+          OUTPUT=$(append_source_to_file "$SHELL_CONFIG" '. "$HOME/.vite-plus/env"' 2>&1) || RESULT=$?
+          test "$RESULT" -eq 3
+          echo "$OUTPUT" | grep -F "warn"
+          echo "$OUTPUT" | grep -F "permission denied"
+
       - name: Incomplete directory overrides are rejected
         run: |
           set -euo pipefail
@@ -233,7 +263,7 @@ jobs:
           cat "$OUTPUT"
           grep -F "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together" "$OUTPUT"
 
-      - name: Existing setup-vp uses legacy layout
+      - name: Existing GitHub setup-vp uses legacy layout
         run: |
           set -euo pipefail
           LEGACY=$(mktemp -d)
@@ -252,6 +282,27 @@ jobs:
           test "$(readlink "$LEGACY/.vite-plus/bin/vp")" = "$LEGACY/.vite-plus/current/bin/vp"
           "$LEGACY/.vite-plus/bin/vp" --version
 
+      - name: Existing GitLab setup-vp uses legacy layout
+        run: |
+          set -euo pipefail
+          LEGACY=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$LEGACY"
+          export USERPROFILE="$LEGACY"
+          unset GITHUB_ACTION_REPOSITORY
+          export GITLAB_CI=true
+          export SETUP_VP_SETUP_REF=v1.15.0
+          unset VP_VPDIRS_AWARE
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-setup-vp-gitlab-legacy bash packages/cli/install.sh
+
+          test -e "$LEGACY/.vite-plus/current"
+          test -e "$LEGACY/.vite-plus/bin/vp"
+          test ! -d "$LEGACY/.local/share/vite-plus"
+          test "$(readlink "$LEGACY/.vite-plus/bin/vp")" = "$LEGACY/.vite-plus/current/bin/vp"
+          "$LEGACY/.vite-plus/bin/vp" --version
+
       - name: Fresh home uses split layout
         run: |
           set -euo pipefail
@@ -263,7 +314,12 @@ jobs:
           export VP_VPDIRS_AWARE=1
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
-          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
+          OUTPUT=$(mktemp)
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh | tee "$OUTPUT"
+
+          grep -F "Install locations:" "$OUTPUT"
+          grep -F "Data directory: ~/.local/share/vite-plus" "$OUTPUT"
+          grep -F "Bin directory:  ~/.local/share/vite-plus/bin" "$OUTPUT"
 
           test ! -d "$FRESH/.vite-plus"
           test -e "$FRESH/.local/share/vite-plus/current"
@@ -435,6 +491,18 @@ jobs:
             Write-Error "Expected the pre-split fallback notice in installer output"
             exit 1
           }
+          if (-not (Select-String -Path install-output.txt -Pattern "Install locations:" -SimpleMatch -Quiet)) {
+            Write-Error "Expected install locations in installer output"
+            exit 1
+          }
+          if (-not (Select-String -Path install-output.txt -Pattern "Data directory: ~\.vite-plus" -SimpleMatch -Quiet)) {
+            Write-Error "Expected the single-root data directory in installer output"
+            exit 1
+          }
+          if (-not (Select-String -Path install-output.txt -Pattern "Bin directory:  ~\.vite-plus\bin" -SimpleMatch -Quiet)) {
+            Write-Error "Expected the single-root bin directory in installer output"
+            exit 1
+          }
 
       - name: Verify monolithic layout
         shell: pwsh
@@ -488,12 +556,17 @@ jobs:
           echo "$output"
           # Verify installation succeeds (not a fatal error)
           echo "$output" | grep -q "successfully installed"
-          # Verify fallback message shows binary location
-          echo "$output" | grep -q "vp was installed to:"
-          # Verify fallback message shows manual instructions
-          echo "$output" | grep -q "Or run vp directly:"
-          # Verify the permission warning was shown
-          echo "$output" | grep -qi "permission denied"
+          # Verify the success message shows the single-root locations
+          echo "$output" | grep -q "Install locations:"
+          echo "$output" | grep -q "Data directory: ~/.vite-plus"
+          echo "$output" | grep -q "Bin directory:  ~/.vite-plus/bin"
+          # CI gets PATH from the runner environment.
+          # VP_LOG=trace shows shell file errors.
+          # Normal output does not show these errors.
+          if echo "$output" | grep -Eqi "permission denied|Shell configuration:|Some shells still need manual setup"; then
+            echo "Installer printed shell configuration details in CI"
+            exit 1
+          fi
 
       - name: Verify vp works via direct path
         run: |
@@ -1204,6 +1277,87 @@ jobs:
         shell: bash
         run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
 
+      - name: vp-setup.exe rejects invalid directory overrides
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $false
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          $root = Join-Path $env:RUNNER_TEMP "vp-setup-invalid-dirs"
+          $defaultRoot = Join-Path $env:LOCALAPPDATA "vite-plus"
+          $defaultRootExisted = Test-Path $defaultRoot
+          $dirVars = @("VP_HOME", "VP_BIN_DIR", "VP_DATA_DIR", "VP_CACHE_DIR")
+          $togetherError = "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR"
+          $cases = @(
+            @{ Name = "bin"; Values = @{ VP_BIN_DIR = Join-Path $root "bin" }; Error = $togetherError }
+            @{ Name = "data"; Values = @{ VP_DATA_DIR = Join-Path $root "data" }; Error = $togetherError }
+            @{ Name = "cache"; Values = @{ VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
+            @{ Name = "bin-data"; Values = @{ VP_BIN_DIR = Join-Path $root "bin"; VP_DATA_DIR = Join-Path $root "data" }; Error = $togetherError }
+            @{ Name = "bin-cache"; Values = @{ VP_BIN_DIR = Join-Path $root "bin"; VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
+            @{ Name = "data-cache"; Values = @{ VP_DATA_DIR = Join-Path $root "data"; VP_CACHE_DIR = Join-Path $root "cache" }; Error = $togetherError }
+            @{ Name = "relative-home"; Values = @{ VP_HOME = "relative-home" }; Error = "Set VP_HOME to an absolute path" }
+            @{ Name = "relative-split"; Values = @{ VP_BIN_DIR = "relative-bin"; VP_DATA_DIR = "relative-data"; VP_CACHE_DIR = "relative-cache" }; Error = "Set VP_BIN_DIR to an absolute path" }
+          )
+
+          foreach ($case in $cases) {
+            foreach ($name in $dirVars) {
+              [Environment]::SetEnvironmentVariable($name, $null)
+            }
+            foreach ($entry in $case.Values.GetEnumerator()) {
+              [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+            }
+
+            $output = (& $installer --yes --quiet --no-node-manager --no-modify-path 2>&1) | Out-String
+            $exitCode = $LASTEXITCODE
+            Write-Host $output
+            if ($exitCode -ne 1) {
+              throw "$($case.Name) exited with $exitCode, expected 1"
+            }
+            if (-not $output.Contains($case.Error)) {
+              throw "$($case.Name) did not report '$($case.Error)'"
+            }
+            foreach ($value in $case.Values.Values) {
+              if ([System.IO.Path]::IsPathRooted($value) -and (Test-Path $value)) {
+                throw "$($case.Name) created requested root $value"
+              }
+            }
+            if (-not $defaultRootExisted -and (Test-Path $defaultRoot)) {
+              throw "$($case.Name) created default root $defaultRoot"
+            }
+          }
+
+          # Each installer process must fail in this test. Reset the native exit
+          # code after the assertions. This lets the PowerShell step succeed.
+          $global:LASTEXITCODE = 0
+
+      - name: vp-setup.exe rejects releases before 0.3.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $false
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          $installRoot = Join-Path $env:RUNNER_TEMP "vp-setup-unsupported-version"
+          Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
+          $env:VP_HOME = $installRoot
+          Remove-Item Env:VP_BIN_DIR, Env:VP_DATA_DIR, Env:VP_CACHE_DIR -ErrorAction SilentlyContinue
+
+          $output = (& $installer --yes --quiet --version 0.2.9 --no-node-manager --no-modify-path 2>&1) | Out-String
+          $exitCode = $LASTEXITCODE
+          Write-Host $output
+          if ($exitCode -ne 1) {
+            throw "vp-setup.exe exited with $exitCode, expected 1"
+          }
+          if (-not $output.Contains("Install vite-plus 0.3.0 or later")) {
+            throw "vp-setup.exe did not report its minimum supported version"
+          }
+          if ($output -match "(?i)preview") {
+            throw "vp-setup.exe mentioned preview builds"
+          }
+          if (Test-Path $installRoot) {
+            throw "vp-setup.exe created an installation root for version 0.2.9: $installRoot"
+          }
+          $global:LASTEXITCODE = 0
+
       - name: Incomplete directory overrides are rejected in PowerShell
         shell: pwsh
         run: |
@@ -1264,6 +1418,26 @@ jobs:
           }
           & $vp --version
 
+          $longDirectory = Join-Path $legacyRoot "current\node_modules\.pnpm"
+          $segment = "package-" + ("x" * 60)
+          while ((Join-Path $longDirectory "payload.txt").Length -le 300) {
+            $longDirectory = Join-Path $longDirectory $segment
+          }
+          $longFile = Join-Path $longDirectory "payload.txt"
+          [System.IO.Directory]::CreateDirectory($longDirectory) | Out-Null
+          [System.IO.File]::WriteAllText($longFile, "long-path")
+          if ($longFile.Length -le 260) { throw "test path is not longer than MAX_PATH: $longFile" }
+
+          $env:VP_HOME = $legacyRoot
+          & $vp implode --yes
+          for ($i = 0; $i -lt 150; $i++) {
+            $removingRoots = @(Get-ChildItem -LiteralPath $root -Filter ".vite-plus.removing-*" -Force -ErrorAction SilentlyContinue)
+            if ($removingRoots.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 100
+          }
+          if (Test-Path $legacyRoot) { throw "implode left the monolithic root" }
+          if ($removingRoots.Count -ne 0) { throw "implode left a renamed monolithic root" }
+
       - name: PowerShell installer preserves an unrelated Node executable
         shell: pwsh
         run: |
@@ -1319,7 +1493,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
 
-          & ./packages/cli/install.ps1
+          $output = (& ./packages/cli/install.ps1 *>&1) | Out-String
+          Write-Host $output
+          if (-not $output.Contains("Install locations:")) {
+            throw "install.ps1 did not print install locations"
+          }
+          if (-not $output.Contains("Data directory: $($env:VP_DATA_DIR)")) {
+            throw "install.ps1 did not print the split data directory"
+          }
+          if (-not $output.Contains("Bin directory:  $($env:VP_BIN_DIR)")) {
+            throw "install.ps1 did not print the split bin directory"
+          }
 
           function Get-DirMap([string]$VpBinary) {
             $env:VP_DUMP_DIRS = "1"
@@ -1427,7 +1611,7 @@ jobs:
           & pwsh -NoProfile -Command '. $env:VP_TEST_ENV_FILE; if ($env:VP_HOME -cne $env:VP_TEST_EXPECTED_HOME) { throw "PowerShell 7 changed VP_HOME" }; vp --version'
           if ($LASTEXITCODE -ne 0) { throw "PowerShell 7 could not source env.ps1" }
 
-      - name: Split-layout implode removes the running trampoline safely
+      - name: Split-layout implode removes long paths and the running trampoline safely
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -1457,12 +1641,27 @@ jobs:
           $unrelated = Join-Path $bin "unrelated.txt"
           [System.IO.File]::WriteAllText($unrelated, "keep")
 
+          $longDirectory = Join-Path $data "current\node_modules\.pnpm"
+          $segment = "package-" + ("x" * 60)
+          while ((Join-Path $longDirectory "payload.txt").Length -le 300) {
+            $longDirectory = Join-Path $longDirectory $segment
+          }
+          $longFile = Join-Path $longDirectory "payload.txt"
+          [System.IO.Directory]::CreateDirectory($longDirectory) | Out-Null
+          [System.IO.File]::WriteAllText($longFile, "long-path")
+          if ($longFile.Length -le 260) { throw "test path is not longer than MAX_PATH: $longFile" }
+
           & $vp implode --yes
-          for ($i = 0; $i -lt 100 -and ((Test-Path $vp) -or (Test-Path $sidecar)); $i++) {
+          for ($i = 0; $i -lt 150; $i++) {
+            $removingRoots = @(Get-ChildItem -LiteralPath $root -Filter "data.removing-*" -Force -ErrorAction SilentlyContinue)
+            if (-not (Test-Path $vp) -and -not (Test-Path $sidecar) -and $removingRoots.Count -eq 0) {
+              break
+            }
             Start-Sleep -Milliseconds 100
           }
           if (Test-Path $vp) { throw "implode left vp.exe in the split bin" }
           if (Test-Path $sidecar) { throw "implode left vp.shim in the split bin" }
+          if ($removingRoots.Count -ne 0) { throw "implode left a renamed split data root" }
           if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
             throw "implode changed an unrelated bin entry"
           }
@@ -1472,18 +1671,129 @@ jobs:
           & ./packages/cli/install.ps1
           & $vp implode --yes
           & ./packages/cli/install.ps1
-          Start-Sleep -Seconds 2
+          for ($i = 0; $i -lt 150; $i++) {
+            $removingRoots = @(Get-ChildItem -LiteralPath $root -Filter "data.removing-*" -Force -ErrorAction SilentlyContinue)
+            if ($removingRoots.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 100
+          }
 
           if (-not (Test-Path $vp)) { throw "deferred cleanup removed the new vp.exe" }
           if (-not (Test-Path $sidecar)) { throw "deferred cleanup removed the new vp.shim" }
+          if ($removingRoots.Count -ne 0) { throw "implode left a renamed split data root after reinstall" }
           if ([System.IO.File]::ReadAllText($unrelated) -ne "keep") {
             throw "the reinstall changed an unrelated bin entry"
           }
           & $vp --version
 
-      - name: Install via vp-setup.exe (silent)
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+
+      - name: Start local preview registry for vp-setup.exe
+        shell: bash
+        run: |
+          test_version="0.0.0-commit.${GITHUB_SHA}"
+          registry_root="$RUNNER_TEMP/vp-setup-local-registry"
+          packages_dir="$registry_root/packages"
+          main_dir="$registry_root/vite-plus"
+          platform_dir="$registry_root/vite-plus-cli-win32-x64-msvc"
+          rm -rf "$registry_root"
+          mkdir -p "$packages_dir" "$main_dir" "$platform_dir"
+
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const [dir, version] = process.argv.slice(1);
+            fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "vite-plus", version }));
+          ' "$main_dir" "$test_version"
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const [dir, version] = process.argv.slice(1);
+            const manifest = {
+              name: "@voidzero-dev/vite-plus-cli-win32-x64-msvc",
+              version,
+              files: ["vp.exe", "vp-shim.exe"],
+            };
+            fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(manifest));
+          ' "$platform_dir" "$test_version"
+          cp "$DEV_DRIVE/target/release/vp.exe" "$DEV_DRIVE/target/release/vp-shim.exe" "$platform_dir/"
+          npm pack "$main_dir" --pack-destination "$packages_dir"
+          npm pack "$platform_dir" --pack-destination "$packages_dir"
+
+          registry_log="$registry_root/registry.out"
+          node "$GITHUB_WORKSPACE/packages/tools/src/local-npm-registry.ts" --serve --packages-dir "$packages_dir" > "$registry_log" 2>&1 &
+          server_pid=$!
+          until grep -q '"registry"' "$registry_log" 2>/dev/null; do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat "$registry_log"
+              exit 1
+            fi
+            sleep 0.2
+          done
+          handshake=$(grep -m1 '"registry"' "$registry_log")
+          registry=$(echo "$handshake" | node -e 'process.stdin.on("data", data => process.stdout.write(JSON.parse(data).registry))')
+          echo "VP_SETUP_TEST_REGISTRY=$registry" >> "$GITHUB_ENV"
+          echo "VP_SETUP_TEST_VERSION=$test_version" >> "$GITHUB_ENV"
+
+      - name: Create a dangling current junction
         shell: pwsh
-        run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $current = Join-Path $env:VP_HOME "current"
+          $removedTarget = Join-Path $env:RUNNER_TEMP "vp-setup-removed-target"
+          Remove-Item -Recurse -Force $env:VP_HOME, $removedTarget -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:VP_HOME, $removedTarget | Out-Null
+
+          & cmd.exe /d /c "mklink /J `"$current`" `"$removedTarget`""
+          if ($LASTEXITCODE -ne 0) {
+            throw "cmd.exe could not create the test junction"
+          }
+          Remove-Item -Recurse -Force $removedTarget
+          & fsutil.exe reparsepoint query $current | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "the dangling current entry is not a reparse point"
+          }
+
+      - name: Repair the dangling junction without ANSI output
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          $stdout = Join-Path $env:RUNNER_TEMP "vp-setup-no-color.stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "vp-setup-no-color.stderr.txt"
+          $env:NO_COLOR = "1"
+          try {
+            $process = Start-Process -FilePath $installer `
+              -ArgumentList @(
+                "--yes",
+                "--version", $env:VP_SETUP_TEST_VERSION,
+                "--registry", $env:VP_SETUP_TEST_REGISTRY,
+                "--no-node-manager",
+                "--no-modify-path"
+              ) `
+              -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
+              -Wait -PassThru -NoNewWindow
+          } finally {
+            Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue
+          }
+
+          Get-Content -Raw $stdout | Write-Host
+          Get-Content -Raw $stderr | Write-Host
+          if ($process.ExitCode -ne 0) {
+            throw "vp-setup.exe exited with $($process.ExitCode)"
+          }
+          foreach ($path in @($stdout, $stderr)) {
+            if ([System.IO.File]::ReadAllBytes($path) -contains [byte]0x1b) {
+              throw "$path contains an ANSI escape"
+            }
+          }
+          if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/vp.exe"))) {
+            throw "vp-setup.exe did not repair the dangling current junction"
+          }
+          if (-not (Test-Path (Join-Path $env:VP_HOME "bin/vp.exe"))) {
+            throw "vp-setup.exe did not create the global vp.exe"
+          }
 
       - name: Set PATH
         shell: bash

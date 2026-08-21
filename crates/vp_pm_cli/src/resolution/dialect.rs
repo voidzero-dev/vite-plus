@@ -71,3 +71,10 @@ impl Yarn {
         crate::package_manager::is_yarn_berry(&self.version)
     }
 }
+
+impl Bun {
+    /// `dedupe`, `prune`, and `audit fix` landed in bun 1.4.
+    pub(crate) fn supports_v1_4_commands(&self) -> bool {
+        self.version >= Version::new(1, 4, 0)
+    }
+}

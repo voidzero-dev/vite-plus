@@ -53,4 +53,16 @@ if ("VP_NODE_VERSION" in $env) {
   }
 }
 
+vp env use --no-install
+if ("VP_NODE_VERSION" not-in $env) {
+  error make {
+    msg: "vp env use without a version did not set VP_NODE_VERSION"
+  }
+}
+if $env.VP_NODE_VERSION != "22.18.0" {
+  error make {
+    msg: $"file-based VP_NODE_VERSION mismatch: expected 22.18.0, got ($env.VP_NODE_VERSION)"
+  }
+}
+
 print "Nushell environment checks passed"

@@ -146,6 +146,21 @@ Thus, `user_home` and `dirs` cannot use different home directories. Directory
 resolution reads only `VP_HOME`, `VP_*_DIR`, and `XDG_*`. It does not read
 `HOME` or `USERPROFILE`.
 
+`DirEnvOverrides` reads `VP_HOME`, `VP_BIN_DIR`, `VP_DATA_DIR`, and
+`VP_CACHE_DIR`. It records one of these states for each variable:
+
+- unset
+- absolute path
+- relative path
+
+Runtime resolution uses only absolute paths. `validate_vp_dir_env` uses the
+same states to apply the installer policy. The function returns an error for
+these conditions:
+
+- `VP_HOME` contains a relative path.
+- The split group is incomplete.
+- A variable in the complete split group contains a relative path.
+
 Directory resolution has no test-only branches. Tests use the process
 environment to run the production resolution chain. See
 [Test configuration](#test-configuration).
@@ -242,7 +257,7 @@ A restricted service or CI environment can prevent the known-folder query.
 When this occurs, Vite+ uses `AppData\Local` and `AppData\Roaming` under the
 resolved user home. Thus, a known home always produces a complete layout.
 
-| Source                                            | Behavior                                                                                            |
+| Source                                            | Runtime behavior                                                                                    |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | **`VP_HOME`**                                     | Vite+ puts the **monolithic mapping** for all categories under this root.                           |
 | **`~/.vite-plus`**                                | Vite+ uses the monolithic mapping when this directory contains a `current` link.                    |
@@ -250,8 +265,9 @@ resolved user home. Thus, a known home always produces a complete layout.
 | **`XDG_*`** (Unix)                                | Vite+ uses absolute XDG category roots with the app name `vite-plus`. Bin resolves to `<DATA>/bin`. |
 | **Platform defaults**                             | [Category mapping](#category-mapping) defines the Unix and Windows defaults.                        |
 
-Vite+ ignores relative `VP_*` and `XDG_*` values. This behavior follows the XDG
-Base Directory Specification.
+`VpDirs` ignores relative `VP_*` and `XDG_*` values during runtime resolution.
+This behavior follows the XDG Base Directory Specification. Installers apply
+stricter rules before they create installation roots.
 
 ### Category mapping
 
@@ -314,11 +330,18 @@ root. Features must not store machine identity or durable state in these files.
 `install.sh`, `install.ps1`, and the local `install-global-cli` use the CLI
 resolution chain:
 
-1. If `VP_HOME` is set, use that root for the **monolithic** layout.
+1. If `VP_HOME` contains an absolute path, use that root for the
+   **monolithic** layout.
 2. Otherwise, check the default `~/.vite-plus` directory or its Windows
    equivalent. If it contains a `current` link, keep the monolithic root.
 3. Otherwise, use a complete `VP_*_DIR` group, `XDG_*`, or platform defaults
    for the **split** layout.
+
+The script installers reject an incomplete or relative `VP_*_DIR` group.
+`vp-setup` rejects the same groups. It also rejects a relative `VP_HOME`.
+`vp-setup` calls `vp_shared::validate_vp_dir_env` before `EnvConfig` resolves
+paths. If validation fails, `vp-setup` returns status 1. It does not create a
+requested or default installation root.
 
 Each platform has one install script. There is no separate script for each
 layout. Local bootstrap does not set `VP_HOME`. It resolves the install data
@@ -384,11 +407,11 @@ However, the installer still exits with status 0:
 - Shell startup sources an env script from a config dir the binary never writes.
 - The binary's own env setup builds a second, incomplete `~/.vite-plus` tree.
 
-**Detection.** Each installer downloads the platform payload before it selects
-the final layout. This includes `install.sh`, `install.ps1`, and `vp-setup`. The
-installer then runs the payload binary once with `VP_DUMP_DIRS=1`. The shell and
-PowerShell installers do not resolve `VP_*_DIR`, XDG variables, platform
-defaults, or legacy installs themselves:
+**Detection.** `install.sh` and `install.ps1` download the platform payload
+before they select the final layout. Each script then runs the payload binary
+once with `VP_DUMP_DIRS=1`. The scripts validate the split override group, but
+they do not resolve `VP_*_DIR`, XDG variables, platform defaults, or legacy
+installs:
 
 - A current split-aware binary prints the layout mode and one tab-separated line
   for each category root. The categories are `bin`, `data`, `cache`, `config`,
@@ -414,28 +437,22 @@ The `test-install-sh-layout` CI job tests this case. It creates a split install
 and a stray `~/.vite-plus` tree. It then checks that resolution and a reinstall
 remain split.
 
-**Probe failure.** A payload can fail to run because it is for the wrong platform
-or requires a missing VC++ runtime. The installer then selects the monolithic
-root. The dependency-install step reports the applicable error as before.
+**Probe failure.** A payload can fail on the wrong platform. It can also fail
+if Windows does not have the required VC++ runtime. The script installer then
+selects the monolithic root. The dependency-install step reports the applicable
+error as before.
 
 The monolithic root works for old and new releases. A split-aware binary keeps
 an existing `~/.vite-plus` install. Thus, an incorrect pre-split result still
 produces a compatible layout. An incorrect split-aware result is not possible.
 Only a binary that implements `VP_DUMP_DIRS` can print the roots.
 
-**`vp-setup` behavior.** `vp-setup` resolves `EnvConfig` when the process starts.
-Therefore, a pre-split fallback occurs during the install. After the probe,
-`do_install` changes to the monolithic mapping. It returns the effective
-directories for the success summary.
-
-The wrapper install uses managed Node.js and pnpm. These tools get their paths
-from the process-wide `EnvConfig`, which resolves before the fallback. Therefore,
-the tools first go into the unused split data root. `do_install` removes this
-root if the current run created it.
-
-The interactive menu has one known limit. It shows the split directories before
-the download. For a pinned pre-split version, the user confirms those
-directories. The installer then uses the monolithic root and prints the notice.
+**`vp-setup` behavior.** `vp-setup` supports Vite+ 0.3.0 and later. This
+includes 0.3.0 prereleases. It also supports internal preview versions that use
+the `0.0.0-commit.<sha>` format. The installer resolves the target version
+first. It rejects an older version before it downloads the platform payload or
+creates an installation root. It uses the directories from `EnvConfig`. It does
+not probe the payload or use a monolithic fallback.
 
 **`vp upgrade`.** On a split install, `vp upgrade` rejects a target earlier than
 0.3.0 before the download. It tells the user to run `vp upgrade` to install the
@@ -452,8 +469,18 @@ define the boundary.
 pre-split release without `VP_HOME`. They check the monolithic layout, the
 absence of split roots, and commands that run through `PATH`.
 
-This mechanism also keeps fresh default installs of `latest` functional before
-the 0.3.0 release becomes available.
+The `test-vp-setup-exe` job checks these invalid configurations:
+
+- Each incomplete split-variable combination.
+- A relative `VP_HOME`.
+- A complete split group that contains relative paths.
+
+The job checks that validation creates no requested or default roots. It also
+checks that `vp-setup` rejects version `0.2.9` without creating an installation
+root. The successful test installs a local `0.0.0-commit.<sha>` preview package.
+
+`install.sh` and `install.ps1` use their fallback to install `latest` before
+Vite+ 0.3.0 is available.
 
 ### Global CLI → JS children
 

@@ -1177,9 +1177,10 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     $pathResult = Configure-UserPath
     $nushellResult = Configure-Nushell
 
-    # Use ~ when the shim directory is under USERPROFILE. Otherwise, show the
+    # Use ~ when an install location is under USERPROFILE. Otherwise, show the
     # full path.
-    $displayDir = $ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
+    $displayDataDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
+    $displayBinDir = $ShimDir -replace [regex]::Escape($env:USERPROFILE), '~'
     $displayConfigDir = $ConfigDir -replace [regex]::Escape($env:USERPROFILE), '~'
 
     # ANSI color codes for consistent output
@@ -1216,6 +1217,11 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     Write-Host "  Run ${BRIGHT_BLUE}vp help${NC} to see available commands."
 
     Write-Host ""
+    Write-Host "  ${BOLD}Install locations:${NC}"
+    Write-Host "    Data directory: $displayDataDir"
+    Write-Host "    Bin directory:  $displayBinDir"
+
+    Write-Host ""
     Write-Host "  Shell configuration:"
     switch ($pathResult) {
         "true" { Write-Host "    - Windows PATH: updated" }
@@ -1237,8 +1243,6 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     if ($pathResult -eq "failed" -or $nushellResult.Status -eq "failed") {
         Write-Host ""
         Write-Host "  ${YELLOW}note${NC}: Some shells still need manual setup."
-        Write-Host ""
-        Write-Host "  vp was installed to: ${BOLD}${displayDir}${NC}"
         Write-Host ""
         if ($pathResult -eq "failed") {
             Write-Host "  To use vp in Powershell/cmd, manually add it to your PATH:"

@@ -10,7 +10,10 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::{
+    fs,
+    io::{AsyncSeekExt, AsyncWriteExt},
+};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
@@ -66,17 +69,65 @@ pub async fn download_file(
     // Runtime archives are tens of megabytes, so the request gets the longer,
     // configurable download budget instead of the shared client's 2-minute
     // default — a slow-but-steady transfer must be allowed to finish.
+    //
+    // Keep partial bytes between attempts, but append only after the server
+    // proves it honored the exact requested range.
     let timeout = vp_shared::download_timeout();
     let result = (|| async {
-        let response = client.get(url).timeout(timeout).send().await?.error_for_status()?;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .open(target_path)
+            .await?;
+        let resume_from = file.metadata().await?.len();
 
-        // Advertised length, used both for the progress bar and the
-        // truncation check below.
-        let total_size = response.content_length();
+        let (response, total_size, is_resumed) = if resume_from > 0 {
+            let ranged = client
+                .get(url)
+                .timeout(timeout)
+                .header(reqwest::header::RANGE, format!("bytes={resume_from}-"))
+                .send()
+                .await?;
+
+            // A range-capable server answers `Range: bytes=<len>-` on an
+            // already-complete file with `416 Range Not Satisfiable` (there's
+            // nothing left to send). `error_for_status()` would surface that
+            // as a hard failure and every retry would resend the same doomed
+            // Range request against the same full-length file, permanently
+            // failing instead of restarting. Treat it like an inconsistent
+            // partial response: drop it and fall back to a plain full request.
+            if ranged.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+                drop(ranged);
+                let plain = full_response(client.get(url).timeout(timeout).send().await?)?;
+                let total = plain.content_length();
+                (plain, total, false)
+            } else {
+                let ranged = ranged.error_for_status()?;
+                match classify_range_response(&ranged, resume_from) {
+                    RangeOutcome::Resume { total } => (ranged, Some(total), true),
+                    RangeOutcome::Restart => {
+                        let total = ranged.content_length();
+                        (ranged, total, false)
+                    }
+                    RangeOutcome::Reject => {
+                        // Never consume an inconsistent partial response. Retry
+                        // once without Range so the outer retry loop can progress.
+                        drop(ranged);
+                        let plain = full_response(client.get(url).timeout(timeout).send().await?)?;
+                        let total = plain.content_length();
+                        (plain, total, false)
+                    }
+                }
+            }
+        } else {
+            let plain = full_response(client.get(url).timeout(timeout).send().await?)?;
+            let total = plain.content_length();
+            (plain, total, false)
+        };
 
         if let Some(ref pb) = progress {
-            // Reset for this attempt.
-            pb.set_position(0);
+            pb.set_position(if is_resumed { resume_from } else { 0 });
             if let Some(size) = total_size {
                 pb.set_length(size);
                 pb.set_style(
@@ -91,10 +142,22 @@ pub async fn download_file(
             }
         }
 
-        // Stream to file with progress updates.
-        let mut file = fs::File::create(target_path).await?;
+        let mut bytes_written = if is_resumed {
+            let actual_len = file.seek(std::io::SeekFrom::End(0)).await?;
+            if actual_len != resume_from {
+                return Err(Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "partial download changed while resuming",
+                )));
+            }
+            actual_len
+        } else {
+            file.set_len(0).await?;
+            file.seek(std::io::SeekFrom::Start(0)).await?;
+            0
+        };
+
         let mut stream = response.bytes_stream();
-        let mut bytes_written: u64 = 0;
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
@@ -107,8 +170,7 @@ pub async fn download_file(
 
         file.flush().await?;
 
-        // Detect truncation: a short read against an advertised Content-Length
-        // is an incomplete download — error out so the retry re-downloads.
+        // A short read triggers another attempt, which resumes from disk.
         if let Some(expected_len) = total_size
             && bytes_written != expected_len
         {
@@ -144,6 +206,73 @@ pub async fn download_file(
     tracing::debug!("Download completed: {target_path:?}");
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RangeOutcome {
+    Resume { total: u64 },
+    Restart,
+    Reject,
+}
+
+fn classify_range_response(response: &reqwest::Response, resume_from: u64) -> RangeOutcome {
+    if response.status() == reqwest::StatusCode::OK {
+        return RangeOutcome::Restart;
+    }
+    if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+        return RangeOutcome::Reject;
+    }
+
+    let Some(parsed) = response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(parse_content_range)
+    else {
+        return RangeOutcome::Reject;
+    };
+
+    if parsed.start != resume_from || parsed.end < parsed.start || parsed.end >= parsed.total {
+        return RangeOutcome::Reject;
+    }
+
+    let expected_len = parsed.end - parsed.start + 1;
+    if response.content_length() != Some(expected_len) {
+        return RangeOutcome::Reject;
+    }
+
+    RangeOutcome::Resume { total: parsed.total }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ParsedContentRange {
+    start: u64,
+    end: u64,
+    total: u64,
+}
+
+fn parse_content_range(header: &str) -> Option<ParsedContentRange> {
+    let rest = header.strip_prefix("bytes ")?;
+    let (range, total) = rest.split_once('/')?;
+    let (start, end) = range.split_once('-')?;
+    let parsed = ParsedContentRange {
+        start: start.trim().parse().ok()?,
+        end: end.trim().parse().ok()?,
+        total: total.trim().parse().ok()?,
+    };
+    (parsed.end >= parsed.start && parsed.end < parsed.total).then_some(parsed)
+}
+
+fn full_response(response: reqwest::Response) -> Result<reqwest::Response, Error> {
+    let response = response.error_for_status()?;
+    if response.status() == reqwest::StatusCode::OK {
+        Ok(response)
+    } else {
+        Err(Error::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            vt_str::format!("expected a full HTTP response, got {}", response.status()).to_string(),
+        )))
+    }
 }
 
 /// Download text content from a URL with retry logic
@@ -383,9 +512,195 @@ pub async fn move_to_cache(
 
 #[cfg(test)]
 mod tests {
+    use httpmock::prelude::*;
     use tempfile::TempDir;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::{TcpListener, TcpStream},
+    };
 
     use super::*;
+
+    fn temp_target(dir: &TempDir) -> AbsolutePathBuf {
+        AbsolutePathBuf::new(dir.path().join("archive.tar.gz")).unwrap()
+    }
+
+    async fn read_request(socket: &mut TcpStream) -> String {
+        let mut request = Vec::new();
+        let mut buffer = [0; 1024];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let read = socket.read(&mut buffer).await.unwrap();
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..read]);
+        }
+        String::from_utf8(request).unwrap()
+    }
+
+    #[tokio::test]
+    async fn resumes_after_a_real_truncated_connection() {
+        static FULL_BODY: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        let split_at = 10usize;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut first).await;
+            assert!(!request.to_ascii_lowercase().contains("\r\nrange:"));
+            first
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        FULL_BODY.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            first.write_all(&FULL_BODY[..split_at]).await.unwrap();
+            first.shutdown().await.unwrap();
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut second).await.to_ascii_lowercase();
+            assert!(request.contains(&format!("\r\nrange: bytes={split_at}-\r\n")));
+            let remaining = &FULL_BODY[split_at..];
+            second
+                .write_all(
+                    format!(
+                        "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {split_at}-{}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        FULL_BODY.len() - 1,
+                        FULL_BODY.len(),
+                        remaining.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            second.write_all(remaining).await.unwrap();
+            second.shutdown().await.unwrap();
+        });
+        let dir = TempDir::new().unwrap();
+        let target = temp_target(&dir);
+        download_file(&format!("http://{addr}/archive.bin"), &target, "Downloading test")
+            .await
+            .unwrap();
+        server.await.unwrap();
+
+        assert_eq!(tokio::fs::read(target.as_path()).await.unwrap(), FULL_BODY);
+    }
+
+    #[tokio::test]
+    async fn server_ignoring_range_with_200_does_not_append() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let target = temp_target(&dir);
+
+        let full_body = b"the-quick-brown-fox-jumps-over-the-lazy-dog-1234567890";
+        let split_at = 12usize;
+        tokio::fs::write(target.as_path(), &full_body[..split_at]).await.unwrap();
+
+        server.mock(|when, then| {
+            when.method(GET).path("/archive.bin").header("range", format!("bytes={split_at}-"));
+            then.status(200)
+                .header("accept-ranges", "bytes")
+                .header("content-length", full_body.len().to_string())
+                .body(full_body);
+        });
+
+        let url = format!("{}/archive.bin", server.base_url());
+        download_file(&url, &target, "Downloading test").await.unwrap();
+
+        assert_eq!(tokio::fs::read(target.as_path()).await.unwrap(), full_body);
+    }
+
+    // Regression for a retry after content-integrity failure: the file on
+    // disk is already the *full* archive (a complete-but-corrupt previous
+    // attempt), so the resume offset equals the file's total length. A
+    // range-capable server answers that with `416 Range Not Satisfiable`
+    // instead of `206`. Before the fix, `error_for_status()` turned that into
+    // a hard error and every retry re-sent the same doomed Range request
+    // against the same full-length file, so the download could never recover.
+    #[tokio::test]
+    async fn full_length_file_gets_416_and_restarts_with_a_plain_request() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let target = temp_target(&dir);
+
+        let full_body = b"the-full-archive-bytes-already-on-disk-from-a-prior-attempt";
+        // Simulate a complete-but-corrupt archive already on disk (e.g. one
+        // that failed hash verification and is being retried by the outer
+        // content-integrity loop in `runtime.rs`).
+        tokio::fs::write(target.as_path(), full_body).await.unwrap();
+
+        let range_mock = server.mock(|when, then| {
+            when.method(GET)
+                .path("/archive.bin")
+                .header("range", format!("bytes={}-", full_body.len()));
+            then.status(416);
+        });
+        let plain_mock = server.mock(|when, then| {
+            when.method(GET).path("/archive.bin");
+            then.status(200).header("content-length", full_body.len().to_string()).body(full_body);
+        });
+
+        let url = format!("{}/archive.bin", server.base_url());
+        download_file(&url, &target, "Downloading test").await.unwrap();
+
+        range_mock.assert_hits(1);
+        plain_mock.assert_hits(1);
+        assert_eq!(tokio::fs::read(target.as_path()).await.unwrap(), full_body);
+    }
+
+    #[tokio::test]
+    async fn mismatched_content_range_falls_back_to_a_plain_request() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let target = temp_target(&dir);
+
+        let full_body = b"another-test-body-with-enough-bytes-to-split-in-the-middle";
+        let split_at = 15usize;
+        tokio::fs::write(target.as_path(), &full_body[..split_at]).await.unwrap();
+
+        let bad_range_mock = server.mock(|when, then| {
+            when.method(GET).path("/archive.bin").header("range", format!("bytes={split_at}-"));
+            then.status(206)
+                .header(
+                    "content-range",
+                    format!("bytes 0-{}/{}", full_body.len() - 1, full_body.len()),
+                )
+                .header("content-length", full_body.len().to_string())
+                .body(full_body);
+        });
+        server.mock(|when, then| {
+            when.method(GET).path("/archive.bin");
+            then.status(200).header("content-length", full_body.len().to_string()).body(full_body);
+        });
+
+        let url = format!("{}/archive.bin", server.base_url());
+        download_file(&url, &target, "Downloading test").await.unwrap();
+
+        bad_range_mock.assert_hits(1);
+        assert_eq!(tokio::fs::read(target.as_path()).await.unwrap(), full_body);
+    }
+
+    #[test]
+    fn parses_content_range() {
+        assert_eq!(
+            parse_content_range("bytes 100-199/1000"),
+            Some(ParsedContentRange { start: 100, end: 199, total: 1000 })
+        );
+        for invalid in [
+            "bytes */1000",
+            "bytes 5-4/10",
+            "bytes 0-10/10",
+            "not-bytes 100-199/1000",
+            "bytes 100/1000",
+            "",
+        ] {
+            assert_eq!(parse_content_range(invalid), None, "{invalid}");
+        }
+    }
 
     #[test]
     fn test_parse_max_age() {

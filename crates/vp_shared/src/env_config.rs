@@ -95,11 +95,8 @@ fn user_home_path() -> Option<AbsolutePathBuf> {
 /// cannot be resolved again. Do not write resolved `VP_*_DIR` or `XDG_*`
 /// values. Split layouts resolve them from each process environment.
 fn persisted_dir_envs() -> HashMap<&'static str, String> {
-    if let Some(home) = std::env::var_os(env_vars::VP_HOME).and_then(|path| {
-        let display = path.to_string_lossy().into_owned();
-        AbsolutePathBuf::new(path.into()).map(|_| display)
-    }) {
-        return HashMap::from([(env_vars::VP_HOME, home)]);
+    if let Some(home) = crate::dirs::vp_home_override() {
+        return HashMap::from([(env_vars::VP_HOME, home.as_path().to_string_lossy().into_owned())]);
     }
     HashMap::default()
 }

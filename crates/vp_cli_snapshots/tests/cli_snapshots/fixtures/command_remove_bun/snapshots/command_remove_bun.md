@@ -49,7 +49,7 @@ For more information, try '--help'.
 should error when remove not exists package from dev dependencies
 
 ```
-bun remove <version> (af24e281)
+bun remove <version> (<hash>)
 package.json doesn't have dependencies, there's nothing to remove!
 ```
 
@@ -68,7 +68,7 @@ package.json doesn't have dependencies, there's nothing to remove!
 should add packages to dependencies
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed testnpm2@1.0.1
 
@@ -78,7 +78,7 @@ installed testnpm2@1.0.1
 ## `vp add -D test-vite-plus-install`
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed test-vite-plus-install@1.0.0
 
@@ -88,7 +88,7 @@ installed test-vite-plus-install@1.0.0
 ## `vp add -O test-vite-plus-package-optional`
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed test-vite-plus-package-optional@1.0.0
 
@@ -119,7 +119,7 @@ installed test-vite-plus-package-optional@1.0.0
 should remove packages from dependencies
 
 ```
-bun remove <version> (af24e281)
+bun remove <version> (<hash>)
 
 - testnpm2
 - test-vite-plus-install
@@ -144,7 +144,7 @@ bun remove <version> (af24e281)
 should remove package from optional dependencies
 
 ```
-bun remove <version> (af24e281)
+bun remove <version> (<hash>)
 
 package.json has no dependencies! Deleted empty lockfile
 

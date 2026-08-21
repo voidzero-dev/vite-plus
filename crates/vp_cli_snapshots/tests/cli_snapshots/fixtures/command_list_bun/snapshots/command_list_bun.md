@@ -7,7 +7,7 @@ should install packages first
 ```
 VITE+ - The Unified Toolchain for the Web
 
-bun install <version> (af24e281)
+bun install <version> (<hash>)
 
  test-vite-plus-package@1.0.0
  test-vite-plus-package-optional@1.0.0

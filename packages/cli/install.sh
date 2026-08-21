@@ -66,6 +66,19 @@ warn() {
   echo -e "${YELLOW}warn${NC}: $1"
 }
 
+trace() {
+  [ "${VP_LOG:-}" = "trace" ] || return 0
+  echo -e "${DIM}trace${NC}: $1"
+}
+
+report_shell_config_error() {
+  if [ "${CI:-}" = "true" ]; then
+    trace "$1"
+  else
+    warn "$1"
+  fi
+}
+
 error() {
   echo -e "${RED}error${NC}: $1"
   exit 1
@@ -176,11 +189,14 @@ resolution_home_dir() {
   fi
 }
 
-# Released setup-vp versions add ~/.vite-plus/bin to the GitHub Actions PATH.
-# They do this after the installer exits. Use the monolithic layout until
-# setup-vp declares support for VP_DUMP_DIRS.
+# Released setup-vp versions add ~/.vite-plus/bin to the GitHub Actions or
+# GitLab CI/CD PATH. They do this after the installer exits. Use the monolithic
+# layout until setup-vp declares support for VP_DUMP_DIRS.
 enable_setup_vp_legacy_compatibility() {
-  [ "${GITHUB_ACTION_REPOSITORY:-}" = "voidzero-dev/setup-vp" ] || return 0
+  if [ "${GITHUB_ACTION_REPOSITORY:-}" != "voidzero-dev/setup-vp" ]; then
+    [ "${GITLAB_CI:-}" = "true" ] || return 0
+    [ -n "${SETUP_VP_SETUP_REF:-}" ] || return 0
+  fi
   [ "${VP_VPDIRS_AWARE:-}" != "1" ] || return 0
   [ -z "${VP_HOME:-}" ] || return 0
   [ -z "${VP_BIN_DIR:-}" ] || return 0
@@ -728,7 +744,7 @@ append_source_to_file() {
   fi
 
   if [ ! -w "$shell_config" ]; then
-    warn "Cannot write to $shell_config (permission denied), skipping."
+    report_shell_config_error "Cannot write to $shell_config (permission denied), skipping."
     return 3
   fi
 
@@ -755,12 +771,12 @@ write_managed_snippet() {
 
   snippet_dir=$(dirname "$snippet_file")
   if ! mkdir -p "$snippet_dir" 2>/dev/null; then
-    warn "Cannot create $snippet_dir, skipping."
+    report_shell_config_error "Cannot create $snippet_dir, skipping."
     return 3
   fi
 
   if [ -f "$snippet_file" ] && [ ! -w "$snippet_file" ]; then
-    warn "Cannot write to $snippet_file (permission denied), skipping."
+    report_shell_config_error "Cannot write to $snippet_file (permission denied), skipping."
     return 3
   fi
 
@@ -769,7 +785,7 @@ write_managed_snippet() {
   fi
 
   if ! printf '%s' "$snippet_content" > "$snippet_file"; then
-    warn "Cannot write to $snippet_file, skipping."
+    report_shell_config_error "Cannot write to $snippet_file, skipping."
     return 3
   fi
   return 0
@@ -804,7 +820,7 @@ configure_zsh_path() {
   local result
 
   if ! mkdir -p "$zsh_dir" 2>/dev/null; then
-    warn "Cannot create $zsh_dir, skipping zsh."
+    report_shell_config_error "Cannot create $zsh_dir, skipping zsh."
     SHELL_CONFIG_HAS_FAILURE="true"
     SHELL_CONFIG_FAILED_SHELLS+=("zsh")
     record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zsh_dir"))"
@@ -812,7 +828,7 @@ configure_zsh_path() {
   fi
 
   if [ ! -f "$zshenv" ] && ! touch "$zshenv" 2>/dev/null; then
-    warn "Cannot create $zshenv, skipping zsh."
+    report_shell_config_error "Cannot create $zshenv, skipping zsh."
     SHELL_CONFIG_HAS_FAILURE="true"
     SHELL_CONFIG_FAILED_SHELLS+=("zsh")
     record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zshenv"))"
@@ -1408,9 +1424,10 @@ WRAPPER_EOF
   # Configure shell PATH after the install is otherwise complete.
   configure_shell_path
 
-  # Use ~ when the shim directory is under HOME. Otherwise, show the full path.
-  local display_location
-  display_location="$(abbreviate_path "$SHIM_DIR")"
+  # Use ~ when an install location is under HOME. Otherwise, show the full path.
+  local display_data_dir display_bin_dir
+  display_data_dir="$(abbreviate_path "$INSTALL_DIR")"
+  display_bin_dir="$(abbreviate_path "$SHIM_DIR")"
 
   # Print success message
   echo ""
@@ -1434,6 +1451,19 @@ WRAPPER_EOF
   echo -e "  Run ${BRIGHT_BLUE}vp help${NC} to see available commands."
 
   echo ""
+  echo -e "  ${BOLD}Install locations:${NC}"
+  echo "    Data directory: $display_data_dir"
+  echo "    Bin directory:  $display_bin_dir"
+
+  # CI jobs configure PATH through the runner.
+  # Shell files do not change PATH for later steps.
+  # Do not print shell details in normal CI output.
+  if [ "${CI:-}" = "true" ]; then
+    echo ""
+    return
+  fi
+
+  echo ""
   echo "  Shell configuration:"
   local summary_line
   for summary_line in "${SHELL_CONFIG_SUMMARY[@]}"; do
@@ -1451,8 +1481,6 @@ WRAPPER_EOF
     echo ""
     echo -e "  ${YELLOW}note${NC}: Some shells still need manual setup."
     echo ""
-    echo -e "  vp was installed to: ${BOLD}${display_location}${NC}"
-    echo ""
     echo "  Manual setup instructions:"
     echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
     printf '        . "%s/env"\n' "$CONFIG_DIR_REF_POSIX"
@@ -1463,7 +1491,7 @@ WRAPPER_EOF
     echo ""
     echo "  Or run vp directly:"
     echo ""
-    echo -e "    ${display_location}/vp"
+    echo -e "    ${display_bin_dir}/vp"
   fi
 
   echo ""

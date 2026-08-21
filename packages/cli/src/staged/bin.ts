@@ -11,37 +11,13 @@
 
 import lintStaged from 'lint-staged';
 import type { Options } from 'lint-staged';
-import mri from 'mri';
 
 import { resolveViteConfig } from '../resolve-vite-config.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { errorMsg, log, printHeader } from '../utils/terminal.ts';
+import { normalizeStagedArgs, parseStagedArgs } from './args.ts';
 
-const args = mri(process.argv.slice(3), {
-  alias: {
-    h: 'help',
-    p: 'concurrent',
-    d: 'debug',
-    q: 'quiet',
-    r: 'relative',
-    v: 'verbose',
-  },
-  boolean: [
-    'help',
-    'allow-empty',
-    'debug',
-    'continue-on-error',
-    'fail-on-changes',
-    'hide-partially-staged',
-    'hide-unstaged',
-    'quiet',
-    'relative',
-    'revert',
-    'stash',
-    'verbose',
-  ],
-  string: ['concurrent', 'cwd', 'diff', 'diff-filter'],
-});
+const args = parseStagedArgs(process.argv.slice(3));
 
 if (args.help) {
   const helpMessage = renderCliDoc({
@@ -99,6 +75,15 @@ if (args.help) {
   printHeader();
   log(helpMessage);
 } else {
+  let normalizedArgs;
+  try {
+    normalizedArgs = normalizeStagedArgs(args);
+  } catch (err) {
+    printHeader();
+    errorMsg(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+
   const options: Options = {};
 
   // Boolean flags — only include if explicitly set
@@ -139,7 +124,7 @@ if (args.help) {
   // Read "staged" from vite.config.ts and pass it as an inline config object to lint-staged.
   let stagedConfig;
   try {
-    const viteConfig = await resolveViteConfig(args.cwd ?? process.cwd());
+    const viteConfig = await resolveViteConfig(normalizedArgs.cwd ?? process.cwd());
     stagedConfig = viteConfig.staged;
   } catch (err) {
     // Surface real errors (syntax errors, missing imports, etc.)
@@ -160,27 +145,17 @@ if (args.help) {
     log('  });');
     process.exit(1);
   }
-  if (args.cwd != null) {
-    options.cwd = args.cwd;
+  if (normalizedArgs.cwd != null) {
+    options.cwd = normalizedArgs.cwd;
   }
-  if (args.diff != null) {
-    options.diff = args.diff;
+  if (normalizedArgs.diff != null) {
+    options.diff = normalizedArgs.diff;
   }
-  if (args['diff-filter'] != null) {
-    options.diffFilter = args['diff-filter'];
+  if (normalizedArgs.diffFilter != null) {
+    options.diffFilter = normalizedArgs.diffFilter;
   }
-
-  // Parsed flags: concurrent → boolean | number
-  if (args.concurrent != null) {
-    const val = args.concurrent;
-    if (val === 'true') {
-      options.concurrent = true;
-    } else if (val === 'false') {
-      options.concurrent = false;
-    } else {
-      const num = Number(val);
-      options.concurrent = Number.isNaN(num) || val === '' ? true : num;
-    }
+  if (normalizedArgs.concurrent != null) {
+    options.concurrent = normalizedArgs.concurrent;
   }
 
   const success = await lintStaged(options);
