@@ -405,7 +405,7 @@ impl JsExecutor {
 
 - `crates/vp_global_cli/Cargo.toml`
 - `crates/vp_global_cli/src/main.rs`
-- `crates/vp_global_cli/src/cli.rs` # Top-level clap parser; flattens `vp_pm_cli::PackageManagerCommand` for all PM subcommands and intercepts `--global` for managed installs
+- `crates/vp_global_cli/src/cli.rs` # Top-level clap parser; flattens `vp_pm_cli::PackageManagerCommand` for all PM subcommands and `vp_global_only_cli::GlobalOnlyCommand` for `env`/`upgrade`/`implode`, and intercepts `--global` for managed installs
 - `crates/vp_global_cli/src/commands/mod.rs`
 - `crates/vp_global_cli/src/commands/new.rs` # Project scaffolding
 - `crates/vp_global_cli/src/commands/migrate.rs` # Migration command
