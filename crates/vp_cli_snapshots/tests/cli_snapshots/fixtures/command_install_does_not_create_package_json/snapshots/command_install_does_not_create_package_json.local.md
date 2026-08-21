@@ -17,7 +17,7 @@ install should require package.json
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```
 
 ## `vpt stat-file package.json --assert-not file`
@@ -35,7 +35,7 @@ add should require package.json
 **Exit code:** 1
 
 ```
-No package.json found.
+error: Package not found in workspace: `<workspace>`
 ```
 
 ## `vpt stat-file package.json --assert-not file`
