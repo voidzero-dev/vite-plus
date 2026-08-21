@@ -86,7 +86,8 @@ This RFC does not:
 | Global `vp` binary              | Select the local package and forward the command arguments |
 | Local `packages/cli/src/bin.ts` | Apply `-C` and `vpr` rules, then select the command        |
 | `binding/src/js_command_args/`  | Parse command arguments and request help output            |
-| `vp_cli_help`                   | Build, format, and print Vite+ help                        |
+| `vp_cli_help`                   | Build, format, and print Rust-backed help                  |
+| `packages/cli/src/help.ts`      | Keep static help for tool-backed commands                  |
 | JavaScript command modules      | Apply defaults and run command operations                  |
 
 The global CLI must keep these command arguments as `Vec<String>`. It must not parse the local option grammar.
@@ -294,6 +295,10 @@ The shared adapter reads public metadata from the built `clap::Command`. It read
 - help headings.
 
 The global CLI uses the same document types and formatter. The formatter keeps help text within the terminal width. JavaScript does not receive the document or the rendered text.
+
+The upstream tool help workflow does not change. `dev`, `build`, `preview`, `test`, `lint`, `fmt`, and `pack` continue to use `commandHelpDocs` and `renderCliDoc()`.
+
+The daily dependency upgrade continues to use `.claude/skills/sync-upstream-cli-help/SKILL.md`. This RFC does not move these static documents to `clap` or `vp_cli_help`.
 
 A help flag takes priority over a later invalid option. This behavior matches the current JavaScript command.
 
