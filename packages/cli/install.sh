@@ -1055,8 +1055,7 @@ shim_pointer_data() {
   IFS= read -r first < "$file" || [ -n "$first" ] || return 1
   first="${first%$'\r'}"
   if [ "$first" != "vite-plus-shim-v1" ]; then
-    printf '%s\n' "$first"
-    return 0
+    return 1
   fi
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"

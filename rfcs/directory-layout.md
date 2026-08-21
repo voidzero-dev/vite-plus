@@ -384,8 +384,8 @@ Vite+ writes a sidecar immediately after it copies a trampoline executable.
 `vp env setup --env-only` does not write sidecars. Setup without `--refresh`
 does not add a sidecar to a skipped executable. `vp env setup --refresh`
 replaces the executable and then records ownership of the new trampoline.
-The trampoline also accepts the earlier one-line sidecar format. That format
-contains only the data root, so it keeps the earlier path-based behavior.
+The trampoline and ownership readers require the `vite-plus-shim-v1` header.
+They reject unversioned sidecars.
 
 On Windows, `vp implode` cannot delete the trampoline that started the current
 command. For a separate `<BIN>`, it renames the owned executable and its

@@ -35,7 +35,7 @@ pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
 /// The complete `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group can put
 /// the shim and payload under different parents. A trampoline must not read
 /// directory environment variables. Installers and `vp env setup` write this
-/// one-line UTF-8 file next to each trampoline copy.
+/// versioned UTF-8 sidecar next to each trampoline copy.
 pub const SHIM_POINTER_EXTENSION: &str = "shim";
 
 /// Sidecar filename for a trampoline named `<exe_stem>.exe`.
@@ -187,8 +187,7 @@ fn shim_pointer_data(text: &str) -> Option<&str> {
     }
     let mut lines = text.lines();
     if lines.next()? != SHIM_POINTER_HEADER {
-        // Compatibility with the one-line sidecars from earlier PR previews.
-        return Some(text);
+        return None;
     }
     lines.find_map(|line| line.strip_prefix("data=").filter(|data| !data.is_empty()))
 }
@@ -247,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn windows_trampoline_ownership_accepts_legacy_sidecar() {
+    fn windows_trampoline_ownership_rejects_unversioned_sidecar() {
         EnvConfig::scoped(|config| {
             let node = config.dirs.bin.join("node.exe");
             std::fs::create_dir_all(&config.dirs.bin).unwrap();
@@ -258,7 +257,7 @@ mod tests {
             )
             .unwrap();
 
-            assert!(config.dirs.owns_windows_trampoline(node.as_path()));
+            assert!(!config.dirs.owns_windows_trampoline(node.as_path()));
         });
     }
 
