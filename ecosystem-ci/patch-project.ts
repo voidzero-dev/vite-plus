@@ -301,6 +301,20 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
   env: migrateEnv,
 });
 
+if (project === 'tiptap') {
+  // Keep Tiptap's upstream lint semantics. Migration enables type-aware type
+  // checking, which reports TypeScript diagnostics that upstream CI does not check.
+  const viteConfigPath = join(repoRoot, 'vite.config.mts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const typeAwareOptions =
+    /,\s*(?:"options"|options):\s*\{\s*(?:"typeAware"|typeAware):\s*true,\s*(?:"typeCheck"|typeCheck):\s*true\s*\}/;
+  const patched = viteConfig.replace(typeAwareOptions, '');
+  if (patched === viteConfig) {
+    throw new Error(`tiptap patch: migrated type-aware lint options not found in ${viteConfigPath}`);
+  }
+  await writeFile(viteConfigPath, patched, 'utf-8');
+}
+
 // Install through the local registry. `vp migrate` already pinned
 // `vite-plus@<version>` in package.json exactly like a real migration, so no
 // manual package.json rewrite is needed.
