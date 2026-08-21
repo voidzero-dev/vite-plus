@@ -3442,6 +3442,24 @@ export interface BatchRewriteResult {
   errors: Array<BatchRewriteError>;
 }
 
+export interface CliHelpDoc {
+  usage: string;
+  summary?: string;
+  sections: Array<CliHelpSection>;
+  documentationUrl?: string;
+}
+
+export interface CliHelpRow {
+  label: string;
+  description: string;
+}
+
+export interface CliHelpSection {
+  title: string;
+  lines?: Array<string>;
+  rows?: Array<CliHelpRow>;
+}
+
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
   lint: (err: Error | null) => Promise<JsCommandResolvedResult>;
@@ -3658,7 +3676,7 @@ export declare function parseStagedArgs(argv: Array<string>): ParseStagedArgsOut
 
 export type ParseStagedArgsOutcome =
   | { status: 'ok'; value: StagedArgs }
-  | { status: 'help' }
+  | { status: 'help'; doc: CliHelpDoc }
   | { status: 'error'; error: CliParseError };
 
 /** Access modes for a path. */
