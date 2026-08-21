@@ -16,7 +16,7 @@ Start:
   hooks       Manage the Git hook dispatcher
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided
-  env         Manage Node.js versions
+  env         Manage Node.js and package managers
 
 Develop:
   dev          Run the development server
@@ -460,54 +460,57 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp env [COMMAND]
 
-Manage Node.js versions
+Manage Node.js and package-manager environments
 
 Setup:
   setup  Create or update shims in VP_HOME/bin
-  on     Enable managed mode - shims always use vite-plus managed Node.js
-  off    Enable system-first mode - shims prefer system Node.js, fallback to managed
-  print  Print shell snippet to set environment for current session
+  on     Enable managed mode for Node.js and package managers
+  off    Enable system-first mode for Node.js and package managers
+  print  Print PATH setup for the resolved environment
 
 Manage:
-  default         Set or show the global default Node.js version
-  pin             Pin a Node.js version in the current directory
-  unpin           Remove the Node.js pin from the current directory (alias for `pin --unpin`)
-  use             Use a specific Node.js version for this shell session
-  install, i      Install a Node.js version
-  uninstall, uni  Uninstall a Node.js version
-  clean           Remove unused managed runtimes and package manager caches
-  exec, run       Execute a command with a specific Node.js version
+  default         Set or show global environment defaults
+  pin             Pin Node.js and package-manager versions in the project
+  unpin           Remove project environment pins (alias for `pin --unpin`)
+  use             Activate an environment for this shell session
+  install, i      Install a resolved or explicit environment
+  uninstall, uni  Uninstall explicit component versions
+  clean           Remove unused runtimes and package managers
+  exec, run       Execute a command in a resolved or explicit environment
 
 Inspect:
   current                 Show current environment information
   doctor                  Run diagnostics and show environment status
   which                   Show path to the tool that would be executed
-  list, ls                List locally installed Node.js versions
-  list-remote, ls-remote  List available Node.js versions from the registry
+  list, ls                List locally installed environment components
+  list-remote, ls-remote  List available versions from component registries
 
 Examples:
   Setup:
-    vp env setup                  # Create shims for node, npm, npx, corepack
-    vp env on                     # Use vite-plus managed Node.js
-    vp env print                  # Print shell snippet for this session
+    vp env setup                  # Create Node.js and package-manager shims
+    vp env on                     # Manage Node.js and package managers
+    vp env off pm                 # Prefer system package managers only
+    vp env print                  # Print PATH setup for both components
 
   Manage:
-    vp env pin lts                # Pin to latest LTS version
-    vp env install                # Install version from .node-version / package.json / .nvmrc
-    vp env use 20                 # Use Node.js 20 for this shell session
-    vp env use --unset            # Remove session override
-    vp env clean                  # Remove unused managed caches
+    vp env default 22.19.0        # Set the Node.js default
+    vp env default pnpm@12        # Set the package-manager default
+    vp env pin 22.19.0            # Pin Node.js for this project
+    vp env use 22.19.0            # Use Node.js in this shell
+    vp env clean                  # Clean all unused managed versions
 
   Inspect:
     vp env current                # Show current resolved environment
     vp env current --json         # JSON output for automation
     vp env doctor                 # Check environment configuration
     vp env which node             # Show which node binary will be used
-    vp env list-remote --lts      # List only LTS versions
+    vp env list node              # List only Node.js installations
+    vp env list-remote --lts      # List only Node.js LTS versions
 
   Execute:
-    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
-    vp env exec node -v           # Shim mode (version auto-resolved)
+    vp env exec --node lts node -v               # Override Node.js
+    vp env exec --package-manager pnpm@12 pnpm i # Override the package manager
+    vp env exec node -v                          # Resolve both components
 
 Related Commands:
   vp install -g <package>       # Install a package globally

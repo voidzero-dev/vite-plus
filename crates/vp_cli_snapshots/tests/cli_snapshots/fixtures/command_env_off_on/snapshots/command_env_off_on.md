@@ -18,11 +18,11 @@ Switch to system-first mode
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Node.js management set to system-first.
+✓ Node.js and package-manager management set to system-first.
 
-All vp commands and shims will now prefer system Node.js, falling back to managed if not found.
+Selected commands and shims will now prefer system tools, falling back to managed tools.
 
-Run `vp env on` to always use Vite+ managed Node.js.
+Run `vp env on` to always use Vite+ managed tools.
 ```
 
 ## `vp run assert-not-managed`
@@ -45,11 +45,11 @@ Switch back to managed mode
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Node.js management set to managed.
+✓ Node.js and package-manager management set to managed.
 
-All vp commands and shims will now always use Vite+ managed Node.js.
+Selected commands and shims will now use Vite+ managed tools.
 
-Run `vp env off` to prefer system Node.js instead.
+Run `vp env off` to prefer system tools instead.
 ```
 
 ## `vp run assert-managed`

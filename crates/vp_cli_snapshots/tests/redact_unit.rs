@@ -88,11 +88,35 @@ fn masks_bun_build_hash_only_in_bun_banners() {
 }
 
 #[test]
+fn normalizes_managed_executable_paths_and_missing_commands() {
+    let input = concat!(
+        r#""bin_path": "<home>/.vite-plus/js_runtime/node/24.18.1/node.exe""#,
+        "\n",
+        r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm.cmd""#,
+        "\n",
+        "error: Command execution failed: No such file or directory (os error 2)\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            r#""bin_path": "<home>/.vite-plus/js_runtime/node/<version>/bin/node""#,
+            "\n",
+            r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm""#,
+            "\n",
+            "error: Command execution failed: program not found\n",
+        )
+    );
+}
+
+#[test]
 fn masks_managed_node_versions_in_environment_output() {
     let input = concat!(
         "Node: 24.18.1\n",
         "\"nodeVersion\": \"24.18.1\"\n",
         "✓ Default Node.js version set to lts (currently 24.18.1)\n",
+        "No default Node.js version configured. Using latest LTS (24.18.1).\n",
+        "  Currently resolves to: 24.18.1\n",
         "just-a-normal-package@0.0.0   24.18.1        just-a-normal-package\n",
         "fixture pin: 22.18.0\n",
     )
@@ -103,6 +127,8 @@ fn masks_managed_node_versions_in_environment_output() {
             "Node: <version>\n",
             "\"nodeVersion\": \"<version>\"\n",
             "✓ Default Node.js version set to lts (currently <version>)\n",
+            "No default Node.js version configured. Using latest LTS (<version>).\n",
+            "  Currently resolves to: <version>\n",
             "just-a-normal-package@0.0.0   <version>        just-a-normal-package\n",
             "fixture pin: 22.18.0\n",
         )

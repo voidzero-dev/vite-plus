@@ -217,7 +217,7 @@ pub enum Commands {
         global: bool,
     },
 
-    /// Manage Node.js versions
+    /// Manage Node.js and package-manager environments
     Env(EnvArgs),
 
     // =========================================================================
@@ -295,30 +295,46 @@ pub struct EnvArgs {
 pub enum EnvSubcommands {
     /// Show current environment information
     Current {
+        /// Limit output to node, pm, or a package-manager family
+        scope: Option<String>,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,
     },
 
     /// Print shell snippet to set environment for current session
-    Print,
-
-    /// Set or show the global default Node.js version
-    #[command(after_long_help = "\
-Examples:
-  vp env default          # Show the current default
-  vp env default lts      # Set the default")]
-    Default {
-        /// Version to set as default (e.g., "20.18.0", "lts", "latest").
-        /// If omitted, prints the current default.
-        version: Option<String>,
+    Print {
+        /// Limit output to node, pm, or a package-manager family
+        scope: Option<String>,
     },
 
-    /// Enable managed mode - shims always use vite-plus managed Node.js
-    On,
+    /// Set or show global Node.js and package-manager defaults
+    #[command(after_long_help = "\
+Examples:
+  vp env default          # Show both current defaults
+  vp env default 22.19.0  # Set the Node.js default
+  vp env default pnpm@12  # Set the package-manager default")]
+    Default {
+        /// Defaults or component selectors. Bare versions select Node.js.
+        values: Vec<String>,
 
-    /// Enable system-first mode - shims prefer system Node.js, fallback to managed
-    Off,
+        /// Clear defaults instead of setting them
+        #[arg(long)]
+        unset: bool,
+    },
+
+    /// Enable managed mode for Node.js and package managers
+    On {
+        /// Change only node or package-manager mode
+        scope: Option<String>,
+    },
+
+    /// Enable system-first mode for Node.js and package managers
+    Off {
+        /// Change only node or package-manager mode
+        scope: Option<String>,
+    },
 
     /// Create or update shims in VP_HOME/bin
     Setup {
@@ -331,20 +347,24 @@ Examples:
     },
 
     /// Run diagnostics and show environment status
-    Doctor,
+    Doctor {
+        /// Limit diagnostics to node or package managers
+        scope: Option<String>,
+    },
 
     /// Show path to the tool that would be executed
     Which {
-        /// Tool name (node, npm, or npx)
+        /// Tool name resolved through the environment shims
         tool: String,
     },
 
-    /// Pin a Node.js version in the current directory
-    /// (updates .node-version or package.json#devEngines.runtime)
+    /// Pin Node.js and package-manager versions in the current directory
     #[command(after_long_help = "\
 Examples:
-  vp env pin lts                  # Pin to latest LTS
-  vp env pin --unpin              # Remove the pin
+  vp env pin lts                  # Pin Node.js to latest LTS
+  vp env pin pnpm@10              # Pin the package manager
+  vp env pin 22 pnpm@10           # Pin both components
+  vp env pin --unpin              # Remove both effective pins
   vp env pin \"^20.0.0\" --force    # Overwrite existing pin
   vp env pin 24 --target node-version   # Force the .node-version file
 
@@ -352,9 +372,8 @@ The write target follows the compatibility-first rule: an existing .node-version
 keeps being updated; otherwise the pin is written to package.json#devEngines.runtime;
 .node-version is only created when the directory has no package.json.")]
     Pin {
-        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
-        /// If omitted, prints the currently pinned version.
-        version: Option<String>,
+        /// Versions to pin. Bare versions select Node.js; package managers use name@version.
+        specs: Vec<String>,
 
         /// Remove the pin from the current directory
         #[arg(long)]
@@ -373,26 +392,32 @@ keeps being updated; otherwise the pin is written to package.json#devEngines.run
         target: Option<PinTarget>,
     },
 
-    /// Remove the Node.js pin from current directory (alias for `pin --unpin`)
+    /// Remove environment pins from the current directory (alias for `pin --unpin`)
     Unpin {
+        /// Limit removal to node, pm, or a package-manager family
+        scope: Option<String>,
+
         /// Explicitly choose which pin source to remove
         #[arg(long, value_enum)]
         target: Option<PinTarget>,
     },
 
-    /// List locally installed Node.js versions
+    /// List locally installed Node.js and package-manager versions
     #[command(visible_alias = "ls")]
     List {
+        /// Limit output to node, pm, or a package-manager family
+        scope: Option<String>,
+
         /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// List available Node.js versions from the registry
+    /// List available Node.js and package-manager versions from registries
     #[command(name = "list-remote", visible_alias = "ls-remote")]
     ListRemote {
-        /// Filter versions by pattern (e.g., "20" for 20.x versions)
-        pattern: Option<String>,
+        /// Optional component selector followed by a version pattern
+        values: Vec<String>,
 
         /// Show only LTS versions
         #[arg(long)]
@@ -411,13 +436,14 @@ keeps being updated; otherwise the pin is written to package.json#devEngines.run
         sort: SortingMethod,
     },
 
-    /// Execute a command with a specific Node.js version
+    /// Execute a command in a resolved or explicit environment
     #[command(
         visible_alias = "run",
         after_long_help = "\
 Examples:
-  vp env exec --node lts npm install  # Pin version for this invocation
-  vp env exec node -v                 # Shim mode: version auto-resolved"
+  vp env exec --node lts node -v                     # Override Node.js
+  vp env exec --package-manager pnpm@12 pnpm install # Override the package manager
+  vp env exec node -v                                # Resolve the full environment"
     )]
     Exec {
         /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0").
@@ -426,43 +452,49 @@ Examples:
         #[arg(long)]
         node: Option<String>,
 
-        /// npm version to use (optional, defaults to bundled)
+        /// npm version to use (alias for --package-manager npm@<version>)
         #[arg(long)]
         npm: Option<String>,
+
+        /// Package manager and version to use (for example, pnpm@10)
+        #[arg(long)]
+        package_manager: Option<String>,
 
         /// Command and arguments to run
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
 
-    /// Uninstall a Node.js version
+    /// Uninstall explicit Node.js or package-manager versions
     #[command(visible_alias = "uni")]
     Uninstall {
-        /// Version to uninstall (e.g., "20.18.0")
+        /// Versions to uninstall. Bare versions select Node.js.
         #[arg(required = true)]
-        version: String,
+        specs: Vec<String>,
     },
 
     /// Remove unused managed runtimes and package manager caches
-    Clean,
-
-    /// Install a Node.js version
-    #[command(visible_alias = "i")]
-    Install {
-        /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
-        /// If not provided, installs the version from .node-version, package.json, or .nvmrc
-        version: Option<String>,
+    Clean {
+        /// Limit cleanup to node, pm, or a package-manager family
+        scope: Option<String>,
     },
 
-    /// Use a specific Node.js version for this shell session
+    /// Install a resolved or explicit environment
+    #[command(visible_alias = "i")]
+    Install {
+        /// Component selectors or explicit versions to install
+        requests: Vec<String>,
+    },
+
+    /// Activate Node.js and package-manager versions for this shell session
     #[command(after_long_help = "\
 Examples:
-  vp env use lts        # Override session with latest LTS
-  vp env use --unset    # Clear the session override")]
+  vp env use 22.19.0  # Override Node.js for this session
+  vp env use pnpm@12  # Override the package manager
+  vp env use --unset  # Clear both session overrides")]
     Use {
-        /// Version to use (e.g., "20", "20.18.0", "lts", "latest").
-        /// If omitted, reads from .node-version, package.json, or .nvmrc.
-        version: Option<String>,
+        /// Component selectors or explicit versions to activate
+        requests: Vec<String>,
 
         /// Remove session override (revert to file-based resolution)
         #[arg(long)]
@@ -481,7 +513,9 @@ Examples:
 impl EnvSubcommands {
     fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
-            Self::Current { json } | Self::List { json } | Self::ListRemote { json, .. } => *json,
+            Self::Current { json, .. }
+            | Self::List { json, .. }
+            | Self::ListRemote { json, .. } => *json,
             _ => false,
         }
     }
@@ -494,6 +528,8 @@ pub enum PinTarget {
     NodeVersion,
     /// Pin via package.json#devEngines.runtime
     DevEngines,
+    /// Pin via the top-level packageManager field
+    PackageManager,
 }
 
 /// Version sorting order for list-remote command
@@ -638,7 +674,29 @@ async fn run_package_manager_command(
     }
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    let result = vp_pm_cli::dispatch_with_metadata(&cwd, command).await?;
+    let selected = commands::env::package_manager::resolve_current(&cwd).await?;
+    let result = if let Some(selected) = selected.as_ref()
+        && commands::env::config::load_config().await?.package_manager_shim_mode()
+            == commands::env::config::ShimMode::SystemFirst
+        && let Some(system_path) =
+            crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
+        && let Some(manager) =
+            system_package_manager(selected.package_manager_type, &system_path).await
+    {
+        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
+    } else {
+        match selected {
+            Some(selected) => {
+                vp_pm_cli::dispatch_with_package_manager(
+                    &cwd,
+                    command,
+                    (selected.package_manager_type, &selected.version, selected.hash.as_deref()),
+                )
+                .await?
+            }
+            None => vp_pm_cli::dispatch_with_metadata(&cwd, command).await?,
+        }
+    };
     if result.status.success()
         && let Some(packages) = result.why_hint_packages.as_deref()
     {
@@ -668,6 +726,21 @@ fn active_toolchain_manifest(cwd: &vt_path::AbsolutePath) -> Option<vp_toolchain
     vp_toolchain::load_manifest(&manifest_path).ok()
 }
 
+async fn system_package_manager(
+    kind: vp_pm_cli::PackageManagerType,
+    executable: &vt_path::AbsolutePath,
+) -> Option<vp_pm_cli::PackageManager> {
+    let output =
+        tokio::process::Command::new(executable.as_path()).arg("--version").output().await.ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let version = std::str::from_utf8(&output.stdout).ok()?.trim();
+    node_semver::Version::parse(version).ok()?;
+    let install_dir = executable.parent()?.parent()?.to_absolute_path_buf();
+    Some(vp_pm_cli::PackageManager::from_install_dir(kind, version, install_dir))
+}
+
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
@@ -681,7 +754,6 @@ async fn managed_install(
             force,
             concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
             update: false,
-            only_bins: None,
         },
     )
     .await
@@ -879,7 +951,6 @@ async fn managed_update(
             force: false,
             concurrency,
             update: true,
-            only_bins: None,
         },
     )
     .await

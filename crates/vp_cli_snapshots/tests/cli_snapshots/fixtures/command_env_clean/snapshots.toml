@@ -4,4 +4,7 @@ vp = "global"
 seed-runtime = false
 steps = [
   { argv = ["vp", "env", "clean"], comment = "Clean isolated Vite+ caches" },
+  { argv = ["vp", "env", "clean", "node"], comment = "Clean only Node.js runtimes" },
+  { argv = ["vp", "env", "clean", "pm"], comment = "Clean all package-manager families" },
+  { argv = ["vp", "env", "clean", "pnpm"], comment = "Clean one package-manager family" },
 ]

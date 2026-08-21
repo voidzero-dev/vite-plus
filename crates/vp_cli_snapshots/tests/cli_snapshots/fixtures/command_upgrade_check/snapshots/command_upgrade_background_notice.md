@@ -25,11 +25,11 @@ The next interactive command displays the cached update notice.
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Node.js management set to system-first.
+✓ Node.js and package-manager management set to system-first.
 
-All vp commands and shims will now prefer system Node.js, falling back to managed if not found.
+Selected commands and shims will now prefer system tools, falling back to managed tools.
 
-Run `vp env on` to always use Vite+ managed Node.js.
+Run `vp env on` to always use Vite+ managed tools.
 
 vp update available: <version> → 999.0.0, run vp upgrade
 ```
@@ -41,6 +41,9 @@ A subsequent command stays quiet after the notice timestamp is recorded.
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Node.js management is already set to system-first.
-All vp commands and shims will prefer system Node.js, falling back to managed if not found.
+✓ Node.js and package-manager management set to system-first.
+
+Selected commands and shims will now prefer system tools, falling back to managed tools.
+
+Run `vp env on` to always use Vite+ managed tools.
 ```

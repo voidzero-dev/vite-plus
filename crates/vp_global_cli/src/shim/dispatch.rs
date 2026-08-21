@@ -3,11 +3,9 @@
 //! This module handles the core shim functionality:
 //! 1. Version resolution (with caching)
 //! 2. Node.js installation (if needed)
-//! 3. Tool execution (core tools and package binaries)
+//! 3. Tool execution (core shims and package binaries)
 
-use vp_pm_cli::{
-    PackageManagerType, ensure_package_manager_bin, resolve_package_manager_from_package_json,
-};
+use vp_pm_cli::{PackageManagerType, ensure_package_manager_bin};
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
@@ -20,6 +18,7 @@ use crate::{
         env::{
             bin_config::{BinConfig, BinSource},
             config::{self, ShimMode},
+            package_manager,
             package_metadata::PackageMetadata,
         },
         global::install::is_protected_shim,
@@ -32,16 +31,6 @@ use crate::{
 /// When set, the shim will skip version resolution and execute the tool
 /// directly using the current PATH (passthrough mode).
 const RECURSION_ENV_VAR: &str = env_vars::VP_TOOL_RECURSION;
-
-/// Package-manager tools whose Node.js runtime should be resolved from the
-/// project context rather than the install-time version.
-///
-/// Intentionally excludes `npm`/`npx`: those are core shims (see
-/// `is_core_shim_tool`) and never reach `dispatch_package_binary`, so they are
-/// handled by the main `dispatch` path instead.
-fn is_package_manager_tool(tool: &str) -> bool {
-    matches!(PackageManagerType::from_tool(tool), Some(t) if t != PackageManagerType::Npm)
-}
 
 /// Parsed npm global command (install or uninstall).
 struct NpmGlobalCommand {
@@ -261,18 +250,13 @@ fn check_npm_global_install_result(
 
         for bin_name in bin_names {
             // Skip protected shims (core shims and default env shims). Tell
-            // the user for the non-core names (e.g. `npm i -g corepack`):
-            // npm installed the package, but the binary stays unlinked.
+            // the user for non-core names: npm installed the package, but the
+            // binary stays unlinked.
             if is_protected_shim(&bin_name, false) {
-                if !crate::commands::global::CORE_SHIMS.contains(&bin_name.as_str()) {
-                    let hint = if bin_name == "corepack" {
-                        " Use `vp install -g corepack` to manage its version."
-                    } else {
-                        ""
-                    };
+                if bin_name != "vp" && !crate::shim::is_core_shim_tool(&bin_name) {
                     output::note(&vt_str::format!(
                         "'{bin_name}' is a Vite+ default shim; the npm-installed copy is not \
-                         linked.{hint}"
+                         linked."
                     ));
                 }
                 continue;
@@ -520,9 +504,8 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     for (bin_name, package_name) in bin_entries {
-        // Skip protected shims: a stale Npm BinConfig (e.g. a pre-default-shim
-        // `npm install -g corepack`) must not let `npm uninstall -g` delete a
-        // default shim that `vp env setup` now owns.
+        // Skip protected shims: a stale Npm BinConfig must not let
+        // `npm uninstall -g` delete a default shim that `vp env setup` owns.
         if is_protected_shim(bin_name, false) {
             continue;
         }
@@ -663,12 +646,12 @@ fn resolve_npm_prefix(
     get_npm_global_prefix(npm_path, node_dir)
 }
 
-/// Resolve a matching package-manager binary from the current project's explicit
-/// `packageManager` field.
+/// Resolve the package-manager binary for a core shim.
 ///
-/// The match is intentionally strict to avoid translating commands: `npm` only uses
-/// `npm@...`, `pnpm` only uses `pnpm@...`, etc.
-async fn resolve_matching_package_manager_tool(
+/// A project pin applies only to its matching manager. npm otherwise comes
+/// from the selected Node.js installation; standalone managers use their
+/// latest release when no matching pin exists.
+async fn resolve_package_manager_tool(
     cwd: &AbsolutePath,
     tool: &str,
 ) -> Result<Option<AbsolutePathBuf>, Error> {
@@ -676,22 +659,16 @@ async fn resolve_matching_package_manager_tool(
         return Ok(None);
     };
 
-    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
-        return Ok(None);
+    let resolution = package_manager::resolve_current_for(cwd, Some(expected_type)).await?;
+    let (version, hash) = match resolution {
+        Some(resolution) => (resolution.version, resolution.hash),
+        None if expected_type == PackageManagerType::Npm => return Ok(None),
+        None => ("latest".into(), None),
     };
 
-    if resolution.package_manager_type != expected_type {
-        return Ok(None);
-    }
-
     let bin_name = expected_type.bin_name_for_tool(tool);
-    let bin_path = ensure_package_manager_bin(
-        expected_type,
-        &resolution.version,
-        resolution.hash.as_deref(),
-        bin_name,
-    )
-    .await?;
+    let bin_path =
+        ensure_package_manager_bin(expected_type, &version, hash.as_deref(), bin_name).await?;
     Ok(Some(bin_path))
 }
 
@@ -701,7 +678,7 @@ async fn prepend_js_child_process_path_env(
 ) -> Result<(), Error> {
     let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
-    let Some(npm_path) = resolve_matching_package_manager_tool(cwd, "npm").await? else {
+    let Some(npm_path) = resolve_package_manager_tool(cwd, "npm").await? else {
         return Ok(());
     };
     if let Some(pm_bin_dir) = npm_path.parent()
@@ -714,8 +691,8 @@ async fn prepend_js_child_process_path_env(
 
 /// Main shim dispatch entry point.
 ///
-/// Called when the binary is invoked as node, npm, npx, corepack, or a
-/// package binary. Returns an exit code to be used with std::process::exit.
+/// Called when the binary is invoked as a core shim or package binary.
+/// Returns an exit code to be used with std::process::exit.
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
 
@@ -744,7 +721,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Check recursion prevention - if already in a shim context, passthrough directly
-    // Only applies to core tools (node/npm/npx) whose bin dir is prepended to PATH.
+    // Only applies to core tools whose bin dir is prepended to PATH.
     // Package binaries are always resolved via metadata lookup, so they can't loop.
     if std::env::var(RECURSION_ENV_VAR).is_ok() && is_core_shim_tool(tool) {
         tracing::debug!("recursion prevention enabled for core tool");
@@ -758,11 +735,17 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Check shim mode from config
-    let shim_mode = load_shim_mode().await;
+    let shim_mode = load_shim_mode(tool).await;
     if shim_mode == ShimMode::SystemFirst {
         tracing::debug!("system-first mode enabled");
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
+            if PackageManagerType::from_tool(tool).is_some()
+                && let Err(error) = prepare_node_path_for_system_package_manager().await
+            {
+                eprintln!("vp: Failed to prepare Node.js for system package manager: {error}");
+                return 1;
+            }
             // Append current bin_dir to VP_BYPASS to prevent infinite loops
             // when multiple vite-plus installations exist in PATH.
             // The next installation will filter all accumulated paths.
@@ -785,16 +768,8 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         // Fall through to managed if system not found
     }
 
-    // corepack: dedicated resolution chain (vp-managed package → Node-bundled
-    // → auto-install), see shim::corepack. Intentionally placed after the
-    // bypass/system-first checks and outside the recursion passthrough so it
-    // always re-resolves (corepack may not exist on the prepended PATH at all
-    // with Node.js 25+).
-    if tool == "corepack" {
-        return super::corepack::dispatch_corepack(args).await;
-    }
-
-    // Check if this is a package binary (not node/npm/npx)
+    // Package binaries use their install-time Node.js version; core shims use
+    // the project-resolved runtime below.
     if !is_core_shim_tool(tool) {
         return dispatch_package_binary(tool, args).await;
     }
@@ -829,25 +804,21 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     };
 
-    // Locate tool binary. If the current project explicitly pins the invoked
-    // package manager in `packageManager`, prefer that managed package-manager
-    // binary over the tool bundled with Node.js.
-    let package_manager_tool_path = match resolve_matching_package_manager_tool(&cwd, tool).await {
-        Ok(path) => path,
-        Err(e) => {
-            eprintln!("vp: Failed to resolve package manager for '{tool}': {e}");
-            return 1;
-        }
-    };
-    let tool_path = match package_manager_tool_path {
-        Some(path) => path,
-        None => match locate_tool(&resolution.version, tool) {
-            Ok(p) => p,
+    // Package managers use a matching project pin or their family-specific
+    // fallback. Node and bundled npm tools come from the selected Node.js runtime.
+    let tool_path = match resolve_package_manager_tool(&cwd, tool).await {
+        Ok(Some(path)) => path,
+        Ok(None) => match locate_tool(&resolution.version, tool) {
+            Ok(path) => path,
             Err(e) => {
                 eprintln!("vp: Tool '{tool}' not found: {e}");
                 return 1;
             }
         },
+        Err(e) => {
+            eprintln!("vp: Failed to resolve package manager for '{tool}': {e}");
+            return 1;
+        }
     };
 
     // Save original PATH before we modify it - needed for npm global install check.
@@ -855,9 +826,8 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     let original_path = if tool == "npm" { std::env::var_os("PATH") } else { None };
 
     // Prepare environment for recursive invocations. Keep the project Node.js
-    // bin dir available for JS package-manager shims, and when a package-manager
-    // version was selected from `packageManager`, put that PM bin dir first so
-    // nested invocations see the same PM version while recursion prevention is set.
+    // bin dir available for JS package-manager shims, and put a separately
+    // installed PM bin dir first so nested invocations see the same PM version.
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
     if let Err(e) = prepend_js_child_process_path_env(&cwd, node_bin_dir).await {
         eprintln!("vp: Failed to resolve package manager for child process PATH: {e}");
@@ -878,11 +848,14 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     }
 
-    // Set recursion prevention marker before executing
-    // This prevents infinite loops when the executed tool invokes another shim
-    // SAFETY: Setting env vars at this point before exec is safe
-    unsafe {
-        std::env::set_var(RECURSION_ENV_VAR, "1");
+    // Node can launch arbitrary scripts, including the local Vite+ CLI.
+    // Its resolved bin directory is already first on PATH, so nested `node`
+    // calls cannot loop through the shim.
+    if tool != "node" {
+        // SAFETY: Setting env vars at this point before exec is safe
+        unsafe {
+            std::env::set_var(RECURSION_ENV_VAR, "1");
+        }
     }
 
     // For npm install/uninstall -g, use spawn+wait so we can post-check/cleanup binaries
@@ -930,70 +903,31 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     exec::exec_tool(&tool_path, args)
 }
 
+async fn prepare_node_path_for_system_package_manager() -> Result<(), Error> {
+    let config = config::load_config().await?;
+    if config.shim_mode == ShimMode::SystemFirst
+        && let Some(node) = find_system_tool("node")
+        && let Some(bin_dir) = node.parent()
+    {
+        let _ = prepend_to_path_env(bin_dir, PrependOptions::default());
+        return Ok(());
+    }
+
+    let cwd = current_dir()?;
+    let resolution = resolve_with_cache(&cwd).await.map_err(|error| Error::Other(error.into()))?;
+    let node =
+        ensure_installed(&resolution.version).await.map_err(|error| Error::Other(error.into()))?;
+    let bin_dir =
+        node.parent().ok_or_else(|| Error::Other("Node.js has no bin directory".into()))?;
+    let _ = prepend_to_path_env(bin_dir, PrependOptions::default());
+    Ok(())
+}
+
 /// Dispatch a package binary shim.
 ///
 /// Finds the package that provides this binary and executes it with the
 /// Node.js version that was used to install the package.
 async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
-    if PackageManagerType::from_tool(tool).is_some() {
-        let cwd = match current_dir() {
-            Ok(path) => path,
-            Err(e) => {
-                eprintln!("vp: Failed to get current directory: {e}");
-                return 1;
-            }
-        };
-
-        match resolve_matching_package_manager_tool(&cwd, tool).await {
-            Ok(Some(tool_path)) => {
-                let node_version = match resolve_with_cache(&cwd).await {
-                    Ok(resolution) => resolution.version,
-                    Err(_) => match find_package_for_binary(tool).await {
-                        Ok(Some(metadata)) => metadata.platform.node,
-                        _ => String::new(),
-                    },
-                };
-
-                if !node_version.is_empty() {
-                    match ensure_installed(&node_version).await {
-                        Ok(node_path) => {
-                            if let Some(node_bin_dir) = node_path.parent() {
-                                if let Err(e) =
-                                    prepend_js_child_process_path_env(&cwd, node_bin_dir).await
-                                {
-                                    eprintln!(
-                                        "vp: Failed to resolve package manager for child \
-                                             process PATH: {e}"
-                                    );
-                                    return 1;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("vp: Failed to install Node {}: {e}", node_version);
-                            return 1;
-                        }
-                    }
-                }
-
-                if let Some(pm_bin_dir) = tool_path.parent() {
-                    let _ = prepend_to_path_env(pm_bin_dir, PrependOptions::default());
-                }
-
-                // SAFETY: Setting env vars at this point before exec is safe
-                unsafe {
-                    std::env::set_var(RECURSION_ENV_VAR, "1");
-                }
-                return exec::exec_tool(&tool_path, args);
-            }
-            Ok(None) => {}
-            Err(e) => {
-                eprintln!("vp: Failed to resolve package manager for '{tool}': {e}");
-                return 1;
-            }
-        }
-    }
-
     // Find which package provides this binary
     let package_metadata = match find_package_for_binary(tool).await {
         Ok(Some(metadata)) => metadata,
@@ -1008,31 +942,10 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         }
     };
 
-    // Determine Node.js version to use:
-    // - Package managers (pnpm, yarn): resolve from project context so they respect
-    //   the project's engines.node / .node-version, falling back to install-time version
-    // - Other package binaries: use the install-time version (original behavior)
-    let node_version = if is_package_manager_tool(tool) {
-        let cwd = match current_dir() {
-            Ok(path) => path,
-            Err(e) => {
-                eprintln!("vp: Failed to get current directory: {e}");
-                return 1;
-            }
-        };
-        match resolve_with_cache(&cwd).await {
-            Ok(resolution) => resolution.version,
-            Err(_) => {
-                // Fall back to install-time version if project resolution fails
-                package_metadata.platform.node.clone()
-            }
-        }
-    } else {
-        package_metadata.platform.node.clone()
-    };
-
     let (program, mut full_args) =
-        match package_binary_invocation(&package_metadata, tool, &node_version).await {
+        match package_binary_invocation(&package_metadata, tool, &package_metadata.platform.node)
+            .await
+        {
             Ok(invocation) => invocation,
             Err(e) => {
                 eprintln!("vp: {e}");
@@ -1343,8 +1256,17 @@ pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, 
 /// Load shim mode from config.
 ///
 /// Returns the default (Managed) if config cannot be read.
-async fn load_shim_mode() -> ShimMode {
-    config::load_config().await.map(|c| c.shim_mode).unwrap_or_default()
+async fn load_shim_mode(tool: &str) -> ShimMode {
+    config::load_config()
+        .await
+        .map(|config| {
+            if PackageManagerType::from_tool(tool).is_some() {
+                config.package_manager_shim_mode()
+            } else {
+                config.shim_mode
+            }
+        })
+        .unwrap_or_default()
 }
 
 /// Find a system tool in PATH, skipping the vite-plus bin directory and any
@@ -1477,7 +1399,7 @@ mod tests {
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_path())],
             |_| async {
-                let result = resolve_matching_package_manager_tool(&cwd, "yarn").await;
+                let result = resolve_package_manager_tool(&cwd, "yarn").await;
                 assert!(
                     matches!(
                         result,

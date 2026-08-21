@@ -13,7 +13,7 @@ dot-sources env.ps1 and verifies PowerShell environment setup and wrapper behavi
 
 ```
 Using Node.js <version> (resolved from 20.18.0)
-Reverted to file-based Node.js version resolution
+Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 PowerShell environment checks passed
 ```
