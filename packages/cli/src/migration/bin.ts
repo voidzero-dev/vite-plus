@@ -941,7 +941,7 @@ async function executeMigrationPlan(
     );
     if (!tsupOk) {
       failMigrationProgress('Migration failed');
-      cancelAndExit('tsup migration failed. Fix the issue and re-run `vp migrate`.', 1);
+      cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
     }
   }
 
@@ -1410,7 +1410,7 @@ async function main() {
         );
         if (!tsupOk) {
           clearMigrationProgress();
-          cancelAndExit('tsup migration failed. Fix the issue and re-run `vp migrate`.', 1);
+          cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
         }
         tsupMigrated = true;
       }

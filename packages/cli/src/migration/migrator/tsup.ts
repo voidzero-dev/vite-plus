@@ -14,10 +14,21 @@ import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
 
-function showTsdownMigrationSkill(): void {
-  prompts.log.info(
-    `You can use the tsdown migration skill to migrate manually: ${TSDOWN_MIGRATION_SKILL_URL}`,
-  );
+function showTsdownMigrationOptions(
+  targetLabel = 'the project root',
+  automaticMigrationFailed = false,
+): void {
+  const lines = [
+    'Choose one of these manual migration methods:',
+    `  1. Run \`vp dlx tsdown-migrate\` in ${targetLabel}.`,
+    '  2. Use the tsdown migration skill:',
+    `     ${TSDOWN_MIGRATION_SKILL_URL}`,
+  ];
+  if (automaticMigrationFailed) {
+    lines.unshift('Automatic tsup migration failed.', '');
+    lines.push('');
+  }
+  prompts.log.info(lines.join('\n'));
 }
 
 export function detectTsupProject(
@@ -68,8 +79,7 @@ async function runTsdownMigrateStep(
   vpBin: string,
   cwd: string,
   spinner: ReturnType<typeof getSpinner>,
-  failMessage: string,
-  manualHint: string,
+  targetLabel: string,
   packageManager: PackageManager,
 ): Promise<boolean> {
   try {
@@ -86,20 +96,18 @@ async function runTsdownMigrateStep(
       envs: process.env,
     });
     if (result.exitCode !== 0) {
-      spinner.stop(failMessage);
+      spinner.stop();
       const stderr = result.stderr.toString().trim();
       if (stderr) {
         prompts.log.warn(`⚠ ${stderr}`);
       }
-      prompts.log.info(manualHint);
-      showTsdownMigrationSkill();
+      showTsdownMigrationOptions(targetLabel, true);
       return false;
     }
     return true;
   } catch {
-    spinner.stop(failMessage);
-    prompts.log.info(manualHint);
-    showTsdownMigrationSkill();
+    spinner.stop();
+    showTsdownMigrationOptions(targetLabel, true);
     return false;
   }
 }
@@ -129,12 +137,12 @@ export async function migrateTsupToTsdown(
   if (tsupTargets.length > 0) {
     spinner.start('Migrating tsup config to tsdown...');
     for (const target of tsupTargets) {
+      const targetLabel = displayRelative(target) || 'the project root';
       const migrateOk = await runTsdownMigrateStep(
         vpBin,
         target,
         spinner,
-        'tsup migration failed',
-        `You can run \`vp dlx tsdown-migrate\` manually later in ${displayRelative(target)}`,
+        targetLabel,
         packageManager,
       );
       if (!migrateOk) {
@@ -249,7 +257,7 @@ export async function confirmTsupMigration(interactive: boolean): Promise<boolea
       cancelAndExit();
     }
     if (!confirmed) {
-      showTsdownMigrationSkill();
+      showTsdownMigrationOptions();
     }
     return confirmed;
   }
@@ -284,7 +292,7 @@ export async function promptTsupMigration(
     packages,
   );
   if (!ok) {
-    cancelAndExit('tsup migration failed.', 1);
+    cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
   }
   return true;
 }

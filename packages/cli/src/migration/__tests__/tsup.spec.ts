@@ -29,9 +29,19 @@ vi.mock('../../utils/prompts.ts', () => ({
 import { PackageManager } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { displayRelative } from '../../utils/path.ts';
 import { confirmTsupMigration, migrateTsupToTsdown } from '../migrator/tsup.ts';
 
 const mockRunCommandSilently = vi.mocked(runCommandSilently);
+
+function manualMigrationOptions(targetLabel = 'the project root'): string {
+  return [
+    'Choose one of these manual migration methods:',
+    `  1. Run \`vp dlx tsdown-migrate\` in ${targetLabel}.`,
+    '  2. Use the tsdown migration skill:',
+    `     ${TSDOWN_MIGRATION_SKILL_URL}`,
+  ].join('\n');
+}
 
 describe('tsup migration', () => {
   let projectPath: string;
@@ -86,9 +96,7 @@ describe('tsup migration', () => {
 
     await expect(confirmTsupMigration(true)).resolves.toBe(false);
 
-    expect(mockInfo).toHaveBeenCalledWith(
-      `You can use the tsdown migration skill to migrate manually: ${TSDOWN_MIGRATION_SKILL_URL}`,
-    );
+    expect(mockInfo).toHaveBeenCalledWith(manualMigrationOptions());
   });
 
   it('shows the migration skill when automatic migration fails', async () => {
@@ -105,7 +113,9 @@ describe('tsup migration', () => {
     ).resolves.toBe(false);
 
     expect(mockInfo).toHaveBeenCalledWith(
-      `You can use the tsdown migration skill to migrate manually: ${TSDOWN_MIGRATION_SKILL_URL}`,
+      `Automatic tsup migration failed.\n\n${manualMigrationOptions(
+        displayRelative(projectPath) || 'the project root',
+      )}\n`,
     );
   });
 });
