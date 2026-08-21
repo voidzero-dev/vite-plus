@@ -1,29 +1,10 @@
-//! Unified help rendering for the global CLI.
-
-use std::{borrow::Cow, fmt::Write as _};
+//! Global help documents and routing.
 
 use clap::{CommandFactory, error::ErrorKind};
-use owo_colors::OwoColorize;
-
-#[derive(Clone, Debug)]
-pub struct HelpDoc {
-    pub usage: Cow<'static, str>,
-    pub summary: Vec<Cow<'static, str>>,
-    pub sections: Vec<HelpSection>,
-    pub documentation_url: Option<Cow<'static, str>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum HelpSection {
-    Rows { title: Cow<'static, str>, rows: Vec<HelpRow> },
-    Lines { title: Cow<'static, str>, lines: Vec<Cow<'static, str>> },
-}
-
-#[derive(Clone, Debug)]
-pub struct HelpRow {
-    pub label: Cow<'static, str>,
-    pub description: Vec<Cow<'static, str>>,
-}
+pub use vp_cli_help::{
+    HelpDoc, HelpRow, HelpSection, accent, accent_command, print_help_doc, render_heading,
+    render_help_doc,
+};
 
 fn row(label: &'static str, description: &'static str) -> HelpRow {
     HelpRow { label: label.into(), description: vec![description.into()] }
@@ -52,123 +33,6 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["implode"] => Some("https://viteplus.dev/guide/implode"),
         _ => None,
     }
-}
-
-pub fn render_heading(title: &str) -> String {
-    let heading = format!("{title}:");
-    if !should_style_help() {
-        return heading;
-    }
-
-    if should_accent_heading(title) {
-        heading.bold().bright_blue().to_string()
-    } else {
-        heading.bold().to_string()
-    }
-}
-
-fn render_usage_value(usage: &str) -> String {
-    if should_style_help() { usage.bold().to_string() } else { usage.to_string() }
-}
-
-fn should_accent_heading(title: &str) -> bool {
-    title != "Usage"
-}
-
-fn write_documentation_footer(output: &mut String, documentation_url: &str) {
-    let _ = writeln!(output);
-    let _ = writeln!(output, "{} {documentation_url}", render_heading("Documentation"));
-}
-
-pub fn accent(text: &str) -> String {
-    if should_style_help() { text.bright_blue().to_string() } else { text.to_string() }
-}
-
-pub fn accent_command(command: &str) -> String {
-    format!("`{}`", accent(command))
-}
-
-pub fn should_style_help() -> bool {
-    vp_shared::is_stdout_terminal()
-        && std::env::var_os("NO_COLOR").is_none()
-        && std::env::var("CLICOLOR").map_or(true, |value| value != "0")
-        && std::env::var("TERM").map_or(true, |term| term != "dumb")
-}
-
-fn render_rows(rows: &[HelpRow]) -> Vec<String> {
-    if rows.is_empty() {
-        return vec![];
-    }
-
-    let label_width = rows.iter().map(|row| row.label.chars().count()).max().unwrap_or(0);
-    let mut output = Vec::new();
-
-    for row in rows {
-        let mut description_iter = row.description.iter();
-        if let Some(first) = description_iter.next() {
-            output.push(format!("  {:label_width$}  {}", row.label, first));
-            for line in description_iter {
-                output.push(format!("  {:label_width$}  {}", "", line));
-            }
-        } else {
-            output.push(format!("  {}", row.label));
-        }
-    }
-
-    output
-}
-
-fn split_comment_suffix(line: &str) -> Option<(&str, &str)> {
-    line.find(" #").map(|index| line.split_at(index))
-}
-
-fn render_muted_comment_suffix(line: &str) -> String {
-    if !should_style_help() {
-        return line.to_string();
-    }
-
-    if let Some((prefix, suffix)) = split_comment_suffix(line) {
-        return format!("{}{}", prefix, suffix.bright_black());
-    }
-
-    line.to_string()
-}
-
-pub fn render_help_doc(doc: &HelpDoc) -> String {
-    let mut output = String::new();
-
-    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(&doc.usage));
-
-    if !doc.summary.is_empty() {
-        let _ = writeln!(output);
-        for line in &doc.summary {
-            let _ = writeln!(output, "{line}");
-        }
-    }
-
-    for section in &doc.sections {
-        let _ = writeln!(output);
-        match section {
-            HelpSection::Rows { title, rows } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in render_rows(rows) {
-                    let _ = writeln!(output, "{line}");
-                }
-            }
-            HelpSection::Lines { title, lines } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in lines {
-                    let _ = writeln!(output, "{}", render_muted_comment_suffix(line));
-                }
-            }
-        }
-    }
-
-    if let Some(documentation_url) = doc.documentation_url.as_deref() {
-        write_documentation_footer(&mut output, documentation_url);
-    }
-
-    output
 }
 
 fn is_section_heading(line: &str) -> bool {
@@ -649,8 +513,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     }
 
     if command_path.len() == 1 && command_path[0] == "env" {
-        vp_shared::header::print_header();
-        println!("{}", render_help_doc(&env_help_doc()));
+        print_help_doc(&env_help_doc());
         return true;
     }
 
@@ -663,8 +526,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
 
 pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     if command_path == ["env"] {
-        vp_shared::header::print_header();
-        println!("{}", render_help_doc(&env_help_doc()));
+        print_help_doc(&env_help_doc());
         return true;
     }
 
@@ -685,8 +547,7 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
         ..doc
     };
 
-    vp_shared::header::print_header();
-    println!("{}", render_help_doc(&doc));
+    print_help_doc(&doc);
     true
 }
 
@@ -695,8 +556,8 @@ mod tests {
     use super::{
         HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
         parse_clap_help_to_doc, parse_command_rows, parse_rows, render_help_doc,
-        should_skip_parent_help_for_unknown_direct_nested_child, split_comment_suffix,
-        split_label_and_description, strip_ansi,
+        should_skip_parent_help_for_unknown_direct_nested_child, split_label_and_description,
+        strip_ansi,
     };
 
     #[test]
@@ -860,19 +721,6 @@ Options:
         assert_eq!(doc.usage, "vp add [OPTIONS] <PACKAGES>...");
         assert_eq!(doc.summary, vec!["Add packages to dependencies"]);
         assert_eq!(doc.sections.len(), 2);
-    }
-
-    #[test]
-    fn split_comment_suffix_extracts_command_comment() {
-        let line = "  vp env list-remote 20         # List Node.js 20.x versions";
-        let (prefix, suffix) = split_comment_suffix(line).expect("expected comment suffix");
-        assert_eq!(prefix, "  vp env list-remote 20        ");
-        assert_eq!(suffix, " # List Node.js 20.x versions");
-    }
-
-    #[test]
-    fn split_comment_suffix_returns_none_without_comment() {
-        assert!(split_comment_suffix("  vp env list").is_none());
     }
 
     #[test]

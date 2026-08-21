@@ -290,6 +290,7 @@ url = "2.5.4"
 uuid = "1.17.0"
 vfs = "0.13.0"
 vp_command = { path = "crates/vp_command" }
+vp_cli_help = { path = "crates/vp_cli_help" }
 vp_error = { path = "crates/vp_error" }
 vp_js_runtime = { path = "crates/vp_js_runtime" }
 vp_migration = { path = "crates/vp_migration" }

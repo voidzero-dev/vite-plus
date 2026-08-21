@@ -3,8 +3,9 @@ use std::{num::NonZeroU32, str::FromStr};
 use clap::{Arg, ArgAction, Args, Command};
 use napi::bindgen_prelude::Either;
 use napi_derive::napi;
+use vp_cli_help::{help_doc_from_command, print_help_doc};
 
-use super::parse::{CliHelpDoc, CliParseError, ParseResult, help_doc, parse_args};
+use super::parse::{CliParseError, ParseResult, parse_args};
 
 const CONCURRENT_VALUE_ERROR: &str = "use true, false, or an integer from 1 through 4294967295";
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
@@ -197,7 +198,7 @@ impl From<StagedCliArgs> for StagedArgs {
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseStagedArgsOutcome {
     Ok { value: StagedArgs },
-    Help { doc: CliHelpDoc },
+    Exit { code: u32 },
     Error { error: CliParseError },
 }
 
@@ -206,7 +207,9 @@ pub fn parse_staged_args(argv: Vec<String>) -> ParseStagedArgsOutcome {
     match parse_args::<StagedCliArgs>(staged_command(), argv) {
         ParseResult::Ok(value) => ParseStagedArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            ParseStagedArgsOutcome::Help { doc: help_doc(*command, Some(DOCUMENTATION_URL)) }
+            let doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            print_help_doc(&doc);
+            ParseStagedArgsOutcome::Exit { code: 0 }
         }
         ParseResult::Error(error) => ParseStagedArgsOutcome::Error { error },
     }
