@@ -5,6 +5,7 @@ import {
   parseCreateArgs,
   parseHooksArgs,
   parseMigrateArgs,
+  parseStagedArgs,
 } from '../../binding/index.js';
 
 function expectParsed<T>(outcome: { status: string; value?: T }): T {
@@ -24,6 +25,21 @@ function expectParseError(outcome: { status: string; error?: { kind: string; mes
 }
 
 describe('JavaScript command NAPI arguments', () => {
+  it('returns staged field names and only explicit values', () => {
+    expect(
+      expectParsed(
+        parseStagedArgs([
+          '--allow-empty',
+          '--concurrent=2',
+          '--diff-filter',
+          'ACMR',
+          '--no-stash',
+        ]),
+      ),
+    ).toEqual({ allowEmpty: true, concurrent: 2, diffFilter: 'ACMR', stash: false });
+    expect(expectParsed(parseStagedArgs([]))).toEqual({});
+  });
+
   it('returns config field names and only explicit values', () => {
     expect(
       expectParsed(parseConfigArgs(['--hooks-dir', '.custom', '--hooks', '--no-agent'])),
