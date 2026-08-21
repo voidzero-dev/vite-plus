@@ -85,27 +85,58 @@ export function suggestAvailableTargetDir(defaultTargetDir: string, cwd: string)
   return suggestedTargetDir;
 }
 
+function describeExistingTarget(projectDirFullPath: string, stats: fs.Stats) {
+  if (stats.isSymbolicLink()) {
+    return {
+      description: `Target path "${projectDirFullPath}" is a symbolic link`,
+      removeLabel: 'Remove symbolic link and continue',
+    };
+  }
+  if (stats.isDirectory()) {
+    return {
+      description: `Target directory "${projectDirFullPath}" is not empty`,
+      removeLabel: 'Remove existing files and continue',
+    };
+  }
+  return {
+    description: `Target path "${projectDirFullPath}" already exists`,
+    removeLabel: 'Remove existing path and continue',
+  };
+}
+
+function stripTrailingPathSeparators(targetPath: string) {
+  const root = path.parse(targetPath).root;
+  let end = targetPath.length;
+  while (end > root.length && targetPath[end - 1] === path.sep) {
+    end--;
+  }
+  return targetPath.slice(0, end);
+}
+
 export async function checkProjectDirExists(projectDirFullPath: string, interactive?: boolean) {
-  if (isTargetDirAvailable(projectDirFullPath)) {
+  const targetPath = stripTrailingPathSeparators(projectDirFullPath);
+  const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  if (!stats || (stats.isDirectory() && isEmpty(targetPath))) {
     return;
   }
+  const { description, removeLabel } = describeExistingTarget(targetPath, stats);
   if (!interactive) {
     prompts.log.info(
       'Use --directory to specify a different location or remove the directory first',
     );
-    cancelAndExit(`Target directory "${projectDirFullPath}" is not empty`, 1);
+    cancelAndExit(description, 1);
   }
 
-  // Handle directory if it exists and is not empty
+  // Handle an existing target that cannot be reused as-is.
   const overwrite = await prompts.select({
-    message: `Target directory "${projectDirFullPath}" is not empty. Please choose how to proceed:`,
+    message: `${description}. Please choose how to proceed:`,
     options: [
       {
         label: 'Cancel operation',
         value: 'no',
       },
       {
-        label: 'Remove existing files and continue',
+        label: removeLabel,
         value: 'yes',
       },
     ],
@@ -117,7 +148,7 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
 
   switch (overwrite) {
     case 'yes':
-      emptyDir(projectDirFullPath);
+      clearTargetPath(targetPath);
       break;
     case 'no':
       cancelAndExit();
@@ -129,20 +160,28 @@ function isEmpty(path: string) {
   return files.length === 0 || (files.length === 1 && files[0] === '.git');
 }
 
-function emptyDir(dir: string) {
-  if (!fs.existsSync(dir)) {
+function clearTargetPath(targetPath: string) {
+  const strippedTargetPath = stripTrailingPathSeparators(targetPath);
+  const stats = fs.lstatSync(strippedTargetPath, { throwIfNoEntry: false });
+  if (!stats) {
     return;
   }
-  for (const file of fs.readdirSync(dir)) {
+  if (!stats.isDirectory()) {
+    fs.rmSync(strippedTargetPath, { force: true });
+    return;
+  }
+  for (const file of fs.readdirSync(strippedTargetPath)) {
     if (file === '.git') {
       continue;
     }
-    fs.rmSync(path.resolve(dir, file), { recursive: true, force: true });
+    fs.rmSync(path.resolve(strippedTargetPath, file), { recursive: true, force: true });
   }
 }
 
 export function isTargetDirAvailable(projectDirFullPath: string) {
-  return !fs.existsSync(projectDirFullPath) || isEmpty(projectDirFullPath);
+  const targetPath = stripTrailingPathSeparators(projectDirFullPath);
+  const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  return !stats || (stats.isDirectory() && isEmpty(targetPath));
 }
 
 function validateTargetDir(input?: string, cwd?: string): { directory: string; error?: string } {
