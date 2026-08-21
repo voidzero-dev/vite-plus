@@ -142,9 +142,9 @@ jobs:
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
             6. If the stable `tsdown` version changed, confirm that
                `TSDOWN_MIGRATE_VERSION` in
-               `packages/cli/src/migration/migrator/tsup.ts` uses the same stable
-               version. Do not use a prerelease version or an npm dist-tag. The
-               upgrade script must stop if the two stable versions do not match.
+               `packages/cli/src/utils/constants.ts` uses the same stable version.
+               Do not use a prerelease version or an npm dist-tag. The upgrade
+               script must stop if the two stable versions do not match.
             7. Follow `.claude/skills/sync-upstream-dependency-docs/SKILL.md` to
                update version-specific documentation for dependencies changed in this run.
             8. Install the global CLI:

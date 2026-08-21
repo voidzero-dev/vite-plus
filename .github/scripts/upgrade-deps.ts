@@ -376,9 +376,9 @@ async function updateTsdownMigrateVersion(
     throw new Error('The tsdown catalog update did not record a version');
   }
 
-  const filePath = path.join(ROOT, 'packages/cli/src/migration/migrator/tsup.ts');
+  const filePath = path.join(ROOT, 'packages/cli/src/utils/constants.ts');
   const content = fs.readFileSync(filePath, 'utf8');
-  const pattern = /const TSDOWN_MIGRATE_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
+  const pattern = /export const TSDOWN_MIGRATE_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
   let currentMigrateVersion: string | undefined;
   const tsdownAdvanced = tsdownChange.old !== tsdownChange.new;
 
@@ -392,7 +392,7 @@ async function updateTsdownMigrateVersion(
   const updated = content.replace(pattern, (_match: string, captured: string) => {
     currentMigrateVersion = captured;
     const nextMigrateVersion = tsdownAdvanced ? stableMigrateVersion : captured;
-    return `const TSDOWN_MIGRATE_VERSION = '${nextMigrateVersion}';`;
+    return `export const TSDOWN_MIGRATE_VERSION = '${nextMigrateVersion}';`;
   });
   if (currentMigrateVersion === undefined) {
     throw new Error(
@@ -404,7 +404,7 @@ async function updateTsdownMigrateVersion(
   const nextMigrateVersion = tsdownAdvanced ? stableMigrateVersion : currentMigrateVersion;
   fs.writeFileSync(filePath, updated);
   recordChange('tsdown-migrate', currentMigrateVersion, nextMigrateVersion);
-  console.log('Updated packages/cli/src/migration/migrator/tsup.ts');
+  console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
 // ============ Update README.md manual-migration vitest pins ============

@@ -17,6 +17,10 @@ export const VITE_CONFIG_FILES = [
 
 export const VITEST_VERSION = '4.1.11';
 
+// Stable 0.22.x predates non-TTY support. The dependency upgrade script replaces
+// this RC with the matching stable version when the bundled tsdown version advances.
+export const TSDOWN_MIGRATE_VERSION = '0.23.0-rc.0';
+
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {

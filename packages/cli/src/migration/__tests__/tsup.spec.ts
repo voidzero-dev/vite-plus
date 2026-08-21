@@ -13,6 +13,7 @@ vi.mock('../../utils/prompts.ts', () => ({
 
 import { PackageManager } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
+import { TSDOWN_MIGRATE_VERSION } from '../../utils/constants.ts';
 import { migrateTsupToTsdown } from '../migrator/tsup.ts';
 
 const mockRunCommandSilently = vi.mocked(runCommandSilently);
@@ -51,7 +52,13 @@ describe('tsup migration', () => {
 
     expect(mockRunCommandSilently).toHaveBeenCalledWith({
       command: 'vp',
-      args: ['dlx', 'tsdown-migrate@0.23.0-rc.0', '--yes', '--package-manager', 'npm'],
+      args: [
+        'dlx',
+        `tsdown-migrate@${TSDOWN_MIGRATE_VERSION}`,
+        '--yes',
+        '--package-manager',
+        'npm',
+      ],
       cwd: projectPath,
       envs: process.env,
     });

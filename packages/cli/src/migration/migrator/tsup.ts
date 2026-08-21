@@ -6,16 +6,13 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
+import { TSDOWN_MIGRATE_VERSION } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
 import { type MigrationReport } from '../report.ts';
-
-// Stable 0.22.x predates non-TTY support. The dependency upgrade script replaces
-// this RC with the matching stable version when the bundled tsdown version advances.
-const TSDOWN_MIGRATE_VERSION = '0.23.0-rc.0';
 
 export function detectTsupProject(
   projectPath: string,
