@@ -1292,7 +1292,13 @@ jobs:
 
       - name: Build Windows installers
         shell: bash
-        run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
+        run: |
+          cargo build --release -p vp_global_cli -p vp_installer
+
+          target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
+          case "$target_dir" in /*|[A-Za-z]:*) ;; *) target_dir="$PWD/$target_dir" ;; esac
+          cd crates/vp_trampoline
+          CARGO_TARGET_DIR="$target_dir" cargo build --release
 
       - name: vp-setup.exe rejects invalid directory overrides
         shell: pwsh
