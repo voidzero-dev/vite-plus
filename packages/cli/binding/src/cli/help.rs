@@ -6,6 +6,13 @@ use vt::ExitStatus;
 
 use super::types::SynthesizableSubcommand;
 
+/// Subcommands that exist only in the global `vp` binary.
+///
+/// Keep in sync with the self-management variants of `Commands` in
+/// `crates/vp_global_cli/src/cli.rs`; the local CLI cannot run them and only
+/// needs the names to point users at the global installation.
+const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
+
 pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
@@ -118,6 +125,14 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
     let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
         return false;
     };
+
+    if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
+        let command = format!("`{invalid_subcommand}`").bright_blue().to_string();
+        output::error(&format!(
+            "The {command} command is only available in the global `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary."
+        ));
+        return true;
+    }
 
     let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
@@ -313,7 +328,7 @@ mod tests {
     fn global_subcommands_produce_invalid_subcommand_error() {
         use clap::error::ErrorKind;
 
-        for subcommand in ["config", "create", "env", "hooks", "migrate"] {
+        for subcommand in ["config", "create", "env", "hooks", "implode", "migrate", "upgrade"] {
             let error = CLIArgs::try_parse_from(["vp", subcommand])
                 .expect_err(&format!("expected error for global subcommand '{subcommand}'"));
             assert_eq!(
