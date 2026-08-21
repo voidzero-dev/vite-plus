@@ -176,11 +176,14 @@ resolution_home_dir() {
   fi
 }
 
-# Released setup-vp versions add ~/.vite-plus/bin to the GitHub Actions PATH.
-# They do this after the installer exits. Use the monolithic layout until
-# setup-vp declares support for VP_DUMP_DIRS.
+# Released setup-vp versions add ~/.vite-plus/bin to the GitHub Actions or
+# GitLab CI/CD PATH. They do this after the installer exits. Use the monolithic
+# layout until setup-vp declares support for VP_DUMP_DIRS.
 enable_setup_vp_legacy_compatibility() {
-  [ "${GITHUB_ACTION_REPOSITORY:-}" = "voidzero-dev/setup-vp" ] || return 0
+  if [ "${GITHUB_ACTION_REPOSITORY:-}" != "voidzero-dev/setup-vp" ]; then
+    [ "${GITLAB_CI:-}" = "true" ] || return 0
+    [ -n "${SETUP_VP_SETUP_REF:-}" ] || return 0
+  fi
   [ "${VP_VPDIRS_AWARE:-}" != "1" ] || return 0
   [ -z "${VP_HOME:-}" ] || return 0
   [ -z "${VP_BIN_DIR:-}" ] || return 0

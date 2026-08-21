@@ -233,7 +233,7 @@ jobs:
           cat "$OUTPUT"
           grep -F "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together" "$OUTPUT"
 
-      - name: Existing setup-vp uses legacy layout
+      - name: Existing GitHub setup-vp uses legacy layout
         run: |
           set -euo pipefail
           LEGACY=$(mktemp -d)
@@ -245,6 +245,27 @@ jobs:
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-setup-vp-legacy bash packages/cli/install.sh
+
+          test -e "$LEGACY/.vite-plus/current"
+          test -e "$LEGACY/.vite-plus/bin/vp"
+          test ! -d "$LEGACY/.local/share/vite-plus"
+          test "$(readlink "$LEGACY/.vite-plus/bin/vp")" = "$LEGACY/.vite-plus/current/bin/vp"
+          "$LEGACY/.vite-plus/bin/vp" --version
+
+      - name: Existing GitLab setup-vp uses legacy layout
+        run: |
+          set -euo pipefail
+          LEGACY=$(mktemp -d)
+          FAKE_TGZ=$(mktemp)
+          export HOME="$LEGACY"
+          export USERPROFILE="$LEGACY"
+          unset GITHUB_ACTION_REPOSITORY
+          export GITLAB_CI=true
+          export SETUP_VP_SETUP_REF=v1.15.0
+          unset VP_VPDIRS_AWARE
+          unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
+          unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-setup-vp-gitlab-legacy bash packages/cli/install.sh
 
           test -e "$LEGACY/.vite-plus/current"
           test -e "$LEGACY/.vite-plus/bin/vp"
