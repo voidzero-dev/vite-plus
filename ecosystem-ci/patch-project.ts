@@ -310,7 +310,9 @@ if (project === 'tiptap') {
     /,\s*(?:"options"|options):\s*\{\s*(?:"typeAware"|typeAware):\s*true,\s*(?:"typeCheck"|typeCheck):\s*true\s*\}/;
   const patched = viteConfig.replace(typeAwareOptions, '');
   if (patched === viteConfig) {
-    throw new Error(`tiptap patch: migrated type-aware lint options not found in ${viteConfigPath}`);
+    throw new Error(
+      `tiptap patch: migrated type-aware lint options not found in ${viteConfigPath}`,
+    );
   }
   await writeFile(viteConfigPath, patched, 'utf-8');
 }
