@@ -218,13 +218,29 @@ if (project === 'nuxt-devtools') {
   // the local registry. Trust that lockfile when package scripts invoke pnpm
   // again: the registry's unpublished 0.0.0 tarballs do not have npm trust
   // metadata, so a second supply-chain verification rejects them.
+  //
+  // Nuxt DevTools uses one YAML anchor for its Vite DevTools package family.
+  // Align that source with vite-plus-core so pnpm resolves the core package,
+  // kit, and optional integration peers as one compatible release family.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
   const workspace = await readFile(workspacePath, 'utf-8');
   const trustPolicy = 'trustPolicy: no-downgrade';
   if (!workspace.includes(trustPolicy)) {
     throw new Error(`nuxt-devtools patch: \`${trustPolicy}\` not found in ${workspacePath}`);
   }
-  const patched = workspace.replace(trustPolicy, `${trustPolicy}\ntrustLockfile: true`);
+  const viteDevtoolsVersionSource = /^([ \t]*vite-devtools:[ \t]+&vite-devtools[ \t]+)\S+[ \t]*$/m;
+  if (!viteDevtoolsVersionSource.test(workspace)) {
+    throw new Error(
+      `nuxt-devtools patch: Vite DevTools version source not found in ${workspacePath}`,
+    );
+  }
+  const viteDevtoolsVersion = vitePlusCorePkg.devDependencies['@vitejs/devtools'];
+  const patched = workspace
+    .replace(trustPolicy, `${trustPolicy}\ntrustLockfile: true`)
+    .replace(
+      viteDevtoolsVersionSource,
+      (_line, prefix: string) => `${prefix}${viteDevtoolsVersion}`,
+    );
   await writeFile(workspacePath, patched, 'utf-8');
 }
 
@@ -248,14 +264,6 @@ const vitestOverrides = {
   '@vitest/coverage-v8': VITEST_VERSION,
   '@vitest/coverage-istanbul': VITEST_VERSION,
 };
-
-// A flagged fixture directly exercises Vite DevTools. Align its dependency
-// with the version used to build vite-plus-core so an upstream bump tests the
-// new version instead of the fixture's pinned lockfile version.
-const viteDevtoolsOverride =
-  'viteDevtools' in repoConfig && repoConfig.viteDevtools
-    ? { '@vitejs/devtools': vitePlusCorePkg.devDependencies['@vitejs/devtools'] }
-    : {};
 
 // E2E intentionally installs just-published toolchain packages (e.g.
 // @oxlint/migrate during `vp migrate`, freshly bumped @oxc-project/runtime
@@ -287,7 +295,6 @@ const migrateEnv: NodeJS.ProcessEnv = {
   VP_OVERRIDE_PACKAGES: JSON.stringify({
     vite: `npm:@voidzero-dev/vite-plus-core@${vitePlusVersion}`,
     ...vitestOverrides,
-    ...viteDevtoolsOverride,
   }),
   // The vp binary was built before the pack step pinned the package versions,
   // so align the version migrate pins with the tgz the registry serves.
