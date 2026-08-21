@@ -16,7 +16,7 @@ if (!validArgs) {
 }
 
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-packageJson.scripts.build = 'tsdown';
+packageJson.scripts.build = packageJson.scripts.build.replace(/\btsup(?:-node)?\b/g, 'tsdown');
 packageJson.devDependencies.tsdown = '0.22.14';
 delete packageJson.devDependencies.tsup;
 fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);

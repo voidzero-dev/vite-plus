@@ -12,7 +12,7 @@ import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
-import { type MigrationReport } from '../report.ts';
+import { addMigrationWarning, type MigrationReport } from '../report.ts';
 
 function showTsdownMigrationOptions(
   targetLabel = 'the project root',
@@ -106,15 +106,26 @@ function restoreTsupMigrationTargets(snapshots: Map<string, Buffer | undefined>)
   return failures;
 }
 
-/**
- * Run `vp dlx tsdown-migrate` in `cwd` with graceful error handling.
- * Returns true on success, false on failure (spawn error or non-zero exit).
- */
+function extractTsdownMigrationWarnings(output: Buffer): string[] {
+  return output
+    .toString()
+    .replaceAll('\r\n', '\n')
+    .split(/\n\s*\n/)
+    .map((block) =>
+      block
+        .trim()
+        .match(/^WARN\s+([\s\S]+)$/)?.[1]
+        ?.trim(),
+    )
+    .filter((warning): warning is string => !!warning);
+}
+
+/** Run `vp dlx tsdown-migrate` in `cwd` with graceful error handling. */
 async function runTsdownMigrateStep(
   vpBin: string,
   cwd: string,
   packageManager: PackageManager,
-): Promise<boolean> {
+): Promise<{ ok: boolean; warnings: string[] }> {
   try {
     const result = await runCommandSilently({
       command: vpBin,
@@ -134,11 +145,17 @@ async function runTsdownMigrateStep(
       if (stderr) {
         prompts.log.warn(`⚠ ${stderr}`);
       }
-      return false;
+      return { ok: false, warnings: [] };
     }
-    return true;
+    return {
+      ok: true,
+      warnings: [
+        ...extractTsdownMigrationWarnings(result.stdout),
+        ...extractTsdownMigrationWarnings(result.stderr),
+      ],
+    };
   } catch {
-    return false;
+    return { ok: false, warnings: [] };
   }
 }
 
@@ -169,11 +186,13 @@ export async function migrateTsupToTsdown(
     // finds. Preserve those files across all targets so a later failure can
     // roll the complete workspace back to its pre-migration state.
     const snapshots = snapshotTsupMigrationTargets(tsupTargets);
+    const migrationWarnings: { targetLabel: string; warning: string }[] = [];
     spinner.start('Migrating tsup config to tsdown...');
     for (const target of tsupTargets) {
-      const targetLabel = displayRelative(target) || 'the project root';
-      const migrateOk = await runTsdownMigrateStep(vpBin, target, packageManager);
-      if (!migrateOk) {
+      const targetLabel =
+        target === projectPath ? 'the project root' : displayRelative(target, projectPath);
+      const migrateResult = await runTsdownMigrateStep(vpBin, target, packageManager);
+      if (!migrateResult.ok) {
         spinner.stop();
         const restoreFailures = restoreTsupMigrationTargets(snapshots);
         if (restoreFailures.length > 0) {
@@ -186,18 +205,32 @@ export async function migrateTsupToTsdown(
         showTsdownMigrationOptions(targetLabel, true);
         return false;
       }
+      for (const warning of migrateResult.warnings) {
+        migrationWarnings.push({ targetLabel, warning });
+      }
     }
     spinner.stop('tsup config migrated to tsdown.config');
+
+    for (const { targetLabel, warning } of migrationWarnings) {
+      const message =
+        targetLabel === 'the project root'
+          ? `tsdown-migrate: ${warning}`
+          : `tsdown-migrate (${targetLabel}): ${warning}`;
+      if (options?.report) {
+        addMigrationWarning(options.report, message);
+      } else {
+        prompts.log.warn(message);
+      }
+    }
   }
 
   if (options?.report) {
     options.report.tsupMigrated = true;
   }
 
-  // Cleanup runs uniformly across the root and every workspace package —
-  // delete tsup config files and remove the `tsup` dependency from
-  // package.json. Mirrors the eslint/prettier cleanup pass.
-  for (const target of targets) {
+  // Only clean packages that tsdown-migrate processed. Other packages can
+  // still use tsup when they do not have a config that can be migrated.
+  for (const target of tsupTargets) {
     if (!fs.existsSync(path.join(target, 'package.json'))) {
       continue;
     }
@@ -255,15 +288,26 @@ function rewriteTsupPackageJson(packageJsonPath: string): void {
     return;
   }
   editJsonFile<{
+    scripts?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
-    // Remove the tsup dependency itself. Scripts (`"build": "tsup"`) are
-    // already rewritten to `vp pack` generically by `rewriteScripts` (see
-    // `replace-tsup` in rules/vite-tools.yml), and `tsdown` is a managed
-    // vite-plus-bundled dependency (see `REMOVE_PACKAGES`), so neither needs
-    // handling here.
+    // tsdown-migrate rewrites the command to tsdown. Normalize explicit config
+    // paths as a safeguard before the generic tsdown -> vp pack rewrite runs.
+    for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
+      let rewritten = script;
+      for (const configFile of TSUP_CONFIG_FILES) {
+        rewritten = rewritten.replaceAll(configFile, configFile.replace('tsup', 'tsdown'));
+      }
+      if (rewritten !== script) {
+        pkg.scripts![name] = rewritten;
+        changed = true;
+      }
+    }
+
+    // Remove any tsup dependency left by the external migrator. The tsdown
+    // dependency is removed later because vite-plus bundles it.
     for (const field of ['devDependencies', 'dependencies'] as const) {
       if (pkg[field]?.tsup) {
         delete pkg[field].tsup;

@@ -52,7 +52,7 @@ package a manifest is restored
 {
   "name": "a",
   "scripts": {
-    "build": "tsup"
+    "build": "tsup --config tsup.config.ts"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

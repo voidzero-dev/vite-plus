@@ -52,7 +52,7 @@ the tsup dependency and script are preserved
 {
   "name": "migration-from-tsup",
   "scripts": {
-    "build": "tsup"
+    "build": "tsup --config tsup.config.ts"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

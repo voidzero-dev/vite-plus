@@ -17,8 +17,10 @@ VITE+ - The Unified Toolchain for the Web
 tsup configuration detected. Auto-migrating to tsdown...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 3 config updates applied, 1 file had imports rewritten
+• 2 config updates applied, 1 file had imports rewritten
 • tsup config migrated to tsdown (`vp pack`)
+! Warnings:
+  - tsdown-migrate: The splitting option is currently unsupported in tsdown. Code splitting is always enabled and cannot be disabled.
 → Manual follow-up:
   - Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
 ```
@@ -42,6 +44,7 @@ export default defineConfig({
   entry: ['src/index.ts'],
   dts: true,
   format: ['esm', 'cjs'],
+  splitting: false,
   target: false,
 });
 ```
@@ -70,7 +73,7 @@ tsup is removed and its script uses vp pack
 {
   "name": "migration-from-tsup",
   "scripts": {
-    "build": "vp pack"
+    "build": "vp pack --config tsdown.config.ts"
   },
   "devDependencies": {
     "vite": "catalog:",

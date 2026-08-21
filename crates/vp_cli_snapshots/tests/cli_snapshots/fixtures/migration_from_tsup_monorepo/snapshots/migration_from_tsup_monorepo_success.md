@@ -56,7 +56,7 @@ package a uses vp pack
 {
   "name": "a",
   "scripts": {
-    "build": "vp pack"
+    "build": "vp pack --config tsdown.config.ts"
   },
   "devDependencies": {
     "vite": "catalog:",

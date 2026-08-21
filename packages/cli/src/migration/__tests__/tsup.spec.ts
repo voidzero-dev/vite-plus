@@ -4,9 +4,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockConfirm, mockInfo } = vi.hoisted(() => ({
+const { mockConfirm, mockInfo, mockWarn } = vi.hoisted(() => ({
   mockConfirm: vi.fn(),
   mockInfo: vi.fn(),
+  mockWarn: vi.fn(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
@@ -15,7 +16,7 @@ vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   log: {
     info: mockInfo,
     success: vi.fn(),
-    warn: vi.fn(),
+    warn: mockWarn,
   },
 }));
 
@@ -29,8 +30,8 @@ vi.mock('../../utils/prompts.ts', () => ({
 import { PackageManager } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
-import { displayRelative } from '../../utils/path.ts';
 import { confirmTsupMigration, detectTsupProject, migrateTsupToTsdown } from '../migrator/tsup.ts';
+import { createMigrationReport } from '../report.ts';
 
 const mockRunCommandSilently = vi.mocked(runCommandSilently);
 
@@ -69,6 +70,7 @@ describe('tsup migration', () => {
     mockRunCommandSilently.mockReset();
     mockConfirm.mockReset();
     mockInfo.mockReset();
+    mockWarn.mockReset();
   });
 
   it('passes the package manager as a separate CLI argument', async () => {
@@ -169,6 +171,107 @@ describe('tsup migration', () => {
     }
   });
 
+  it('preserves workspace packages that do not have a tsup config', async () => {
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      '{"name":"workspace","private":true}\n',
+    );
+    fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+    const packages = [
+      { name: 'a', path: 'packages/a' },
+      { name: 'b', path: 'packages/b' },
+    ];
+    for (const workspacePackage of packages) {
+      const packagePath = path.join(projectPath, workspacePackage.path);
+      fs.mkdirSync(packagePath, { recursive: true });
+      fs.writeFileSync(
+        path.join(packagePath, 'package.json'),
+        `${JSON.stringify(
+          {
+            name: workspacePackage.name,
+            scripts: { build: 'tsup' },
+            devDependencies: { tsup: '^8.5.0' },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+    }
+    fs.writeFileSync(path.join(projectPath, 'packages/a/tsup.config.ts'), 'export default {};\n');
+    const packageBPath = path.join(projectPath, 'packages/b/package.json');
+    const originalPackageB = fs.readFileSync(packageBPath, 'utf8');
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, undefined, packages, {
+        silent: true,
+      }),
+    ).resolves.toBe(true);
+
+    expect(mockRunCommandSilently).toHaveBeenCalledTimes(1);
+    expect(mockRunCommandSilently).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: path.join(projectPath, 'packages/a') }),
+    );
+    expect(fs.readFileSync(packageBPath, 'utf8')).toBe(originalPackageB);
+  });
+
+  it('rewrites explicit tsup config paths after migration', async () => {
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'fixture',
+          scripts: { build: 'tsup --config ./tsup.config.ts' },
+          devDependencies: { tsup: '^8.5.0' },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    mockRunCommandSilently.mockImplementation(async () => {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      packageJson.scripts.build = 'tsdown --config ./tsup.config.ts';
+      packageJson.devDependencies.tsdown = '0.22.14';
+      delete packageJson.devDependencies.tsup;
+      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+      fs.writeFileSync(path.join(projectPath, 'tsdown.config.ts'), 'export default {};\n');
+      fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));
+      return { exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    });
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, 'tsup.config.ts', undefined, {
+        silent: true,
+      }),
+    ).resolves.toBe(true);
+
+    const packageJson = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
+    expect(packageJson.scripts.build).toBe('tsdown --config ./tsdown.config.ts');
+  });
+
+  it('adds successful tsdown-migrate warnings to the migration report', async () => {
+    mockRunCommandSilently.mockResolvedValue({
+      exitCode: 0,
+      stdout: Buffer.from('\n WARN  The plugins option requires manual migration.\n'),
+      stderr: Buffer.from(
+        'Progress: resolved 1\n\n WARN  The splitting option is currently unsupported in tsdown.\n',
+      ),
+    });
+    const report = createMigrationReport();
+
+    await expect(
+      migrateTsupToTsdown(projectPath, false, PackageManager.pnpm, 'tsup.config.ts', undefined, {
+        silent: true,
+        report,
+      }),
+    ).resolves.toBe(true);
+
+    expect(report.warnings).toEqual([
+      'tsdown-migrate: The plugins option requires manual migration.',
+      'tsdown-migrate: The splitting option is currently unsupported in tsdown.',
+    ]);
+  });
+
   it('shows the migration skill when automatic migration is declined', async () => {
     mockConfirm.mockResolvedValue(false);
 
@@ -191,9 +294,7 @@ describe('tsup migration', () => {
     ).resolves.toBe(false);
 
     expect(mockInfo).toHaveBeenCalledWith(
-      `Automatic tsup migration failed.\n\n${manualMigrationOptions(
-        displayRelative(projectPath) || 'the project root',
-      )}\n`,
+      `Automatic tsup migration failed.\n\n${manualMigrationOptions()}\n`,
     );
   });
 });
