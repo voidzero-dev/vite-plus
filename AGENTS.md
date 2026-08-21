@@ -38,9 +38,11 @@ vite-plus/
 ├── crates/vp_js_runtime/    # Managed Node.js runtime support
 ├── crates/vp_migration/     # Rust migration helpers
 ├── crates/vp_pm_cli/        # Package-manager detection, download, command resolution, and dispatch
+├── crates/vp_pm_cli_macros/ # `#[pm_args]` proc macro used by vp_pm_cli command definitions
 ├── crates/vp_setup/         # Setup helpers
 ├── crates/vp_shared/        # Shared Rust env config, tracing, output, utilities
 ├── crates/vp_static_config/ # Static extraction of vite.config.* data
+├── crates/vp_toolchain/     # toolchain.json manifest model, validation, and `why` hints
 └── crates/vp_trampoline/    # Windows shim trampoline
 ```
 
