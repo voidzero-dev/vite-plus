@@ -36,39 +36,74 @@ export function detectTsupProject(
   packages?: WorkspacePackage[],
 ): {
   hasDependency: boolean;
+  hasConfig: boolean;
   configFile?: string;
 } {
   const packageJsonPath = path.join(projectPath, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return { hasDependency: false };
+  let hasDependency = false;
+  if (fs.existsSync(packageJsonPath)) {
+    const pkg = readJsonFile(packageJsonPath) as {
+      devDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
+    };
+    hasDependency = !!(pkg.devDependencies?.tsup || pkg.dependencies?.tsup);
   }
-  const pkg = readJsonFile(packageJsonPath) as {
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
-  };
-  let hasDependency = !!(pkg.devDependencies?.tsup || pkg.dependencies?.tsup);
   const configs = detectConfigs(projectPath);
   const configFile = configs.tsupConfig;
+  let hasConfig = !!configFile;
 
-  // If root doesn't have tsup dependency, check workspace packages
-  if (!hasDependency && packages) {
-    for (const wp of packages) {
-      const pkgJsonPath = path.join(projectPath, wp.path, 'package.json');
-      if (!fs.existsSync(pkgJsonPath)) {
-        continue;
-      }
-      const wpPkg = readJsonFile(pkgJsonPath) as {
-        devDependencies?: Record<string, string>;
-        dependencies?: Record<string, string>;
-      };
-      if (wpPkg.devDependencies?.tsup || wpPkg.dependencies?.tsup) {
-        hasDependency = true;
-        break;
+  for (const wp of packages ?? []) {
+    const workspacePath = path.join(projectPath, wp.path);
+    hasConfig ||= !!detectConfigs(workspacePath).tsupConfig;
+
+    if (!hasDependency) {
+      const workspacePackageJsonPath = path.join(workspacePath, 'package.json');
+      if (fs.existsSync(workspacePackageJsonPath)) {
+        const workspacePackageJson = readJsonFile(workspacePackageJsonPath) as {
+          devDependencies?: Record<string, string>;
+          dependencies?: Record<string, string>;
+        };
+        hasDependency = !!(
+          workspacePackageJson.devDependencies?.tsup || workspacePackageJson.dependencies?.tsup
+        );
       }
     }
   }
 
-  return { hasDependency, configFile };
+  return { hasDependency, hasConfig, configFile };
+}
+
+const TSDOWN_MIGRATION_FILES = [
+  'package.json',
+  ...TSUP_CONFIG_FILES,
+  ...TSUP_CONFIG_FILES.map((file) => file.replace('tsup', 'tsdown')),
+];
+
+function snapshotTsupMigrationTargets(targets: string[]): Map<string, Buffer | undefined> {
+  const snapshots = new Map<string, Buffer | undefined>();
+  for (const target of targets) {
+    for (const file of TSDOWN_MIGRATION_FILES) {
+      const filePath = path.join(target, file);
+      snapshots.set(filePath, fs.existsSync(filePath) ? fs.readFileSync(filePath) : undefined);
+    }
+  }
+  return snapshots;
+}
+
+function restoreTsupMigrationTargets(snapshots: Map<string, Buffer | undefined>): string[] {
+  const failures: string[] = [];
+  for (const [filePath, contents] of snapshots) {
+    try {
+      if (contents === undefined) {
+        fs.rmSync(filePath, { force: true });
+      } else {
+        fs.writeFileSync(filePath, contents);
+      }
+    } catch {
+      failures.push(displayRelative(filePath));
+    }
+  }
+  return failures;
 }
 
 /**
@@ -78,8 +113,6 @@ export function detectTsupProject(
 async function runTsdownMigrateStep(
   vpBin: string,
   cwd: string,
-  spinner: ReturnType<typeof getSpinner>,
-  targetLabel: string,
   packageManager: PackageManager,
 ): Promise<boolean> {
   try {
@@ -91,23 +124,20 @@ async function runTsdownMigrateStep(
         '--yes',
         '--package-manager',
         packageManager,
+        '--no-install',
       ],
       cwd,
       envs: process.env,
     });
     if (result.exitCode !== 0) {
-      spinner.stop();
       const stderr = result.stderr.toString().trim();
       if (stderr) {
         prompts.log.warn(`⚠ ${stderr}`);
       }
-      showTsdownMigrationOptions(targetLabel, true);
       return false;
     }
     return true;
   } catch {
-    spinner.stop();
-    showTsdownMigrationOptions(targetLabel, true);
     return false;
   }
 }
@@ -135,17 +165,25 @@ export async function migrateTsupToTsdown(
   );
 
   if (tsupTargets.length > 0) {
+    // tsdown-migrate rewrites package.json and renames every tsup config it
+    // finds. Preserve those files across all targets so a later failure can
+    // roll the complete workspace back to its pre-migration state.
+    const snapshots = snapshotTsupMigrationTargets(tsupTargets);
     spinner.start('Migrating tsup config to tsdown...');
     for (const target of tsupTargets) {
       const targetLabel = displayRelative(target) || 'the project root';
-      const migrateOk = await runTsdownMigrateStep(
-        vpBin,
-        target,
-        spinner,
-        targetLabel,
-        packageManager,
-      );
+      const migrateOk = await runTsdownMigrateStep(vpBin, target, packageManager);
       if (!migrateOk) {
+        spinner.stop();
+        const restoreFailures = restoreTsupMigrationTargets(snapshots);
+        if (restoreFailures.length > 0) {
+          prompts.log.warn(
+            `Could not restore these files after the failed migration:\n${restoreFailures
+              .map((file) => `  ${file}`)
+              .join('\n')}`,
+          );
+        }
+        showTsdownMigrationOptions(targetLabel, true);
         return false;
       }
     }
@@ -236,9 +274,9 @@ function rewriteTsupPackageJson(packageJsonPath: string): void {
   });
 }
 
-export function warnPackageLevelTsup() {
+export function warnMissingTsupConfig() {
   prompts.log.warn(
-    'tsup detected in workspace packages but no root config found. Package-level tsup must be migrated manually.',
+    'tsup detected, but no tsup config was found. The tsup setup must be migrated manually.',
   );
 }
 
@@ -275,9 +313,8 @@ export async function promptTsupMigration(
   if (!tsupProject.hasDependency) {
     return false;
   }
-  if (!tsupProject.configFile) {
-    // Packages have tsup but no root config → warn and skip
-    warnPackageLevelTsup();
+  if (!tsupProject.hasConfig) {
+    warnMissingTsupConfig();
     return false;
   }
   const confirmed = await confirmTsupMigration(interactive);

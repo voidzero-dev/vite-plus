@@ -24,8 +24,8 @@ import {
   preflightGitHooksSetup,
   warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
+  warnMissingTsupConfig,
   warnPackageLevelEslint,
-  warnPackageLevelTsup,
 } from './migrator.ts';
 import type { MigrationOptions } from './options.ts';
 
@@ -198,10 +198,10 @@ export async function collectTsupMigrationDecision(
 ): Promise<{ migrateTsup: boolean; tsupConfigFile?: string }> {
   const tsupProject = detectTsupProject(rootDir, packages);
   let migrateTsup = false;
-  if (tsupProject.hasDependency && tsupProject.configFile) {
+  if (tsupProject.hasDependency && tsupProject.hasConfig) {
     migrateTsup = await confirmTsupMigration(options.interactive);
   } else if (tsupProject.hasDependency) {
-    warnPackageLevelTsup();
+    warnMissingTsupConfig();
   }
 
   return { migrateTsup, tsupConfigFile: tsupProject.configFile };

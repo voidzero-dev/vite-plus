@@ -7,7 +7,8 @@ const validArgs =
   args[1]?.startsWith('tsdown-migrate@') &&
   args[2] === '--yes' &&
   args[3] === '--package-manager' &&
-  args[4] === 'pnpm';
+  args[4] === 'pnpm' &&
+  args[5] === '--no-install';
 
 if (!validArgs || process.env.TSDOWN_MIGRATE_STUB_FAIL === '1') {
   process.exit(1);
