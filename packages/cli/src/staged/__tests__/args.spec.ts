@@ -6,7 +6,7 @@ function expectParsed(argv: string[]) {
   const outcome = parseStagedArgs(argv);
   expect(outcome.status).toBe('ok');
   if (outcome.status !== 'ok') {
-    throw new Error(`Expected parsed arguments, got ${outcome.status}`);
+    throw new Error(`The parser returned ${outcome.status}. The test expected arguments.`);
   }
   return outcome.value;
 }
@@ -15,7 +15,7 @@ function expectParseError(argv: string[]) {
   const outcome = parseStagedArgs(argv);
   expect(outcome.status).toBe('error');
   if (outcome.status !== 'error') {
-    throw new Error(`Expected an argument error, got ${outcome.status}`);
+    throw new Error(`The parser returned ${outcome.status}. The test expected an error.`);
   }
   return outcome.error;
 }
@@ -42,7 +42,7 @@ describe('staged arguments', () => {
   ])('rejects invalid concurrency $argv', ({ argv }) => {
     const error = expectParseError(argv);
     expect(error.kind).toBe('invalid-value');
-    expect(error.message).toContain('must be true, false, or an integer from 1 to 4294967295');
+    expect(error.message).toContain('use true, false, or an integer from 1 through 4294967295');
   });
 
   it.each([['--no-cwd'], ['--no-diff'], ['--no-diff-filter'], ['--stash'], ['--no-debug']])(
@@ -75,7 +75,7 @@ describe('staged arguments', () => {
     });
   });
 
-  it('maps explicit boolean options without adding absent defaults', () => {
+  it('returns only explicit Boolean options', () => {
     expect(expectParsed(['--allow-empty', '--debug', '--no-stash'])).toEqual({
       allowEmpty: true,
       debug: true,

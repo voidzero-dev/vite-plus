@@ -7,8 +7,8 @@ steps = [
   { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },
   { argv = ["vpt", "write-file", "a.txt", "changed\n"], snapshot = false },
   { argv = ["git", "add", "a.txt"], snapshot = false },
-  { argv = ["vp", "staged", "--no-concurrent", "--verbose"], comment = "--no-concurrent should execute staged tasks instead of stalling", envs = [["TMPDIR", "${workspace}"]], timeout = 10000 },
-  { argv = ["vp", "staged", "--concurrent=0"], comment = "zero concurrency should fail before starting lint-staged", continue-on-failure = true },
-  { argv = ["vp", "staged", "--no-cwd"], comment = "negated string options should report a CLI error", continue-on-failure = true },
-  { argv = ["vp", "staged", "--no-diff"], comment = "negated diff should report a CLI error", continue-on-failure = true },
+  { argv = ["vp", "staged", "--no-concurrent", "--verbose"], comment = "--no-concurrent runs staged tasks and does not stall", envs = [["TMPDIR", "${workspace}"]], timeout = 10000 },
+  { argv = ["vp", "staged", "--concurrent=0"], comment = "zero concurrency fails before lint-staged starts", continue-on-failure = true },
+  { argv = ["vp", "staged", "--no-cwd"], comment = "negated string options report a CLI error", continue-on-failure = true },
+  { argv = ["vp", "staged", "--no-diff"], comment = "negated diff reports a CLI error", continue-on-failure = true },
 ]
