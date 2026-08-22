@@ -168,8 +168,10 @@ symbol, so neither the CRT startup nor `std` runtime init runs. The flow in
 
 1. `GetModuleFileNameW` gives the shim path and tool name. Replacing the `.exe`
    extension with `.shim` locates the per-tool sidecar.
-2. `CreateFileW` and `ReadFile` load the UTF-8 sidecar. The parser requires the
-   versioned header and accepts the `single-root` and `split` layouts.
+2. `CreateFileW` and `ReadFile` load the UTF-8 sidecar. Long paths are made
+   absolute with `GetFullPathNameW`, then use the `\\?\` drive prefix or the
+   `\\?\UNC\` network prefix. The parser requires the versioned header and
+   accepts the `single-root` and `split` layouts.
 3. `SetEnvironmentVariableW` pins the sidecar's layout. A single-root pointer
    sets `VP_HOME`. A split pointer removes `VP_HOME` and sets `VP_DATA_DIR`,
    `VP_BIN_DIR`, and `VP_CACHE_DIR`. Tool shims also set `VP_SHIM_TOOL` and
@@ -181,6 +183,7 @@ symbol, so neither the CRT startup nor `std` runtime init runs. The flow in
 5. `SetConsoleCtrlHandler` installs a handler that ignores Ctrl+C and
    Ctrl+Break; the child decides how to react.
 6. `CreateProcessW` spawns the child with inherited handles and startup info.
+   The payload path uses the same extended-length normalization as the sidecar.
    When the parent redirected stdio (`STARTF_USESTDHANDLES`), the standard
    handles are forced inheritable first, as in uv-trampoline and distlib.
 7. `WaitForSingleObject`, `GetExitCodeProcess`, and `ExitProcess` propagate the
@@ -207,7 +210,7 @@ infer the layout from directory paths.
 | `#![no_main]` + `mainCRTStartup` (no CRT startup, no `std` runtime init) | Done   |
 | Raw `CreateProcessW` instead of `std::process::Command`                  | Done   |
 
-**Binary size**: 13,312 B on x86_64-pc-windows-msvc and 13,824 B on
+**Binary size**: 14,336 B on both x86_64-pc-windows-msvc and
 aarch64-pc-windows-msvc, including sidecar parsing and error diagnostics. The
 sidecar-aware `std::process::Command` implementation was 221,696 B on x86_64.
 See Future Optimizations for the measured size ladder. The executable imports
@@ -307,17 +310,17 @@ When installing a pre-trampoline version (no `vp-shim.exe` in the package):
 | **Data embedding**  | PE resources (kind, path, script ZIP)    | Adjacent directory-layout sidecar |
 | **Dependencies**    | `windows` crate (unsafe, no CRT)         | Zero (raw FFI declaration)        |
 | **Toolchain**       | Nightly Rust (`panic="immediate-abort"`) | Nightly Rust (same technique)     |
-| **Binary size**     | 39-47 KiB                                | 13-14 KiB                         |
+| **Binary size**     | 39-47 KiB                                | 14 KiB                            |
 | **Entry point**     | `#![no_main]` + `mainCRTStartup`         | Same approach                     |
 | **Error output**    | `ufmt` (no `core::fmt`)                  | `WriteFile` + Win32 error codes   |
 | **Ctrl+C handling** | `SetConsoleCtrlHandler` → ignore         | Same approach                     |
 | **Exit code**       | `GetExitCodeProcess` → `exit()`          | Same approach                     |
 
-The Vite+ trampoline is smaller because it embeds no PE resources and needs no
-path canonicalization, job objects, or GUI subsystem support. It reads a small
-sidecar next to its own filename, resolves `vp.exe` under the recorded data
-root, and starts it. Both projects share the same build recipe and entry-point
-structure.
+The Vite+ trampoline is smaller because it embeds no PE resources and only
+normalizes long file and process paths. It needs no job objects or GUI
+subsystem support. It reads a small sidecar next to its own filename, resolves
+`vp.exe` under the recorded data root, and starts it. Both projects share the
+same build recipe and entry-point structure.
 
 ## Alternatives Considered
 
@@ -357,7 +360,7 @@ last row is the current sidecar-aware raw implementation.
 | Raw Win32 rewrite, normal `main` + build-std                                 | nightly   | 13,824 B  |
 | Raw Win32 rewrite + `#![no_main]`, no diagnostics                            | nightly   | 6,656 B   |
 | Fixed-layout raw Win32 + `#![no_main]` + full diagnostics                    | nightly   | 8,192 B   |
-| Sidecar-aware raw Win32 + `#![no_main]` + full diagnostics (shipped)         | nightly   | 13,312 B  |
+| Sidecar-aware raw Win32 + `#![no_main]` + full diagnostics (shipped)         | nightly   | 14,336 B  |
 
 For comparison: uv-trampoline ships 45,056 B (x64 console), Scoop's default
 kiennq shim is 136,192 B (statically linked MSVC C), and Scoop once vendored
