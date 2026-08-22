@@ -2,7 +2,7 @@
 
 #2309 on pnpm 12. pnpm 12 fixes the clobber upstream (a bare override key no longer strips a `catalog:` importer spec), so this pins that the range-qualified key vite-plus writes is also correct there rather than only being a pnpm 9-11 workaround.
 
-## `vp migrate --no-interactive --no-hooks --package-manager pnpm`
+## `vp migrate --no-interactive --no-hooks`
 
 migrate pins the toolchain through the workspace catalog
 

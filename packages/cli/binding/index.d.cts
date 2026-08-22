@@ -3461,6 +3461,32 @@ export interface CliOptions {
   resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
 }
 
+export interface CliParseError {
+  kind: string;
+  message: string;
+}
+
+export interface ConfigArgs {
+  hooksDir?: string;
+  hooks?: boolean;
+  agent?: boolean;
+}
+
+export interface CreateArgs {
+  templateName?: string;
+  directory?: string;
+  agent?: false | string | Array<string>;
+  editor?: false | string;
+  git?: boolean;
+  hooks?: boolean;
+  packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun';
+  approveBuilds?: boolean;
+  verbose?: boolean;
+  interactive?: boolean;
+  list?: boolean;
+  templateArgs: Array<string>;
+}
+
 /**
  * Detect the workspace root and package manager type and version
  *
@@ -3567,6 +3593,11 @@ export declare function getVpDirs(): VpDirsJs;
  */
 export declare function hasConfigKey(viteConfigPath: string, configKey: string): boolean;
 
+export interface HooksArgs {
+  command: 'enable' | 'disable' | 'status';
+  hooksDir?: string;
+}
+
 /** Result returned by JavaScript resolver functions. */
 export interface JsCommandResolvedResult {
   binPath: string;
@@ -3648,6 +3679,50 @@ export declare function mergeTsdownConfig(
   viteConfigPath: string,
   tsdownConfigPath: string,
 ): MergeJsonConfigResult;
+
+export interface MigrateArgs {
+  path?: string;
+  agent?: false | string | Array<string>;
+  editor?: false | string;
+  hooks?: boolean;
+  interactive?: boolean;
+  full?: boolean;
+}
+
+export declare function parseConfigArgs(argv: Array<string>): ParseConfigArgsOutcome;
+
+export type ParseConfigArgsOutcome =
+  | { status: 'ok'; value: ConfigArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseCreateArgs(argv: Array<string>): ParseCreateArgsOutcome;
+
+export type ParseCreateArgsOutcome =
+  | { status: 'ok'; value: CreateArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseHooksArgs(argv: Array<string>): ParseHooksArgsOutcome;
+
+export type ParseHooksArgsOutcome =
+  | { status: 'ok'; value: HooksArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
+
+export type ParseMigrateArgsOutcome =
+  | { status: 'ok'; value: MigrateArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseStagedArgs(argv: Array<string>): ParseStagedArgsOutcome;
+
+export type ParseStagedArgsOutcome =
+  | { status: 'ok'; value: StagedArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
 
 /** Access modes for a path. */
 export interface PathAccess {
@@ -3832,6 +3907,24 @@ export interface RunCommandResult {
  * the same TTY + git-hook gating without duplicating the rules in JS.
  */
 export declare function shouldPrintVitePlusHeader(): boolean;
+
+export interface StagedArgs {
+  allowEmpty?: boolean;
+  concurrent?: boolean | number;
+  continueOnError?: boolean;
+  cwd?: string;
+  debug?: boolean;
+  diff?: string;
+  diffFilter?: string;
+  failOnChanges?: boolean;
+  hidePartiallyStaged?: boolean;
+  hideUnstaged?: boolean;
+  quiet?: boolean;
+  relative?: boolean;
+  revert?: boolean;
+  stash?: boolean;
+  verbose?: boolean;
+}
 
 /**
  * Set the value of a top-level config key in a vite config file (upsert)

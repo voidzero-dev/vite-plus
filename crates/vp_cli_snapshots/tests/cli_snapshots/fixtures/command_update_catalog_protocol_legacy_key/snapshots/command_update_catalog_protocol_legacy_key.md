@@ -2,7 +2,7 @@
 
 #2309 repair path. Migrate first so the catalog holds a real PINNED toolchain version (the reporter's shape), then downgrade the override key to the pre-fix bare spelling a project migrated by an older Vite+ still carries.
 
-## `vp migrate --no-interactive --no-hooks --package-manager pnpm`
+## `vp migrate --no-interactive --no-hooks`
 
 migrate pins the toolchain through the workspace catalog
 

@@ -11,8 +11,6 @@ steps = [
     "migrate",
     "--no-interactive",
     "--no-hooks",
-    "--package-manager",
-    "pnpm",
   ], comment = "migrate pins the toolchain through the workspace catalog", continue-on-failure = true },
   { argv = [
     "vpt",

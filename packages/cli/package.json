@@ -394,7 +394,6 @@
     "jsonc-parser": "catalog:",
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
-    "mri": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
     "semver": "catalog:",
