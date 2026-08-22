@@ -2,9 +2,9 @@
 name = "dev_uses_custom_vite_root"
 vp = ["local", "global"]
 comment = """
-A workspace root remains the app target when its static Vite root points to
-the directory that contains index.html. Bare vp dev starts there instead of
-eliciting a member package.
+The config sets a static Vite `root`. The `index.html` file is in that directory.
+Bare `vp dev` starts the workspace app. The command does not ask the user to
+select a member package.
 """
 steps = [
   { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
@@ -17,8 +17,9 @@ steps = [
 name = "build_and_preview_use_custom_vite_root"
 vp = ["local", "global"]
 comment = """
-A workspace root remains the app target when its static Vite root contains
-index.html. Bare vp build creates the app, and vp preview serves its output.
+The config sets a static Vite `root`. The `index.html` file is in that directory.
+Bare `vp build` builds the workspace app. Then `vp preview` serves the build
+output.
 """
 steps = [
   ["vp", "build"],

@@ -1,7 +1,8 @@
 # build_and_preview_use_custom_vite_root
 
-A workspace root remains the app target when its static Vite root contains
-index.html. Bare vp build creates the app, and vp preview serves its output.
+The config sets a static Vite `root`. The `index.html` file is in that directory.
+Bare `vp build` builds the workspace app. Then `vp preview` serves the build
+output.
 
 ## `vp build`
 

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite-plus';
 
-function emitMilestone(name: string) {
-  // Let Vite print its startup banner after server.listen() resolves.
+function emitMilestone(name: string): void {
+  // Wait one event-loop turn so Vite can print the startup banner.
   setImmediate(() => {
     const encodedName = Buffer.from(name).toString('base64url');
     process.stdout.write(

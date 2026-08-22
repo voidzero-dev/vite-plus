@@ -1,8 +1,8 @@
 # dev_uses_custom_vite_root
 
-A workspace root remains the app target when its static Vite root points to
-the directory that contains index.html. Bare vp dev starts there instead of
-eliciting a member package.
+The config sets a static Vite `root`. The `index.html` file is in that directory.
+Bare `vp dev` starts the workspace app. The command does not ask the user to
+select a member package.
 
 ## `vp dev --host 127.0.0.1 --port 0`
 

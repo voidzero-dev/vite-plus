@@ -162,19 +162,22 @@ fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
 /// not make the root look like an app, or auto-select would run the silent
 /// root build this feature exists to prevent.
 ///
-/// Root variant. Takes the root config [`classify`] already resolved for the
-/// `defaultPackage` lookup, so the file is read and parsed once per
-/// invocation. A declared `build` block (a library/SSR build with no entry
-/// HTML) makes the root a target for `vp build` only: dev/preview serve an
-/// app, for which the signal is an `index.html` at Vite's statically
-/// configured root (or the invocation root by default). A shared root config
-/// for lint/fmt/tasks declares neither, so it never makes the root a target.
+/// This function checks the workspace root. The `defaultPackage` lookup passes
+/// the config that [`classify`] already resolved. Vite+ reads and parses the
+/// file only once for each command.
+///
+/// An explicit `build` block makes the root a target for `vp build`. This
+/// supports library and SSR builds without an HTML entry. The `vp dev` and
+/// `vp preview` commands require an `index.html` file. Vite+ checks the static
+/// Vite `root`. If the config has no static `root`, Vite+ checks the command
+/// directory. A shared config for lint, format, and tasks has neither signal.
+/// It does not make the workspace root a target.
 fn root_looks_runnable(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
 ) -> bool {
-    let has_vite_index = || {
+    let has_index_html = || {
         let vite_root = match config.get_declared("root") {
             Some(vp_static_config::FieldValue::Json(serde_json::Value::String(root))) => {
                 dir.join(root).clean()
@@ -192,8 +195,8 @@ fn root_looks_runnable(
         "pack" => {
             dir.as_path().join("src/index.ts").is_file() || config.get_declared("pack").is_some()
         }
-        "build" => has_vite_index() || config.get_declared("build").is_some(),
-        _ => has_vite_index(),
+        "build" => has_index_html() || config.get_declared("build").is_some(),
+        _ => has_index_html(),
     }
 }
 
