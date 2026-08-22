@@ -1,6 +1,6 @@
 # dev_uses_configured_root_without_index
 
-A non-static Vite `root` makes the workspace root runnable without `index.html`.
+A declared Vite `root` field is a root intent signal without `index.html`.
 
 ## `vpt cp configs/root-no-index.ts vite.config.ts`
 

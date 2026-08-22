@@ -1,6 +1,6 @@
 # build_uses_top_level_input
 
-A non-static Vite `input` makes the workspace root runnable for `vp build`.
+A declared Vite `input` field is a root intent signal for `vp build`.
 
 ## `vpt cp configs/input.ts vite.config.ts`
 

@@ -1,9 +1,9 @@
 //! Target elicitation for bare app commands at a workspace root.
 //!
 //! A bare `vp dev`/`build`/`preview`/`pack` at a workspace root has no target
-//! and would silently run against the root. Explicit `-C` and any downstream
+//! and would silently run against the root. Explicit `-C` and any subcommand
 //! arguments skip target selection. An exact bare command uses
-//! `defaultPackage`, a runnable root signal, or the package picker. See
+//! `defaultPackage`, a root intent signal, or the package picker. See
 //! rfcs/cwd-flag.md.
 
 use vp_error::Error;
@@ -28,7 +28,7 @@ struct PackageRow {
     name: vt_str::Str,
     path: vt_str::Str,
     absolute: AbsolutePathBuf,
-    runnable: bool,
+    likely_runnable: bool,
 }
 
 /// App commands are the single-target subcommands; everything else never
@@ -43,23 +43,15 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
     }
 }
 
-/// Heuristic ranking signal: does a directory look runnable for `command`?
-/// Used for ordering and single-candidate auto-selection, never for hiding.
-/// The rules are documented in rfcs/cwd-flag.md ("The likely-runnable
-/// heuristic"); keep both in sync. Two variants because the workspace root
-/// needs a stronger signal than member packages: a shared root
-/// `vite.config.ts` (lint/fmt/tasks) is the normal monorepo setup and must
-/// not make the root look like an app, or auto-select would run the silent
-/// root build this feature exists to prevent.
-///
-/// This function checks the workspace root. The `defaultPackage` lookup passes
-/// the config that [`classify`] already resolved. Vite+ reads and parses the
-/// file only once for each command.
+/// Does the workspace root have an intent signal for this app command?
+/// This signal selects the root. It does not prove that the command succeeds.
+/// The `defaultPackage` lookup passes the config that [`classify`] already
+/// resolved, so Vite+ reads and parses the file only once for each command.
 ///
 /// A declared field is sufficient. Vite reports invalid values after the
 /// command starts. Dev, build, and preview use the same union of configuration
 /// and source `index.html` signals.
-fn root_looks_runnable(
+fn root_has_intent_signal(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
@@ -80,11 +72,13 @@ fn root_looks_runnable(
     dir.as_path().join("index.html").is_file()
 }
 
-/// Member variant of the likely-runnable heuristic; see
-/// [`root_looks_runnable`]. Resolves the member's own config lazily: this
-/// executes per workspace package, and for `pack` the one-stat entry check
-/// runs first because the config check reads and parses a file.
-fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
+/// Member ranking heuristic. It orders picker rows and can auto-select one
+/// member, but it never hides a member. This check differs from the root intent
+/// signal. A shared root `vite.config.ts` is normal monorepo configuration and
+/// does not by itself select the root. Resolve each member config lazily. For
+/// `pack`, check the default entry first because config extraction reads and
+/// parses a file.
+fn member_is_likely_runnable(dir: &AbsolutePath, command: &str) -> bool {
     match command {
         "pack" => {
             dir.as_path().join("src/index.ts").is_file()
@@ -243,7 +237,7 @@ fn default_package_for_command(
 }
 
 /// The RFC's resolution order, written once for both entry points. An explicit
-/// `-C` or any downstream argument runs in place. An exact bare app command
+/// `-C` or any subcommand argument runs in place. An exact bare app command
 /// then uses `defaultPackage` at the invocation root or checks the workspace
 /// root itself. `defaultPackage` is a root-pointer concept: it applies where
 /// the invocation directory is its own root (a workspace root, a standalone
@@ -268,7 +262,7 @@ fn classify(
     let workspace = vt_workspace::find_workspace_root(cwd);
     let at_invocation_root =
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
-    // Resolved once and reused by `root_looks_runnable` below, so a bare
+    // Resolved once and reused by `root_has_intent_signal` below, so a bare
     // command at a root reads and parses the config a single time.
     let root_config = at_invocation_root.then(|| vp_static_config::resolve_static_config(cwd));
     if let Some(value) = root_config
@@ -288,18 +282,17 @@ fn classify(
     {
         return Classification::RunInPlace(Some(workspace_root));
     }
-    // A runnable workspace root runs in place, TTY or not: the invocation
-    // already has its configured target, and repos whose root is the app or
-    // library (e.g. a single package with a settings-only pnpm-workspace.yaml)
-    // ran this way before elicitation existed. Eliciting only when the root
-    // is not a plausible target is what keeps this feature purely additive.
+    // A workspace root with an intent signal runs in place, TTY or not. The
+    // invocation already identifies its configured target. This keeps the
+    // existing behavior for repos whose root is the app or library, including
+    // a single package with a settings-only pnpm-workspace.yaml.
     // An empty `rel_from_root` means the invocation is at the root, so the
     // config resolved above is present; degrade to running in place rather
     // than panic if that invariant ever breaks.
     let Some(root_config) = root_config else {
         return Classification::RunInPlace(Some(workspace_root));
     };
-    if root_looks_runnable(&root_config, &workspace_root.path, command) {
+    if root_has_intent_signal(&root_config, &workspace_root.path, command) {
         return Classification::RunInPlace(Some(workspace_root));
     }
     Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))
@@ -339,34 +332,39 @@ pub(super) fn resolve_app_target(
                     name: info.package_json.name.clone(),
                     path: vt_str::Str::from("."),
                     absolute,
-                    runnable: false,
+                    likely_runnable: false,
                 });
                 None
             } else {
                 Some(PackageRow {
                     name: info.package_json.name.clone(),
                     path: vt_str::Str::from(info.path.as_str()),
-                    runnable: member_looks_runnable(&absolute, command),
+                    likely_runnable: member_is_likely_runnable(&absolute, command),
                     absolute,
                 })
             }
         })
         .collect();
-    rows.sort_by(|a, b| (!a.runnable, a.path.as_str()).cmp(&(!b.runnable, b.path.as_str())));
-    let single_runnable_member =
-        rows.first().is_some_and(|row| row.runnable) && rows.get(1).is_none_or(|row| !row.runnable);
+    rows.sort_by(|a, b| {
+        (!a.likely_runnable, a.path.as_str()).cmp(&(!b.likely_runnable, b.path.as_str()))
+    });
+    let single_likely_runnable_member = rows.first().is_some_and(|row| row.likely_runnable)
+        && rows.get(1).is_none_or(|row| !row.likely_runnable);
     rows.push(root_row.unwrap_or_else(|| PackageRow {
         name: vt_str::Str::from("workspace root"),
         path: vt_str::Str::from("."),
         absolute: workspace_root.path.to_absolute_path_buf(),
-        runnable: false,
+        likely_runnable: false,
     }));
 
     // In an interactive terminal, pick the target: exactly one likely-runnable
     // member auto-selects without a menu. The root fallback does not count.
     if vp_shared::is_interactive_terminal() {
-        let picked =
-            if single_runnable_member { Some(0) } else { run_package_picker(command, &rows)? };
+        let picked = if single_likely_runnable_member {
+            Some(0)
+        } else {
+            run_package_picker(command, &rows)?
+        };
         let Some(index) = picked else {
             return Ok((AppTarget::Exit(ExitStatus(130)), None));
         };
@@ -399,7 +397,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn vite_commands_share_runnable_config_signals() {
+    fn vite_commands_share_root_intent_signals() {
         let temp = tempfile::tempdir().expect("temporary directory should exist");
         let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
 
@@ -413,8 +411,8 @@ mod tests {
 
             for command in ["dev", "build", "preview"] {
                 assert!(
-                    root_looks_runnable(&config, &dir, command),
-                    "{field} should make {command} runnable"
+                    root_has_intent_signal(&config, &dir, command),
+                    "{field} should express root intent for {command}"
                 );
             }
         }
@@ -428,7 +426,7 @@ mod tests {
         let config = vp_static_config::resolve_static_config(&dir);
 
         for command in ["dev", "build", "preview"] {
-            assert!(root_looks_runnable(&config, &dir, command));
+            assert!(root_has_intent_signal(&config, &dir, command));
         }
 
         fs::remove_file(temp.path().join("index.html")).expect("source index should be removed");
@@ -436,7 +434,7 @@ mod tests {
         fs::write(temp.path().join("dist/index.html"), "").expect("output index should be written");
 
         for command in ["dev", "build", "preview"] {
-            assert!(!root_looks_runnable(&config, &dir, command));
+            assert!(!root_has_intent_signal(&config, &dir, command));
         }
     }
 

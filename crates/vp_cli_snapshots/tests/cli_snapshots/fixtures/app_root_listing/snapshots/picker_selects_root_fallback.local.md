@@ -1,7 +1,7 @@
 # picker_selects_root_fallback
 
-The workspace root is the last picker row when the runnable heuristic does not
-recognize it. Selecting that row runs the command in the workspace root.
+The workspace root is the last picker row when it has no root intent signal.
+Selecting that row runs the command in the workspace root.
 
 ## `vp build`
 

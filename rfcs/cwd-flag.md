@@ -246,15 +246,15 @@ Rejected alternatives: repurposing the app-command positional to mean "run there
 
 ### Target directory resolution
 
-An app command is **bare** only when no token follows the subcommand and no explicit `-C` exists. Before bare-command resolution, Vite+ applies these rules:
+An app command is **bare** only when the user does not specify `-C` and does not pass arguments to the subcommand. Before bare-command resolution, Vite+ applies these rules:
 
 1. An explicit `-C <dir>` runs the command in `<dir>`.
-2. Any downstream argument is explicit command intent. Vite+ forwards it and runs the command in the current directory.
+2. Any argument passed to the subcommand is explicit command intent. Vite+ forwards it and runs the command in the current directory.
 
 Vite+ does not parse Vite or tsdown options for target selection. For an exact bare `vp dev` / `build` / `preview` / `pack`, Vite+ uses this order:
 
 1. Apply **`defaultPackage`** in the directory that contains the root config. This directory can be a workspace root or a non-workspace repo root. Run with an implicit `-C` and print a one-line note.
-2. Run directly when the workspace root has a strong entry signal.
+2. Run directly when the workspace root has a root intent signal.
 3. At another workspace root, show the interactive picker or the non-interactive list. Put the `.` fallback last.
 4. Anywhere else, run in the current directory.
 
@@ -282,19 +282,19 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 ### Picker contents
 
 - One row per workspace member: name plus relative path. Nothing is filtered out. Likely-runnable members rank first, then by path.
-- If the workspace root does not look runnable, a `.` row appears after all member rows. This row is a fallback. It does not count when Vite+ checks for one runnable member to auto-select. Selecting it runs the command in the original workspace root. The non-interactive list also shows this row last.
+- If the workspace root has no root intent signal, a `.` row appears after all member rows. This row is a fallback. It does not count when Vite+ checks for one likely-runnable member to auto-select. Selecting it runs the command in the original workspace root. The non-interactive list also shows this row last.
 - Fuzzy search over name and path via `vt_select::fuzzy_match`, paging identical to the task picker.
-- A runnable workspace root never elicits. The command runs in place, with or without a TTY.
+- A workspace root with a root intent signal never elicits. The command runs in place, with or without a TTY.
 - With exactly one likely-runnable member, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 - An explicit `-C` always runs in the selected directory. Target classification does not run again after either CLI entry point consumes the option.
 
-### The likely-runnable heuristic
+### Root intent signals and member ranking
 
-Vite+ uses a stronger test for the workspace root. A runnable root uses the fast path and runs in place.
+Vite+ uses root intent signals to select the workspace root. A signal identifies the intended target. It does not prove that the command will succeed.
 
-For `pack`, the root is runnable when `src/index.ts` exists or the root config declares `pack`.
+For `pack`, the root has an intent signal when `src/index.ts` exists or the root config declares `pack`.
 
-The `dev`, `build`, and `preview` commands use the same signals. The root is runnable when the config declares `root`, `build`, `input`, `environments`, or `appType`. A source `index.html` is also sufficient. Vite+ does not validate declared values. Vite reports invalid values after the command starts.
+The `dev`, `build`, and `preview` commands use the same root intent signals. The config can declare `root`, `build`, `input`, `environments`, or `appType`. A source `index.html` is also sufficient. Vite+ does not validate declared values. Vite reports invalid values after the command starts.
 
 Member-package signals are used only for ranking and single-member auto-select. They never hide a member. Vite+ checks each member directory. It does not execute the config, and parent directories do not count.
 
@@ -305,12 +305,12 @@ Member-package signals are used only for ranking and single-member auto-select. 
 
 Both file-based signals are upstream defaults, not vp inventions: `index.html` at the project root is Vite's entry point ([index.html and Project Root](https://vite.dev/guide/#index-html-and-project-root)), the config file names are the list Vite resolves ([Configuring Vite](https://vite.dev/config/), mirrored by `vp_static_config::CONFIG_FILE_NAMES` with the upstream source link), and `src/index.ts` is tsdown's default entry when none is configured ([tsdown Entry](https://tsdown.dev/options/entry); `src/features/entry.ts` in tsdown resolves exactly this one path).
 
-"Exactly one likely-runnable package" means: after sorting rows runnable-first, the first row is runnable and the second is not. Auto-select additionally requires an interactive terminal.
+"Exactly one likely-runnable package" means that the first row is likely runnable and the second row is not after sorting. Auto-select also requires an interactive terminal.
 
 Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is visible at once (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
 
-- A library whose `vite.config.*` exists only for Vitest or lint settings ranks as runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
-- Static extraction cannot see values that a plugin adds. If no other root signal exists, a bare command starts package selection. The workspace-root fallback row keeps the root selectable.
+- A library whose `vite.config.*` exists only for Vitest or lint settings ranks as likely runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
+- Static extraction cannot see values that a plugin adds. If no other root intent signal exists, a bare command starts package selection. The workspace-root fallback row keeps the root selectable.
 
 ### `defaultPackage` config
 
@@ -353,7 +353,7 @@ No upstream Vite or tsdown changes are required.
 
 - `crates/vp_global_cli/src/main.rs` / `cli.rs`: parse the global `-C <dir>`, resolve the local install from `<dir>`, and delegate with `<dir>` as the effective cwd. Preserve an explicit-target marker for the local CLI.
 - `packages/cli/src/bin.ts`: parse `-C` for direct local invocations and pass the explicit-target marker to the binding.
-- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the exact-bare command resolution order. Skip target selection when `-C` or a downstream argument is present.
+- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the exact-bare command resolution order. Skip target selection when `-C` or a subcommand argument is present.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
 - Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
@@ -362,7 +362,7 @@ No upstream Vite or tsdown changes are required.
 
 ## Compatibility
 
-The behavior change applies to an exact bare app command at a workspace root. A runnable root still runs in place. Otherwise, Vite+ shows the picker or a clear non-interactive error. The workspace root is the last fallback target. Use `vp -C . <command>` or `defaultPackage: '.'` to select it directly.
+The behavior change applies to an exact bare app command at a workspace root. A root intent signal makes the command run in place. Otherwise, Vite+ shows the picker or a clear non-interactive error. The workspace root is the last fallback target. Use `vp -C . <command>` or `defaultPackage: '.'` to select it directly.
 
 ## Snap Tests
 
@@ -372,7 +372,7 @@ Snapshot cases cover:
 - Parity regression: `vp dev <dir>` still forwards the positional as Vite `root` with cwd untouched.
 - Bare app commands at a workspace root without a TTY: package listing and exit code.
 - Workspace-root fallback: last picker and listing row, direct selection, and explicit `vp -C . build`.
-- Vite root signals: declared `root`, build inputs, custom app type, and the `preview` command.
+- Vite root intent signals: declared `root`, build inputs, custom app type, and the `preview` command.
 - Explicit arguments: `build --ssr <entry>` and pack `--root` bypass target selection.
 - `defaultPackage`: happy path and missing-directory error.
 - Equivalence checks: `vp -C <dir> build` and `cd <dir> && vp build` produce the same output in a fixture whose config reads `process.cwd()`.
@@ -381,11 +381,11 @@ The interactive picker gets pty snapshot coverage in the `vt` repo style (`task_
 
 ## Open Questions
 
-1. Does ranking plus search suffice, or is outright filtering of non-runnable packages ever wanted?
+1. Does ranking plus search suffice, or is filtering of lower-ranked packages ever wanted?
 2. Add a `VP_DEFAULT_PACKAGE` env override later? Env companions are an established pattern (`NX_DEFAULT_PROJECT`); deferred from v1.
 3. Should `vp test` join the elicitation set? Probably not: Vitest already has first-class `projects` semantics at the root (`-C` works with it regardless).
 4. Exact non-interactive gate: the `vp run` picker's TTY check plus the `CI` check used by the global command picker?
-5. Resolved during review: any downstream argument bypasses target selection. Vite+ does not add positional-path guidance.
+5. Resolved during review: any subcommand argument bypasses target selection. Vite+ does not add positional-path guidance.
 
 ## Appendix: Naming Survey for `defaultPackage`
 

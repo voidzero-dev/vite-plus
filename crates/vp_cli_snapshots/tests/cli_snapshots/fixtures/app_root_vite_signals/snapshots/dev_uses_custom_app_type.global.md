@@ -1,6 +1,6 @@
 # dev_uses_custom_app_type
 
-A non-static Vite `appType` makes the workspace root runnable for `vp dev`.
+A declared Vite `appType` field is a root intent signal for `vp dev`.
 
 ## `vpt cp configs/custom-app.ts vite.config.ts`
 

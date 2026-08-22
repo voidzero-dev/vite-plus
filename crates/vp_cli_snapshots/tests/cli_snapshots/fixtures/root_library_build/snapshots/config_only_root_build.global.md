@@ -1,7 +1,7 @@
 # config_only_root_build
 
-A declared `build` field makes the workspace root runnable. Bare `vp build`
-runs at the root instead of eliciting members.
+A declared `build` field is a root intent signal. Bare `vp build` runs at the
+root instead of eliciting members.
 
 ## `vp build`
 

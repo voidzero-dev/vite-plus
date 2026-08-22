@@ -1,6 +1,6 @@
 # build_uses_environment_input
 
-A non-static Vite `environments` field makes the workspace root runnable for `vp build`.
+A declared Vite `environments` field is a root intent signal for `vp build`.
 
 ## `vpt cp configs/environment-input.ts vite.config.ts`
 

@@ -1,6 +1,6 @@
 # preview_uses_build_output
 
-A non-static Vite `build` field makes the workspace root runnable for `vp preview`.
+A declared Vite `build` field is a root intent signal for `vp preview`.
 
 ## `vpt cp configs/preview-output.ts vite.config.ts`
 

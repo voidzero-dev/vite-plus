@@ -2,8 +2,8 @@
 name = "config_only_root_build"
 vp = ["local", "global"]
 comment = """
-A declared `build` field makes the workspace root runnable. Bare `vp build`
-runs at the root instead of eliciting members.
+A declared `build` field is a root intent signal. Bare `vp build` runs at the
+root instead of eliciting members.
 """
 # PTY-rendered (not tty = false): a piped vite build's raw byte stream
 # differs invisibly on Windows (see unanalyzable_config_ignored); the grid
@@ -14,7 +14,7 @@ steps = [{ argv = ["vp", "build"] }]
 name = "dev_uses_build_signal"
 vp = ["local", "global"]
 comment = """
-The same declared `build` field makes the workspace root runnable for `vp dev`.
+The same root intent signal applies to `vp dev`.
 """
 steps = [
   { argv = ["vp", "dev"], interactions = [

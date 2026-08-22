@@ -1,6 +1,6 @@
 # dev_uses_build_signal
 
-The same declared `build` field makes the workspace root runnable for `vp dev`.
+The same root intent signal applies to `vp dev`.
 
 ## `vp dev`
 
