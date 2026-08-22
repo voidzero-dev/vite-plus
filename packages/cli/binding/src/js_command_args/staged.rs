@@ -1,6 +1,6 @@
 use std::{num::NonZeroU32, str::FromStr};
 
-use clap::{Arg, ArgAction, Args, Command};
+use clap::{Arg, ArgAction, Args, Command, builder::NonEmptyStringValueParser};
 use napi::bindgen_prelude::Either;
 use napi_derive::napi;
 use vp_cli_help::{help_doc_from_command, print_help_doc};
@@ -62,18 +62,29 @@ struct StagedCliArgs {
     )]
     continue_on_error: bool,
 
-    #[arg(long, value_name = "path", help = "Working directory to run all tasks in")]
+    #[arg(
+        long,
+        value_name = "path",
+        value_parser = NonEmptyStringValueParser::new(),
+        help = "Working directory to run all tasks in"
+    )]
     cwd: Option<String>,
 
     #[arg(short = 'd', long, action = ArgAction::SetTrue, help = "Enable debug output")]
     debug: bool,
 
-    #[arg(long, value_name = "string", help = "Override the default --staged flag of git diff")]
+    #[arg(
+        long,
+        value_name = "string",
+        value_parser = NonEmptyStringValueParser::new(),
+        help = "Override the default --staged flag of git diff"
+    )]
     diff: Option<String>,
 
     #[arg(
         long,
         value_name = "string",
+        value_parser = NonEmptyStringValueParser::new(),
         help = "Override the default --diff-filter=ACMR flag of git diff"
     )]
     diff_filter: Option<String>,
@@ -337,6 +348,13 @@ mod tests {
         assert_eq!(parse_error(&["--cwd"]).kind, "invalid-value");
         assert_eq!(parse_error(&["--cwd", "one", "--cwd", "two"]).kind, "argument-conflict");
         assert_eq!(parse_error(&["--debug", "--debug"]).kind, "argument-conflict");
+    }
+
+    #[test]
+    fn rejects_empty_string_values() {
+        for argument in ["--cwd=", "--diff=", "--diff-filter="] {
+            assert_eq!(parse_error(&[argument]).kind, "invalid-value");
+        }
     }
 
     #[test]

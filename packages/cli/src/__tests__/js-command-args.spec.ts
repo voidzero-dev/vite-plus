@@ -24,6 +24,10 @@ function expectParseError(outcome: { status: string; error?: { kind: string; mes
   return outcome.error;
 }
 
+function expectExit(outcome: { status: string; code?: number }) {
+  expect(outcome).toEqual({ status: 'exit', code: 0 });
+}
+
 describe('JavaScript command NAPI arguments', () => {
   it('returns staged field names and only explicit values', () => {
     expect(
@@ -32,6 +36,16 @@ describe('JavaScript command NAPI arguments', () => {
       ),
     ).toEqual({ allowEmpty: true, concurrent: 2, diffFilter: 'ACMR', stash: false });
     expect(expectParsed(parseStagedArgs([]))).toEqual({});
+  });
+
+  it('returns staged values for each short option', () => {
+    expect(expectParsed(parseStagedArgs(['-p', '2', '-d', '-q', '-r', '-v']))).toEqual({
+      concurrent: 2,
+      debug: true,
+      quiet: true,
+      relative: true,
+      verbose: true,
+    });
   });
 
   it('returns config field names and only explicit values', () => {
@@ -86,5 +100,16 @@ describe('JavaScript command NAPI arguments', () => {
     ['create', () => parseCreateArgs(['--all'])],
   ])('returns strict errors for %s', (_command, parse) => {
     expect(expectParseError(parse()).kind).toBe('unknown-argument');
+  });
+
+  it.each([
+    ['staged', () => parseStagedArgs(['-h'])],
+    ['config', () => parseConfigArgs(['-h'])],
+    ['hooks', () => parseHooksArgs(['-h'])],
+    ['hooks without a subcommand', () => parseHooksArgs([])],
+    ['migrate', () => parseMigrateArgs(['-h'])],
+    ['create', () => parseCreateArgs(['-h'])],
+  ])('returns a successful help exit for %s', (_command, parse) => {
+    expectExit(parse());
   });
 });
