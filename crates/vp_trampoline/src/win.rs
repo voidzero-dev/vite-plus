@@ -402,11 +402,12 @@ fn read_pointer_file(path: &[u16]) -> Vec<u8> {
     let ok = unsafe {
         ReadFile(handle, bytes.as_mut_ptr(), size as u32, &raw mut read, ptr::null_mut())
     };
-    let error = if ok == 0 { unsafe { GetLastError() } } else { 0 };
-    unsafe { CloseHandle(handle) };
     if ok == 0 {
+        let error = unsafe { GetLastError() };
+        unsafe { CloseHandle(handle) };
         fail_path_call(b"ReadFile", path, error);
     }
+    unsafe { CloseHandle(handle) };
     if i64::from(read) != size {
         fail_invalid_pointer(path);
     }
@@ -419,12 +420,12 @@ fn read_pointer_file(path: &[u16]) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 
 fn set_env(name: &[u16], name_ascii: &[u8], value: Option<&[u16]>) {
-    let value = value.map(nul_terminated);
-    let value_ptr = value.as_ref().map_or(ptr::null(), |value| value.as_ptr());
+    let value_nul = value.map(nul_terminated);
+    let value_ptr = value_nul.as_ref().map_or(ptr::null(), |value| value.as_ptr());
     let ok = unsafe { SetEnvironmentVariableW(name.as_ptr(), value_ptr) };
     if ok == 0 {
         let error = unsafe { GetLastError() };
-        if value.is_none() && error == ERROR_ENVVAR_NOT_FOUND {
+        if value_nul.is_none() && error == ERROR_ENVVAR_NOT_FOUND {
             return;
         }
         stderr_write(b"vite-plus shim: SetEnvironmentVariableW(");
@@ -570,12 +571,13 @@ pub fn run() -> ! {
     unsafe {
         CloseHandle(pi.thread);
         let wait = WaitForSingleObject(pi.process, INFINITE);
-        if wait == WAIT_FAILED {
-            fail_call(b"WaitForSingleObject");
-        }
-        if wait != WAIT_OBJECT_0 {
-            report_call_failure(b"WaitForSingleObject returned an unexpected status", wait);
-            ExitProcess(1);
+        match wait {
+            WAIT_OBJECT_0 => {}
+            WAIT_FAILED => fail_call(b"WaitForSingleObject"),
+            _ => {
+                report_call_failure(b"WaitForSingleObject returned an unexpected status", wait);
+                ExitProcess(1);
+            }
         }
         let mut code = 1u32;
         if GetExitCodeProcess(pi.process, &raw mut code) == 0 {

@@ -40,10 +40,6 @@ pub struct ShimPointer<'a> {
 pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     let text = core::str::from_utf8(bytes).ok()?.trim();
-    if text.is_empty() {
-        return None;
-    }
-
     let mut lines = text.lines();
     if lines.next()? != SHIM_POINTER_HEADER {
         return None;

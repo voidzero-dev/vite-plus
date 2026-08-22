@@ -71,14 +71,6 @@ mod portable {
         pointer: ShimPointer,
     }
 
-    /// Specify how the child `vp.exe` resolves category roots.
-    enum ChildDirPins<'a> {
-        /// `VP_HOME` or an installation from an earlier version selected one root.
-        SingleRoot,
-        /// The versioned sidecar explicitly selected separate roots.
-        Split { cache: &'a Path },
-    }
-
     /// Return a Unix signal exit code with the shell's `128 + signal` convention.
     fn exit_code_from_status(status: ExitStatus) -> i32 {
         #[cfg(unix)]
@@ -89,13 +81,6 @@ mod portable {
             }
         }
         status.code().unwrap_or(1)
-    }
-
-    fn child_dir_pins(pointer: &ShimPointer) -> ChildDirPins<'_> {
-        match &pointer.layout {
-            ShimLayout::SingleRoot => ChildDirPins::SingleRoot,
-            ShimLayout::Split { cache } => ChildDirPins::Split { cache },
-        }
     }
 
     /// Locate `vp.exe` from `<BIN>/<name>.shim`.
@@ -134,11 +119,11 @@ mod portable {
         // 3. Spawn vp.exe with the directory layout pinned by the sidecar.
         let mut cmd = Command::new(&location.exe);
         cmd.args(env::args_os().skip(1));
-        match child_dir_pins(&location.pointer) {
-            ChildDirPins::SingleRoot => {
+        match &location.pointer.layout {
+            ShimLayout::SingleRoot => {
                 cmd.env("VP_HOME", &location.pointer.data);
             }
-            ChildDirPins::Split { cache } => {
+            ShimLayout::Split { cache } => {
                 cmd.env_remove("VP_HOME");
                 cmd.env("VP_DATA_DIR", &location.pointer.data);
                 cmd.env("VP_BIN_DIR", bin_dir);
@@ -320,8 +305,8 @@ mod portable {
 
             let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
             assert!(matches!(
-                child_dir_pins(&location.pointer),
-                ChildDirPins::Split { cache: value } if value == cache
+                location.pointer.layout,
+                ShimLayout::Split { cache: value } if value == cache
             ));
             let _ = fs::remove_dir_all(&root);
         }
@@ -340,7 +325,7 @@ mod portable {
             .unwrap();
 
             let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
-            assert!(matches!(child_dir_pins(&location.pointer), ChildDirPins::SingleRoot));
+            assert!(matches!(location.pointer.layout, ShimLayout::SingleRoot));
             let _ = fs::remove_dir_all(&root);
         }
     }
