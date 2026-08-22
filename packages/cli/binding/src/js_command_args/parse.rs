@@ -16,6 +16,25 @@ pub(super) enum ParseResult<T> {
     Error(CliParseError),
 }
 
+#[cfg(test)]
+impl<T> ParseResult<T> {
+    pub(super) fn expect_ok(self) -> T {
+        match self {
+            Self::Ok(value) => value,
+            Self::Help(_) => panic!("The parser returned help."),
+            Self::Error(error) => panic!("The parser returned an error: {}", error.message),
+        }
+    }
+
+    pub(super) fn expect_error(self) -> CliParseError {
+        match self {
+            Self::Error(error) => error,
+            Self::Ok(_) => panic!("The parser returned arguments."),
+            Self::Help(_) => panic!("The parser returned help."),
+        }
+    }
+}
+
 pub(super) fn parse_args<T>(mut command: Command, argv: Vec<String>) -> ParseResult<T>
 where
     T: Args + FromArgMatches,
