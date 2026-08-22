@@ -45,8 +45,11 @@ function getErrorMessage(err: unknown): string {
 
 // Parse command line arguments
 let args = process.argv.slice(2);
-let explicitChdir = process.env.VP_EXPLICIT_CHDIR === '1';
-delete process.env.VP_EXPLICIT_CHDIR;
+const explicitChdirMarker = process.env.VP_EXPLICIT_CHDIR;
+let explicitChdir = explicitChdirMarker === '1';
+if (explicitChdirMarker !== undefined) {
+  delete process.env.VP_EXPLICIT_CHDIR;
+}
 
 // Global `-C <dir>` flag: run as if vp was started in <dir>. The global Rust
 // CLI parses this itself and spawns bin.js with the target cwd already set;
