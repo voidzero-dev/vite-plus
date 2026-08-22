@@ -166,13 +166,24 @@ fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
 /// `defaultPackage` lookup, so the file is read and parsed once per
 /// invocation. A declared `build` block (a library/SSR build with no entry
 /// HTML) makes the root a target for `vp build` only: dev/preview serve an
-/// app, for which the signal is a root `index.html`. A shared root config
+/// app, for which the signal is an `index.html` at Vite's statically
+/// configured root (or the invocation root by default). A shared root config
 /// for lint/fmt/tasks declares neither, so it never makes the root a target.
 fn root_looks_runnable(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
 ) -> bool {
+    let has_vite_index = || {
+        let vite_root = match config.get_declared("root") {
+            Some(vp_static_config::FieldValue::Json(serde_json::Value::String(root))) => {
+                dir.join(root).clean()
+            }
+            _ => dir.to_absolute_path_buf(),
+        };
+        vite_root.as_path().join("index.html").is_file()
+    };
+
     match command {
         // Bare `vp pack` succeeds when tsdown's default entry exists or the
         // config explicitly declares a `pack` block (a spread that only
@@ -181,10 +192,8 @@ fn root_looks_runnable(
         "pack" => {
             dir.as_path().join("src/index.ts").is_file() || config.get_declared("pack").is_some()
         }
-        "build" => {
-            dir.as_path().join("index.html").is_file() || config.get_declared("build").is_some()
-        }
-        _ => dir.as_path().join("index.html").is_file(),
+        "build" => has_vite_index() || config.get_declared("build").is_some(),
+        _ => has_vite_index(),
     }
 }
 

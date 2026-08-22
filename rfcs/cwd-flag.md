@@ -279,6 +279,7 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 - One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
 - Fuzzy search over name and path via `vt_select::fuzzy_match`, paging identical to the task picker.
 - A runnable workspace root never elicits at all: the command runs in place, TTY or not, exactly as before this RFC. The invocation already has its configured target: a root app, or a single package whose `pnpm-workspace.yaml` only carries settings (catalogs, `minimumReleaseAge`). Eliciting only when the root is not a plausible target is what keeps the feature purely additive. The root needs a stronger runnable signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
+  When the root config declares a static Vite `root`, the `index.html` signal is resolved from that directory instead of the workspace directory.
 - With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
 
 ### The likely-runnable heuristic
@@ -297,7 +298,7 @@ Both file-based signals are upstream defaults, not vp inventions: `index.html` a
 Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is visible at once (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
 
 - A library whose `vite.config.*` exists only for Vitest or lint settings ranks as runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
-- An app whose `index.html` lives outside the package root (custom Vite `root`) or whose config is inherited from a parent directory is not ranked first, and never auto-selects.
+- An app whose custom Vite `root` is not statically extractable, or whose config is inherited from a parent directory, is not ranked first and never auto-selects.
 
 ### `defaultPackage` config
 

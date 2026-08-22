@@ -1,0 +1,11 @@
+[[case]]
+name = "dev_uses_custom_vite_root"
+vp = ["local", "global"]
+comment = """
+A workspace root remains the app target when its static Vite root points to
+the directory that contains index.html. Bare vp dev starts there instead of
+eliciting a member package.
+"""
+steps = [
+  { argv = ["vp", "dev", "--port", "12312312312"], tty = false, continue-on-failure = true },
+]
