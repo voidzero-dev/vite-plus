@@ -1,0 +1,15 @@
+# The vendored node_modules/vite/package.json shadows the runner's run-root
+# `vite` -> core link with a core at a version the CLI never shipped with,
+# simulating a dependency-bot bump of the `vite` alias without the matching
+# vite-plus bump (issue #2356). The app/ subdir vendors a real-vite-shaped
+# package, so the positional-root step passes only when the guard checks the
+# selected root instead of the workspace cwd.
+[[case]]
+name = "core_version_guard"
+vp = "local"
+steps = [
+  { argv = ["vp", "build"], continue-on-failure = true },
+  { argv = ["vp", "test"], continue-on-failure = true },
+  { argv = ["vp", "build", "app"], comment = "the guard checks the positional root, where vite is real Vite" },
+  { argv = ["vp", "build"], comment = "VP_SKIP_CORE_VERSION_CHECK=1 skips the guard", envs = [["VP_SKIP_CORE_VERSION_CHECK", "1"]] },
+]

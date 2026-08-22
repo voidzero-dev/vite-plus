@@ -22,7 +22,7 @@ async fn resolve_and_build_command(
     cwd: &AbsolutePathBuf,
 ) -> Result<tokio::process::Command, Error> {
     let resolved = resolver
-        .resolve(subcommand, resolved_vite_config, envs)
+        .resolve(subcommand, resolved_vite_config, envs, cwd)
         .await
         .map_err(|e| Error::Anyhow(e))?;
 

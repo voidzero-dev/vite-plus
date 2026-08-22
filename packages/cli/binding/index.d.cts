@@ -3444,12 +3444,12 @@ export interface BatchRewriteResult {
 
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
-  lint: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  fmt: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  vite: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  test: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  pack: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  doc: (err: Error | null) => Promise<JsCommandResolvedResult>;
+  lint: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  fmt: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  vite: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  test: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  pack: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  doc: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
   cwd?: string;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;

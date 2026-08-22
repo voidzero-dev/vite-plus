@@ -65,12 +65,12 @@ pub fn ensure_blocking_stdio() {
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
-    pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub lint: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub fmt: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub vite: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub test: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub pack: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub doc: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
@@ -98,18 +98,20 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
     }
 }
 
-/// Create a boxed resolver function from a ThreadsafeFunction
+/// Create a boxed resolver function from a ThreadsafeFunction. The `cwd`
+/// argument is the directory the resolved command will run in; it reaches the
+/// JS resolver as its second (callee-handled) argument.
 /// NOTE: Uses anyhow::Error to avoid NAPI type interference with vp_error::Error
 fn create_resolver(
-    tsf: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    tsf: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
     error_message: &'static str,
 ) -> BoxedResolverFn {
-    Box::new(move || {
+    Box::new(move |cwd: String| {
         let tsf = tsf.clone();
         Box::pin(async move {
             // Call JS function - map napi::Error to anyhow::Error
             let promise: Promise<JsCommandResolvedResult> = tsf
-                .call_async(Ok(()))
+                .call_async(Ok(cwd))
                 .await
                 .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 

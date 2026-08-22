@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { DEFAULT_ENVS, resolveBundled } from './utils/constants.ts';
+import { checkCoreVersionMatchOnce } from './utils/core-version-guard.ts';
 
 interface VitestPackageJson {
   bin?: string | Record<string, string>;
@@ -34,10 +35,19 @@ interface VitestPackageJson {
  * unreachable. See `resolveBundled` for the rationale (avoiding dual-copy
  * Vitest internal-state / mock-hoisting mismatches).
  */
-export async function test(): Promise<{
+export async function test(
+  // Callee-handled NAPI callback: the payload (the command's cwd) is the
+  // second argument, after the error slot.
+  _err?: unknown,
+  taskDir?: string,
+): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
+  // Fail fast before the bundled Vitest loads a skewed `vite` alias as its
+  // vite (see core-version-guard.ts).
+  checkCoreVersionMatchOnce(taskDir);
+
   const pkgJsonPath = resolveBundled('vitest/package.json');
   const pkgRoot = dirname(pkgJsonPath);
   const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as VitestPackageJson;
