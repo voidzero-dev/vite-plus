@@ -74,14 +74,12 @@ pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
 /// Index where the raw command line's first (program) argument ends.
 ///
 /// This follows the MSVC parsing rule for the program name: a quote toggles
-/// quoted mode and backslashes have no escaping effect. The remainder
-/// (`&cmdline[result..]`, leading whitespace included) is the argument tail to
-/// forward to the child verbatim.
+/// quoted mode, backslashes have no escaping effect, and leading whitespace
+/// terminates an empty program argument. The remainder (`&cmdline[result..]`,
+/// leading whitespace included) is the argument tail to forward to the child
+/// verbatim.
 pub fn skip_program_argument(cmdline: &[u16]) -> usize {
     let mut i = 0;
-    while i < cmdline.len() && (cmdline[i] == SPACE || cmdline[i] == TAB) {
-        i += 1;
-    }
     let mut quoted = false;
     while i < cmdline.len() {
         let c = cmdline[i];
@@ -196,8 +194,15 @@ mod tests {
     }
 
     #[test]
-    fn skips_leading_whitespace_and_bare_program() {
-        let cl = wide("  node");
+    fn treats_leading_whitespace_as_an_empty_program() {
+        for cl in [wide("  script.js --flag"), wide("\tscript.js --flag")] {
+            assert_eq!(skip_program_argument(&cl), 0);
+        }
+    }
+
+    #[test]
+    fn skips_bare_program() {
+        let cl = wide("node");
         assert_eq!(skip_program_argument(&cl), cl.len());
         assert_eq!(skip_program_argument(&[]), 0);
     }

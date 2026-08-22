@@ -97,15 +97,11 @@ snapshot-test *args='': _install_chromium _build-trampoline
   cargo test -p vp_cli_snapshots -- {{args}}
 
 # The trampoline is excluded from the workspace; build it from its own
-# directory so its .cargo/config.toml (build-std) applies. Artifacts still
-# land in the repo-root target/ directory.
-[unix]
+# directory so its .cargo/config.toml (build-std) applies. The helper anchors
+# relative CARGO_TARGET_DIR values to the repo root so all binaries stay in the
+# same artifact directory.
 _build-trampoline:
-  cd crates/vp_trampoline && cargo build
-
-[windows]
-_build-trampoline:
-  Set-Location crates/vp_trampoline; cargo build
+  node packages/tools/src/build-trampoline.ts
 
 # Browser-mode snapshot cases run with PLAYWRIGHT_BROWSERS_PATH=0, so the
 # browser must be installed into node_modules with the same setting.
