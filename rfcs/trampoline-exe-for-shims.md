@@ -124,56 +124,113 @@ layout and also records that Vite+ owns the adjacent executable.
 
 ```
 crates/vp_trampoline/
-├── Cargo.toml      # Zero external dependencies
+├── Cargo.toml           # Package settings and release profile
+├── Cargo.lock           # Lockfile for this standalone crate
+├── .cargo/
+│   └── config.toml      # build-std and artifact directory settings
 ├── src/
-│   └── main.rs     # Sidecar parser, launcher, and portable tests
+│   ├── main.rs          # Entry points and portable implementation
+│   ├── win.rs           # Raw Win32 code for the no_main entry point
+│   └── cmdline.rs       # Portable parsers and tests
 ```
+
+The root `Cargo.toml` excludes this crate from the workspace. The crate must
+stay outside the workspace for two reasons:
+
+- The release profile sets `panic = "immediate-abort"`. Cargo ignores `panic`
+  in per-package profile overrides. Thus, the crate needs a separate profile.
+- The crate-local `.cargo/config.toml` enables build-std. Cargo reads this file
+  only when it runs from the crate directory.
+
+From the repository root, run:
+
+```bash
+node packages/tools/src/build-trampoline.ts --release [--target <triple>]
+```
+
+The crate config stores artifacts in the repository `target/` directory. It
+sets `target-dir = "../../target"`. CI and `install-global-cli` find
+`vp-shim.exe` in the same directory as workspace binaries. The build uses the
+pinned nightly toolchain and the `rust-src` component. The repository
+`rust-toolchain.toml` supplies both items.
 
 ### Trampoline Binary
 
-The trampoline has **zero external dependencies**. It declares the Win32
-`SetConsoleCtrlHandler` call inline to avoid the `windows` and `windows-core`
-crates. It also avoids direct `core::fmt` use. It does not use `format!`,
-`eprintln!`, `println!`, or `.unwrap()` in the production path.
+The trampoline has no external dependencies. It declares all Win32 calls as
+raw `extern "system"` functions from KERNEL32. Thus, it does not use the
+`windows` or `windows-core` crate. It also does not use `core::fmt`.
+Diagnostics use `WriteFile` and a small decimal formatter.
 
-The trampoline performs these steps:
+On Windows, the binary uses `#![no_main]` and exports `mainCRTStartup`. Thus,
+the CRT startup and the `std` runtime do not initialize. `src/win.rs` uses this
+sequence:
 
-1. Read its executable path and get the tool name from the file stem.
-2. Read the same-stem `.shim` file. Require the `vite-plus-shim-v1` header and
-   parse the layout, data root, and cache root.
-3. Resolve the child executable as `<DATA>/current/bin/vp.exe`.
-4. Pin the recorded layout in the child environment. A `single-root` sidecar
-   sets `VP_HOME`. A `split` sidecar removes `VP_HOME` and sets `VP_DATA_DIR`,
-   `VP_BIN_DIR`, and `VP_CACHE_DIR`.
-5. Install the Ctrl+C handler, start the child, and propagate its exit code.
+1. `GetModuleFileNameW` returns the shim path and tool name. The code replaces
+   the `.exe` extension with `.shim` to find the sidecar.
+2. `CreateFileW` and `ReadFile` load the UTF-8 sidecar. `GetFullPathNameW`
+   makes long paths absolute. The code then adds the `\\?\` drive prefix or
+   the `\\?\UNC\` network prefix. The parser requires the versioned header.
+   It accepts the `single-root` and `split` layouts.
+3. `SetEnvironmentVariableW` sets the directory layout. A single-root pointer
+   sets `VP_HOME`. A split pointer removes `VP_HOME`. It sets `VP_DATA_DIR`,
+   `VP_BIN_DIR`, and `VP_CACHE_DIR`. Tool shims also set `VP_SHIM_TOOL`. They
+   remove `VP_TOOL_RECURSION`.
+4. The child command line starts with `"<DATA>\current\bin\vp.exe"`. The code
+   appends the raw `GetCommandLineW` text after the program argument. It uses
+   the MSVC `argv[0]` rule. Quotation marks start or stop quoted mode.
+   Backslashes do not escape characters. This preserves the exact UTF-16
+   argument text from the caller.
+5. `SetConsoleCtrlHandler` installs a handler that ignores Ctrl+C and
+   Ctrl+Break. The child process handles these events.
+6. `CreateProcessW` starts the child with inherited handles and startup
+   information. The payload and sidecar paths use the same extended-length
+   normalization. If the parent redirects standard I/O, the code makes the
+   standard handles inheritable. It does this before `CreateProcessW`, as
+   uv-trampoline and distlib do.
+7. `WaitForSingleObject` waits for the child. `GetExitCodeProcess` reads its
+   exit code. `ExitProcess` returns that code without changes.
 
-The trampoline fails if the sidecar is missing, malformed, unversioned, or
-points to a missing payload. It does not infer the layout from directory paths.
+For a critical launch failure, the trampoline reports the failed operation and
+the applicable path. It includes the Windows error code when Windows supplies
+one. If `vp.exe` is missing, it tells the user to reinstall Vite+ or run
+`vp env setup`.
+
+The non-Windows implementation uses `std::process::Command`. Portable tests use
+the same sidecar parser. Unix shims are symlinks and do not use this binary.
+The parser rejects missing, malformed, and unversioned sidecars. It does not
+infer a layout from directory paths.
 
 ### Size Optimization
 
-| Technique                                                                             | Savings                    | Status |
-| ------------------------------------------------------------------------------------- | -------------------------- | ------ |
-| Zero external dependencies (raw FFI)                                                  | ~20KB (vs `windows` crate) | Done   |
-| No direct `core::fmt` usage (avoid `eprintln!`/`format!`/`.unwrap()`)                 | Marginal                   | Done   |
-| Workspace profile: `lto="fat"`, `codegen-units=1`, `strip="symbols"`, `panic="abort"` | Inherited                  | Done   |
-| Per-package `opt-level="z"` (optimize for size)                                       | ~5-10%                     | Done   |
+| Technique                                                                | Status |
+| ------------------------------------------------------------------------ | ------ |
+| Zero external dependencies (raw FFI, no `windows` crate)                 | Done   |
+| No `core::fmt` (diagnostics via `WriteFile` + manual decimal formatter)  | Done   |
+| Own profile: `opt-level="z"`, `lto="fat"`, `codegen-units=1`, `strip`    | Done   |
+| build-std: recompile `std` with this profile (`-Zbuild-std`)             | Done   |
+| `panic = "immediate-abort"` (no panic formatting, unwinding, backtrace)  | Done   |
+| `#![no_main]` + `mainCRTStartup` (no CRT startup, no `std` runtime init) | Done   |
+| Raw `CreateProcessW` instead of `std::process::Command`                  | Done   |
 
-**Binary size**: ~200KB on Windows. The floor is set by `std::process::Command` which internally pulls in `core::fmt` for error formatting regardless of whether our code uses it. Further reduction to ~40-50KB (matching uv-trampoline) would require replacing `Command` with raw `CreateProcessW` and using nightly Rust (see Future Optimizations).
+**Binary size**: 14,336 B on x86_64-pc-windows-msvc and
+aarch64-pc-windows-msvc. This size includes the sidecar parser and diagnostics.
+The x86_64 `std::process::Command` implementation was 221,696 B. See Size
+Measurements and Build Constraints for all measurements. The executable imports
+only KERNEL32.
 
 ### Environment Variables
 
-The trampoline pins the selected directory layout before it starts `vp.exe`:
+The sidecar controls the directory environment inherited by `vp.exe`:
 
-| Variable            | When                       | Purpose                                                                        |
-| ------------------- | -------------------------- | ------------------------------------------------------------------------------ |
-| `VP_HOME`           | `single-root` sidecar      | Pins the data root as the single install root                                  |
-| `VP_HOME`           | `split` sidecar            | Removed so it cannot override the recorded split layout                        |
-| `VP_DATA_DIR`       | `split` sidecar            | Pins the recorded data root                                                    |
-| `VP_BIN_DIR`        | `split` sidecar            | Pins the trampoline executable directory                                       |
-| `VP_CACHE_DIR`      | `split` sidecar            | Pins the recorded cache root                                                   |
-| `VP_SHIM_TOOL`      | Tool shims only (not `vp`) | Tells `vp.exe` to enter shim dispatch mode for the named tool                  |
-| `VP_TOOL_RECURSION` | Removed for tool shims     | Clears the recursion marker for fresh version resolution in nested invocations |
+| Variable            | When                    | Trampoline action                                      |
+| ------------------- | ----------------------- | ------------------------------------------------------ |
+| `VP_HOME`           | Single-root layout      | Sets all Vite+ directories from the sidecar data root  |
+| `VP_HOME`           | Split layout            | Removes the value so it cannot override separate roots |
+| `VP_DATA_DIR`       | Split layout            | Sets the payload and state root                        |
+| `VP_BIN_DIR`        | Split layout            | Sets the directory that contains the shim              |
+| `VP_CACHE_DIR`      | Split layout            | Sets the cache root                                    |
+| `VP_SHIM_TOOL`      | Tool shims, except `vp` | Selects the named tool for shim dispatch               |
+| `VP_TOOL_RECURSION` | Tool shims              | Removes the value so nested shims resolve versions     |
 
 ### Ctrl+C Handling
 
@@ -189,13 +246,15 @@ The trampoline installs a console control handler that returns `TRUE` (1):
 
 ### Integration with Shim Detection
 
-`detect_shim_tool()` in `shim/mod.rs` checks `VP_SHIM_TOOL` env var **before** `argv[0]`:
+`detect_shim_tool()` in `shim/mod.rs` checks `VP_SHIM_TOOL` before it checks
+`argv[0]`:
 
 ```
-Trampoline (<BIN>/node.exe + <BIN>/node.shim)
-  → reads the recorded layout, data root, and cache root
-  → pins the layout, sets VP_SHIM_TOOL=node, and removes VP_TOOL_RECURSION
-  → spawns <DATA>/current/bin/vp.exe with the original args
+Trampoline (node.exe + node.shim)
+  → loads the recorded directory layout
+  → sets VP_SHIM_TOOL=node and the directory variables
+  → removes VP_TOOL_RECURSION
+  → spawns <DATA>/current/bin/vp.exe with the original argument tail
     → detect_shim_tool() reads env var → "node"
     → dispatch("node", args)
     → resolves Node.js version, executes real node
@@ -248,24 +307,24 @@ When installing a pre-trampoline version (no `vp-shim.exe` in the package):
 
 ## Comparison with uv-trampoline
 
-| Aspect              | uv-trampoline                            | vite-plus trampoline              |
-| ------------------- | ---------------------------------------- | --------------------------------- |
-| **Purpose**         | Launch Python with embedded script       | Forward to `vp.exe`               |
-| **Complexity**      | High (PE resources, zipimport)           | Low (filename + spawn)            |
-| **Data embedding**  | PE resources (kind, path, script ZIP)    | Adjacent directory-layout sidecar |
-| **Dependencies**    | `windows` crate (unsafe, no CRT)         | Zero (raw FFI declaration)        |
-| **Toolchain**       | Nightly Rust (`panic="immediate-abort"`) | Stable Rust                       |
-| **Binary size**     | 39-47 KB                                 | ~200 KB                           |
-| **Entry point**     | `#![no_main]` + `mainCRTStartup`         | Standard `fn main()`              |
-| **Error output**    | `ufmt` (no `core::fmt`)                  | `write_all` (no `core::fmt`)      |
-| **Ctrl+C handling** | `SetConsoleCtrlHandler` → ignore         | Same approach                     |
-| **Exit code**       | `GetExitCodeProcess` → `exit()`          | `Command::status()` → `exit()`    |
+| Aspect              | uv-trampoline                            | vite-plus trampoline                 |
+| ------------------- | ---------------------------------------- | ------------------------------------ |
+| **Purpose**         | Launch Python with embedded script       | Forward to `vp.exe`                  |
+| **Complexity**      | High (PE resources, zipimport)           | Low (filename + spawn)               |
+| **Data embedding**  | PE resources (kind, path, script ZIP)    | Adjacent directory-layout sidecar    |
+| **Dependencies**    | `windows` crate (unsafe, no CRT)         | None (raw FFI declarations)          |
+| **Toolchain**       | Nightly Rust (`panic="immediate-abort"`) | Nightly Rust (same technique)        |
+| **Binary size**     | 39-47 KiB                                | 14 KiB                               |
+| **Entry point**     | `#![no_main]` + `mainCRTStartup`         | `#![no_main]` + `mainCRTStartup`     |
+| **Error output**    | `ufmt` (no `core::fmt`)                  | `WriteFile` + Win32 error codes      |
+| **Ctrl+C handling** | `SetConsoleCtrlHandler` → ignore         | `SetConsoleCtrlHandler` → ignore     |
+| **Exit code**       | `GetExitCodeProcess` → `exit()`          | `GetExitCodeProcess` → `ExitProcess` |
 
-The vite-plus trampoline does not embed data in PE resources. It reads its own
-filename and adjacent sidecar. It then resolves `vp.exe` under the recorded data
-root. The ~150KB size difference from uv-trampoline comes from
-`std::process::Command` (which internally pulls in `core::fmt`) versus raw
-`CreateProcessW` with nightly-only `#![no_main]`.
+The Vite+ trampoline is smaller because it does not embed PE resources. It
+normalizes only long sidecar and payload paths. It does not need job objects or
+GUI subsystem support. It reads a small sidecar next to its file. It finds
+`vp.exe` under the recorded data root and starts it. Both projects use the same
+build method and entry-point structure.
 
 ## Alternatives Considered
 
@@ -283,25 +342,79 @@ Requires administrator privileges or Developer Mode. Not reliable for all users.
 
 ### 4. Copy `vp.exe` as Each Shim (Rejected)
 
-~5-10MB per copy. The trampoline achieves the same result at ~200KB.
+~5-10MB per copy. The trampoline achieves the same result in 14 KiB.
 
 ### 5. `windows` Crate for FFI (Rejected)
 
 Adds ~100KB to the binary for a single `SetConsoleCtrlHandler` call. Raw FFI declaration is sufficient.
 
-## Future Optimizations
+## Size Measurements and Build Constraints
 
-If the ~200KB binary size needs to be reduced further:
+We built each variant below with cargo-xwin. We measured each variant on
+x86_64-pc-windows-msvc. The first two rows use the sidecar-aware `std`
+implementation. The next five rows show earlier fixed-layout experiments. The
+last row shows the current sidecar-aware raw implementation.
 
-1. **Switch to nightly Rust** with `panic="immediate-abort"` and `#![no_main]` + `mainCRTStartup` (~50KB savings)
-2. **Use raw Win32 `CreateProcessW`** instead of `std::process::Command` (eliminates most of std's process machinery)
-3. **Pre-build and check in** trampoline binaries (like uv does) to decouple the trampoline build from the workspace toolchain
+| Variant                                                                      | Toolchain | Size      |
+| ---------------------------------------------------------------------------- | --------- | --------- |
+| Sidecar-aware `std::process::Command`, precompiled `std`                     | stable    | 221,696 B |
+| Same source + build-std + `panic="immediate-abort"`                          | nightly   | 82,432 B  |
+| Fixed-layout `std` source + `#![no_main]` + `mainCRTStartup` + `atexit` stub | nightly   | 69,632 B  |
+| Raw Win32 rewrite, normal `main`, stable, no build-std                       | stable    | 105,984 B |
+| Raw Win32 rewrite, normal `main` + build-std                                 | nightly   | 13,824 B  |
+| Raw Win32 rewrite + `#![no_main]`, no diagnostics                            | nightly   | 6,656 B   |
+| Fixed-layout raw Win32 + `#![no_main]` + full diagnostics                    | nightly   | 8,192 B   |
+| Sidecar-aware raw Win32 + `#![no_main]` + full diagnostics (shipped)         | nightly   | 14,336 B  |
 
-These would bring the binary to ~40-50KB, matching uv-trampoline, at the cost of requiring a nightly toolchain and more unsafe code.
+For comparison, the uv-trampoline x64 console binary is 45,056 B. The default
+Scoop kiennq shim is 136,192 B and uses statically linked MSVC C. Scoop also
+added and then removed a 317,952 B Rust shim.
+
+### Build Constraints
+
+1. **`atexit` link failure**: Current nightly toolchains register TLS cleanup
+   through C `atexit`. With `#![no_main]`, that symbol links
+   `msvcrt.lib(utility.obj)`. The link then fails on undefined `__vcrt_*` and
+   `__acrt_*` CRT initialization symbols. Export this no-op function:
+
+   ```rust
+   extern "C" fn atexit(...) -> i32 { 0 }
+   ```
+
+   See `src/win.rs`. The trampoline does not run TLS destructors at process exit.
+   The documented `rustc-link-lib=ucrt` workaround does not fix this link. See
+   rust-lang/rust#143172. The older nightly toolchain that uv uses does not
+   register `atexit`.
+
+2. **Subsystem**: `#![no_main]` needs
+   `#![windows_subsystem = "console"]`. Without this attribute, lld reports
+   that the subsystem is not defined.
+3. **Static CRT**: Do not use `+crt-static`. It links the static CRT and
+   increases the binary size to approximately 115 KiB.
+4. **Development profile**: Use `opt-level = 1` and LTO. At `opt-level = 0`,
+   the compiler can reference the MSVC helper `__CxxFrameHandler3`. This causes
+   a link failure, even with `panic = "immediate-abort"`. uv uses the same
+   settings.
+
+### Remaining options
+
+- Assign the child to a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
+  uv uses this option. It makes Windows stop the child when Windows stops the
+  shim. It increases the binary size by a few KiB.
+- Commit reproducible trampoline binaries. uv commits `/Brepro`-normalized
+  executables and compares each byte in CI. This option isolates the shim from
+  toolchain changes.
 
 ## References
 
 - [Issue #835](https://github.com/voidzero-dev/vite-plus/issues/835): Original feature request with video reproduction
-- [uv-trampoline](https://github.com/astral-sh/uv/tree/main/crates/uv-trampoline): Reference implementation by astral-sh (~40KB with nightly Rust)
+- [uv-trampoline](https://github.com/astral-sh/uv/tree/main/crates/uv-trampoline):
+  Reference implementation by astral-sh. It uses workspace exclusion,
+  build-std, `panic="immediate-abort"`, cargo-xwin, `#![no_main]`, and raw
+  Win32. Its CI rejects `core::fmt` and `std::panicking` symbols.
+- [Scoop shims](https://github.com/ScoopInstaller/Scoop/tree/master/supporting/shims):
+  Native C shim from kiennq/scoop-better-shimexe and C# .NET shim. The C shim
+  is 136 KiB. The C# shim is 9.7 KiB. A sibling `.shim` file specifies the
+  launch target.
 - [RFC: env-command](./env-command.md): Shim architecture documentation
 - [RFC: upgrade-command](./upgrade-command.md): Upgrade/rollback flow
