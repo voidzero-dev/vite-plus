@@ -1,9 +1,10 @@
 [workspace]
 resolver = "3"
 members = ["bench", "crates/*", "packages/cli/binding"]
-# vp_trampoline is a standalone package: it needs its own release profile with
-# panic = "immediate-abort" (cargo ignores `panic` in per-package profile
-# overrides) and a crate-local build-std config. See crates/vp_trampoline/Cargo.toml.
+# vp_trampoline is a standalone package.
+# It needs a separate release profile and a crate-local build-std config.
+# Cargo ignores `panic` in per-package profile overrides.
+# See crates/vp_trampoline/Cargo.toml.
 exclude = ["crates/vp_trampoline"]
 
 [workspace.metadata.cargo-shear]

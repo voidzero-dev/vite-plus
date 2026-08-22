@@ -206,9 +206,9 @@ jobs:
       # Keep the package selection in sync with the `test` recipe in justfile.
       # vp_cli_snapshots is excluded there too: its snapshot suite needs a
       # built vp and node at runtime and joins the Windows archive later.
-      # vp_trampoline is excluded from the workspace. Its portable parser and
-      # layout tests run on Unix, while Windows shim behavior is covered by the
-      # Windows CLI snapshot suite.
+      # vp_trampoline is not a workspace member.
+      # Run its portable parser and layout tests on Unix.
+      # The Windows CLI snapshot suite tests Windows shim behavior.
       - name: Build test archive
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"

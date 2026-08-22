@@ -174,8 +174,8 @@ runs:
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
-    # The shared helper builds the excluded trampoline from its own directory
-    # and anchors CARGO_TARGET_DIR to the repository root.
+    # The helper builds the excluded trampoline from its crate directory.
+    # It anchors CARGO_TARGET_DIR to the repository root.
     - name: Build trampoline shim binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
