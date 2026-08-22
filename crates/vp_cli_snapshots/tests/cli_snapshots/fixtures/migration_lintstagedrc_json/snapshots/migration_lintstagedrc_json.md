@@ -12,66 +12,38 @@ Usage: vp migrate [PATH] [OPTIONS]
 Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.
 
 Arguments:
-  PATH  Target directory to migrate (default: current directory)
+  [PATH]  Target directory to migrate (default: current directory)
 
 Options:
-  --agent NAME      Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
+  --agent <NAME>    Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
   --no-agent        Skip writing coding agent instructions
-  --editor NAME     Write editor config files into the project.
+  --editor <NAME>   Write editor config files into the project
   --no-editor       Skip writing editor config files
   --hooks           Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks        Skip pre-commit hooks setup
-  --full            Existing Vite+ projects: also run the full setup (hooks, editor, agent files, ESLint/Prettier migration, framework shims, tsconfig baseUrl, .node-version). Without it, `vp migrate` only upgrades the toolchain version.
+  --interactive     Enable interactive prompts
   --no-interactive  Run in non-interactive mode (skip prompts and use defaults)
+  --full            Also run the full setup for an existing Vite+ project
   -h, --help        Show this help message
 
 Examples:
-  # Migrate current package
-  vp migrate
-
-  # Migrate specific directory
-  vp migrate my-app
-
-  # Non-interactive mode
-  vp migrate --no-interactive
+  vp migrate                    # Migrate the current package
+  vp migrate my-app             # Migrate a directory
+  vp migrate --no-interactive   # Use defaults without prompts
 
 Migration Prompt:
   Give this to a coding agent when you want it to drive the migration:
 
   Migrate this project to Vite+.
-  Vite+ replaces the current split tooling around runtime management, package
-  management, dev/build/test commands, linting, formatting, and packaging.
-  Run `vp help` and `vp help migrate` before making changes.
-  Use vp migrate --no-interactive in the workspace root.
-  Make sure the project is using Vite 8+ and Vitest 4.1+ before migrating.
+  Vite+ replaces the split tools for runtime management, package management,
+  development, builds, tests, linting, formatting, and packaging.
+  Run `vp help` and `vp help migrate` before you make changes.
+  Run `vp migrate --no-interactive` in the workspace root.
+  Make sure that the project uses Vite 8+ and Vitest 4.1+.
 
-  After the migration:
-  - Confirm `vite` imports were rewritten to `vite-plus` where needed
-  - Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
-  - On pnpm, keep the `vite` / `vitest` entries that `vp migrate` aliased to
-    the Vite+ packages so the workspace override stays effective; with other
-    package managers you can remove them once those rewrites are confirmed
-  - Move remaining tool-specific config into the appropriate blocks in
-    `vite.config.ts`
-
-  Command mapping:
-  - `vp run <script>` is the equivalent of `pnpm run <script>`
-  - `vp dev` and `vp test` always run the built-ins; `vp run dev` and
-    `vp run test` run the `dev` and `test` scripts from `package.json`
-  - `vp install`, `vp add`, and `vp remove` delegate through the package
-    manager declared by `packageManager`
-  - `vp dev`, `vp build`, `vp preview`, `vp lint`, `vp fmt`, `vp check`,
-    and `vp pack` replace the corresponding standalone tools
-  - Prefer `vp check` for validation loops
-
-  Finally, verify the migration by running:
-  - vp install
-  - vp check
-  - vp test
-  - vp build
-
-  Summarize the migration at the end and report any manual follow-up still
-  required.
+  After the migration, check imports, configuration, and package aliases.
+  Then run `vp install`, `vp check`, `vp test`, and `vp build`.
+  Report all required manual work in the migration summary.
 
 Documentation: https://viteplus.dev/guide/migrate
 ```
