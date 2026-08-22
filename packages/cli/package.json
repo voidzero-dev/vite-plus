@@ -69,6 +69,15 @@
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
     },
+    "./lint/plugins": {
+      "types": "./dist/lint-plugins.d.ts",
+      "import": "./dist/lint-plugins.js",
+      "require": "./dist/lint-plugins.cjs"
+    },
+    "./lint/plugins-dev": {
+      "types": "./dist/lint-plugins-dev.d.ts",
+      "import": "./dist/lint-plugins-dev.js"
+    },
     "./oxlint-plugin": {
       "module-sync": "./dist/oxlint-plugin.js",
       "node": "./dist/oxlint-plugin.js",
