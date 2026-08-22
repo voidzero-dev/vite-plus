@@ -246,14 +246,19 @@ Rejected alternatives: repurposing the app-command positional to mean "run there
 
 ### Target directory resolution
 
-An app command invocation is **bare** when it has no `-C` and no positional target (no Vite `[root]`, no pack entries). The classification mirrors the tools' own cac parsing: a non-flag token following any non-boolean flag is that flag's value, required and optional values alike (`--port 3000`, `--host 0.0.0.0`), because the tool itself would never treat it as a positional; only a token no flag consumes is a positional target, and any positional disables elicitation. The boolean-flag tables come from the shipped `--help` of each tool and are command-specific (`--minify` is optional-value for Vite build but boolean for pack). pack's target selectors (`-W`/`--workspace`, `-F`/`--filter`, `--root`) already define their own target and always disable elicitation. For `vp dev` / `build` / `preview` / `pack`, the target directory is resolved in this order:
+An app command is **bare** only when no token follows the subcommand and no explicit `-C` exists. Before bare-command resolution, Vite+ applies these rules:
 
-1. **`-C <dir>`**: run there. Never triggers the picker.
-2. **Positional target present**: forward as today, upstream semantics, vp does not interfere.
-3. **`defaultPackage`**, when bare in the directory containing the root config (a workspace root, or the root of a non-workspace repo): implicit `-C`, print a one-line note.
-4. **Interactive picker**, when bare at the workspace root in an interactive TTY (and not CI): pick, print hint, run as implicit `-C`.
-5. **Non-interactive and bare at the workspace root**: print the package list and the `-C` hint, exit 1.
-6. **Anywhere else**: current behavior, run in the current directory.
+1. An explicit `-C <dir>` runs the command in `<dir>`.
+2. Any downstream argument is explicit command intent. Vite+ forwards it and runs the command in the current directory.
+
+Vite+ does not parse Vite or tsdown options for target selection. For an exact bare `vp dev` / `build` / `preview` / `pack`, Vite+ uses this order:
+
+1. Apply **`defaultPackage`** in the directory that contains the root config. This directory can be a workspace root or a non-workspace repo root. Run with an implicit `-C` and print a one-line note.
+2. Run directly when the workspace root has a strong entry signal.
+3. At another workspace root, show the interactive picker or the non-interactive list. Put the `.` fallback last.
+4. Anywhere else, run in the current directory.
+
+This feature protects exact bare invocations only. Commands such as `vp dev --host` and `vp build --watch` do not use workspace target selection.
 
 "Workspace root" means the current directory's package is the workspace root package, as determined by `vt_workspace::find_workspace_root` (already called on every invocation in `packages/cli/binding/src/cli/mod.rs`).
 
@@ -348,7 +353,7 @@ No upstream Vite or tsdown changes are required.
 
 - `crates/vp_global_cli/src/main.rs` / `cli.rs`: parse the global `-C <dir>`, resolve the local install from `<dir>`, and delegate with `<dir>` as the effective cwd. Preserve an explicit-target marker for the local CLI.
 - `packages/cli/src/bin.ts`: parse `-C` for direct local invocations and pass the explicit-target marker to the binding.
-- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the bare-command resolution order. Skip classification when the explicit-target marker is set.
+- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the exact-bare command resolution order. Skip target selection when `-C` or a downstream argument is present.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
 - Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
@@ -357,7 +362,7 @@ No upstream Vite or tsdown changes are required.
 
 ## Compatibility
 
-The behavior change applies to a bare app command at a workspace root. A runnable root still runs in place. Otherwise, Vite+ shows the picker or a clear non-interactive error. The workspace root is the last fallback target. Use `vp -C . <command>` or `defaultPackage: '.'` to select it directly.
+The behavior change applies to an exact bare app command at a workspace root. A runnable root still runs in place. Otherwise, Vite+ shows the picker or a clear non-interactive error. The workspace root is the last fallback target. Use `vp -C . <command>` or `defaultPackage: '.'` to select it directly.
 
 ## Snap Tests
 
@@ -367,8 +372,8 @@ Snapshot cases cover:
 - Parity regression: `vp dev <dir>` still forwards the positional as Vite `root` with cwd untouched.
 - Bare app commands at a workspace root without a TTY: package listing and exit code.
 - Workspace-root fallback: last picker and listing row, direct selection, and explicit `vp -C . build`.
-- Vite root signals: declared `root`, build inputs, custom app type, and preview output directory.
-- Explicit arguments: `build --ssr <entry>` bypasses elicitation, while pack `--root` does not.
+- Vite root signals: declared `root`, build inputs, custom app type, and the `preview` command.
+- Explicit arguments: `build --ssr <entry>` and pack `--root` bypass target selection.
 - `defaultPackage`: happy path and missing-directory error.
 - Equivalence checks: `vp -C <dir> build` and `cd <dir> && vp build` produce the same output in a fixture whose config reads `process.cwd()`.
 
@@ -380,7 +385,7 @@ The interactive picker gets pty snapshot coverage in the `vt` repo style (`task_
 2. Add a `VP_DEFAULT_PACKAGE` env override later? Env companions are an established pattern (`NX_DEFAULT_PROJECT`); deferred from v1.
 3. Should `vp test` join the elicitation set? Probably not: Vitest already has first-class `projects` semantics at the root (`-C` works with it regardless).
 4. Exact non-interactive gate: the `vp run` picker's TTY check plus the `CI` check used by the global command picker?
-5. Resolved during review: `vp dev <dir>` with a directory positional prints a one-line note pointing at `vp -C <dir> dev` (dev/build/preview only; pack positionals are entries, and flags-only or help invocations stay silent).
+5. Resolved during review: any downstream argument bypasses target selection. Vite+ does not add positional-path guidance.
 
 ## Appendix: Naming Survey for `defaultPackage`
 

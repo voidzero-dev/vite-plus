@@ -17,7 +17,7 @@ comment = """
 The same declared `build` field makes the workspace root runnable for `vp dev`.
 """
 steps = [
-  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
+  { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },

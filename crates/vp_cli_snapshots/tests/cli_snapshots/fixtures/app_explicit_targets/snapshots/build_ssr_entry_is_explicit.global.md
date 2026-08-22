@@ -1,6 +1,6 @@
 # build_ssr_entry_is_explicit
 
-A value for `--ssr` is an explicit Vite build entry. The command does not elicit a package.
+The `--ssr` option is explicit command intent. Vite+ runs the command in the current directory.
 
 ## `vp build --ssr src/server.js`
 

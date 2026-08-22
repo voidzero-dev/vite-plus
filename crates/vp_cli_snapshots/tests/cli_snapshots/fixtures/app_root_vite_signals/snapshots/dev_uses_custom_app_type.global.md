@@ -5,7 +5,7 @@ A non-static Vite `appType` makes the workspace root runnable for `vp dev`.
 ## `vpt cp configs/custom-app.ts vite.config.ts`
 
 
-## `vp dev --host 127.0.0.1 --port 0`
+## `vp dev`
 
 **→ expect-milestone:** `dev-server:ready`
 

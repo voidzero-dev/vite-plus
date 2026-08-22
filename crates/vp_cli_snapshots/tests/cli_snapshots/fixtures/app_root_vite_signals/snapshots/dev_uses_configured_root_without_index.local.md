@@ -5,7 +5,7 @@ A non-static Vite `root` makes the workspace root runnable without `index.html`.
 ## `vpt cp configs/root-no-index.ts vite.config.ts`
 
 
-## `vp dev --host 127.0.0.1 --port 0`
+## `vp dev`
 
 **→ expect-milestone:** `dev-server:ready`
 

@@ -14,7 +14,7 @@ src/dist/index.html  <size> kB │ gzip: <size> kB
 ✓ built in <duration>
 ```
 
-## `vp preview --host 127.0.0.1 --port 0`
+## `vp preview`
 
 **→ expect-milestone:** `preview-server:ready`
 

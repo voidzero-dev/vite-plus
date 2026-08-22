@@ -5,7 +5,7 @@ A non-static Vite `build` field makes the workspace root runnable for `vp previe
 ## `vpt cp configs/preview-output.ts vite.config.ts`
 
 
-## `vp preview --host 127.0.0.1 --port 0`
+## `vp preview`
 
 **→ expect-milestone:** `preview-server:ready`
 

@@ -2,7 +2,7 @@
 
 The same declared `build` field makes the workspace root runnable for `vp dev`.
 
-## `vp dev --host 127.0.0.1 --port 0`
+## `vp dev`
 
 **→ expect-milestone:** `dev-server:ready`
 

@@ -7,6 +7,10 @@ const build = {
 export default {
   clearScreen: false,
   build,
+  preview: {
+    host: '127.0.0.1',
+    port: 0,
+  },
   plugins: [
     {
       name: 'preview-ready-milestone',

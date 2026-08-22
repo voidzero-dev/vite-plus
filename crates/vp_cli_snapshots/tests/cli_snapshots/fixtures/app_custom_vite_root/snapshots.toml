@@ -7,7 +7,7 @@ Bare `vp dev` starts the workspace app. The command does not ask the user to
 select a member package.
 """
 steps = [
-  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
+  { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
@@ -23,7 +23,7 @@ output.
 """
 steps = [
   ["vp", "build"],
-  { argv = ["vp", "preview", "--host", "127.0.0.1", "--port", "0"], interactions = [
+  { argv = ["vp", "preview"], interactions = [
     { "expect-milestone" = "preview-server:ready" },
     { "write-line" = "q" },
   ] },

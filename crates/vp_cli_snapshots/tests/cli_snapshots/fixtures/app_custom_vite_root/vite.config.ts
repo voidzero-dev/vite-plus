@@ -13,6 +13,14 @@ function emitMilestone(name: string): void {
 export default defineConfig({
   clearScreen: false,
   root: 'src',
+  server: {
+    host: '127.0.0.1',
+    port: 0,
+  },
+  preview: {
+    host: '127.0.0.1',
+    port: 0,
+  },
   plugins: [
     {
       name: 'server-ready-milestones',

@@ -22,7 +22,7 @@ vp = ["local", "global"]
 comment = "A non-static Vite `appType` makes the workspace root runnable for `vp dev`."
 steps = [
   { argv = ["vpt", "cp", "configs/custom-app.ts", "vite.config.ts"], snapshot = false },
-  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
+  { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
@@ -34,7 +34,7 @@ vp = ["local", "global"]
 comment = "A non-static Vite `root` makes the workspace root runnable without `index.html`."
 steps = [
   { argv = ["vpt", "cp", "configs/root-no-index.ts", "vite.config.ts"], snapshot = false },
-  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
+  { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
@@ -46,7 +46,7 @@ vp = ["local", "global"]
 comment = "A non-static Vite `build` field makes the workspace root runnable for `vp preview`."
 steps = [
   { argv = ["vpt", "cp", "configs/preview-output.ts", "vite.config.ts"], snapshot = false },
-  { argv = ["vp", "preview", "--host", "127.0.0.1", "--port", "0"], interactions = [
+  { argv = ["vp", "preview"], interactions = [
     { "expect-milestone" = "preview-server:ready" },
     { "write-line" = "q" },
   ] },

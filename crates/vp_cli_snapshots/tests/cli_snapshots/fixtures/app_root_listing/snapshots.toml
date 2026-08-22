@@ -68,10 +68,8 @@ steps = [["vp", "-C", ".", "build"]]
 name = "positional_is_vite_root"
 vp = ["local", "global"]
 comment = """
-A positional path is forwarded to Vite as [root] (upstream semantics), not
-treated as a package to elicit: vp build <dir> at the workspace root skips
-the picker/listing and builds that dir as the Vite root, with no Selected/Tip
-elicitation lines (rfcs/cwd-flag.md).
+A positional Vite root is explicit command intent. Vite+ forwards it and does
+not start target selection.
 """
 steps = [{ argv = ["vp", "build", "apps/web"] }]
 
