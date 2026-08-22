@@ -51,17 +51,3 @@ steps = [
     { "write-line" = "q" },
   ] },
 ]
-
-[[case]]
-name = "preview_uses_default_output"
-vp = ["local", "global"]
-comment = "A default preview output makes the workspace root runnable without another Vite signal."
-steps = [
-  { argv = ["vpt", "cp", "configs/preview-default-output.ts", "vite.config.ts"], snapshot = false },
-  { argv = ["vpt", "mkdir", "dist"], snapshot = false },
-  { argv = ["vpt", "cp", "output/index.html", "dist/index.html"], snapshot = false },
-  { argv = ["vp", "preview", "--host", "127.0.0.1", "--port", "0"], interactions = [
-    { "expect-milestone" = "preview-server:ready" },
-    { "write-line" = "q" },
-  ] },
-]

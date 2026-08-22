@@ -172,9 +172,8 @@ fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
 /// file only once for each command.
 ///
 /// A declared field is sufficient. Vite reports invalid values after the
-/// command starts. Preview accepts every dev signal. Without a declared
-/// field, all Vite commands accept a source `index.html`. Preview also accepts
-/// the default output at `dist/index.html`.
+/// command starts. Dev, build, and preview use the same union of configuration
+/// and source `index.html` signals.
 fn root_looks_runnable(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
@@ -188,17 +187,12 @@ fn root_looks_runnable(
             || config.get_declared("pack").is_some();
     }
 
-    let config_fields: &[&str] = match command {
-        "build" => &["root", "build", "input", "environments"],
-        "preview" => &["root", "appType", "build"],
-        _ => &["root", "appType"],
-    };
+    let config_fields = ["root", "build", "input", "environments", "appType"];
     if config_fields.iter().any(|field| config.get_declared(field).is_some()) {
         return true;
     }
 
     dir.as_path().join("index.html").is_file()
-        || command == "preview" && dir.as_path().join("dist/index.html").is_file()
 }
 
 /// Member variant of the likely-runnable heuristic; see
@@ -545,11 +539,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn preview_accepts_dev_config_signals() {
+    fn vite_commands_share_runnable_config_signals() {
         let temp = tempfile::tempdir().expect("temporary directory should exist");
         let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
 
-        for field in ["root", "appType"] {
+        for field in ["root", "build", "input", "environments", "appType"] {
             fs::write(
                 temp.path().join("vite.config.ts"),
                 format!("const value = {{}}; export default {{ {field}: value }};"),
@@ -557,7 +551,7 @@ mod tests {
             .expect("config should be written");
             let config = vp_static_config::resolve_static_config(&dir);
 
-            for command in ["dev", "preview"] {
+            for command in ["dev", "build", "preview"] {
                 assert!(
                     root_looks_runnable(&config, &dir, command),
                     "{field} should make {command} runnable"
@@ -567,14 +561,23 @@ mod tests {
     }
 
     #[test]
-    fn preview_accepts_the_dev_index_signal() {
+    fn vite_commands_share_the_source_index_signal() {
         let temp = tempfile::tempdir().expect("temporary directory should exist");
         let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
         fs::write(temp.path().join("index.html"), "").expect("index should be written");
         let config = vp_static_config::resolve_static_config(&dir);
 
-        assert!(root_looks_runnable(&config, &dir, "dev"));
-        assert!(root_looks_runnable(&config, &dir, "preview"));
+        for command in ["dev", "build", "preview"] {
+            assert!(root_looks_runnable(&config, &dir, command));
+        }
+
+        fs::remove_file(temp.path().join("index.html")).expect("source index should be removed");
+        fs::create_dir(temp.path().join("dist")).expect("output directory should be created");
+        fs::write(temp.path().join("dist/index.html"), "").expect("output index should be written");
+
+        for command in ["dev", "build", "preview"] {
+            assert!(!root_looks_runnable(&config, &dir, command));
+        }
     }
 
     #[test]
