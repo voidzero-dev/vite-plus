@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type CliParseError,
   parseConfigArgs,
   parseCreateArgs,
   parseHooksArgs,
@@ -16,7 +17,7 @@ function expectParsed<T>(outcome: { status: string; value?: T }): T {
   return outcome.value;
 }
 
-function expectParseError(outcome: { status: string; error?: { kind: string; message: string } }) {
+function expectParseError(outcome: { status: string; error?: CliParseError }): CliParseError {
   expect(outcome.status).toBe('error');
   if (outcome.status !== 'error' || outcome.error === undefined) {
     throw new Error(`The parser returned ${outcome.status}.`);
@@ -24,7 +25,7 @@ function expectParseError(outcome: { status: string; error?: { kind: string; mes
   return outcome.error;
 }
 
-function expectExit(outcome: { status: string; code?: number }) {
+function expectExit(outcome: { status: string; code?: number }): void {
   expect(outcome).toEqual({ status: 'exit', code: 0 });
 }
 

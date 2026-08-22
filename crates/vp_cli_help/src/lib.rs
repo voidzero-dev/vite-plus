@@ -13,6 +13,9 @@ use owo_colors::OwoColorize;
 use terminal_size::{Width, terminal_size_of};
 
 const HELP_RIGHT_MARGIN: usize = 4;
+const ROW_LABEL_INDENT: &str = "  ";
+const ROW_DESCRIPTION_GAP: &str = "  ";
+const ROW_DESCRIPTION_INDENT: &str = "    ";
 
 #[derive(Clone, Debug)]
 pub struct HelpDoc {
@@ -254,13 +257,34 @@ fn wrap_line(line: &str, width: usize) -> Vec<String> {
     output
 }
 
+fn render_stacked_rows(rows: &[HelpRow], content_width: usize) -> Vec<String> {
+    let description_width = content_width.saturating_sub(ROW_DESCRIPTION_INDENT.len());
+    let mut output = Vec::new();
+
+    for row in rows {
+        output.push(format!("{}{}", ROW_LABEL_INDENT, row.label));
+        for line in row.description.iter().flat_map(|line| wrap_line(line, description_width)) {
+            if !line.is_empty() {
+                output.push(format!("{ROW_DESCRIPTION_INDENT}{line}"));
+            }
+        }
+    }
+
+    output
+}
+
 fn render_rows(rows: &[HelpRow], content_width: usize) -> Vec<String> {
     if rows.is_empty() {
         return vec![];
     }
 
     let label_width = rows.iter().map(|row| visible_length(&row.label)).max().unwrap_or(0);
-    let description_width = content_width.saturating_sub(label_width + 4);
+    if content_width <= label_width.saturating_add(ROW_DESCRIPTION_INDENT.len()) {
+        return render_stacked_rows(rows, content_width);
+    }
+
+    let description_width =
+        content_width.saturating_sub(label_width + ROW_DESCRIPTION_INDENT.len());
     let mut output = Vec::new();
 
     for row in rows {
@@ -272,12 +296,15 @@ fn render_rows(rows: &[HelpRow], content_width: usize) -> Vec<String> {
                 row.label,
                 " ".repeat(label_width.saturating_sub(visible_length(&row.label)))
             );
-            output.push(format!("  {label}  {first}"));
+            output.push(format!("{ROW_LABEL_INDENT}{label}{ROW_DESCRIPTION_GAP}{first}"));
             for line in description_iter {
-                output.push(format!("  {:label_width$}  {}", "", line));
+                output.push(format!(
+                    "{ROW_LABEL_INDENT}{:label_width$}{ROW_DESCRIPTION_GAP}{line}",
+                    ""
+                ));
             }
         } else {
-            output.push(format!("  {}", row.label));
+            output.push(format!("{ROW_LABEL_INDENT}{}", row.label));
         }
     }
 
@@ -362,7 +389,10 @@ pub fn print_help_doc(doc: &HelpDoc) {
 mod tests {
     use clap::{ArgAction, Command};
 
-    use super::{HelpDoc, HelpRow, HelpSection, help_doc_from_command, render_help_doc_with_width};
+    use super::{
+        HelpDoc, HelpRow, HelpSection, ROW_DESCRIPTION_INDENT, help_doc_from_command,
+        render_help_doc_with_width, render_rows, visible_length,
+    };
 
     #[test]
     fn builds_help_from_command_metadata() {
@@ -469,6 +499,47 @@ mod tests {
                 "                   import\n",
                 "                   resolution.\n",
             )
+        );
+    }
+
+    #[test]
+    fn stacks_rows_when_labels_leave_no_description_width() {
+        let rows = vec![
+            HelpRow {
+                label: "--package-manager <pnpm|npm|yarn|bun>".into(),
+                description: vec![
+                    "Use the selected package manager for the generated project.".into(),
+                ],
+            },
+            HelpRow {
+                label: "--verbose".into(),
+                description: vec!["Show detailed scaffolding output.".into()],
+            },
+        ];
+
+        let content_width = 28;
+        let label_width = rows.iter().map(|row| visible_length(&row.label)).max().unwrap_or(0);
+        assert!(content_width <= label_width + ROW_DESCRIPTION_INDENT.len());
+
+        let output = render_rows(&rows, content_width);
+
+        assert_eq!(
+            output,
+            [
+                "  --package-manager <pnpm|npm|yarn|bun>",
+                "    Use the selected package",
+                "    manager for the",
+                "    generated project.",
+                "  --verbose",
+                "    Show detailed",
+                "    scaffolding output.",
+            ]
+        );
+        assert!(
+            output
+                .iter()
+                .filter(|line| line.starts_with("    "))
+                .all(|line| visible_length(line) <= content_width)
         );
     }
 }

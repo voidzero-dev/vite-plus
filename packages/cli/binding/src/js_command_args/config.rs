@@ -110,19 +110,11 @@ mod tests {
     }
 
     fn parsed(argv: &[&str]) -> ConfigCliArgs {
-        match parse(argv) {
-            ParseResult::Ok(value) => value,
-            ParseResult::Help(_) => panic!("The parser returned help."),
-            ParseResult::Error(error) => panic!("The parser returned an error: {}", error.message),
-        }
+        parse(argv).expect_ok()
     }
 
     fn parse_error(argv: &[&str]) -> CliParseError {
-        match parse(argv) {
-            ParseResult::Error(error) => error,
-            ParseResult::Ok(_) => panic!("The parser returned arguments."),
-            ParseResult::Help(_) => panic!("The parser returned help."),
-        }
+        parse(argv).expect_error()
     }
 
     #[test]
