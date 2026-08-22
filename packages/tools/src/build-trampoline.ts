@@ -11,10 +11,13 @@ export function resolveCargoTargetDir(configured: string | undefined): string {
 export function resolveCargoArgs(args: string[]): string[] {
   const xwin = args.includes('--xwin');
   const cargoArgs = args.filter((arg) => arg !== '--xwin');
-  return [...(xwin ? ['xwin'] : []), 'build', ...cargoArgs];
+  if (xwin) {
+    return ['xwin', 'build', ...cargoArgs];
+  }
+  return ['build', ...cargoArgs];
 }
 
-export function buildTrampoline(args: string[] = process.argv.slice(2)) {
+export function buildTrampoline(args: string[] = process.argv.slice(2)): void {
   const cargo = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
   execFileSync(cargo, resolveCargoArgs(args), {
     cwd: path.join(repoRoot, 'crates/vp_trampoline'),
