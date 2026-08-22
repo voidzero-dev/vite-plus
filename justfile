@@ -100,8 +100,8 @@ snapshot-test *args='': _install_chromium _build-trampoline
 # directory so its .cargo/config.toml (build-std) applies. The helper anchors
 # relative CARGO_TARGET_DIR values to the repo root so all binaries stay in the
 # same artifact directory.
-_build-trampoline:
-  node packages/tools/src/build-trampoline.ts
+_build-trampoline *args='':
+  node packages/tools/src/build-trampoline.ts {{args}}
 
 # Browser-mode snapshot cases run with PLAYWRIGHT_BROWSERS_PATH=0, so the
 # browser must be installed into node_modules with the same setting.

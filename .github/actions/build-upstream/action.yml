@@ -174,20 +174,12 @@ runs:
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
-    # The trampoline is excluded from the workspace and must build from its
-    # own directory so its .cargo/config.toml (build-std) applies. Pin
-    # CARGO_TARGET_DIR to an absolute path so the artifact still lands in the
-    # rust-target dir the cache and artifact paths expect. This runs on native
-    # Windows runners for release builds, so also treat drive-letter paths as
-    # absolute.
+    # The shared helper builds the excluded trampoline from its own directory
+    # and anchors CARGO_TARGET_DIR to the repository root.
     - name: Build trampoline shim binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: |
-        target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
-        case "$target_dir" in /*|[A-Za-z]:*) ;; *) target_dir="$PWD/$target_dir" ;; esac
-        cd crates/vp_trampoline
-        CARGO_TARGET_DIR="$target_dir" cargo build --release --target ${INPUTS_TARGET}
+      run: node packages/tools/src/build-trampoline.ts --release --target "${INPUTS_TARGET}"
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
