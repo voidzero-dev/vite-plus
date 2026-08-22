@@ -4,11 +4,27 @@ A workspace root remains the app target when its static Vite root points to
 the directory that contains index.html. Bare vp dev starts there instead of
 eliciting a member package.
 
-## `vp dev --port 12312312312`
+## `vp dev --host 127.0.0.1 --port 0`
 
-**Exit code:** 1
+**→ expect-milestone:** `dev-server:ready`
 
 ```
-error when starting dev server:
-Error: No available ports found between 12312312312 and 65535
+VITE+ - The Unified Toolchain for the Web
+
+  VITE+ <version>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+```
+
+**← write-line:** `q`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+  VITE+ <version>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+q
 ```

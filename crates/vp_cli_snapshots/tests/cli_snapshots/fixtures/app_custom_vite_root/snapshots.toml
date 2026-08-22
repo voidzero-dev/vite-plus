@@ -7,5 +7,17 @@ the directory that contains index.html. Bare vp dev starts there instead of
 eliciting a member package.
 """
 steps = [
-  { argv = ["vp", "dev", "--port", "12312312312"], tty = false, continue-on-failure = true },
+  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
 ]
+
+[[case]]
+name = "build_uses_custom_vite_root"
+vp = ["local", "global"]
+comment = """
+A workspace root remains the app target when its static Vite root contains
+index.html. Bare vp build creates the app instead of eliciting a member package.
+"""
+steps = [["vp", "build"]]
