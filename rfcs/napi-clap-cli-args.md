@@ -230,7 +230,9 @@ The statuses have these meanings:
 - `exit`: Rust printed help. JavaScript exits with the specified code.
 - `error`: JavaScript prints the `clap` diagnostic.
 
-Map `clap::error::ErrorKind::DisplayHelp` to `exit` with code 0. Map all other argument errors to `error`.
+Map `DisplayHelp` and `DisplayHelpOnMissingArgumentOrSubcommand` to `exit` with code 0. Only bare `vp hooks` uses the second kind.
+
+Map all other argument errors to `error`.
 
 JavaScript prints the Vite+ header before a diagnostic. JavaScript exits with code 1 for invalid arguments.
 
@@ -386,6 +388,9 @@ Reject these inputs before JavaScript calls `lint-staged`:
 --concurrent=1.5
 --concurrent=NaN
 --concurrent=4294967296
+--cwd=
+--diff=
+--diff-filter=
 ```
 
 Use `NonZeroU32`, not `NonZeroUsize`. `NonZeroU32` has the same range on each supported platform.
@@ -590,6 +595,7 @@ This RFC intentionally changes these inputs:
 | Negative string option        | Can return `false`                           | `clap` error            |
 | `--stash` or `--no-debug`     | Uses automatic `mri` negation                | `clap` error            |
 | Repeated scalar option        | Can return an array or an order-based value  | `clap` conflict         |
+| Empty staged string option    | JavaScript rejects it during normalization   | `clap` value error      |
 | Fractional staged concurrency | Passes the PR #2501 check                    | `clap` value error      |
 | Create `--all`                | Accepts and ignores the option               | `clap` error            |
 | Invalid package manager       | JavaScript reports the error during `create` | `clap` reports it first |
@@ -739,7 +745,9 @@ Generated declarations check field names and union shapes. Runtime tests check t
 
 Some external scripts can use options that `mri` ignored. Snapshot tests cannot find every external script.
 
-Release notes must identify the new strict checks. A diagnostic must show the rejected token and command usage.
+The pull request description is the release-note source. It must identify the new strict checks.
+
+A diagnostic must show the rejected token and command usage.
 
 ## Alternatives
 
