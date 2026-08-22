@@ -1,7 +1,9 @@
 import { emitMilestone } from './milestone';
 
+const appType = 'custom';
+
 export default {
-  appType: 'custom',
+  appType,
   clearScreen: false,
   plugins: [
     {

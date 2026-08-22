@@ -289,13 +289,13 @@ Vite+ uses a stronger test for the workspace root. A runnable root uses the fast
 
 For `pack`, the root is runnable when `src/index.ts` exists or the root config declares `pack`.
 
-For Vite commands, a declared `root` is sufficient. Vite+ does not check the configured directory or its entry file. Vite reports an invalid configuration after the command starts. Without a declared `root`, Vite+ uses these signals:
+For Vite commands, a declared field is sufficient. Vite+ does not validate its value. Vite reports an invalid configuration after the command starts. Preview accepts every dev signal. Vite+ uses these signals:
 
-| Command   | Workspace-root signal                                                                                    |
-| --------- | -------------------------------------------------------------------------------------------------------- |
-| `dev`     | `index.html` exists, or the config declares static `appType: 'custom'`                                   |
-| `build`   | `index.html` exists, or the config declares `build`, top-level `input`, or static `environments.*.input` |
-| `preview` | `index.html` exists in `build.outDir`; the default output directory is `dist`                            |
+| Command   | Workspace-root signal                                                                          |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| `dev`     | The config declares `root` or `appType`, or `index.html` exists                                |
+| `build`   | The config declares `root`, `build`, `input`, or `environments`, or `index.html` exists        |
+| `preview` | The config declares `root`, `appType`, or `build`, or `index.html` or `dist/index.html` exists |
 
 Member-package signals are used only for ranking and single-member auto-select. They never hide a member. Vite+ checks each member directory. It does not execute the config, and parent directories do not count.
 

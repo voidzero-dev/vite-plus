@@ -1,7 +1,9 @@
-export default {
-  environments: {
-    client: {
-      input: 'src/main.js',
-    },
+const environments = {
+  client: {
+    input: 'src/main.js',
   },
+};
+
+export default {
+  environments,
 };

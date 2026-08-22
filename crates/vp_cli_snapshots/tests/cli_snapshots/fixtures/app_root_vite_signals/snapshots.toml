@@ -1,7 +1,7 @@
 [[case]]
 name = "build_uses_top_level_input"
 vp = ["local", "global"]
-comment = "A top-level Vite `input` makes the workspace root runnable for `vp build`."
+comment = "A non-static Vite `input` makes the workspace root runnable for `vp build`."
 steps = [
   { argv = ["vpt", "cp", "configs/input.ts", "vite.config.ts"], snapshot = false },
   ["vp", "build"],
@@ -10,7 +10,7 @@ steps = [
 [[case]]
 name = "build_uses_environment_input"
 vp = ["local", "global"]
-comment = "A static `environments.*.input` makes the workspace root runnable for `vp build`."
+comment = "A non-static Vite `environments` field makes the workspace root runnable for `vp build`."
 steps = [
   { argv = ["vpt", "cp", "configs/environment-input.ts", "vite.config.ts"], snapshot = false },
   ["vp", "build"],
@@ -19,7 +19,7 @@ steps = [
 [[case]]
 name = "dev_uses_custom_app_type"
 vp = ["local", "global"]
-comment = "A static `appType: 'custom'` makes the workspace root runnable for `vp dev`."
+comment = "A non-static Vite `appType` makes the workspace root runnable for `vp dev`."
 steps = [
   { argv = ["vpt", "cp", "configs/custom-app.ts", "vite.config.ts"], snapshot = false },
   { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], interactions = [
@@ -43,9 +43,23 @@ steps = [
 [[case]]
 name = "preview_uses_build_output"
 vp = ["local", "global"]
-comment = "A static `build.outDir` with `index.html` makes the workspace root runnable for `vp preview`."
+comment = "A non-static Vite `build` field makes the workspace root runnable for `vp preview`."
 steps = [
   { argv = ["vpt", "cp", "configs/preview-output.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "preview", "--host", "127.0.0.1", "--port", "0"], interactions = [
+    { "expect-milestone" = "preview-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "preview_uses_default_output"
+vp = ["local", "global"]
+comment = "A default preview output makes the workspace root runnable without another Vite signal."
+steps = [
+  { argv = ["vpt", "cp", "configs/preview-default-output.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "mkdir", "dist"], snapshot = false },
+  { argv = ["vpt", "cp", "output/index.html", "dist/index.html"], snapshot = false },
   { argv = ["vp", "preview", "--host", "127.0.0.1", "--port", "0"], interactions = [
     { "expect-milestone" = "preview-server:ready" },
     { "write-line" = "q" },

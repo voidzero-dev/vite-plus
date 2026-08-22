@@ -1,10 +1,12 @@
 import { emitMilestone } from './milestone';
 
+const build = {
+  outDir: 'output',
+};
+
 export default {
   clearScreen: false,
-  build: {
-    outDir: 'output',
-  },
+  build,
   plugins: [
     {
       name: 'preview-ready-milestone',

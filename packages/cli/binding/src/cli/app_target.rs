@@ -171,13 +171,10 @@ fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
 /// the config that [`classify`] already resolved. Vite+ reads and parses the
 /// file only once for each command.
 ///
-/// A declared Vite `root` is sufficient for all Vite commands. Vite reports
-/// an invalid root or missing entry after the command starts. Without that
-/// declaration, an explicit `build` block or input makes the root a target
-/// for `vp build`. The `vp dev` command accepts an `index.html` file or
-/// `appType: 'custom'`. The `vp preview` command checks `build.outDir` for
-/// `index.html`. A shared config for lint, format, and tasks has none of these
-/// signals.
+/// A declared field is sufficient. Vite reports invalid values after the
+/// command starts. Preview accepts every dev signal. Without a declared
+/// field, all Vite commands accept a source `index.html`. Preview also accepts
+/// the default output at `dist/index.html`.
 fn root_looks_runnable(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
@@ -191,55 +188,17 @@ fn root_looks_runnable(
             || config.get_declared("pack").is_some();
     }
 
-    if config.get_declared("root").is_some() {
+    let config_fields: &[&str] = match command {
+        "build" => &["root", "build", "input", "environments"],
+        "preview" => &["root", "appType", "build"],
+        _ => &["root", "appType"],
+    };
+    if config_fields.iter().any(|field| config.get_declared(field).is_some()) {
         return true;
     }
 
-    let has_index_html = dir.as_path().join("index.html").is_file();
-
-    match command {
-        "build" => {
-            has_index_html
-                || config.get_declared("build").is_some()
-                || config.get_declared("input").is_some()
-                || config.get_declared("environments").is_some_and(|value| match value {
-                    vp_static_config::FieldValue::Json(serde_json::Value::Object(environments)) => {
-                        environments.values().any(|environment| {
-                            environment
-                                .as_object()
-                                .is_some_and(|environment| environment.contains_key("input"))
-                        })
-                    }
-                    vp_static_config::FieldValue::Json(_)
-                    | vp_static_config::FieldValue::NonStatic => false,
-                })
-        }
-        "preview" => {
-            let out_dir = match config.get_declared("build") {
-                None => dir.join("dist"),
-                Some(vp_static_config::FieldValue::Json(serde_json::Value::Object(build))) => {
-                    match build.get("outDir") {
-                        None => dir.join("dist"),
-                        Some(serde_json::Value::String(out_dir)) => dir.join(out_dir).clean(),
-                        Some(_) => return false,
-                    }
-                }
-                Some(
-                    vp_static_config::FieldValue::Json(_) | vp_static_config::FieldValue::NonStatic,
-                ) => return false,
-            };
-            out_dir.as_path().join("index.html").is_file()
-        }
-        _ => {
-            has_index_html
-                || matches!(
-                    config.get_declared("appType"),
-                    Some(vp_static_config::FieldValue::Json(serde_json::Value::String(
-                        app_type
-                    ))) if app_type == "custom"
-                )
-        }
-    }
+    dir.as_path().join("index.html").is_file()
+        || command == "preview" && dir.as_path().join("dist/index.html").is_file()
 }
 
 /// Member variant of the likely-runnable heuristic; see
@@ -581,7 +540,42 @@ pub(super) fn resolve_app_target(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
+
+    #[test]
+    fn preview_accepts_dev_config_signals() {
+        let temp = tempfile::tempdir().expect("temporary directory should exist");
+        let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
+
+        for field in ["root", "appType"] {
+            fs::write(
+                temp.path().join("vite.config.ts"),
+                format!("const value = {{}}; export default {{ {field}: value }};"),
+            )
+            .expect("config should be written");
+            let config = vp_static_config::resolve_static_config(&dir);
+
+            for command in ["dev", "preview"] {
+                assert!(
+                    root_looks_runnable(&config, &dir, command),
+                    "{field} should make {command} runnable"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn preview_accepts_the_dev_index_signal() {
+        let temp = tempfile::tempdir().expect("temporary directory should exist");
+        let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
+        fs::write(temp.path().join("index.html"), "").expect("index should be written");
+        let config = vp_static_config::resolve_static_config(&dir);
+
+        assert!(root_looks_runnable(&config, &dir, "dev"));
+        assert!(root_looks_runnable(&config, &dir, "preview"));
+    }
 
     #[test]
     fn bare_means_no_positional_target_and_no_help() {

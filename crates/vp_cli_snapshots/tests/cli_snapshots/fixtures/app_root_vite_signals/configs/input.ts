@@ -1,3 +1,5 @@
+const input = 'src/main.js';
+
 export default {
-  input: 'src/main.js',
+  input,
 };
