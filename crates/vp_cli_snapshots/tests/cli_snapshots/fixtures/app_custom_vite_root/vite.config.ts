@@ -1,18 +1,29 @@
 import { defineConfig } from 'vite-plus';
 
+function emitMilestone(name: string) {
+  // Let Vite print its startup banner after server.listen() resolves.
+  setImmediate(() => {
+    const encodedName = Buffer.from(name).toString('base64url');
+    process.stdout.write(
+      `\x1b]2;pty-terminal-test:${'0'.repeat(32)}:${encodedName}\x1b\\`,
+    );
+  });
+}
+
 export default defineConfig({
   clearScreen: false,
   root: 'src',
   plugins: [
     {
-      name: 'dev-server-ready-milestone',
+      name: 'server-ready-milestones',
       configureServer(server) {
         server.httpServer?.once('listening', () => {
-          // Let Vite print its startup banner after server.listen() resolves.
-          setImmediate(() => {
-            const name = Buffer.from('dev-server:ready').toString('base64url');
-            process.stdout.write(`\x1b]2;pty-terminal-test:${'0'.repeat(32)}:${name}\x1b\\`);
-          });
+          emitMilestone('dev-server:ready');
+        });
+      },
+      configurePreviewServer(server) {
+        server.httpServer.once('listening', () => {
+          emitMilestone('preview-server:ready');
         });
       },
     },
