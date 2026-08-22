@@ -157,6 +157,12 @@ pub struct CliOptions {
     pub toolchain_manifest_path: String,
     pub vite_plus_package_path: String,
     pub resolve_universal_vite_config: ViteConfigResolverFn,
+    /// Host Node.js version (`process.version`), used for the package-manager
+    /// lifecycle env user agent.
+    pub node_version: Option<String>,
+    /// Host Node.js executable path (`process.execPath`), used for the
+    /// package-manager lifecycle env (`npm_node_execpath`/`NODE`).
+    pub node_exec_path: Option<String>,
 }
 
 /// A resolved subcommand ready for execution.

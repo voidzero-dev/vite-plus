@@ -3453,6 +3453,16 @@ export interface CliOptions {
   cwd?: string;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;
+  /**
+   * Host Node.js version (`process.version`), used for the package-manager
+   * lifecycle env user agent.
+   */
+  nodeVersion?: string;
+  /**
+   * Host Node.js executable path (`process.execPath`), used for the
+   * package-manager lifecycle env (`npm_node_execpath`/`NODE`).
+   */
+  nodeExecPath?: string;
   /** Generated toolchain manifest shipped with this vite-plus package. */
   toolchainManifestPath: string;
   /** Root directory of this vite-plus package. */
