@@ -1,6 +1,6 @@
-//! Pure helpers over UTF-16 code units and bytes, shared by the Windows
-//! implementation. They live outside win.rs so the unit tests run on every
-//! platform.
+//! Portable helpers for UTF-16 code units and bytes.
+//! The Windows implementation uses these helpers.
+//! They stay outside win.rs so their unit tests run on all platforms.
 
 const SPACE: u16 = b' ' as u16;
 const TAB: u16 = b'\t' as u16;
@@ -34,9 +34,9 @@ pub struct ShimPointer<'a> {
 
 /// Parse the UTF-8 `<name>.shim` sidecar written by `vp_shared::VpDirs`.
 ///
-/// Sidecars record the directory layout, data root, and cache root. The parser
-/// requires the versioned header and matches `vp_shared`, including UTF-8 BOM
-/// and CRLF support.
+/// A sidecar records the directory layout, data root, and cache root.
+/// The parser requires the versioned header.
+/// The parser supports a UTF-8 BOM and CRLF line endings, as `vp_shared` does.
 pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     let text = core::str::from_utf8(bytes).ok()?.trim();
@@ -71,13 +71,14 @@ pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
     Some(ShimPointer { data, layout })
 }
 
-/// Index where the raw command line's first (program) argument ends.
+/// Return the end index of the first program argument in a raw command line.
 ///
-/// This follows the MSVC parsing rule for the program name: a quote toggles
-/// quoted mode, backslashes have no escaping effect, and leading whitespace
-/// terminates an empty program argument. The remainder (`&cmdline[result..]`,
-/// leading whitespace included) is the argument tail to forward to the child
-/// verbatim.
+/// This function follows the MSVC rule for a program name.
+/// A quote starts or stops quoted mode.
+/// Backslashes do not escape characters.
+/// Leading whitespace ends an empty program argument.
+/// Forward `&cmdline[result..]` to the child without changes.
+/// This remaining text includes its leading whitespace.
 pub fn skip_program_argument(cmdline: &[u16]) -> usize {
     let mut i = 0;
     let mut quoted = false;
@@ -99,12 +100,12 @@ fn is_path_separator(unit: u16) -> bool {
 
 /// Add the Win32 extended-length prefix to a normalized absolute path.
 ///
-/// The caller must resolve `.` and `..` components and replace `/` separators
-/// before calling this function because the extended-length namespace treats
-/// the rest of the path verbatim.
+/// Before the call, resolve `.` and `..` components.
+/// Before the call, replace `/` separators.
+/// The extended-length namespace uses the remaining path without changes.
 pub fn verbatim_path(path: &[u16]) -> Vec<u16> {
     let (prefix, tail) = match path {
-        // Keep paths that already use an extended-length or NT namespace.
+        // Keep an existing extended-length or NT namespace.
         [BACKSLASH, BACKSLASH, QUESTION, BACKSLASH, ..]
         | [BACKSLASH, QUESTION, QUESTION, BACKSLASH, ..] => return path.to_vec(),
         // C:\path => \\?\C:\path
@@ -122,13 +123,12 @@ pub fn verbatim_path(path: &[u16]) -> Vec<u16> {
     extended
 }
 
-/// End index of a parent directory, preserving the separator when it is part
-/// of a Windows root.
+/// Return the end index of a parent directory.
+/// Keep the separator when it is part of a Windows root.
 ///
-/// Removing the separator from `C:\vp.exe` would produce the drive-relative
-/// path `C:`. Device roots such as `\\?\Volume{...}\vp.exe` have the same
-/// constraint. Other parents omit their trailing separator, matching
-/// `Path::parent`.
+/// Without the separator, `C:\vp.exe` produces the drive-relative path `C:`.
+/// Device roots such as `\\?\Volume{...}\vp.exe` have the same constraint.
+/// Other parent paths omit the final separator, as `Path::parent` does.
 pub fn parent_dir_len(path: &[u16], last_separator: usize) -> usize {
     let drive_root = last_separator >= 1 && path[last_separator - 1] == COLON;
     let device_root = last_separator >= 4
@@ -145,8 +145,8 @@ pub fn parent_dir_len(path: &[u16], last_separator: usize) -> usize {
     }
 }
 
-/// Length of the file stem, matching `Path::file_stem`: everything before the
-/// last `.`, except that a leading `.` never starts an extension.
+/// Return the file-stem length, as `Path::file_stem` does.
+/// The stem ends before the last `.`, but a leading `.` does not start an extension.
 pub fn file_stem_len(name: &[u16]) -> usize {
     match name.iter().skip(1).rposition(|&c| c == DOT) {
         Some(pos) => pos + 1,
@@ -159,7 +159,8 @@ pub fn eq_ascii(wide: &[u16], ascii: &[u8]) -> bool {
     wide.len() == ascii.len() && wide.iter().zip(ascii).all(|(&w, &a)| w == u16::from(a))
 }
 
-/// Format `value` as decimal ASCII into `buf`, returning the used suffix.
+/// Format `value` as decimal ASCII in `buf`.
+/// Return the used suffix.
 pub fn format_u32(mut value: u32, buf: &mut [u8; 10]) -> &[u8] {
     let mut i = buf.len();
     loop {

@@ -72,9 +72,9 @@ watch-check:
 # vite-plus-cli (lives outside crates/) to catch type sync issues.
 # vp_cli_snapshots is excluded: its suite needs a built global binary and
 # node, and runs via `just snapshot-test` instead.
-# vp_trampoline is excluded from the workspace and tests from its own
-# directory on Unix. Its portable parser and layout tests run there, while
-# Windows shim behavior is covered by the Windows CLI snapshot suite.
+# vp_trampoline is not a workspace member.
+# On Unix, run its portable parser and layout tests separately.
+# The Windows CLI snapshot suite tests Windows shim behavior.
 # Single source of truth for cargo test, used by CI too.
 [unix]
 test:
@@ -96,10 +96,9 @@ snapshot-test *args='': _install_chromium _build-trampoline
   cargo build -p vp_global_cli
   cargo test -p vp_cli_snapshots -- {{args}}
 
-# The trampoline is excluded from the workspace; build it from its own
-# directory so its .cargo/config.toml (build-std) applies. The helper anchors
-# relative CARGO_TARGET_DIR values to the repo root so all binaries stay in the
-# same artifact directory.
+# The trampoline is not a workspace member.
+# The helper runs Cargo from the crate directory so the build-std config applies.
+# It resolves relative CARGO_TARGET_DIR values from the repository root.
 _build-trampoline *args='':
   node packages/tools/src/build-trampoline.ts {{args}}
 

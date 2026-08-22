@@ -1,22 +1,22 @@
-# This crate is excluded from the workspace on purpose (see the root
-# Cargo.toml). It needs its own release profile with panic = "immediate-abort",
-# which cargo ignores in per-package profile overrides, plus the crate-local
-# .cargo/config.toml that enables build-std. Build it from this directory so
-# that config applies:
+# The root Cargo.toml excludes this crate from the workspace.
+# This crate needs a separate release profile with panic = "immediate-abort".
+# Cargo ignores `panic` in per-package profile overrides.
+# The crate-local .cargo/config.toml enables build-std.
+# From the repository root, run:
 #
-#   cd crates/vp_trampoline && cargo build --release [--target <triple>]
+#   node packages/tools/src/build-trampoline.ts --release [--target <triple>]
 #
-# Artifacts land in the repo-root target/ directory (see .cargo/config.toml),
-# the same location as workspace builds. The build needs the pinned nightly
-# toolchain and the rust-src component (both come from the repo
-# rust-toolchain.toml).
+# The crate config stores artifacts in the repository target/ directory.
+# Workspace builds use the same directory.
+# The build uses the pinned nightly toolchain and the rust-src component.
+# The repository rust-toolchain.toml supplies both items.
 #
-# Size on x86_64-pc-windows-msvc: 14 KiB, down from ~222 KiB when the
-# sidecar-aware implementation used the precompiled std. build-std recompiles
-# std with this profile, panic = "immediate-abort" compiles out the panic
-# formatting, unwinding, and backtrace machinery, and the Windows build uses
-# #![no_main] with raw Win32 calls (src/win.rs) instead of
-# std::process::Command. Background: rfcs/trampoline-exe-for-shims.md.
+# The x86_64-pc-windows-msvc executable is 14 KiB.
+# The implementation with precompiled std was approximately 222 KiB.
+# build-std recompiles std with this profile.
+# panic = "immediate-abort" removes panic formatting, unwinding, and backtraces.
+# src/win.rs uses #![no_main] and raw Win32 calls instead of std::process::Command.
+# For more information, see rfcs/trampoline-exe-for-shims.md.
 cargo-features = ["panic-immediate-abort"]
 
 [package]
@@ -32,13 +32,12 @@ description = "Minimal Windows trampoline exe for vite-plus shims"
 name = "vp-shim"
 path = "src/main.rs"
 
-# No dependencies — the single Win32 FFI call (SetConsoleCtrlHandler) is
-# declared inline to avoid pulling in the heavy `windows`/`windows-core` crates.
+# This crate has no dependencies.
+# It declares raw Win32 FFI calls to avoid the `windows` and `windows-core` crates.
 
-# This crate does not inherit the workspace lints. It intentionally uses std
-# types and macros directly instead of vp_shared, vt_path, vt_str, etc. to
-# keep the binary size small; allow the repo-wide .clippy.toml restrictions
-# that exist to funnel code through those crates.
+# This crate does not inherit workspace lints.
+# It uses std types and macros directly to keep the binary small.
+# Thus, allow the .clippy.toml rules that require shared project abstractions.
 [lints.clippy]
 disallowed_macros = "allow"
 disallowed_types = "allow"
@@ -49,15 +48,15 @@ opt-level = "z"
 lto = "fat"
 codegen-units = 1
 strip = "symbols"
-# Stronger than "abort": panics become a bare abort with no message
-# formatting, so core::fmt and std::panicking never get linked.
+# Convert panics to an immediate abort without message formatting.
+# This prevents links to core::fmt and std::panicking.
 panic = "immediate-abort"
 debug = false
 
-# Debug builds must still optimize a little: at opt-level 0 the compiler can
-# emit references to the MSVC unwinding helper __CxxFrameHandler3 even with
-# panic = "immediate-abort", and the link fails (same constraint as
-# uv-trampoline).
+# Optimize debug builds at opt-level 1.
+# At opt-level 0, the compiler can reference the MSVC helper __CxxFrameHandler3.
+# This reference causes a link failure, even with panic = "immediate-abort".
+# uv-trampoline has the same constraint.
 [profile.dev]
 opt-level = 1
 lto = true

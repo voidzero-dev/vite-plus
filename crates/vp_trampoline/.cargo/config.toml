@@ -1,24 +1,24 @@
-# This config only applies when cargo runs from this directory (config
-# discovery is cwd-based), which is why the trampoline must be built with
-# `cd crates/vp_trampoline && cargo build ...` and not with `-p vp_trampoline`
-# from the repo root.
+# Cargo reads this config only when it runs from this directory.
+# Run `node packages/tools/src/build-trampoline.ts` from the repository root.
+# The helper runs Cargo from this directory.
 
 [unstable]
-# Recompile std with this crate's release profile (opt-level = "z" and
-# panic = "immediate-abort"). Together with the no_main raw-Win32 source this
-# takes the sidecar-aware exe to 14 KiB on x86_64-pc-windows-msvc. Requires the
-# rust-src rustup component.
+# Recompile std with this crate's release profile.
+# The profile uses opt-level = "z" and panic = "immediate-abort".
+# With the raw Win32 source, this reduces the x64 executable to 14 KiB.
+# This operation needs the rust-src component.
 build-std = ["std", "panic_abort"]
-# Replace std's default features (drops panic-unwind and backtrace, enables
-# the size-optimized code paths). compiler-builtins-mem provides memcpy and
-# friends from compiler_builtins instead of the CRT, which the #![no_main]
-# entry point needs.
+# Replace the default std features to remove panic-unwind and backtrace.
+# The optimize_for_size feature enables smaller code paths.
+# compiler-builtins-mem supplies memory functions without the CRT.
+# The #![no_main] entry point needs these functions.
 build-std-features = ["optimize_for_size", "compiler-builtins-mem"]
-# Let `cargo test` run with the abort-family panic strategy.
+# Use the abort panic strategy for `cargo test`.
 panic-abort-tests = true
 
 [build]
-# Keep artifacts in the repo-root target/ directory, where CI steps, the
-# snapshot runner, and install-global-cli expect them. This path resolves
-# relative to this crate directory. A CARGO_TARGET_DIR env var still wins.
+# Store artifacts in the repository target/ directory.
+# CI, the snapshot runner, and install-global-cli read artifacts there.
+# Cargo resolves this path from the crate directory.
+# CARGO_TARGET_DIR overrides this value.
 target-dir = "../../target"

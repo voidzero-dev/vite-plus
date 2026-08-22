@@ -8,7 +8,7 @@ import { resolveCargoArgs, resolveCargoTargetDir } from '../build-trampoline.ts'
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
 
 describe('resolveCargoTargetDir', () => {
-  test('anchors relative paths to the repository root', () => {
+  test('resolves relative paths from the repository root', () => {
     expect(resolveCargoTargetDir('artifacts')).toBe(path.join(repoRoot, 'artifacts'));
   });
 
@@ -23,7 +23,7 @@ describe('resolveCargoTargetDir', () => {
 });
 
 describe('resolveCargoArgs', () => {
-  test('builds with cargo by default', () => {
+  test('uses cargo build by default', () => {
     expect(resolveCargoArgs(['--release', '--target', 'x86_64-pc-windows-msvc'])).toEqual([
       'build',
       '--release',
@@ -32,7 +32,7 @@ describe('resolveCargoArgs', () => {
     ]);
   });
 
-  test('builds with cargo-xwin when requested', () => {
+  test('uses cargo xwin build when requested', () => {
     expect(resolveCargoArgs(['--xwin', '--release', '--target', 'x86_64-pc-windows-msvc'])).toEqual(
       ['xwin', 'build', '--release', '--target', 'x86_64-pc-windows-msvc'],
     );

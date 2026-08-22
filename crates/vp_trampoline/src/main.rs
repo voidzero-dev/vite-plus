@@ -1,21 +1,24 @@
 //! Minimal Windows trampoline for Vite+ shims.
 //!
-//! Vite+ copies and renames this binary for each shim tool, such as `node.exe`
-//! and `npm.exe`. The trampoline gets the tool name from its filename, reads
-//! the install roots from the adjacent `<name>.shim` sidecar, and starts the
-//! active `vp.exe` with the matching dispatch environment.
+//! Vite+ copies and renames this binary for each shim tool.
+//! Examples include `node.exe` and `npm.exe`.
+//! The trampoline reads the tool name from its file name.
+//! It reads the install roots from the adjacent `<name>.shim` sidecar.
+//! It sets the dispatch environment for that tool.
+//! It starts the active `vp.exe`.
 //!
 //! The trampoline ignores Ctrl+C because the child process handles it. This
 //! prevents the termination prompt that `.cmd` wrappers produce.
 //!
-//! On Windows, `#![no_main]` and raw Win32 calls avoid the CRT startup and the
-//! `std::process::Command` implementation. The standalone build recompiles
-//! `std` for size and uses immediate-abort panics. Error paths still report the
-//! failed operation, relevant path, and Windows error code. See
-//! `rfcs/trampoline-exe-for-shims.md`.
+//! On Windows, `#![no_main]` and raw Win32 calls omit the CRT startup.
+//! They also omit the `std::process::Command` implementation.
+//! The standalone build recompiles `std` for size.
+//! It uses immediate-abort panics.
+//! Failure messages include the operation, path, and Windows error code.
+//! See `rfcs/trampoline-exe-for-shims.md`.
 //!
-//! The non-Windows implementation exists for portable tests. Unix shims are
-//! symlinks and never ship this binary.
+//! The non-Windows implementation exists for portable tests.
+//! Vite+ does not ship this binary for Unix shims because they are symlinks.
 //!
 //! See: <https://github.com/voidzero-dev/vite-plus/issues/835>
 
@@ -27,8 +30,9 @@ mod cmdline;
 #[cfg(windows)]
 mod win;
 
-/// The linker picks this symbol as the console-subsystem entry point, so no
-/// `/ENTRY:` flag is needed. The `std` runtime does not initialize; see win.rs.
+/// The linker uses this symbol as the console entry point.
+/// Thus, the build does not need an `/ENTRY:` flag.
+/// The `std` runtime does not initialize. See win.rs.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
@@ -67,15 +71,15 @@ mod portable {
         pointer: ShimPointer,
     }
 
-    /// How the child `vp.exe` should resolve category roots.
+    /// Specify how the child `vp.exe` resolves category roots.
     enum ChildDirPins<'a> {
-        /// `VP_HOME` or a grandfathered install explicitly selected one root.
+        /// `VP_HOME` or an installation from an earlier version selected one root.
         SingleRoot,
-        /// The versioned sidecar explicitly selected split roots.
+        /// The versioned sidecar explicitly selected separate roots.
         Split { cache: &'a Path },
     }
 
-    /// Preserve Unix signal termination using the shell's `128 + signal` convention.
+    /// Return a Unix signal exit code with the shell's `128 + signal` convention.
     fn exit_code_from_status(status: ExitStatus) -> i32 {
         #[cfg(unix)]
         {
@@ -144,8 +148,9 @@ mod portable {
 
         if tool_name != "vp" {
             cmd.env("VP_SHIM_TOOL", tool_name);
-            // A nested shim must resolve the version again instead of using
-            // passthrough mode. Must match vp_shared::env_vars::VP_TOOL_RECURSION.
+            // A nested shim must resolve the version again.
+            // It must not use passthrough mode.
+            // This name must match vp_shared::env_vars::VP_TOOL_RECURSION.
             cmd.env_remove("VP_TOOL_RECURSION");
         }
 

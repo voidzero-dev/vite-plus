@@ -1,9 +1,10 @@
 //! Raw Win32 trampoline implementation.
 //!
-//! The `#![no_main]` entry point jumps directly here, so the CRT startup and
-//! the Rust `std` runtime do not initialize. This module uses KERNEL32 calls
-//! for sidecar I/O, environment setup, process creation, diagnostics, and
-//! process exit. `Vec` uses the Windows process heap and needs no runtime init.
+//! The `#![no_main]` entry point calls this module directly.
+//! Thus, the CRT startup and the Rust `std` runtime do not initialize.
+//! This module uses KERNEL32 calls for all operating-system operations.
+//! These operations include file I/O, environment setup, and process control.
+//! `Vec` uses the Windows process heap and does not need runtime initialization.
 
 use core::{ffi::c_void, ptr};
 
@@ -29,9 +30,9 @@ const WAIT_FAILED: u32 = 0xFFFF_FFFF;
 const ERROR_FILE_NOT_FOUND: u32 = 2;
 const ERROR_PATH_NOT_FOUND: u32 = 3;
 const ERROR_ENVVAR_NOT_FOUND: u32 = 203;
-// Match the conservative threshold used by Rust's Windows path handling.
-// CreateDirectoryW reserves extra space below MAX_PATH, so std normalizes all
-// paths at this length even when the immediate API accepts a few more units.
+// Use the conservative threshold from Rust's Windows path handling.
+// CreateDirectoryW reserves space below MAX_PATH.
+// Thus, std normalizes paths at this length, even if another API accepts more units.
 const LEGACY_MAX_PATH: usize = 248;
 const MAX_SHIM_POINTER_BYTES: i64 = 1024 * 1024;
 const INVALID_HANDLE_VALUE: Handle = -1isize as Handle;
@@ -136,10 +137,10 @@ unsafe extern "system" {
     fn ExitProcess(exit_code: u32) -> !;
 }
 
-// Current nightlies register exit-time TLS cleanup through C `atexit`. Linking
-// the CRT implementation would pull its startup machinery into this no_main
-// binary. ExitProcess never runs TLS destructors, so a successful no-op is the
-// correct implementation for this process.
+// Current nightly toolchains register TLS cleanup through C `atexit`.
+// The CRT implementation would add its startup code to this no_main binary.
+// ExitProcess does not run TLS destructors.
+// Thus, this process uses a successful no-op implementation.
 #[unsafe(no_mangle)]
 pub extern "C" fn atexit(_f: Option<unsafe extern "C" fn()>) -> i32 {
     0
@@ -199,9 +200,10 @@ fn is_verbatim(path: &[u16]) -> bool {
 
 /// Return a NUL-terminated path suitable for Win32 file and process APIs.
 ///
-/// This mirrors the standard library behavior that the raw implementation
-/// replaced: long paths are made absolute and normalized before entering the
-/// extended-length namespace.
+/// This function matches the behavior of the replaced standard-library code.
+/// It makes long paths absolute.
+/// It normalizes the paths.
+/// It then puts the paths in the extended-length namespace.
 fn win32_api_path(path: &[u16]) -> Vec<u16> {
     let path_nul = nul_terminated(path);
     if is_verbatim(path) || path_nul.len() < LEGACY_MAX_PATH {
@@ -480,8 +482,9 @@ pub fn run() -> ! {
         set_env(w!("VP_TOOL_RECURSION"), b"VP_TOOL_RECURSION", None);
     }
 
-    // 3. Build the child command line from the active payload plus the raw
-    // caller argument tail. Forwarding the tail preserves the caller's quoting.
+    // 3. Build the child command line from the active payload.
+    // Append the caller's raw argument tail without changes.
+    // This preserves the caller's quotation marks.
     let vp_exe = join_path(&data, without_nul(w!("current\\bin\\vp.exe")));
     let vp_exe_nul = win32_api_path(&vp_exe);
     let tail = unsafe {
@@ -503,14 +506,16 @@ pub fn run() -> ! {
     child_cmdline.extend_from_slice(tail);
     child_cmdline.push(0);
 
-    // 4. Ignore console control events in the trampoline. The child receives
-    // the same event and decides how to handle it.
+    // 4. Ignore console control events in the trampoline.
+    // The child receives the same event.
+    // The child handles the event.
     if unsafe { SetConsoleCtrlHandler(Some(ignore_ctrl), 1) } == 0 {
         report_call_failure(b"warning: SetConsoleCtrlHandler", unsafe { GetLastError() });
     }
 
-    // 5. Reuse our startup info. When the parent supplied redirected stdio,
-    // make those handles inheritable before CreateProcessW.
+    // 5. Reuse the trampoline startup information.
+    // If the parent redirected standard I/O, make those handles inheritable.
+    // Do this before the CreateProcessW call.
     let mut si = unsafe { core::mem::zeroed::<StartupInfoW>() };
     si.cb = size_of::<StartupInfoW>() as u32;
     unsafe { GetStartupInfoW(&raw mut si) };
@@ -560,7 +565,8 @@ pub fn run() -> ! {
         unsafe { ExitProcess(1) }
     }
 
-    // 6. Wait for the child and propagate its exact exit code.
+    // 6. Wait for the child.
+    // Propagate its exact exit code.
     unsafe {
         CloseHandle(pi.thread);
         let wait = WaitForSingleObject(pi.process, INFINITE);

@@ -85,8 +85,8 @@ runs:
         XWIN_ACCEPT_LICENSE: '1'
         CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 
-    # The shared helper builds the excluded trampoline from its own directory
-    # and anchors CARGO_TARGET_DIR to the repository root.
+    # The helper builds the excluded trampoline from its crate directory.
+    # It anchors CARGO_TARGET_DIR to the repository root.
     - name: Build trampoline shim binary
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
