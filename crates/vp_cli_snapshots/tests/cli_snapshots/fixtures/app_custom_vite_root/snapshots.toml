@@ -1,0 +1,30 @@
+[[case]]
+name = "dev_uses_custom_vite_root"
+vp = ["local", "global"]
+comment = """
+The config sets a static Vite `root`. The `index.html` file is in that directory.
+Bare `vp dev` starts the workspace app. The command does not ask the user to
+select a member package.
+"""
+steps = [
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "build_and_preview_use_custom_vite_root"
+vp = ["local", "global"]
+comment = """
+The config sets a static Vite `root`. The `index.html` file is in that directory.
+Bare `vp build` builds the workspace app. Then `vp preview` serves the build
+output.
+"""
+steps = [
+  ["vp", "build"],
+  { argv = ["vp", "preview"], interactions = [
+    { "expect-milestone" = "preview-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]

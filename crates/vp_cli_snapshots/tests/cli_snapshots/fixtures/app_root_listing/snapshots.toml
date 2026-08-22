@@ -40,13 +40,36 @@ steps = [
 ]
 
 [[case]]
+name = "picker_selects_root_fallback"
+vp = ["local", "global"]
+comment = """
+The workspace root is the last picker row when it has no root intent signal.
+Selecting that row runs the command in the workspace root.
+"""
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "app-root-listing" },
+    { "expect-milestone" = "package-select:app-root-listing:0" },
+    { "write-key" = "enter" },
+  ] },
+]
+
+[[case]]
+name = "explicit_chdir_selects_root"
+vp = ["local", "global"]
+comment = """
+An explicit `-C .` selects the workspace root. The command does not open the
+package picker again after the CLI consumes `-C`.
+"""
+steps = [["vp", "-C", ".", "build"]]
+
+[[case]]
 name = "positional_is_vite_root"
 vp = ["local", "global"]
 comment = """
-A positional path is forwarded to Vite as [root] (upstream semantics), not
-treated as a package to elicit: vp build <dir> at the workspace root skips
-the picker/listing and builds that dir as the Vite root, with no Selected/Tip
-elicitation lines (rfcs/cwd-flag.md).
+A positional Vite root is explicit command intent. Vite+ forwards it and does
+not start target selection.
 """
 steps = [{ argv = ["vp", "build", "apps/web"] }]
 

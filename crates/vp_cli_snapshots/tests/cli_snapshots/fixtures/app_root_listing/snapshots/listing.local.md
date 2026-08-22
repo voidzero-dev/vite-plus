@@ -13,9 +13,10 @@ root (rfcs/cwd-flag.md).
 [1m[31merror:[39m[0m `vp build` at the workspace root needs a target package.
 
   Packages in this workspace:
-    admin  apps/admin
-    web    apps/web
-    ui     packages/ui
+    admin             apps/admin
+    web               apps/web
+    ui                packages/ui
+    app-root-listing  .
 
   Pass a directory:  vp -C apps/admin build
   Or run every package's build script:  vp run -r build
@@ -31,9 +32,10 @@ dev at the root no longer starts a server against the root
 [1m[31merror:[39m[0m `vp dev` at the workspace root needs a target package.
 
   Packages in this workspace:
-    admin  apps/admin
-    web    apps/web
-    ui     packages/ui
+    admin             apps/admin
+    web               apps/web
+    ui                packages/ui
+    app-root-listing  .
 
   Pass a directory:  vp -C apps/admin dev
   Or run every package's dev script:  vp run -r dev

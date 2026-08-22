@@ -1,0 +1,13 @@
+[[case]]
+name = "build_ssr_entry_is_explicit"
+vp = ["local", "global"]
+comment = "The `--ssr` option is explicit command intent. Vite+ runs the command in the current directory."
+steps = [["vp", "build", "--ssr", "src/server.js"]]
+
+[[case]]
+name = "pack_root_is_explicit"
+vp = ["local", "global"]
+comment = "The pack `--root` option is explicit command intent. Vite+ runs the command in the current directory."
+steps = [
+  { argv = ["vp", "pack", "--root", "src"], tty = false, continue-on-failure = true },
+]

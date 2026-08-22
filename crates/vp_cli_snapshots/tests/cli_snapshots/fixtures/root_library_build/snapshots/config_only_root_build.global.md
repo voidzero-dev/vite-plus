@@ -1,8 +1,7 @@
 # config_only_root_build
 
-Regression: a workspace root that builds via vite.config.ts (build.lib, no
-index.html) is a valid target. Bare vp build must run the root build in
-place, not elicit the members, even with a member present.
+A declared `build` field is a root intent signal. Bare `vp build` runs at the
+root instead of eliciting members.
 
 ## `vp build`
 

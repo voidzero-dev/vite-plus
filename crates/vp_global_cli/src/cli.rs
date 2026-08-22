@@ -962,8 +962,10 @@ pub async fn run_command(
     cwd: AbsolutePathBuf,
     args: Args,
     raw_subcommand: Option<&str>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
-    run_command_with_options(cwd, args, RenderOptions::default(), raw_subcommand).await
+    run_command_with_options(cwd, args, RenderOptions::default(), raw_subcommand, explicit_chdir)
+        .await
 }
 
 /// Run the CLI command with rendering options.
@@ -972,12 +974,14 @@ pub async fn run_command_with_options(
     args: Args,
     render_options: RenderOptions,
     raw_subcommand: Option<&str>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     // Apply the global `-C <dir>` flag before anything reads cwd. main
     // normally consumes a leading `-C` pre-parse; this covers orderings that
     // reach clap (e.g. a second `-C`), with identical semantics: the shared
     // helper changes the process cwd, and delegated children receive PWD from
     // the resolved cwd at spawn time.
+    let explicit_chdir = explicit_chdir || args.chdir.is_some();
     if let Some(dir) = &args.chdir {
         cwd =
             crate::apply_chdir(&cwd, dir).map_err(|message| Error::UserMessage(message.into()))?;
@@ -1028,12 +1032,13 @@ pub async fn run_command_with_options(
         // Category C: Local CLI Delegation (forwarded to the local vite-plus CLI)
         Commands::Dev { args } => {
             maybe_print_runtime_header("dev", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "dev", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "dev", &args, raw_subcommand, explicit_chdir).await
         }
 
         Commands::Build { args } => {
             maybe_print_runtime_header("build", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "build", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "build", &args, raw_subcommand, explicit_chdir)
+                .await
         }
 
         Commands::Test { args } => {
@@ -1066,7 +1071,8 @@ pub async fn run_command_with_options(
 
         Commands::Pack { args } => {
             maybe_print_runtime_header("pack", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "pack", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "pack", &args, raw_subcommand, explicit_chdir)
+                .await
         }
 
         Commands::Run { args } => {
@@ -1081,7 +1087,8 @@ pub async fn run_command_with_options(
 
         Commands::Preview { args } => {
             maybe_print_runtime_header("preview", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "preview", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "preview", &args, raw_subcommand, explicit_chdir)
+                .await
         }
 
         Commands::Cache { args } => {

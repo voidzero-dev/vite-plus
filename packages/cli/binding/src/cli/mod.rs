@@ -47,11 +47,13 @@ async fn execute_direct_subcommand(
     subcommand: SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
-    let (target, workspace_root_hint) = app_target::resolve_app_target(&subcommand, cwd)?;
+    let (target, workspace_root_hint) =
+        app_target::resolve_app_target(&subcommand, cwd, explicit_chdir)?;
     let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
     let cwd = match &target {
         app_target::AppTarget::Exit(status) => return Ok(*status),
@@ -366,6 +368,7 @@ pub async fn main(
     cwd: AbsolutePathBuf,
     options: Option<CliOptions>,
     args: Option<Vec<String>>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     let raw_args: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
     // The global CLI resolves aliases to their canonical names before
@@ -393,7 +396,7 @@ pub async fn main(
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
             script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options).await
+            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,

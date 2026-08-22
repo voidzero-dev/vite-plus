@@ -2,9 +2,8 @@
 name = "config_only_root_build"
 vp = ["local", "global"]
 comment = """
-Regression: a workspace root that builds via vite.config.ts (build.lib, no
-index.html) is a valid target. Bare vp build must run the root build in
-place, not elicit the members, even with a member present.
+A declared `build` field is a root intent signal. Bare `vp build` runs at the
+root instead of eliciting members.
 """
 # PTY-rendered (not tty = false): a piped vite build's raw byte stream
 # differs invisibly on Windows (see unanalyzable_config_ignored); the grid
@@ -12,11 +11,14 @@ place, not elicit the members, even with a member present.
 steps = [{ argv = ["vp", "build"] }]
 
 [[case]]
-name = "dev_at_lib_root_elicits"
+name = "dev_uses_build_signal"
 vp = ["local", "global"]
 comment = """
-The build-config signal is build-only: a lib/SSR root has no app to serve,
-so bare vp dev at that root must still elicit (no index.html), even though
-vp build runs it in place.
+The same root intent signal applies to `vp dev`.
 """
-steps = [{ argv = ["vp", "dev"], tty = false }]
+steps = [
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
