@@ -1,0 +1,13 @@
+[[case]]
+name = "build_ssr_entry_is_explicit"
+vp = ["local", "global"]
+comment = "A value for `--ssr` is an explicit Vite build entry. The command does not elicit a package."
+steps = [["vp", "build", "--ssr", "src/server.js"]]
+
+[[case]]
+name = "pack_root_still_elicits"
+vp = ["local", "global"]
+comment = "The pack `--root` option changes path mapping. It does not select a package or an entry."
+steps = [
+  { argv = ["vp", "pack", "--root", "src"], tty = false, continue-on-failure = true },
+]

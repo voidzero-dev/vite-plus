@@ -33,6 +33,8 @@ pub struct JsExecutor {
     scripts_dir: Option<AbsolutePathBuf>,
     /// Subcommand as the user wrote it, forwarded to the CLI this one runs
     raw_subcommand: Option<String>,
+    /// Whether the user selected the command directory with `-C`
+    explicit_chdir: bool,
     /// Whether a project-local CLI miss should emit a warning before global fallback
     warn_on_missing_local_cli: bool,
 }
@@ -50,6 +52,7 @@ impl JsExecutor {
             project_runtime: None,
             scripts_dir,
             raw_subcommand: None,
+            explicit_chdir: false,
             warn_on_missing_local_cli: true,
         }
     }
@@ -60,6 +63,12 @@ impl JsExecutor {
     /// otherwise lost on the way down.
     pub fn with_raw_subcommand(mut self, raw_subcommand: Option<&str>) -> Self {
         self.raw_subcommand = raw_subcommand.map(ToOwned::to_owned);
+        self
+    }
+
+    /// Preserve an explicit `-C` after the global CLI changes the child cwd.
+    pub const fn with_explicit_chdir(mut self, explicit_chdir: bool) -> Self {
+        self.explicit_chdir = explicit_chdir;
         self
     }
 
@@ -371,6 +380,9 @@ impl JsExecutor {
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
         if let Some(raw_subcommand) = &self.raw_subcommand {
             cmd.env(vp_shared::env_vars::VP_RAW_SUBCOMMAND, raw_subcommand);
+        }
+        if self.explicit_chdir {
+            cmd.env(vp_shared::env_vars::VP_EXPLICIT_CHDIR, "1");
         }
         vp_command::sync_child_pwd(&mut cmd, project_path);
         Ok(cmd)

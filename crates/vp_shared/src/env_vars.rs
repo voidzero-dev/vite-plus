@@ -140,6 +140,12 @@ pub const VP_SHIM_WRAPPER: &str = "VP_SHIM_WRAPPER";
 /// the spelling. This carries the original alongside it.
 pub const VP_RAW_SUBCOMMAND: &str = "VP_RAW_SUBCOMMAND";
 
+/// Set (to `1`) when the global CLI delegates a command that used `-C`.
+///
+/// The local CLI uses this marker to keep the explicit target after the global
+/// CLI changes the child process directory and removes `-C` from its arguments.
+pub const VP_EXPLICIT_CHDIR: &str = "VP_EXPLICIT_CHDIR";
+
 /// Path to the vp binary, passed to JS scripts so they can invoke CLI commands.
 pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 

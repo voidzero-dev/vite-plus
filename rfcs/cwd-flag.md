@@ -276,15 +276,28 @@ The global binary also resolves the local `vite-plus` install from `<dir>`, matc
 
 ### Picker contents
 
-- One row per workspace package: name plus relative path. Nothing is filtered out; likely-runnable packages (rules below) rank first, then by path, so apps surface at the top while everything stays searchable.
+- One row per workspace member: name plus relative path. Nothing is filtered out. Likely-runnable members rank first, then by path.
+- If the workspace root does not look runnable, a `.` row appears after all member rows. This row is a fallback. It does not count when Vite+ checks for one runnable member to auto-select. Selecting it runs the command in the original workspace root. The non-interactive list also shows this row last.
 - Fuzzy search over name and path via `vt_select::fuzzy_match`, paging identical to the task picker.
-- A runnable workspace root never elicits at all: the command runs in place, TTY or not, exactly as before this RFC. The invocation already has its configured target: a root app, or a single package whose `pnpm-workspace.yaml` only carries settings (catalogs, `minimumReleaseAge`). Eliciting only when the root is not a plausible target is what keeps the feature purely additive. The root needs a stronger runnable signal than member packages: an `index.html` for `dev`/`build`/`preview` (a shared root config for lint/fmt/tasks is the normal monorepo setup and does not make the root an app), and the usual explicit-`pack`-or-default-entry rule for `pack`.
-  When the root config declares a static Vite `root`, Vite+ checks that directory for `index.html`.
-- With exactly one likely-runnable package, the picker auto-selects it, printing only the `Selected package:` line and the tip.
+- A runnable workspace root never elicits. The command runs in place, with or without a TTY.
+- With exactly one likely-runnable member, the picker auto-selects it, printing only the `Selected package:` line and the tip.
+- An explicit `-C` always runs in the selected directory. Target classification does not run again after either CLI entry point consumes the option.
 
 ### The likely-runnable heuristic
 
-Used only for ranking and single-candidate auto-select, never to hide a package: a misjudged package still appears in the picker and listing, just lower. Judged per package directory from file existence and static config extraction; nothing is executed, and parent directories never count.
+Vite+ uses a stronger test for the workspace root. A runnable root uses the fast path and runs in place.
+
+For `pack`, the root is runnable when `src/index.ts` exists or the root config declares `pack`.
+
+For Vite commands, a declared `root` is sufficient. Vite+ does not check the configured directory or its entry file. Vite reports an invalid configuration after the command starts. Without a declared `root`, Vite+ uses these signals:
+
+| Command   | Workspace-root signal                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| `dev`     | `index.html` exists, or the config declares static `appType: 'custom'`                                        |
+| `build`   | `index.html` exists, or the config declares `build`, top-level `input`, or static `environments.*.input`      |
+| `preview` | `index.html` exists in `build.outDir`; the default output directory is `dist`                                 |
+
+Member-package signals are used only for ranking and single-member auto-select. They never hide a member. Vite+ checks each member directory. It does not execute the config, and parent directories do not count.
 
 | Command                     | A package is likely runnable when                                                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -298,7 +311,7 @@ Both file-based signals are upstream defaults, not vp inventions: `index.html` a
 Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is visible at once (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
 
 - A library whose `vite.config.*` exists only for Vitest or lint settings ranks as runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
-- If static extraction cannot resolve a workspace app's custom Vite `root`, bare `dev`, `build`, and `preview` commands start package selection. A member app does not rank first or auto-select if it has neither a local Vite config nor a package-root `index.html`.
+- Static extraction cannot see values that a plugin adds. If no other root signal exists, a bare command starts package selection. The workspace-root fallback row keeps the root selectable.
 
 ### `defaultPackage` config
 
@@ -337,10 +350,11 @@ Below the root the cwd already identifies the project, so prompting would be noi
 
 ## Implementation Architecture
 
-All changes live in the Rust layers; no upstream Vite or tsdown changes are required.
+No upstream Vite or tsdown changes are required.
 
-- `crates/vp_global_cli/src/cli.rs`: parse the global `-C <dir>`; resolve the local install from `<dir>` and delegate with `<dir>` as the effective cwd.
-- `packages/cli/binding/src/cli/types.rs` / `mod.rs`: parse `-C` on the local bin path; in `execute_direct_subcommand`, add the bare-invocation resolution order (workspace-root detection already happens here).
+- `crates/vp_global_cli/src/main.rs` / `cli.rs`: parse the global `-C <dir>`, resolve the local install from `<dir>`, and delegate with `<dir>` as the effective cwd. Preserve an explicit-target marker for the local CLI.
+- `packages/cli/src/bin.ts`: parse `-C` for direct local invocations and pass the explicit-target marker to the binding.
+- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the bare-command resolution order. Skip classification when the explicit-target marker is set.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
 - Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.
@@ -349,15 +363,18 @@ All changes live in the Rust layers; no upstream Vite or tsdown changes are requ
 
 ## Compatibility
 
-Every existing invocation is unchanged. The only behavior change is the bare app command at a workspace root, which goes from "silently serve or build the root" to picker / config / clear error. A runnable root stays available as a picker entry, and `defaultPackage: '.'` restores the old behavior unconditionally.
+The behavior change applies to a bare app command at a workspace root. A runnable root still runs in place. Otherwise, Vite+ shows the picker or a clear non-interactive error. The workspace root is the last fallback target. Use `vp -C . <command>` or `defaultPackage: '.'` to select it directly.
 
 ## Snap Tests
 
-Non-interactive branches are covered by snap tests:
+Snapshot cases cover:
 
 - `vp -C <dir> build` / `vp -C <dir> pack` / `vp -C <dir> run <task>`, plus `-C` with a missing directory.
 - Parity regression: `vp dev <dir>` still forwards the positional as Vite `root` with cwd untouched.
 - Bare app commands at a workspace root without a TTY: package listing and exit code.
+- Workspace-root fallback: last picker and listing row, direct selection, and explicit `vp -C . build`.
+- Vite root signals: declared `root`, build inputs, custom app type, and preview output directory.
+- Explicit arguments: `build --ssr <entry>` bypasses elicitation, while pack `--root` does not.
 - `defaultPackage`: happy path and missing-directory error.
 - Equivalence checks: `vp -C <dir> build` and `cd <dir> && vp build` produce the same output in a fixture whose config reads `process.cwd()`.
 

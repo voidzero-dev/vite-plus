@@ -40,6 +40,31 @@ steps = [
 ]
 
 [[case]]
+name = "picker_selects_root_fallback"
+vp = ["local", "global"]
+comment = """
+The workspace root is the last picker row when the runnable heuristic does not
+recognize it. Selecting that row runs the command in the workspace root.
+"""
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "app-root-listing" },
+    { "expect-milestone" = "package-select:app-root-listing:0" },
+    { "write-key" = "enter" },
+  ] },
+]
+
+[[case]]
+name = "explicit_chdir_selects_root"
+vp = ["local", "global"]
+comment = """
+An explicit `-C .` selects the workspace root. The command does not open the
+package picker again after the CLI consumes `-C`.
+"""
+steps = [["vp", "-C", ".", "build"]]
+
+[[case]]
 name = "positional_is_vite_root"
 vp = ["local", "global"]
 comment = """

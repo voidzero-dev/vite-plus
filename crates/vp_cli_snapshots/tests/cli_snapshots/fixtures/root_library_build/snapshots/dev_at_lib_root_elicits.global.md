@@ -12,7 +12,8 @@ vp build runs it in place.
 [1m[31merror:[39m[0m `vp dev` at the workspace root needs a target package.
 
   Packages in this workspace:
-    ui  packages/ui
+    ui            packages/ui
+    root-library  .
 
   Pass a directory:  vp -C packages/ui dev
   Or run every package's dev script:  vp run -r dev
