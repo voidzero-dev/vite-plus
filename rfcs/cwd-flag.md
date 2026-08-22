@@ -298,7 +298,7 @@ Both file-based signals are upstream defaults, not vp inventions: `index.html` a
 Accepted trade-offs, tolerable because the signal never hides anything and a wrong auto-select is visible at once (the `Selected package:` line, with the `Tip:` line showing the explicit `-C` form):
 
 - A library whose `vite.config.*` exists only for Vitest or lint settings ranks as runnable for `dev`/`build`/`preview`. A refinement could demote configs whose only top-level keys are tool blocks, via the same static extraction; deferred until it bites in practice.
-- An app whose custom Vite `root` is not statically extractable, or whose config is inherited from a parent directory, is not ranked first and never auto-selects.
+- A bare `dev`, `build`, or `preview` command at a workspace-root app still enters package elicitation when static extraction cannot resolve the app's custom Vite `root`. A member app with no local Vite config and no package-root `index.html` does not rank first or auto-select.
 
 ### `defaultPackage` config
 
