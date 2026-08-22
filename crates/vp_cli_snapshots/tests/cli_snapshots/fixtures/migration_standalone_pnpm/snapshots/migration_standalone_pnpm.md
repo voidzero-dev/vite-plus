@@ -1,6 +1,6 @@
 # migration_standalone_pnpm
 
-## `vp migrate --no-interactive --no-hooks --package-manager pnpm`
+## `vp migrate --no-interactive --no-hooks`
 
 migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml
 
