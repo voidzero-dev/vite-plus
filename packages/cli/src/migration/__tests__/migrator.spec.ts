@@ -48,6 +48,7 @@ const {
   injectLintTypeCheckDefaults,
   ensureSvelteRuneGlobals,
   mergeViteConfigFiles,
+  rewriteAllImports,
   rewriteEslintPackageJson,
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
@@ -1286,6 +1287,60 @@ describe('mergeViteConfigFiles — Svelte rune globals', () => {
     expect(viteConfig).toMatch(/["']\$host["']\s*:\s*["']readonly["']/);
     expect(viteConfig).toMatch(/["']customGlobal["']\s*:\s*["']writable["']/);
     expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
+  });
+});
+
+describe('mergeViteConfigFiles — dynamic Oxc configs', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-dynamic-oxc-'));
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'test' }));
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({});\n",
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('imports dynamic lint and format configs without removing them', () => {
+    const oxlintConfig = `import { defineConfig } from 'oxlint';
+
+export default defineConfig({ rules: { eqeqeq: 'error' } });
+`;
+    const oxfmtConfig = `import { defineConfig } from 'oxfmt';
+
+export default defineConfig({ printWidth: 100 });
+`;
+    fs.writeFileSync(path.join(tmpDir, 'oxlint.config.ts'), oxlintConfig);
+    fs.writeFileSync(path.join(tmpDir, 'oxfmt.config.mts'), oxfmtConfig);
+    const report = createMigrationReport();
+
+    mergeViteConfigFiles(tmpDir, true, report);
+    rewriteAllImports(tmpDir, true, report);
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain("import oxlintConfig from './oxlint.config.js';");
+    expect(viteConfig).toContain("import oxfmtConfig from './oxfmt.config.mjs';");
+    expect(viteConfig).toContain('lint: oxlintConfig');
+    expect(viteConfig).toContain('fmt: oxfmtConfig');
+    expect(fs.readFileSync(path.join(tmpDir, 'oxlint.config.ts'), 'utf8')).toBe(
+      oxlintConfig.replace("from 'oxlint'", "from 'vite-plus/lint'"),
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'oxfmt.config.mts'), 'utf8')).toBe(
+      oxfmtConfig.replace("from 'oxfmt'", "from 'vite-plus/fmt'"),
+    );
+    expect(report.mergedConfigCount).toBe(2);
+    expect(report.rewrittenImportFileCount).toBe(2);
+
+    mergeViteConfigFiles(tmpDir, true, report);
+    rewriteAllImports(tmpDir, true, report);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(viteConfig);
+    expect(report.mergedConfigCount).toBe(2);
+    expect(report.rewrittenImportFileCount).toBe(2);
   });
 });
 

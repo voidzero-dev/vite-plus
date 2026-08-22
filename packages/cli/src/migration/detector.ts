@@ -119,7 +119,12 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for oxlint configs
   // https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format
-  const oxlintConfigs = ['.oxlintrc.json', '.oxlintrc.jsonc'];
+  const oxlintConfigs = [
+    '.oxlintrc.json',
+    '.oxlintrc.jsonc',
+    'oxlint.config.ts',
+    'oxlint.config.mts',
+  ];
   for (const config of oxlintConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxlintConfig = config;
@@ -129,7 +134,7 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for oxfmt configs
   // https://oxc.rs/docs/guide/usage/formatter.html#configuration-file
-  const oxfmtConfigs = ['.oxfmtrc.json', '.oxfmtrc.jsonc'];
+  const oxfmtConfigs = ['.oxfmtrc.json', '.oxfmtrc.jsonc', 'oxfmt.config.ts', 'oxfmt.config.mts'];
   for (const config of oxfmtConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxfmtConfig = config;

@@ -967,6 +967,7 @@ module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;
 module.exports.getVpDirs = nativeBinding.getVpDirs;
 module.exports.hasConfigKey = nativeBinding.hasConfigKey;
+module.exports.mergeDynamicConfig = nativeBinding.mergeDynamicConfig;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
