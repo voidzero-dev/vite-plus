@@ -1,11 +1,11 @@
 use std::{num::NonZeroU32, str::FromStr};
 
-use clap::{Arg, ArgAction, Args, Command, builder::NonEmptyStringValueParser};
+use clap::{ArgAction, Args, Command, builder::NonEmptyStringValueParser};
 use napi::bindgen_prelude::Either;
 use napi_derive::napi;
 use vp_cli_help::{help_doc_from_command, print_help_doc};
 
-use super::parse::{CliParseError, ParseResult, parse_args};
+use super::parse::{CliParseError, ParseResult, help_arg, parse_args};
 
 const CONCURRENT_VALUE_ERROR: &str = "use true, false, or an integer from 1 through 4294967295";
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
@@ -146,13 +146,7 @@ fn staged_command() -> Command {
             .about("Run linters on staged files using staged config from vite.config.ts.")
             .disable_help_flag(true),
     )
-    .arg(
-        Arg::new("help")
-            .short('h')
-            .long("help")
-            .action(ArgAction::Help)
-            .help("Show this help message"),
-    )
+    .arg(help_arg())
 }
 
 #[napi(object, object_from_js = false)]
@@ -235,25 +229,11 @@ mod tests {
     }
 
     fn parsed(argv: &[&str]) -> StagedCliArgs {
-        match parse(argv) {
-            ParseResult::Ok(value) => value,
-            ParseResult::Help(_) => {
-                panic!("The parser returned help. The test expected arguments.")
-            }
-            ParseResult::Error(error) => panic!("The parser returned an error: {}", error.message),
-        }
+        parse(argv).expect_ok()
     }
 
     fn parse_error(argv: &[&str]) -> CliParseError {
-        match parse(argv) {
-            ParseResult::Error(error) => error,
-            ParseResult::Ok(_) => {
-                panic!("The parser returned arguments. The test expected an error.")
-            }
-            ParseResult::Help(_) => {
-                panic!("The parser returned help. The test expected an error.")
-            }
-        }
+        parse(argv).expect_error()
     }
 
     #[test]

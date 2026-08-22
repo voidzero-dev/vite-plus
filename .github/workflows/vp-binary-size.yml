@@ -156,10 +156,18 @@ jobs:
           const { existsSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
           const { gzipSync } = require('node:zlib');
 
-          const measureDirectory = (directory, includeFile = () => true) => {
+          function includeAllFiles() {
+            return true;
+          }
+
+          function includeNonNodeFiles(file) {
+            return !file.endsWith('.node');
+          }
+
+          function measureDirectory(directory, includeFile = includeAllFiles) {
             let files = 0;
             let raw = 0;
-            const visit = (currentDirectory) => {
+            function visit(currentDirectory) {
               for (const entry of readdirSync(currentDirectory, { withFileTypes: true })) {
                 const entryPath = `${currentDirectory}/${entry.name}`;
                 if (entry.isDirectory()) {
@@ -169,10 +177,10 @@ jobs:
                   raw += readFileSync(entryPath).length;
                 }
               }
-            };
+            }
             visit(directory);
             return { path: directory, files, raw };
-          };
+          }
 
           const target = process.env.TARGET;
           const paths =
@@ -214,10 +222,7 @@ jobs:
               }
             }
             artifacts.cliDist = measureDirectory(cliDistDirectory);
-            artifacts.coreDist = measureDirectory(
-              coreDistDirectory,
-              (file) => !file.endsWith('.node'),
-            );
+            artifacts.coreDist = measureDirectory(coreDistDirectory, includeNonNodeFiles);
           }
 
           const result = {
