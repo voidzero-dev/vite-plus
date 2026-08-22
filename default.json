@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset for Vite+ projects: keeps vite-plus, the vite catalog alias (@voidzero-dev/vite-plus-core), and the pinned vitest family in one grouped update. Consume with \"extends\": [\"github>voidzero-dev/vite-plus\"].",
+  "packageRules": [
+    {
+      "description": "Explicit minimumReleaseAge and schedule give every member one eligibility policy, so another preset cannot hold one member back and split the group.",
+      "groupName": "vite+",
+      "matchPackageNames": ["vite-plus", "@voidzero-dev/vite-plus-*", "vitest", "@vitest/*"],
+      "minimumReleaseAge": "1 day",
+      "schedule": ["at any time"]
+    }
+  ]
+}
