@@ -337,6 +337,16 @@ mod tests {
     }
 
     #[test]
+    fn parses_documented_short_options() {
+        let args = parsed(&["-d", "-q", "-r", "-v"]);
+
+        assert!(args.debug);
+        assert!(args.quiet);
+        assert!(args.relative);
+        assert!(args.verbose);
+    }
+
+    #[test]
     fn returns_help_without_printing() {
         assert!(matches!(parse(&["--help"]), ParseResult::Help(_)));
         assert!(matches!(parse(&["-h"]), ParseResult::Help(_)));
