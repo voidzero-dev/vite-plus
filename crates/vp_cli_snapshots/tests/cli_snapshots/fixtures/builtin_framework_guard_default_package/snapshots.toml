@@ -1,0 +1,27 @@
+# The framework refusal runs on the resolved target package, not on the
+# invocation directory. `defaultPackage` acts as an implicit -C, so it can
+# move a bare `vp build` out of a framework root into a plain Vite app, or
+# into a framework app that the invocation directory never saw.
+[[case]]
+name = "builtin_framework_guard_default_package"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "build"], comment = "the root holds a nuxt.config.ts, but defaultPackage retargets the build into apps/web, so it runs" },
+  { argv = ["vpt", "list-dir", "apps/web/dist"], comment = "output lands in the configured package" },
+]
+
+[[case]]
+name = "builtin_framework_guard_default_package_to_nuxt"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "build"], cwd = "to_nuxt", comment = "defaultPackage points at a Nuxt app, so the refusal fires for the resolved target and the hint carries -C", continue-on-failure = true },
+]
+
+# A framework app can itself be a workspace root with member packages. The
+# refusal owns that root: the command must not fall into the package picker.
+[[case]]
+name = "builtin_framework_guard_workspace_root"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "dev"], cwd = "framework_root_ws", comment = "a framework app at a workspace root refuses instead of listing member packages", continue-on-failure = true },
+]

@@ -5,6 +5,7 @@
 
 mod app_target;
 mod execution;
+mod framework_guard;
 mod handler;
 mod help;
 mod resolver;
@@ -41,6 +42,17 @@ use self::{
     types::CLIArgs,
 };
 
+/// The `-C` spelling of a resolved target for user-facing hints: relative to
+/// the invocation directory when the target is inside it, absolute otherwise.
+fn display_target(invocation: &AbsolutePath, target: &AbsolutePath) -> String {
+    if let Ok(Some(rel)) = target.strip_prefix(invocation)
+        && !rel.as_str().is_empty()
+    {
+        return rel.as_str().to_string();
+    }
+    target.as_path().display().to_string()
+}
+
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
@@ -53,11 +65,19 @@ async fn execute_direct_subcommand(
     // in the resolved directory (rfcs/cwd-flag.md).
     let (target, workspace_root_hint) = app_target::resolve_app_target(&subcommand, cwd)?;
     let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
-    let cwd = match &target {
+    let (cwd, retarget) = match &target {
         app_target::AppTarget::Exit(status) => return Ok(*status),
-        app_target::AppTarget::Dir(dir) => dir,
-        app_target::AppTarget::CurrentDir => cwd,
+        app_target::AppTarget::Dir(dir) => (dir, Some(display_target(cwd, dir))),
+        app_target::AppTarget::CurrentDir => (cwd, None),
     };
+    // The refusal belongs to the resolved target: elicitation or
+    // `defaultPackage` can select a package that the invocation directory
+    // never saw, or move the command out of a framework root into a plain
+    // Vite app. A retarget rides into the hints as `-C <target>`, so they
+    // run in the refused package.
+    if let Some(exit) = framework_guard::check(&subcommand, cwd, retarget.as_deref()) {
+        return Ok(exit);
+    }
 
     // The resolver hands back the workspace root it already found whenever the
     // command runs in the unchanged cwd (never after a -C/elicitation
@@ -392,7 +412,15 @@ pub async fn main(
             // legitimately trigger a project's `install` lifecycle scripts
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
-            script_note::print(raw_subcommand.as_deref(), &cwd);
+            //
+            // The framework refusal itself runs after target resolution in
+            // `execute_direct_subcommand`, because `defaultPackage` can move
+            // the command out of a framework root. The note still must not
+            // recommend `vpr` right before a refusal, so a refusal in the
+            // invocation package silences it.
+            if !framework_guard::applies(&subcmd, &cwd) {
+                script_note::print(raw_subcommand.as_deref(), &cwd);
+            }
             execute_direct_subcommand(subcmd, &cwd, options).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,

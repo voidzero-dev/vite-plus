@@ -1,0 +1,11 @@
+{
+  "name": "@test/builtin-framework-guard-renamed-script",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "devtools": "nuxt devtools enable",
+    "make": "nuxt build",
+    "start": "nuxi dev --host"
+  }
+}

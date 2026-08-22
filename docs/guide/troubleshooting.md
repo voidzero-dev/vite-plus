@@ -45,6 +45,8 @@ For example:
 - `vp test` always runs the built-in Vitest command
 - `vp run dev`, `vp run build`, and `vp run test` run the matching `package.json` scripts instead
 
+In a Nuxt or Astro project (a `nuxt.config.*` or `astro.config.*` file next to `package.json`), `vp dev` and `vp build` stop with an error. The hint points at the script that runs the framework command, or at the framework CLI through `vp exec` when no script matches. Those frameworks run Vite through their own CLI. The bundled Vite CLI cannot serve or build them.
+
 See [Built-in Commands vs Scripts](/guide/run#built-in-commands-vs-scripts) for when to prefer each path.
 
 ::: info

@@ -1,0 +1,9 @@
+{
+  "name": "@test/builtin-framework-guard-ws-root",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev"
+  }
+}

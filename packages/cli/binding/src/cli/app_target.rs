@@ -85,7 +85,7 @@ const PACK_BOOLEAN_FLAGS: &[&str] = &[
 
 /// How an app command's arguments target it, per the walk in
 /// [`classify_args`].
-enum ArgTarget<'a> {
+pub(super) enum ArgTarget<'a> {
     /// No positional target and no help-like flag: elicitation territory.
     Bare,
     /// The first token the tool would treat as a positional (a Vite `[root]`
@@ -108,7 +108,7 @@ fn is_bare(command: &str, args: &[String]) -> bool {
 /// and disables elicitation. pack's workspace selectors already define their
 /// own target set and disable elicitation outright. Help/version requests
 /// are answered by the underlying tool and must never be redirected.
-fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
+pub(super) fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
     /// `arg` is one of `flags`, exactly or in inline `flag=value` form.
     fn matches_flag(arg: &str, flags: &[&str]) -> bool {
         flags.iter().any(|f| arg == *f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
@@ -403,6 +403,12 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classif
         return Classification::RunInPlace(Some(workspace_root));
     };
     if root_looks_runnable(&root_config, &workspace_root.path, command) {
+        return Classification::RunInPlace(Some(workspace_root));
+    }
+    // A framework root is not runnable by the config heuristic, but the
+    // framework refusal owns it: a package listing must not hide the
+    // refusal. An explicit `defaultPackage` already won above.
+    if super::framework_guard::applies(subcommand, cwd) {
         return Classification::RunInPlace(Some(workspace_root));
     }
     Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))

@@ -21,11 +21,8 @@ const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
     let Some(command) = command else { return };
     // A task spawned this command, so the user is already on a script-running
-    // path. npm-compatible runners set `npm_lifecycle_event`; Vite Task uses
-    // its own marker.
-    if std::env::var_os(MARKER_ENV_NAME).is_some()
-        || std::env::var_os(NPM_LIFECYCLE_EVENT_ENV_NAME).is_some_and(|event| !event.is_empty())
-    {
+    // path.
+    if spawned_from_script() {
         return;
     }
     if !has_package_json_script(cwd, command) {
@@ -38,6 +35,13 @@ pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
         "You are running {built_in} as a Vite+ built-in command. \
          If you meant to run the {command} npm script, use {via_run} instead."
     ));
+}
+
+/// Whether a task or a package script spawned this command. npm-compatible
+/// runners set `npm_lifecycle_event`; Vite Task uses its own marker.
+pub(super) fn spawned_from_script() -> bool {
+    std::env::var_os(MARKER_ENV_NAME).is_some()
+        || std::env::var_os(NPM_LIFECYCLE_EVENT_ENV_NAME).is_some_and(|event| !event.is_empty())
 }
 
 /// Whether the package enclosing `cwd` defines a `<name>` script.

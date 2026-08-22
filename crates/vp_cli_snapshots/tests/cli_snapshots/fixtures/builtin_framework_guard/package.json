@@ -1,0 +1,11 @@
+{
+  "name": "@test/builtin-framework-guard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vpt print nuxt build script",
+    "dev": "vpt print nuxt dev script",
+    "nested-build": "vp build"
+  }
+}

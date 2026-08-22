@@ -1,0 +1,10 @@
+{
+  "name": "@test/builtin-framework-guard-mismatched-script",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "storybook dev",
+    "serve": "nuxt dev --host"
+  }
+}
