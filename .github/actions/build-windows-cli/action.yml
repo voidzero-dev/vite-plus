@@ -85,18 +85,12 @@ runs:
         XWIN_ACCEPT_LICENSE: '1'
         CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 
-    # The trampoline is excluded from the workspace and must build from its
-    # own directory so its .cargo/config.toml (build-std) applies. Pin
-    # CARGO_TARGET_DIR to an absolute path so the artifact still lands in the
-    # same target/ directory the artifact list above expects.
+    # The shared helper builds the excluded trampoline from its own directory
+    # and anchors CARGO_TARGET_DIR to the repository root.
     - name: Build trampoline shim binary
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: |
-        target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
-        case "$target_dir" in /*) ;; *) target_dir="$PWD/$target_dir" ;; esac
-        cd crates/vp_trampoline
-        CARGO_TARGET_DIR="$target_dir" cargo xwin build --release --target x86_64-pc-windows-msvc
+      run: node packages/tools/src/build-trampoline.ts --xwin --release --target x86_64-pc-windows-msvc
       env:
         XWIN_ACCEPT_LICENSE: '1'
 

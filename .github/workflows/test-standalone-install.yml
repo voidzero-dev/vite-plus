@@ -1294,11 +1294,7 @@ jobs:
         shell: bash
         run: |
           cargo build --release -p vp_global_cli -p vp_installer
-
-          target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
-          case "$target_dir" in /*|[A-Za-z]:*) ;; *) target_dir="$PWD/$target_dir" ;; esac
-          cd crates/vp_trampoline
-          CARGO_TARGET_DIR="$target_dir" cargo build --release
+          node packages/tools/src/build-trampoline.ts --release
 
       - name: Trampoline launches an extended-length payload path
         shell: pwsh

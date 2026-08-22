@@ -8,9 +8,15 @@ export function resolveCargoTargetDir(configured: string | undefined): string {
   return path.resolve(repoRoot, configured || 'target');
 }
 
+export function resolveCargoArgs(args: string[]): string[] {
+  const xwin = args.includes('--xwin');
+  const cargoArgs = args.filter((arg) => arg !== '--xwin');
+  return [...(xwin ? ['xwin'] : []), 'build', ...cargoArgs];
+}
+
 export function buildTrampoline(args: string[] = process.argv.slice(2)) {
   const cargo = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
-  execFileSync(cargo, ['build', ...args], {
+  execFileSync(cargo, resolveCargoArgs(args), {
     cwd: path.join(repoRoot, 'crates/vp_trampoline'),
     env: {
       ...process.env,
