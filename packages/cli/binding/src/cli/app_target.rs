@@ -177,27 +177,23 @@ fn root_looks_runnable(
     dir: &AbsolutePath,
     command: &str,
 ) -> bool {
-    let has_index_html = || {
-        let vite_root = match config.get_declared("root") {
-            Some(vp_static_config::FieldValue::Json(serde_json::Value::String(root))) => {
-                dir.join(root).clean()
-            }
-            _ => dir.to_absolute_path_buf(),
-        };
-        vite_root.as_path().join("index.html").is_file()
-    };
-
-    match command {
-        // Bare `vp pack` succeeds when tsdown's default entry exists or the
-        // config explicitly declares a `pack` block (a spread that only
-        // might contain `pack` does not count: auto-select acts on this
-        // signal, so a false positive runs tsdown in a non-packable package).
-        "pack" => {
-            dir.as_path().join("src/index.ts").is_file() || config.get_declared("pack").is_some()
-        }
-        "build" => has_index_html() || config.get_declared("build").is_some(),
-        _ => has_index_html(),
+    // Bare `vp pack` accepts tsdown's default entry or a declared `pack` block.
+    // A spread that might contain `pack` does not declare the block. A false
+    // positive would run tsdown in a package that it cannot pack.
+    if command == "pack" {
+        return dir.as_path().join("src/index.ts").is_file()
+            || config.get_declared("pack").is_some();
     }
+
+    let vite_root = match config.get_declared("root") {
+        Some(vp_static_config::FieldValue::Json(serde_json::Value::String(root))) => {
+            dir.join(root).clean()
+        }
+        _ => dir.to_absolute_path_buf(),
+    };
+    let has_index_html = vite_root.as_path().join("index.html").is_file();
+
+    has_index_html || (command == "build" && config.get_declared("build").is_some())
 }
 
 /// Member variant of the likely-runnable heuristic; see
