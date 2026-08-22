@@ -214,8 +214,9 @@ infer a layout from directory paths.
 
 **Binary size**: 14,336 B on x86_64-pc-windows-msvc and
 aarch64-pc-windows-msvc. This size includes the sidecar parser and diagnostics.
-The x86_64 `std::process::Command` implementation was 221,696 B. See Future
-Optimizations for all measurements. The executable imports only KERNEL32.
+The x86_64 `std::process::Command` implementation was 221,696 B. See Size
+Measurements and Build Constraints for all measurements. The executable imports
+only KERNEL32.
 
 ### Environment Variables
 
@@ -347,7 +348,7 @@ Requires administrator privileges or Developer Mode. Not reliable for all users.
 
 Adds ~100KB to the binary for a single `SetConsoleCtrlHandler` call. Raw FFI declaration is sufficient.
 
-## Future Optimizations
+## Size Measurements and Build Constraints
 
 We built each variant below with cargo-xwin. We measured each variant on
 x86_64-pc-windows-msvc. The first two rows use the sidecar-aware `std`
