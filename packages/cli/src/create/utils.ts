@@ -4,7 +4,53 @@ import path from 'node:path';
 import validateNpmPackageName from 'validate-npm-package-name';
 
 import { editJsonFile } from '../utils/json.ts';
+import type { CommandRunSummary } from '../utils/prompts.ts';
 import { getRandomProjectName } from './random-name.ts';
+
+export interface CreateCompletion {
+  /** One line per step that failed, in the order the steps ran. */
+  failures: string[];
+  /** Command worth suggesting next: recovery when the project is not usable. */
+  nextCommand: string;
+  /** Non-zero when a step of the requested operation failed. */
+  exitCode: number;
+}
+
+/**
+ * Decide what `vp create` should report once scaffolding is done.
+ *
+ * The template files are written before dependencies are installed and the
+ * result is formatted, so those later steps can fail while the project
+ * directory already exists. "Files were generated" and "the project is ready
+ * to run" are different states, and the completion summary has to tell them
+ * apart instead of reporting success for both.
+ *
+ * A skipped step (`VP_SKIP_INSTALL`) is not a failure — nothing was attempted.
+ */
+export function resolveCreateCompletion(options: {
+  installSummary?: CommandRunSummary;
+  fmtSummary?: CommandRunSummary;
+}): CreateCompletion {
+  const installFailed = options.installSummary?.status === 'failed';
+  const fmtFailed = options.fmtSummary?.status === 'failed';
+
+  const failures: string[] = [];
+  if (installFailed) {
+    failures.push('Dependencies were not installed');
+  }
+  if (fmtFailed) {
+    failures.push('Code was not formatted');
+  }
+
+  return {
+    failures,
+    // Without `node_modules` the suggested `vp run` cannot work, so point at
+    // the step that has to succeed first. A format failure leaves a runnable
+    // project, so it does not change the suggestion.
+    nextCommand: installFailed ? 'vp install' : 'vp run',
+    exitCode: failures.length > 0 ? 1 : 0,
+  };
+}
 
 export type CreateEditorOption = string | false | undefined;
 type ParsedCreateEditorOption = CreateEditorOption | CreateEditorOption[];
