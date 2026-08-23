@@ -274,6 +274,21 @@ export function formatDisplayTargetDir(targetDir: string) {
   return `./${normalized}`;
 }
 
+const MAX_PACKAGE_NAME_LENGTH = 214;
+
+// Turn a directory name into the closest npm-compatible name: lowercase it and
+// replace characters npm rejects, so a directory like `My-App.v2` keeps its
+// identity as `my-app.v2` instead of being swapped for an unrelated name.
+function sanitizePackageNameSegment(dirName: string): string {
+  return dirName
+    .toLowerCase()
+    .replace(/[^a-z0-9\-._]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-._]+/, '')
+    .slice(0, MAX_PACKAGE_NAME_LENGTH)
+    .replace(/[-.]+$/, '');
+}
+
 export function deriveDefaultPackageName(
   cwd: string,
   scope: string | undefined,
@@ -281,7 +296,15 @@ export function deriveDefaultPackageName(
 ): string {
   const dirName = path.basename(cwd);
   const candidate = scope ? `${scope}/${dirName}` : dirName;
-  return validateNpmPackageName(candidate).validForNewPackages
-    ? candidate
-    : getRandomProjectName({ scope, fallbackName });
+  if (validateNpmPackageName(candidate).validForNewPackages) {
+    return candidate;
+  }
+  const sanitized = sanitizePackageNameSegment(dirName);
+  if (sanitized) {
+    const sanitizedCandidate = scope ? `${scope}/${sanitized}` : sanitized;
+    if (validateNpmPackageName(sanitizedCandidate).validForNewPackages) {
+      return sanitizedCandidate;
+    }
+  }
+  return getRandomProjectName({ scope, fallbackName });
 }
