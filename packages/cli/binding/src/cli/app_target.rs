@@ -345,6 +345,11 @@ pub(super) fn resolve_app_target(
             }
         })
         .collect();
+    if rows.is_empty() {
+        // The workspace root is the only target. Static extraction can miss
+        // plugin-provided config, so run the command in place.
+        return Ok((AppTarget::CurrentDir, Some(workspace_root)));
+    }
     rows.sort_by(|a, b| {
         (!a.likely_runnable, a.path.as_str()).cmp(&(!b.likely_runnable, b.path.as_str()))
     });
