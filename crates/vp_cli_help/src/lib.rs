@@ -8,9 +8,12 @@
 
 use std::{borrow::Cow, fmt::Write as _, io::Write as _};
 
+#[cfg(feature = "clap")]
 use clap::{Arg, Command};
 use owo_colors::OwoColorize;
 use terminal_size::{Width, terminal_size_of};
+#[cfg(feature = "usage")]
+use usage_rs::{Command as UsageCommand, spec::CommandMeta};
 
 const HELP_RIGHT_MARGIN: usize = 4;
 const ROW_LABEL_INDENT: &str = "  ";
@@ -38,6 +41,7 @@ pub struct HelpRow {
 }
 
 /// Build a help document from public `clap` command metadata.
+#[cfg(feature = "clap")]
 #[must_use]
 pub fn help_doc_from_command(
     mut command: Command,
@@ -81,6 +85,167 @@ pub fn help_doc_from_command(
     HelpDoc { usage: usage.into(), summary, sections, documentation_url }
 }
 
+#[cfg(feature = "usage")]
+#[must_use]
+pub fn help_doc_from_usage(
+    spec: &'static usage_rs::spec::Spec<'static>,
+    argv: &[String],
+    command: &UsageCommand<'_>,
+    documentation_url: Option<Cow<'static, str>>,
+) -> Option<HelpDoc> {
+    let argv = argv.iter().map(std::ffi::OsStr::new).collect::<Vec<_>>();
+    let route = usage_rs::help::route_to(spec.root.cmd, &argv, command)?;
+    let root_name = spec.bin.unwrap_or(spec.name);
+    let (path, metadata) = usage_route(spec.root, &route, root_name)?;
+    let usage = if path.len() == 1 {
+        spec.usage
+            .map(str::trim)
+            .and_then(|usage| usage.strip_prefix("Usage: "))
+            .map_or_else(|| usage_line(&path, metadata), ToOwned::to_owned)
+    } else {
+        usage_line(&path, metadata)
+    };
+    let summary = metadata
+        .long_about
+        .or(metadata.about)
+        .or_else(|| (path.len() == 1).then_some(spec.long_about.or(spec.about)).flatten())
+        .map(str::to_owned)
+        .map(Into::into)
+        .into_iter()
+        .collect();
+    let mut sections = Vec::new();
+
+    for argument in metadata.args.iter().filter(|argument| !argument.hide) {
+        let title = argument.help_heading.unwrap_or("Arguments");
+        let description = argument.long_help.or(argument.help).unwrap_or_default();
+        push_help_row(
+            &mut sections,
+            title,
+            HelpRow {
+                label: usage_argument_label(argument).into(),
+                description: vec![description.to_owned().into()],
+            },
+        );
+    }
+
+    for flag in metadata.flags.iter().filter(|flag| !flag.hide) {
+        let title = flag.help_heading.unwrap_or("Options");
+        let description = flag.long_help.or(flag.help).unwrap_or_default();
+        push_help_row(
+            &mut sections,
+            title,
+            HelpRow {
+                label: usage_flag_label(flag).into(),
+                description: vec![description.to_owned().into()],
+            },
+        );
+    }
+    push_help_row(
+        &mut sections,
+        "Options",
+        HelpRow { label: "-h, --help".into(), description: vec!["Show this help message".into()] },
+    );
+
+    let subcommand_title = metadata.subcommand_help_heading.unwrap_or("Commands");
+    for subcommand in metadata.subcommands.iter().filter(|subcommand| !subcommand.hide) {
+        let visible_aliases = subcommand
+            .cmd
+            .aliases
+            .iter()
+            .filter(|alias| !subcommand.hidden_aliases.contains(alias));
+        let label = std::iter::once(subcommand.cmd.name)
+            .chain(visible_aliases.copied())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let description = subcommand.long_about.or(subcommand.about).unwrap_or_default();
+        push_help_row(
+            &mut sections,
+            subcommand_title,
+            HelpRow { label: label.into(), description: vec![description.to_owned().into()] },
+        );
+    }
+
+    Some(HelpDoc { usage: usage.into(), summary, sections, documentation_url })
+}
+
+#[cfg(feature = "usage")]
+fn usage_route<'a>(
+    root: &'a CommandMeta<'a>,
+    route: &[&UsageCommand<'_>],
+    root_name: &'a str,
+) -> Option<(Vec<&'a str>, &'a CommandMeta<'a>)> {
+    let mut path = vec![root_name];
+    let mut metadata = root;
+    for command in route.iter().skip(1) {
+        metadata = metadata
+            .subcommands
+            .iter()
+            .find(|subcommand| std::ptr::eq(subcommand.cmd, *command))?;
+        path.push(metadata.cmd.name);
+    }
+    Some((path, metadata))
+}
+
+#[cfg(feature = "usage")]
+fn usage_line(path: &[&str], metadata: &CommandMeta<'_>) -> String {
+    let mut usage = path.join(" ");
+    for argument in metadata.args.iter().filter(|argument| !argument.hide) {
+        let _ = write!(usage, " {}", usage_argument_label(argument));
+    }
+    if metadata.flags.iter().any(|flag| !flag.hide) {
+        usage.push_str(" [OPTIONS]");
+    }
+    if !metadata.cmd.subcommands.is_empty() {
+        let value_name = metadata.subcommand_value_name.unwrap_or("COMMAND");
+        let _ = write!(usage, " <{value_name}>");
+    }
+    usage
+}
+
+#[cfg(feature = "usage")]
+fn usage_argument_label(argument: &usage_rs::spec::ArgMeta<'_>) -> String {
+    let value_name = argument.value_names.first().copied().unwrap_or(argument.arg.name);
+    let mut label =
+        if argument.required { format!("<{value_name}>") } else { format!("[{value_name}]") };
+    if argument.arg.var {
+        label.push_str("...");
+    }
+    label
+}
+
+#[cfg(feature = "usage")]
+fn usage_flag_label(flag: &usage_rs::spec::FlagMeta<'_>) -> String {
+    let short = flag
+        .flag
+        .shorts
+        .iter()
+        .find(|short| !flag.hidden_shorts.contains(short))
+        .map(|short| format!("-{}", *short as char));
+    let long = flag
+        .flag
+        .longs
+        .iter()
+        .find(|long| !flag.hidden_longs.contains(long))
+        .map(|long| format!("--{long}"));
+    let mut label = match (short, long) {
+        (Some(short), Some(long)) => format!("{short}, {long}"),
+        (Some(short), None) => short,
+        (None, Some(long)) => long,
+        (None, None) => flag.flag.name.to_owned(),
+    };
+
+    if flag.flag.takes_value {
+        let value_name = flag.value_names.first().copied().or(flag.value_name).unwrap_or("VALUE");
+        if flag.flag.value_optional {
+            let _ = write!(label, " [<{value_name}>]");
+        } else {
+            let _ = write!(label, " <{value_name}>");
+        }
+    }
+    label
+}
+
+#[cfg(feature = "clap")]
 fn push_argument_rows<'a>(
     sections: &mut Vec<HelpSection>,
     default_title: &str,
@@ -104,6 +269,7 @@ fn push_argument_rows<'a>(
     }
 }
 
+#[cfg(feature = "clap")]
 fn arg_label(arg: &Arg) -> String {
     let label = arg.to_string();
     match (arg.get_short(), arg.get_long()) {
@@ -387,13 +553,19 @@ pub fn print_help_doc(doc: &HelpDoc) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "clap")]
     use clap::{ArgAction, Command};
 
+    #[cfg(feature = "clap")]
+    use super::help_doc_from_command;
+    #[cfg(feature = "usage")]
+    use super::help_doc_from_usage;
     use super::{
-        HelpDoc, HelpRow, HelpSection, ROW_DESCRIPTION_INDENT, help_doc_from_command,
-        render_help_doc_with_width, render_rows, visible_length,
+        HelpDoc, HelpRow, HelpSection, ROW_DESCRIPTION_INDENT, render_help_doc_with_width,
+        render_rows, visible_length,
     };
 
+    #[cfg(feature = "clap")]
     #[test]
     fn builds_help_from_command_metadata() {
         let command = Command::new("vp example")
@@ -458,6 +630,57 @@ mod tests {
         };
         assert_eq!(title, "Commands");
         assert_eq!(rows[0].label, "inspect, show");
+    }
+
+    #[cfg(feature = "usage")]
+    #[test]
+    fn builds_help_from_usage_metadata() {
+        #[derive(Debug, usage_rs::Cli)]
+        #[usage(
+            bin = "vp example",
+            about = "Run an example command",
+            usage = "Usage: vp example [input] [OPTIONS]",
+            unknown_flags = "error",
+            args_override_self = false
+        )]
+        struct Example {
+            #[usage(value_name = "input", help = "Input path")]
+            input: Option<String>,
+            #[usage(short = 'v', long, help = "Show more output")]
+            verbose: bool,
+        }
+
+        let argv = vec!["--help".to_owned()];
+        let words = argv.iter().map(std::ffi::OsStr::new).collect::<Vec<_>>();
+        let Err(usage_rs::Error::Help { cmd, .. }) = Example::parse_from(&words) else {
+            panic!("--help must return a help request");
+        };
+        let doc = help_doc_from_usage(
+            Example::spec(),
+            &argv,
+            cmd,
+            Some("https://viteplus.dev/example".into()),
+        )
+        .expect("help command must belong to the example parser");
+
+        assert_eq!(doc.usage, "vp example [input] [OPTIONS]");
+        assert_eq!(doc.summary, ["Run an example command"]);
+        assert_eq!(doc.documentation_url.as_deref(), Some("https://viteplus.dev/example"));
+        assert_eq!(doc.sections.len(), 2);
+
+        let HelpSection::Rows { title, rows } = &doc.sections[0] else {
+            panic!("Arguments must contain rows");
+        };
+        assert_eq!(title, "Arguments");
+        assert_eq!(rows[0].label, "[input]");
+
+        let HelpSection::Rows { title, rows } = &doc.sections[1] else {
+            panic!("Options must contain rows");
+        };
+        assert_eq!(title, "Options");
+        assert_eq!(rows[0].label, "-v, --verbose");
+        assert_eq!(rows[0].description, ["Show more output"]);
+        assert_eq!(rows[1].label, "-h, --help");
     }
 
     #[test]

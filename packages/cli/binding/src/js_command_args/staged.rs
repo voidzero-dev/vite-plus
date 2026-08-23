@@ -1,14 +1,34 @@
-use std::{num::NonZeroU32, str::FromStr};
+use std::{num::NonZeroU32, ops::Deref, str::FromStr};
 
-use clap::{ArgAction, Args, Command, builder::NonEmptyStringValueParser};
 use napi::bindgen_prelude::Either;
 use napi_derive::napi;
-use vp_cli_help::{help_doc_from_command, print_help_doc};
+use usage_rs::Cli;
+use vp_cli_help::{help_doc_from_usage, print_help_doc};
 
-use super::parse::{CliParseError, ParseResult, help_arg, parse_args};
+use super::parse::{CliParseError, CliParser, ParseResult, parse_args};
 
 const CONCURRENT_VALUE_ERROR: &str = "use true, false, or an integer from 1 through 4294967295";
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
+const NON_EMPTY_VALUE_ERROR: &str = "a value cannot be empty";
+
+#[derive(Debug)]
+struct NonEmptyString(String);
+
+impl Deref for NonEmptyString {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromStr for NonEmptyString {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value.is_empty() { Err(NON_EMPTY_VALUE_ERROR) } else { Ok(Self(value.to_owned())) }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Concurrent {
@@ -31,122 +51,86 @@ impl FromStr for Concurrent {
     }
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Cli)]
+#[usage(
+    bin = "vp staged",
+    about = "Run linters on staged files using staged config from vite.config.ts.",
+    usage = "Usage: vp staged [OPTIONS]",
+    unknown_flags = "error",
+    args_override_self = false
+)]
 struct StagedCliArgs {
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Allow empty commits when tasks revert all staged changes"
-    )]
+    #[usage(long, help = "Allow empty commits when tasks revert all staged changes")]
     allow_empty: bool,
 
-    #[arg(
+    #[usage(
         short = 'p',
         long,
         value_name = "number|boolean",
-        num_args = 0..=1,
-        default_missing_value = "true",
+        default_missing = "true",
         allow_negative_numbers = true,
-        overrides_with = "no_concurrent",
+        overrides("no_concurrent"),
         help = "Run tasks at the same time. Use false to run one task at a time"
     )]
     concurrent: Option<Concurrent>,
 
-    #[arg(long = "no-concurrent", overrides_with = "concurrent", help = "Run one task at a time")]
+    #[usage(long = "no-concurrent", overrides("concurrent"), help = "Run one task at a time")]
     no_concurrent: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Run all tasks to completion even if one fails"
-    )]
+    #[usage(long, help = "Run all tasks to completion even if one fails")]
     continue_on_error: bool,
 
-    #[arg(
-        long,
-        value_name = "path",
-        value_parser = NonEmptyStringValueParser::new(),
-        help = "Working directory to run all tasks in"
-    )]
-    cwd: Option<String>,
+    #[usage(long, value_name = "path", help = "Working directory to run all tasks in")]
+    cwd: Option<NonEmptyString>,
 
-    #[arg(short = 'd', long, action = ArgAction::SetTrue, help = "Enable debug output")]
+    #[usage(short = 'd', long, help = "Enable debug output")]
     debug: bool,
 
-    #[arg(
-        long,
-        value_name = "string",
-        value_parser = NonEmptyStringValueParser::new(),
-        help = "Override the default --staged flag of git diff"
-    )]
-    diff: Option<String>,
+    #[usage(long, value_name = "string", help = "Override the default --staged flag of git diff")]
+    diff: Option<NonEmptyString>,
 
-    #[arg(
+    #[usage(
         long,
         value_name = "string",
-        value_parser = NonEmptyStringValueParser::new(),
         help = "Override the default --diff-filter=ACMR flag of git diff"
     )]
-    diff_filter: Option<String>,
+    diff_filter: Option<NonEmptyString>,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Fail with exit code 1 when tasks modify tracked files"
-    )]
+    #[usage(long, help = "Fail with exit code 1 when tasks modify tracked files")]
     fail_on_changes: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Hide unstaged changes from partially staged files"
-    )]
+    #[usage(long, help = "Hide unstaged changes from partially staged files")]
     hide_partially_staged: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Hide all unstaged changes before running tasks"
-    )]
+    #[usage(long, help = "Hide all unstaged changes before running tasks")]
     hide_unstaged: bool,
 
-    #[arg(long = "no-stash", help = "Disable the backup stash")]
+    #[usage(long = "no-stash", help = "Disable the backup stash")]
     no_stash: bool,
 
-    #[arg(short = 'q', long, action = ArgAction::SetTrue, help = "Disable console output")]
+    #[usage(short = 'q', long, help = "Disable console output")]
     quiet: bool,
 
-    #[arg(
-        short = 'r',
-        long,
-        action = ArgAction::SetTrue,
-        help = "Pass filepaths relative to cwd to tasks"
-    )]
+    #[usage(short = 'r', long, help = "Pass filepaths relative to cwd to tasks")]
     relative: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Revert to original state in case of errors"
-    )]
+    #[usage(long, help = "Revert to original state in case of errors")]
     revert: bool,
 
-    #[arg(
-        short = 'v',
-        long,
-        action = ArgAction::SetTrue,
-        help = "Show task output even when tasks succeed"
-    )]
+    #[usage(short = 'v', long, help = "Show task output even when tasks succeed")]
     verbose: bool,
 }
 
-fn staged_command() -> Command {
-    StagedCliArgs::augment_args(
-        Command::new("vp staged")
-            .about("Run linters on staged files using staged config from vite.config.ts.")
-            .disable_help_flag(true),
-    )
-    .arg(help_arg())
+impl CliParser for StagedCliArgs {
+    fn parse_from<'value>(
+        argv: &'value [&'value std::ffi::OsStr],
+    ) -> Result<Self, usage_rs::Error<'static, 'value>> {
+        Self::parse_from(argv)
+    }
+
+    fn spec() -> &'static usage_rs::spec::Spec<'static> {
+        Self::spec()
+    }
 }
 
 #[napi(object, object_from_js = false)]
@@ -184,10 +168,10 @@ impl From<StagedCliArgs> for StagedArgs {
             allow_empty: value.allow_empty.then_some(true),
             concurrent,
             continue_on_error: value.continue_on_error.then_some(true),
-            cwd: value.cwd,
+            cwd: value.cwd.map(|value| value.0),
             debug: value.debug.then_some(true),
-            diff: value.diff,
-            diff_filter: value.diff_filter,
+            diff: value.diff.map(|value| value.0),
+            diff_filter: value.diff_filter.map(|value| value.0),
             fail_on_changes: value.fail_on_changes.then_some(true),
             hide_partially_staged: value.hide_partially_staged.then_some(true),
             hide_unstaged: value.hide_unstaged.then_some(true),
@@ -209,10 +193,16 @@ pub enum ParseStagedArgsOutcome {
 
 #[napi]
 pub fn parse_staged_args(argv: Vec<String>) -> ParseStagedArgsOutcome {
-    match parse_args::<StagedCliArgs>(staged_command(), argv) {
+    match parse_args::<StagedCliArgs>(&argv) {
         ParseResult::Ok(value) => ParseStagedArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            let doc = help_doc_from_usage(
+                StagedCliArgs::spec(),
+                &argv,
+                command,
+                Some(DOCUMENTATION_URL.into()),
+            )
+            .expect("help command must belong to the staged parser");
             print_help_doc(&doc);
             ParseStagedArgsOutcome::Exit { code: 0 }
         }
@@ -225,7 +215,8 @@ mod tests {
     use super::*;
 
     fn parse(argv: &[&str]) -> ParseResult<StagedCliArgs> {
-        parse_args(staged_command(), argv.iter().map(|value| (*value).to_owned()).collect())
+        let argv = argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>();
+        parse_args(&argv)
     }
 
     fn parsed(argv: &[&str]) -> StagedCliArgs {

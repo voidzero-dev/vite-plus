@@ -1,156 +1,134 @@
-use clap::{ArgAction, Args, Command};
+use std::str::FromStr;
+
 use napi::bindgen_prelude::{Either, Either3};
 use napi_derive::napi;
-use vp_cli_help::{HelpSection, help_doc_from_command, print_help_doc};
+use usage_rs::Cli;
+use vp_cli_help::{HelpSection, help_doc_from_usage, print_help_doc};
 use vp_pm_cli::PackageManagerType;
 
 use super::parse::{
-    CliParseError, ParseResult, agent_option, boolean_option, editor_option, help_arg, parse_args,
+    CliParseError, CliParser, ParseResult, agent_option, boolean_option, editor_option, parse_args,
 };
 
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/create";
 const PACKAGE_MANAGER_ERROR: &str = "use pnpm, npm, yarn, or bun";
 
-fn parse_package_manager(value: &str) -> Result<PackageManagerType, &'static str> {
-    PackageManagerType::from_name(value).ok_or(PACKAGE_MANAGER_ERROR)
+#[derive(Debug)]
+struct PackageManager(PackageManagerType);
+
+impl FromStr for PackageManager {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        PackageManagerType::from_name(value).map(Self).ok_or(PACKAGE_MANAGER_ERROR)
+    }
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Cli)]
+#[usage(
+    bin = "vp create",
+    about = "Use any builtin, local or remote template with Vite+.",
+    usage = "Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]",
+    unknown_flags = "error",
+    args_override_self = false
+)]
 struct CreateCliArgs {
-    #[arg(value_name = "TEMPLATE", help = "Builtin, local, or remote template name")]
+    #[usage(value_name = "TEMPLATE", help = "Builtin, local, or remote template name")]
     template: Option<String>,
 
-    #[arg(long, value_name = "DIR", help = "Target directory for the generated project")]
+    #[usage(long, value_name = "DIR", help = "Target directory for the generated project")]
     directory: Option<String>,
 
-    #[arg(
+    #[usage(
         long,
         value_name = "NAME",
-        action = ArgAction::Append,
-        overrides_with = "no_agent",
+        overrides("no_agent"),
         help = "Write coding agent instructions to AGENTS.md, CLAUDE.md, etc."
     )]
     agent: Vec<String>,
 
-    #[arg(
+    #[usage(
         long = "no-agent",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["agent", "no_agent"],
+        var,
+        overrides("agent"),
         help = "Skip writing coding agent instructions"
     )]
     no_agent: bool,
 
-    #[arg(
+    #[usage(
         long,
         value_name = "NAME",
-        action = ArgAction::Append,
-        overrides_with = "no_editor",
+        overrides("no_editor"),
         help = "Write editor config files for the specified editor"
     )]
     editor: Vec<String>,
 
-    #[arg(
+    #[usage(
         long = "no-editor",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["editor", "no_editor"],
+        var,
+        overrides("editor"),
         help = "Skip writing editor config files"
     )]
     no_editor: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["git", "no_git"],
-        help = "Initialize a git repository"
-    )]
+    #[usage(long, var, overrides("no_git"), help = "Initialize a git repository")]
     git: bool,
 
-    #[arg(
-        long = "no-git",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["git", "no_git"],
-        help = "Skip git repository initialization"
-    )]
+    #[usage(long = "no-git", var, overrides("git"), help = "Skip git repository initialization")]
     no_git: bool,
 
-    #[arg(
+    #[usage(
         long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["hooks", "no_hooks"],
+        var,
+        overrides("no_hooks"),
         help = "Set up pre-commit hooks (default in non-interactive mode)"
     )]
     hooks: bool,
 
-    #[arg(
-        long = "no-hooks",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["hooks", "no_hooks"],
-        help = "Skip pre-commit hooks setup"
-    )]
+    #[usage(long = "no-hooks", var, overrides("hooks"), help = "Skip pre-commit hooks setup")]
     no_hooks: bool,
 
-    #[arg(
-        long,
-        value_name = "pnpm|npm|yarn|bun",
-        value_parser = parse_package_manager,
-        help = "Use the specified package manager"
-    )]
-    package_manager: Option<PackageManagerType>,
+    #[usage(long, value_name = "pnpm|npm|yarn|bun", help = "Use the specified package manager")]
+    package_manager: Option<PackageManager>,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Approve and run gated dependency build scripts without prompting"
-    )]
+    #[usage(long, help = "Approve and run gated dependency build scripts without prompting")]
     approve_builds: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Show detailed scaffolding output"
-    )]
+    #[usage(long, help = "Show detailed scaffolding output")]
     verbose: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["interactive", "no_interactive"],
-        help = "Enable interactive prompts"
-    )]
+    #[usage(long, var, overrides("no_interactive"), help = "Enable interactive prompts")]
     interactive: bool,
 
-    #[arg(
+    #[usage(
         long = "no-interactive",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["interactive", "no_interactive"],
+        var,
+        overrides("interactive"),
         help = "Run in non-interactive mode"
     )]
     no_interactive: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "List all available templates"
-    )]
+    #[usage(long, help = "List all available templates")]
     list: bool,
 
-    #[arg(
-        last = true,
-        allow_hyphen_values = true,
+    #[usage(
+        double_dash = "required",
         value_name = "TEMPLATE_OPTIONS",
         help = "Arguments passed to the template without changes"
     )]
     template_args: Vec<String>,
 }
 
-fn create_command() -> Command {
-    CreateCliArgs::augment_args(
-        Command::new("vp create")
-            .about("Use any builtin, local or remote template with Vite+.")
-            .disable_help_flag(true)
-            .override_usage("vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]"),
-    )
-    .arg(help_arg())
+impl CliParser for CreateCliArgs {
+    fn parse_from<'value>(
+        argv: &'value [&'value std::ffi::OsStr],
+    ) -> Result<Self, usage_rs::Error<'static, 'value>> {
+        Self::parse_from(argv)
+    }
+
+    fn spec() -> &'static usage_rs::spec::Spec<'static> {
+        Self::spec()
+    }
 }
 
 #[napi(object, object_from_js = false)]
@@ -183,7 +161,7 @@ impl From<CreateCliArgs> for CreateArgs {
             hooks: boolean_option(value.hooks, value.no_hooks),
             package_manager: value
                 .package_manager
-                .map(|package_manager| package_manager.to_string()),
+                .map(|package_manager| package_manager.0.to_string()),
             approve_builds: value.approve_builds.then_some(true),
             verbose: value.verbose.then_some(true),
             interactive: boolean_option(value.interactive, value.no_interactive),
@@ -202,10 +180,16 @@ pub enum ParseCreateArgsOutcome {
 
 #[napi]
 pub fn parse_create_args(argv: Vec<String>) -> ParseCreateArgsOutcome {
-    match parse_args::<CreateCliArgs>(create_command(), argv) {
+    match parse_args::<CreateCliArgs>(&argv) {
         ParseResult::Ok(value) => ParseCreateArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let mut doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            let mut doc = help_doc_from_usage(
+                CreateCliArgs::spec(),
+                &argv,
+                command,
+                Some(DOCUMENTATION_URL.into()),
+            )
+            .expect("help command must belong to the create parser");
             doc.sections.push(HelpSection::Lines {
                 title: "Examples".into(),
                 lines: vec![
@@ -233,7 +217,8 @@ mod tests {
     use super::*;
 
     fn parse(argv: &[&str]) -> ParseResult<CreateCliArgs> {
-        parse_args(create_command(), argv.iter().map(|value| (*value).to_owned()).collect())
+        let argv = argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>();
+        parse_args(&argv)
     }
 
     fn parsed(argv: &[&str]) -> CreateArgs {
@@ -285,6 +270,27 @@ mod tests {
         assert_eq!(args.git, Some(true));
         assert_eq!(args.hooks, Some(false));
         assert_eq!(args.interactive, Some(true));
+    }
+
+    #[test]
+    fn accepts_repeated_boolean_overrides() {
+        let args = parsed(&[
+            "--git",
+            "--git",
+            "--no-hooks",
+            "--no-hooks",
+            "--interactive",
+            "--interactive",
+            "--no-agent",
+            "--no-agent",
+            "--no-editor",
+            "--no-editor",
+        ]);
+        assert_eq!(args.git, Some(true));
+        assert_eq!(args.hooks, Some(false));
+        assert_eq!(args.interactive, Some(true));
+        assert!(matches!(args.agent, Some(Either3::A(false))));
+        assert!(matches!(args.editor, Some(Either::A(false))));
     }
 
     #[test]

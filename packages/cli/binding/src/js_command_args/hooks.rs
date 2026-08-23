@@ -1,53 +1,57 @@
-use clap::{ArgAction, Args, Command, Subcommand};
 use napi_derive::napi;
-use vp_cli_help::{HelpRow, HelpSection, help_doc_from_command, print_help_doc};
+use usage_rs::{Args, Cli, Subcommands};
+use vp_cli_help::{HelpRow, HelpSection, help_doc_from_usage, print_help_doc};
 
-use super::parse::{CliParseError, ParseResult, help_arg, parse_args};
+use super::parse::{CliParseError, CliParser, ParseResult, parse_args};
 
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
 
-#[derive(Debug, Args)]
+#[derive(Debug, Cli)]
+#[usage(
+    bin = "vp hooks",
+    about = "Manage the Vite+ Git hook dispatcher for this repository.",
+    usage = "Usage: vp hooks <COMMAND> [OPTIONS]",
+    unknown_flags = "error",
+    args_override_self = false,
+    arg_required_else_help,
+    disable_help_subcommand
+)]
 struct HooksCliArgs {
-    #[command(subcommand)]
+    #[usage(subcommand)]
     command: HooksSubcommand,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Subcommands)]
 enum HooksSubcommand {
     /// Install or refresh the hook dispatcher (sets core.hooksPath)
-    #[command(disable_help_flag = true)]
     Enable(HooksActionArgs),
     /// Disable hooks: unset core.hooksPath, remove <dir>/_, persist preference
-    #[command(disable_help_flag = true)]
     Disable(HooksActionArgs),
     /// Show preference, core.hooksPath, and dispatcher state
-    #[command(disable_help_flag = true)]
     Status(HooksActionArgs),
 }
 
 #[derive(Debug, Args)]
+#[usage(args_override_self = false)]
 struct HooksActionArgs {
-    #[arg(
+    #[usage(
         long,
         value_name = "path",
         help = "Custom hooks directory (default: .vite-hooks, or last used)"
     )]
     hooks_dir: Option<String>,
-
-    #[arg(short = 'h', long, action = ArgAction::Help, help = "Show this help message")]
-    help: Option<bool>,
 }
 
-fn hooks_command() -> Command {
-    HooksCliArgs::augment_args(
-        Command::new("vp hooks")
-            .about("Manage the Vite+ Git hook dispatcher for this repository.")
-            .disable_help_flag(true)
-            .disable_help_subcommand(true)
-            .override_usage("vp hooks <COMMAND> [OPTIONS]")
-            .arg_required_else_help(true),
-    )
-    .arg(help_arg())
+impl CliParser for HooksCliArgs {
+    fn parse_from<'value>(
+        argv: &'value [&'value std::ffi::OsStr],
+    ) -> Result<Self, usage_rs::Error<'static, 'value>> {
+        Self::parse_from(argv)
+    }
+
+    fn spec() -> &'static usage_rs::spec::Spec<'static> {
+        Self::spec()
+    }
 }
 
 #[napi(object, object_from_js = false)]
@@ -75,25 +79,19 @@ pub enum ParseHooksArgsOutcome {
     Error { error: CliParseError },
 }
 
-fn command_for_help(mut command: Command, argv: &[String]) -> Command {
-    command.build();
-    if let Some(name) = argv.first()
-        && let Some(subcommand) = command.find_subcommand(name)
-    {
-        return subcommand.clone();
-    }
-    command
-}
-
 #[napi]
 pub fn parse_hooks_args(argv: Vec<String>) -> ParseHooksArgsOutcome {
-    let help_argv = argv.clone();
-    match parse_args::<HooksCliArgs>(hooks_command(), argv) {
+    match parse_args::<HooksCliArgs>(&argv) {
         ParseResult::Ok(value) => ParseHooksArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let command = command_for_help(*command, &help_argv);
-            let is_top_level = command.get_name() == "vp hooks";
-            let mut doc = help_doc_from_command(command, Some(DOCUMENTATION_URL.into()));
+            let is_top_level = std::ptr::eq(command, HooksCliArgs::command());
+            let mut doc = help_doc_from_usage(
+                HooksCliArgs::spec(),
+                &argv,
+                command,
+                Some(DOCUMENTATION_URL.into()),
+            )
+            .expect("help command must belong to the hooks parser");
             if is_top_level {
                 doc.sections.push(HelpSection::Rows {
                     title: "Environment".into(),
@@ -127,7 +125,8 @@ mod tests {
     use super::*;
 
     fn parse(argv: &[&str]) -> ParseResult<HooksCliArgs> {
-        parse_args(hooks_command(), argv.iter().map(|value| (*value).to_owned()).collect())
+        let argv = argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>();
+        parse_args(&argv)
     }
 
     fn parsed(argv: &[&str]) -> HooksArgs {

@@ -7,10 +7,16 @@ license.workspace = true
 publish = false
 rust-version.workspace = true
 
+[features]
+default = ["clap"]
+clap = ["dep:clap"]
+usage = ["dep:usage-rs"]
+
 [dependencies]
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 owo-colors = { workspace = true }
 terminal_size = { workspace = true }
+usage-rs = { workspace = true, optional = true }
 vp_shared = { workspace = true }
 
 [lints]

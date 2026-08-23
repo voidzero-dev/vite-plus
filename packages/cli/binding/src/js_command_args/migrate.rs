@@ -1,103 +1,97 @@
-use clap::{ArgAction, Args, Command};
 use napi::bindgen_prelude::{Either, Either3};
 use napi_derive::napi;
-use vp_cli_help::{HelpSection, help_doc_from_command, print_help_doc};
+use usage_rs::Cli;
+use vp_cli_help::{HelpSection, help_doc_from_usage, print_help_doc};
 
 use super::parse::{
-    CliParseError, ParseResult, agent_option, boolean_option, editor_option, help_arg, parse_args,
+    CliParseError, CliParser, ParseResult, agent_option, boolean_option, editor_option, parse_args,
 };
 
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/migrate";
 
-#[derive(Debug, Args)]
+#[derive(Debug, Cli)]
+#[usage(
+    bin = "vp migrate",
+    about = "Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.",
+    usage = "Usage: vp migrate [PATH] [OPTIONS]",
+    unknown_flags = "error",
+    args_override_self = false
+)]
 struct MigrateCliArgs {
-    #[arg(value_name = "PATH", help = "Target directory to migrate (default: current directory)")]
+    #[usage(
+        value_name = "PATH",
+        help = "Target directory to migrate (default: current directory)"
+    )]
     path: Option<String>,
 
-    #[arg(
+    #[usage(
         long,
         value_name = "NAME",
-        action = ArgAction::Append,
-        overrides_with = "no_agent",
+        overrides("no_agent"),
         help = "Write coding agent instructions to AGENTS.md, CLAUDE.md, etc."
     )]
     agent: Vec<String>,
 
-    #[arg(
+    #[usage(
         long = "no-agent",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["agent", "no_agent"],
+        var,
+        overrides("agent"),
         help = "Skip writing coding agent instructions"
     )]
     no_agent: bool,
 
-    #[arg(
+    #[usage(
         long,
         value_name = "NAME",
-        action = ArgAction::Append,
-        overrides_with = "no_editor",
+        overrides("no_editor"),
         help = "Write editor config files into the project"
     )]
     editor: Vec<String>,
 
-    #[arg(
+    #[usage(
         long = "no-editor",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["editor", "no_editor"],
+        var,
+        overrides("editor"),
         help = "Skip writing editor config files"
     )]
     no_editor: bool,
 
-    #[arg(
+    #[usage(
         long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["hooks", "no_hooks"],
+        var,
+        overrides("no_hooks"),
         help = "Set up pre-commit hooks (default in non-interactive mode)"
     )]
     hooks: bool,
 
-    #[arg(
-        long = "no-hooks",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["hooks", "no_hooks"],
-        help = "Skip pre-commit hooks setup"
-    )]
+    #[usage(long = "no-hooks", var, overrides("hooks"), help = "Skip pre-commit hooks setup")]
     no_hooks: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["interactive", "no_interactive"],
-        help = "Enable interactive prompts"
-    )]
+    #[usage(long, var, overrides("no_interactive"), help = "Enable interactive prompts")]
     interactive: bool,
 
-    #[arg(
+    #[usage(
         long = "no-interactive",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["interactive", "no_interactive"],
+        var,
+        overrides("interactive"),
         help = "Run in non-interactive mode (skip prompts and use defaults)"
     )]
     no_interactive: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        help = "Also run the full setup for an existing Vite+ project"
-    )]
+    #[usage(long, help = "Also run the full setup for an existing Vite+ project")]
     full: bool,
 }
 
-fn migrate_command() -> Command {
-    MigrateCliArgs::augment_args(
-        Command::new("vp migrate")
-            .about(
-                "Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.",
-            )
-            .disable_help_flag(true)
-            .override_usage("vp migrate [PATH] [OPTIONS]"),
-    )
-    .arg(help_arg())
+impl CliParser for MigrateCliArgs {
+    fn parse_from<'value>(
+        argv: &'value [&'value std::ffi::OsStr],
+    ) -> Result<Self, usage_rs::Error<'static, 'value>> {
+        Self::parse_from(argv)
+    }
+
+    fn spec() -> &'static usage_rs::spec::Spec<'static> {
+        Self::spec()
+    }
 }
 
 #[napi(object, object_from_js = false)]
@@ -134,10 +128,16 @@ pub enum ParseMigrateArgsOutcome {
 
 #[napi]
 pub fn parse_migrate_args(argv: Vec<String>) -> ParseMigrateArgsOutcome {
-    match parse_args::<MigrateCliArgs>(migrate_command(), argv) {
+    match parse_args::<MigrateCliArgs>(&argv) {
         ParseResult::Ok(value) => ParseMigrateArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let mut doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            let mut doc = help_doc_from_usage(
+                MigrateCliArgs::spec(),
+                &argv,
+                command,
+                Some(DOCUMENTATION_URL.into()),
+            )
+            .expect("help command must belong to the migrate parser");
             doc.sections.push(HelpSection::Lines {
                 title: "Examples".into(),
                 lines: vec![
@@ -177,7 +177,8 @@ mod tests {
     use super::*;
 
     fn parse(argv: &[&str]) -> ParseResult<MigrateCliArgs> {
-        parse_args(migrate_command(), argv.iter().map(|value| (*value).to_owned()).collect())
+        let argv = argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>();
+        parse_args(&argv)
     }
 
     fn parsed(argv: &[&str]) -> MigrateArgs {
@@ -231,6 +232,24 @@ mod tests {
         assert!(matches!(args.editor, Some(Either::B(value)) if value == "last"));
         assert_eq!(args.hooks, Some(true));
         assert_eq!(args.interactive, Some(false));
+    }
+
+    #[test]
+    fn accepts_repeated_boolean_overrides() {
+        let args = parsed(&[
+            "--hooks",
+            "--hooks",
+            "--no-interactive",
+            "--no-interactive",
+            "--no-agent",
+            "--no-agent",
+            "--no-editor",
+            "--no-editor",
+        ]);
+        assert_eq!(args.hooks, Some(true));
+        assert_eq!(args.interactive, Some(false));
+        assert!(matches!(args.agent, Some(Either3::A(false))));
+        assert!(matches!(args.editor, Some(Either::A(false))));
     }
 
     #[test]

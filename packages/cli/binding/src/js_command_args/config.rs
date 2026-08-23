@@ -1,60 +1,60 @@
-use clap::{ArgAction, Args, Command};
 use napi_derive::napi;
-use vp_cli_help::{HelpRow, HelpSection, help_doc_from_command, print_help_doc};
+use usage_rs::Cli;
+use vp_cli_help::{HelpRow, HelpSection, help_doc_from_usage, print_help_doc};
 
-use super::parse::{CliParseError, ParseResult, boolean_option, help_arg, parse_args};
+use super::parse::{CliParseError, CliParser, ParseResult, boolean_option, parse_args};
 
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
 
-#[derive(Debug, Args)]
+#[derive(Debug, Cli)]
+#[usage(
+    bin = "vp config",
+    about = "Configure Vite+ for the current project (hook dispatcher + agent integration).",
+    usage = "Usage: vp config [OPTIONS]",
+    unknown_flags = "error",
+    args_override_self = false
+)]
 struct ConfigCliArgs {
-    #[arg(
+    #[usage(
         long,
         value_name = "path",
         help = "Custom hooks directory (default: .vite-hooks, or last used in this clone)"
     )]
     hooks_dir: Option<String>,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["hooks", "no_hooks"],
-        help = "Install the hook dispatcher"
-    )]
+    #[usage(long, var, overrides("no_hooks"), help = "Install the hook dispatcher")]
     hooks: bool,
 
-    #[arg(
+    #[usage(
         long = "no-hooks",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["hooks", "no_hooks"],
+        var,
+        overrides("hooks"),
         help = "Skip hook dispatcher installation"
     )]
     no_hooks: bool,
 
-    #[arg(
-        long,
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["agent", "no_agent"],
-        help = "Update coding agent instructions"
-    )]
+    #[usage(long, var, overrides("no_agent"), help = "Update coding agent instructions")]
     agent: bool,
 
-    #[arg(
+    #[usage(
         long = "no-agent",
-        action = ArgAction::SetTrue,
-        overrides_with_all = ["agent", "no_agent"],
+        var,
+        overrides("agent"),
         help = "Skip updating coding agent instructions"
     )]
     no_agent: bool,
 }
 
-fn config_command() -> Command {
-    ConfigCliArgs::augment_args(
-        Command::new("vp config")
-            .about("Configure Vite+ for the current project (hook dispatcher + agent integration).")
-            .disable_help_flag(true),
-    )
-    .arg(help_arg())
+impl CliParser for ConfigCliArgs {
+    fn parse_from<'value>(
+        argv: &'value [&'value std::ffi::OsStr],
+    ) -> Result<Self, usage_rs::Error<'static, 'value>> {
+        Self::parse_from(argv)
+    }
+
+    fn spec() -> &'static usage_rs::spec::Spec<'static> {
+        Self::spec()
+    }
 }
 
 #[napi(object, object_from_js = false)]
@@ -83,10 +83,16 @@ pub enum ParseConfigArgsOutcome {
 
 #[napi]
 pub fn parse_config_args(argv: Vec<String>) -> ParseConfigArgsOutcome {
-    match parse_args::<ConfigCliArgs>(config_command(), argv) {
+    match parse_args::<ConfigCliArgs>(&argv) {
         ParseResult::Ok(value) => ParseConfigArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let mut doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            let mut doc = help_doc_from_usage(
+                ConfigCliArgs::spec(),
+                &argv,
+                command,
+                Some(DOCUMENTATION_URL.into()),
+            )
+            .expect("help command must belong to the config parser");
             doc.sections.push(HelpSection::Rows {
                 title: "Environment".into(),
                 rows: vec![HelpRow {
@@ -106,7 +112,8 @@ mod tests {
     use super::*;
 
     fn parse(argv: &[&str]) -> ParseResult<ConfigCliArgs> {
-        parse_args(config_command(), argv.iter().map(|value| (*value).to_owned()).collect())
+        let argv = argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>();
+        parse_args(&argv)
     }
 
     fn parsed(argv: &[&str]) -> ConfigCliArgs {
@@ -128,6 +135,13 @@ mod tests {
     #[test]
     fn positive_and_negative_options_use_the_last_value() {
         let args = ConfigArgs::from(parsed(&["--no-hooks", "--hooks", "--agent", "--no-agent"]));
+        assert_eq!(args.hooks, Some(true));
+        assert_eq!(args.agent, Some(false));
+    }
+
+    #[test]
+    fn accepts_repeated_boolean_overrides() {
+        let args = ConfigArgs::from(parsed(&["--hooks", "--hooks", "--no-agent", "--no-agent"]));
         assert_eq!(args.hooks, Some(true));
         assert_eq!(args.agent, Some(false));
     }
