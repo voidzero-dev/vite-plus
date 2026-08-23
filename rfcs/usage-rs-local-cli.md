@@ -263,6 +263,8 @@ the same configuration that the current `run_tasks_completions` function reads.
 Vite Task must replace `clap` in its production CLI crates before Vite+ updates
 the pinned git revision.
 
+The draft implementation is [Vite Task PR #694](https://github.com/voidzero-dev/vite-task/pull/694).
+
 The upstream change must:
 
 1. derive `Cli`, `Args`, `Subcommands`, and `ValueEnum` on the Vite Task parser
@@ -398,7 +400,8 @@ material native-size increase by itself.
 ## Migration order
 
 1. Add this RFC to PR #2534.
-2. Open a draft Vite Task PR that replaces its production `clap` parsers.
+2. Review [Vite Task PR #694](https://github.com/voidzero-dev/vite-task/pull/694),
+   which replaces its production `clap` parsers.
 3. Add Vite Task parser, help, completion, and equivalence tests.
 4. Point PR #2534 at the pushed Vite Task commit.
 5. Migrate the local Vite+ command router and `vp_pm_cli` usage path.
