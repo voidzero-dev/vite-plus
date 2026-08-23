@@ -8,7 +8,6 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
-async-trait = { workspace = true }
 backon = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
