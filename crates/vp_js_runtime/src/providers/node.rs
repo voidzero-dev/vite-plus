@@ -171,7 +171,7 @@ impl NodeProvider {
     const fn archive_format(platform: Platform) -> ArchiveFormat {
         match platform.os {
             Os::Windows => ArchiveFormat::Zip,
-            Os::Linux | Os::Darwin => ArchiveFormat::TarGz,
+            Os::Linux | Os::Darwin | Os::FreeBSD => ArchiveFormat::TarGz,
         }
     }
 
@@ -599,6 +599,13 @@ impl JsRuntimeProvider for NodeProvider {
             Os::Linux => "linux",
             Os::Darwin => "darwin",
             Os::Windows => "win",
+            // Node.js publishes no official FreeBSD build, and `download_runtime`
+            // refuses to download a Node.js runtime on FreeBSD (see
+            // `is_download_supported`), falling back to a system-installed
+            // `node` instead. This token is therefore never used to build a
+            // real download URL, but it is kept distinct from `"linux"` so no
+            // code path could ever silently point at a Linux binary.
+            Os::FreeBSD => "freebsd",
         };
         let arch = match platform.arch {
             crate::platform::Arch::X64 => "x64",
@@ -653,14 +660,14 @@ impl JsRuntimeProvider for NodeProvider {
     fn binary_relative_path(&self, platform: Platform) -> Str {
         match platform.os {
             Os::Windows => "node.exe".into(),
-            Os::Linux | Os::Darwin => "bin/node".into(),
+            Os::Linux | Os::Darwin | Os::FreeBSD => "bin/node".into(),
         }
     }
 
     fn bin_dir_relative_path(&self, platform: Platform) -> Str {
         match platform.os {
             Os::Windows => "".into(),
-            Os::Linux | Os::Darwin => "bin".into(),
+            Os::Linux | Os::Darwin | Os::FreeBSD => "bin".into(),
         }
     }
 
@@ -678,6 +685,17 @@ impl JsRuntimeProvider for NodeProvider {
         }
 
         Err(Error::HashNotFound { filename: filename.into() })
+    }
+
+    fn is_download_supported(&self, platform: Platform) -> bool {
+        // Node.js does not publish official FreeBSD builds. The
+        // `unofficial-builds.nodejs.org` site also lacks a FreeBSD
+        // platform, and the only way to get a node binary from the
+        // standard dist layout is the Linux build, which segfaults on
+        // FreeBSD. Return `false` so `download_runtime` falls back to a
+        // system-installed `node` (e.g. from the FreeBSD Ports
+        // `lang/node` or `lang/node22`) instead of attempting a download.
+        platform.os != Os::FreeBSD
     }
 }
 
