@@ -4,9 +4,8 @@ use napi_derive::napi;
 use vp_cli_help::{HelpSection, help_doc_from_command, print_help_doc};
 use vp_pm_cli::PackageManagerType;
 
-use super::parse::{
-    CliParseError, ParseResult, agent_option, boolean_option, editor_option, help_arg, parse_args,
-};
+use super::common::{agent_option, boolean_option, editor_option};
+use crate::js_command_args::parser::{CliParseError, ParseResult, help_arg, parse_args};
 
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/create";
 const PACKAGE_MANAGER_ERROR: &str = "use pnpm, npm, yarn, or bun";

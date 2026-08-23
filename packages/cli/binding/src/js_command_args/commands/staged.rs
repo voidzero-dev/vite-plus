@@ -5,7 +5,7 @@ use napi::bindgen_prelude::Either;
 use napi_derive::napi;
 use vp_cli_help::{help_doc_from_command, print_help_doc};
 
-use super::parse::{CliParseError, ParseResult, help_arg, parse_args};
+use crate::js_command_args::parser::{CliParseError, ParseResult, help_arg, parse_args};
 
 const CONCURRENT_VALUE_ERROR: &str = "use true, false, or an integer from 1 through 4294967295";
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";

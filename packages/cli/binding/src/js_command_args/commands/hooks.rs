@@ -2,7 +2,7 @@ use clap::{ArgAction, Args, Command, Subcommand};
 use napi_derive::napi;
 use vp_cli_help::{HelpRow, HelpSection, help_doc_from_command, print_help_doc};
 
-use super::parse::{CliParseError, ParseResult, help_arg, parse_args};
+use crate::js_command_args::parser::{CliParseError, ParseResult, help_arg, parse_args};
 
 const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
 
