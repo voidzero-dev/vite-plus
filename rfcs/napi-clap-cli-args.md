@@ -76,14 +76,15 @@ This RFC does not:
 
 ## Ownership
 
-| Layer                           | Responsibility                                             |
-| ------------------------------- | ---------------------------------------------------------- |
-| Global `vp` binary              | Select the local package and forward the command arguments |
-| Local `packages/cli/src/bin.ts` | Apply `-C` and `vpr` rules, then select the command        |
-| `binding/src/js_command_args/`  | Parse command arguments and request help output            |
-| `vp_cli_help`                   | Build, format, and print Rust-backed help                  |
-| `packages/cli/src/help.ts`      | Keep static help for tool-backed commands                  |
-| JavaScript command modules      | Apply defaults and run command operations                  |
+| Layer                                   | Responsibility                                             |
+| --------------------------------------- | ---------------------------------------------------------- |
+| Global `vp` binary                      | Select the local package and forward the command arguments |
+| Local `packages/cli/src/bin.ts`         | Apply `-C` and `vpr` rules, then select the command        |
+| `binding/src/js_command_args/parser.rs` | Run the shared parser and convert parse errors             |
+| `binding/src/js_command_args/commands/` | Define command grammars, NAPI results, and help            |
+| `vp_cli_help`                           | Build, format, and print Rust-backed help                  |
+| `packages/cli/src/help.ts`              | Keep static help for tool-backed commands                  |
+| JavaScript command modules              | Apply defaults and run command operations                  |
 
 The global CLI must keep these command arguments as `Vec<String>`. The global CLI must not parse the local option grammar.
 
@@ -135,23 +136,29 @@ crates/vp_cli_help/
 
 packages/cli/binding/src/js_command_args/
   mod.rs
-  parse.rs
-  create.rs
-  migrate.rs
-  config.rs
-  hooks.rs
-  staged.rs
+  parser.rs
+  commands/
+    mod.rs
+    common.rs
+    config.rs
+    create.rs
+    hooks.rs
+    migrate.rs
+    staged.rs
 ```
 
 The `vp_cli_help` crate contains the shared help model, `clap` adapter, formatter, and output function. The global CLI and the NAPI binding use this crate.
 
 The `js_command_args` name shows that these files support JavaScript commands. The existing `binding/src/cli/` module parses and runs Rust commands.
 
-`parse.rs` contains the shared parser and error conversion. Each command file contains these items:
+`parser.rs` contains the shared parser, help argument, parse outcome, and error conversion. It does not depend on a command module.
+
+The `commands/` directory contains all command-specific code. `commands/common.rs` contains value conversions that multiple commands use. Each command file contains these items:
 
 - its `clap` type;
-- its value conversion;
+- its command-specific value conversion;
 - its NAPI output type;
+- its help additions;
 - its focused tests.
 
 `create` and `migrate` can share a private setup type. Share a field only when both commands use the same rules.
@@ -612,7 +619,7 @@ Use small, focused pull requests when repository rules permit them.
 
 1. Add the `vp_cli_help` crate.
 2. Move the global help model and formatter to the new crate.
-3. Add `binding/src/js_command_args/`.
+3. Add `binding/src/js_command_args/parser.rs` and `binding/src/js_command_args/commands/`.
 4. Add the shared parser and error conversion.
 5. Add the NAPI outcome and error types.
 6. Add the shared `clap` metadata adapter.
