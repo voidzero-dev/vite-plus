@@ -3451,6 +3451,8 @@ export interface CliOptions {
   pack: (err: Error | null) => Promise<JsCommandResolvedResult>;
   doc: (err: Error | null) => Promise<JsCommandResolvedResult>;
   cwd?: string;
+  /** Whether the user supplied the global `-C` option. */
+  explicitChdir?: boolean;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;
   /** Generated toolchain manifest shipped with this vite-plus package. */

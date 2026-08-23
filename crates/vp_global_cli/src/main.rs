@@ -260,7 +260,11 @@ fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
     ExitCode::from(e.exit_code() as u8)
 }
 
-async fn run_corrected_args(cwd: &vt_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
+async fn run_corrected_args(
+    cwd: &vt_path::AbsolutePathBuf,
+    raw_args: &[String],
+    explicit_chdir: bool,
+) -> ExitCode {
     let render_options = RenderOptions { show_header: false };
     let args_with_program: Vec<String> =
         std::iter::once("vp".to_string()).chain(raw_args.iter().cloned()).collect();
@@ -275,8 +279,14 @@ async fn run_corrected_args(cwd: &vt_path::AbsolutePathBuf, raw_args: &[String])
         }
     };
 
-    match run_command_with_options(cwd.clone(), parsed, render_options, raw_subcommand.as_deref())
-        .await
+    match run_command_with_options(
+        cwd.clone(),
+        parsed,
+        render_options,
+        raw_subcommand.as_deref(),
+        explicit_chdir,
+    )
+    .await
     {
         Ok(exit_status) => exit_status_to_exit_code(exit_status),
         Err(e) => {
@@ -415,7 +425,9 @@ async fn main() -> ExitCode {
     // behave exactly as if vp had been started in <dir>. Setting the process
     // cwd (before any command logic runs) keeps `vt_path::current_dir()`
     // callers deep inside command implementations equivalent to the cd form.
+    let mut explicit_chdir = false;
     if let Some((dir, consumed)) = parse_leading_chdir(&args[1..]) {
+        explicit_chdir = true;
         cwd = match apply_chdir(&cwd, &dir) {
             Ok(target) => target,
             Err(message) => {
@@ -490,7 +502,7 @@ async fn main() -> ExitCode {
                     if let Some(corrected_raw_args) = corrected_top_level_args {
                         let suggestion = details.suggestion.as_ref().expect("suggestion exists");
                         if prompt_to_run_suggested_command(suggestion) {
-                            run_corrected_args(&cwd, &corrected_raw_args).await
+                            run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
                         } else {
                             clap_error_to_exit_code(&e)
                         }
@@ -519,17 +531,19 @@ async fn main() -> ExitCode {
                 clap_error_to_exit_code(&e)
             }
         }
-        Ok(args) => match run_command(cwd.clone(), args, raw_subcommand.as_deref()).await {
-            Ok(exit_status) => exit_status_to_exit_code(exit_status),
-            Err(e) => {
-                if e.is_user_message() {
-                    output::raw_stderr(&format!("{e}"));
-                } else {
-                    output::error(&format!("{e}"));
+        Ok(args) => {
+            match run_command(cwd.clone(), args, raw_subcommand.as_deref(), explicit_chdir).await {
+                Ok(exit_status) => exit_status_to_exit_code(exit_status),
+                Err(e) => {
+                    if e.is_user_message() {
+                        output::raw_stderr(&format!("{e}"));
+                    } else {
+                        output::error(&format!("{e}"));
+                    }
+                    ExitCode::FAILURE
                 }
-                ExitCode::FAILURE
             }
-        },
+        }
     };
 
     // A command never consumes a notice produced by the helper it just spawned.

@@ -1,11 +1,10 @@
 //! Target elicitation for bare app commands at a workspace root.
 //!
 //! A bare `vp dev`/`build`/`preview`/`pack` at a workspace root has no target
-//! and would silently run against the root. Resolution order (rfcs/cwd-flag.md):
-//! explicit `-C` and positional targets are handled before this code and skip
-//! elicitation entirely; then `defaultPackage` from the config in the
-//! invocation directory, then the interactive package picker (a package
-//! listing plus exit 1 when the terminal is not interactive).
+//! and would silently run against the root. Explicit `-C` and any subcommand
+//! arguments skip target selection. An exact bare command uses
+//! `defaultPackage`, a root intent signal, or the package picker. See
+//! rfcs/cwd-flag.md.
 
 use vp_error::Error;
 use vp_shared::{env_vars, output};
@@ -29,7 +28,7 @@ struct PackageRow {
     name: vt_str::Str,
     path: vt_str::Str,
     absolute: AbsolutePathBuf,
-    runnable: bool,
+    likely_runnable: bool,
 }
 
 /// App commands are the single-target subcommands; everything else never
@@ -44,155 +43,42 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
     }
 }
 
-/// Boolean flags of the Vite CLI (dev/build/preview), from the shipped
-/// `vp <command> --help` (snap-tests/command-helper); keep in sync. Under
-/// cac/mri parsing every OTHER flag — required-value, optional-value
-/// (`--host [host]`), or unknown — consumes a following non-flag token as
-/// its value, so only tokens no flag consumes are positional targets.
-const VITE_BOOLEAN_FLAGS: &[&str] = &[
-    "-w",
-    "--watch",
-    "--app",
-    "--clearScreen",
-    "--cors",
-    "--emptyOutDir",
-    "--experimentalBundle",
-    "--force",
-    "--profile",
-    "--strictPort",
-];
-
-/// Boolean flags of the bundled pack CLI (tsdown), from `vp pack --help`.
-const PACK_BOOLEAN_FLAGS: &[&str] = &[
-    "--attw",
-    "--clean",
-    "--devtools",
-    "--dts",
-    "--exe",
-    "--exports",
-    "--fail-on-warn",
-    "--failOnWarn",
-    "--minify",
-    "--no-write",
-    "--publint",
-    "--report",
-    "--shims",
-    "--sourcemap",
-    "--treeshake",
-    "--unbundle",
-    "--unused",
-];
-
-/// How an app command's arguments target it, per the walk in
-/// [`classify_args`].
-enum ArgTarget<'a> {
-    /// No positional target and no help-like flag: elicitation territory.
-    Bare,
-    /// The first token the tool would treat as a positional (a Vite `[root]`
-    /// or a pack entry), including one after a `--` terminator.
-    Positional(&'a str),
-    /// Explicitly targeted without a positional (help/version request, an
-    /// explicit `-c`/`--config` file, pack workspace selectors): forward
-    /// untouched.
-    Explicit,
-}
-
-/// Bare = no positional target and no help-like flag.
-fn is_bare(command: &str, args: &[String]) -> bool {
-    matches!(classify_args(command, args), ArgTarget::Bare)
-}
-
-/// Mirrors the tools' own cac/mri parsing: a non-flag token after any
-/// non-boolean flag is that flag's value (the tool would never see it as a
-/// positional), while a token after a boolean flag is a positional target
-/// and disables elicitation. pack's workspace selectors already define their
-/// own target set and disable elicitation outright. Help/version requests
-/// are answered by the underlying tool and must never be redirected.
-fn classify_args<'a>(command: &str, args: &'a [String]) -> ArgTarget<'a> {
-    /// `arg` is one of `flags`, exactly or in inline `flag=value` form.
-    fn matches_flag(arg: &str, flags: &[&str]) -> bool {
-        flags.iter().any(|f| arg == *f || arg.strip_prefix(f).is_some_and(|r| r.starts_with('=')))
-    }
-
-    let is_pack = command == "pack";
-    let booleans = if is_pack { PACK_BOOLEAN_FLAGS } else { VITE_BOOLEAN_FLAGS };
-    let mut iter = args.iter().peekable();
-    while let Some(arg) = iter.next() {
-        if !arg.starts_with('-') {
-            return ArgTarget::Positional(arg);
-        }
-        if super::help::is_app_tool_help_or_version_flag(arg) {
-            return ArgTarget::Explicit;
-        }
-        // `--` terminates options: whatever follows is an explicit positional.
-        if arg == "--" {
-            return match iter.next() {
-                Some(token) => ArgTarget::Positional(token),
-                None => ArgTarget::Bare,
-            };
-        }
-        // An explicit config file (`-c`/`--config`) is explicit build intent:
-        // forward it to the tool instead of eliciting a package to override it.
-        if matches_flag(arg, &["-c", "--config"]) {
-            return ArgTarget::Explicit;
-        }
-        // Workspace selectors and --root already specify pack's target;
-        // these previously-valid targeted invocations must keep forwarding.
-        if is_pack && matches_flag(arg, &["-W", "--workspace", "-F", "--filter", "--root"]) {
-            return ArgTarget::Explicit;
-        }
-        let is_boolean = booleans.contains(&arg.as_str()) || arg.starts_with("--no-");
-        // An inline `=` already carries the value (`--port=3000`, `--env.FOO=bar`).
-        if !is_boolean
-            && !arg.contains('=')
-            && iter.peek().is_some_and(|next| !next.starts_with('-'))
-        {
-            iter.next();
-        }
-    }
-    ArgTarget::Bare
-}
-
-/// Heuristic ranking signal: does a directory look runnable for `command`?
-/// Used for ordering and single-candidate auto-selection, never for hiding.
-/// The rules are documented in rfcs/cwd-flag.md ("The likely-runnable
-/// heuristic"); keep both in sync. Two variants because the workspace root
-/// needs a stronger signal than member packages: a shared root
-/// `vite.config.ts` (lint/fmt/tasks) is the normal monorepo setup and must
-/// not make the root look like an app, or auto-select would run the silent
-/// root build this feature exists to prevent.
+/// Does the workspace root have an intent signal for this app command?
+/// This signal selects the root. It does not prove that the command succeeds.
+/// The `defaultPackage` lookup passes the config that [`classify`] already
+/// resolved, so Vite+ reads and parses the file only once for each command.
 ///
-/// Root variant. Takes the root config [`classify`] already resolved for the
-/// `defaultPackage` lookup, so the file is read and parsed once per
-/// invocation. A declared `build` block (a library/SSR build with no entry
-/// HTML) makes the root a target for `vp build` only: dev/preview serve an
-/// app, for which the signal is a root `index.html`. A shared root config
-/// for lint/fmt/tasks declares neither, so it never makes the root a target.
-fn root_looks_runnable(
+/// A declared field is sufficient. Vite reports invalid values after the
+/// command starts. Dev, build, and preview use the same union of configuration
+/// and source `index.html` signals.
+fn root_has_intent_signal(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
 ) -> bool {
-    match command {
-        // Bare `vp pack` succeeds when tsdown's default entry exists or the
-        // config explicitly declares a `pack` block (a spread that only
-        // might contain `pack` does not count: auto-select acts on this
-        // signal, so a false positive runs tsdown in a non-packable package).
-        "pack" => {
-            dir.as_path().join("src/index.ts").is_file() || config.get_declared("pack").is_some()
-        }
-        "build" => {
-            dir.as_path().join("index.html").is_file() || config.get_declared("build").is_some()
-        }
-        _ => dir.as_path().join("index.html").is_file(),
+    // Bare `vp pack` accepts tsdown's default entry or a declared `pack` block.
+    // A spread that might contain `pack` does not declare the block. A false
+    // positive would run tsdown in a package that it cannot pack.
+    if command == "pack" {
+        return dir.as_path().join("src/index.ts").is_file()
+            || config.get_declared("pack").is_some();
     }
+
+    let config_fields = ["root", "build", "input", "environments", "appType"];
+    if config_fields.iter().any(|field| config.get_declared(field).is_some()) {
+        return true;
+    }
+
+    dir.as_path().join("index.html").is_file()
 }
 
-/// Member variant of the likely-runnable heuristic; see
-/// [`root_looks_runnable`]. Resolves the member's own config lazily: this
-/// executes per workspace package, and for `pack` the one-stat entry check
-/// runs first because the config check reads and parses a file.
-fn member_looks_runnable(dir: &AbsolutePath, command: &str) -> bool {
+/// Member ranking heuristic. It orders picker rows and can auto-select one
+/// member, but it never hides a member. This check differs from the root intent
+/// signal. A shared root `vite.config.ts` is normal monorepo configuration and
+/// does not by itself select the root. Resolve each member config lazily. For
+/// `pack`, check the default entry first because config extraction reads and
+/// parses a file.
+fn member_is_likely_runnable(dir: &AbsolutePath, command: &str) -> bool {
     match command {
         "pack" => {
             dir.as_path().join("src/index.ts").is_file()
@@ -307,7 +193,7 @@ fn emit_milestone_title(name: &str) {
 /// which case the script merely spawns the real binary, which then behaves
 /// identically to a direct invocation.
 pub(super) fn needs_elicitation(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> bool {
-    matches!(classify(subcommand, cwd), Classification::Elicit(..))
+    matches!(classify(subcommand, cwd, false), Classification::Elicit(..))
 }
 
 /// Outcome of classifying a bare app command.
@@ -350,28 +236,33 @@ fn default_package_for_command(
     }
 }
 
-/// The RFC's resolution order, written once for both entry points: bare app
-/// command, then `defaultPackage` at the invocation root, then the workspace
+/// The RFC's resolution order, written once for both entry points. An explicit
+/// `-C` or any subcommand argument runs in place. An exact bare app command
+/// then uses `defaultPackage` at the invocation root or checks the workspace
 /// root itself. `defaultPackage` is a root-pointer concept: it applies where
 /// the invocation directory is its own root (a workspace root, a standalone
-/// package, or a framework directory with no package.json ancestry); below a
-/// workspace root the current directory already identifies the target, so a
-/// member's own config must not redirect.
+/// package, or a framework directory with no package.json ancestry). Below a
+/// workspace root, the current directory identifies the target. A member's
+/// own config must not redirect.
 ///
 /// The one `find_workspace_root` walk here rides back out on
 /// [`Classification::RunInPlace`] whenever the command ends up running in
 /// `cwd`, so a bare command in a sub-package walks the tree once, not twice.
-fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classification {
+fn classify(
+    subcommand: &SynthesizableSubcommand,
+    cwd: &AbsolutePath,
+    explicit_chdir: bool,
+) -> Classification {
     let Some((command, args)) = app_command_parts(subcommand) else {
         return Classification::RunInPlace(None);
     };
-    if !is_bare(command, args) {
+    if explicit_chdir || !args.is_empty() {
         return Classification::RunInPlace(None);
     }
     let workspace = vt_workspace::find_workspace_root(cwd);
     let at_invocation_root =
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
-    // Resolved once and reused by `root_looks_runnable` below, so a bare
+    // Resolved once and reused by `root_has_intent_signal` below, so a bare
     // command at a root reads and parses the config a single time.
     let root_config = at_invocation_root.then(|| vp_static_config::resolve_static_config(cwd));
     if let Some(value) = root_config
@@ -391,55 +282,32 @@ fn classify(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> Classif
     {
         return Classification::RunInPlace(Some(workspace_root));
     }
-    // A runnable workspace root runs in place, TTY or not: the invocation
-    // already has its configured target, and repos whose root is the app or
-    // library (e.g. a single package with a settings-only pnpm-workspace.yaml)
-    // ran this way before elicitation existed. Eliciting only when the root
-    // is not a plausible target is what keeps this feature purely additive.
+    // A workspace root with an intent signal runs in place, TTY or not. The
+    // invocation already identifies its configured target. This keeps the
+    // existing behavior for repos whose root is the app or library, including
+    // a single package with a settings-only pnpm-workspace.yaml.
     // An empty `rel_from_root` means the invocation is at the root, so the
     // config resolved above is present; degrade to running in place rather
     // than panic if that invariant ever breaks.
     let Some(root_config) = root_config else {
         return Classification::RunInPlace(Some(workspace_root));
     };
-    if root_looks_runnable(&root_config, &workspace_root.path, command) {
+    if root_has_intent_signal(&root_config, &workspace_root.path, command) {
         return Classification::RunInPlace(Some(workspace_root));
     }
     Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))
 }
 
-/// One-line guidance when a dev/build/preview positional names a directory:
-/// the positional keeps upstream Vite semantics (`root` only, cwd untouched),
-/// which diverges from `-C` exactly when the target is a directory, so this
-/// is the moment to teach the `cd`-equivalent form. pack positionals are
-/// tsdown entry files and never directories, so pack is excluded. Direct
-/// invocations only: the task-script interception path never reaches
-/// [`resolve_app_target`], keeping task output clean.
-fn note_directory_positional(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) {
-    let Some((command, args)) = app_command_parts(subcommand) else { return };
-    if command == "pack" {
-        return;
-    }
-    if let ArgTarget::Positional(target) = classify_args(command, args)
-        && cwd.join(target).clean().as_path().is_dir()
-    {
-        output::note(&format!(
-            "`vp {command} {target}` sets Vite's root without changing the working directory. \
-             To run as if started there, use `vp -C {target} {command}`."
-        ));
-    }
-}
-
-/// Resolve a bare app command's target. The second tuple element is the
-/// workspace root already found for `cwd`, present only when the command runs
-/// in the unchanged `cwd` (so it always matches a fresh lookup there); the
-/// caller reuses it to skip a second `find_workspace_root` walk.
+/// Resolve an app command's target. The second tuple element is the workspace
+/// root already found for `cwd`. It is present only when the command runs in
+/// the unchanged `cwd`, so it matches a fresh lookup there. The caller reuses
+/// it to skip a second `find_workspace_root` walk.
 pub(super) fn resolve_app_target(
     subcommand: &SynthesizableSubcommand,
     cwd: &AbsolutePath,
+    explicit_chdir: bool,
 ) -> Result<(AppTarget, Option<vt_workspace::WorkspaceRoot>), Error> {
-    note_directory_positional(subcommand, cwd);
-    let (command, elicitation) = match classify(subcommand, cwd) {
+    let (command, elicitation) = match classify(subcommand, cwd, explicit_chdir) {
         Classification::RunInPlace(workspace_root) => {
             return Ok((AppTarget::CurrentDir, workspace_root));
         }
@@ -454,36 +322,49 @@ pub(super) fn resolve_app_target(
 
     let graph =
         vt_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
+    let mut root_row = None;
     let mut rows: Vec<PackageRow> = graph
         .node_weights()
-        .filter(|info| {
-            // The root is never a row: when it looks runnable, classify
-            // already ran the command in place instead of eliciting.
-            !info.path.as_str().is_empty()
-        })
-        .map(|info| {
+        .filter_map(|info| {
             let absolute = info.absolute_path.to_absolute_path_buf();
-            PackageRow {
-                name: info.package_json.name.clone(),
-                path: vt_str::Str::from(info.path.as_str()),
-                runnable: member_looks_runnable(&absolute, command),
-                absolute,
+            if info.path.as_str().is_empty() {
+                root_row = Some(PackageRow {
+                    name: info.package_json.name.clone(),
+                    path: vt_str::Str::from("."),
+                    absolute,
+                    likely_runnable: false,
+                });
+                None
+            } else {
+                Some(PackageRow {
+                    name: info.package_json.name.clone(),
+                    path: vt_str::Str::from(info.path.as_str()),
+                    likely_runnable: member_is_likely_runnable(&absolute, command),
+                    absolute,
+                })
             }
         })
         .collect();
-    if rows.is_empty() {
-        // Root excluded and no members: runs in place, and the root we found
-        // is still valid for the unchanged cwd.
-        return Ok((AppTarget::CurrentDir, Some(workspace_root)));
-    }
-    rows.sort_by(|a, b| (!a.runnable, a.path.as_str()).cmp(&(!b.runnable, b.path.as_str())));
+    rows.sort_by(|a, b| {
+        (!a.likely_runnable, a.path.as_str()).cmp(&(!b.likely_runnable, b.path.as_str()))
+    });
+    let single_likely_runnable_member = rows.first().is_some_and(|row| row.likely_runnable)
+        && rows.get(1).is_none_or(|row| !row.likely_runnable);
+    rows.push(root_row.unwrap_or_else(|| PackageRow {
+        name: vt_str::Str::from("workspace root"),
+        path: vt_str::Str::from("."),
+        absolute: workspace_root.path.to_absolute_path_buf(),
+        likely_runnable: false,
+    }));
 
     // In an interactive terminal, pick the target: exactly one likely-runnable
-    // package (rows are sorted runnable first) auto-selects without a menu;
-    // otherwise the fuzzy picker runs.
+    // member auto-selects without a menu. The root fallback does not count.
     if vp_shared::is_interactive_terminal() {
-        let single_runnable = rows[0].runnable && rows.get(1).is_none_or(|row| !row.runnable);
-        let picked = if single_runnable { Some(0) } else { run_package_picker(command, &rows)? };
+        let picked = if single_likely_runnable_member {
+            Some(0)
+        } else {
+            run_package_picker(command, &rows)?
+        };
         let Some(index) = picked else {
             return Ok((AppTarget::Exit(ExitStatus(130)), None));
         };
@@ -511,75 +392,72 @@ pub(super) fn resolve_app_target(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]
-    fn bare_means_no_positional_target_and_no_help() {
-        let to_args = |args: &[&str]| args.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        assert!(is_bare("dev", &to_args(&[])));
-        assert!(is_bare("dev", &to_args(&["--watch"])));
-        assert!(is_bare("build", &to_args(&["-w", "--minify"])));
-        // A positional target disables elicitation.
-        assert!(!is_bare("dev", &to_args(&["apps/web"])));
-        // Like cac, any non-boolean flag consumes a following non-flag token
-        // as its value — required and optional values alike.
-        assert!(is_bare("dev", &to_args(&["--port", "3000"])));
-        assert!(is_bare("dev", &to_args(&["--host", "0.0.0.0"])));
-        assert!(is_bare("dev", &to_args(&["--open", "/foo"])));
-        assert!(is_bare("build", &to_args(&["--mode", "production", "--minify"])));
-        assert!(is_bare("build", &to_args(&["--port=3000"])));
-        assert!(is_bare("pack", &to_args(&["--env-file", ".env"])));
-        assert!(is_bare("pack", &to_args(&["--env.FOO=bar", "--minify"])));
-        // A token after a boolean flag is a positional; the tables are
-        // command-specific (--minify is optional-value for Vite build,
-        // boolean for pack).
-        assert!(!is_bare("build", &to_args(&["--watch", "apps/web"])));
-        assert!(!is_bare("pack", &to_args(&["--minify", "src/index.ts"])));
-        assert!(!is_bare("pack", &to_args(&["--env.FOO", "bar", "src/cli.ts"])));
-        assert!(is_bare("build", &to_args(&["--minify", "esbuild"])));
-        // pack workspace selectors define their own target set, in both the
-        // spaced and inline-value forms.
-        assert!(!is_bare("pack", &to_args(&["-W"])));
-        assert!(!is_bare("pack", &to_args(&["--workspace", "packages/a"])));
-        assert!(!is_bare("pack", &to_args(&["-F", "ui"])));
-        assert!(!is_bare("pack", &to_args(&["--filter=ui"])));
-        assert!(!is_bare("pack", &to_args(&["--workspace=packages/a"])));
-        assert!(!is_bare("pack", &to_args(&["--root", "packages/lib"])));
-        assert!(!is_bare("pack", &to_args(&["--root=packages/lib"])));
-        // An explicit config file is an explicit target (build and pack).
-        assert!(!is_bare("build", &to_args(&["-c", "apps/web/vite.config.ts"])));
-        assert!(!is_bare("build", &to_args(&["--config", "apps/web/vite.config.ts"])));
-        assert!(!is_bare("build", &to_args(&["--config=apps/web/vite.config.ts"])));
-        assert!(!is_bare("preview", &to_args(&["-c", "x.ts"])));
-        assert!(!is_bare("pack", &to_args(&["-c", "tsdown.config.ts"])));
-        // `--` terminates options; a token after it is an explicit positional.
-        assert!(!is_bare("build", &to_args(&["--", "apps/web"])));
-        assert!(!is_bare("pack", &to_args(&["--minify", "--", "src/index.ts"])));
-        assert!(is_bare("build", &to_args(&["--"])));
-        // Help/version requests go to the underlying tool, never elicitation.
-        assert!(!is_bare("dev", &to_args(&["--help"])));
-        assert!(!is_bare("dev", &to_args(&["-h"])));
-        assert!(!is_bare("build", &to_args(&["--watch", "--version"])));
-        // Vite and tsdown are cac-based and use `-v` for version.
-        assert!(!is_bare("build", &to_args(&["-v"])));
+    fn vite_commands_share_root_intent_signals() {
+        let temp = tempfile::tempdir().expect("temporary directory should exist");
+        let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
+
+        for field in ["root", "build", "input", "environments", "appType"] {
+            fs::write(
+                temp.path().join("vite.config.ts"),
+                format!("const value = {{}}; export default {{ {field}: value }};"),
+            )
+            .expect("config should be written");
+            let config = vp_static_config::resolve_static_config(&dir);
+
+            for command in ["dev", "build", "preview"] {
+                assert!(
+                    root_has_intent_signal(&config, &dir, command),
+                    "{field} should express root intent for {command}"
+                );
+            }
+        }
     }
 
     #[test]
-    fn classify_args_reports_the_positional_token() {
-        let to_args = |args: &[&str]| args.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        let positional = |command: &str, args: &[&str]| match classify_args(command, &to_args(args))
-        {
-            ArgTarget::Positional(token) => Some(token.to_string()),
-            _ => None,
-        };
-        assert_eq!(positional("dev", &["apps/web"]), Some("apps/web".to_string()));
-        assert_eq!(positional("build", &["--watch", "apps/web"]), Some("apps/web".to_string()));
-        assert_eq!(positional("build", &["--", "apps/web"]), Some("apps/web".to_string()));
-        // A value-consuming flag swallows the token: not a positional.
-        assert_eq!(positional("dev", &["--port", "3000"]), None);
-        // Help and explicit-config invocations are Explicit, not positional.
-        assert!(matches!(classify_args("dev", &to_args(&["--help"])), ArgTarget::Explicit));
-        assert!(matches!(classify_args("build", &to_args(&["-c", "x.ts"])), ArgTarget::Explicit));
+    fn vite_commands_share_the_source_index_signal() {
+        let temp = tempfile::tempdir().expect("temporary directory should exist");
+        let dir = AbsolutePathBuf::new(temp.path().to_path_buf()).expect("path should be absolute");
+        fs::write(temp.path().join("index.html"), "").expect("index should be written");
+        let config = vp_static_config::resolve_static_config(&dir);
+
+        for command in ["dev", "build", "preview"] {
+            assert!(root_has_intent_signal(&config, &dir, command));
+        }
+
+        fs::remove_file(temp.path().join("index.html")).expect("source index should be removed");
+        fs::create_dir(temp.path().join("dist")).expect("output directory should be created");
+        fs::write(temp.path().join("dist/index.html"), "").expect("output index should be written");
+
+        for command in ["dev", "build", "preview"] {
+            assert!(!root_has_intent_signal(&config, &dir, command));
+        }
+    }
+
+    #[test]
+    fn arguments_and_explicit_chdir_run_in_place() {
+        let cwd = AbsolutePathBuf::new(std::env::current_dir().expect("cwd should exist"))
+            .expect("cwd should be absolute");
+        let commands = [
+            SynthesizableSubcommand::Build { args: vec!["--watch".into()] },
+            SynthesizableSubcommand::Build { args: vec!["--ssr".into()] },
+            SynthesizableSubcommand::Build { args: vec!["apps/web".into()] },
+            SynthesizableSubcommand::Dev { args: vec!["--host".into()] },
+            SynthesizableSubcommand::Preview { args: vec!["--help".into()] },
+            SynthesizableSubcommand::Pack { args: vec!["--root".into(), "src".into()] },
+        ];
+
+        for command in &commands {
+            assert!(matches!(classify(command, &cwd, false), Classification::RunInPlace(None)));
+        }
+        assert!(matches!(
+            classify(&SynthesizableSubcommand::Build { args: vec![] }, &cwd, true),
+            Classification::RunInPlace(None)
+        ));
     }
 
     #[test]
