@@ -6,12 +6,11 @@ a non-interactive terminal.
 
 ## `vp build`
 
-```
-transforming...
-✓ 2 modules transformed.
-rendering chunks...
-computing gzip size...
-dist/assets/index-<hash>.js  <size> kB │ gzip: <size> kB
 
-✓ built in <duration>
+## `vpt list-dir dist/assets`
+
+build output stays in the root workspace
+
+```
+index-<hash>.js
 ```
