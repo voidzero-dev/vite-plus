@@ -88,7 +88,12 @@ struct CreateCliArgs {
     #[usage(long = "no-hooks", var, overrides("hooks"), help = "Skip pre-commit hooks setup")]
     no_hooks: bool,
 
-    #[usage(long, value_name = "pnpm|npm|yarn|bun", help = "Use the specified package manager")]
+    #[usage(
+        long,
+        value_name = "pnpm|npm|yarn|bun",
+        choices("pnpm", "npm", "yarn", "bun"),
+        help = "Use the specified package manager"
+    )]
     package_manager: Option<PackageManager>,
 
     #[usage(long, help = "Approve and run gated dependency build scripts without prompting")]
@@ -117,6 +122,10 @@ struct CreateCliArgs {
         help = "Arguments passed to the template without changes"
     )]
     template_args: Vec<String>,
+}
+
+pub(super) fn spec() -> &'static usage_rs::spec::Spec<'static> {
+    CreateCliArgs::spec()
 }
 
 impl CliParser for CreateCliArgs {
@@ -319,7 +328,9 @@ mod tests {
 
         let error = parse_error(&["--package-manager", "deno"]);
         assert_eq!(error.kind, "invalid-value");
-        assert!(error.message.contains(PACKAGE_MANAGER_ERROR));
+        for package_manager in ["pnpm", "npm", "yarn", "bun"] {
+            assert!(error.message.contains(package_manager), "{}", error.message);
+        }
     }
 
     #[test]

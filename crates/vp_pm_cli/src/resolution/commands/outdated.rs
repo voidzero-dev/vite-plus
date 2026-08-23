@@ -3,6 +3,8 @@ use std::str::FromStr;
 use cow_utils::CowUtils as _;
 use vp_pm_cli_macros::pm_args;
 
+use super::PositiveUsize;
+#[cfg(feature = "clap-parser")]
 use super::parse_positive_usize;
 use crate::resolution::{
     Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
@@ -46,7 +48,9 @@ impl std::fmt::Display for OutdatedFormat {
 }
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OutdatedArgs {
     /// Package name(s) to check
     pub(crate) packages: Vec<String>,
@@ -97,7 +101,7 @@ pub struct OutdatedArgs {
 
     /// Number of global package checks to run in parallel (only with -g)
     #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-    pub(crate) concurrency: Option<usize>,
+    pub(crate) concurrency: Option<PositiveUsize>,
 
     /// Additional arguments to pass through to the package manager
     #[arg(last = true, allow_hyphen_values = true)]
@@ -233,7 +237,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{ParseErrorKind, bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn outdated_args(packages: &[&str]) -> OutdatedArgs {
@@ -254,21 +258,21 @@ mod tests {
     fn format_parser_rejects_unknown_value() {
         let error = parse_args::<OutdatedArgs>(["--format", "yaml"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+        assert_eq!(error.kind(), ParseErrorKind::ValueValidation);
     }
 
     #[test]
     fn concurrency_requires_global() {
         let error = parse_args::<OutdatedArgs>(["--concurrency", "2"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        assert_eq!(error.kind(), ParseErrorKind::MissingRequiredArgument);
     }
 
     #[test]
     fn concurrency_rejects_zero() {
         let error = parse_args::<OutdatedArgs>(["-g", "--concurrency", "0"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+        assert_eq!(error.kind(), ParseErrorKind::ValueValidation);
     }
 
     #[test]

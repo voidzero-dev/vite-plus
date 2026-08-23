@@ -1,11 +1,9 @@
-//! Typed clap surface for every package-manager command.
+//! Typed parser surface for every package-manager command.
 //!
 //! [`PackageManagerCommand`] is flattened into both the global CLI and the
 //! local NAPI CLI. Each variant owns the same typed argument value that is
 //! later diagnosed and resolved for the detected package manager. There is no
-//! parser-to-options compatibility layer between clap and dispatch.
-
-use clap::Subcommand;
+//! parser-to-options compatibility layer between parsing and dispatch.
 
 use crate::{
     Error, PackageManager, PackageManagerType,
@@ -23,21 +21,32 @@ use crate::{
 ///
 /// The variants intentionally hold the production resolver argument types
 /// directly. Aliases match the existing public `vp` command surface.
-#[derive(Subcommand, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PackageManagerCommand {
     /// Install all dependencies, or add packages if package names are provided
-    #[command(visible_alias = "i")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "i"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "i"))]
     Install(InstallArgs),
 
     /// Add packages to dependencies
     Add(AddArgs),
 
     /// Remove packages from dependencies
-    #[command(visible_alias = "rm", visible_alias = "un", visible_alias = "uninstall")]
+    #[cfg_attr(
+        feature = "clap-parser",
+        command(visible_alias = "rm", visible_alias = "un", visible_alias = "uninstall")
+    )]
+    #[cfg_attr(
+        feature = "usage-parser",
+        usage(visible_alias = "rm", visible_alias = "un", visible_alias = "uninstall")
+    )]
     Remove(RemoveArgs),
 
     /// Update packages to their latest versions
-    #[command(visible_alias = "up")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "up"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "up"))]
     Update(UpdateArgs),
 
     /// Deduplicate dependencies
@@ -47,15 +56,18 @@ pub enum PackageManagerCommand {
     Outdated(OutdatedArgs),
 
     /// Show why a package is installed
-    #[command(visible_alias = "explain")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "explain"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "explain"))]
     Why(WhyArgs),
 
     /// View package information from the registry
-    #[command(visible_alias = "view", visible_alias = "show")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "view", visible_alias = "show"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "view", visible_alias = "show"))]
     Info(ViewArgs),
 
     /// Link packages for local development
-    #[command(visible_alias = "ln")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "ln"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "ln"))]
     Link(LinkArgs),
 
     /// Unlink packages
@@ -65,18 +77,38 @@ pub enum PackageManagerCommand {
     Dlx(DlxArgs),
 
     /// Forward a command to the package manager
-    #[command(subcommand)]
-    Pm(PmCommand),
+    Pm {
+        #[cfg_attr(feature = "clap-parser", command(subcommand))]
+        #[cfg_attr(feature = "usage-parser", usage(subcommand))]
+        command: PmCommand,
+    },
+}
+
+/// The package-manager parser used by the local NAPI CLI.
+#[cfg(feature = "usage-parser")]
+#[derive(Debug, usage_rs::Cli)]
+#[usage(
+    bin = "vp",
+    unknown_flags = "error",
+    args_override_self = false,
+    disable_help_subcommand = true
+)]
+pub struct PackageManagerCli {
+    #[usage(subcommand)]
+    pub command: PackageManagerCommand,
 }
 
 /// Commands nested below `vp pm`.
-#[derive(Subcommand, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PmCommand {
     /// Clean install dependencies for CI environments
     Ci(CiArgs),
 
     /// Approve dependency lifecycle scripts (install/postinstall) to run
-    #[command(name = "approve-builds")]
+    #[cfg_attr(feature = "clap-parser", command(name = "approve-builds"))]
+    #[cfg_attr(feature = "usage-parser", usage(name = "approve-builds"))]
     ApproveBuilds(ApproveBuildsArgs),
 
     /// Remove unnecessary packages
@@ -86,18 +118,21 @@ pub enum PmCommand {
     Patch(PatchArgs),
 
     /// Commit a prepared package patch
-    #[command(name = "patch-commit")]
+    #[cfg_attr(feature = "clap-parser", command(name = "patch-commit"))]
+    #[cfg_attr(feature = "usage-parser", usage(name = "patch-commit"))]
     PatchCommit(PatchCommitArgs),
 
     /// Create a tarball of the package
     Pack(PackArgs),
 
     /// List installed packages
-    #[command(visible_alias = "ls")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "ls"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "ls"))]
     List(ListArgs),
 
     /// View package information from the registry
-    #[command(visible_alias = "info", visible_alias = "show")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "info", visible_alias = "show"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "info", visible_alias = "show"))]
     View(ViewArgs),
 
     /// Forward the native package version command
@@ -107,22 +142,36 @@ pub enum PmCommand {
     Publish(PublishArgs),
 
     /// Stage a package for publishing (npm staged publishing workflow)
-    #[command(subcommand)]
-    Stage(StageCommand),
+    Stage {
+        #[cfg_attr(feature = "clap-parser", command(subcommand))]
+        #[cfg_attr(feature = "usage-parser", usage(subcommand))]
+        command: StageCommand,
+    },
 
     /// Manage package owners
-    #[command(subcommand, visible_alias = "author")]
-    Owner(OwnerCommand),
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "author"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "author"))]
+    Owner {
+        #[cfg_attr(feature = "clap-parser", command(subcommand))]
+        #[cfg_attr(feature = "usage-parser", usage(subcommand))]
+        command: OwnerCommand,
+    },
 
     /// Manage package cache
     Cache(CacheArgs),
 
     /// Manage package manager configuration
-    #[command(subcommand, visible_alias = "c")]
-    Config(ConfigCommand),
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "c"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "c"))]
+    Config {
+        #[cfg_attr(feature = "clap-parser", command(subcommand))]
+        #[cfg_attr(feature = "usage-parser", usage(subcommand))]
+        command: ConfigCommand,
+    },
 
     /// Log in to a registry
-    #[command(visible_alias = "adduser")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "adduser"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "adduser"))]
     Login(LoginArgs),
 
     /// Log out from a registry
@@ -132,15 +181,23 @@ pub enum PmCommand {
     Whoami(WhoamiArgs),
 
     /// Manage authentication tokens
-    #[command(subcommand)]
-    Token(TokenCommand),
+    Token {
+        #[cfg_attr(feature = "clap-parser", command(subcommand))]
+        #[cfg_attr(feature = "usage-parser", usage(subcommand))]
+        command: TokenCommand,
+    },
 
     /// Run a security audit
     Audit(AuditArgs),
 
     /// Manage distribution tags
-    #[command(name = "dist-tag", subcommand)]
-    DistTag(DistTagCommand),
+    #[cfg_attr(feature = "clap-parser", command(name = "dist-tag"))]
+    #[cfg_attr(feature = "usage-parser", usage(name = "dist-tag"))]
+    DistTag {
+        #[cfg_attr(feature = "clap-parser", command(subcommand))]
+        #[cfg_attr(feature = "usage-parser", usage(subcommand))]
+        command: DistTagCommand,
+    },
 
     /// Deprecate a package version
     Deprecate(DeprecateArgs),
@@ -149,7 +206,8 @@ pub enum PmCommand {
     Search(SearchArgs),
 
     /// Rebuild native modules
-    #[command(visible_alias = "rb")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "rb"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "rb"))]
     Rebuild(RebuildArgs),
 
     /// Show funding information for installed packages
@@ -161,7 +219,7 @@ pub enum PmCommand {
 
 /// A package-manager command handled by Vite+'s managed global-package store.
 ///
-/// This borrowed projection keeps the clap argument layout private while
+/// This borrowed projection keeps the parser argument layout private while
 /// exposing the small set of values required by the global CLI dispatcher.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ManagedGlobalCommand<'a> {
@@ -194,7 +252,7 @@ pub enum ManagedGlobalCommand<'a> {
 }
 
 impl PackageManagerCommand {
-    /// Build a `dlx` command for callers that do not use the clap parser.
+    /// Build a `dlx` command for callers that do not use a CLI parser.
     #[must_use]
     pub fn dlx(package: Vec<String>, shell_mode: bool, silent: bool, args: Vec<String>) -> Self {
         Self::Dlx(DlxArgs { package, shell_mode, silent, args })
@@ -203,7 +261,7 @@ impl PackageManagerCommand {
     /// Resolve this parsed command for a detected package manager.
     ///
     /// `install <packages>` normalizes directly into [`AddArgs`]. This is the
-    /// only command whose typed clap shape selects between two resolvers.
+    /// only command whose typed parser shape selects between two resolvers.
     pub(crate) fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
         match self {
             Self::Install(args) if !args.packages.is_empty() => {
@@ -220,7 +278,7 @@ impl PackageManagerCommand {
             Self::Link(args) => resolve_args_for_manager(manager, args),
             Self::Unlink(args) => resolve_args_for_manager(manager, args),
             Self::Dlx(args) => resolve_args_for_manager(manager, args),
-            Self::Pm(command) => command.resolve_for_manager(manager),
+            Self::Pm { command } => command.resolve_for_manager(manager),
         }
     }
 
@@ -241,13 +299,13 @@ impl PackageManagerCommand {
                 packages: &args.packages,
                 node: args.node.as_deref(),
                 force: args.force,
-                concurrency: args.concurrency,
+                concurrency: args.concurrency.map(Into::into),
             }),
             Self::Add(args) if args.global => Some(ManagedGlobalCommand::Install {
                 packages: &args.packages,
                 node: args.node.as_deref(),
                 force: false,
-                concurrency: args.concurrency,
+                concurrency: args.concurrency.map(Into::into),
             }),
             Self::Remove(args) if args.global => Some(ManagedGlobalCommand::Remove {
                 packages: &args.packages,
@@ -256,7 +314,7 @@ impl PackageManagerCommand {
             Self::Update(args) if args.global => Some(ManagedGlobalCommand::Update {
                 packages: &args.packages,
                 latest: args.latest,
-                concurrency: args.concurrency,
+                concurrency: args.concurrency.map(Into::into),
                 reinstall_node_mismatch: args.reinstall_node_mismatch,
                 ignore_node_mismatch: args.ignore_node_mismatch,
             }),
@@ -264,12 +322,14 @@ impl PackageManagerCommand {
                 packages: &args.packages,
                 long: args.long,
                 format: args.format,
-                concurrency: args.concurrency,
+                concurrency: args.concurrency.map(Into::into),
             }),
-            Self::Pm(PmCommand::List(args)) if args.global => Some(ManagedGlobalCommand::List {
-                json: args.json,
-                pattern: args.pattern.as_deref(),
-            }),
+            Self::Pm { command: PmCommand::List(args) } if args.global => {
+                Some(ManagedGlobalCommand::List {
+                    json: args.json,
+                    pattern: args.pattern.as_deref(),
+                })
+            }
             _ => None,
         }
     }
@@ -286,7 +346,7 @@ impl PackageManagerCommand {
             }
             Self::Why(args) => args.is_machine_readable(),
             Self::Info(args) => args.json,
-            Self::Pm(command) => command.is_quiet_or_machine_readable(),
+            Self::Pm { command } => command.is_quiet_or_machine_readable(),
             _ => false,
         }
     }
@@ -346,16 +406,16 @@ impl PmCommand {
             Self::View(args) => resolve_args_for_manager(manager, args),
             Self::Version(args) => resolve_args_for_manager(manager, args),
             Self::Publish(args) => resolve_args_for_manager(manager, args),
-            Self::Stage(args) => resolve_args_for_manager(manager, args),
-            Self::Owner(args) => resolve_args_for_manager(manager, args),
+            Self::Stage { command } => resolve_args_for_manager(manager, command),
+            Self::Owner { command } => resolve_args_for_manager(manager, command),
             Self::Cache(args) => resolve_args_for_manager(manager, args),
-            Self::Config(args) => resolve_args_for_manager(manager, args),
+            Self::Config { command } => resolve_args_for_manager(manager, command),
             Self::Login(args) => resolve_args_for_manager(manager, args),
             Self::Logout(args) => resolve_args_for_manager(manager, args),
             Self::Whoami(args) => resolve_args_for_manager(manager, args),
-            Self::Token(args) => resolve_args_for_manager(manager, args),
+            Self::Token { command } => resolve_args_for_manager(manager, command),
             Self::Audit(args) => resolve_args_for_manager(manager, args),
-            Self::DistTag(args) => resolve_args_for_manager(manager, args),
+            Self::DistTag { command } => resolve_args_for_manager(manager, command),
             Self::Deprecate(args) => resolve_args_for_manager(manager, args),
             Self::Search(args) => resolve_args_for_manager(manager, args),
             Self::Rebuild(args) => resolve_args_for_manager(manager, args),
@@ -374,17 +434,17 @@ impl PmCommand {
             Self::Audit(args) => args.json,
             Self::Search(args) => args.json,
             Self::Fund(args) => args.json,
-            Self::Config(args) => match args {
+            Self::Config { command } => match command {
                 ConfigCommand::List { json, .. }
                 | ConfigCommand::Get { json, .. }
                 | ConfigCommand::Set { json, .. } => *json,
                 ConfigCommand::Delete { .. } => false,
             },
-            Self::Token(args) => match args {
+            Self::Token { command } => match command {
                 TokenCommand::List { json, .. } | TokenCommand::Create { json, .. } => *json,
                 TokenCommand::Revoke { .. } => false,
             },
-            Self::Stage(args) => match args {
+            Self::Stage { command } => match command {
                 StageCommand::Publish { json, .. }
                 | StageCommand::List { json, .. }
                 | StageCommand::View { json, .. } => *json,
@@ -399,16 +459,24 @@ impl PmCommand {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "clap-parser", not(feature = "usage-parser")))]
     use clap::{FromArgMatches, Subcommand};
 
     use super::*;
     use crate::{PackageManagerType, resolution::CommandResolution};
 
+    #[cfg(all(feature = "clap-parser", not(feature = "usage-parser")))]
     fn parse(args: &[&str]) -> Result<PackageManagerCommand, clap::Error> {
         let command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
         let matches =
             command.try_get_matches_from(std::iter::once("vp").chain(args.iter().copied()))?;
         PackageManagerCommand::from_arg_matches(&matches)
+    }
+
+    #[cfg(feature = "usage-parser")]
+    fn parse(args: &[&str]) -> Result<PackageManagerCommand, ()> {
+        let argv = args.iter().map(std::ffi::OsStr::new).collect::<Vec<_>>();
+        PackageManagerCli::parse_from(&argv).map(|cli| cli.command).map_err(|_| ())
     }
 
     fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
@@ -418,6 +486,16 @@ mod tests {
             version: version.into(),
             install_dir: workspace_root.join(".test-package-manager"),
         }
+    }
+
+    #[cfg(all(feature = "clap-parser", feature = "usage-parser"))]
+    #[test]
+    fn parser_features_can_coexist_in_a_workspace_build() {
+        fn has_clap_parser<T: clap::Subcommand>() {}
+        fn has_usage_parser<T: usage_rs::spec::Subcommands>() {}
+
+        has_clap_parser::<PackageManagerCommand>();
+        has_usage_parser::<PackageManagerCommand>();
     }
 
     #[test]
@@ -438,41 +516,51 @@ mod tests {
     fn parses_pm_aliases_and_nested_commands() {
         assert!(matches!(
             parse(&["pm", "ls"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::List(_))
+            PackageManagerCommand::Pm { command: PmCommand::List(_) }
         ));
         for alias in ["info", "show"] {
             assert!(matches!(
                 parse(&["pm", alias, "react"]).unwrap(),
-                PackageManagerCommand::Pm(PmCommand::View(_))
+                PackageManagerCommand::Pm { command: PmCommand::View(_) }
             ));
         }
         assert!(matches!(
             parse(&["pm", "author", "ls", "react"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Owner(OwnerCommand::List { .. }))
+            PackageManagerCommand::Pm {
+                command: PmCommand::Owner { command: OwnerCommand::List { .. } }
+            }
         ));
         assert!(matches!(
             parse(&["pm", "c", "list"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Config(ConfigCommand::List { .. }))
+            PackageManagerCommand::Pm {
+                command: PmCommand::Config { command: ConfigCommand::List { .. } }
+            }
         ));
         assert!(matches!(
             parse(&["pm", "adduser"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Login(_))
+            PackageManagerCommand::Pm { command: PmCommand::Login(_) }
         ));
         assert!(matches!(
             parse(&["pm", "rb"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Rebuild(_))
+            PackageManagerCommand::Pm { command: PmCommand::Rebuild(_) }
         ));
         assert!(matches!(
             parse(&["pm", "token", "ls"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Token(TokenCommand::List { .. }))
+            PackageManagerCommand::Pm {
+                command: PmCommand::Token { command: TokenCommand::List { .. } }
+            }
         ));
         assert!(matches!(
             parse(&["pm", "dist-tag", "ls"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::DistTag(DistTagCommand::List { .. }))
+            PackageManagerCommand::Pm {
+                command: PmCommand::DistTag { command: DistTagCommand::List { .. } }
+            }
         ));
         assert!(matches!(
             parse(&["pm", "stage", "ls"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Stage(StageCommand::List { .. }))
+            PackageManagerCommand::Pm {
+                command: PmCommand::Stage { command: StageCommand::List { .. } }
+            }
         ));
     }
 
@@ -480,10 +568,10 @@ mod tests {
     fn ci_parses_and_captures_pass_through_args() {
         assert!(matches!(
             parse(&["pm", "ci"]).unwrap(),
-            PackageManagerCommand::Pm(PmCommand::Ci(_))
+            PackageManagerCommand::Pm { command: PmCommand::Ci(_) }
         ));
 
-        let PackageManagerCommand::Pm(PmCommand::Ci(args)) =
+        let PackageManagerCommand::Pm { command: PmCommand::Ci(args) } =
             parse(&["pm", "ci", "--", "--ignore-scripts"]).unwrap()
         else {
             panic!("expected ci command");
@@ -723,7 +811,7 @@ mod tests {
             parse(&["pm", "version", "prerelease", "--json", "--", "--preid", "beta"]).unwrap();
 
         assert!(command.is_quiet_or_machine_readable());
-        let PackageManagerCommand::Pm(PmCommand::Version(args)) = command else {
+        let PackageManagerCommand::Pm { command: PmCommand::Version(args) } = command else {
             panic!("expected version command");
         };
         assert_eq!(args.new_version.as_deref(), Some("prerelease"));

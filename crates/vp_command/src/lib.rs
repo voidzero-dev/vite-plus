@@ -320,9 +320,10 @@ where
 
     let child = cmd.spawn(CancellationToken::new()).await.map_err(|e| Error::Anyhow(e.into()))?;
     let termination = child.wait_handle.await?;
+    let accesses = termination.path_accesses.map_err(|error| Error::Anyhow(error.into()))?;
 
     let mut path_accesses = HashMap::<RelativePathBuf, AccessMode>::new();
-    for access in termination.path_accesses.iter() {
+    for access in accesses.iter() {
         tracing::debug!("Path access: {:?}", access);
         let relative_path = access
             .path

@@ -6,10 +6,13 @@ use crate::resolution::{
 
 /// Owner subcommands.
 #[pm_args]
-#[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OwnerCommand {
     /// List package owners
-    #[command(visible_alias = "ls")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "ls"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "ls"))]
     List {
         /// Package name
         package: String,

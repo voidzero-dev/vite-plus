@@ -29,7 +29,8 @@ pub(super) async fn execute_exec_workspace(
     // Build the query from exec flags
     let fail_if_no_match = args.packages.fail_if_no_match;
     let cwd_arc: Arc<vt_path::AbsolutePath> = cwd.clone().into();
-    let (query, is_cwd_only) = match args.packages.into_package_query(None, &cwd_arc) {
+    let package_query = vt_workspace::package_filter::PackageQueryArgs::from(args.packages);
+    let (query, is_cwd_only) = match package_query.into_package_query(None, &cwd_arc) {
         Ok(result) => result,
         Err(e) => {
             vp_shared::output::error(&vt_str::format!("{e}"));

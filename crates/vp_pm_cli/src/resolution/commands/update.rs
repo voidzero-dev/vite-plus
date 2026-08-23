@@ -1,12 +1,16 @@
 use vp_pm_cli_macros::pm_args;
 
+use super::PositiveUsize;
+#[cfg(feature = "clap-parser")]
 use super::parse_positive_usize;
 use crate::resolution::{
     Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UpdateArgs {
     /// Update to latest version (ignore semver range)
     #[arg(short = 'L', long, not_supported(npm))]
@@ -18,7 +22,7 @@ pub struct UpdateArgs {
 
     /// Number of global package updates to run in parallel (only with -g)
     #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-    pub(crate) concurrency: Option<usize>,
+    pub(crate) concurrency: Option<PositiveUsize>,
 
     /// Reinstall up-to-date global packages installed with a different Node.js version
     #[arg(long, requires = "global")]
@@ -172,7 +176,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{ParseErrorKind, bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn update_args(packages: &[&str]) -> UpdateArgs {
@@ -186,14 +190,14 @@ mod tests {
     fn concurrency_requires_global() {
         let error = parse_args::<UpdateArgs>(["--concurrency", "2", "typescript"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        assert_eq!(error.kind(), ParseErrorKind::MissingRequiredArgument);
     }
 
     #[test]
     fn concurrency_rejects_zero() {
         let error = parse_args::<UpdateArgs>(["-g", "--concurrency", "0"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+        assert_eq!(error.kind(), ParseErrorKind::ValueValidation);
     }
 
     #[test]
@@ -208,7 +212,7 @@ mod tests {
         .unwrap();
 
         assert!(args.global);
-        assert_eq!(args.concurrency, Some(2));
+        assert_eq!(args.concurrency.map(Into::into), Some(2));
         assert!(args.reinstall_node_mismatch);
         assert_eq!(args.packages, vec!["typescript"]);
     }

@@ -121,6 +121,10 @@ struct StagedCliArgs {
     verbose: bool,
 }
 
+pub(super) fn spec() -> &'static usage_rs::spec::Spec<'static> {
+    StagedCliArgs::spec()
+}
+
 impl CliParser for StagedCliArgs {
     fn parse_from<'value>(
         argv: &'value [&'value std::ffi::OsStr],

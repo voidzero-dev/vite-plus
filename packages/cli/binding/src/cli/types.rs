@@ -1,9 +1,8 @@
 use std::{ffi::OsStr, future::Future, pin::Pin, sync::Arc};
 
-use clap::{Parser, Subcommand};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use vt::{Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
+use vt::{ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
 use vt_str::Str;
 
 /// Resolved configuration from vite.config.ts
@@ -25,112 +24,155 @@ pub struct ResolveCommandResult {
 }
 
 /// Built-in subcommands that resolve to a concrete tool (oxlint, vitest, vite, etc.)
-#[derive(Debug, Clone, Subcommand)]
+#[derive(Debug, Clone)]
 pub enum SynthesizableSubcommand {
     /// Lint code
-    #[command(disable_help_flag = true)]
-    Lint {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Lint { args: Vec<String> },
     /// Format code
-    #[command(disable_help_flag = true, visible_alias = "format")]
-    Fmt {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Fmt { args: Vec<String> },
     /// Build for production
-    #[command(disable_help_flag = true)]
-    Build {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Build { args: Vec<String> },
     /// Run tests
-    #[command(disable_help_flag = true)]
-    Test {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Test { args: Vec<String> },
     /// Build library
-    #[command(disable_help_flag = true)]
-    Pack {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Pack { args: Vec<String> },
     /// Run the development server
-    #[command(disable_help_flag = true)]
-    Dev {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Dev { args: Vec<String> },
     /// Preview production build
-    #[command(disable_help_flag = true)]
-    Preview {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Preview { args: Vec<String> },
     /// Build documentation
-    #[command(disable_help_flag = true, hide = true)]
-    Doc {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Doc { args: Vec<String> },
     /// Run format, lint, and type checks
     Check {
         /// Auto-fix format and lint issues
-        #[arg(long)]
         fix: bool,
         /// Skip format check
-        #[arg(long = "no-fmt")]
         no_fmt: bool,
         /// Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
-        #[arg(long = "no-lint")]
         no_lint: bool,
         /// Do not exit with error when pattern is unmatched
-        #[arg(long = "no-error-on-unmatched-pattern")]
         no_error_on_unmatched_pattern: bool,
         /// File paths to check (passed through to fmt and lint)
-        #[arg(trailing_var_arg = true)]
         paths: Vec<String>,
     },
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, usage_rs::Args)]
+#[usage(args_override_self = false)]
 pub struct ToolchainArgs {
     /// Tool or package names to show
-    #[arg(value_name = "TOOLS")]
+    #[usage(value_name = "TOOLS")]
     pub tools: Vec<String>,
 
     /// Print the graph as JSON
-    #[arg(long)]
+    #[usage(long)]
     pub json: bool,
 
     /// Use the global Vite+ toolchain
-    #[arg(long)]
+    #[usage(long)]
     pub global: bool,
 }
 
-/// Top-level CLI argument parser for vite-plus.
-#[derive(Debug, Parser)]
-#[command(name = "vp", disable_help_subcommand = true)]
-pub(super) enum CLIArgs {
-    /// vite-task commands (run, cache)
-    #[command(flatten)]
-    ViteTask(Command),
+#[derive(Debug, usage_rs::Args)]
+#[usage(args_override_self = false, disable_help_flag = true)]
+struct PassthroughArgs {
+    #[usage(double_dash = "automatic", value_name = "ARGS")]
+    args: Vec<String>,
+}
 
-    /// Built-in subcommands (lint, build, test, etc.)
-    #[command(flatten)]
-    Synthesizable(SynthesizableSubcommand),
+#[derive(Debug, usage_rs::Args)]
+#[usage(args_override_self = false)]
+struct CheckArgs {
+    /// Auto-fix format and lint issues
+    #[usage(long)]
+    fix: bool,
+    /// Skip format check
+    #[usage(long = "no-fmt")]
+    no_fmt: bool,
+    /// Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
+    #[usage(long = "no-lint")]
+    no_lint: bool,
+    /// Do not exit with error when pattern is unmatched
+    #[usage(long = "no-error-on-unmatched-pattern")]
+    no_error_on_unmatched_pattern: bool,
+    /// File paths to check (passed through to fmt and lint)
+    #[usage(double_dash = "automatic", value_name = "PATH")]
+    paths: Vec<String>,
+}
 
-    /// Package manager commands (install, add, remove, update, dedupe, …)
-    #[command(flatten)]
-    PackageManager(vp_pm_cli::PackageManagerCommand),
-
+#[derive(Debug, usage_rs::Subcommands)]
+enum LocalCommand {
+    /// Lint code
+    Lint(PassthroughArgs),
+    /// Format code
+    #[usage(visible_alias = "format")]
+    Fmt(PassthroughArgs),
+    /// Build for production
+    Build(PassthroughArgs),
+    /// Run tests
+    Test(PassthroughArgs),
+    /// Build library
+    Pack(PassthroughArgs),
+    /// Run the development server
+    Dev(PassthroughArgs),
+    /// Preview production build
+    Preview(PassthroughArgs),
+    /// Build documentation
+    #[usage(hide)]
+    Doc(PassthroughArgs),
+    /// Run format, lint, and type checks
+    Check(CheckArgs),
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),
-
     /// Show active Vite+ tools, versions, and relationships
     Toolchain(ToolchainArgs),
+}
+
+#[derive(Debug, usage_rs::Cli)]
+#[usage(
+    bin = "vp",
+    unknown_flags = "error",
+    args_override_self = false,
+    disable_help_subcommand = true
+)]
+pub(super) struct LocalCli {
+    #[usage(subcommand)]
+    command: LocalCommand,
+}
+
+/// Parsed command from one of the local CLI parser trees.
+#[derive(Debug)]
+pub(super) enum CLIArgs {
+    ViteTask(vt::Command),
+    Synthesizable(SynthesizableSubcommand),
+    PackageManager(vp_pm_cli::PackageManagerCommand),
+    Exec(crate::exec::ExecArgs),
+    Toolchain(ToolchainArgs),
+}
+
+impl From<LocalCli> for CLIArgs {
+    fn from(cli: LocalCli) -> Self {
+        let command = match cli.command {
+            LocalCommand::Lint(args) => SynthesizableSubcommand::Lint { args: args.args },
+            LocalCommand::Fmt(args) => SynthesizableSubcommand::Fmt { args: args.args },
+            LocalCommand::Build(args) => SynthesizableSubcommand::Build { args: args.args },
+            LocalCommand::Test(args) => SynthesizableSubcommand::Test { args: args.args },
+            LocalCommand::Pack(args) => SynthesizableSubcommand::Pack { args: args.args },
+            LocalCommand::Dev(args) => SynthesizableSubcommand::Dev { args: args.args },
+            LocalCommand::Preview(args) => SynthesizableSubcommand::Preview { args: args.args },
+            LocalCommand::Doc(args) => SynthesizableSubcommand::Doc { args: args.args },
+            LocalCommand::Check(args) => SynthesizableSubcommand::Check {
+                fix: args.fix,
+                no_fmt: args.no_fmt,
+                no_lint: args.no_lint,
+                no_error_on_unmatched_pattern: args.no_error_on_unmatched_pattern,
+                paths: args.paths,
+            },
+            LocalCommand::Exec(args) => return Self::Exec(args),
+            LocalCommand::Toolchain(args) => return Self::Toolchain(args),
+        };
+        Self::Synthesizable(command)
+    }
 }
 
 /// Type alias for boxed async resolver function

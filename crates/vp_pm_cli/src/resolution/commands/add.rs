@@ -1,14 +1,19 @@
 use vp_pm_cli_macros::pm_args;
 
+use super::PositiveUsize;
+#[cfg(feature = "clap-parser")]
 use super::parse_positive_usize;
 use crate::resolution::{
     Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AddArgs {
-    #[command(flatten)]
+    #[cfg_attr(feature = "clap-parser", command(flatten))]
+    #[cfg_attr(feature = "usage-parser", usage(flatten))]
     pub(crate) save_dependency: SaveDependencyArgs,
 
     /// Save exact version rather than semver range
@@ -49,7 +54,7 @@ pub struct AddArgs {
 
     /// Number of global package installs to run in parallel (only with -g)
     #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-    pub(crate) concurrency: Option<usize>,
+    pub(crate) concurrency: Option<PositiveUsize>,
 
     /// Packages to add
     #[arg(required = true)]
@@ -68,23 +73,31 @@ pub(crate) enum SaveDependencyTarget {
     Optional,
 }
 
-#[derive(clap::Args, Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[group(id = "save_dependency_target", multiple = false)]
+#[pm_args]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", group(id = "save_dependency_target", multiple = false))]
+#[cfg_attr(feature = "usage-parser", usage(group("save_dependency_target")))]
 pub(crate) struct SaveDependencyArgs {
     /// Save to `dependencies` (default)
     #[arg(short = 'P', long)]
+    #[cfg_attr(feature = "usage-parser", usage(group = "save_dependency_target"))]
     pub(crate) save_prod: bool,
 
     /// Save to `devDependencies`
     #[arg(short = 'D', long)]
+    #[cfg_attr(feature = "usage-parser", usage(group = "save_dependency_target"))]
     pub(crate) save_dev: bool,
 
     /// Save to `peerDependencies` and `devDependencies`
     #[arg(long)]
+    #[cfg_attr(feature = "usage-parser", usage(group = "save_dependency_target"))]
     pub(crate) save_peer: bool,
 
     /// Save to `optionalDependencies`
     #[arg(short = 'O', long)]
+    #[cfg_attr(feature = "usage-parser", usage(group = "save_dependency_target"))]
     pub(crate) save_optional: bool,
 }
 
@@ -256,7 +269,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{ParseErrorKind, bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn add_args(packages: &[&str]) -> AddArgs {
@@ -381,7 +394,7 @@ mod tests {
     fn save_dependency_flags_are_mutually_exclusive() {
         let error = parse_args::<AddArgs>(["--save-dev", "--save-optional", "react"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert_eq!(error.kind(), ParseErrorKind::ArgumentConflict);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Package-manager infrastructure for `vp`.
 //!
 //! [`PackageManager`] detects and downloads the selected package manager.
-//! [`PackageManagerCommand`] provides the shared clap surface, and [`dispatch`]
+//! [`PackageManagerCommand`] provides the shared typed parser surface, and [`dispatch`]
 //! resolves and executes it. Managed Node.js runtimes and managed global
 //! packages remain owned by the global CLI.
 
@@ -17,6 +17,8 @@ mod request;
 pub(crate) mod resolution;
 mod shim;
 
+#[cfg(feature = "usage-parser")]
+pub use cli::PackageManagerCli;
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::npm_registry;
 pub use dispatch::{DispatchResult, dispatch, dispatch_with_metadata};

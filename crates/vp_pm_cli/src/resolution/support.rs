@@ -143,7 +143,9 @@ mod tests {
     #[test]
     fn active_detection_filters_bool_option_vec_and_option_vec() {
         #[pm_args]
-        #[derive(clap::Args, Clone, Debug, Default)]
+        #[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+        #[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+        #[derive(Clone, Debug, Default)]
         struct ShapeArgs {
             #[arg(long, not_supported(bun))]
             bool_field: bool,
@@ -177,7 +179,9 @@ mod tests {
     #[test]
     fn enum_diagnosis_filters_inline_variant_fields() {
         #[pm_args]
-        #[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
+        #[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+        #[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         enum ShapeArgs {
             List {
                 #[arg(long, not_supported(bun))]
@@ -196,7 +200,9 @@ mod tests {
     #[test]
     fn enum_diagnosis_binding_names_are_hygienic() {
         #[pm_args]
-        #[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
+        #[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+        #[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         enum ShadowingArgs {
             Check {
                 #[arg(long, not_supported(bun))]
@@ -251,7 +257,9 @@ mod tests {
     #[test]
     fn diagnosis_preserves_conditional_fields_and_variants() {
         #[pm_args]
-        #[derive(clap::Args, Clone, Debug, PartialEq, Eq)]
+        #[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+        #[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         struct ConditionalStruct {
             #[cfg(any())]
             #[arg(long, not_supported(bun))]
@@ -262,7 +270,9 @@ mod tests {
         }
 
         #[pm_args]
-        #[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
+        #[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+        #[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         enum ConditionalEnum {
             #[cfg_attr(all(), cfg(any()))]
             Hidden {
@@ -293,7 +303,9 @@ mod tests {
     #[test]
     fn unknown_version_skips_version_qualified_rules() {
         #[pm_args]
-        #[derive(clap::Args, Clone, Debug, PartialEq, Eq)]
+        #[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+        #[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         struct ShapeArgs {
             #[arg(long, not_supported(npm < "99"))]
             future: bool,

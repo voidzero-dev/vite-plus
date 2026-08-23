@@ -57,6 +57,10 @@ impl CliParser for ConfigCliArgs {
     }
 }
 
+pub(super) fn spec() -> &'static usage_rs::spec::Spec<'static> {
+    ConfigCliArgs::spec()
+}
+
 #[napi(object, object_from_js = false)]
 pub struct ConfigArgs {
     pub hooks_dir: Option<String>,

@@ -1,8 +1,9 @@
-use vt_workspace::package_filter::PackageQueryArgs;
+use vt_workspace::package_filter::PackageQueryCliArgs;
 
-/// Parsed exec arguments (clap-derived).
-#[derive(Debug, clap::Args)]
-#[command(
+/// Parsed exec arguments.
+#[derive(Debug, usage_rs::Args)]
+#[usage(
+    args_override_self = false,
     about = "Execute a command from local node_modules/.bin",
     after_help = "\
 Examples:
@@ -13,30 +14,30 @@ Examples:
   vp exec --filter 'app...' -- tsc                   # Run in filtered packages"
 )]
 pub(crate) struct ExecArgs {
-    #[clap(flatten)]
-    pub packages: PackageQueryArgs,
+    #[usage(flatten)]
+    pub packages: PackageQueryCliArgs,
 
     /// Execute the command within a shell environment
-    #[clap(short = 'c', long = "shell-mode")]
+    #[usage(short = 'c', long = "shell-mode")]
     pub shell_mode: bool,
 
     /// Run concurrently without topological ordering
-    #[clap(long)]
+    #[usage(long)]
     pub parallel: bool,
 
     /// Reverse execution order
-    #[clap(long)]
+    #[usage(long)]
     pub reverse: bool,
 
     /// Resume from a specific package
-    #[clap(long = "resume-from")]
+    #[usage(long = "resume-from")]
     pub resume_from: Option<String>,
 
     /// Save results to vp-exec-summary.json
-    #[clap(long = "report-summary")]
+    #[usage(long = "report-summary")]
     pub report_summary: bool,
 
     /// Command and arguments to execute
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    #[usage(double_dash = "automatic", value_name = "COMMAND")]
     pub command: Vec<String>,
 }

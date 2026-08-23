@@ -5,7 +5,9 @@ use crate::resolution::{
 };
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RemoveArgs {
     /// Only remove from `devDependencies` (pnpm-specific)
     #[arg(short = 'D', long)]
@@ -135,7 +137,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{ParseErrorKind, bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn remove_args(packages: &[&str]) -> RemoveArgs {
@@ -149,7 +151,7 @@ mod tests {
     fn dry_run_requires_global() {
         let error = parse_args::<RemoveArgs>(["--dry-run", "lodash"]).unwrap_err();
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        assert_eq!(error.kind(), ParseErrorKind::MissingRequiredArgument);
     }
 
     #[test]

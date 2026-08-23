@@ -572,40 +572,17 @@ vp() {
 
 # Dynamic shell completion for bash/zsh
 if [ -n "${BASH_VERSION-}" ] && type complete >/dev/null 2>&1; then
-    eval "$(VP_COMPLETE=bash command vp)"
+    # Bash invoked as `sh` rejects process substitution in the generated script.
+    case ":${SHELLOPTS-}:" in
+        *:posix:*) ;;
+        *)
+            eval "$(command vp __complete_script__ --shell bash)"
+            eval "$(command vp __complete_script__ --shell bash --alias vpr)"
+            ;;
+    esac
 elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
-    eval "$(VP_COMPLETE=zsh command vp)"
-    eval '
-    _vpr_complete() {
-        local -a orig=("${words[@]}")
-        if [[ "${orig[2]-}" == "-C" ]]; then
-            if (( ${#orig[@]} >= 4 )); then
-                words=("vp" "-C" "${orig[3]}" "run" "${orig[@]:3}")
-                if (( CURRENT >= 4 )); then
-                    CURRENT=$((CURRENT + 1))
-                fi
-            else
-                words=("vp" "${orig[@]:1}")
-            fi
-        elif [[ "${orig[2]-}" == -C?* ]]; then
-            if (( ${#orig[@]} >= 3 )); then
-                words=("vp" "${orig[2]}" "run" "${orig[@]:2}")
-                if (( CURRENT >= 3 )); then
-                    CURRENT=$((CURRENT + 1))
-                fi
-            else
-                words=("vp" "${orig[@]:1}")
-            fi
-        else
-            words=("vp" "run" "${orig[@]:1}")
-            if (( CURRENT >= 2 )); then
-                CURRENT=$((CURRENT + 1))
-            fi
-        fi
-        ${=_comps[vp]}
-    }
-    compdef _vpr_complete vpr
-    '
+    eval "$(command vp __complete_script__ --shell zsh)"
+    eval "$(command vp __complete_script__ --shell zsh --alias vpr)"
 fi
 "#;
 
@@ -645,33 +622,11 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
-
-function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
-    set -l args $tokens[2..]
-    set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
-        # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
-        set -a translated -C
-        if test (count $args) -ge 2
-            set -a translated "$args[2]" run $args[3..]
-        end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
-        set -a translated "$args[1]" run $args[2..]
-    else
-        set -a translated run $args
-    end
-    VP_COMPLETE=fish command vp -- $translated $current
-end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+command vp __complete_script__ --shell fish | source
+command vp __complete_script__ --shell fish --alias vpr | source
 "#;
 
-// Nushell env file with vp wrapper function.
-// Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
-// generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+// Nushell env file with vp wrapper function and dynamic completion.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
@@ -711,38 +666,22 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
     }
 }
 
-# Shell completion for nushell (delegates to fish completions dynamically)
+# Shell completion for nushell
 def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    let out = (^vp __complete_word__ --shell nu --line $context | complete)
+    if $out.exit_code != 0 { return null }
+    let lines = ($out.stdout | lines | where {|line| $line != "" })
+    let marker = "\u{1}"
+    let wants_files = ($lines | any {|line| $line == $marker + "files" or $line == $marker + "dirs" or $line == $marker + "executables" or $line == $marker + "commands" })
+    let candidates = ($lines | where {|line| not ($line | str starts-with $marker) } | each {|line|
+        let parts = ($line | split row (char tab))
+        { value: ($parts | get 0), description: (if ($parts | length) > 1 { $parts | get 1 } else { "" }) }
+    })
+    if ($candidates | is-empty) and $wants_files { null } else { $candidates }
 }
-# Completion logic for vpr (translates context to 'vp run ...')
+# vpr uses the Vite Task executable view.
 def "nu-complete vpr" [context: string] {
-    let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
-    } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
-    } else if ($context =~ '^vpr\s+-C') {
-        $context | str replace -r '^vpr' 'vp'
-    } else {
-        $context | str replace -r '^vpr' 'vp run'
-    }
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    nu-complete vp $context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
@@ -788,38 +727,8 @@ function vp {
 }
 
 # Dynamic shell completion for PowerShell
-$env:VP_COMPLETE = "powershell"
-& (Join-Path $__vp_bin "vp") | Out-String | Invoke-Expression
-Remove-Item Env:\VP_COMPLETE -ErrorAction SilentlyContinue
-
-$__vpr_comp = {
-    param($wordToComplete, $commandAst, $cursorPosition)
-    $prev = $env:VP_COMPLETE
-    $env:VP_COMPLETE = "powershell"
-    $commandLine = $commandAst.Extent.Text
-    $args = $commandLine.Substring(0, [math]::Min($cursorPosition, $commandLine.Length))
-    if ($args -match '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s') {
-        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
-    } elseif ($args -match '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s') {
-        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
-    } elseif ($args -match '^(vpr\.exe|vpr)\b\s+-C') {
-        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp'
-    } else {
-        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
-    }
-    if ($wordToComplete -eq "") { $args += " ''" }
-    $results = Invoke-Expression @"
-& (Join-Path $__vp_bin 'vp') -- $args
-"@;
-    if ($prev) { $env:VP_COMPLETE = $prev } else { Remove-Item Env:\VP_COMPLETE }
-    $results | ForEach-Object {
-        $split = $_.Split("`t")
-        $cmd = $split[0];
-        if ($split.Length -eq 2) { $help = $split[1] } else { $help = $split[0] }
-        [System.Management.Automation.CompletionResult]::new($cmd, $cmd, 'ParameterValue', $help)
-    }
-}
-Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
+& (Join-Path $__vp_bin "vp") __complete_script__ --shell powershell | Out-String | Invoke-Expression
+& (Join-Path $__vp_bin "vp") __complete_script__ --shell powershell --alias vpr | Out-String | Invoke-Expression
 "#;
 
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
@@ -1382,8 +1291,8 @@ mod tests {
             "env.nu should set VP_ENV_USE_EVAL_ENABLE"
         );
         assert!(
-            nu_content.contains("VP_COMPLETE=fish"),
-            "env.nu should use dynamic Fish completion delegation"
+            nu_content.contains("__complete_word__ --shell nu"),
+            "env.nu should use the native completion protocol"
         );
         assert!(nu_content.contains("load-env"), "env.nu should use load-env to apply exports");
     })
@@ -2007,34 +1916,30 @@ mod tests {
                 let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
                 assert!(
-                    env_content.contains("VP_COMPLETE=bash")
-                        && env_content.contains("VP_COMPLETE=zsh"),
+                    env_content.contains("__complete_script__ --shell bash")
+                        && env_content.contains("__complete_script__ --shell zsh"),
                     "env file should contain completion for bash and zsh"
                 );
                 assert!(
-                    fish_content.contains("VP_COMPLETE=fish"),
+                    fish_content.contains("__complete_script__ --shell fish"),
                     "env.fish file should contain completion for fish"
                 );
                 assert!(
-                    ps1_content.contains("VP_COMPLETE = \"powershell\""),
+                    ps1_content.contains("__complete_script__ --shell powershell"),
                     "env.ps1 file should contain completion for PowerShell"
                 );
 
                 assert!(
-                    env_content.contains("compdef _vpr_complete vpr"),
-                    "env should have vpr completion for zsh"
+                    env_content.matches("--alias vpr").count() == 2,
+                    "env should request vpr completion for bash and zsh"
                 );
                 assert!(
-                    env_content.contains("eval '") && env_content.contains("_vpr_complete() {"),
-                    "env should wrap zsh-specific code in eval"
+                    fish_content.contains("--alias vpr"),
+                    "env.fish should request vpr completion"
                 );
                 assert!(
-                    fish_content.contains("complete -c vpr"),
-                    "env.fish should have vpr completion"
-                );
-                assert!(
-                    ps1_content.contains("Register-ArgumentCompleter -Native -CommandName vpr"),
-                    "env.ps1 should have vpr completion"
+                    ps1_content.contains("--alias vpr"),
+                    "env.ps1 should request vpr completion"
                 );
             },
         )
@@ -2042,7 +1947,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_env_content_cwd_completion_regressions() {
+    fn test_render_env_content_uses_native_completion_protocol() {
         let temp_dir = TempDir::new().unwrap();
         vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
             let config = vp_shared::EnvConfig::get();
@@ -2050,12 +1955,10 @@ mod tests {
             let nu_content = render_env_content(EnvShell::Nu, &config);
             let ps1_content = render_env_content(EnvShell::Powershell, &config);
 
-            assert!(posix_content.contains("if (( CURRENT >= 4 )); then"));
-            assert!(posix_content.contains("if (( CURRENT >= 3 )); then"));
-            assert!(nu_content.contains(r#"-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+)"#));
-            assert!(ps1_content.contains(r#""$($args[0])" -like "-C?*""#));
-            assert!(!ps1_content.contains("$args[0].StartsWith"));
-            assert!(ps1_content.contains(r#"-C=?(?:"[^"]*"|''[^'']*''|\S+)"#));
+            assert!(posix_content.contains("__complete_script__ --shell bash --alias vpr"));
+            assert!(posix_content.contains("__complete_script__ --shell zsh --alias vpr"));
+            assert!(nu_content.contains("__complete_word__ --shell nu"));
+            assert!(ps1_content.contains("__complete_script__ --shell powershell --alias vpr"));
         });
     }
 
@@ -2120,72 +2023,5 @@ vp
             },
         )
         .await;
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn test_zsh_vpr_completion_preserves_cursor_before_inserted_run() {
-        use std::{os::unix::fs::PermissionsExt, process::Command};
-
-        if Command::new("zsh").arg("-c").arg("exit 0").status().is_err() {
-            return;
-        }
-
-        let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let bin_dir = home.join("bin");
-        std::fs::create_dir_all(&bin_dir).unwrap();
-        let fake_vp = bin_dir.join("vp");
-        std::fs::write(
-            &fake_vp,
-            "#!/bin/sh\nif [ -n \"$VP_COMPLETE\" ]; then exit 0; fi\nexit 88\n",
-        )
-        .unwrap();
-        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_vp, permissions).unwrap();
-
-        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
-            let env_file = home.join("env");
-            std::fs::write(
-                &env_file,
-                render_env_content(EnvShell::Posix, &vp_shared::EnvConfig::get()),
-            )
-            .unwrap();
-
-            let output = Command::new("zsh")
-                .arg("-c")
-                .arg(
-                    r#"compdef() { : }
-typeset -A _comps
-capture() { print -r -- "$CURRENT|${words[1]}|${words[2]-}|${words[3]-}|${words[4]-}|${words[5]-}" }
-_comps[vp]=capture
-. "$1"
-words=(vpr -C "" build)
-CURRENT=3
-_vpr_complete
-words=(vpr -C dir build)
-CURRENT=4
-_vpr_complete
-words=(vpr -Cdir build)
-CURRENT=2
-_vpr_complete
-setopt no_unset
-words=(vpr)
-CURRENT=1
-_vpr_complete
-"#,
-                )
-                .arg("test-zsh-vpr-completion")
-                .arg(env_file.as_path())
-                .env("HOME", temp_dir.path())
-                .output()
-                .unwrap();
-            assert!(output.status.success(), "zsh completion script should run");
-            assert_eq!(
-                String::from_utf8(output.stdout).unwrap(),
-                "3|vp|-C||run|build\n5|vp|-C|dir|run|build\n2|vp|-Cdir|run|build|\n1|vp|run|||\n"
-            );
-        });
     }
 }

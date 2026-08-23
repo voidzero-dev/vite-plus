@@ -3,13 +3,11 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
+use std::{collections::HashSet, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
-use clap_complete::ArgValueCompleter;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use owo_colors::OwoColorize;
-use tokio::runtime::Runtime;
 use vp_pm_cli::{ManagedGlobalCommand, PackageManagerCommand};
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
@@ -174,7 +172,7 @@ pub enum Commands {
     #[command(disable_help_flag = true)]
     Run {
         /// Additional arguments
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true, add = ArgValueCompleter::new(run_tasks_completions))]
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
 
@@ -543,42 +541,6 @@ fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool
         }
         _ => false,
     }
-}
-
-/// Get available tasks for shell completion.
-///
-/// Delegates to the local vite-plus CLI to run `vp run` without arguments,
-/// which returns a list of available tasks in the format "task_name: description".
-fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
-    let Ok(cwd) = vt_path::current_dir() else {
-        return vec![];
-    };
-
-    // Unescape hashtag and trim quotes for better matching
-    let current = current
-        .to_string_lossy()
-        .replace("\\#", "#")
-        .trim_matches(|c| c == '"' || c == '\'')
-        .to_string();
-
-    let output = tokio::task::block_in_place(|| {
-        Runtime::new().ok().and_then(|rt| {
-            rt.block_on(async { commands::delegate::execute_output(cwd, "run", &[]).await.ok() })
-        })
-    });
-
-    output
-        .filter(|o| o.status.success())
-        .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
-                .filter(|name| !name.is_empty())
-                .filter(|name| name.starts_with(&current) || current.is_empty())
-                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 /// Handle a parsed package-manager command.

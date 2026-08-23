@@ -7,10 +7,15 @@ license.workspace = true
 publish = false
 rust-version.workspace = true
 
+[features]
+default = ["clap-parser"]
+clap-parser = ["dep:clap"]
+usage-parser = ["dep:usage-rs", "usage-rs/clap-coexistence"]
+
 [dependencies]
 backon = { workspace = true }
 base64-simd = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive"], optional = true }
 cow-utils = { workspace = true }
 crossterm = { workspace = true }
 flate2 = { workspace = true }
@@ -30,6 +35,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
+usage-rs = { workspace = true, optional = true }
 vp_command = { workspace = true }
 vp_error = { workspace = true }
 vt_path = { workspace = true }

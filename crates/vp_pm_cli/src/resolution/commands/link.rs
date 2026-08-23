@@ -5,7 +5,9 @@ use crate::resolution::{
 };
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LinkArgs {
     /// Package name or directory to link
     #[arg(value_name = "PACKAGE|DIR")]

@@ -10,7 +10,9 @@ use crate::resolution::{
 /// (`yarn npm publish --staged`, `yarn npm stage ...`). Note: this is unrelated
 /// to yarn's own `yarn stage` command, which stages files for a VCS commit.
 #[pm_args]
-#[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StageCommand {
     /// Stage a package for publishing (no 2FA required)
     Publish {
@@ -60,7 +62,8 @@ pub enum StageCommand {
     },
 
     /// List staged versions
-    #[command(visible_alias = "ls")]
+    #[cfg_attr(feature = "clap-parser", command(visible_alias = "ls"))]
+    #[cfg_attr(feature = "usage-parser", usage(visible_alias = "ls"))]
     List {
         /// Package spec to filter by
         package: Option<String>,

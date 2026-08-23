@@ -93,12 +93,17 @@ if [ "${VP_NODE_VERSION:-}" != "22.18.0" ]; then
 fi
 
 if [ -n "${BASH_VERSION:-}" ]; then
-    complete -p vp >/dev/null || {
-        echo "env did not register Bash completions"
-        exit 1
-    }
+    case ":${SHELLOPTS:-}:" in
+        *:posix:*) ;;
+        *)
+            complete -p vp >/dev/null || {
+                echo "env did not register Bash completions"
+                exit 1
+            }
+            ;;
+    esac
 elif [ -n "${ZSH_VERSION:-}" ]; then
-    whence -w _vpr_complete >/dev/null || {
+    whence -w _vpr >/dev/null || {
         echo "env did not register Zsh completions"
         exit 1
     }

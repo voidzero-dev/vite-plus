@@ -1,7 +1,5 @@
 # RFC: Use usage-rs for the Local Rust CLI
 
-## Summary
-
 Use [`usage-rs`](https://usage.jdx.dev/rust/) for argument parsing in the local
 Vite+ CLI and in Vite Task. Remove `clap` from the NAPI binary dependency graph.
 
@@ -25,18 +23,18 @@ parser graph at run time.
 
 The first local measurements show this result for the `staged` parser:
 
-| Parser | Successful parse |
-| --- | ---: |
-| `mri` on the main design | 1.20 us |
-| `clap` in PR #2523 | 6.36 us |
-| `usage-rs` in PR #2534 | 1.02 us |
+| Parser                   | Successful parse |
+| ------------------------ | ---------------: |
+| `mri` on the main design |          1.20 us |
+| `clap` in PR #2523       |          6.36 us |
+| `usage-rs` in PR #2534   |          1.02 us |
 
 The full CLI takes approximately 130 to 154 ms in the same test. Thus, the
 parser improvement does not make process startup measurably faster.
 
-The first `usage-rs` change does not reduce the uncompressed NAPI binary. It is
-880 bytes larger than PR #2523. It is 8,074 bytes smaller after `gzip -9`.
-`clap` is still in the dependency graph for these reasons:
+The first `usage-rs` change did not reduce the uncompressed NAPI binary. It was
+880 bytes larger than PR #2523. It was 8,074 bytes smaller after `gzip -9`.
+`clap` stayed in that dependency graph for these reasons:
 
 - the error path builds a `clap` command to keep the old diagnostics;
 - the NAPI command router uses `clap` types;
@@ -46,6 +44,11 @@ The first `usage-rs` change does not reduce the uncompressed NAPI binary. It is
 
 A partial parser change cannot test the main size hypothesis. Vite+ must remove
 `clap` from the complete NAPI dependency graph before it compares the result.
+
+The complete implementation removes that dependency path. A paired macOS ARM64
+build is 94,832 bytes smaller than PR #2523 before compression and 74,392 bytes
+smaller after `gzip -9`. Thus, the complete implementation passes the native
+size gate.
 
 ## Goals
 
@@ -73,36 +76,42 @@ This RFC does not:
 
 ## Decision
 
-Use `usage-rs` 6.1.0 for this experiment. Pin the exact version in Vite+ and
-Vite Task. Both repositories must use the same revision.
+Use a reviewed `usage-rs` revision based on 6.1.0 for this change. Pin the exact
+revision in Vite+ and Vite Task. Both repositories must use the same revision.
 
 `usage-rs` is still experimental. A later update must be an explicit dependency
 change with parser, help, completion, performance, and size checks.
 
 Use these features only where they are necessary:
 
-| Feature | Consumer | Purpose |
-| --- | --- | --- |
-| `spec` | production parser crates | Read static command metadata for help |
-| `help` | standalone CLI entry points | Render built-in help and version output |
-| `diagnostics` | NAPI parser and `vt` binary | Render user-facing parse errors |
-| `completions` | local completion provider and `vt` binary | Generate scripts and candidates |
-| `test` | development dependencies only | Test parse outcomes, help, and completion |
+| Feature            | Consumer                                              | Purpose                                                 |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------------------- |
+| `spec`             | production parser crates                              | Read static command metadata for help                   |
+| `help`             | standalone CLI entry points                           | Render built-in help and version output                 |
+| `diagnostics`      | NAPI parser and `vt` binary                           | Render user-facing parse errors                         |
+| `completions`      | global and local completion providers and `vt` binary | Parse requests, generate scripts, and return candidates |
+| `clap-coexistence` | shared `vp_pm_cli` declarations during migration      | Let the same type use gated clap and usage derives      |
+| `test`             | development dependencies only                         | Test parse outcomes, help, and completion               |
 
 Do not enable all default features without checking their binary-size cost.
 
+The reviewed usage-rs revision also stores common flag metadata separately from
+rare value, help, and relationship metadata. It uses small cold-path sorts for
+help and diagnostics. These changes reduce generated code and static table cost.
+They do not change the parser result.
+
 ## Ownership
 
-| Layer | Responsibility |
-| --- | --- |
-| Global `vp` binary | Select the local package and forward local arguments |
-| Local Node.js CLI | Apply `-C` and `vpr`, select the local command, and call NAPI |
-| NAPI command router | Parse local Rust commands and return typed results |
-| `js_command_args` | Parse the five JavaScript command grammars |
-| `vp_cli_help` | Convert static metadata to the shared Vite+ help document |
-| `vp_pm_cli` | Parse package-manager command arguments |
-| Vite Task | Parse `run` and `cache` arguments and provide task completion |
-| JavaScript commands | Apply defaults and run JavaScript operations |
+| Layer               | Responsibility                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| Global `vp` binary  | Select the local package, merge completion candidates, and forward local arguments |
+| Local Node.js CLI   | Apply `-C` and `vpr`, select the local command, and call NAPI                      |
+| NAPI command router | Parse local Rust commands and return typed results                                 |
+| `js_command_args`   | Parse the five JavaScript command grammars                                         |
+| `vp_cli_help`       | Convert static metadata to the shared Vite+ help document                          |
+| `vp_pm_cli`         | Parse package-manager command arguments                                            |
+| Vite Task           | Parse `run` and `cache` arguments and provide task completion                      |
+| JavaScript commands | Apply defaults and run JavaScript operations                                       |
 
 ## Architecture
 
@@ -231,12 +240,15 @@ The completion call graph is:
 
 ```text
 shell completion script
-  -> global vp completion entry
-  -> select the same local vite-plus package as command execution
-  -> local Node.js completion entry
-  -> NAPI completion request
-  -> usage-rs completion engine
-  -> newline-delimited candidates
+  -> global vp completion request parser
+  +-> clap_complete candidates for global-only options
+  +-> select the same local vite-plus package as command execution
+      -> local Node.js completion entry
+      -> NAPI completion request
+      -> usage-rs completion engine
+      -> neutral tab-delimited candidates and file markers
+  -> merge and de-duplicate candidates
+  -> usage-rs shell renderer
   -> shell
 ```
 
@@ -247,6 +259,10 @@ local command candidates to the selected local package.
 Generate scripts for Bash, Zsh, Fish, Nu, and PowerShell. Use
 `completion_script_for_alias` for `vpr`, or provide an equivalent alias view
 that inserts the `run` command before completion.
+
+The generated POSIX startup file must not evaluate the Bash completion script
+when Bash runs in POSIX mode as `sh`. Bash process substitution is not valid in
+that mode.
 
 Use static completion for command names, flags, aliases, and value choices. Use
 custom completers for data that is available only at run time:
@@ -312,7 +328,9 @@ as the distributed NAPI build.
 ## Unit tests
 
 Use `usage-rs` with the `test` feature in development dependencies. Prefer its
-process-free test helpers.
+process-free test helpers for one grammar. A composite completion provider can
+test `Request`, `complete`, and `render` directly because it merges more than
+one grammar.
 
 Each parser module must directly test:
 
@@ -332,8 +350,7 @@ Each parser module must directly test:
 Use `usage::test::parse` or `usage::test::outcome` for parser tests. Use help-page
 and `help_tree` snapshots for metadata and help coverage.
 
-Completion tests must use `candidates`, `completion`, and `completion_at`. They
-must cover:
+Completion tests must cover:
 
 - root command and subcommand candidates;
 - short and long options;
@@ -374,28 +391,66 @@ No production path from `vt` or `vt_workspace` can require `clap`.
 
 ## Performance and size checks
 
-Compare three revisions with the same toolchain, target, profile, and machine:
+The parser benchmarks ran on macOS ARM64 with Node.js 22.22.0. The successful
+case used 100,000 warm-up calls and ten batches of 200,000 calls. The error,
+help, and completion cases used at least 20,000 warm-up calls and ten batches of
+50,000 calls. The full CLI cases used 25 separate processes after four warm-up
+runs.
 
-| Metric | main / `mri` | PR #2523 / `clap` | complete `usage-rs` change |
-| --- | ---: | ---: | ---: |
-| Successful parser call | measure | measure | measure |
-| Invalid parser call | measure | measure | measure |
-| Help generation | measure | measure | measure |
-| Completion request | measure | measure | measure |
-| Full CLI latency | measure | measure | measure |
-| NAPI binary bytes | measure | measure | measure |
-| NAPI `gzip -9` bytes | measure | measure | measure |
-| `packages/cli/dist` bytes | measure | measure | measure |
-| `packages/core/dist` bytes | measure | measure | measure |
-| Combined dist bytes | measure | measure | measure |
+The successful parser input was
+`--allow-empty --concurrent=2 --diff-filter ACMR --no-stash`. Help generation
+includes parsing `--help` and building the shared help document. It does not
+include terminal output. Static completion includes request parsing, candidate
+selection, and rendering.
 
-Measure valid, error, help, and completion paths separately. The successful
-parser benchmark must use enough warm-up and sample calls to reduce process and
-timer noise. The full CLI benchmark must use separate processes.
+| Metric                          |   main / `mri` | PR #2523 / `clap` | complete `usage-rs` change |
+| ------------------------------- | -------------: | ----------------: | -------------------------: |
+| Successful parser call          |        1.20 us |           6.36 us |                   1.007 us |
+| Unknown option                  | Not comparable |           4.42 us |                   2.158 us |
+| Parse and build staged help     |  Not available |         21.572 us |                   1.977 us |
+| Static staged completion        |  Not available |     Not available |                   1.571 us |
+| `vp --version`                  |      130.76 ms |         130.38 ms |                   123.8 ms |
+| `vp staged --help`              |      140.27 ms |         132.42 ms |                   124.4 ms |
+| `vp staged --unknown`           | Not comparable |      Not measured |                   125.1 ms |
+| Static completion process       |  Not available |     Not available |                   122.9 ms |
+| Dynamic task completion process |  Not available |     Not available |                   125.3 ms |
 
-Adopt the change only if all compatibility tests pass and the complete artifact
-result is better than PR #2523. Parser-only speed does not compensate for a
-material native-size increase by itself.
+The complete usage-rs parser is 84% faster than the Clap parser for successful
+input. It is 51% faster for an unknown option. Parse and help-document creation
+is 10.9 times faster. The complete CLI stays within process-startup noise.
+
+The final CLI measurements ran in a later local session than the earlier paired
+`mri` and Clap measurements. Use them to confirm the startup-scale result, not
+as a claim that this change saves 6 to 17 ms.
+
+The native size gate used paired release builds with the same source checkout,
+toolchain, target, profile, and machine:
+
+| macOS ARM64 NAPI library | PR #2523 / `clap` | Complete `usage-rs` |     Change |
+| ------------------------ | ----------------: | ------------------: | ---------: |
+| Binary                   |      41,869,648 B |        41,774,816 B |  -94,832 B |
+| `gzip -9`                |      17,221,832 B |        17,147,440 B |  -74,392 B |
+| Mach-O `__text`          |      19,438,000 B |        19,207,460 B | -230,540 B |
+
+The raw binary is 0.23% smaller. The compressed binary is 0.43% smaller. The
+machine code is 1.19% smaller. This result passes the directional size gate,
+but it is not a material package-size improvement. Binary size alone does not
+justify the migration.
+
+The package JavaScript does not change after PR #2523. The canonical Linux
+artifact workflow for that PR supplies the exact dist totals. The complete
+usage-rs change keeps those files unchanged:
+
+| Distributed JavaScript                  | main / `mri` | PR #2523 / `clap` | Complete `usage-rs` |
+| --------------------------------------- | -----------: | ----------------: | ------------------: |
+| `packages/cli/dist`                     |  1,685,719 B |       1,666,423 B |         1,666,423 B |
+| `packages/core/dist`, excluding `.node` |  4,097,460 B |       4,097,460 B |         4,097,460 B |
+| Combined dist                           |  5,783,179 B |       5,763,883 B |         5,763,883 B |
+
+The complete artifact is smaller than PR #2523, and all compatibility tests
+pass. Therefore, the result meets the directional adoption condition. The main
+reasons to adopt this change are the unified grammar, completion support, and
+lower parser cost.
 
 ## Migration order
 
@@ -417,8 +472,15 @@ final NAPI build cannot contain both.
 
 ### Experimental dependency
 
-`usage-rs` can change while its API develops. Exact version pins and focused
+`usage-rs` can change while its API develops. Exact revision pins and focused
 upgrade checks limit this risk.
+
+The compact metadata work changes the public `FlagMeta` struct layout while it
+keeps field reads compatible through `Deref`. External struct literals are not
+source-compatible. The upstream project must either publish this layout in a
+breaking release or provide a compatible construction API before Vite+ updates
+to a published crate. Vite+ and Vite Task must pin the reviewed revision until
+that decision is complete.
 
 ### Diagnostic differences
 

@@ -1,0 +1,8 @@
+{
+  "name": "completion-fixture",
+  "private": true,
+  "scripts": {
+    "build": "vpt print build",
+    "check": "vpt print check"
+  }
+}

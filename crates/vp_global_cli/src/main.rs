@@ -16,6 +16,7 @@
 mod cli;
 mod command_picker;
 mod commands;
+mod completion;
 mod error;
 mod help;
 mod js_executor;
@@ -379,6 +380,11 @@ async fn main() -> ExitCode {
     }
 
     let mut args: Vec<String> = std::env::args().collect();
+
+    if let Some(answer) = completion::request(&args[1..]).await {
+        print!("{answer}");
+        return ExitCode::SUCCESS;
+    }
 
     // Replace bash completion script to fix completion for items containing ':'
     if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {

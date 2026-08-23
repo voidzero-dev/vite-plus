@@ -54,40 +54,17 @@ vp() {
 
 # Dynamic shell completion for bash/zsh
 if [ -n "${BASH_VERSION-}" ] && type complete >/dev/null 2>&1; then
-    eval "$(VP_COMPLETE=bash command vp)"
+    # Bash invoked as `sh` rejects process substitution in the generated script.
+    case ":${SHELLOPTS-}:" in
+        *:posix:*) ;;
+        *)
+            eval "$(command vp __complete_script__ --shell bash)"
+            eval "$(command vp __complete_script__ --shell bash --alias vpr)"
+            ;;
+    esac
 elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
-    eval "$(VP_COMPLETE=zsh command vp)"
-    eval '
-    _vpr_complete() {
-        local -a orig=("${words[@]}")
-        if [[ "${orig[2]-}" == "-C" ]]; then
-            if (( ${#orig[@]} >= 4 )); then
-                words=("vp" "-C" "${orig[3]}" "run" "${orig[@]:3}")
-                if (( CURRENT >= 4 )); then
-                    CURRENT=$((CURRENT + 1))
-                fi
-            else
-                words=("vp" "${orig[@]:1}")
-            fi
-        elif [[ "${orig[2]-}" == -C?* ]]; then
-            if (( ${#orig[@]} >= 3 )); then
-                words=("vp" "${orig[2]}" "run" "${orig[@]:2}")
-                if (( CURRENT >= 3 )); then
-                    CURRENT=$((CURRENT + 1))
-                fi
-            else
-                words=("vp" "${orig[@]:1}")
-            fi
-        else
-            words=("vp" "run" "${orig[@]:1}")
-            if (( CURRENT >= 2 )); then
-                CURRENT=$((CURRENT + 1))
-            fi
-        fi
-        ${=_comps[vp]}
-    }
-    compdef _vpr_complete vpr
-    '
+    eval "$(command vp __complete_script__ --shell zsh)"
+    eval "$(command vp __complete_script__ --shell zsh --alias vpr)"
 fi
 ```
 
@@ -133,28 +110,8 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
-
-function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
-    set -l args $tokens[2..]
-    set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
-        # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
-        set -a translated -C
-        if test (count $args) -ge 2
-            set -a translated "$args[2]" run $args[3..]
-        end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
-        set -a translated "$args[1]" run $args[2..]
-    else
-        set -a translated run $args
-    end
-    VP_COMPLETE=fish command vp -- $translated $current
-end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+command vp __complete_script__ --shell fish | source
+command vp __complete_script__ --shell fish --alias vpr | source
 ```
 
 ## `vpt print-file home/env.nu`
@@ -202,38 +159,22 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
     }
 }
 
-# Shell completion for nushell (delegates to fish completions dynamically)
+# Shell completion for nushell
 def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    let out = (^vp __complete_word__ --shell nu --line $context | complete)
+    if $out.exit_code != 0 { return null }
+    let lines = ($out.stdout | lines | where {|line| $line != "" })
+    let marker = "\u{1}"
+    let wants_files = ($lines | any {|line| $line == $marker + "files" or $line == $marker + "dirs" or $line == $marker + "executables" or $line == $marker + "commands" })
+    let candidates = ($lines | where {|line| not ($line | str starts-with $marker) } | each {|line|
+        let parts = ($line | split row (char tab))
+        { value: ($parts | get 0), description: (if ($parts | length) > 1 { $parts | get 1 } else { "" }) }
+    })
+    if ($candidates | is-empty) and $wants_files { null } else { $candidates }
 }
-# Completion logic for vpr (translates context to 'vp run ...')
+# vpr uses the Vite Task executable view.
 def "nu-complete vpr" [context: string] {
-    let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
-    } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
-    } else if ($context =~ '^vpr\s+-C') {
-        $context | str replace -r '^vpr' 'vp'
-    } else {
-        $context | str replace -r '^vpr' 'vp run'
-    }
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    nu-complete vp $context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 ```
@@ -285,36 +226,6 @@ function vp {
 }
 
 # Dynamic shell completion for PowerShell
-$env:VP_COMPLETE = "powershell"
-& (Join-Path $__vp_bin "vp") | Out-String | Invoke-Expression
-Remove-Item Env:\VP_COMPLETE -ErrorAction SilentlyContinue
-
-$__vpr_comp = {
-    param($wordToComplete, $commandAst, $cursorPosition)
-    $prev = $env:VP_COMPLETE
-    $env:VP_COMPLETE = "powershell"
-    $commandLine = $commandAst.Extent.Text
-    $args = $commandLine.Substring(0, [math]::Min($cursorPosition, $commandLine.Length))
-    if ($args -match '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s') {
-        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
-    } elseif ($args -match '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s') {
-        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
-    } elseif ($args -match '^(vpr\.exe|vpr)\b\s+-C') {
-        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp'
-    } else {
-        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
-    }
-    if ($wordToComplete -eq "") { $args += " ''" }
-    $results = Invoke-Expression @"
-& (Join-Path $__vp_bin 'vp') -- $args
-"@;
-    if ($prev) { $env:VP_COMPLETE = $prev } else { Remove-Item Env:\VP_COMPLETE }
-    $results | ForEach-Object {
-        $split = $_.Split("`t")
-        $cmd = $split[0];
-        if ($split.Length -eq 2) { $help = $split[1] } else { $help = $split[0] }
-        [System.Management.Automation.CompletionResult]::new($cmd, $cmd, 'ParameterValue', $help)
-    }
-}
-Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
+& (Join-Path $__vp_bin "vp") __complete_script__ --shell powershell | Out-String | Invoke-Expression
+& (Join-Path $__vp_bin "vp") __complete_script__ --shell powershell --alias vpr | Out-String | Invoke-Expression
 ```

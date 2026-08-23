@@ -4,6 +4,7 @@
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
 mod app_target;
+mod completion;
 mod execution;
 mod handler;
 mod help;
@@ -13,7 +14,6 @@ mod types;
 
 use std::{borrow::Cow, env, ffi::OsStr, sync::Arc};
 
-use clap::Parser;
 use cow_utils::CowUtils;
 pub(crate) use execution::resolve_and_capture_output;
 // Re-exports for lib.rs and check/mod.rs
@@ -35,11 +35,105 @@ use self::{
     execution::{FilterStream, resolve_and_execute, resolve_and_execute_with_filter},
     handler::{VitePlusCommandHandler, VitePlusConfigLoader},
     help::{
-        handle_cli_parse_error, normalize_help_args, print_help, should_print_help,
+        normalize_help_args, print_help, print_invalid_subcommand_error, should_print_help,
         should_suppress_subcommand_stdout,
     },
-    types::CLIArgs,
+    types::{CLIArgs, LocalCli},
 };
+
+enum ParsedCli {
+    Command(CLIArgs),
+    Exit(ExitStatus),
+}
+
+fn command_matches(spec: &'static usage_rs::spec::Spec<'static>, name: &str) -> bool {
+    spec.root
+        .subcommands
+        .iter()
+        .any(|subcommand| subcommand.cmd.name == name || subcommand.cmd.aliases.contains(&name))
+}
+
+fn is_known_command(name: &str) -> bool {
+    command_matches(vt::Cli::spec(), name)
+        || command_matches(vp_pm_cli::PackageManagerCli::spec(), name)
+        || command_matches(LocalCli::spec(), name)
+}
+
+fn local_command_names() -> Vec<String> {
+    let mut names = [vt::Cli::spec(), vp_pm_cli::PackageManagerCli::spec(), LocalCli::spec()]
+        .into_iter()
+        .flat_map(|spec| spec.root.subcommands)
+        .flat_map(|command| {
+            std::iter::once(command.cmd.name).chain(command.cmd.aliases.iter().copied())
+        })
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    names.extend(crate::js_command_args::command_specs().into_iter().map(|spec| {
+        spec.bin
+            .unwrap_or(spec.name)
+            .split_ascii_whitespace()
+            .next_back()
+            .unwrap_or(spec.name)
+            .to_owned()
+    }));
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+fn finish_usage_parse<'value, T>(
+    spec: &'static usage_rs::spec::Spec<'static>,
+    args: &[String],
+    argv: &[&'value OsStr],
+    result: Result<T, usage_rs::Error<'static, 'value>>,
+    into_command: impl FnOnce(T) -> CLIArgs,
+) -> ParsedCli {
+    match result {
+        Ok(value) => ParsedCli::Command(into_command(value)),
+        Err(usage_rs::Error::Help { cmd, .. } | usage_rs::Error::MissingArgsHelp { cmd }) => {
+            let doc = vp_cli_help::help_doc_from_usage(spec, args, cmd, None)
+                .expect("help command must belong to its parser");
+            vp_cli_help::print_help_doc(&doc);
+            ParsedCli::Exit(ExitStatus::SUCCESS)
+        }
+        Err(error) => {
+            vp_shared::output::raw_stderr(usage_rs::render_failure(spec, argv, &error).trim_end());
+            ParsedCli::Exit(ExitStatus(2))
+        }
+    }
+}
+
+fn parse_cli_args(args: &[String]) -> ParsedCli {
+    let Some(command_name) = args.first().map(String::as_str) else {
+        return ParsedCli::Exit(ExitStatus::SUCCESS);
+    };
+    let argv = args.iter().map(OsStr::new).collect::<Vec<_>>();
+
+    if command_matches(vt::Cli::spec(), command_name) {
+        return finish_usage_parse(
+            vt::Cli::spec(),
+            args,
+            &argv,
+            vt::Cli::parse_from(&argv),
+            |cli| CLIArgs::ViteTask(cli.command),
+        );
+    }
+    if command_matches(vp_pm_cli::PackageManagerCli::spec(), command_name) {
+        return finish_usage_parse(
+            vp_pm_cli::PackageManagerCli::spec(),
+            args,
+            &argv,
+            vp_pm_cli::PackageManagerCli::parse_from(&argv),
+            |cli| CLIArgs::PackageManager(cli.command),
+        );
+    }
+    if !is_known_command(command_name) {
+        print_invalid_subcommand_error(command_name);
+        return ParsedCli::Exit(ExitStatus(2));
+    }
+
+    finish_usage_parse(LocalCli::spec(), args, &argv, LocalCli::parse_from(&argv), Into::into)
+}
 
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
@@ -371,6 +465,10 @@ pub async fn main(
     explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     let raw_args: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
+    if let Some(answer) = completion::request(&cwd, options.as_ref(), &raw_args).await {
+        vp_shared::output::raw_inline(&answer);
+        return Ok(ExitStatus::SUCCESS);
+    }
     // The global CLI resolves aliases to their canonical names before
     // delegating, so prefer the original spelling it forwards. A direct local
     // invocation can use its first, still-unnormalized argument.
@@ -382,10 +480,9 @@ pub async fn main(
         return Ok(ExitStatus::SUCCESS);
     }
 
-    let args_with_program = std::iter::once("vp".to_string()).chain(args_vec.iter().cloned());
-    let cli_args = match CLIArgs::try_parse_from(args_with_program) {
-        Ok(args) => args,
-        Err(err) => return handle_cli_parse_error(err),
+    let cli_args = match parse_cli_args(&args_vec) {
+        ParsedCli::Command(args) => args,
+        ParsedCli::Exit(status) => return Ok(status),
     };
 
     match cli_args {

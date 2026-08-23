@@ -1,5 +1,7 @@
 use vp_pm_cli_macros::pm_args;
 
+use super::PositiveUsize;
+#[cfg(feature = "clap-parser")]
 use super::parse_positive_usize;
 use crate::resolution::{
     AddArgs, Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm,
@@ -7,7 +9,9 @@ use crate::resolution::{
 };
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InstallArgs {
     /// Do not install devDependencies
     #[arg(short = 'P', long)]
@@ -103,7 +107,7 @@ pub struct InstallArgs {
 
     /// Number of global package installs to run in parallel (only with -g)
     #[arg(long, requires = "global", value_parser = parse_positive_usize)]
-    pub(crate) concurrency: Option<usize>,
+    pub(crate) concurrency: Option<PositiveUsize>,
 
     /// Packages to add (if provided, acts as `vp add`)
     pub(crate) packages: Vec<String>,

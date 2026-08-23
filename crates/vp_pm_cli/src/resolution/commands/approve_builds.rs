@@ -10,7 +10,9 @@ const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11
 const NPM_ENFORCED_NOTE: &str = "npm records the approval in the `allowScripts` field of package.json but does not run scripts a previous install skipped. Run `vp pm rebuild <package>` to execute them.";
 
 #[pm_args]
-#[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Args))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Args))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ApproveBuildsArgs {
     /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0, npm >= 11.16.0).
     /// Omit to launch interactive mode (pnpm) or list pending packages (npm >= 11.16.0).
@@ -230,7 +232,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{ParseErrorKind, bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -246,7 +248,7 @@ mod tests {
         let error = parse_args::<ApproveBuildsArgs>(["--all", "esbuild"])
             .expect_err("expected clap conflict");
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert_eq!(error.kind(), ParseErrorKind::ArgumentConflict);
     }
 
     #[test]

@@ -99,7 +99,7 @@ fn manager_policy(command: &PackageManagerCommand) -> ManagerPolicy {
         PackageManagerCommand::Dlx(_) => {
             unreachable!("dlx commands are dispatched before manager policy selection")
         }
-        PackageManagerCommand::Pm(command) => pm_manager_policy(command),
+        PackageManagerCommand::Pm { command } => pm_manager_policy(command),
     }
 }
 
@@ -117,17 +117,19 @@ fn pm_manager_policy(command: &PmCommand) -> ManagerPolicy {
         | PmCommand::Rebuild(_)
         | PmCommand::Fund(_)
         | PmCommand::Audit(_)
-        | PmCommand::Stage(StageCommand::Publish { .. }) => ManagerPolicy::RequireProject,
+        | PmCommand::Stage { command: StageCommand::Publish { .. } } => {
+            ManagerPolicy::RequireProject
+        }
         PmCommand::View(_)
-        | PmCommand::Stage(_)
-        | PmCommand::Owner(_)
+        | PmCommand::Stage { .. }
+        | PmCommand::Owner { .. }
         | PmCommand::Cache(_)
-        | PmCommand::Config(_)
+        | PmCommand::Config { .. }
         | PmCommand::Login(_)
         | PmCommand::Logout(_)
         | PmCommand::Whoami(_)
-        | PmCommand::Token(_)
-        | PmCommand::DistTag(_)
+        | PmCommand::Token { .. }
+        | PmCommand::DistTag { .. }
         | PmCommand::Deprecate(_)
         | PmCommand::Search(_)
         | PmCommand::Ping(_) => ManagerPolicy::AllowNpmFallback,
@@ -136,14 +138,24 @@ fn pm_manager_policy(command: &PmCommand) -> ManagerPolicy {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "clap-parser", not(feature = "usage-parser")))]
     use clap::{FromArgMatches, Subcommand};
 
     use super::*;
+    #[cfg(feature = "usage-parser")]
+    use crate::PackageManagerCli;
 
+    #[cfg(all(feature = "clap-parser", not(feature = "usage-parser")))]
     fn parse_command(args: &[&str]) -> PackageManagerCommand {
         let mut command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
         let matches = command.try_get_matches_from_mut(args).unwrap();
         PackageManagerCommand::from_arg_matches(&matches).unwrap()
+    }
+
+    #[cfg(feature = "usage-parser")]
+    fn parse_command(args: &[&str]) -> PackageManagerCommand {
+        let argv = args[1..].iter().map(std::ffi::OsStr::new).collect::<Vec<_>>();
+        PackageManagerCli::parse_from(&argv).expect("command must parse").command
     }
 
     #[test]

@@ -1,0 +1,12 @@
+[[case]]
+name = "command_completion"
+vp = ["local", "global"]
+comment = "The hidden completion protocol returns local commands, options, values, tasks, packages, and the vpr view."
+steps = [
+  { argv = ["vp", "__complete_word__", "--shell", "nu", "--line", "vp cr"], comment = "completes a local command" },
+  { argv = ["vp", "__complete_word__", "--shell", "nu", "--line", "vp staged --di"], comment = "completes JavaScript command options" },
+  { argv = ["vp", "__complete_word__", "--shell", "nu", "--line", "vp create --package-manager p"], comment = "completes an option value" },
+  { argv = ["vp", "__complete_word__", "--shell", "nu", "--line", "vp run bu"], comment = "completes a package script" },
+  { argv = ["vp", "__complete_word__", "--shell", "nu", "--line", "vp run --filter completion"], comment = "completes a workspace package" },
+  { argv = ["vp", "__complete_word__", "--shell", "nu", "--line", "vpr --lo"], comment = "completes the vpr executable view" },
+]

@@ -94,6 +94,10 @@ impl CliParser for MigrateCliArgs {
     }
 }
 
+pub(super) fn spec() -> &'static usage_rs::spec::Spec<'static> {
+    MigrateCliArgs::spec()
+}
+
 #[napi(object, object_from_js = false)]
 pub struct MigrateArgs {
     pub path: Option<String>,

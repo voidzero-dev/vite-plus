@@ -1,6 +1,3 @@
-use std::iter;
-
-use clap::{Parser, error::ErrorKind};
 use vt::{
     CommandHandler, HandledCommand, ScriptCommand,
     config::user::{EnabledCacheConfig, UserCacheConfig, UserRunConfig},
@@ -10,6 +7,7 @@ use vt_path::AbsolutePath;
 use vt_str::Str;
 
 use super::{
+    ParsedCli, is_known_command, parse_cli_args,
     resolver::{SubcommandResolver, check_cache_inputs},
     types::{CLIArgs, ResolvedUniversalViteConfig, SynthesizableSubcommand, ViteConfigResolverFn},
 };
@@ -63,18 +61,21 @@ impl CommandHandler for VitePlusCommandHandler {
         }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
-        let cli_args = match CLIArgs::try_parse_from(
-            iter::once("vp")
-                .chain(is_vpr.then_some("run"))
-                .chain(command.args.iter().map(Str::as_str)),
-        ) {
-            Ok(args) => args,
-            Err(err) if err.kind() == ErrorKind::InvalidSubcommand => {
-                return Ok(HandledCommand::Synthesized(
-                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
-                ));
+        let mut args = Vec::with_capacity(command.args.len() + usize::from(is_vpr));
+        if is_vpr {
+            args.push("run".to_owned());
+        }
+        args.extend(command.args.iter().map(ToString::to_string));
+        if args.first().is_none_or(|name| !is_known_command(name)) {
+            return Ok(HandledCommand::Synthesized(
+                command.to_synthetic_plan_request(UserCacheConfig::disabled()),
+            ));
+        }
+        let cli_args = match parse_cli_args(&args) {
+            ParsedCli::Command(args) => args,
+            ParsedCli::Exit(status) => {
+                return Err(anyhow::anyhow!("nested vp arguments exited with status {status:?}"));
             }
-            Err(err) => return Err(err.into()),
         };
         match cli_args {
             CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {

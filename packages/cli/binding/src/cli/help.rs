@@ -1,8 +1,6 @@
-use clap::error::{ContextKind, ContextValue, ErrorKind};
 use owo_colors::OwoColorize;
-use vp_error::Error;
+use vp_cli_help::{HelpDoc, HelpRow, HelpSection, print_help_doc};
 use vp_shared::output;
-use vt::ExitStatus;
 
 use super::types::SynthesizableSubcommand;
 
@@ -12,19 +10,6 @@ use super::types::SynthesizableSubcommand;
 /// `crates/vp_global_cli/src/cli.rs`; the local CLI cannot run them and only
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
-
-pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
-    if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
-        return Ok(ExitStatus(err.exit_code() as u8));
-    }
-    if matches!(err.kind(), ErrorKind::UnknownArgument) && print_unknown_argument_error(&err) {
-        return Ok(ExitStatus(err.exit_code() as u8));
-    }
-
-    err.print().map_err(|e| Error::Anyhow(e.into()))?;
-    Ok(ExitStatus(err.exit_code() as u8))
-}
-
 pub(super) fn normalize_help_args(args: Vec<String>) -> Vec<String> {
     match args.as_slice() {
         [arg] if arg == "help" => vec!["--help".to_string()],
@@ -97,151 +82,154 @@ pub(super) fn should_print_help(args: &[String]) -> bool {
     args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
 }
 
-fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Option<String>)> {
-    let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
-        Some(ContextValue::String(value)) => value.as_str(),
-        _ => return None,
-    };
-
-    let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        Some(ContextValue::Strings(values)) => {
-            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
-        }
-        _ => None,
-    };
-
-    Some((invalid_subcommand.to_owned(), suggestion))
-}
-
-fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
-    let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
-        return false;
-    };
-
-    if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
+pub(super) fn print_invalid_subcommand_error(invalid_subcommand: &str) {
+    if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand) {
         let command = format!("`{invalid_subcommand}`").bright_blue().to_string();
         output::error(&format!(
             "The {command} command is only available in the global `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary."
         ));
-        return true;
+        return;
     }
 
     let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
 
-    if let Some(suggestion) = suggestion {
+    let commands = super::local_command_names();
+    if let Some(suggestion) =
+        vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, &commands)
+    {
         eprintln!();
         let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
         eprintln!("Did you mean {highlighted_suggestion}?");
     }
-
-    true
-}
-
-fn extract_unknown_argument(error: &clap::Error) -> Option<String> {
-    match error.get(ContextKind::InvalidArg) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        _ => None,
-    }
-}
-
-fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
-    let contains_pass_as_value = |suggestion: &str| suggestion.contains("as a value");
-
-    match error.get(ContextKind::Suggested) {
-        Some(ContextValue::String(suggestion)) => contains_pass_as_value(suggestion),
-        Some(ContextValue::Strings(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(suggestion))
-        }
-        Some(ContextValue::StyledStr(suggestion)) => {
-            contains_pass_as_value(&suggestion.to_string())
-        }
-        Some(ContextValue::StyledStrs(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(&suggestion.to_string()))
-        }
-        _ => false,
-    }
-}
-
-fn print_unknown_argument_error(error: &clap::Error) -> bool {
-    let Some(invalid_argument) = extract_unknown_argument(error) else {
-        return false;
-    };
-
-    let highlighted_argument = invalid_argument.bright_blue().to_string();
-    output::error(&format!("Unexpected argument '{highlighted_argument}'"));
-
-    if has_pass_as_value_suggestion(error) {
-        eprintln!();
-        let pass_through_argument = format!("-- {invalid_argument}");
-        let highlighted_pass_through_argument =
-            format!("`{}`", pass_through_argument.bright_blue());
-        eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
-    }
-
-    true
 }
 
 pub(super) fn print_help() {
-    let header = if vp_shared::header::should_print_header() {
-        format!("{}\n\n", vp_shared::header::vite_plus_header())
-    } else {
-        String::new()
-    };
-    let bold = "\x1b[1m";
-    let bold_underline = "\x1b[1;4m";
-    let reset = "\x1b[0m";
-    println!(
-        "{header}{bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
+    let mut core = command_rows(vt::Cli::spec());
+    core.extend(command_rows(super::types::LocalCli::spec()));
+    core.extend(crate::js_command_args::command_specs().into_iter().map(root_command_row));
+    core.sort_unstable_by(|left, right| left.label.cmp(&right.label));
 
-{bold_underline}Core Commands:{reset}
-  {bold}create{reset}         Create a new project from a template
-  {bold}migrate{reset}        Migrate an existing project to Vite+
-  {bold}dev{reset}            Run the development server
-  {bold}build{reset}          Build for production
-  {bold}test{reset}           Run tests
-  {bold}lint{reset}           Lint code
-  {bold}fmt, format{reset}    Format code
-  {bold}check{reset}          Run format, lint, and type checks
-  {bold}pack{reset}           Build library
-  {bold}run{reset}            Run tasks
-  {bold}exec{reset}           Execute a command from local node_modules/.bin
-  {bold}preview{reset}        Preview production build
-  {bold}cache{reset}          Manage the task cache
-  {bold}config{reset}         Configure hooks and agent integration
-  {bold}hooks{reset}          Manage the Git hook dispatcher
-  {bold}staged{reset}         Run linters on staged files
-  {bold}toolchain{reset}      Show Vite+ tool versions and relationships
+    let mut package_manager = command_rows(vp_pm_cli::PackageManagerCli::spec());
+    package_manager.sort_unstable_by(|left, right| left.label.cmp(&right.label));
 
-{bold_underline}Package Manager Commands:{reset}
-  {bold}install{reset}    Install all dependencies, or add packages if package names are provided
+    print_help_doc(&HelpDoc {
+        usage: "vp <COMMAND>".into(),
+        summary: Vec::new(),
+        sections: vec![
+            HelpSection::Rows { title: "Core Commands".into(), rows: core },
+            HelpSection::Rows {
+                title: "Package Manager Commands".into(),
+                rows: package_manager,
+            },
+            HelpSection::Rows {
+                title: "Options".into(),
+                rows: vec![
+                    HelpRow {
+                        label: "-C <DIR>".into(),
+                        description: vec![
+                            "Run as if vp was started in <DIR> instead of the current working directory"
+                                .into(),
+                        ],
+                    },
+                    HelpRow {
+                        label: "-h, --help".into(),
+                        description: vec!["Show this help message".into()],
+                    },
+                ],
+            },
+        ],
+        documentation_url: None,
+    });
+}
 
-Options:
-  -C <DIR>    Run as if vp was started in <DIR> instead of the current working directory
-  -h, --help  Print help"
-    );
+fn command_rows(spec: &'static usage_rs::spec::Spec<'static>) -> Vec<HelpRow> {
+    spec.root
+        .subcommands
+        .iter()
+        .filter(|command| !command.hide)
+        .map(|command| {
+            let aliases =
+                command.cmd.aliases.iter().filter(|alias| !command.hidden_aliases.contains(alias));
+            HelpRow {
+                label: std::iter::once(command.cmd.name)
+                    .chain(aliases.copied())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+                    .into(),
+                description: vec![command.long_about.or(command.about).unwrap_or_default().into()],
+            }
+        })
+        .collect()
+}
+
+fn root_command_row(spec: &'static usage_rs::spec::Spec<'static>) -> HelpRow {
+    HelpRow {
+        label: spec
+            .bin
+            .unwrap_or(spec.name)
+            .split_ascii_whitespace()
+            .next_back()
+            .unwrap_or(spec.name)
+            .into(),
+        description: vec![
+            spec.long_about
+                .or(spec.about)
+                .or(spec.root.long_about)
+                .or(spec.root.about)
+                .unwrap_or_default()
+                .into(),
+        ],
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use clap::Parser;
+    use usage_rs::test::{self, Outcome, Page};
     use vt::Command;
 
-    use super::{super::types::CLIArgs, *};
+    use super::{
+        super::{
+            ParsedCli, parse_cli_args,
+            types::{CLIArgs, LocalCli},
+        },
+        *,
+    };
 
     #[test]
     fn unknown_argument_detected_without_pass_as_value_hint() {
-        let error = CLIArgs::try_parse_from(["vp", "--cache"]).expect_err("Expected parse error");
-        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
-        assert!(!has_pass_as_value_suggestion(&error));
+        let argv = test::argv(["--cache"]);
+        let Outcome::Failed(error) =
+            test::outcome(LocalCli::spec(), &argv.words(), LocalCli::parse_from)
+        else {
+            panic!("expected an argument error");
+        };
+        assert!(error.text.contains("--cache"), "{}", error.text);
+        assert!(!error.text.contains("pass the argument as a value"), "{}", error.text);
     }
 
     #[test]
-    fn run_accepts_unknown_flags_as_task_args() {
-        // After trailing_var_arg change, unknown flags like --yolo are
-        // accepted as task arguments instead of producing a parse error.
-        let args = CLIArgs::try_parse_from(["vp", "run", "--yolo"]).unwrap();
+    fn help_trees_use_the_parser_metadata() {
+        let local = test::help_tree(LocalCli::spec(), Page::Long);
+        assert!(local.contains("=== vp check ==="), "{local}");
+        assert!(local.contains("--no-error-on-unmatched-pattern"), "{local}");
+
+        let tasks = test::help_tree(vt::Cli::spec(), Page::Long);
+        assert!(tasks.contains("=== vt run ==="), "{tasks}");
+        assert!(tasks.contains("--concurrency-limit"), "{tasks}");
+
+        let package_manager = test::help_tree(vp_pm_cli::PackageManagerCli::spec(), Page::Long);
+        assert!(package_manager.contains("=== vp install ==="), "{package_manager}");
+        assert!(package_manager.contains("=== vp pm approve-builds ==="), "{package_manager}");
+    }
+
+    #[test]
+    fn run_forwards_unknown_flags_after_the_task_name() {
+        let ParsedCli::Command(args) =
+            parse_cli_args(&["run".into(), "build".into(), "--yolo".into()])
+        else {
+            panic!("run arguments must parse");
+        };
         let debug = vt_str::format!("{args:?}");
         assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}");
         assert!(matches!(args, CLIArgs::ViteTask(Command::Run(_))));
@@ -319,16 +307,10 @@ mod tests {
 
     #[test]
     fn global_subcommands_produce_invalid_subcommand_error() {
-        use clap::error::ErrorKind;
-
         for subcommand in ["config", "create", "env", "hooks", "implode", "migrate", "upgrade"] {
-            let error = CLIArgs::try_parse_from(["vp", subcommand])
-                .expect_err(&format!("expected error for global subcommand '{subcommand}'"));
-            assert_eq!(
-                error.kind(),
-                ErrorKind::InvalidSubcommand,
-                "expected InvalidSubcommand for '{subcommand}', got {:?}",
-                error.kind()
+            assert!(
+                matches!(parse_cli_args(&[subcommand.into()]), ParsedCli::Exit(status) if status.0 == 2),
+                "expected an invalid-subcommand exit for '{subcommand}'"
             );
         }
     }

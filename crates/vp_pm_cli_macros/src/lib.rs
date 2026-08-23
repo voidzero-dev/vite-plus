@@ -180,8 +180,8 @@ fn process_field(field: &mut Field) -> Result<Option<FieldSupport>> {
             continue;
         }
 
-        let processed = process_arg_attr(&attr, &field_ident)?;
-        new_attrs.push(processed.attr);
+        let processed = process_arg_attr(&attr, &field_ident, &field.ty)?;
+        new_attrs.extend(processed.attrs);
         if let Some(attr_support) = processed.support {
             if support.is_some() {
                 return Err(Error::new(
@@ -230,7 +230,7 @@ fn conditional_attrs(attrs: &[Attribute]) -> Result<Vec<Attribute>> {
 }
 
 struct ProcessedArgAttr {
-    attr: Attribute,
+    attrs: [Attribute; 2],
     support: Option<AttrSupport>,
 }
 
@@ -239,7 +239,11 @@ struct AttrSupport {
     clauses: Vec<Clause>,
 }
 
-fn process_arg_attr(attr: &Attribute, field_ident: &Ident) -> Result<ProcessedArgAttr> {
+fn process_arg_attr(
+    attr: &Attribute,
+    field_ident: &Ident,
+    field_type: &Type,
+) -> Result<ProcessedArgAttr> {
     let metas = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
     let mut kept = Vec::new();
     let mut clauses = None;
@@ -273,7 +277,12 @@ fn process_arg_attr(attr: &Attribute, field_ident: &Ident) -> Result<ProcessedAr
         kept.push(meta);
     }
 
-    let new_attr: Attribute = syn::parse_quote!(#[arg(#(#kept),*)]);
+    let clap_attr: Attribute =
+        syn::parse_quote!(#[cfg_attr(feature = "clap-parser", arg(#(#kept),*))]);
+    let usage_metas =
+        kept.iter().filter_map(|meta| usage_meta(meta, field_type)).collect::<Vec<_>>();
+    let usage_attr: Attribute =
+        syn::parse_quote!(#[cfg_attr(feature = "usage-parser", usage(#(#usage_metas),*))]);
     let support = if let Some(clauses) = clauses {
         let display_name = long_display.or(short_display).or(value_display).ok_or_else(|| {
             Error::new(
@@ -286,7 +295,36 @@ fn process_arg_attr(attr: &Attribute, field_ident: &Ident) -> Result<ProcessedAr
         None
     };
 
-    Ok(ProcessedArgAttr { attr: new_attr, support })
+    Ok(ProcessedArgAttr { attrs: [clap_attr, usage_attr], support })
+}
+
+fn usage_meta(meta: &Meta, field_type: &Type) -> Option<Meta> {
+    let name = meta.path().get_ident()?.to_string();
+    match name.as_str() {
+        "value_parser" => None,
+        "required" if !is_vec(field_type) && !is_option_vec(field_type) => None,
+        "last" => Some(syn::parse_quote!(double_dash = "required")),
+        "overrides_with" | "overrides_with_all" => Some(rename_meta(meta, "overrides")),
+        "conflicts_with" | "conflicts_with_all" => Some(rename_meta(meta, "conflicts")),
+        _ => Some(meta.clone()),
+    }
+}
+
+fn rename_meta(meta: &Meta, name: &str) -> Meta {
+    let path = Ident::new(name, meta.path().span()).into();
+    match meta {
+        Meta::Path(_) => Meta::Path(path),
+        Meta::List(list) => {
+            let mut list = list.clone();
+            list.path = path;
+            Meta::List(list)
+        }
+        Meta::NameValue(value) => {
+            let mut value = value.clone();
+            value.path = path;
+            Meta::NameValue(value)
+        }
+    }
 }
 
 fn is_not_supported_meta(meta: &Meta) -> bool {

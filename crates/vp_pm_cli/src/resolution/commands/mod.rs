@@ -71,10 +71,28 @@ pub use view::ViewArgs;
 pub use whoami::WhoamiArgs;
 pub use why::WhyArgs;
 
-fn parse_positive_usize(value: &str) -> Result<usize, String> {
-    match value.parse::<usize>() {
-        Ok(value) if value > 0 => Ok(value),
-        Ok(_) => Err("value must be at least 1".to_string()),
-        Err(error) => Err(error.to_string()),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PositiveUsize(usize);
+
+impl std::str::FromStr for PositiveUsize {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.parse::<usize>() {
+            Ok(value) if value > 0 => Ok(Self(value)),
+            Ok(_) => Err("value must be at least 1".to_string()),
+            Err(error) => Err(error.to_string()),
+        }
     }
+}
+
+impl From<PositiveUsize> for usize {
+    fn from(value: PositiveUsize) -> Self {
+        value.0
+    }
+}
+
+#[cfg(feature = "clap-parser")]
+fn parse_positive_usize(value: &str) -> Result<PositiveUsize, String> {
+    value.parse()
 }

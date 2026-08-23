@@ -54,6 +54,10 @@ impl CliParser for HooksCliArgs {
     }
 }
 
+pub(super) fn spec() -> &'static usage_rs::spec::Spec<'static> {
+    HooksCliArgs::spec()
+}
+
 #[napi(object, object_from_js = false)]
 pub struct HooksArgs {
     #[napi(ts_type = "'enable' | 'disable' | 'status'")]

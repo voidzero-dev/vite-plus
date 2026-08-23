@@ -6,7 +6,9 @@ use crate::resolution::{
 
 /// Configuration subcommands.
 #[pm_args]
-#[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap-parser", derive(clap::Subcommand))]
+#[cfg_attr(feature = "usage-parser", derive(usage_rs::Subcommands))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConfigCommand {
     /// List all configuration
     List {
