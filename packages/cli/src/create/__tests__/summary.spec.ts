@@ -79,14 +79,19 @@ describe('showCreateSummary', () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it('still suggests running the project when only formatting failed', () => {
+  // Regression test for the PTY snapshot failures this PR first introduced:
+  // `create_framework_shim_vue` and `new_create_vite` scaffold templates whose
+  // plugin imports are not resolvable when `vp fmt` runs, so the format step
+  // fails on a project that is otherwise complete. Naming it is right; exiting
+  // non-zero for it is not.
+  it('still suggests running the project and succeeds when only formatting failed', () => {
     showCreateSummary({ ...baseOptions, installSummary: installed, fmtSummary: failed });
 
     const text = output();
     expect(text).toContain('Code was not formatted');
     expect(text).toContain('cd create-failure-demo && vp run');
     expect(text).not.toContain('Dependencies were not installed');
-    expect(process.exitCode).toBe(1);
+    expect(process.exitCode).toBeUndefined();
   });
 
   it('never lowers an exit code another step already raised', () => {

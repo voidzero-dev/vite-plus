@@ -408,11 +408,15 @@ describe('resolveCreateCompletion', () => {
     });
   });
 
-  it('reports a failed format but still suggests running the project', () => {
+  // A format failure leaves a complete, runnable project, so it is named in
+  // the summary but must not fail the command: scaffolding a `react-ts` or
+  // `vue-ts` template produces a `vite.config.ts` whose plugin import is not
+  // resolvable until dependencies land, and `vp fmt` fails there routinely.
+  it('reports a failed format without failing the command', () => {
     expect(resolveCreateCompletion({ installSummary: installed, fmtSummary: failed })).toEqual({
       failures: ['Code was not formatted'],
       nextCommand: 'vp run',
-      exitCode: 1,
+      exitCode: 0,
     });
   });
 

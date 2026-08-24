@@ -12,7 +12,7 @@ export interface CreateCompletion {
   failures: string[];
   /** Command worth suggesting next: recovery when the project is not usable. */
   nextCommand: string;
-  /** Non-zero when a step of the requested operation failed. */
+  /** Non-zero when the scaffolded project cannot be run as it stands. */
   exitCode: number;
 }
 
@@ -26,6 +26,14 @@ export interface CreateCompletion {
  * apart instead of reporting success for both.
  *
  * A skipped step (`VP_SKIP_INSTALL`) is not a failure — nothing was attempted.
+ *
+ * Only a failed install changes the exit code. Formatting runs against a
+ * project whose dependencies may not be resolvable yet — scaffolding a
+ * `react-ts` or `vue-ts` template leaves a `vite.config.ts` importing a plugin
+ * that is not installed, so `vp fmt` cannot load the config and fails on a
+ * project that is otherwise complete. Reporting that as a failed command would
+ * break every such `vp create` in CI, so it is named in the summary and left
+ * out of the exit code.
  */
 export function resolveCreateCompletion(options: {
   installSummary?: CommandRunSummary;
@@ -48,7 +56,7 @@ export function resolveCreateCompletion(options: {
     // the step that has to succeed first. A format failure leaves a runnable
     // project, so it does not change the suggestion.
     nextCommand: installFailed ? 'vp install' : 'vp run',
-    exitCode: failures.length > 0 ? 1 : 0,
+    exitCode: installFailed ? 1 : 0,
   };
 }
 
