@@ -87,7 +87,7 @@ For advanced configuration and the complete input reference, see the [`setup-vp`
 
 ## Azure Pipelines
 
-Use the reusable `setup-vp` step template in your Azure Pipelines configuration. Create a GitHub service connection named `github`, then set the repository `ref` and `setupRef` to the same release tag or commit SHA:
+Use the reusable `setup-vp` step template in your Azure Pipelines configuration. Create a GitHub service connection named `github`, then reference the template from the `setup-vp` repository:
 
 ```yaml [azure-pipelines.yml]
 resources:
@@ -113,6 +113,8 @@ steps:
   - script: vp test
   - script: vp build
 ```
+
+Pin `ref` and `setupRef` to the same tag or commit SHA for strict reproducibility.
 
 The Azure Pipelines template supports Microsoft-hosted Linux, macOS, and Windows agents. It uses Azure's native `UseNode@1` and `Cache@2` tasks to set up Node.js and cache package-manager data.
 
