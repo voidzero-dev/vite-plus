@@ -536,7 +536,7 @@ describe('writeCopilotSetupWorkflow', () => {
     expect(content).toContain('runs-on: ubuntu-latest');
     expect(content).toContain('persist-credentials: false');
     expect(content).toContain('uses: actions/checkout@v6');
-    expect(content).toContain('uses: voidzero-dev/setup-vp@v1');
+    expect(content).toContain('uses: voidzero-dev/setup-vp@v1.18.0');
     expect(content).toContain('run-install: true');
     expect(content).toContain('- .github/workflows/copilot-setup-steps.yml');
 
