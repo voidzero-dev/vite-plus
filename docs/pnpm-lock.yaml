@@ -32,9 +32,6 @@ importers:
       vue:
         specifier: ^3.5.27
         version: 3.5.35(typescript@6.0.3)
-      vue3-carousel:
-        specifier: ^0.17.0
-        version: 0.17.0(vue@3.5.35(typescript@6.0.3))
     devDependencies:
       '@voidzero-dev/vitepress-theme':
         specifier: 4.8.4
@@ -1960,11 +1957,6 @@ packages:
     peerDependenciesMeta:
       '@vue/composition-api':
         optional: true
-
-  vue3-carousel@0.17.0:
-    resolution: {integrity: sha512-kvb2CRpsEtLGSbiOq/fXfayMJeiwMMjnNSbqWI/Ee7tgfY/ofNanRuhpd7WRVtDdzJY1HvygdLawlBhIyJTM2w==}
-    peerDependencies:
-      vue: ^3.5.0
 
   vue@3.5.35:
     resolution: {integrity: sha512-cx89fnr+0kVGHiNFG6y6s0bdjypJRFNZn6x3WPstNdQR1bi1mbB7h4v5IBGTsPJU3nK1+0Iqj3Zf+hZWMieR4Q==}
@@ -3963,10 +3955,6 @@ snapshots:
       - yaml
 
   vue-demi@0.14.10(vue@3.5.35(typescript@6.0.3)):
-    dependencies:
-      vue: 3.5.35(typescript@6.0.3)
-
-  vue3-carousel@0.17.0(vue@3.5.35(typescript@6.0.3)):
     dependencies:
       vue: 3.5.35(typescript@6.0.3)
 
