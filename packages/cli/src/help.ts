@@ -834,6 +834,7 @@ const commandHelpDocs = {
       {
         title: 'Options',
         rows: [
+          { label: '--no-config', description: 'Disable config file' },
           {
             label: '-f, --format <format>',
             description: 'Bundle format: esm, cjs, iife, umd (default: esm)',

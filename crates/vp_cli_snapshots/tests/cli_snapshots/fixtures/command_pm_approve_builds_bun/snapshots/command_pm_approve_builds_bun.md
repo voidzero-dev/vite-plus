@@ -45,6 +45,6 @@ forwards bun pm trust --all (errors on empty project — no lockfile)
 **Exit code:** 1
 
 ```
-bun pm trust <version> (af24e281)
+bun pm trust <version> (<hash>)
 error: Lockfile not found
 ```

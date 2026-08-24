@@ -13,8 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
+console = { workspace = true }
 indicatif = { workspace = true }
-owo-colors = { workspace = true, features = ["supports-colors"] }
 tokio = { workspace = true, features = ["full"] }
 vp_pm_cli = { workspace = true }
 vt_path = { workspace = true }
@@ -24,6 +24,10 @@ which = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

@@ -359,7 +359,7 @@ pub fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
+    use vp_shared::env_vars;
 
     use super::*;
 
@@ -681,35 +681,20 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_find_on_path_finds_tool() {
-        let original_path = std::env::var_os("PATH");
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path().join("bin_test");
         std::fs::create_dir_all(&dir).unwrap();
         create_fake_executable(&dir, "vpx-test-tool-abc");
 
-        // SAFETY: serial test
-        unsafe {
-            std::env::set_var("PATH", &dir);
-        }
-
-        let result = find_on_path("vpx-test-tool-abc");
-        assert!(result.is_some());
-
-        unsafe {
-            match &original_path {
-                Some(v) => std::env::set_var("PATH", v),
-                None => std::env::remove_var("PATH"),
-            }
-        }
+        temp_env::with_var("PATH", Some(dir.as_os_str()), || {
+            let result = find_on_path("vpx-test-tool-abc");
+            assert!(result.is_some());
+        });
     }
 
     #[test]
-    #[serial]
     fn test_find_on_path_excludes_vp_bin_dir() {
-        let original_path = std::env::var_os("PATH");
-        let original_home = std::env::var_os("VP_HOME");
         let temp = tempfile::tempdir().unwrap();
 
         // Set up a fake vite-plus home with bin dir
@@ -725,30 +710,18 @@ mod tests {
 
         let path = std::env::join_paths([fake_bin.as_path(), other_dir.as_path()]).unwrap();
 
-        // SAFETY: serial test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::set_var("VP_HOME", fake_home.as_os_str());
-        }
-
-        let result = find_on_path("vpx-excluded-tool");
-        assert!(result.is_some());
-        // Should find the one in other_dir, not fake_bin
-        assert!(
-            result.unwrap().as_path().starts_with(&other_dir),
-            "Should skip vite-plus bin dir and find tool in other directory"
+        vp_shared::EnvConfig::with_vars(
+            [("PATH", path.as_os_str()), (env_vars::VP_HOME, fake_home.as_os_str())],
+            |_| {
+                let result = find_on_path("vpx-excluded-tool");
+                assert!(result.is_some());
+                // Should find the one in other_dir, not fake_bin
+                assert!(
+                    result.unwrap().as_path().starts_with(&other_dir),
+                    "Should skip vite-plus bin dir and find tool in other directory"
+                );
+            },
         );
-
-        unsafe {
-            match &original_path {
-                Some(v) => std::env::set_var("PATH", v),
-                None => std::env::remove_var("PATH"),
-            }
-            match &original_home {
-                Some(v) => std::env::set_var("VP_HOME", v),
-                None => std::env::remove_var("VP_HOME"),
-            }
-        }
     }
 
     // =========================================================================
@@ -756,9 +729,7 @@ mod tests {
     // =========================================================================
 
     #[test]
-    #[serial]
     fn test_prepend_node_modules_bin_to_path() {
-        let original_path = std::env::var_os("PATH");
         let temp = tempfile::tempdir().unwrap();
         let temp_path = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
 
@@ -771,26 +742,16 @@ mod tests {
         let nested_bin = nested.join("node_modules").join(".bin");
         std::fs::create_dir_all(&nested_bin).unwrap();
 
-        // SAFETY: serial test
-        unsafe {
-            std::env::set_var("PATH", "/usr/bin");
-        }
+        temp_env::with_var("PATH", Some(std::ffi::OsStr::new("/usr/bin")), || {
+            prepend_node_modules_bin_to_path(&nested);
 
-        prepend_node_modules_bin_to_path(&nested);
+            let new_path = std::env::var_os("PATH").unwrap();
+            let paths: Vec<_> = std::env::split_paths(&new_path).collect();
 
-        let new_path = std::env::var_os("PATH").unwrap();
-        let paths: Vec<_> = std::env::split_paths(&new_path).collect();
-
-        // Nearest (nested) should be first
-        assert_eq!(paths[0], nested_bin.as_path().to_path_buf());
-        // Root should be second
-        assert_eq!(paths[1], root_bin.as_path().to_path_buf());
-
-        unsafe {
-            match &original_path {
-                Some(v) => std::env::set_var("PATH", v),
-                None => std::env::remove_var("PATH"),
-            }
-        }
+            // Nearest (nested) should be first
+            assert_eq!(paths[0], nested_bin.as_path().to_path_buf());
+            // Root should be second
+            assert_eq!(paths[1], root_bin.as_path().to_path_buf());
+        });
     }
 }

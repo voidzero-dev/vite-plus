@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { Scalar, YAMLMap } from 'yaml';
+import { YAMLMap } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import {
@@ -25,7 +25,9 @@ import {
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
+  pnpmOverrideKey,
   type CatalogDependencyResolver,
+  type ManagedOverrideKeyStyle,
   type PackageJsonDependencyField,
 } from './shared.ts';
 
@@ -546,26 +548,52 @@ export function projectUsesVitestDirectly(
 // alias is always a string, whereas a nested object value (npm/bun `overrides`)
 // is a user override scoped under `vitest` and must be left intact. Returns true
 // iff an entry was removed.
-export function removeManagedVitestEntry(record: Record<string, string> | undefined): boolean {
-  if (VITEST_IS_MANAGED_OVERRIDE && typeof record?.vitest === 'string') {
-    delete record.vitest;
-    return true;
+//
+// `keyStyle` selects which spellings count as managed. Only a pnpm override sink
+// spells the managed key `vitest@*` (see `pnpmOverrideKey`), and such a sink can
+// hold either spelling. A project migrated before the #2309 fix holds the bare
+// key. A project migrated after it holds the ranged key. Every other sink stays
+// `bare`. npm also accepts a range in an override key, so a user-authored
+// `"vitest@*"` in npm `overrides` belongs to the user. Do not delete it.
+export function removeManagedVitestEntry(
+  record: Record<string, string> | undefined,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
+): boolean {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
+    return false;
   }
-  return false;
+  let removed = false;
+  for (const key of managedVitestOverrideKeys(keyStyle)) {
+    if (typeof record[key] === 'string') {
+      delete record[key];
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 // Remove a managed `vitest` scalar key from a YAMLMap (pnpm-workspace.yaml
-// `overrides`, `catalog`, and each named `catalogs` entry).
-export function removeYamlMapVitestEntry(map: unknown): void {
+// `overrides`, `catalog`, and each named `catalogs` entry). Only the `overrides`
+// map uses the range-qualified spelling. `catalog`, `catalogs`, and
+// `allowedVersions` key on plain package names, so they stay `bare`.
+export function removeYamlMapVitestEntry(
+  map: unknown,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
+): void {
   if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
     return;
   }
-  const target = map.items.find(
-    (item) => item.key instanceof Scalar && item.key.value === 'vitest',
-  )?.key;
-  if (target) {
-    map.delete(target);
+  for (const key of managedVitestOverrideKeys(keyStyle)) {
+    map.delete(key);
   }
+}
+
+// The managed spellings of the `vitest` override key: `vitest` everywhere, plus
+// `vitest@*` in a pnpm override sink (see `pnpmOverrideKey`). Exact key
+// equality keeps selector-scoped keys such as `some-app>vitest` out, and, in
+// bare sinks, a user-authored ranged key too.
+function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] {
+  return keyStyle === 'pnpm-ranged' ? ['vitest', pnpmOverrideKey('vitest')] : ['vitest'];
 }
 
 // Remove the managed `vitest` entry from pnpm peerDependencyRules (its

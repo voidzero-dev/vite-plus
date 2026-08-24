@@ -1,0 +1,56 @@
+[[case]]
+name = "migration_from_tsup_monorepo_success"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "the real tsdown-migrate package should migrate all workspace-only tsup configs", timeout = 120000 },
+  { argv = ["vpt", "stat-file", "packages/a/tsup.config.ts", "--assert-not", "file"], comment = "package a original config is removed" },
+  { argv = ["vpt", "print-file", "packages/a/tsdown.config.ts"], comment = "package a gets a converted config" },
+  { argv = ["vpt", "print-file", "packages/a/package.json"], comment = "package a uses vp pack" },
+  { argv = ["vpt", "stat-file", "packages/b/tsup.config.ts", "--assert-not", "file"], comment = "package b original config is removed" },
+  { argv = ["vpt", "print-file", "packages/b/tsdown.config.ts"], comment = "package b gets a converted config" },
+  { argv = ["vpt", "print-file", "packages/b/package.json"], comment = "package b uses vp pack" },
+  { argv = ["vp", "run", "build"], cwd = "packages/a", comment = "package a migrated vp pack script builds successfully" },
+  { argv = ["vpt", "list-dir", "packages/a/dist"], comment = "package a build artifacts are created" },
+  { argv = ["vp", "run", "build"], cwd = "packages/b", comment = "package b migrated vp pack script builds successfully" },
+  { argv = ["vpt", "list-dir", "packages/b/dist"], comment = "package b build artifacts are created" },
+]
+
+[[case]]
+name = "migration_from_tsup_monorepo_shared_root_config"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vpt", "cp", "packages/a/tsup.config.ts", "tsup.config.ts"], snapshot = false },
+  { argv = ["vpt", "rm", "packages/a/tsup.config.ts", "packages/b/tsup.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsup", "^8.5.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "^5.9.2"], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/a/package.json", "scripts.build", "tsup --config ../../tsup.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/b/package.json", "scripts.build", "tsup --config ../../tsup.config.ts"], snapshot = false },
+  { argv = ["vp", "install"], comment = "install the original shared-config tsup workspace", snapshot = false, timeout = 120000 },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a shared root tsup config should be preserved with a warning", timeout = 120000 },
+  { argv = ["vpt", "stat-file", "tsup.config.ts", "--assert", "file"], comment = "the shared tsup config is preserved" },
+  { argv = ["vpt", "stat-file", "tsdown.config.ts", "--assert", "file"], comment = "the root also gets a migrated tsdown config" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the root keeps tsup for the shared config" },
+  { argv = ["vpt", "print-file", "packages/a/package.json"], comment = "package a keeps its shared-config tsup script" },
+  { argv = ["vpt", "print-file", "packages/b/package.json"], comment = "package b keeps its shared-config tsup script" },
+  { argv = ["vp", "run", "build"], cwd = "packages/a", comment = "package a shared-config build remains usable" },
+  { argv = ["vpt", "list-dir", "packages/a/dist"], comment = "package a build artifacts are created" },
+  { argv = ["vp", "run", "build"], cwd = "packages/b", comment = "package b shared-config build remains usable" },
+  { argv = ["vpt", "list-dir", "packages/b/dist"], comment = "package b build artifacts are created" },
+]
+
+[[case]]
+name = "migration_from_tsup_monorepo_failure"
+vp = "local"
+env = { VP_CLI_BIN = "../../tsdown-migrate-failure-stub.mjs", TSDOWN_MIGRATE_STUB_FAIL_IN = "b" }
+steps = [
+  { argv = ["vpt", "chmod", "+x", "tsdown-migrate-failure-stub.mjs"], comment = "stub a failure after package a succeeds", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a later package failure should roll back every package", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/a/tsup.config.ts", "--assert", "file"], comment = "package a original config is restored", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/a/tsdown.config.ts", "--assert-not", "file"], comment = "package a converted config is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/a/package.json"], comment = "package a manifest is restored", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/b/tsup.config.ts", "--assert", "file"], comment = "package b original config is restored", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/b/tsdown.config.ts", "--assert-not", "file"], comment = "package b partial config is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/b/package.json"], comment = "package b manifest is restored", continue-on-failure = true },
+]

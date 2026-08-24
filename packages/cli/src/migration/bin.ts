@@ -47,6 +47,7 @@ import {
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
+  detectTsupProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
@@ -55,10 +56,12 @@ import {
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
   installGitHooks,
+  mergeTsdownConfigFile,
   mergeViteConfigFiles,
   migrateEslintToOxlint,
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
+  migrateTsupToTsdown,
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -70,7 +73,11 @@ import {
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
-import { collectMigrationSetupPlan, type MigrationSetupPlan } from './setup-plan.ts';
+import {
+  collectMigrationSetupPlan,
+  collectTsupMigrationDecision,
+  type MigrationSetupPlan,
+} from './setup-plan.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -379,6 +386,8 @@ interface MigrationPlan extends MigrationSetupPlan {
   migratePrettier: boolean;
   hasPrettierDependency: boolean;
   prettierConfigFile?: string;
+  migrateTsup: boolean;
+  tsupConfigFile?: string;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
@@ -467,12 +476,14 @@ function hasExistingVitePlusMigrationCandidates(
 ): boolean {
   const eslintProject = detectEslintProject(workspaceInfo.rootDir, workspaceInfo.packages);
   const prettierProject = detectPrettierProject(workspaceInfo.rootDir, workspaceInfo.packages);
+  const tsupProject = detectTsupProject(workspaceInfo.rootDir, workspaceInfo.packages);
   return (
     hasExplicitExistingVitePlusSetupRequest(options) ||
     detectLegacyGitHooksMigrationCandidate(workspaceInfo.rootDir) ||
     hasBaseUrlInWorkspace(workspaceInfo) ||
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
+    tsupProject.hasDependency ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
     getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
@@ -525,6 +536,13 @@ async function collectMigrationPlan(
     warnPackageLevelPrettier();
   }
 
+  // 3b. tsup detection + prompt (after Prettier so Prettier -> Oxfmt is checked first)
+  const { migrateTsup, tsupConfigFile } = await collectTsupMigrationDecision(
+    rootDir,
+    options,
+    packages,
+  );
+
   // 9. tsconfig baseUrl prompt
   const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
     ? await confirmBaseUrlFix(options.interactive)
@@ -550,6 +568,8 @@ async function collectMigrationPlan(
     migratePrettier,
     hasPrettierDependency: prettierProject.hasDependency,
     prettierConfigFile: prettierProject.configFile,
+    migrateTsup,
+    tsupConfigFile,
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
@@ -690,6 +710,9 @@ function showMigrationSummary(options: {
   }
   if (report.prettierMigrated) {
     log(`${styleText('gray', '•')} Prettier migrated to Oxfmt`);
+  }
+  if (report.tsupMigrated) {
+    log(`${styleText('gray', '•')} tsup config migrated to tsdown (\`vp pack\`)`);
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
@@ -902,6 +925,23 @@ async function executeMigrationPlan(
     if (!prettierOk) {
       failMigrationProgress('Migration failed');
       cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+    }
+  }
+
+  // 6b. tsup → tsdown migration (before main rewrite so tsdown.config.* gets picked up)
+  if (plan.migrateTsup) {
+    updateMigrationProgress('Migrating tsup');
+    const tsupOk = await migrateTsupToTsdown(
+      workspaceInfo.rootDir,
+      interactive,
+      plan.packageManager,
+      plan.tsupConfigFile,
+      workspaceInfo.packages,
+      { silent: true, report },
+    );
+    if (!tsupOk) {
+      failMigrationProgress('Migration failed');
+      cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
     }
   }
 
@@ -1345,6 +1385,37 @@ async function main() {
       }
     }
 
+    let tsupMigrated = false;
+    if (fullSetup) {
+      // Interactive only: stop any active spinner (e.g. "Migrating Prettier") so
+      // it does not animate beneath the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      const { migrateTsup, tsupConfigFile } = await collectTsupMigrationDecision(
+        workspaceInfoOptional.rootDir,
+        setupOptions,
+        workspaceInfoOptional.packages,
+      );
+      if (migrateTsup) {
+        await ensureExistingPackageManager();
+        updateMigrationProgress('Migrating tsup');
+        const tsupOk = await migrateTsupToTsdown(
+          workspaceInfoOptional.rootDir,
+          options.interactive,
+          packageManager!, // is it safe to do this?
+          tsupConfigFile,
+          workspaceInfoOptional.packages,
+          { silent: true, report },
+        );
+        if (!tsupOk) {
+          clearMigrationProgress();
+          cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
+        }
+        tsupMigrated = true;
+      }
+    }
+
     // Check if node version manager file migration is needed (full setup only)
     if (fullSetup) {
       const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
@@ -1391,7 +1462,7 @@ async function main() {
     }
 
     // Merge configs and reinstall once if any tool or bootstrap migration happened
-    if (eslintMigrated || prettierMigrated) {
+    if (eslintMigrated || prettierMigrated || tsupMigrated) {
       updateMigrationProgress('Rewriting configs');
       mergeViteConfigFiles(
         workspaceInfoOptional.rootDir,
@@ -1399,10 +1470,17 @@ async function main() {
         report,
         workspaceInfoOptional.packages,
       );
+      if (tsupMigrated) {
+        mergeTsdownConfigFile(workspaceInfoOptional.rootDir, true, report);
+        for (const pkg of workspaceInfoOptional.packages ?? []) {
+          mergeTsdownConfigFile(path.join(workspaceInfoOptional.rootDir, pkg.path), true, report);
+        }
+      }
       needsInstall = true;
       didMigrate = true;
       report.eslintMigrated = eslintMigrated;
       report.prettierMigrated = prettierMigrated;
+      report.tsupMigrated = tsupMigrated;
     }
 
     if (plan.shouldSetupHooks) {

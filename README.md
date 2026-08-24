@@ -102,6 +102,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 - **create** - Create a new project from a template
 - **migrate** - Migrate an existing project to Vite+
 - **config** - Configure hooks and agent integration
+- **hooks** - Manage the Git hook dispatcher
 - **staged** - Run linters on staged files
 - **install** (`i`) - Install dependencies
 - **env** - Manage Node.js versions
@@ -206,7 +207,7 @@ Add package-manager overrides so that other packages use the Vite+ versions. Ali
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.10"
+  "vitest": "4.1.11"
 }
 ```
 
@@ -215,7 +216,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 4.1.10
+  vitest: 4.1.11
 ```
 
 Or, if you are using Yarn:
@@ -223,7 +224,7 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.10"
+  "vitest": "4.1.11"
 }
 ```
 

@@ -12,9 +12,10 @@ runs the selection as an implicit -C (rfcs/cwd-flag.md).
 note: You are running `vp build` as a Vite+ built-in command. If you meant to run the build npm script, use `vpr build` instead.
 Select a package to build (↑/↓, Enter to run, type to search):
 
-  › admin apps/admin
-    web   apps/web
-    ui    packages/ui
+  › admin            apps/admin
+    web              apps/web
+    ui               packages/ui
+    app-root-listing .
 ```
 
 **← write:** `web`

@@ -54,6 +54,11 @@
     "branch": "main",
     "hash": "439d7df1a5d594458e95071612c5edd93ff736a5"
   },
+  "decoders": {
+    "repository": "https://github.com/nvie/decoders.git",
+    "branch": "main",
+    "hash": "ba339327758fcfda9d2f361e2786513aca901717"
+  },
   "vite-vue-vercel": {
     "repository": "https://github.com/fengmk2/vite-vue-vercel.git",
     "branch": "main",
@@ -136,6 +141,17 @@
     "repository": "https://github.com/varletjs/varlet.git",
     "branch": "dev",
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
+    "forceFreshMigration": true
+  },
+  "nuxt-devtools": {
+    "repository": "https://github.com/nuxt/devtools.git",
+    "branch": "main",
+    "hash": "a24195182241ddcce07f9d9e7972608eafbc93fb"
+  },
+  "tiptap": {
+    "repository": "https://github.com/ueberdosis/tiptap.git",
+    "branch": "main",
+    "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
     "forceFreshMigration": true
   }
 }

@@ -47,11 +47,13 @@ async fn execute_direct_subcommand(
     subcommand: SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
-    let (target, workspace_root_hint) = app_target::resolve_app_target(&subcommand, cwd)?;
+    let (target, workspace_root_hint) =
+        app_target::resolve_app_target(&subcommand, cwd, explicit_chdir)?;
     let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
     let cwd = match &target {
         app_target::AppTarget::Exit(status) => return Ok(*status),
@@ -366,6 +368,7 @@ pub async fn main(
     cwd: AbsolutePathBuf,
     options: Option<CliOptions>,
     args: Option<Vec<String>>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     let raw_args: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
     // The global CLI resolves aliases to their canonical names before
@@ -393,7 +396,7 @@ pub async fn main(
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
             script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options).await
+            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
@@ -418,7 +421,6 @@ async fn execute_pm_command(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
         )));
     }
-    let hint_command = command.clone();
     let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {
         Ok(result) => result,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
@@ -431,7 +433,7 @@ async fn execute_pm_command(
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
     };
     if result.status.success()
-        && let Some(packages) = hint_command.why_hint_packages(result.package_manager)
+        && let Some(packages) = result.why_hint_packages.as_deref()
     {
         print_toolchain_why_hint(options, packages);
     }
@@ -550,6 +552,7 @@ mod tests {
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
         let vp_home = temp_dir.join("vp-home");
+        // VP_HOME pins <DATA> to the root, so the cached install lands here.
         let bin_dir =
             vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
         fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
@@ -568,15 +571,16 @@ mod tests {
         let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        let _guard =
-            vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(&vp_home));
-        let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+        vp_shared::EnvConfig::with_vars_async([(vp_shared::env_vars::VP_HOME, &vp_home)], |_| async {
+            let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
 
         assert!(
             matches!(result, Err(Error::PackageManagerHashMismatch(_))),
             "an integrity failure must reach the user instead of a missing command: {result:?}"
         );
         fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+            })
+        .await;
     }
 
     #[tokio::test]

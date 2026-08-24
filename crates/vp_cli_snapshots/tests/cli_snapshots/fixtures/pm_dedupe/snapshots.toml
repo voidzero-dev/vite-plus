@@ -43,3 +43,13 @@ steps = [
   { argv = ["vp", "dedupe", "--", "--silent"], comment = "Bun falls back to install because it does not support dedupe" },
   { argv = ["vpt", "print-file", "package.json"], comment = "verify Bun completed" },
 ]
+
+[[case]]
+name = "pm_dedupe_bun_1_4"
+vp = "global"
+cwd = "bun_1_4"
+steps = [
+  { argv = ["vp", "install", "--", "--silent"], comment = "install to create the lockfile" },
+  { argv = ["vp", "dedupe"], comment = "bun 1.4 runs bun dedupe directly" },
+  { argv = ["vp", "dedupe", "--check"], comment = "check mode reports without changing the lockfile" },
+]

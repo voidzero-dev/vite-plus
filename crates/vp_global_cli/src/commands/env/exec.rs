@@ -201,9 +201,16 @@ fn classify_version(version: &str) -> VersionSelector<'_> {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
-
     use super::*;
+
+    /// Shared VP_HOME for tests that download a real Node.js runtime: pinning
+    /// isolates them from concurrent scopes, and one shared root keeps the
+    /// download cache warm across tests and runs.
+    fn shared_vp_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[tokio::test]
     async fn test_execute_missing_command() {
@@ -214,14 +221,21 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_execute_node_version() {
-        // Run 'node --version' with a specific Node.js version
-        let command = vec!["node".to_string(), "--version".to_string()];
-        let result = execute(Some("20.18.0"), None, &command).await;
-        assert!(result.is_ok());
-        let status = result.unwrap();
-        assert!(status.success());
+        // Shared root keeps the downloaded Node 20.18.0 warm across runs.
+        let vp_home = shared_vp_home();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            |_| async {
+                // Run 'node --version' with a specific Node.js version
+                let command = vec!["node".to_string(), "--version".to_string()];
+                let result = execute(Some("20.18.0"), None, &command).await;
+                assert!(result.is_ok());
+                let status = result.unwrap();
+                assert!(status.success());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]

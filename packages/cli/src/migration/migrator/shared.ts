@@ -161,6 +161,63 @@ export const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
   vitest: VITEST_VERSION,
 };
 
+/**
+ * Managed pnpm override keys use an explicit `@*` range, not a bare package
+ * name: `vite@*`, not `vite`.
+ *
+ * pnpm applies overrides through a read-package hook. The hook replaces the
+ * declared spec on every manifest, importer manifests included, before
+ * resolution runs. A bare override key has no range, and pnpm treats a key with
+ * no range as a match for every declared spec. That includes `catalog:`. An
+ * importer that declares `vite: "catalog:"` therefore loses its link to the
+ * catalog during resolution, and `pnpm update` then writes the resolved core
+ * alias into that importer's package.json (issue #2309).
+ *
+ * The `@*` range keeps the override on the declared semver ranges that
+ * transitive and peer `vite` declarations use. Those declarations are the
+ * reason this override exists. The range leaves `catalog:` specs alone, because
+ * `catalog:` is not a valid semver range, so pnpm's `isIntersectingRange`
+ * rejects it before it compares anything. The installed result does not change:
+ * an importer that references the catalog already resolves to the aliased core
+ * through its catalog entry.
+ *
+ * Known gap on pnpm 9 to 11: a declaration that pins an EXACT prerelease, such
+ * as `vite: "8.0.0-beta.18"`, escapes the override. pnpm compares with
+ * `semver.intersects(declaredSpec, keyRange)`. That call is asymmetric for
+ * prereleases: it returns false for an exact prerelease against a wildcard
+ * range. The reversed argument order returns true. No range string avoids
+ * this, because node-semver only admits a prerelease when a comparator carries
+ * the same version tuple. A prerelease RANGE such as `^8.0.0-beta.1` still
+ * matches. pnpm 12 matches the exact form too. A bare key would cover this
+ * case, but a bare key is what clobbers `catalog:` specs. Below pnpm 12,
+ * prerelease coverage and `catalog:` safety cannot both hold.
+ *
+ * This applies to pnpm only. npm and bun `overrides`, and yarn `resolutions`,
+ * keep bare keys. Those package managers have no `catalog:` importer specs to
+ * lose. Bun catalogs live in package.json, and bun resolves them before it
+ * applies overrides.
+ */
+export function pnpmOverrideKey(dependencyName: string): string {
+  return `${dependencyName}@*`;
+}
+
+/**
+ * How a sink spells its managed override keys. pnpm's `overrides` use the
+ * range-qualified form ({@link pnpmOverrideKey}). Every other sink uses the bare
+ * package name.
+ *
+ * A pnpm sink that still holds a bare managed key predates the #2309 fix. Such a
+ * key reads as unsatisfied on purpose, so the next migration rewrites it.
+ */
+export type ManagedOverrideKeyStyle = 'bare' | 'pnpm-ranged';
+
+export function managedOverrideKey(
+  dependencyName: string,
+  keyStyle: ManagedOverrideKeyStyle,
+): string {
+  return keyStyle === 'pnpm-ranged' ? pnpmOverrideKey(dependencyName) : dependencyName;
+}
+
 export type PackageJsonDependencyField =
   | 'devDependencies'
   | 'dependencies'

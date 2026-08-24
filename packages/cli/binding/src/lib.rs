@@ -72,6 +72,8 @@ pub struct CliOptions {
     pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
+    /// Whether the user supplied the global `-C` option.
+    pub explicit_chdir: Option<bool>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
     /// Generated toolchain manifest shipped with this vite-plus package.
@@ -177,6 +179,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let doc_tsf = options.doc;
     let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
     let args = options.args;
+    let explicit_chdir = options.explicit_chdir.unwrap_or(false);
     let toolchain_manifest_path = options.toolchain_manifest_path;
     let vite_plus_package_path = options.vite_plus_package_path;
 
@@ -210,8 +213,9 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
         // Run the CLI in a LocalSet to allow non-Send futures
         let local = tokio::task::LocalSet::new();
-        let result =
-            local.block_on(&rt, async { crate::cli::main(cwd, Some(cli_options), args).await });
+        let result = local.block_on(&rt, async {
+            crate::cli::main(cwd, Some(cli_options), args, explicit_chdir).await
+        });
 
         // Send the result back to the NAPI async context
         let _ = tx.send(result);
@@ -231,6 +235,32 @@ pub async fn run(options: CliOptions) -> Result<i32> {
                 Err(napi::Error::from_reason(format_error_message(&e)))
             }
         },
+    }
+}
+
+/// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+#[napi(object)]
+pub struct VpDirsJs {
+    pub bin: String,
+    pub data: String,
+    pub cache: String,
+    pub config: String,
+    pub state: String,
+}
+
+/// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+///
+/// JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
+/// this is the JS surface of the same `EnvConfig::get().dirs` Rust uses.
+#[napi]
+pub fn get_vp_dirs() -> VpDirsJs {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    VpDirsJs {
+        bin: dirs.bin.as_path().to_string_lossy().into_owned(),
+        data: dirs.data.as_path().to_string_lossy().into_owned(),
+        cache: dirs.cache.as_path().to_string_lossy().into_owned(),
+        config: dirs.config.as_path().to_string_lossy().into_owned(),
+        state: dirs.state.as_path().to_string_lossy().into_owned(),
     }
 }
 

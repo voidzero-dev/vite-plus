@@ -363,6 +363,50 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
+// ============ Update tsdown-migrate version ============
+// The current RC adds non-TTY support while it still targets tsdown 0.22.14.
+// Keep that RC until the stable tsdown version advances. At that point, require
+// tsdown-migrate to have the same stable version and replace the RC pin.
+async function updateTsdownMigrateVersion(
+  tsdownVersion: string,
+  stableMigrateVersion: string,
+): Promise<void> {
+  const tsdownChange = changes.get('tsdown');
+  if (!tsdownChange) {
+    throw new Error('The tsdown catalog update did not record a version');
+  }
+
+  const filePath = path.join(ROOT, 'packages/cli/src/utils/constants.ts');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const pattern = /export const TSDOWN_MIGRATE_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
+  let currentMigrateVersion: string | undefined;
+  const tsdownAdvanced = tsdownChange.old !== tsdownChange.new;
+
+  if (tsdownAdvanced && stableMigrateVersion !== tsdownVersion) {
+    throw new Error(
+      `Stable tsdown advanced to ${tsdownVersion}, but stable tsdown-migrate is ` +
+        `${stableMigrateVersion}. Update their compatibility before the dependency upgrade.`,
+    );
+  }
+
+  const updated = content.replace(pattern, (_match: string, captured: string) => {
+    currentMigrateVersion = captured;
+    const nextMigrateVersion = tsdownAdvanced ? stableMigrateVersion : captured;
+    return `export const TSDOWN_MIGRATE_VERSION = '${nextMigrateVersion}';`;
+  });
+  if (currentMigrateVersion === undefined) {
+    throw new Error(
+      `Failed to match TSDOWN_MIGRATE_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
+        `please update it in .github/scripts/upgrade-deps.ts`,
+    );
+  }
+
+  const nextMigrateVersion = tsdownAdvanced ? stableMigrateVersion : currentMigrateVersion;
+  fs.writeFileSync(filePath, updated);
+  recordChange('tsdown-migrate', currentMigrateVersion, nextMigrateVersion);
+  console.log('Updated packages/cli/src/utils/constants.ts');
+}
+
 // ============ Update README.md manual-migration vitest pins ============
 // The manual-migration guide pins `vitest` to an exact version in three places —
 // the npm/Bun `overrides` block, the pnpm-workspace `overrides` block, and the
@@ -519,6 +563,7 @@ console.log('Fetching latest versions…');
 const [
   vitestVersion,
   tsdownVersion,
+  stableTsdownMigrateVersion,
   lightningcssVersion,
   devtoolsVersion,
   oxcNodeCliVersion,
@@ -534,6 +579,7 @@ const [
 ] = await Promise.all([
   getLatestNpmVersion('vitest'),
   getLatestNpmVersion('tsdown'),
+  getLatestNpmVersion('tsdown-migrate'),
   // Mirror exactly what the bundled @tsdown/css depends on.
   getNpmDependencyRange('@tsdown/css', 'lightningcss'),
   getLatestNpmVersion('@vitejs/devtools'),
@@ -551,6 +597,7 @@ const [
 
 console.log(`vitest: ${vitestVersion}`);
 console.log(`tsdown: ${tsdownVersion}`);
+console.log(`tsdown-migrate (stable): ${stableTsdownMigrateVersion}`);
 console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
 console.log(`@vitejs/devtools: ${devtoolsVersion}`);
 console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
@@ -580,6 +627,7 @@ await updatePnpmWorkspace({
   oxcParser: oxcParserVersion,
   oxcTransform: oxcTransformVersion,
 });
+await updateTsdownMigrateVersion(tsdownVersion, stableTsdownMigrateVersion);
 await updateVitestVersionConstant(vitestVersion);
 await updateReadmeVitestPins(vitestVersion);
 await updateCorePackage(devtoolsVersion);

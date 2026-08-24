@@ -23,6 +23,7 @@ export interface MigrationReport {
   rewrittenImportErrors: Array<{ path: string; message: string }>;
   eslintMigrated: boolean;
   prettierMigrated: boolean;
+  tsupMigrated: boolean;
   nodeVersionFileMigrated: boolean;
   gitHooksConfigured: boolean;
   frameworkShimAdded: boolean;
@@ -45,6 +46,7 @@ export function createMigrationReport(): MigrationReport {
     preservedUpstreamVitestImportFileCount: 0,
     rewrittenImportErrors: [],
     eslintMigrated: false,
+    tsupMigrated: false,
     prettierMigrated: false,
     nodeVersionFileMigrated: false,
     gitHooksConfigured: false,

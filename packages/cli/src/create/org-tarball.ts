@@ -1,16 +1,15 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { parseTarGzip } from 'nanotar';
 
+import { getVpDirs } from '../../binding/index.js';
 import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
 
 function getCacheRoot(): string {
-  const home = process.env.VP_HOME || path.join(os.homedir(), '.vite-plus');
-  return path.join(home, 'tmp', 'create-org');
+  return path.join(getVpDirs().cache, 'create-org');
 }
 
 /**

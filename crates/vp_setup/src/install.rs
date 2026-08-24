@@ -217,7 +217,7 @@ fn format_install_failure_message(
 
 /// Write stdout and stderr from a failed install to `upgrade.log`.
 ///
-/// The log is written to the **parent** of `version_dir` (i.e. `~/.vite-plus/upgrade.log`)
+/// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
@@ -412,24 +412,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
     #[cfg(windows)]
     {
         // Windows: junction swap (not atomic)
-        // Remove whatever exists at current_link — could be a junction, symlink, or directory.
-        // We don't rely on junction::exists() since it may not detect junctions created by
-        // cmd /c mklink /J (used by install.ps1).
-        if current_link.as_path().exists() {
-            // std::fs::remove_dir works on junctions/symlinks without removing target contents
-            if let Err(e) = std::fs::remove_dir(&current_link) {
-                tracing::debug!("remove_dir failed ({}), trying junction::delete", e);
-                junction::delete(&current_link).map_err(|e| {
-                    Error::Setup(
-                        format!(
-                            "Failed to remove existing junction at {}: {e}",
-                            current_link.as_path().display()
-                        )
-                        .into(),
-                    )
-                })?;
-            }
-        }
+        remove_windows_current_link(&current_link)?;
 
         junction::create(&version_dir, &current_link).map_err(|e| {
             Error::Setup(
@@ -443,6 +426,56 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
     }
 
     tracing::debug!("Swapped current → {}", version);
+    Ok(())
+}
+
+/// Remove the Windows `current` entry without following its target.
+#[cfg(windows)]
+fn remove_windows_current_link(current_link: &AbsolutePath) -> Result<(), Error> {
+    match std::fs::symlink_metadata(current_link) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(Error::Setup(
+                format!(
+                    "Failed to inspect the current link at {}: {error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        Ok(_) => {}
+    }
+
+    // remove_dir removes a junction or directory symlink without changing its
+    // target. It also detects a dangling junction because symlink_metadata did
+    // not follow the missing target.
+    if let Err(remove_error) = std::fs::remove_dir(current_link) {
+        tracing::debug!("remove_dir failed ({remove_error}), trying junction::delete");
+        junction::delete(current_link).map_err(|junction_error| {
+            Error::Setup(
+                format!(
+                    "Failed to remove the current link at {}: {remove_error}. Junction cleanup also failed: {junction_error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            )
+        })?;
+
+        // junction::delete removes the reparse data. Remove the empty directory
+        // that remains, unless the API removed the directory too.
+        if let Err(error) = std::fs::remove_dir(current_link)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(Error::Setup(
+                format!(
+                    "Failed to remove the current directory at {}: {error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -655,6 +688,29 @@ mod tests {
         assert!(!is_install_dir_for_version("0.1.24", "0.1.23"));
     }
 
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn swap_current_link_replaces_a_dangling_windows_junction() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let old_version = install_dir.join("old-version");
+        let new_version = install_dir.join("new-version");
+        let current_link = install_dir.join("current");
+
+        std::fs::create_dir(&old_version).unwrap();
+        std::fs::create_dir(&new_version).unwrap();
+        std::fs::write(new_version.join("active"), b"active").unwrap();
+        junction::create(&old_version, &current_link).unwrap();
+        std::fs::remove_dir(&old_version).unwrap();
+
+        assert!(!current_link.as_path().exists());
+        assert!(std::fs::symlink_metadata(&current_link).is_ok());
+
+        swap_current_link(&install_dir, "new-version").await.unwrap();
+
+        assert!(current_link.join("active").as_path().is_file());
+    }
+
     #[test]
     fn test_is_safe_tar_path_normal() {
         assert!(is_safe_tar_path(Path::new("dist/index.js")));
@@ -790,7 +846,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_upgrade_log_creates_log_in_parent_dir() {
         let temp = tempfile::tempdir().unwrap();
-        // Simulate ~/.vite-plus/0.1.15/ structure
+        // Simulate a `<DATA>/0.1.15/` install structure
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 

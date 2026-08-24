@@ -1,0 +1,35 @@
+[[case]]
+name = "command_update_catalog_protocol_pnpm"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["CI", "VP_SKIP_INSTALL"]
+local-registry = true
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+    "--no-hooks",
+    "--package-manager",
+    "pnpm",
+  ], comment = "migrate pins the toolchain through the workspace catalog", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "the migrated project references the catalog", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "up",
+  ], comment = "#2309: update must not resolve the catalog reference away", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "`vite` stays `catalog:` instead of the concrete core alias", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "pnpm-workspace.yaml",
+  ], comment = "the catalog keeps owning the resolved toolchain version", continue-on-failure = true },
+]

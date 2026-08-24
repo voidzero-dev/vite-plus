@@ -570,4 +570,4 @@ All `./test*` exports are fully managed by `syncTestPackageExports()`. The build
 2. Creates shim files in `dist/test/`
 3. Removes old `./test*` exports from `package.json`
 4. Merges in newly generated test exports
-5. Ensures `dist/test` is in the `files` array
+5. Relies on the existing `dist` entry to include the generated `dist/test` shims
