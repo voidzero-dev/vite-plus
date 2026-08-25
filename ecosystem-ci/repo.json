@@ -146,7 +146,7 @@
   "nuxt-devtools": {
     "repository": "https://github.com/nuxt/devtools.git",
     "branch": "main",
-    "hash": "7d12d3b2afe9c9d1ffd308d66eb802c2a340bddc"
+    "hash": "a24195182241ddcce07f9d9e7972608eafbc93fb"
   },
   "tiptap": {
     "repository": "https://github.com/ueberdosis/tiptap.git",
