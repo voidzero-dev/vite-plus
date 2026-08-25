@@ -455,8 +455,10 @@ jobs:
             }
 
   # Build and push a preview Docker image from the registry bridge build so the
-  # image can be verified before a real release. Tagged `pr-<number>`; never
-  # `latest`. See docker/Dockerfile and docs/guide/docker.md.
+  # image can be verified before a real release. Tagged `pr-<number>` and
+  # `pr-<number>-<commit>`; never `latest`. The commit tag remains on older
+  # builds when the mutable PR tag moves, so cleanup can identify them safely.
+  # See docker/Dockerfile and docs/guide/docker.md.
   #
   # Same-repo PRs only, for now. This job installs the preview package, which
   # executes the PR's code, and pushes the result to the org's GHCR namespace as
@@ -501,7 +503,9 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
+          tags: |
+            ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
+            ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}-${{ github.event.workflow_run.head_sha }}
           build-args: |
             VP_PR_VERSION=${{ needs.authorize.outputs.pr }}
           # Single-manifest image (no attestation index): simpler for consumers
