@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_oxc_config_conflict"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should refuse to start on conflicting Oxc configs", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"], comment = "both configs left untouched by the interrupt", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "oxlint.config.ts", "--assert", "file"], continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite.config.ts", "--assert", "missing"], comment = "no file was written before the interrupt", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "package.json unchanged", continue-on-failure = true },
+]
