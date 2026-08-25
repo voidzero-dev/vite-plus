@@ -961,34 +961,7 @@ jobs:
         run: pnpm bootstrap-cli:ci
 
       - name: Install Fish
-        shell: bash
-        run: |
-          install_fish() {
-            if [ "$RUNNER_OS" = 'Linux' ]; then
-              sudo apt-add-repository --yes --no-update ppa:fish-shell/release-4 \
-                && sudo apt-get update -qq \
-                && sudo apt-get install --yes fish
-            elif [ "$RUNNER_OS" = 'macOS' ]; then
-              brew install fish
-            else
-              echo "::error::$RUNNER_OS is not supported"
-              return 1
-            fi
-          }
-
-          max_attempts=3
-          for ((attempt = 1; attempt <= max_attempts; attempt++)); do
-            if install_fish; then
-              fish --version
-              exit 0
-            fi
-            if [ "$attempt" -eq "$max_attempts" ]; then
-              echo "::error::Fish installation failed after $max_attempts attempts"
-              exit 1
-            fi
-            echo "Fish installation attempt $attempt failed; retrying in 5 seconds..."
-            sleep 5
-          done
+        uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
 
       - name: Ensure Zsh is installed
         run: |
