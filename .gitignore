@@ -12,3 +12,8 @@ vite
 
 # PTY snapshot runner failure artifacts (reviewed via the diff, never committed)
 crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new
+# Cargo does not read the crate config when these commands run from the repo root:
+# `cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml`
+# `cargo clippy --manifest-path crates/vp_trampoline/Cargo.toml`
+# These commands create the nested target directory below.
+/crates/vp_trampoline/target
