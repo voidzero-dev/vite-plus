@@ -24,6 +24,8 @@ interface PnpmWorkspace {
 interface PackageJson {
   name?: string;
   version?: string;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
   exports?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -33,6 +35,7 @@ type ExportValue = string | { [condition: string]: string | ExportValue } | null
 const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
+const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -330,6 +333,22 @@ function mergePackageExports(
       },
       {} as Record<string, unknown>,
     );
+}
+
+export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: PackageJson): void {
+  const devRange = vitePkg.devDependencies?.[VITE_DEVTOOLS_PACKAGE];
+  const peerRange = vitePkg.peerDependencies?.[VITE_DEVTOOLS_PACKAGE];
+
+  if (!devRange || !peerRange) {
+    throw new Error(
+      `Vite package.json must define ${VITE_DEVTOOLS_PACKAGE} in devDependencies and peerDependencies`,
+    );
+  }
+
+  corePkg.devDependencies ??= {};
+  corePkg.peerDependencies ??= {};
+  corePkg.devDependencies[VITE_DEVTOOLS_PACKAGE] = devRange;
+  corePkg.peerDependencies[VITE_DEVTOOLS_PACKAGE] = peerRange;
 }
 
 // Oxc-related packages that should use the higher version on conflict
@@ -887,6 +906,17 @@ export async function syncRemote() {
 
   log('✓ pnpm-workspace.yaml updated successfully!');
 
+  const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
+  const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
+  const corePackage = JSON.parse(readFileSync(corePackagePath, 'utf-8')) as PackageJson;
+  const rolldownVitePackage = JSON.parse(
+    readFileSync(rolldownVitePackagePath, 'utf-8'),
+  ) as PackageJson;
+
+  syncViteDevtoolsDependencies(corePackage, rolldownVitePackage);
+  writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf-8');
+  log('✓ package.json Vite DevTools ranges updated successfully!');
+
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
 
   // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
@@ -896,9 +926,7 @@ export async function syncRemote() {
   // Merge package.json exports
   log('Merging package.json exports...');
 
-  const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownPackagePath = join(rootDir, ROLLDOWN_DIR, 'packages', 'rolldown', 'package.json');
-  const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
   const pluginutilsPackagePath = join(
     rootDir,
     ROLLDOWN_DIR,
@@ -910,11 +938,7 @@ export async function syncRemote() {
     'package.json',
   );
 
-  const corePackage = JSON.parse(readFileSync(corePackagePath, 'utf-8')) as PackageJson;
   const rolldownPackage = JSON.parse(readFileSync(rolldownPackagePath, 'utf-8')) as PackageJson;
-  const rolldownVitePackage = JSON.parse(
-    readFileSync(rolldownVitePackagePath, 'utf-8'),
-  ) as PackageJson;
   const pluginutilsPackage = JSON.parse(
     readFileSync(pluginutilsPackagePath, 'utf-8'),
   ) as PackageJson;

@@ -1,7 +1,35 @@
 import * as semver from 'semver';
 import { describe, expect, test } from 'vitest';
 
-import { mergePnpmWorkspaces, syncCargoOxcVersions } from '../sync-remote-deps.ts';
+import {
+  mergePnpmWorkspaces,
+  syncCargoOxcVersions,
+  syncViteDevtoolsDependencies,
+} from '../sync-remote-deps.ts';
+
+describe('syncViteDevtoolsDependencies()', () => {
+  test('uses the DevTools ranges declared by Vite', () => {
+    const corePackage = {
+      devDependencies: { '@vitejs/devtools': '^0.6.1' },
+      peerDependencies: { '@vitejs/devtools': '^0.4.0 || ^0.5.0 || ^0.6.0' },
+    };
+    const vitePackage = {
+      devDependencies: { '@vitejs/devtools': '^0.4.12' },
+      peerDependencies: { '@vitejs/devtools': '^0.4.0 || ^0.5.0' },
+    };
+
+    syncViteDevtoolsDependencies(corePackage, vitePackage);
+
+    expect(corePackage.devDependencies['@vitejs/devtools']).toBe('^0.4.12');
+    expect(corePackage.peerDependencies['@vitejs/devtools']).toBe('^0.4.0 || ^0.5.0');
+  });
+
+  test('fails when Vite no longer declares a DevTools range', () => {
+    expect(() => syncViteDevtoolsDependencies({}, {})).toThrow(
+      'Vite package.json must define @vitejs/devtools in devDependencies and peerDependencies',
+    );
+  });
+});
 
 describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
   test('drops versioned upstream entries already covered by a glob or bare pattern', () => {

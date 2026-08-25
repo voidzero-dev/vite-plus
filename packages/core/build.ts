@@ -498,11 +498,10 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
-// Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
-// `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
-// import every color the Vite+ branding uses, so after the logger patches we
-// add any missing ones, resolving their (minified) export aliases from main's
-// own `export { ... }` map so the fix survives rolldown renaming them.
+// Ensure a bundled chunk has the given ansis color helpers (e.g. `bold`, `red`).
+// Rolldown can inline ansis into the logger chunk or keep it in a shared chunk.
+// For the latter layout, add imports for any missing helpers by resolving their
+// minified aliases from the shared chunk's own `export { ... }` map.
 async function ensureAnsisImports(
   content: string,
   names: string[],
@@ -515,10 +514,6 @@ async function ensureAnsisImports(
   // chunk actually re-exports it.
   const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
   const imports = [...content.matchAll(importRe)];
-  if (imports.length === 0) {
-    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
-  }
-
   // Every binding already in scope across all imports (its local name).
   const localNames = new Set<string>();
   for (const [, bindings] of imports) {
@@ -531,9 +526,16 @@ async function ensureAnsisImports(
       localNames.add(aliased ? aliased[1] : trimmed);
     }
   }
-  const missing = names.filter((name) => !localNames.has(name));
+  // Rolldown can also inline ansis into the logger chunk. Detect its destructured
+  // declarations so we do not try to import a binding that is already local.
+  const isLocallyDeclared = (name: string) =>
+    new RegExp(`\\b(?:const|let|var)\\s+(?:${name}\\b|\\{[^}]*\\b${name}\\b)`).test(content);
+  const missing = names.filter((name) => !localNames.has(name) && !isLocallyDeclared(name));
   if (missing.length === 0) {
     return content;
+  }
+  if (imports.length === 0) {
+    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
   }
 
   // Group missing colors by the imported chunk that re-exports them. Chunks
