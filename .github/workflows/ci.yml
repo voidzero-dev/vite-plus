@@ -961,6 +961,12 @@ jobs:
         run: pnpm bootstrap-cli:ci
 
       - name: Install Fish
+        id: install_fish
+        continue-on-error: true
+        uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
+
+      - name: Retry Fish installation
+        if: steps.install_fish.outcome == 'failure'
         uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
 
       - name: Ensure Zsh is installed
