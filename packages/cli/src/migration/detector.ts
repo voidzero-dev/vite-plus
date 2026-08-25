@@ -47,8 +47,8 @@ export const PRETTIER_CONFIG_FILES = [
 // The JSON forms are inlined into `vite.config.*` during migration and deleted;
 // the dynamic forms are preserved and imported instead. Detection takes the
 // first match in each list, so the two forms are ordered JSON-first only to keep
-// the historical precedence — `detectOxcConfigConflicts` rejects the ambiguous
-// state before that precedence can matter.
+// the historical precedence — `detectOxcConfigConflicts` rejects any directory
+// holding more than one of these before that precedence can matter.
 // https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format
 export const OXLINT_JSON_CONFIG_FILES = ['.oxlintrc.json', '.oxlintrc.jsonc'] as const;
 export const OXLINT_DYNAMIC_CONFIG_FILES = ['oxlint.config.ts', 'oxlint.config.mts'] as const;
@@ -68,25 +68,25 @@ export const OXFMT_CONFIG_FILES = [
 export interface OxcConfigConflict {
   /** `oxlint` or `oxfmt` — the tool whose config is ambiguous. */
   tool: 'oxlint' | 'oxfmt';
-  /** Directory holding both forms, relative to the workspace root ('.' for the root). */
+  /** Directory holding the competing configs, relative to the workspace root ('.' for the root). */
   dir: string;
-  /** Every JSON-form config present in `dir`. */
-  jsonConfigs: string[];
-  /** Every dynamic-form config present in `dir`. */
-  dynamicConfigs: string[];
+  /** Every config for `tool` present in `dir`, in the tool's own candidate order. */
+  configs: string[];
 }
 
 /**
- * Detect directories that hold both a JSON and a dynamic config for the same Oxc
- * tool.
+ * Detect directories that hold more than one config for the same Oxc tool.
  *
- * Oxlint itself refuses to run in that state ("Only one of `.oxlintrc.json` and
- * `oxlint.config.ts` is allowed per directory"), so such a project is already
- * broken before migration sees it. Migration cannot repair it either: first-match
- * detection would inline and delete the JSON config and leave the dynamic one on
- * disk unreferenced, where it then silently shadows the freshly inlined `lint`
- * block for direct `oxlint` invocations. Erroring out and letting the user pick a
- * single config first is the only outcome that does not quietly lose settings.
+ * Both tools refuse to run in that state — `oxlint` and `oxfmt` each fail with
+ * "Both '<a>' and '<b>' found in <dir>" — so such a project is already broken
+ * before migration sees it. The rule is one config per directory, not one config
+ * *form*: two JSON forms (`.oxlintrc.json` + `.oxlintrc.jsonc`) and two dynamic
+ * forms (`oxlint.config.ts` + `oxlint.config.mts`) are rejected exactly like the
+ * mixed pair. Migration cannot repair any of them either: first-match detection
+ * would consume one config and leave the rest on disk unreferenced, where they
+ * then silently shadow the freshly inlined `lint` block for direct `oxlint`
+ * invocations. Erroring out and letting the user pick a single config first is
+ * the only outcome that does not quietly lose settings.
  *
  * `dir` is `'.'` for the workspace root; other values are workspace-relative
  * package paths with forward slashes.
@@ -98,27 +98,15 @@ export function detectOxcConfigConflicts(
   const conflicts: OxcConfigConflict[] = [];
 
   const tools = [
-    {
-      tool: 'oxlint',
-      jsonForms: OXLINT_JSON_CONFIG_FILES,
-      dynamicForms: OXLINT_DYNAMIC_CONFIG_FILES,
-    },
-    {
-      tool: 'oxfmt',
-      jsonForms: OXFMT_JSON_CONFIG_FILES,
-      dynamicForms: OXFMT_DYNAMIC_CONFIG_FILES,
-    },
+    { tool: 'oxlint', configFiles: OXLINT_CONFIG_FILES },
+    { tool: 'oxfmt', configFiles: OXFMT_CONFIG_FILES },
   ] as const;
 
-  for (const { tool, jsonForms, dynamicForms } of tools) {
-    const present = (candidates: readonly string[]) =>
-      candidates.filter((config) => fs.existsSync(path.join(projectPath, config)));
+  for (const { tool, configFiles } of tools) {
+    const configs = configFiles.filter((config) => fs.existsSync(path.join(projectPath, config)));
 
-    const jsonConfigs = present(jsonForms);
-    const dynamicConfigs = present(dynamicForms);
-
-    if (jsonConfigs.length > 0 && dynamicConfigs.length > 0) {
-      conflicts.push({ tool, dir: relativeDir, jsonConfigs, dynamicConfigs });
+    if (configs.length > 1) {
+      conflicts.push({ tool, dir: relativeDir, configs });
     }
   }
 
@@ -146,9 +134,9 @@ export function collectOxcConfigConflicts(
 /** Render one conflict as a user-facing line for the migration abort message. */
 export function formatOxcConfigConflict(conflict: OxcConfigConflict): string {
   const location = conflict.dir === '.' ? 'the project root' : conflict.dir;
-  const files = [...conflict.jsonConfigs, ...conflict.dynamicConfigs]
-    .map((file) => `\`${file}\``)
-    .join(' and ');
+  const quoted = conflict.configs.map((file) => `\`${file}\``);
+  // `a and b` for the common pair, `a, b and c` once a directory holds more.
+  const files = [quoted.slice(0, -1).join(', '), quoted.at(-1)].filter(Boolean).join(' and ');
   return `${location} has ${files} — ${conflict.tool} allows only one config per directory.`;
 }
 

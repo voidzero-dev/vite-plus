@@ -84,28 +84,25 @@ describe('detectOxcConfigConflicts', () => {
     expect(detectOxcConfigConflicts(tmpDir)).toEqual([]);
   });
 
-  // Two JSON forms are deliberately NOT a conflict here: the ambiguity this
-  // guard exists for is JSON-vs-dynamic, which is the combination oxlint itself
-  // rejects and the one that leaves an unreferenced config shadowing the
-  // inlined block after migration.
-  it('reports no conflict for two JSON forms of the same tool', () => {
-    write('.oxlintrc.json');
-    write('.oxlintrc.jsonc');
-
-    expect(detectOxcConfigConflicts(tmpDir)).toEqual([]);
-  });
-
+  // The rule both tools enforce is one config per directory, not one config
+  // *form*: `.oxlintrc.json` + `.oxlintrc.jsonc` and `oxlint.config.ts` +
+  // `oxlint.config.mts` fail the same way the mixed pair does, so every
+  // two-config shape below is a conflict.
   it.each([
     ['oxlint', '.oxlintrc.json', 'oxlint.config.ts'],
     ['oxlint', '.oxlintrc.jsonc', 'oxlint.config.mts'],
+    ['oxlint', '.oxlintrc.json', '.oxlintrc.jsonc'],
+    ['oxlint', 'oxlint.config.ts', 'oxlint.config.mts'],
     ['oxfmt', '.oxfmtrc.json', 'oxfmt.config.ts'],
     ['oxfmt', '.oxfmtrc.jsonc', 'oxfmt.config.mts'],
-  ] as const)('flags %s when %s and %s coexist', (tool, jsonConfig, dynamicConfig) => {
-    write(jsonConfig);
-    write(dynamicConfig);
+    ['oxfmt', '.oxfmtrc.json', '.oxfmtrc.jsonc'],
+    ['oxfmt', 'oxfmt.config.ts', 'oxfmt.config.mts'],
+  ] as const)('flags %s when %s and %s coexist', (tool, firstConfig, secondConfig) => {
+    write(firstConfig);
+    write(secondConfig);
 
     expect(detectOxcConfigConflicts(tmpDir)).toEqual([
-      { tool, dir: '.', jsonConfigs: [jsonConfig], dynamicConfigs: [dynamicConfig] },
+      { tool, dir: '.', configs: [firstConfig, secondConfig] },
     ]);
   });
 
@@ -121,18 +118,17 @@ describe('detectOxcConfigConflicts', () => {
     ]);
   });
 
-  it('lists every present form on both sides of a conflict', () => {
-    write('.oxlintrc.json');
+  it('lists every config present, in the tool candidate order', () => {
+    write('oxlint.config.mts');
     write('.oxlintrc.jsonc');
     write('oxlint.config.ts');
-    write('oxlint.config.mts');
+    write('.oxlintrc.json');
 
     expect(detectOxcConfigConflicts(tmpDir)).toEqual([
       {
         tool: 'oxlint',
         dir: '.',
-        jsonConfigs: ['.oxlintrc.json', '.oxlintrc.jsonc'],
-        dynamicConfigs: ['oxlint.config.ts', 'oxlint.config.mts'],
+        configs: ['.oxlintrc.json', '.oxlintrc.jsonc', 'oxlint.config.ts', 'oxlint.config.mts'],
       },
     ]);
   });
@@ -145,8 +141,7 @@ describe('detectOxcConfigConflicts', () => {
       {
         tool: 'oxlint',
         dir: 'packages/app',
-        jsonConfigs: ['.oxlintrc.json'],
-        dynamicConfigs: ['oxlint.config.ts'],
+        configs: ['.oxlintrc.json', 'oxlint.config.ts'],
       },
     ]);
   });
@@ -188,8 +183,7 @@ describe('collectOxcConfigConflicts', () => {
       {
         tool: 'oxlint',
         dir: 'packages/app',
-        jsonConfigs: ['.oxlintrc.json'],
-        dynamicConfigs: ['oxlint.config.ts'],
+        configs: ['.oxlintrc.json', 'oxlint.config.ts'],
       },
     ]);
   });
@@ -225,8 +219,7 @@ describe('formatOxcConfigConflict', () => {
       formatOxcConfigConflict({
         tool: 'oxlint',
         dir: '.',
-        jsonConfigs: ['.oxlintrc.json'],
-        dynamicConfigs: ['oxlint.config.ts'],
+        configs: ['.oxlintrc.json', 'oxlint.config.ts'],
       }),
     ).toBe(
       'the project root has `.oxlintrc.json` and `oxlint.config.ts` — oxlint allows only one config per directory.',
@@ -238,11 +231,22 @@ describe('formatOxcConfigConflict', () => {
       formatOxcConfigConflict({
         tool: 'oxfmt',
         dir: 'packages/app',
-        jsonConfigs: ['.oxfmtrc.json'],
-        dynamicConfigs: ['oxfmt.config.mts'],
+        configs: ['.oxfmtrc.json', 'oxfmt.config.mts'],
       }),
     ).toBe(
       'packages/app has `.oxfmtrc.json` and `oxfmt.config.mts` — oxfmt allows only one config per directory.',
+    );
+  });
+
+  it('separates three or more configs with commas', () => {
+    expect(
+      formatOxcConfigConflict({
+        tool: 'oxlint',
+        dir: '.',
+        configs: ['.oxlintrc.json', '.oxlintrc.jsonc', 'oxlint.config.ts'],
+      }),
+    ).toBe(
+      'the project root has `.oxlintrc.json`, `.oxlintrc.jsonc` and `oxlint.config.ts` — oxlint allows only one config per directory.',
     );
   });
 });
