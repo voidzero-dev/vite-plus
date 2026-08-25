@@ -36,7 +36,6 @@ reqwest = { workspace = true, features = ["stream", "rustls-no-provider"] }
 
 [dev-dependencies]
 httpmock = { workspace = true }
-tempfile = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
