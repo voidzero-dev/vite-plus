@@ -53,9 +53,7 @@ mod provider;
 mod providers;
 mod runtime;
 
-pub use dev_engines::{
-    parse_node_version_content, read_node_version_file, read_nvmrc_file, write_node_version_file,
-};
+pub use dev_engines::{parse_node_version_content, read_node_version_file, read_nvmrc_file};
 pub use error::Error;
 pub use platform::{Arch, Os, Platform};
 pub use provider::{
