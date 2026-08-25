@@ -405,9 +405,7 @@ jobs:
           - name: nuxt-devtools
             node-version: 24
             command: |
-              # The module build inlines its dependencies and exceeds the
-              # default 2 GB V8 heap on Windows.
-              NODE_OPTIONS=--max-old-space-size=4096 vp run build
+              vp run build
               vp run typecheck
               vp run test:unit
           - name: tiptap
