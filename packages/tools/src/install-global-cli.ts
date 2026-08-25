@@ -126,8 +126,8 @@ export function installGlobalCli() {
     if (isWindows) {
       const shimPath = path.join(path.dirname(binaryPath), 'vp-shim.exe');
       if (!existsSync(shimPath)) {
-        console.error(`Error: vp-shim.exe not found at ${shimPath}`);
-        console.error('Build it with: cargo build -p vp_trampoline --release');
+        console.error(`Error: vp-shim.exe does not exist at ${shimPath}`);
+        console.error('Build it with: node packages/tools/src/build-trampoline.ts --release');
         process.exit(1);
       }
     }

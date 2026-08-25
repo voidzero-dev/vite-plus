@@ -8741,10 +8741,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vp_trampoline"
-version = "0.0.0"
-
-[[package]]
 name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

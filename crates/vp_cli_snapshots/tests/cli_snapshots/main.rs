@@ -592,7 +592,7 @@ impl CaseHome {
                 .join("vp-shim.exe");
             if !shim.is_file() {
                 return Err(format!(
-                    "global vp trampoline template not found at {}; run `cargo build -p vp_trampoline`",
+                    "The global vp trampoline template does not exist at {}. Run `node packages/tools/src/build-trampoline.ts`.",
                     shim.display()
                 ));
             }

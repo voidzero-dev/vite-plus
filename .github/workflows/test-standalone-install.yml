@@ -1269,6 +1269,10 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
       - name: Pin VP_HOME to USERPROFILE
         # Namespace's Windows runners run jobs under a service account whose real
         # profile (C:\Windows\system32\config\systemprofile) differs from
@@ -1292,7 +1296,50 @@ jobs:
 
       - name: Build Windows installers
         shell: bash
-        run: cargo build --release -p vp_global_cli -p vp_installer -p vp_trampoline
+        run: |
+          cargo build --release -p vp_global_cli -p vp_installer
+          node packages/tools/src/build-trampoline.ts --release
+
+      - name: Test trampoline with an extended-length payload path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "vp-trampoline-long-payload"
+          $bin = Join-Path $root "bin"
+          $data = Join-Path $root "data"
+          $cache = Join-Path $root "cache"
+          $segment = "segment-" + ("x" * 60)
+          while ((Join-Path $data "current\bin\vp.exe").Length -le 300) {
+            $data = Join-Path $data $segment
+          }
+          $payloadBin = Join-Path $data "current\bin"
+          $payload = Join-Path $payloadBin "vp.exe"
+          if ($payload.Length -le 260) {
+            throw "The payload path must be longer than MAX_PATH: $payload"
+          }
+
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          [System.IO.Directory]::CreateDirectory($bin) | Out-Null
+          [System.IO.Directory]::CreateDirectory($payloadBin) | Out-Null
+          [System.IO.File]::Copy(
+            (Join-Path $env:DEV_DRIVE "target/release/vp-shim.exe"),
+            (Join-Path $bin "vp.exe"),
+            $true
+          )
+          [System.IO.File]::Copy(
+            (Join-Path $env:DEV_DRIVE "target/release/vp.exe"),
+            $payload,
+            $true
+          )
+          $pointer = "vite-plus-shim-v1`nlayout=split`ndata=$data`ncache=$cache`n"
+          [System.IO.File]::WriteAllText((Join-Path $bin "vp.shim"), $pointer)
+
+          $output = (& (Join-Path $bin "vp.exe") --version 2>&1) | Out-String
+          $exitCode = $LASTEXITCODE
+          Write-Host $output
+          if ($exitCode -ne 0) {
+            throw "The trampoline exited with $exitCode for payload path $payload"
+          }
 
       - name: vp-setup.exe rejects invalid directory overrides
         shell: pwsh
@@ -1703,10 +1750,6 @@ jobs:
             throw "the reinstall changed an unrelated bin entry"
           }
           & $vp --version
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
 
       - name: Start local preview registry for vp-setup.exe
         shell: bash

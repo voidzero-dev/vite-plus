@@ -43,7 +43,7 @@ vite-plus/
 ├── crates/vp_shared/        # Shared Rust env config, tracing, output, utilities
 ├── crates/vp_static_config/ # Static extraction of vite.config.* data
 ├── crates/vp_toolchain/     # toolchain.json manifest model, validation, and `why` hints
-└── crates/vp_trampoline/    # Windows shim trampoline
+└── crates/vp_trampoline/    # Standalone Windows shim trampoline outside the workspace
 ```
 
 Vite+ resolves all on-disk paths through `vp_shared::VpDirs`.

@@ -206,11 +206,14 @@ jobs:
       # Keep the package selection in sync with the `test` recipe in justfile.
       # vp_cli_snapshots is excluded there too: its snapshot suite needs a
       # built vp and node at runtime and joins the Windows archive later.
+      # vp_trampoline is not a workspace member.
+      # Run its portable parser and layout tests on Unix.
+      # The Windows CLI snapshot suite tests Windows shim behavior.
       - name: Build test archive
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
+          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -335,6 +338,7 @@ jobs:
       - run: |
           cargo shear
           cargo fmt --check
+          cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
           just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
