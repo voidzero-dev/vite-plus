@@ -63,6 +63,11 @@ type PnpmWorkspaceEntry = {
   newVersion: string;
 };
 
+type PackageJson = {
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
 const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
@@ -460,6 +465,23 @@ async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
   recordChange('README vitest pins', oldVersion ?? null, vitestVersion);
 }
 
+// ============ Update packages/core/package.json ============
+async function updateCorePackage(devtoolsVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, 'packages/core/package.json');
+  const pkg: PackageJson = readJsonFile(filePath);
+
+  const devDependencies = pkg.devDependencies;
+  const currentDevtools = devDependencies?.['@vitejs/devtools'];
+  if (!currentDevtools) {
+    return;
+  }
+  devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
+  recordChange('@vitejs/devtools', currentDevtools.replace(/^[\^~]/, ''), devtoolsVersion);
+
+  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
+  console.log('Updated packages/core/package.json');
+}
+
 // ============ Write metadata files for PR description ============
 function writeMetaFiles(): void {
   if (!META_DIR) {
@@ -543,6 +565,7 @@ const [
   tsdownVersion,
   stableTsdownMigrateVersion,
   lightningcssVersion,
+  devtoolsVersion,
   oxcNodeCliVersion,
   oxcNodeCoreVersion,
   oxfmtVersion,
@@ -559,6 +582,7 @@ const [
   getLatestNpmVersion('tsdown-migrate'),
   // Mirror exactly what the bundled @tsdown/css depends on.
   getNpmDependencyRange('@tsdown/css', 'lightningcss'),
+  getLatestNpmVersion('@vitejs/devtools'),
   getLatestNpmVersion('@oxc-node/cli'),
   getLatestNpmVersion('@oxc-node/core'),
   getLatestNpmVersion('oxfmt'),
@@ -575,6 +599,7 @@ console.log(`vitest: ${vitestVersion}`);
 console.log(`tsdown: ${tsdownVersion}`);
 console.log(`tsdown-migrate (stable): ${stableTsdownMigrateVersion}`);
 console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
+console.log(`@vitejs/devtools: ${devtoolsVersion}`);
 console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
 console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
 console.log(`oxfmt: ${oxfmtVersion}`);
@@ -605,6 +630,7 @@ await updatePnpmWorkspace({
 await updateTsdownMigrateVersion(tsdownVersion, stableTsdownMigrateVersion);
 await updateVitestVersionConstant(vitestVersion);
 await updateReadmeVitestPins(vitestVersion);
+await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();
 
