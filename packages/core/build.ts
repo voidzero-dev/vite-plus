@@ -787,6 +787,10 @@ async function mergePackageJson() {
     ...vitePkg.peerDependencies,
   };
 
+  // Vite's source range can lag the DevTools version validated by Vite+.
+  // Keep the explicit core range instead of replacing it with Vite's range.
+  destPkg.peerDependencies['@vitejs/devtools'] = pkgJson.peerDependencies['@vitejs/devtools'];
+
   // Merge peerDependenciesMeta from tsdown and vite
   destPkg.peerDependenciesMeta = {
     ...tsdownPkg.peerDependenciesMeta,
