@@ -148,7 +148,7 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
 
   switch (overwrite) {
     case 'yes':
-      clearTargetPath(targetPath);
+      clearTargetPath(targetPath, stats);
       break;
     case 'no':
       cancelAndExit();
@@ -160,9 +160,37 @@ function isEmpty(path: string) {
   return files.length === 0 || (files.length === 1 && files[0] === '.git');
 }
 
-function clearTargetPath(targetPath: string) {
+function isSameTargetEntry(expected: fs.Stats, actual: fs.Stats) {
+  return (
+    expected.dev === actual.dev &&
+    expected.ino === actual.ino &&
+    expected.isDirectory() === actual.isDirectory() &&
+    expected.isSymbolicLink() === actual.isSymbolicLink()
+  );
+}
+
+function getUnchangedTargetStats(
+  targetPath: string,
+  expected: fs.Stats,
+  cleanupStarted = false,
+) {
+  const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  if (!stats) {
+    return undefined;
+  }
+  if (!isSameTargetEntry(expected, stats)) {
+    throw new Error(
+      cleanupStarted
+        ? `Target path "${targetPath}" changed during cleanup. Cleanup was stopped. Please inspect the target and retry the command.`
+        : `Target path "${targetPath}" changed while waiting for confirmation. No files were removed. Please retry the command.`,
+    );
+  }
+  return stats;
+}
+
+function clearTargetPath(targetPath: string, expectedStats: fs.Stats) {
   const strippedTargetPath = stripTrailingPathSeparators(targetPath);
-  const stats = fs.lstatSync(strippedTargetPath, { throwIfNoEntry: false });
+  const stats = getUnchangedTargetStats(strippedTargetPath, expectedStats);
   if (!stats) {
     return;
   }
@@ -170,9 +198,13 @@ function clearTargetPath(targetPath: string) {
     fs.rmSync(strippedTargetPath, { force: true });
     return;
   }
-  for (const file of fs.readdirSync(strippedTargetPath)) {
+  const files = fs.readdirSync(strippedTargetPath);
+  for (const file of files) {
     if (file === '.git') {
       continue;
+    }
+    if (!getUnchangedTargetStats(strippedTargetPath, expectedStats, true)) {
+      return;
     }
     fs.rmSync(path.resolve(strippedTargetPath, file), { recursive: true, force: true });
   }

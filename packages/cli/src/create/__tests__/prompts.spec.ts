@@ -13,6 +13,16 @@ vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   select: mockSelect,
 }));
 
+vi.mock('../../utils/prompts.ts', () => ({
+  cancelAndExit: vi.fn(() => {
+    throw new Error('Operation cancelled');
+  }),
+}));
+
+vi.mock('../../utils/terminal.ts', () => ({
+  accent: (value: string) => value,
+}));
+
 const { checkProjectDirExists, isTargetDirAvailable, suggestAvailableTargetDir } =
   await import('../prompts.js');
 
@@ -173,5 +183,51 @@ describe('target directory helpers', () => {
         { label: 'Remove existing path and continue', value: 'yes' },
       ],
     });
+  });
+
+  it('does not clear a directory that replaces a target symlink during confirmation', async () => {
+    const cwd = makeTempDir();
+    const linkedDir = makeTempDir();
+    const targetPath = path.join(cwd, 'new-project');
+    const replacementPath = path.join(cwd, 'replacement-project');
+    const linkedSentinel = path.join(linkedDir, 'keep.txt');
+    const replacementSentinel = path.join(targetPath, 'keep.txt');
+    fs.writeFileSync(linkedSentinel, 'keep linked');
+    fs.mkdirSync(replacementPath);
+    fs.writeFileSync(path.join(replacementPath, 'keep.txt'), 'keep replacement');
+    fs.symlinkSync(linkedDir, targetPath, process.platform === 'win32' ? 'junction' : 'dir');
+    mockSelect.mockImplementation(() => {
+      fs.rmSync(targetPath, { force: true });
+      fs.renameSync(replacementPath, targetPath);
+      return Promise.resolve('yes');
+    });
+
+    await expect(checkProjectDirExists(targetPath, true)).rejects.toThrow(
+      `Target path "${targetPath}" changed while waiting for confirmation. No files were removed. Please retry the command.`,
+    );
+
+    expect(fs.readFileSync(linkedSentinel, 'utf8')).toBe('keep linked');
+    expect(fs.readFileSync(replacementSentinel, 'utf8')).toBe('keep replacement');
+  });
+
+  it('does not remove a file that replaces the confirmed target path', async () => {
+    const cwd = makeTempDir();
+    const targetPath = path.join(cwd, 'new-project');
+    const originalPath = path.join(cwd, 'original-project');
+    const replacementPath = path.join(cwd, 'replacement-project');
+    fs.writeFileSync(targetPath, 'original');
+    fs.writeFileSync(replacementPath, 'replacement');
+    mockSelect.mockImplementation(() => {
+      fs.renameSync(targetPath, originalPath);
+      fs.renameSync(replacementPath, targetPath);
+      return Promise.resolve('yes');
+    });
+
+    await expect(checkProjectDirExists(targetPath, true)).rejects.toThrow(
+      `Target path "${targetPath}" changed while waiting for confirmation. No files were removed. Please retry the command.`,
+    );
+
+    expect(fs.readFileSync(originalPath, 'utf8')).toBe('original');
+    expect(fs.readFileSync(targetPath, 'utf8')).toBe('replacement');
   });
 });
