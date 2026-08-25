@@ -35,6 +35,7 @@ import {
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat/runner.ts';
+import { collectOxcConfigConflicts, formatOxcConfigConflict } from './detector.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,
@@ -1032,6 +1033,37 @@ async function executeMigrationPlan(
   };
 }
 
+/**
+ * Refuse to migrate a workspace where any directory holds both a JSON and a
+ * dynamic config for the same Oxc tool.
+ *
+ * Oxlint hard-errors on that combination itself, so the project cannot lint
+ * before migration either. Migration has no non-destructive way through it:
+ * first-match detection would inline and delete the JSON config while leaving
+ * the dynamic one on disk unreferenced, silently shadowing the freshly inlined
+ * block for direct `oxlint` invocations. Interrupting lets the user pick the
+ * config they mean to keep before anything is rewritten.
+ *
+ * Runs before any file is touched, on both the full-migration and the
+ * already-Vite+ paths.
+ */
+function assertNoOxcConfigConflicts(workspaceInfo: WorkspaceInfoOptional): void {
+  const conflicts = collectOxcConfigConflicts(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages.map((pkg) => pkg.path),
+  );
+
+  if (conflicts.length === 0) {
+    return;
+  }
+
+  const details = conflicts
+    .map((conflict) => `  - ${formatOxcConfigConflict(conflict)}`)
+    .join('\n');
+  prompts.log.error(`✘ Conflicting Oxc configs:\n${details}`);
+  cancelAndExit('Keep a single config per directory, then run `vp migrate` again.', 1);
+}
+
 async function main() {
   const { projectPath, options } = parseArgs();
 
@@ -1053,6 +1085,8 @@ async function main() {
       1,
     );
   }
+  assertNoOxcConfigConflicts(workspaceInfoOptional);
+
   const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
   const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
