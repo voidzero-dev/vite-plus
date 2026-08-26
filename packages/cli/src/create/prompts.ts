@@ -169,11 +169,7 @@ function isSameTargetEntry(expected: fs.Stats, actual: fs.Stats) {
   );
 }
 
-function getUnchangedTargetStats(
-  targetPath: string,
-  expected: fs.Stats,
-  cleanupStarted = false,
-) {
+function getUnchangedTargetStats(targetPath: string, expected: fs.Stats, cleanupStarted = false) {
   const stats = fs.lstatSync(targetPath, { throwIfNoEntry: false });
   if (!stats) {
     return undefined;
