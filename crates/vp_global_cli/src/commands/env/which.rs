@@ -11,8 +11,8 @@ use std::process::ExitStatus;
 use chrono::Local;
 use owo_colors::OwoColorize;
 use vp_pm_cli::{
-    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_from_package_json,
+    package_manager_bin_path, package_manager_install_dir,
+    resolve_package_manager_tool_from_package_json,
 };
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -149,15 +149,10 @@ async fn execute_package_manager_tool(
     cwd: &AbsolutePath,
     tool: &str,
 ) -> Result<Option<ExitStatus>, Error> {
-    let Some(expected_type) = PackageManagerType::from_tool(tool) else {
+    let Some(resolution) = resolve_package_manager_tool_from_package_json(cwd, tool)? else {
         return Ok(None);
     };
-    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
-        return Ok(None);
-    };
-    if resolution.package_manager_type != expected_type {
-        return Ok(None);
-    }
+    let expected_type = resolution.package_manager_type;
 
     let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) else {
         return Ok(None);

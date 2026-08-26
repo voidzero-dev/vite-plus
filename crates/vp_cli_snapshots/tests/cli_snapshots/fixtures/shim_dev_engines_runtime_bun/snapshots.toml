@@ -1,0 +1,10 @@
+# pnpm as package manager with bun and node as runtimes, all via devEngines
+[[case]]
+name = "shim_dev_engines_runtime_bun"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "pnpm"], snapshot = false },
+  { argv = ["bun", "--version"], comment = "bun resolves from the devEngines.runtime bun entry", continue-on-failure = true },
+  { argv = ["node", "-v"], comment = "node resolves from the devEngines.runtime node entry", continue-on-failure = true },
+  { argv = ["pnpm", "-v"], comment = "pnpm resolves from devEngines.packageManager", continue-on-failure = true },
+]

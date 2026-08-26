@@ -21,6 +21,22 @@ latest LTS.
 
 When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
+When bun is not the project's package manager, it can still be pinned as a _runtime_ in `devEngines.runtime` (alongside node). The `bun`/`bunx` shims resolve that entry — walking up parent directories like Node.js resolution — and download the declared bun version. (If a package-manager source names bun, that pin governs the `bun` binary instead.) This makes mixed setups work, where e.g. pnpm handles installs while bun runs scripts:
+
+```json
+{
+  "packageManager": "pnpm@10.11.0",
+  "devEngines": {
+    "runtime": [
+      { "name": "bun", "version": "1.3.13", "onFail": "warn" },
+      { "name": "node", "version": "24", "onFail": "warn" }
+    ]
+  }
+}
+```
+
+With this configuration, `pnpm`, `bun`, and `node` each resolve to their declared version. `vp env setup` creates the `bun`/`bunx` shims by default, so no per-machine bun install is needed; when a project declares no bun at all, they fall back to a globally installed bun (`vp install -g bun`) and then to the system bun.
+
 A fresh install uses the split platform layout by default. On Unix, Vite+
 stores managed runtimes and related files in `~/.local/share/vite-plus`. It
 stores executables in the Vite+-owned `~/.local/share/vite-plus/bin` directory.
@@ -120,7 +136,7 @@ use this file to select the Node.js version.
 
 ```bash
 # Setup
-vp env setup                  # Create shims for node, npm, npx, corepack
+vp env setup                  # Create shims for node, npm, npx, corepack, bun
 vp env on                     # Use Vite+ managed Node.js
 vp env print                  # Print shell snippet for this session
 
