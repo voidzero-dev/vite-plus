@@ -3,7 +3,17 @@ import { createRequire } from 'node:module';
 import cliPkg from '../../package.json' with { type: 'json' };
 
 export const VITE_PLUS_NAME = 'vite-plus';
+export const VITE_PLUS_CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
+
+/**
+ * The version of the CLI package that is actually running, untouched by
+ * `VP_VERSION`. The installer docs tell users to set `VP_VERSION` (and on
+ * PowerShell it persists for the session), and the Rust CLI injects it into
+ * every child env, so anything that must describe the running CLI (not the
+ * install/migrate target) has to read this instead of {@link VITE_PLUS_VERSION}.
+ */
+export const CLI_PACKAGE_VERSION: string = cliPkg.version;
 
 // Mirrors Vite's DEFAULT_CONFIG_FILES order so readers and writers target the same file.
 export const VITE_CONFIG_FILES = [
@@ -26,7 +36,7 @@ export const TSDOWN_MIGRATION_SKILL_URL =
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
-      vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION}`,
+      vite: `npm:${VITE_PLUS_CORE_PACKAGE_NAME}@${VITE_PLUS_VERSION}`,
       // Pin `vitest` only. The `@vitest/*` family (expect, runner, snapshot, spy,
       // utils, mocker, pretty-format) are EXACT (`4.1.9`) dependencies of `vitest`
       // itself, so a single `vitest` override cascades one consistent version to

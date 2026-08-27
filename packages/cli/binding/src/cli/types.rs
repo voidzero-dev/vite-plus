@@ -133,10 +133,13 @@ pub(super) enum CLIArgs {
     Toolchain(ToolchainArgs),
 }
 
-/// Type alias for boxed async resolver function
+/// Type alias for boxed async resolver function. Takes the directory the
+/// resolved command will run in (the task cwd for intercepted script
+/// commands), so JS-side checks can resolve against the right package.
 /// NOTE: Uses anyhow::Error to avoid NAPI type inference issues
-pub type BoxedResolverFn =
-    Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>>;
+pub type BoxedResolverFn = Box<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>,
+>;
 
 /// Type alias for vite config resolver function (takes package path, returns JSON string)
 /// Uses Arc for cloning and Send + Sync for use in UserConfigLoader

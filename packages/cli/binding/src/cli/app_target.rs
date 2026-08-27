@@ -43,6 +43,79 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
     }
 }
 
+/// Boolean flags of the Vite CLI (dev/build/preview), from the shipped
+/// `vp <command> --help` (snap-tests/command-helper); keep in sync. Under
+/// cac/mri parsing every OTHER flag — required-value, optional-value
+/// (`--host [host]`), or unknown — consumes a following non-flag token as
+/// its value, so only tokens no flag consumes are positional targets.
+const VITE_BOOLEAN_FLAGS: &[&str] = &[
+    "-w",
+    "--watch",
+    "--app",
+    "--clearScreen",
+    "--cors",
+    "--emptyOutDir",
+    "--experimentalBundle",
+    "--force",
+    "--profile",
+    "--strictPort",
+];
+
+/// The directory Vite loads the app config from, when the args select one:
+/// the parent of an explicit `-c`/`--config` file (which wins over a
+/// positional), else the `[root]` positional. `None` means the command's cwd.
+/// Walks the args with cac/mri value consumption and scans them all because
+/// Vite accepts `--config` and `[root]` in either order.
+///
+/// Used to aim the core-version guard at the copy of `vite` the app's config
+/// and plugins will import: Vite keeps the process cwd unchanged and rebases
+/// config lookup onto the selected root.
+pub(super) fn vite_config_dir(args: &[String], cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let mut positional: Option<&str> = None;
+    let mut config: Option<&str> = None;
+    let mut iter = args.iter().peekable();
+    while let Some(arg) = iter.next() {
+        if !arg.starts_with('-') {
+            positional.get_or_insert(arg);
+            continue;
+        }
+        // `--` terminates options: the first following token is the
+        // positional, and nothing after it can be a flag.
+        if arg == "--" {
+            if positional.is_none() {
+                positional = iter.next().map(String::as_str);
+            }
+            break;
+        }
+        if arg == "-c" || arg == "--config" {
+            if let Some(next) = iter.peek() {
+                if !next.starts_with('-') {
+                    config = iter.next().map(String::as_str);
+                }
+            }
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("-c=").or_else(|| arg.strip_prefix("--config=")) {
+            config = Some(value);
+            continue;
+        }
+        let is_boolean = VITE_BOOLEAN_FLAGS.contains(&arg.as_str()) || arg.starts_with("--no-");
+        if !is_boolean
+            && !arg.contains('=')
+            && iter.peek().is_some_and(|next| !next.starts_with('-'))
+        {
+            iter.next();
+        }
+    }
+    if let Some(config) = config {
+        // The config's parent dir, resolved like Vite resolves `--config`
+        // (relative to cwd). An empty parent means the config sits in cwd.
+        let parent = std::path::Path::new(config).parent().unwrap_or(std::path::Path::new(""));
+        return Some(cwd.join(parent).clean());
+    }
+    positional.map(|root| cwd.join(root).clean())
+}
+
 /// Does the workspace root have an intent signal for this app command?
 /// This signal selects the root. It does not prove that the command succeeds.
 /// The `defaultPackage` lookup passes the config that [`classify`] already
@@ -421,6 +494,44 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn vite_config_dir_selects_the_app_dir() {
+        let to_args = |args: &[&str]| args.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        let root = if cfg!(windows) { "C:\\ws" } else { "/ws" };
+        let cwd = AbsolutePath::new(root).unwrap();
+        let dir = |rel: &str| Some(cwd.join(rel).clean());
+
+        // No target selection: fall back to the command's cwd.
+        assert_eq!(vite_config_dir(&to_args(&[]), cwd), None);
+        assert_eq!(vite_config_dir(&to_args(&["--mode", "production"]), cwd), None);
+
+        // The `[root]` positional, wherever cac would see one.
+        assert_eq!(vite_config_dir(&to_args(&["apps/web"]), cwd), dir("apps/web"));
+        assert_eq!(
+            vite_config_dir(&to_args(&["--mode", "production", "apps/web"]), cwd),
+            dir("apps/web")
+        );
+        assert_eq!(vite_config_dir(&to_args(&["-w", "apps/web"]), cwd), dir("apps/web"));
+        assert_eq!(vite_config_dir(&to_args(&["--", "apps/web"]), cwd), dir("apps/web"));
+
+        // An explicit config wins over the positional in either order; its
+        // parent is where the config's imports resolve from.
+        assert_eq!(
+            vite_config_dir(&to_args(&["-c", "apps/web/vite.config.ts"]), cwd),
+            dir("apps/web")
+        );
+        assert_eq!(
+            vite_config_dir(&to_args(&["apps/web", "--config=conf/vite.config.ts"]), cwd),
+            dir("conf")
+        );
+        assert_eq!(
+            vite_config_dir(&to_args(&["-c", "conf/vite.config.ts", "apps/web"]), cwd),
+            dir("conf")
+        );
+        // A config in the cwd itself keeps the cwd as the guard dir.
+        assert_eq!(vite_config_dir(&to_args(&["-c", "vite.config.ts"]), cwd), dir(""));
     }
 
     #[test]

@@ -65,12 +65,12 @@ pub fn ensure_blocking_stdio() {
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
-    pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub lint: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub fmt: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub vite: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub test: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub pack: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
+    pub doc: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
     /// Whether the user supplied the global `-C` option.
     pub explicit_chdir: Option<bool>,
@@ -84,34 +84,80 @@ pub struct CliOptions {
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
 }
 
-/// Result returned by JavaScript resolver functions.
+/// A command or tagged user error returned by a JavaScript resolver.
+/// Successful results contain `binPath` and `envs`. User errors contain
+/// `errorKind` and `errorMessage`.
 #[napi(object, object_to_js = false)]
 pub struct JsCommandResolvedResult {
-    pub bin_path: String,
-    pub envs: HashMap<String, String>,
+    pub bin_path: Option<String>,
+    pub envs: Option<HashMap<String, String>>,
+    pub error_kind: Option<String>,
+    pub error_message: Option<String>,
 }
 
-impl From<JsCommandResolvedResult> for ResolveCommandResult {
-    fn from(value: JsCommandResolvedResult) -> Self {
-        Self {
-            bin_path: Arc::<OsStr>::from(OsStr::new(&value.bin_path).to_os_string()),
-            envs: value.envs.into_iter().collect(),
-        }
+fn resolve_command_result(
+    value: JsCommandResolvedResult,
+    error_context: &str,
+) -> anyhow::Result<ResolveCommandResult> {
+    if let Some(error_kind) = value.error_kind {
+        let error_message =
+            value.error_message.unwrap_or_else(|| "resolver returned no error message".to_string());
+        return if error_kind == "core-version-mismatch" {
+            Err(anyhow::anyhow!(error_message))
+        } else {
+            Err(anyhow::anyhow!(
+                "{error_context}: unknown resolver error type '{error_kind}': {error_message}"
+            ))
+        };
+    }
+
+    let bin_path = value
+        .bin_path
+        .ok_or_else(|| anyhow::anyhow!("{error_context}: resolver returned no binary path"))?;
+    let envs = value
+        .envs
+        .ok_or_else(|| anyhow::anyhow!("{error_context}: resolver returned no environment"))?;
+    Ok(ResolveCommandResult {
+        bin_path: Arc::<OsStr>::from(OsStr::new(&bin_path).to_os_string()),
+        envs: envs.into_iter().collect(),
+    })
+}
+
+#[cfg(test)]
+mod resolver_result_tests {
+    use super::*;
+
+    #[test]
+    fn core_version_mismatch_keeps_only_the_user_message() {
+        let error = resolve_command_result(
+            JsCommandResolvedResult {
+                bin_path: None,
+                envs: None,
+                error_kind: Some("core-version-mismatch".to_string()),
+                error_message: Some("Update the `vite` alias.".to_string()),
+            },
+            "Failed to resolve vite command",
+        )
+        .expect_err("the tagged result should be an error");
+
+        assert_eq!(error.to_string(), "Update the `vite` alias.");
     }
 }
 
-/// Create a boxed resolver function from a ThreadsafeFunction
+/// Create a boxed resolver function from a ThreadsafeFunction. The `cwd`
+/// argument is the directory the resolved command will run in; it reaches the
+/// JS resolver as its second (callee-handled) argument.
 /// NOTE: Uses anyhow::Error to avoid NAPI type interference with vp_error::Error
 fn create_resolver(
-    tsf: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    tsf: Arc<ThreadsafeFunction<String, Promise<JsCommandResolvedResult>>>,
     error_message: &'static str,
 ) -> BoxedResolverFn {
-    Box::new(move || {
+    Box::new(move |cwd: String| {
         let tsf = tsf.clone();
         Box::pin(async move {
             // Call JS function - map napi::Error to anyhow::Error
             let promise: Promise<JsCommandResolvedResult> = tsf
-                .call_async(Ok(()))
+                .call_async(Ok(cwd))
                 .await
                 .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
@@ -119,7 +165,7 @@ fn create_resolver(
             let resolved: JsCommandResolvedResult =
                 promise.await.map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
-            Ok(resolved.into())
+            resolve_command_result(resolved, error_message)
         })
     })
 }

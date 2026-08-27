@@ -3444,12 +3444,12 @@ export interface BatchRewriteResult {
 
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
-  lint: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  fmt: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  vite: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  test: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  pack: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  doc: (err: Error | null) => Promise<JsCommandResolvedResult>;
+  lint: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  fmt: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  vite: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  test: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  pack: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
+  doc: (err: Error | null, arg: string) => Promise<JsCommandResolvedResult>;
   cwd?: string;
   /** Whether the user supplied the global `-C` option. */
   explicitChdir?: boolean;
@@ -3569,10 +3569,16 @@ export declare function getVpDirs(): VpDirsJs;
  */
 export declare function hasConfigKey(viteConfigPath: string, configKey: string): boolean;
 
-/** Result returned by JavaScript resolver functions. */
+/**
+ * A command or tagged user error returned by a JavaScript resolver.
+ * Successful results contain `binPath` and `envs`. User errors contain
+ * `errorKind` and `errorMessage`.
+ */
 export interface JsCommandResolvedResult {
-  binPath: string;
-  envs: Record<string, string>;
+  binPath?: string;
+  envs?: Record<string, string>;
+  errorKind?: string;
+  errorMessage?: string;
 }
 
 /**
