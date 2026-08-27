@@ -1694,6 +1694,12 @@ export declare class BindingDevEngine {
    * actual module and its dependencies.
    */
   compileEntry(moduleId: string, clientId: string): Promise<BindingLazyChunkOutput>;
+  /**
+   * Same data the plugin-context `getModuleInfo` returns, readable from the engine
+   * handle at any time (no hook context needed).
+   */
+  getModuleInfo(moduleId: string): BindingModuleInfo | null;
+  getModuleIds(): Array<string>;
 }
 
 export declare class BindingLoadPluginContext {
@@ -2002,8 +2008,8 @@ export declare class TraceSubscriberGuard {
 }
 
 export declare class TsconfigCache {
-  /** Create a new transform cache with auto tsconfig discovery enabled. */
-  constructor(yarnPnp: boolean);
+  /** Create a new transform cache with auto or manual tsconfig discovery enabled. */
+  constructor(yarnPnp: boolean, pathToTsconfig?: string | undefined | null);
   /**
    * Clear the cache.
    *
@@ -2288,9 +2294,10 @@ export interface BindingEnhancedTransformOptions {
   /**
    * Configure tsconfig handling.
    * - true: Auto-discover and load the nearest tsconfig.json
+   * - string: Use the tsconfig at the provided path
    * - TsconfigRawOptions: Use the provided inline tsconfig options
    */
-  tsconfig?: boolean | BindingTsconfigRawOptions;
+  tsconfig?: boolean | string | BindingTsconfigRawOptions;
   /** An input source map to collapse with the output source map. */
   inputMap?: SourceMap;
 }
@@ -2701,8 +2708,8 @@ export interface BindingManualCodeSplittingOptions {
 }
 
 export interface BindingMatchGroup {
-  name: string | ((id: string, ctx: BindingChunkingContext) => VoidNullable<string>);
-  test?: string | RegExp | ((id: string) => VoidNullable<boolean>);
+  name: string | ((ids: Array<string>, ctx: BindingChunkingContext) => Array<VoidNullable<string>>);
+  test?: string | RegExp | ((ids: Array<string>) => Uint8Array);
   priority?: number;
   minSize?: number;
   minShareCount?: number;
@@ -2802,6 +2809,7 @@ export interface BindingOutputOptions {
 export interface BindingOutputs {
   chunks: Array<BindingOutputChunk>;
   assets: Array<BindingOutputAsset>;
+  mangleCache?: Record<string, string | false>;
 }
 
 export interface BindingOverwriteOptions {
@@ -2913,14 +2921,14 @@ export interface BindingPluginOptions {
   renderErrorMeta?: BindingPluginHookMeta;
   generateBundle?: (
     ctx: BindingPluginContext,
-    bundle: BindingErrorsOr<BindingOutputs>,
+    bundle: BindingResult<BindingOutputs>,
     isWrite: boolean,
     opts: BindingNormalizedOptions,
   ) => MaybePromise<VoidNullable<JsChangedOutputs>>;
   generateBundleMeta?: BindingPluginHookMeta;
   writeBundle?: (
     ctx: BindingPluginContext,
-    bundle: BindingErrorsOr<BindingOutputs>,
+    bundle: BindingResult<BindingOutputs>,
     opts: BindingNormalizedOptions,
   ) => MaybePromise<VoidNullable<JsChangedOutputs>>;
   writeBundleMeta?: BindingPluginHookMeta;
@@ -3214,6 +3222,7 @@ export interface BindingViteReporterPluginConfig {
 
 export interface BindingViteResolvePluginConfig {
   resolveOptions: BindingViteResolvePluginResolveOptions;
+  tsconfig?: string;
   environmentConsumer: string;
   environmentName: string;
   builtins: Array<BindingStringOrRegex>;
@@ -3259,6 +3268,7 @@ export interface BindingViteResolvePluginResolveOptions {
 
 export interface BindingViteTransformPluginConfig {
   root: string;
+  tsconfig?: string;
   include?: Array<BindingStringOrRegex>;
   exclude?: Array<BindingStringOrRegex>;
   jsxRefreshInclude?: Array<BindingStringOrRegex>;
