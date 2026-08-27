@@ -37,6 +37,47 @@ When you use a commit SHA, add the exact release tag in a comment. Renovate uses
 
 These settings apply only to GitHub Actions workflows. For GitLab CI/CD and Azure Pipelines, update both version values together.
 
+## Dependency Update Bots
+
+`vp create` and `vp migrate` write two npm entries that must stay on one version: the `vite-plus` dependency and the `vite` alias (`npm:@voidzero-dev/vite-plus-core@<version>`). Projects that use `vp test` also carry a `vitest` override pinned to the version bundled in Vite+. A dependency bot sees unrelated packages and updates each one in its own PR. Either PR leaves the project on a Vite+ pairing that was never published together, and `vp dev`, `vp build`, `vp preview`, and `vp test` fail on the mismatch.
+
+Configure your bot to update these packages in one grouped PR.
+
+### Renovate
+
+Extend the official preset from the Vite+ repository:
+
+```json [renovate.json]
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "github>voidzero-dev/vite-plus"]
+}
+```
+
+The preset groups `vite-plus`, `@voidzero-dev/vite-plus-*`, `vitest`, and `@vitest/*` into one `vite+` PR. It also sets `minimumReleaseAge` and `schedule` on the group, so every member becomes eligible at the same time even when another preset sets a different age gate or schedule for some of them. Rules later in your configuration override these values.
+
+### Dependabot
+
+Add a `groups` entry for the npm ecosystem in `.github/dependabot.yml`:
+
+```yaml [.github/dependabot.yml]
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      vite-plus:
+        patterns:
+          - vite-plus
+          - '@voidzero-dev/vite-plus-*'
+          - vitest
+          - '@vitest/*'
+```
+
+Grouping combines updates that arrive together. A `vitest` release with no Vite+ release still produces a separate `vitest` PR ahead of the bundled version. Run `vp migrate` to realign the `vitest` pin with the bundled version.
+
 ## GitHub Actions
 
 The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package-manager setup, or manual dependency caching steps in your workflow.

@@ -106,6 +106,8 @@ Or, if you are using Yarn:
 }
 ```
 
+These entries and the `vite-plus` dependency must stay on one version. If Renovate or Dependabot updates the project, configure grouped updates so a bot bumps them together; see [Dependency Update Bots](/guide/ci#dependency-update-bots).
+
 ## Migration Prompt
 
 If you want to hand this work to a coding agent (or the reader is a coding agent!), use this migration prompt:
