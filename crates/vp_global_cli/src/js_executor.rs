@@ -628,6 +628,12 @@ mod tests {
 
     /// Without any project marker around (`find_workspace_root` errors) there
     /// is no boundary to protect; the walk stays unbounded as before.
+    ///
+    /// Unix-only: the premise is that no ancestor of the tempdir carries a
+    /// package.json, which holds for `/tmp` / `/var/folders` but not for
+    /// Windows, where `%TEMP%` lives under the user profile and a stray
+    /// `package.json` there would create a boundary and fail the test.
+    #[cfg(unix)]
     #[test]
     fn unbounded_walk_without_project_markers() {
         let temp = tempfile::tempdir().unwrap();
