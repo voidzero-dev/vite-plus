@@ -9,10 +9,10 @@ use std::{
 
 use serde::Deserialize;
 use vp_pm_cli::get_package_manager_type_and_version;
-use vt_path::AbsolutePathBuf;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_workspace::find_workspace_root;
 
-use crate::{commands::env::config::resolve_version, error::Error, help};
+use crate::{commands::env::config::resolve_version, error::Error, help, js_executor::JsExecutor};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,20 +64,16 @@ fn read_package_json(package_json_path: &Path) -> Option<PackageJson> {
     serde_json::from_str(&content).ok()
 }
 
-fn find_local_vite_plus(start: &Path) -> Option<LocalVitePlus> {
-    let mut current = Some(start);
-    while let Some(dir) = current {
-        let package_json_path = dir.join("node_modules").join("vite-plus").join("package.json");
-        if let Some(pkg) = read_package_json(&package_json_path) {
-            let package_dir = package_json_path.parent()?.to_path_buf();
-            // Follow symlinks (pnpm links node_modules/vite-plus -> node_modules/.pnpm/.../vite-plus)
-            // so parent traversal can discover colocated dependency links.
-            let package_dir = fs::canonicalize(&package_dir).unwrap_or(package_dir);
-            return Some(LocalVitePlus { version: pkg.version, package_dir });
-        }
-        current = dir.parent();
-    }
-    None
+fn find_local_vite_plus(cwd: &AbsolutePath) -> Option<LocalVitePlus> {
+    // The workspace-bounded walk keeps this display consistent with what
+    // delegation would actually execute (see `local_vite_plus_install_host`).
+    let host = JsExecutor::local_vite_plus_install_host(cwd)?;
+    let package_dir = host.as_path().join("node_modules").join("vite-plus");
+    let pkg = read_package_json(&package_dir.join("package.json"))?;
+    // Follow symlinks (pnpm links node_modules/vite-plus -> node_modules/.pnpm/.../vite-plus)
+    // so parent traversal can discover colocated dependency links.
+    let package_dir = fs::canonicalize(&package_dir).unwrap_or(package_dir);
+    Some(LocalVitePlus { version: pkg.version, package_dir })
 }
 
 fn read_toolchain_manifest(local: &LocalVitePlus) -> Option<vp_toolchain::Manifest> {
@@ -173,7 +169,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!();
 
     // Local vite-plus and tools
-    let local = find_local_vite_plus(cwd.as_path());
+    let local = find_local_vite_plus(&cwd);
     print_rows(
         "Local vite-plus",
         &[("vite-plus", format_version(local.as_ref().map(|pkg| pkg.version.clone())))],
@@ -227,6 +223,9 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 mod tests {
     #[cfg(unix)]
     use std::{fs, path::Path};
+
+    #[cfg(unix)]
+    use vt_path::AbsolutePath;
 
     #[cfg(unix)]
     use super::{TOOL_SPECS, find_local_vite_plus, read_toolchain_manifest, resolve_tool_version};
@@ -307,7 +306,8 @@ mod tests {
             &node_modules_dir.join("vite-plus"),
         );
 
-        let local = find_local_vite_plus(project).expect("expected local vite-plus to resolve");
+        let local = find_local_vite_plus(AbsolutePath::new(project).unwrap())
+            .expect("expected local vite-plus to resolve");
         let manifest = read_toolchain_manifest(&local).expect("expected manifest to resolve");
         assert_eq!(
             resolve_tool_version(Some(&local), Some(&manifest), TOOL_SPECS[0]).as_deref(),
@@ -342,7 +342,8 @@ mod tests {
             &node_modules_dir.join("vite-plus"),
         );
 
-        let local = find_local_vite_plus(project).expect("expected local vite-plus to resolve");
+        let local = find_local_vite_plus(AbsolutePath::new(project).unwrap())
+            .expect("expected local vite-plus to resolve");
         assert_eq!(
             resolve_tool_version(Some(&local), None, TOOL_SPECS[0]).as_deref(),
             Some("8.0.0"),
