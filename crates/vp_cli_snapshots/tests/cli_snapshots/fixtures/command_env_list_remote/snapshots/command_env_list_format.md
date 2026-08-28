@@ -22,7 +22,7 @@ Installed Node.js versions retain their interactive formatting
 VITE+ - The Unified Toolchain for the Web
 
 Node.js
-  * \x1b[94mv22.11.0 \x1b[2mcurrent default
+  \x1b[94m* <version> \x1b[2mcurrent default
 
 \x1b[2mnote: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
 ```
@@ -35,7 +35,7 @@ Installed package-manager versions use the same interactive formatting
 VITE+ - The Unified Toolchain for the Web
 
 pnpm
-  * \x1b[94m10.18.0 \x1b[2mcurrent default
+  \x1b[94m* 10.18.0 \x1b[2mcurrent default
 
 \x1b[2mnote: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
 ```
