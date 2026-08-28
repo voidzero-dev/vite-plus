@@ -413,11 +413,49 @@ impl JsExecutor {
         Ok(output)
     }
 
+    /// Find the directory whose `node_modules/vite-plus` an upward walk from
+    /// `project_path` is allowed to use.
+    ///
+    /// Node-style resolution walks every ancestor's `node_modules`, which can
+    /// escape the project and silently pick up an unrelated ancestor project's
+    /// copy (e.g. a repo checked out inside another project's tree, whose own
+    /// install is missing or broken). Bound the walk at the project's workspace
+    /// root: within it, nearest wins (a workspace member still resolves the
+    /// workspace root's install); beyond it, resolution fails so callers fall
+    /// back to the global installation. When there is no workspace or package
+    /// root at all (`find_workspace_root` errors), there is no project boundary
+    /// to protect and the walk stays unbounded.
+    pub(crate) fn local_vite_plus_install_host(
+        project_path: &AbsolutePath,
+    ) -> Option<AbsolutePathBuf> {
+        let boundary =
+            vt_workspace::find_workspace_root(project_path).ok().map(|(root, _)| root.path);
+
+        let mut current = project_path;
+        loop {
+            if current.join("node_modules/vite-plus/package.json").as_path().exists() {
+                return Some(current.to_absolute_path_buf());
+            }
+            if boundary.as_deref().is_some_and(|boundary| current == boundary) {
+                return None;
+            }
+            match current.parent() {
+                Some(parent) if parent != current => current = parent,
+                _ => return None,
+            }
+        }
+    }
+
     /// Resolve the local vite-plus package root from the project directory.
     pub(crate) fn resolve_local_vite_plus_package_dir(
         project_path: &AbsolutePath,
     ) -> Option<AbsolutePathBuf> {
         use oxc_resolver::{ResolveOptions, Resolver};
+
+        // Only trust an install that lives within the project's workspace; the
+        // Node-semantics resolution below would otherwise walk past it (see
+        // `local_vite_plus_install_host`).
+        Self::local_vite_plus_install_host(project_path)?;
 
         let resolver = Resolver::new(ResolveOptions {
             condition_names: vec!["import".into(), "node".into()],
@@ -532,6 +570,78 @@ mod tests {
         let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// An independent project (with its own workspace marker) checked out
+    /// inside another project's tree must not resolve the outer project's
+    /// vite-plus when its own install is missing — Node-style upward
+    /// resolution would otherwise silently delegate to an unrelated copy.
+    #[test]
+    fn local_resolution_stays_within_the_workspace() {
+        let temp = tempfile::tempdir().unwrap();
+        let outer = temp.path();
+        std::fs::create_dir_all(outer.join("node_modules/vite-plus/dist")).unwrap();
+        std::fs::write(outer.join("node_modules/vite-plus/package.json"), r#"{"version":"0.2.1"}"#)
+            .unwrap();
+        std::fs::write(outer.join("node_modules/vite-plus/dist/bin.js"), "").unwrap();
+        std::fs::write(outer.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
+        std::fs::write(outer.join("package.json"), r#"{"name":"outer"}"#).unwrap();
+
+        let inner = outer.join("external/inner");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(
+            inner.join("package.json"),
+            r#"{"name":"inner","devDependencies":{"vite-plus":"0.3.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(inner.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
+
+        let inner = AbsolutePath::new(inner.as_path()).unwrap();
+        assert_eq!(JsExecutor::local_vite_plus_install_host(inner), None);
+        assert_eq!(JsExecutor::resolve_local_vite_plus_package_dir(inner), None);
+        assert_eq!(JsExecutor::resolve_local_vite_plus(inner), None);
+    }
+
+    /// A workspace member still resolves the workspace root's install: the
+    /// boundary is the workspace root, not the member directory.
+    #[test]
+    fn workspace_member_resolves_the_workspace_root_install() {
+        let temp = tempfile::tempdir().unwrap();
+        let ws = temp.path();
+        std::fs::write(ws.join("pnpm-workspace.yaml"), "packages:\n  - packages/*\n").unwrap();
+        std::fs::write(ws.join("package.json"), r#"{"name":"ws"}"#).unwrap();
+        std::fs::create_dir_all(ws.join("node_modules/vite-plus")).unwrap();
+        std::fs::write(ws.join("node_modules/vite-plus/package.json"), r#"{"version":"0.3.0"}"#)
+            .unwrap();
+        let member = ws.join("packages/app");
+        std::fs::create_dir_all(&member).unwrap();
+        std::fs::write(member.join("package.json"), r#"{"name":"app"}"#).unwrap();
+
+        let member = AbsolutePath::new(member.as_path()).unwrap();
+        let host = JsExecutor::local_vite_plus_install_host(member)
+            .expect("workspace root install must stay resolvable");
+        assert_eq!(host.as_path(), ws);
+        let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(member)
+            .expect("workspace root install must stay resolvable");
+        assert!(pkg_dir.as_path().ends_with("node_modules/vite-plus"));
+    }
+
+    /// Without any project marker around (`find_workspace_root` errors) there
+    /// is no boundary to protect; the walk stays unbounded as before.
+    #[test]
+    fn unbounded_walk_without_project_markers() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir_all(root.join("node_modules/vite-plus")).unwrap();
+        std::fs::write(root.join("node_modules/vite-plus/package.json"), r#"{"version":"1.0.0"}"#)
+            .unwrap();
+        let nested = root.join("a/b");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let nested = AbsolutePath::new(nested.as_path()).unwrap();
+        let host = JsExecutor::local_vite_plus_install_host(nested)
+            .expect("markerless directories keep the unbounded walk");
+        assert_eq!(host.as_path(), root);
     }
 
     #[test]
