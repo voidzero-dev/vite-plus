@@ -18,5 +18,8 @@ Node version resolved from .node-version
 pnpm should use same project Node version
 
 ```
+Already up to date
+
+Done in <duration> using pnpm <version>
 <version>
 ```
