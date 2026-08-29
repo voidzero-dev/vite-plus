@@ -1,4 +1,4 @@
-//! Node.js version file reading and writing utilities.
+//! Node.js version file reading utilities.
 //!
 //! This module provides utilities for working with `.node-version` and
 //! `.nvmrc` files, which are used to specify Node.js versions for projects.
@@ -9,8 +9,6 @@
 pub use vp_shared::PackageJson;
 use vt_path::AbsolutePath;
 use vt_str::Str;
-
-use crate::Error;
 
 /// Parse the content of a `.node-version` file.
 ///
@@ -80,26 +78,6 @@ pub async fn read_nvmrc_file(project_path: &AbsolutePath) -> Option<Str> {
         "node" | "stable" => Some("latest".into()),
         _ => parse_node_version_content(version),
     }
-}
-
-/// Write a version to the `.node-version` file.
-///
-/// Creates the file if it doesn't exist, overwrites if it does.
-/// Uses three-part version without `v` prefix and Unix line ending.
-///
-/// # Arguments
-/// * `project_path` - The path to the project directory
-/// * `version` - The version string (e.g., "22.13.1")
-///
-/// # Errors
-/// Returns an error if the file cannot be written.
-pub async fn write_node_version_file(
-    project_path: &AbsolutePath,
-    version: &str,
-) -> Result<(), Error> {
-    let path = project_path.join(".node-version");
-    tokio::fs::write(&path, format!("{version}\n")).await?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -187,20 +165,6 @@ mod tests {
 
         tokio::fs::write(temp_path.join(".nvmrc"), "system\n").await.unwrap();
         assert!(read_nvmrc_file(&temp_path).await.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_write_node_version_file() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        write_node_version_file(&temp_path, "22.13.1").await.unwrap();
-
-        let content = tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-        assert_eq!(content, "22.13.1\n");
-
-        // Verify it can be read back
-        assert_eq!(read_node_version_file(&temp_path).await, Some("22.13.1".into()));
     }
 
     // ========================================================================

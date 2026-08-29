@@ -105,16 +105,6 @@ package b uses vp pack
 
 package a migrated vp pack script builds successfully
 
-```
-~/packages/a$ vp pack ⊘ cache disabled
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ dist/index.cjs  <size> kB │ gzip: <size> kB
-ℹ 1 files, total: <size> kB
-ℹ dist/index.d.cts  <size> kB │ gzip: <size> kB
-ℹ 1 files, total: <size> kB
-✔ Build complete in <duration>
-```
 
 ## `vpt list-dir packages/a/dist`
 
@@ -129,16 +119,6 @@ index.d.cts
 
 package b migrated vp pack script builds successfully
 
-```
-~/packages/b$ vp pack ⊘ cache disabled
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ dist/index.cjs  <size> kB │ gzip: <size> kB
-ℹ 1 files, total: <size> kB
-ℹ dist/index.d.cts  <size> kB │ gzip: <size> kB
-ℹ 1 files, total: <size> kB
-✔ Build complete in <duration>
-```
 
 ## `vpt list-dir packages/b/dist`
 

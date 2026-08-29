@@ -1,0 +1,95 @@
+name: Cleanup Docker preview images
+
+on:
+  schedule:
+    # Weekly: Monday 03:17 UTC. The non-zero minute avoids common
+    # top-of-hour scheduling congestion.
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: cleanup-docker-preview-images
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.repository == 'voidzero-dev/vite-plus' && github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - name: Delete expired preview images
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const packageType = 'container';
+            const packageName = 'vite-plus';
+            const minimumToKeep = 10;
+            const retentionMonths = 3;
+            const previewTag = /^pr-[1-9]\d*(?:-[0-9a-f]{40})?$/;
+            const { owner: org } = context.repo;
+
+            const cutoff = new Date();
+            const cutoffDay = cutoff.getUTCDate();
+            cutoff.setUTCDate(1);
+            cutoff.setUTCMonth(cutoff.getUTCMonth() - retentionMonths);
+            const lastCutoffDay = new Date(
+              Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth() + 1, 0),
+            ).getUTCDate();
+            cutoff.setUTCDate(Math.min(cutoffDay, lastCutoffDay));
+
+            const versions = await github.paginate(
+              'GET /orgs/{org}/packages/{package_type}/{package_name}/versions',
+              {
+                org,
+                package_type: packageType,
+                package_name: packageName,
+                per_page: 100,
+              },
+            );
+
+            // A version is a preview only when every tag uses a preview-only
+            // form from publish-preview-register.yml. Release and untagged
+            // versions are never eligible for deletion.
+            const previews = versions
+              .filter((version) => {
+                const tags = version.metadata?.container?.tags ?? [];
+                return tags.length > 0 && tags.every((tag) => previewTag.test(tag));
+              })
+              .sort((left, right) => {
+                const byCreation = Date.parse(right.created_at) - Date.parse(left.created_at);
+                return byCreation || right.id - left.id;
+              });
+
+            const expired = previews
+              .slice(minimumToKeep)
+              .filter((version) => new Date(version.created_at) < cutoff);
+
+            core.info(
+              `Found ${versions.length} package versions and ${previews.length} preview versions.`,
+            );
+            core.info(
+              `Keeping the newest ${Math.min(minimumToKeep, previews.length)} previews and ` +
+                `all previews created on or after ${cutoff.toISOString()}.`,
+            );
+
+            for (const version of expired) {
+              const tags = version.metadata.container.tags.join(', ');
+              core.info(
+                `Deleting ${tags} (version ${version.id}, created ${version.created_at}).`,
+              );
+              await github.request(
+                'DELETE /orgs/{org}/packages/{package_type}/{package_name}/versions/{package_version_id}',
+                {
+                  org,
+                  package_type: packageType,
+                  package_name: packageName,
+                  package_version_id: version.id,
+                },
+              );
+            }
+
+            core.info(`Deleted ${expired.length} expired preview versions.`);

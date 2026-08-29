@@ -455,8 +455,10 @@ jobs:
             }
 
   # Build and push a preview Docker image from the registry bridge build so the
-  # image can be verified before a real release. Tagged `pr-<number>`; never
-  # `latest`. See docker/Dockerfile and docs/guide/docker.md.
+  # image can be verified before a real release. Tagged `pr-<number>` and
+  # `pr-<number>-<commit>`; never `latest`. The commit tag remains on older
+  # builds when the mutable PR tag moves, so cleanup can identify them safely.
+  # See docker/Dockerfile and docs/guide/docker.md.
   #
   # Same-repo PRs only, for now. This job installs the preview package, which
   # executes the PR's code, and pushes the result to the org's GHCR namespace as
@@ -481,7 +483,7 @@ jobs:
       # package should come from the PR.
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -501,7 +503,9 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
+          tags: |
+            ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}
+            ${{ env.IMAGE }}:pr-${{ needs.authorize.outputs.pr }}-${{ github.event.workflow_run.head_sha }}
           build-args: |
             VP_PR_VERSION=${{ needs.authorize.outputs.pr }}
           # Single-manifest image (no attestation index): simpler for consumers
