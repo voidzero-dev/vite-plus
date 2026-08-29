@@ -64,11 +64,6 @@ const guideSidebar = [
       { text: 'Dev', link: '/guide/dev' },
       { text: 'Build', link: '/guide/build' },
       { text: 'Pack', link: '/guide/pack' },
-    ],
-  },
-  {
-    text: 'Task Runner',
-    items: [
       {
         text: 'Run',
         link: '/guide/run',
@@ -85,6 +80,8 @@ const guideSidebar = [
         text: 'Running Binaries',
         link: '/guide/vpx',
       },
+      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
+      { text: 'Monorepo Guide', link: '/guide/monorepo' },
     ],
   },
   {
@@ -101,8 +98,6 @@ const guideSidebar = [
       { text: 'IDE Integration', link: '/guide/ide-integration' },
       { text: 'CI', link: '/guide/ci' },
       { text: 'Docker', link: '/guide/docker' },
-      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
-      { text: 'Monorepo Guide', link: '/guide/monorepo' },
     ],
   },
   {
