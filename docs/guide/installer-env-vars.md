@@ -38,7 +38,6 @@ These variables control the installer scripts and the standalone Windows install
   Unix, it uses `~/.local/share/vite-plus` and its Vite+-owned `bin`
   subdirectory. On Windows, it uses `%LOCALAPPDATA%\vite-plus\data` and
   `%LOCALAPPDATA%\vite-plus\bin`.
-- **CLI equivalent**: `--install-dir`
 - **Example**:
 
   ```bash
@@ -196,6 +195,8 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 ### `VP_LOG`
 
 - **Purpose**: Log filter string for `tracing_subscriber`
+- **Installer behavior**: When `CI=true`, `install.sh` hides shell file errors.
+  Set `VP_LOG=trace` to show these errors.
 - **Default**: None
 - **Example**:
   ```bash

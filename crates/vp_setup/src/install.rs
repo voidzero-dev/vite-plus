@@ -92,71 +92,6 @@ pub async fn extract_platform_package(
     Ok(())
 }
 
-/// Layout mode and category roots a split-aware payload reports via
-/// `VP_DUMP_DIRS`.
-pub struct PayloadDirs {
-    pub layout: vp_shared::VpDirsLayout,
-    pub data: AbsolutePathBuf,
-    pub bin: AbsolutePathBuf,
-    pub cache: AbsolutePathBuf,
-    pub config: AbsolutePathBuf,
-    pub state: AbsolutePathBuf,
-}
-
-/// Ask a downloaded platform payload for its directory layout.
-///
-/// A split-aware `vp` prints tab-separated category roots when
-/// `VP_DUMP_DIRS=1`. A pre-split release prints its help instead. An error
-/// means that the payload gave no answer. Every release supports the
-/// monolithic root, so that fallback is safe.
-pub async fn probe_payload_dirs(platform_data: &[u8]) -> Option<PayloadDirs> {
-    let temp = tempfile::tempdir().ok()?;
-    let temp_root = AbsolutePathBuf::new(temp.path().to_path_buf())?;
-    extract_platform_package(platform_data, &temp_root).await.ok()?;
-
-    let vp_binary = temp_root.join("bin").join(crate::VP_BINARY_NAME);
-    let output = tokio::process::Command::new(vp_binary.as_path())
-        .env(vp_shared::env_vars::VP_DUMP_DIRS, "1")
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    use vp_shared::env_vars::dump_dirs;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let value =
-        |key: &str| stdout.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix('\t'));
-    let category = |key: &str| {
-        let root = value(key)?;
-        AbsolutePathBuf::new(root.into())
-    };
-    let data = category(dump_dirs::DATA)?;
-    let bin = category(dump_dirs::BIN)?;
-    let cache = category(dump_dirs::CACHE)?;
-    let config = category(dump_dirs::CONFIG)?;
-    let state = category(dump_dirs::STATE)?;
-    let layout = value(dump_dirs::LAYOUT)
-        .and_then(vp_shared::VpDirsLayout::parse)
-        .unwrap_or_else(|| infer_payload_layout(&bin, &data, &cache, &config, &state));
-    Some(PayloadDirs { layout, data, bin, cache, config, state })
-}
-
-fn infer_payload_layout(
-    bin: &AbsolutePathBuf,
-    data: &AbsolutePathBuf,
-    cache: &AbsolutePathBuf,
-    config: &AbsolutePathBuf,
-    state: &AbsolutePathBuf,
-) -> vp_shared::VpDirsLayout {
-    if bin == &data.join("bin") && cache == &data.join("cache") && config == data && state == data {
-        vp_shared::VpDirsLayout::SingleRoot
-    } else {
-        vp_shared::VpDirsLayout::Split
-    }
-}
-
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
 const PINNED_PNPM_VERSION: &str = "10.33.0";
@@ -477,24 +412,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
     #[cfg(windows)]
     {
         // Windows: junction swap (not atomic)
-        // Remove whatever exists at current_link — could be a junction, symlink, or directory.
-        // We don't rely on junction::exists() since it may not detect junctions created by
-        // cmd /c mklink /J (used by install.ps1).
-        if current_link.as_path().exists() {
-            // std::fs::remove_dir works on junctions/symlinks without removing target contents
-            if let Err(e) = std::fs::remove_dir(&current_link) {
-                tracing::debug!("remove_dir failed ({}), trying junction::delete", e);
-                junction::delete(&current_link).map_err(|e| {
-                    Error::Setup(
-                        format!(
-                            "Failed to remove existing junction at {}: {e}",
-                            current_link.as_path().display()
-                        )
-                        .into(),
-                    )
-                })?;
-            }
-        }
+        remove_windows_current_link(&current_link)?;
 
         junction::create(&version_dir, &current_link).map_err(|e| {
             Error::Setup(
@@ -508,6 +426,56 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
     }
 
     tracing::debug!("Swapped current → {}", version);
+    Ok(())
+}
+
+/// Remove the Windows `current` entry without following its target.
+#[cfg(windows)]
+fn remove_windows_current_link(current_link: &AbsolutePath) -> Result<(), Error> {
+    match std::fs::symlink_metadata(current_link) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(Error::Setup(
+                format!(
+                    "Failed to inspect the current link at {}: {error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        Ok(_) => {}
+    }
+
+    // remove_dir removes a junction or directory symlink without changing its
+    // target. It also detects a dangling junction because symlink_metadata did
+    // not follow the missing target.
+    if let Err(remove_error) = std::fs::remove_dir(current_link) {
+        tracing::debug!("remove_dir failed ({remove_error}), trying junction::delete");
+        junction::delete(current_link).map_err(|junction_error| {
+            Error::Setup(
+                format!(
+                    "Failed to remove the current link at {}: {remove_error}. Junction cleanup also failed: {junction_error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            )
+        })?;
+
+        // junction::delete removes the reparse data. Remove the empty directory
+        // that remains, unless the API removed the directory too.
+        if let Err(error) = std::fs::remove_dir(current_link)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(Error::Setup(
+                format!(
+                    "Failed to remove the current directory at {}: {error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -718,6 +686,29 @@ mod tests {
         assert!(is_install_dir_for_version("0.1.23+force.1.2", "0.1.23"));
         assert!(!is_install_dir_for_version("0.1.230", "0.1.23"));
         assert!(!is_install_dir_for_version("0.1.24", "0.1.23"));
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn swap_current_link_replaces_a_dangling_windows_junction() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let old_version = install_dir.join("old-version");
+        let new_version = install_dir.join("new-version");
+        let current_link = install_dir.join("current");
+
+        std::fs::create_dir(&old_version).unwrap();
+        std::fs::create_dir(&new_version).unwrap();
+        std::fs::write(new_version.join("active"), b"active").unwrap();
+        junction::create(&old_version, &current_link).unwrap();
+        std::fs::remove_dir(&old_version).unwrap();
+
+        assert!(!current_link.as_path().exists());
+        assert!(std::fs::symlink_metadata(&current_link).is_ok());
+
+        swap_current_link(&install_dir, "new-version").await.unwrap();
+
+        assert!(current_link.join("active").as_path().is_file());
     }
 
     #[test]
@@ -1037,57 +1028,5 @@ mod tests {
     #[test]
     fn test_is_release_age_error_ignores_npm_min_release_age() {
         assert!(!is_release_age_error(b"", b"min-release-age prevented installing vite-plus",));
-    }
-
-    /// A platform tarball whose `package/vp` is the given shell script.
-    #[cfg(unix)]
-    fn fake_platform_tgz(vp_script: &str) -> Vec<u8> {
-        use flate2::{Compression, write::GzEncoder};
-        let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
-        let mut header = tar::Header::new_gnu();
-        header.set_path("package/vp").unwrap();
-        header.set_size(vp_script.len() as u64);
-        header.set_mode(0o755);
-        header.set_cksum();
-        tar.append(&header, vp_script.as_bytes()).unwrap();
-        tar.into_inner().unwrap().finish().unwrap()
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn probe_payload_dirs_parses_split_aware_output() {
-        let script = "#!/bin/sh\nprintf 'layout\\tsplit\\ndata\\t/probe-data\\nbin\\t/probe-bin\\ncache\\t/probe-cache\\nconfig\\t/probe-config\\nstate\\t/probe-state\\n'\n";
-        let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
-        assert_eq!(dirs.layout, vp_shared::VpDirsLayout::Split);
-        assert_eq!(dirs.data.as_path(), Path::new("/probe-data"));
-        assert_eq!(dirs.bin.as_path(), Path::new("/probe-bin"));
-        assert_eq!(dirs.cache.as_path(), Path::new("/probe-cache"));
-        assert_eq!(dirs.config.as_path(), Path::new("/probe-config"));
-        assert_eq!(dirs.state.as_path(), Path::new("/probe-state"));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn probe_payload_dirs_infers_old_single_root_output() {
-        let script = "#!/bin/sh\nprintf 'data\\t/probe-root\\nbin\\t/probe-root/bin\\ncache\\t/probe-root/cache\\nconfig\\t/probe-root\\nstate\\t/probe-root\\n'\n";
-        let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
-        assert_eq!(dirs.layout, vp_shared::VpDirsLayout::SingleRoot);
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn probe_payload_dirs_does_not_infer_single_root_from_data_bin_alone() {
-        let script = "#!/bin/sh\nprintf 'data\\t/probe-data\\nbin\\t/probe-data/bin\\ncache\\t/platform-cache\\nconfig\\t/platform-config\\nstate\\t/platform-state\\n'\n";
-        let dirs = probe_payload_dirs(&fake_platform_tgz(script)).await.unwrap();
-        assert_eq!(dirs.layout, vp_shared::VpDirsLayout::Split);
-    }
-
-    /// A pre-split `vp` prints its help and exits 0; the probe must report
-    /// "no answer".
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn probe_payload_dirs_rejects_pre_split_help_output() {
-        let script = "#!/bin/sh\necho 'Usage: vp [COMMAND]'\n";
-        assert!(probe_payload_dirs(&fake_platform_tgz(script)).await.is_none());
     }
 }

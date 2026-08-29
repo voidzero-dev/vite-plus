@@ -206,11 +206,14 @@ jobs:
       # Keep the package selection in sync with the `test` recipe in justfile.
       # vp_cli_snapshots is excluded there too: its snapshot suite needs a
       # built vp and node at runtime and joins the Windows archive later.
+      # vp_trampoline is not a workspace member.
+      # Run its portable parser and layout tests on Unix.
+      # The Windows CLI snapshot suite tests Windows shim behavior.
       - name: Build test archive
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli \
+          cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -250,7 +253,7 @@ jobs:
         with:
           name: windows-test-archive
 
-      - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
+      - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
         with:
           tool: cargo-nextest
 
@@ -335,6 +338,7 @@ jobs:
       - run: |
           cargo shear
           cargo fmt --check
+          cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
           just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
@@ -956,6 +960,21 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
+      - name: Install Fish
+        uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
+
+      - name: Ensure Zsh is installed
+        run: |
+          if ! command -v zsh >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              sudo apt-get update
+              sudo apt-get install --yes zsh
+            else
+              brew install zsh
+            fi
+          fi
+          zsh --version
+
       # https://github.com/marketplace/actions/setup-nu
       - name: Install Nushell
         uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
@@ -978,8 +997,12 @@ jobs:
 
       - name: Run PTY snapshot tests
         run: |
+          export VP_SNAP_SH_BIN="$(command -v sh)"
+          export VP_SNAP_BASH_BIN="$(command -v bash)"
+          export VP_SNAP_ZSH_BIN="$(command -v zsh)"
           VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
+          VP_SNAP_FISH_BIN="$(command -v fish)" \
           VP_SNAP_NU_BIN="$(command -v nu)" \
           cargo test -p vp_cli_snapshots
         env:
@@ -1070,7 +1093,7 @@ jobs:
         with:
           name: windows-snapshot-test-archive
 
-      - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
+      - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
         with:
           tool: cargo-nextest
 
@@ -1087,6 +1110,10 @@ jobs:
           # trampoline would fail. current\bin\vp.exe is the real CLI.
           export VP_SNAP_GLOBAL_VP="$USERPROFILE/.vite-plus/current/bin/vp.exe"
           export VP_SNAP_JS_RUNTIME_DIR="$USERPROFILE/.vite-plus/js_runtime"
+          export VP_SNAP_CMD_BIN="$(cygpath -w "$(command -v cmd.exe)")"
+          # Keep pwsh at its canonical installation path; copying pwsh.exe
+          # alone can break its adjacent runtime dependencies.
+          export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
           cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast

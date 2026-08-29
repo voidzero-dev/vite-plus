@@ -7,6 +7,7 @@ export interface ConfigFiles {
   viteConfig?: string;
   vitestConfig?: string;
   tsdownConfig?: string;
+  tsupConfig?: string;
   oxlintConfig?: string;
   oxfmtConfig?: string;
   eslintConfig?: string;
@@ -19,6 +20,21 @@ export interface ConfigFiles {
 
 // Sentinel value indicating Prettier config lives inside package.json "prettier" key.
 export const PRETTIER_PACKAGE_JSON_CONFIG = 'package.json#prettier';
+
+// Sentinel value indicating tsup config lives inside package.json "tsup" key.
+export const TSUP_PACKAGE_JSON_CONFIG = 'package.json#tsup';
+
+// All known tsup config file names (standalone files only).
+// https://tsup.egoist.dev/#using-a-config-file
+export const TSUP_CONFIG_FILES = [
+  'tsup.config.ts',
+  'tsup.config.mts',
+  'tsup.config.cts',
+  'tsup.config.js',
+  'tsup.config.mjs',
+  'tsup.config.cjs',
+  'tsup.config.json',
+] as const;
 
 // All known Prettier config file names (standalone files only).
 // https://prettier.io/docs/configuration
@@ -86,6 +102,17 @@ export function detectConfigs(projectPath: string): ConfigFiles {
   for (const config of tsdownConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.tsdownConfig = config;
+      break;
+    }
+  }
+
+  // Check for tsup.config.* (still detected even though tsdown supersedes it —
+  // `promptTsupMigration` / `detectTsupProject` use this to offer the tsup →
+  // tsdown migration).
+  // https://tsup.egoist.dev/#using-a-config-file
+  for (const config of TSUP_CONFIG_FILES) {
+    if (fs.existsSync(path.join(projectPath, config))) {
+      configs.tsupConfig = config;
       break;
     }
   }
@@ -170,6 +197,10 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
       if (!configs.prettierConfig && pkg.prettier) {
         configs.prettierConfig = PRETTIER_PACKAGE_JSON_CONFIG;
+      }
+
+      if (!configs.tsupConfig && pkg.tsup) {
+        configs.tsupConfig = TSUP_PACKAGE_JSON_CONFIG;
       }
 
       const voltaNode = pkg.volta?.node;

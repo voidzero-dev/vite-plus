@@ -40,7 +40,7 @@ should install packages first
 ```
 VITE+ - The Unified Toolchain for the Web
 
-bun install <version> (af24e281)
+bun install <version> (<hash>)
 
  test-vite-plus-top-package@1.0.0 (<version> available)
  test-vite-plus-other-optional@1.0.0 (<version> available)
@@ -54,7 +54,7 @@ bun install <version> (af24e281)
 should show outdated package
 
 ```
-bun outdated <version> (af24e281)
+bun outdated <version> (<hash>)
 ┌──────────┬─────────┬────────┬────────┐
 │ Package  │ Current │ Update │ Latest │
 ├──────────┼─────────┼────────┼────────┤
@@ -67,7 +67,7 @@ bun outdated <version> (af24e281)
 should support recursive output
 
 ```
-bun outdated <version> (af24e281)
+bun outdated <version> (<hash>)
 ┌──────────────────────────────────────────┬─────────┬────────┬────────┬──────────────────────┐
 │ Package                                  │ Current │ Update │ Latest │ Workspace            │
 ├──────────────────────────────────────────┼─────────┼────────┼────────┼──────────────────────┤

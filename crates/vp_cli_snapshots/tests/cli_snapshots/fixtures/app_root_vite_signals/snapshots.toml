@@ -1,0 +1,53 @@
+[[case]]
+name = "build_uses_top_level_input"
+vp = ["local", "global"]
+comment = "A declared Vite `input` field is a root intent signal for `vp build`."
+steps = [
+  { argv = ["vpt", "cp", "configs/input.ts", "vite.config.ts"], snapshot = false },
+  ["vp", "build"],
+]
+
+[[case]]
+name = "build_uses_environment_input"
+vp = ["local", "global"]
+comment = "A declared Vite `environments` field is a root intent signal for `vp build`."
+steps = [
+  { argv = ["vpt", "cp", "configs/environment-input.ts", "vite.config.ts"], snapshot = false },
+  ["vp", "build"],
+]
+
+[[case]]
+name = "dev_uses_custom_app_type"
+vp = ["local", "global"]
+comment = "A declared Vite `appType` field is a root intent signal for `vp dev`."
+steps = [
+  { argv = ["vpt", "cp", "configs/custom-app.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_uses_configured_root_without_index"
+vp = ["local", "global"]
+comment = "A declared Vite `root` field is a root intent signal without `index.html`."
+steps = [
+  { argv = ["vpt", "cp", "configs/root-no-index.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "preview_uses_build_output"
+vp = ["local", "global"]
+comment = "A declared Vite `build` field is a root intent signal for `vp preview`."
+steps = [
+  { argv = ["vpt", "cp", "configs/preview-output.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "preview"], interactions = [
+    { "expect-milestone" = "preview-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]

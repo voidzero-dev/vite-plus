@@ -24,8 +24,8 @@ mod windows_path;
 
 use std::io::{self, Write};
 
+use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::OwoColorize;
 use vp_pm_cli::HttpClient;
 use vp_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
 use vp_shared::VpDirs;
@@ -47,69 +47,14 @@ fn init_dll_security() {
 #[cfg(not(windows))]
 fn init_dll_security() {}
 
-/// Enable ANSI color support on Windows.
-///
-/// Older Windows consoles (cmd.exe) don't process ANSI escape codes by default.
-/// We try to enable virtual terminal processing; if that fails (e.g. redirected
-/// output, legacy console), we disable colors globally via owo_colors.
-#[cfg(windows)]
-fn init_colors() {
-    // Respect NO_COLOR (https://no-color.org/)
-    if std::env::var_os("NO_COLOR").is_some() {
-        owo_colors::set_override(false);
-        return;
-    }
-
-    unsafe extern "system" {
-        fn GetStdHandle(nStdHandle: u32) -> isize;
-        fn GetConsoleMode(hConsoleHandle: isize, lpMode: *mut u32) -> i32;
-        fn SetConsoleMode(hConsoleHandle: isize, dwMode: u32) -> i32;
-    }
-    const STD_OUTPUT_HANDLE: u32 = 0xFFFF_FFF5; // -11i32 as u32
-    const STD_ERROR_HANDLE: u32 = 0xFFFF_FFF4; // -12i32 as u32
-    const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
-
-    let enable_vt = |std_handle: u32| -> bool {
-        unsafe {
-            let handle = GetStdHandle(std_handle);
-            // INVALID_HANDLE_VALUE (-1) or NULL (0, no console attached)
-            if handle == -1_isize || handle == 0 {
-                return false;
-            }
-            let mut mode: u32 = 0;
-            if GetConsoleMode(handle, &mut mode) != 0 {
-                SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
-            } else {
-                false
-            }
-        }
-    };
-
-    let stdout_ok = enable_vt(STD_OUTPUT_HANDLE);
-    let stderr_ok = enable_vt(STD_ERROR_HANDLE);
-
-    if !stdout_ok && !stderr_ok {
-        owo_colors::set_override(false);
-    }
-}
-
-#[cfg(not(windows))]
-fn init_colors() {
-    if std::env::var_os("NO_COLOR").is_some() {
-        owo_colors::set_override(false);
-    }
-}
-
 fn main() {
     init_dll_security();
-    init_colors();
 
     let opts = cli::parse();
 
-    // Resolve the category roots before the tokio runtime starts. EnvConfig
-    // reads an existing VP_HOME value. The --install-dir option sets VP_HOME
-    // here. Thus, the unsafe set_var runs while the process has one thread.
-    let dirs = match prepare_dirs(&opts) {
+    // Validate and resolve the category roots before the installer creates any
+    // directories.
+    let dirs = match prepare_dirs() {
         Ok(dirs) => dirs,
         Err(e) => {
             print_error(&format!("Failed to resolve install directory: {e}"));
@@ -152,10 +97,7 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     }
 
     let code = match do_install(&opts, &dirs).await {
-        Ok(effective_dirs) => {
-            // do_install uses the monolithic root for a pre-split payload.
-            // Report the directories that it used.
-            let (data_dir_display, bin_dir_display) = dir_displays(&effective_dirs);
+        Ok(()) => {
             print_success(&opts, &data_dir_display, &bin_dir_display);
             0
         }
@@ -174,34 +116,33 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     code
 }
 
-/// Install the resolved version and return the directories that the installer
-/// used. The installer uses the monolithic root for a pre-split payload.
+/// Install the resolved version.
 #[allow(clippy::print_stdout)]
-async fn do_install(
-    opts: &cli::Options,
-    dirs: &VpDirs,
-) -> Result<VpDirs, Box<dyn std::error::Error>> {
-    let mut dirs = dirs.clone();
+async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
     let platform_suffix = platform::detect_platform_suffix()?;
     if !opts.quiet {
         print_info(&format!("detected platform: {platform_suffix}"));
     }
 
-    // Check local version first to potentially skip HTTP requests.
-    // This operation is read-only. Create the install root only after the
-    // downloaded payload confirms the layout. Thus, a pre-split fallback does
-    // not leave empty split directories.
+    // Read the installed version first. This operation does not create a
+    // directory. Create the installation root after target-version validation.
     let current_version = install::read_current_version(&dirs.data).await;
 
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
 
-    // Resolve the target version — use resolve_version_string first so we can
-    // skip the platform package fetch if the version is already installed
+    // Resolve the target version first. If it matches the installed version,
+    // skip the platform package request.
     if !opts.quiet {
         print_info(&format!("resolving version '{version_or_tag}'..."));
     }
     let target_version =
         registry::resolve_version_string(version_or_tag, opts.registry.as_deref()).await?;
+    if !vp_setup::supports_split_layout(&target_version) {
+        return Err(format!(
+            "vp-setup does not support vite-plus {target_version}. Install vite-plus 0.3.0 or later."
+        )
+        .into());
+    }
 
     // Same version only if the binary is intact — a corrupted install needs a full reinstall.
     // `is_install_dir_for_version` also matches `{version}+force.*` dirs left by a forced
@@ -245,40 +186,6 @@ async fn do_install(
         }
         integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
-        // A pre-split release resolves every path from VP_HOME. Its default is
-        // ~/.vite-plus. Its environment setup, shims, and trampolines cannot
-        // use split roots. Use that monolithic root when the payload cannot
-        // report split category roots.
-        let legacy = VpDirs::legacy_single_root(&vp_shared::EnvConfig::get().user_home);
-        let abandoned_split_data = if legacy.data == dirs.data {
-            // Pre-split and split-aware payloads use the same monolithic root
-            // here. Skip the probe because it extracts and starts the payload.
-            None
-        } else if let Some(probed) = install::probe_payload_dirs(&platform_data).await {
-            // Use the payload's resolution, as install.sh and install.ps1 do.
-            // This keeps the written layout equal to the resolved layout.
-            dirs = VpDirs::from_resolved_parts(
-                probed.bin,
-                probed.data,
-                probed.cache,
-                probed.config,
-                probed.state,
-                probed.layout,
-            );
-            None
-        } else {
-            if !opts.quiet {
-                print_info(&format!(
-                    "vite-plus {target_version} does not support the split directory layout. Vite+ will install it in {}.",
-                    legacy.data.as_path().display()
-                ));
-            }
-            let split_data = dirs.data.clone();
-            let preexisted = tokio::fs::try_exists(&split_data).await.unwrap_or(true);
-            dirs = legacy;
-            (!preexisted).then_some(split_data)
-        };
-
         let install_dir = &dirs.data;
         let version_dir = install_dir.join(&target_version);
         tokio::fs::create_dir_all(&version_dir).await?;
@@ -298,12 +205,6 @@ async fn do_install(
             let _ = tokio::fs::remove_dir_all(&version_dir).await;
         }
 
-        // The managed node and pnpm use paths from the process EnvConfig. The
-        // installer pinned this configuration before the payload selected the
-        // monolithic root. Remove the split data root if this run created it.
-        if let Some(split_data) = abandoned_split_data {
-            let _ = tokio::fs::remove_dir_all(&split_data).await;
-        }
         result?;
     }
 
@@ -336,7 +237,7 @@ async fn do_install(
         }
     }
 
-    Ok(dirs)
+    Ok(())
 }
 
 /// Auto-detect whether the Node.js version manager should be enabled.
@@ -454,6 +355,13 @@ async fn install_new_version(
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         return Err("Binary not found after extraction. The download may be corrupted.".into());
     }
+    #[cfg(windows)]
+    if !tokio::fs::try_exists(version_dir.join("bin").join("vp-shim.exe")).await.unwrap_or(false) {
+        return Err(
+            "vp-setup did not find vp-shim.exe after extraction. The downloaded package can be corrupt."
+                .into(),
+        );
+    }
 
     install::generate_wrapper_package_json(version_dir, version).await?;
 
@@ -510,17 +418,8 @@ async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>
         let shim_src = dirs.data.join("current").join("bin").join("vp-shim.exe");
         let shim_dst = bin_dir.join("vp.exe");
 
-        // Prefer vp-shim.exe (trampoline); fall back to vp.exe for pre-trampoline releases
-        let src = if tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
-            shim_src
-        } else {
-            dirs.data.join("current").join("bin").join("vp.exe")
-        };
-
-        if tokio::fs::try_exists(&src).await.unwrap_or(false) {
-            replace_windows_exe(&src, &shim_dst, &bin_dir).await?;
-            dirs.write_shim_pointer("vp")?;
-        }
+        replace_windows_exe(&shim_src, &shim_dst, &bin_dir).await?;
+        dirs.write_shim_pointer("vp")?;
 
         // Best-effort cleanup of old shim files
         if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
@@ -566,21 +465,10 @@ async fn download_with_progress(
     Ok(data)
 }
 
-/// Resolve install category roots from [`vp_shared::EnvConfig`].
-///
-/// `--install-dir` is the only override that the installer owns. It pins
-/// `VP_HOME`, so EnvConfig produces a single-root layout. This function never
-/// reads directory environment variables (`VP_HOME`, `VP_*_DIR`, `XDG_*`).
-fn prepare_dirs(opts: &cli::Options) -> Result<VpDirs, Box<dyn std::error::Error>> {
-    if let Some(ref dir) = opts.install_dir {
-        let path = std::path::PathBuf::from(dir);
-        let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
-        let abs = AbsolutePathBuf::new(abs)
-            .ok_or("The installation directory must be an absolute path")?;
-        // Safety: called in main() before any threads are spawned (or under
-        // EnvConfig::with_vars in tests, which serializes env mutation).
-        unsafe { std::env::set_var("VP_HOME", abs.as_path()) };
-    }
+/// Validate installer directory overrides. Then resolve category roots from
+/// [`vp_shared::EnvConfig`].
+fn prepare_dirs() -> Result<VpDirs, Box<dyn std::error::Error>> {
+    vp_shared::validate_vp_dir_env()?;
     Ok(vp_shared::EnvConfig::get().dirs.clone())
 }
 
@@ -610,28 +498,28 @@ fn show_interactive_menu(opts: &mut cli::Options, data_dir: &str, bin_dir: &str)
         let version = opts.version.as_deref().unwrap_or(&opts.tag);
 
         println!();
-        println!("  {}", "Welcome to Vite+ Installer!".bold());
+        println!("  {}", style("Welcome to Vite+ Installer!").bold());
         println!();
-        println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
+        println!("  This will install the {} CLI and monorepo task runner.", style("vp").cyan());
         println!();
-        println!("    Data directory:    {}", data_dir.cyan());
-        println!("    Bin directory:     {}", bin_dir.cyan());
+        println!("    Data directory:    {}", style(data_dir).cyan());
+        println!("    Bin directory:     {}", style(bin_dir).cyan());
         println!(
             "    PATH modification: {}",
-            if opts.no_modify_path {
+            style(if opts.no_modify_path {
                 "no".to_string()
             } else {
                 format!("{bin_dir} \u{2192} User PATH")
-            }
+            })
             .cyan()
         );
-        println!("    Version:           {}", version.cyan());
+        println!("    Version:           {}", style(version).cyan());
         println!(
             "    Node.js manager:   {}",
-            if opts.no_node_manager { "disabled" } else { "enabled" }.cyan()
+            style(if opts.no_node_manager { "disabled" } else { "enabled" }).cyan()
         );
         println!();
-        println!("  1) {} (default)", "Proceed with installation".bold());
+        println!("  1) {} (default)", style("Proceed with installation").bold());
         println!("  2) Customize installation");
         println!("  3) Cancel");
         println!();
@@ -655,17 +543,17 @@ fn show_customize_menu(opts: &mut cli::Options) {
         let registry_display = opts.registry.as_deref().unwrap_or("(default)");
 
         println!();
-        println!("  {}", "Customize installation:".bold());
+        println!("  {}", style("Customize installation:").bold());
         println!();
-        println!("    1) Version:        [{}]", version_display.cyan());
-        println!("    2) npm registry:   [{}]", registry_display.cyan());
+        println!("    1) Version:        [{}]", style(version_display).cyan());
+        println!("    2) npm registry:   [{}]", style(registry_display).cyan());
         println!(
             "    3) Node.js manager: [{}]",
-            if opts.no_node_manager { "disabled" } else { "enabled" }.cyan()
+            style(if opts.no_node_manager { "disabled" } else { "enabled" }).cyan()
         );
         println!(
             "    4) Modify PATH:    [{}]",
-            if opts.no_modify_path { "no" } else { "yes" }.cyan()
+            style(if opts.no_modify_path { "no" } else { "yes" }).cyan()
         );
         println!();
 
@@ -708,11 +596,11 @@ fn print_success(opts: &cli::Options, data_dir: &str, bin_dir: &str) {
     }
 
     println!();
-    println!("  {} Vite+ has been installed successfully!", "\u{2714}".green().bold());
+    println!("  {} Vite+ has been installed successfully!", style("\u{2714}").green().bold());
     println!();
     println!("  To get started, restart your terminal, then run:");
     println!();
-    println!("    {}", "vp --help".cyan());
+    println!("    {}", style("vp --help").cyan());
     println!();
     println!("  Data directory: {data_dir}");
     println!("  Bin directory:  {bin_dir}");
@@ -722,20 +610,17 @@ fn print_success(opts: &cli::Options, data_dir: &str, bin_dir: &str) {
 
 #[allow(clippy::print_stderr)]
 fn print_info(msg: &str) {
-    eprint!("{}", "info: ".blue());
-    eprintln!("{msg}");
+    eprintln!("{}{msg}", style("info: ").blue().for_stderr());
 }
 
 #[allow(clippy::print_stderr)]
 fn print_warn(msg: &str) {
-    eprint!("{}", "warn: ".yellow());
-    eprintln!("{msg}");
+    eprintln!("{}{msg}", style("warn: ").yellow().for_stderr());
 }
 
 #[allow(clippy::print_stderr)]
 fn print_error(msg: &str) {
-    eprint!("{}", "error: ".red());
-    eprintln!("{msg}");
+    eprintln!("{}{msg}", style("error: ").red().for_stderr());
 }
 
 #[cfg(test)]
@@ -743,19 +628,6 @@ mod tests {
     use vp_shared::{EnvConfig, env_vars};
 
     use super::*;
-
-    fn opts(install_dir: Option<String>) -> cli::Options {
-        cli::Options {
-            yes: true,
-            quiet: true,
-            version: None,
-            tag: "latest".into(),
-            install_dir,
-            registry: None,
-            no_node_manager: true,
-            no_modify_path: true,
-        }
-    }
 
     fn with_clean_home<R>(home: &std::path::Path, f: impl FnOnce() -> R) -> R {
         let mut vars =
@@ -804,7 +676,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         with_clean_home(tmp.path(), || {
             let expected = EnvConfig::get().dirs.clone();
-            let dirs = prepare_dirs(&opts(None)).unwrap();
+            let dirs = prepare_dirs().unwrap();
             assert_eq!(dirs, expected);
             assert!(std::env::var_os(env_vars::VP_HOME).is_none());
             #[cfg(not(windows))]
@@ -834,7 +706,7 @@ mod tests {
         std::fs::create_dir_all(legacy.join("current")).unwrap();
 
         with_clean_home(tmp.path(), || {
-            let dirs = prepare_dirs(&opts(None)).unwrap();
+            let dirs = prepare_dirs().unwrap();
             assert_eq!(dirs.data.as_path(), legacy.as_path());
             assert_eq!(dirs.bin.as_path(), legacy.join("bin").as_path());
             assert_eq!(dirs.config.as_path(), legacy.as_path());
@@ -845,17 +717,18 @@ mod tests {
     }
 
     #[test]
-    fn custom_install_dir_pins_vp_home_to_single_root() {
+    fn vp_home_pins_single_root() {
         let tmp = tempfile::tempdir().unwrap();
         let custom = tmp.path().join("custom");
-        std::fs::create_dir_all(&custom).unwrap();
 
         with_clean_home(tmp.path(), || {
-            let dirs = prepare_dirs(&opts(Some(custom.to_string_lossy().into_owned()))).unwrap();
-            assert_eq!(std::env::var_os(env_vars::VP_HOME).as_deref(), Some(custom.as_os_str()));
-            assert_eq!(dirs.data.as_path(), custom.as_path());
-            assert_eq!(dirs.bin.as_path(), custom.join("bin").as_path());
-            assert_eq!(dirs.config.as_path(), custom.as_path());
+            EnvConfig::with_vars([(env_vars::VP_HOME, Some(custom.as_os_str()))], |_| {
+                let dirs = prepare_dirs().unwrap();
+                assert_eq!(dirs.data.as_path(), custom.as_path());
+                assert_eq!(dirs.bin.as_path(), custom.join("bin").as_path());
+                assert_eq!(dirs.cache.as_path(), custom.join("cache").as_path());
+                assert_eq!(dirs.config.as_path(), custom.as_path());
+            });
         });
     }
 
@@ -881,7 +754,7 @@ mod tests {
                 (env_vars::XDG_STATE_HOME, None),
             ],
             |config| {
-                let dirs = prepare_dirs(&opts(None)).unwrap();
+                let dirs = prepare_dirs().unwrap();
                 assert_eq!(dirs.data.as_path(), data.as_path());
                 assert_eq!(dirs.bin.as_path(), bin.as_path());
                 assert_eq!(dirs.cache.as_path(), cache.as_path());
@@ -889,5 +762,45 @@ mod tests {
                 assert!(std::env::var_os(env_vars::VP_HOME).is_none());
             },
         );
+    }
+
+    #[test]
+    fn invalid_vp_dir_env_is_rejected_without_creating_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = tmp.path().join("requested-data");
+
+        with_clean_home(tmp.path(), || {
+            let default_dirs = EnvConfig::get().dirs.clone();
+            let default_roots = [
+                default_dirs.bin.as_path().to_path_buf(),
+                default_dirs.data.as_path().to_path_buf(),
+                default_dirs.cache.as_path().to_path_buf(),
+                default_dirs.config.as_path().to_path_buf(),
+                default_dirs.state.as_path().to_path_buf(),
+            ];
+            let default_existed = default_roots.each_ref().map(|root| root.exists());
+            EnvConfig::with_vars(
+                [
+                    (env_vars::VP_HOME, None),
+                    (env_vars::VP_BIN_DIR, None),
+                    (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                    (env_vars::VP_CACHE_DIR, None),
+                ],
+                |_| {
+                    let error = prepare_dirs().unwrap_err().to_string();
+                    assert_eq!(
+                        error,
+                        "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR. Otherwise, do not set any of them."
+                    );
+                },
+            );
+
+            assert!(!data.exists(), "validation created {}", data.display());
+            for (root, existed) in default_roots.iter().zip(default_existed) {
+                if !existed {
+                    assert!(!root.exists(), "validation created default root {}", root.display());
+                }
+            }
+        });
     }
 }

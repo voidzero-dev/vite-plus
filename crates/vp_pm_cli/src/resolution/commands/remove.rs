@@ -20,7 +20,7 @@ pub struct RemoveArgs {
     pub(crate) save_prod: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Remove from workspace root
@@ -122,7 +122,10 @@ impl Resolve<RemoveArgs> for Bun {
         }
 
         let mut cmd = CommandBuilder::new("bun");
-        cmd.arg("remove").extend(args.pass_through_args.iter()).extend(args.packages.iter());
+        cmd.arg("remove")
+            .repeated("--filter", args.filter.iter())
+            .extend(args.pass_through_args.iter())
+            .extend(args.packages.iter());
         cmd.into()
     }
 }
@@ -502,7 +505,19 @@ mod tests {
             resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>();
         assert_eq!(
             messages,
-            vec!["bun does not support --filter.", "bun does not support --workspace-root."]
+            vec!["bun <1.4 does not support --filter.", "bun does not support --workspace-root."]
         );
+    }
+
+    #[test]
+    fn bun_1_4_supports_filter() {
+        let mut options = remove_args(&["lodash"]);
+        options.filter = vec!["app".to_string()];
+        let resolution = resolve(&bun("1.4.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["remove", "--filter", "app", "lodash"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 }

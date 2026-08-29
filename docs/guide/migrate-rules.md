@@ -236,6 +236,7 @@ scripts while preserving their arguments:
 | `lint-staged` | `vp staged`                                 |
 | `eslint`      | `vp lint`, when its optional migration runs |
 | `prettier`    | `vp fmt`, when its optional migration runs  |
+| `tsup`        | `vp pack`, when its optional migration runs |
 
 For commands launched through `bunx`, migration preserves `bunx` and its
 `--bun` flag (keeping the user's chosen runtime) and rewrites only the managed

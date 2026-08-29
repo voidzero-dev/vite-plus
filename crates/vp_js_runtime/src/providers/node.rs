@@ -2,7 +2,6 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use async_trait::async_trait;
 use node_semver::{Range, Version};
 use serde::{Deserialize, Serialize};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -590,7 +589,6 @@ fn is_official_dist_host(base_url: &str) -> bool {
     host.eq_ignore_ascii_case("nodejs.org")
 }
 
-#[async_trait]
 impl JsRuntimeProvider for NodeProvider {
     fn name(&self) -> &'static str {
         "node"

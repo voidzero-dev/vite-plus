@@ -72,6 +72,8 @@ pub struct CliOptions {
     pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
+    /// Whether the user supplied the global `-C` option.
+    pub explicit_chdir: Option<bool>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
     /// Host Node.js version (`process.version`), used for the package-manager
@@ -185,6 +187,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let args = options.args;
     let node_version = options.node_version;
     let node_exec_path = options.node_exec_path;
+    let explicit_chdir = options.explicit_chdir.unwrap_or(false);
     let toolchain_manifest_path = options.toolchain_manifest_path;
     let vite_plus_package_path = options.vite_plus_package_path;
 
@@ -220,8 +223,9 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
         // Run the CLI in a LocalSet to allow non-Send futures
         let local = tokio::task::LocalSet::new();
-        let result =
-            local.block_on(&rt, async { crate::cli::main(cwd, Some(cli_options), args).await });
+        let result = local.block_on(&rt, async {
+            crate::cli::main(cwd, Some(cli_options), args, explicit_chdir).await
+        });
 
         // Send the result back to the NAPI async context
         let _ = tx.send(result);

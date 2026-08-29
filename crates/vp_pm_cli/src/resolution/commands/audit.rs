@@ -102,8 +102,14 @@ impl Resolve<AuditArgs> for Bun {
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("audit");
         if args.fix {
-            diag.warn(DiagnosticKind::UnsupportedCommandNoop, "bun audit does not support --fix");
-            return CommandResolution::Noop;
+            if !self.supports_v1_4_commands() {
+                diag.warn(
+                    DiagnosticKind::UnsupportedCommandNoop,
+                    "bun audit fix requires bun >= 1.4",
+                );
+                return CommandResolution::Noop;
+            }
+            cmd.arg("fix");
         }
         cmd.option("--audit-level", args.level.as_ref()).arg_if("--json", args.json);
         cmd.extend(args.pass_through_args.iter());
@@ -250,7 +256,17 @@ mod tests {
         let resolution = resolve(&bun("1.3.11"), AuditArgs { fix: true, ..Default::default() });
 
         assert_eq!(resolution.outcome, CommandResolution::Noop);
-        assert_eq!(resolution.diagnostics[0].message, "bun audit does not support --fix");
+        assert_eq!(resolution.diagnostics[0].message, "bun audit fix requires bun >= 1.4");
+    }
+
+    #[test]
+    fn test_bun_audit_fix() {
+        let resolution = resolve(&bun("1.4.0"), AuditArgs { fix: true, ..Default::default() });
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["audit", "fix"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]

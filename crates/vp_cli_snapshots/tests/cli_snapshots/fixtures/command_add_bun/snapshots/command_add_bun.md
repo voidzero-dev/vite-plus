@@ -55,7 +55,7 @@ For more information, try '--help'.
 should add package as dev dependencies
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed testnpm2@1.0.1
 
@@ -80,7 +80,7 @@ installed testnpm2@1.0.1
 should add packages to dependencies
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed testnpm2@1.0.1
 installed test-vite-plus-install@1.0.0
@@ -111,7 +111,7 @@ should install package alias for add
 ```
 VITE+ - The Unified Toolchain for the Web
 
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed test-vite-plus-package@1.0.0
 
@@ -142,7 +142,7 @@ installed test-vite-plus-package@1.0.0
 should add package as optional dependencies
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed test-vite-plus-package-optional@1.0.0
 

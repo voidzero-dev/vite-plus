@@ -17,11 +17,14 @@ import {
 import { cancelAndExit, promptGitHooks } from '../utils/prompts.ts';
 import {
   confirmEslintMigration,
+  confirmTsupMigration,
   detectEslintProject,
   detectIncompatibleEslintIntegration,
+  detectTsupProject,
   preflightGitHooksSetup,
   warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
+  warnMissingTsupConfig,
   warnPackageLevelEslint,
 } from './migrator.ts';
 import type { MigrationOptions } from './options.ts';
@@ -183,6 +186,25 @@ async function collectEslintMigrationDecision(
   }
 
   return { migrateEslint, eslintConfigFile: eslintProject.configFile };
+}
+
+// Collected separately from collectMigrationSetupPlan so callers can prompt
+// for it after the Prettier -> Oxfmt decision (tsup/tsdown is checked last
+// among the tool migrations).
+export async function collectTsupMigrationDecision(
+  rootDir: string,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<{ migrateTsup: boolean; tsupConfigFile?: string }> {
+  const tsupProject = detectTsupProject(rootDir, packages);
+  let migrateTsup = false;
+  if (tsupProject.hasDependency && tsupProject.hasConfig) {
+    migrateTsup = await confirmTsupMigration(options.interactive);
+  } else if (tsupProject.hasDependency) {
+    warnMissingTsupConfig();
+  }
+
+  return { migrateTsup, tsupConfigFile: tsupProject.configFile };
 }
 
 export async function collectMigrationSetupPlan(

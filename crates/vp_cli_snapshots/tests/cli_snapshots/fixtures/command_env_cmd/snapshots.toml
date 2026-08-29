@@ -1,0 +1,8 @@
+[[case]]
+name = "command_env_cmd"
+vp = "global"
+skip-platforms = ["linux", "macos"]
+requires = ["cmd"]
+steps = [
+  { argv = ["cmd", "/d", "/c", "assert.cmd"], comment = "verifies vp-use.cmd explicit, unset, file-based, failure status, and session-only behavior" },
+]

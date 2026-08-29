@@ -36,7 +36,10 @@ fn format_export(shell: &Shell, value: &str) -> String {
 fn format_unset(shell: &Shell) -> String {
     match shell {
         Shell::Posix => format!("unset {VERSION_ENV_VAR}"),
-        Shell::Fish => format!("set -e {VERSION_ENV_VAR}"),
+        // Fish returns a nonzero status when the variable is already absent.
+        // Keep the unset idempotent so wrappers can continue evaluating any
+        // following command, such as the project-file export from `vp env use`.
+        Shell::Fish => format!("set -e {VERSION_ENV_VAR}; or true"),
         Shell::PowerShell => {
             format!("Remove-Item Env:{VERSION_ENV_VAR} -ErrorAction SilentlyContinue")
         }
@@ -268,7 +271,7 @@ mod tests {
     #[test]
     fn test_format_unset_fish() {
         let result = format_unset(&Shell::Fish);
-        assert_eq!(result, "set -e VP_NODE_VERSION");
+        assert_eq!(result, "set -e VP_NODE_VERSION; or true");
     }
 
     #[test]

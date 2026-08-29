@@ -1,4 +1,4 @@
-name: E2E Test
+name: Ecosystem CI
 
 permissions: {}
 
@@ -284,6 +284,11 @@ jobs:
               vp run lint
               vp run test:run
               npx tsc --noEmit
+          - name: decoders
+            node-version: 24
+            command: |
+              vp pack
+              vp test
           - name: vite-vue-vercel
             node-version: 24
             command: |
@@ -397,6 +402,18 @@ jobs:
               # submit a fix PR to varletjs/varlet after the next vite-plus release.
               vp run lint || true
               vp run test:coverage
+          - name: nuxt-devtools
+            node-version: 24
+            command: |
+              vp run build
+              vp run typecheck
+              vp run test:unit
+          - name: tiptap
+            node-version: 24
+            command: |
+              vp run build && vp run build:demos
+              vp run lint
+              vp run test:unit
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: namespace-profile-windows-4c-8g
@@ -422,6 +439,10 @@ jobs:
           - os: namespace-profile-windows-4c-8g
             project:
               name: varlet
+          # tiptap upstream CI is ubuntu-only
+          - os: namespace-profile-windows-4c-8g
+            project:
+              name: tiptap
 
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -436,7 +457,7 @@ jobs:
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.project.node-version }}
           package-manager-cache: false

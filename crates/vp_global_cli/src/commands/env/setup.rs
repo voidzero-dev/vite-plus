@@ -17,6 +17,9 @@
 
 use std::process::ExitStatus;
 
+#[cfg(windows)]
+use indoc::formatdoc;
+
 use crate::{error::Error, help};
 
 /// Shells that get a generated `<CONFIG>/env.*` setup script.
@@ -520,51 +523,85 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 }
 
 // POSIX env file (bash/zsh)
-// When sourced multiple times, removes existing entry and re-prepends to front
-// Uses parameter expansion to split PATH around the bin entry in O(1) operations
+// When sourced multiple times, removes existing entries and re-prepends to front
+// Uses parameter expansion to preserve PATH entries containing spaces
 // Includes vp() shell function wrapper for `vp env use` (evals stdout)
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
-case ":${PATH}:" in
-    *":${__vp_bin}:"*)
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-        __vp_after="${__vp_after%:}"
-        export PATH="${__vp_bin}${__vp_before:+:${__vp_before}}${__vp_after:+:${__vp_after}}"
-        unset __vp_tmp __vp_before __vp_after
-        ;;
-    *)
-        export PATH="$__vp_bin:$PATH"
-        ;;
-esac
-unset __vp_bin
+while case ":${PATH}:" in *":${__vp_bin}:"*) true ;; *) false ;; esac; do
+    __vp_tmp=":${PATH}:"
+    __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
+    __vp_before="${__vp_before#:}"
+    __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
+    __vp_after="${__vp_after%:}"
+    PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+done
+export PATH="${__vp_bin}${PATH:+:${PATH}}"
+unset __vp_bin __vp_tmp __vp_before __vp_after
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 vp() {
-    if [ "$1" = "env" ] && [ "$2" = "use" ]; then
+    __vp_env_use=
+    if [ "${1-}" = "env" ] && [ "${2-}" = "use" ]; then
+        __vp_env_use=1
+    elif [ "${1-}" = "-C" ] && [ "${3-}" = "env" ] && [ "${4-}" = "use" ]; then
+        __vp_env_use=1
+    else
+        case "${1-}" in
+            -C?*)
+                if [ "${2-}" = "env" ] && [ "${3-}" = "use" ]; then
+                    __vp_env_use=1
+                fi
+                ;;
+        esac
+    fi
+
+    if [ -n "$__vp_env_use" ]; then
+        unset __vp_env_use
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
         __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 VP_SHELL=sh command vp "$@")" || return $?
         eval "$__vp_out"
     else
+        unset __vp_env_use
         command vp "$@"
     fi
 }
 
 # Dynamic shell completion for bash/zsh
-if [ -n "$BASH_VERSION" ] && type complete >/dev/null 2>&1; then
+if [ -n "${BASH_VERSION-}" ] && type complete >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=bash command vp)"
-elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
+elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=zsh command vp)"
     eval '
     _vpr_complete() {
         local -a orig=("${words[@]}")
-        words=("vp" "run" "${orig[@]:1}")
-        CURRENT=$((CURRENT + 1))
+        if [[ "${orig[2]-}" == "-C" ]]; then
+            if (( ${#orig[@]} >= 4 )); then
+                words=("vp" "-C" "${orig[3]}" "run" "${orig[@]:3}")
+                if (( CURRENT >= 4 )); then
+                    CURRENT=$((CURRENT + 1))
+                fi
+            else
+                words=("vp" "${orig[@]:1}")
+            fi
+        elif [[ "${orig[2]-}" == -C?* ]]; then
+            if (( ${#orig[@]} >= 3 )); then
+                words=("vp" "${orig[2]}" "run" "${orig[@]:2}")
+                if (( CURRENT >= 3 )); then
+                    CURRENT=$((CURRENT + 1))
+                fi
+            else
+                words=("vp" "${orig[@]:1}")
+            fi
+        else
+            words=("vp" "run" "${orig[@]:1}")
+            if (( CURRENT >= 2 )); then
+                CURRENT=$((CURRENT + 1))
+            fi
+        fi
         ${=_comps[vp]}
     }
     compdef _vpr_complete vpr
@@ -573,21 +610,35 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
-and set -e PATH[$__vp_idx]
+__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
 set -gx PATH "__VP_BIN__" $PATH
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
-    if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
+    set -l __vp_command_index 1
+    if test (count $argv) -ge 1
+        if test "$argv[1]" = "-C"
+            set __vp_command_index 3
+        else if string match -qr '^-C.+' -- "$argv[1]"
+            set __vp_command_index 2
+        end
+    end
+    set -l __vp_next_index (math $__vp_command_index + 1)
+
+    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
         set -lx VP_SHELL fish
         set -l __vp_out (command vp $argv); or return $status
-        eval (string join ';' $__vp_out)
+        for __vp_command in $__vp_out
+            eval $__vp_command; or return $status
+        end
+        return 0
     else
         command vp $argv
     end
@@ -599,7 +650,21 @@ VP_COMPLETE=fish command vp | source
 function __vpr_complete
     set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
     set -l current (commandline --current-token)
-    VP_COMPLETE=fish command vp -- vp run $tokens[2..] $current
+    set -l args $tokens[2..]
+    set -l translated vp
+    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+        # Keep completing the global -C option until its value is finished.
+    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+        set -a translated -C
+        if test (count $args) -ge 2
+            set -a translated "$args[2]" run $args[3..]
+        end
+    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+        set -a translated "$args[1]" run $args[2..]
+    else
+        set -a translated run $args
+    end
+    VP_COMPLETE=fish command vp -- $translated $current
 end
 complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#;
@@ -613,7 +678,14 @@ __ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
-    if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
+    let command_args = if ($args | length) >= 2 and $args.0 == "-C" {
+        $args | skip 2
+    } else if ($args | length) >= 1 and ($args.0 | str starts-with "-C") and $args.0 != "-C" {
+        $args | skip 1
+    } else {
+        $args
+    }
+    if ($command_args | length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
             return
@@ -653,7 +725,15 @@ def "nu-complete vp" [context: string] {
 }
 # Completion logic for vpr (translates context to 'vp run ...')
 def "nu-complete vpr" [context: string] {
-    let modified_context = ($context | str replace -r '^vpr' 'vp run')
+    let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
+        $context | str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+    } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
+        $context | str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+    } else if ($context =~ '^vpr\s+-C') {
+        $context | str replace -r '^vpr' 'vp'
+    } else {
+        $context | str replace -r '^vpr' 'vp run'
+    }
     let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
     fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
         let value = $row.value
@@ -676,7 +756,15 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp {
-    if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
+    $__vp_command_index = 0
+    if ($args.Count -ge 1) {
+        if ($args[0] -eq "-C") {
+            $__vp_command_index = 2
+        } elseif ("$($args[0])" -like "-C?*") {
+            $__vp_command_index = 1
+        }
+    }
+    if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp") @args; return
         }
@@ -710,7 +798,15 @@ $__vpr_comp = {
     $env:VP_COMPLETE = "powershell"
     $commandLine = $commandAst.Extent.Text
     $args = $commandLine.Substring(0, [math]::Min($cursorPosition, $commandLine.Length))
-    $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
+    if ($args -match '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s') {
+        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
+    } elseif ($args -match '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s') {
+        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
+    } elseif ($args -match '^(vpr\.exe|vpr)\b\s+-C') {
+        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp'
+    } else {
+        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
+    }
     if ($wordToComplete -eq "") { $args += " ''" }
     $results = Invoke-Expression @"
 & (Join-Path $__vp_bin 'vp') -- $args
@@ -734,11 +830,26 @@ fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
     let export_lines: String =
-        exports.into_iter().map(|(name, value)| format!("set {name}={value}\r\n")).collect();
-    format!(
-        "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\n{export_lines}for /f \"delims=\" %%i in ('\"{}\" env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n",
-        vp_exe.as_path().display()
-    )
+        exports.into_iter().map(|(name, value)| format!("set {name}={value}\n")).collect();
+    formatdoc! {
+        r#"
+        @echo off
+        setlocal
+        set VP_ENV_USE_EVAL_ENABLE=1
+        set VP_SHELL=cmd
+        {export_lines}set "__VP_USE_OUT=%TEMP%\vp-use-%RANDOM%-%RANDOM%.tmp"
+        "{vp_exe}" env use %* > "%__VP_USE_OUT%"
+        set "__VP_USE_STATUS=%ERRORLEVEL%"
+        endlocal & set "__VP_USE_OUT=%__VP_USE_OUT%" & set "__VP_USE_STATUS=%__VP_USE_STATUS%"
+        {export_lines}if "%__VP_USE_STATUS%"=="0" for /f "usebackq delims=" %%i in ("%__VP_USE_OUT%") do %%i
+        del /q "%__VP_USE_OUT%" >nul 2>&1
+        set "__VP_USE_OUT="
+        set "__VP_USE_STATUS=" & exit /b %__VP_USE_STATUS%
+        "#,
+        vp_exe = vp_exe.as_path().display(),
+        export_lines = export_lines
+    }
+    .replace('\n', "\r\n")
 }
 
 fn render_home_relative_path(path: &std::path::Path, home_dir: &std::path::Path) -> String {
@@ -1384,24 +1495,19 @@ mod tests {
 
                 let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-                // Verify PATH guard structure: case statement checks for duplicate
+                // Verify PATH guard structure: loop removes every duplicate.
                 assert!(
-                    env_content.contains("case \":${PATH}:\" in"),
-                    "env file should contain PATH guard case statement"
+                    env_content.contains("while case \":${PATH}:\" in"),
+                    "env file should contain a PATH cleanup loop"
                 );
                 assert!(
                     env_content.contains("*\":${__vp_bin}:\"*)"),
                     "env file should check for existing bin in PATH"
                 );
-                // Verify it re-prepends to front when already present
+                // Verify it re-prepends exactly once after cleanup.
                 assert!(
-                    env_content.contains("export PATH=\"${__vp_bin}"),
-                    "env file should re-prepend bin to front of PATH"
-                );
-                // Verify simple prepend for new entry
-                assert!(
-                    env_content.contains("export PATH=\"$__vp_bin:$PATH\""),
-                    "env file should prepend bin to PATH for new entry"
+                    env_content.contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}\""),
+                    "env file should prepend bin to PATH after removing duplicates"
                 );
             },
         )
@@ -1486,11 +1592,11 @@ mod tests {
                     "env file should contain vp() shell function"
                 );
                 assert!(
-                    env_content.contains("\"$1\" = \"env\""),
+                    env_content.contains("\"${1-}\" = \"env\""),
                     "env file should check for 'env' subcommand"
                 );
                 assert!(
-                    env_content.contains("\"$2\" = \"use\""),
+                    env_content.contains("\"${2-}\" = \"use\""),
                     "env file should check for 'use' subcommand"
                 );
                 assert!(
@@ -1523,11 +1629,11 @@ mod tests {
                     "env.fish file should contain vp function"
                 );
                 assert!(
-                    fish_content.contains("\"$argv[1]\" = \"env\""),
+                    fish_content.contains("\"$argv[$__vp_command_index]\" = \"env\""),
                     "env.fish should check for 'env' subcommand"
                 );
                 assert!(
-                    fish_content.contains("\"$argv[2]\" = \"use\""),
+                    fish_content.contains("\"$argv[$__vp_next_index]\" = \"use\""),
                     "env.fish should check for 'use' subcommand"
                 );
             },
@@ -1590,6 +1696,12 @@ mod tests {
                 assert!(
                     cmd_content.contains(&format!("\"{}\" env use %*", expected_exe.display())),
                     "vp-use.cmd should invoke the install-local vp.exe, got: {cmd_content}"
+                );
+                assert!(cmd_content.contains("setlocal\r\n"));
+                assert!(cmd_content.contains("set VP_SHELL=cmd\r\n"));
+                assert!(
+                    cmd_content.contains("exit /b %__VP_USE_STATUS%"),
+                    "vp-use.cmd should preserve the vp env use exit status"
                 );
             },
         )
@@ -1927,5 +2039,153 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[test]
+    fn test_render_env_content_cwd_completion_regressions() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let config = vp_shared::EnvConfig::get();
+            let posix_content = render_env_content(EnvShell::Posix, &config);
+            let nu_content = render_env_content(EnvShell::Nu, &config);
+            let ps1_content = render_env_content(EnvShell::Powershell, &config);
+
+            assert!(posix_content.contains("if (( CURRENT >= 4 )); then"));
+            assert!(posix_content.contains("if (( CURRENT >= 3 )); then"));
+            assert!(nu_content.contains(r#"-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+)"#));
+            assert!(ps1_content.contains(r#""$($args[0])" -like "-C?*""#));
+            assert!(!ps1_content.contains("$args[0].StartsWith"));
+            assert!(ps1_content.contains(r#"-C=?(?:"[^"]*"|''[^'']*''|\S+)"#));
+        });
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_posix_vp_wrapper_evals_env_use_after_cwd_flag() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        let fake_vp = bin_dir.join("vp");
+        tokio::fs::write(
+            &fake_vp,
+            r#"#!/bin/sh
+if [ -n "$VP_COMPLETE" ]; then
+    exit 0
+fi
+case " $* " in
+    *" env use 20.18.0 "*) echo 'export VP_NODE_VERSION=20.18.0' ;;
+    *" env use --unset "*) echo 'unset VP_NODE_VERSION' ;;
+    *" env "*) exit 0 ;;
+    "  ") exit 0 ;;
+    *) exit 88 ;;
+esac
+"#,
+        )
+        .await
+        .unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
+
+                let status = Command::new("sh")
+                    .arg("-c")
+                    .arg(
+                        r#"set -eu
+. "$1"
+vp -C "$2" env use 20.18.0
+[ "$VP_NODE_VERSION" = "20.18.0" ]
+vp "-C=$2" env use --unset
+[ -z "${VP_NODE_VERSION+x}" ]
+vp "-C$2" env use 20.18.0
+[ "$VP_NODE_VERSION" = "20.18.0" ]
+vp -C "$2" env
+vp
+"#,
+                    )
+                    .arg("test-posix-vp-wrapper")
+                    .arg(home.join("env").as_path())
+                    .arg(temp_dir.path())
+                    .env("HOME", temp_dir.path())
+                    .status()
+                    .unwrap();
+                assert!(status.success(), "generated POSIX vp wrapper should eval both -C forms");
+            },
+        )
+        .await;
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_zsh_vpr_completion_preserves_cursor_before_inserted_run() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        if Command::new("zsh").arg("-c").arg("exit 0").status().is_err() {
+            return;
+        }
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let fake_vp = bin_dir.join("vp");
+        std::fs::write(
+            &fake_vp,
+            "#!/bin/sh\nif [ -n \"$VP_COMPLETE\" ]; then exit 0; fi\nexit 88\n",
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let env_file = home.join("env");
+            std::fs::write(
+                &env_file,
+                render_env_content(EnvShell::Posix, &vp_shared::EnvConfig::get()),
+            )
+            .unwrap();
+
+            let output = Command::new("zsh")
+                .arg("-c")
+                .arg(
+                    r#"compdef() { : }
+typeset -A _comps
+capture() { print -r -- "$CURRENT|${words[1]}|${words[2]-}|${words[3]-}|${words[4]-}|${words[5]-}" }
+_comps[vp]=capture
+. "$1"
+words=(vpr -C "" build)
+CURRENT=3
+_vpr_complete
+words=(vpr -C dir build)
+CURRENT=4
+_vpr_complete
+words=(vpr -Cdir build)
+CURRENT=2
+_vpr_complete
+setopt no_unset
+words=(vpr)
+CURRENT=1
+_vpr_complete
+"#,
+                )
+                .arg("test-zsh-vpr-completion")
+                .arg(env_file.as_path())
+                .env("HOME", temp_dir.path())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "zsh completion script should run");
+            assert_eq!(
+                String::from_utf8(output.stdout).unwrap(),
+                "3|vp|-C||run|build\n5|vp|-C|dir|run|build\n2|vp|-Cdir|run|build|\n1|vp|run|||\n"
+            );
+        });
     }
 }

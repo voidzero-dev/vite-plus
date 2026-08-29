@@ -1,0 +1,8 @@
+[[case]]
+name = "global_only_commands_require_global_cli"
+vp = "local"
+steps = [
+  { argv = ["vp", "env", "current"], comment = "environment management requires the global vp binary", continue-on-failure = true },
+  { argv = ["vp", "upgrade", "--check"], comment = "self-upgrade requires the global vp binary", continue-on-failure = true },
+  { argv = ["vp", "implode", "--yes"], comment = "self-removal requires the global vp binary", continue-on-failure = true },
+]

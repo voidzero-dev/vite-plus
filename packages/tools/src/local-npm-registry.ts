@@ -366,6 +366,21 @@ async function resolveLocalPackument(name: string): Promise<Packument> {
   return merged;
 }
 
+function resolveLocalVersion(key: string): unknown {
+  const separator = key.lastIndexOf('/');
+  if (separator === -1) {
+    return undefined;
+  }
+  const name = key.slice(0, separator);
+  const specifier = key.slice(separator + 1);
+  const packument = localPackuments.get(name);
+  if (!packument) {
+    return undefined;
+  }
+  const version = packument['dist-tags'][specifier] ?? specifier;
+  return packument.versions[version];
+}
+
 // Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
 // auto-decompress, so the tarball reaches the client exactly as the registry
 // served it (content-encoding and all). bun verifies tarball integrity and
@@ -473,6 +488,15 @@ const server = createServer(async (req, res) => {
     const packument = localPackuments.has(key) ? await resolveLocalPackument(key) : manifest[key];
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(serializeForRegistry(packument, registry));
+    return;
+  }
+  const localVersion = resolveLocalVersion(key);
+  if (localVersion) {
+    const address = server.address();
+    const registry =
+      address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(serializeForRegistry(localVersion, registry));
     return;
   }
   const tarMatch = key.match(/\/-\/([^/]+\.tgz)$/);

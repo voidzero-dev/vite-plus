@@ -5,7 +5,7 @@
 Bun falls back to install because it does not support dedupe
 
 ```
-warn: bun does not support dedupe, falling back to bun install
+warn: bun dedupe requires bun >= 1.4, falling back to bun install
 ```
 
 ## `vpt print-file package.json`
