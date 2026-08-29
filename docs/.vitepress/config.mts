@@ -31,7 +31,7 @@ const guideSidebar = [
   {
     text: 'Introduction',
     items: [
-      { text: 'Getting Starrted', link: '/guide/' },
+      { text: 'Getting Started', link: '/guide/' },
       { text: 'Global CLI', link: '/guide/global-cli' },
       { text: 'Project-local CLI', link: '/guide/local-cli' },
       { text: 'Why Vite+', link: '/guide/why' },
@@ -107,10 +107,7 @@ const guideSidebar = [
   },
   {
     text: 'Reference',
-    items: [
-      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-      { text: 'Installer Environment Variables', link: '/guide/installer-env-vars' },
-    ],
+    items: [{ text: 'Troubleshooting', link: '/guide/troubleshooting' }],
   },
 ];
 
