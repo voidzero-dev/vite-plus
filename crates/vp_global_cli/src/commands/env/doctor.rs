@@ -818,10 +818,11 @@ async fn collect_dev_engines_findings(
         }
     }
 
-    // Runtimes Vite+ does not manage (informational)
+    // Runtimes Vite+ does not manage (informational); bun is managed through
+    // the package-manager store, resolved by the bun/bunx shims.
     if let Some(field) = runtime_field {
         for entry in field.entries() {
-            if entry.name != "node" {
+            if !matches!(entry.name.as_str(), "node" | "bun") {
                 findings.push(DevEnginesFinding::note(
                     "Runtime",
                     format!(
@@ -1272,6 +1273,19 @@ mod tests {
             "got: {}",
             findings[0].message
         );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_bun_runtime_is_managed() {
+        // bun is managed as a runtime (resolved by the bun/bunx shims via the
+        // package-manager store), so it must not get the "not managed" note.
+        let findings = dev_engines_findings_for(
+            &[("package.json", r#"{"devEngines":{"runtime":{"name":"bun","version":"1.3.11"}}}"#)],
+            None,
+        )
+        .await;
+
+        assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
     }
 
     #[tokio::test]

@@ -384,15 +384,8 @@ pub fn resolve_package_manager_from_package_json(
     };
     // An absent version means any version satisfies (devEngines spec)
     let version_req = version_req.unwrap_or_else(|| "*".into());
-    let version = if Version::parse(&version_req).is_ok() {
-        version_req
-    } else if let Ok(range) = node_semver::Range::parse(version_req.as_str())
-        && let Some(cached) = find_cached_package_manager_version(package_manager_type, &range)?
-    {
-        cached
-    } else {
-        version_req
-    };
+    let version = find_installed_package_manager_version(package_manager_type, &version_req)?
+        .unwrap_or(version_req);
 
     let package_json_path = workspace_root.path.join("package.json");
     Ok(Some(PackageManagerResolution {
@@ -403,6 +396,62 @@ pub fn resolve_package_manager_from_package_json(
         source_path: package_json_path.to_absolute_path_buf(),
         project_root: workspace_root.path.to_absolute_path_buf(),
     }))
+}
+
+/// Resolve the project-declared source for a package-manager *tool*
+/// (`pnpm`, `bunx`, ...): [`resolve_package_manager_from_package_json`] when
+/// it names the tool's family (strict, so commands are never translated),
+/// then — for bun only — a `devEngines.runtime` bun entry, since bun can be
+/// pinned as a runtime independently of the package manager
+/// (rfcs/dev-engines.md).
+pub fn resolve_package_manager_tool_from_package_json(
+    cwd: impl AsRef<AbsolutePath>,
+    tool: &str,
+) -> Result<Option<PackageManagerResolution>, Error> {
+    let Some(expected_type) = PackageManagerType::from_tool(tool) else {
+        return Ok(None);
+    };
+    if let Some(resolution) = resolve_package_manager_from_package_json(cwd.as_ref())?
+        && resolution.package_manager_type == expected_type
+    {
+        return Ok(Some(resolution));
+    }
+    if expected_type != PackageManagerType::Bun {
+        return Ok(None);
+    }
+    resolve_bun_runtime_from_dev_engines(cwd.as_ref())
+}
+
+/// Bun declared as a runtime in `devEngines.runtime`: the same binary as the
+/// bun package manager, so it resolves into the managed package-manager store.
+/// Walks up from `cwd` like Node.js runtime resolution (package-manager
+/// detection is anchored at the workspace root instead).
+fn resolve_bun_runtime_from_dev_engines(
+    cwd: &AbsolutePath,
+) -> Result<Option<PackageManagerResolution>, Error> {
+    let mut dir = Some(cwd);
+    while let Some(current) = dir {
+        let package_json_path = current.join("package.json");
+        if let Some(runtime) = read_dev_engines(&package_json_path).and_then(|d| d.runtime)
+            && let Some(entry) = runtime.find_by_name("bun")
+        {
+            // An absent version means any version satisfies (devEngines spec)
+            let version_req = entry.version.clone().unwrap_or_else(|| "*".into());
+            let version =
+                find_installed_package_manager_version(PackageManagerType::Bun, &version_req)?
+                    .unwrap_or(version_req);
+            return Ok(Some(PackageManagerResolution {
+                package_manager_type: PackageManagerType::Bun,
+                version,
+                hash: None,
+                source: "devEngines.runtime".into(),
+                source_path: package_json_path,
+                project_root: current.to_absolute_path_buf(),
+            }));
+        }
+        dir = current.parent();
+    }
+    Ok(None)
 }
 
 /// Return the managed install directory for a package manager version.
@@ -456,11 +505,15 @@ fn get_package_manager_from_package_json(
 fn read_dev_engines_package_manager(
     workspace_root: &WorkspaceRoot,
 ) -> Option<vp_shared::DevEngineField> {
-    let package_json_path = workspace_root.path.join("package.json");
-    let file = open_exists_file(&package_json_path).ok()??;
-    // Lenient: a package.json we cannot parse here is reported by other paths
+    read_dev_engines(&workspace_root.path.join("package.json"))?.package_manager
+}
+
+/// Read `devEngines` from a package.json. Lenient: a missing or unparsable
+/// file yields `None`; such files are reported by other paths.
+fn read_dev_engines(package_json_path: &AbsolutePath) -> Option<vp_shared::DevEngines> {
+    let file = open_exists_file(package_json_path).ok()??;
     let pkg: vp_shared::PackageJson = serde_json::from_reader(BufReader::new(&file)).ok()?;
-    pkg.dev_engines.and_then(|dev_engines| dev_engines.package_manager)
+    pkg.dev_engines
 }
 
 /// Resolve the package manager from `devEngines.packageManager` in package.json.
@@ -806,6 +859,31 @@ fn find_cached_package_manager_version(
         best = Some(version);
     }
     Ok(best.map(|version| Str::from(version.to_string())))
+}
+
+/// Find an already-downloaded version satisfying `version_req` (an exact
+/// version or a semver range; `"*"` means any version).
+///
+/// Non-mutating and offline: returns `None` when no complete install
+/// satisfies the requirement (or when the requirement is not parseable),
+/// leaving resolution to [`download_package_manager`].
+fn find_installed_package_manager_version(
+    package_manager_type: PackageManagerType,
+    version_req: &str,
+) -> Result<Option<Str>, Error> {
+    if Version::parse(version_req).is_ok() {
+        let Some(install_dir) = package_manager_install_dir(package_manager_type, version_req)
+        else {
+            return Ok(None);
+        };
+        let bin_name = package_manager_type.to_string();
+        let complete = is_package_manager_install_complete(&install_dir, &bin_name)?;
+        return Ok(complete.then(|| version_req.into()));
+    }
+    let Ok(range) = node_semver::Range::parse(version_req) else {
+        return Ok(None);
+    };
+    find_cached_package_manager_version(package_manager_type, &range)
 }
 
 /// Resolve a semver range (e.g. from `devEngines.packageManager`) to an exact
@@ -2121,6 +2199,110 @@ mod tests {
         assert!(resolution.hash.is_none());
         assert_eq!(resolution.source.as_str(), "packageManager");
         assert_eq!(resolution.project_root, temp_dir_path);
+    }
+
+    #[test]
+    fn test_resolve_package_manager_tool_bun_from_dev_engines_runtime() {
+        // Mixed mode: pnpm is the package manager, bun and node are runtimes.
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(
+            &temp_dir_path,
+            r#"{
+                "packageManager": "pnpm@10.11.0",
+                "devEngines": {
+                    "runtime": [
+                        {"name": "bun", "version": "1.3.11", "onFail": "warn"},
+                        {"name": "node", "version": "24.5.0", "onFail": "warn"}
+                    ]
+                }
+            }"#,
+        );
+
+        for tool in ["bun", "bunx"] {
+            let resolution = resolve_package_manager_tool_from_package_json(&temp_dir_path, tool)
+                .unwrap()
+                .unwrap_or_else(|| panic!("{tool} should resolve from devEngines.runtime"));
+            assert_eq!(resolution.package_manager_type, PackageManagerType::Bun);
+            assert_eq!(resolution.version.as_str(), "1.3.11");
+            assert_eq!(resolution.source.as_str(), "devEngines.runtime");
+            assert_eq!(resolution.source_path, temp_dir_path.join("package.json"));
+            assert_eq!(resolution.project_root, temp_dir_path);
+        }
+
+        // pnpm keeps resolving from the package-manager field
+        let pnpm = resolve_package_manager_tool_from_package_json(&temp_dir_path, "pnpm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(pnpm.package_manager_type, PackageManagerType::Pnpm);
+        assert_eq!(pnpm.version.as_str(), "10.11.0");
+        assert_eq!(pnpm.source.as_str(), "packageManager");
+
+        // no command translation: other families do not match the pnpm pin
+        assert!(
+            resolve_package_manager_tool_from_package_json(&temp_dir_path, "yarn")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            resolve_package_manager_tool_from_package_json(&temp_dir_path, "npm")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_resolve_package_manager_tool_bun_runtime_walks_up() {
+        let temp_dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(
+            &root,
+            r#"{"devEngines": {"runtime": {"name": "bun", "version": "1.3.11"}}}"#,
+        );
+        let nested = root.join("packages/app");
+        fs::create_dir_all(&nested).unwrap();
+        create_package_json(&nested, r#"{"name": "app"}"#);
+
+        let resolution =
+            resolve_package_manager_tool_from_package_json(&nested, "bun").unwrap().unwrap();
+        assert_eq!(resolution.version.as_str(), "1.3.11");
+        assert_eq!(resolution.source_path, root.join("package.json"));
+        assert_eq!(resolution.project_root, root);
+    }
+
+    #[test]
+    fn test_resolve_package_manager_tool_bun_package_manager_source_wins() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(
+            &temp_dir_path,
+            r#"{
+                "packageManager": "bun@1.3.10",
+                "devEngines": {"runtime": {"name": "bun", "version": "1.3.11"}}
+            }"#,
+        );
+
+        let resolution =
+            resolve_package_manager_tool_from_package_json(&temp_dir_path, "bun").unwrap().unwrap();
+        assert_eq!(resolution.version.as_str(), "1.3.10");
+        assert_eq!(resolution.source.as_str(), "packageManager");
+    }
+
+    #[test]
+    fn test_resolve_package_manager_tool_bun_runtime_absent_version_means_any() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(&temp_dir_path, r#"{"devEngines": {"runtime": {"name": "bun"}}}"#);
+
+        // Isolate VP_HOME so no already-downloaded bun satisfies `*`.
+        let resolution =
+            EnvConfig::with_vars([(env_vars::VP_HOME, temp_dir_path.as_path())], |_| {
+                resolve_package_manager_tool_from_package_json(&temp_dir_path, "bun")
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolution.version.as_str(), "*");
+        assert_eq!(resolution.source.as_str(), "devEngines.runtime");
     }
 
     #[test]

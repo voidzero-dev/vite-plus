@@ -45,8 +45,12 @@ impl EnvShell {
     }
 }
 
-/// Tools to create shims for (node, npm, npx, corepack, vpx, vpr)
-pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "corepack", "vpx", "vpr"];
+/// Tools to create shims for (node, npm, npx, corepack, bun, bunx, vpx, vpr).
+///
+/// `bun`/`bunx` are default shims so a `devEngines.runtime` bun pin works
+/// without bun being the package manager (see `shim::dispatch`).
+pub(crate) const SHIM_TOOLS: &[&str] =
+    &["node", "npm", "npx", "corepack", "bun", "bunx", "vpx", "vpr"];
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
@@ -84,7 +88,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Create wrapper script in bin/
     setup_vp_wrapper(&current_exe, bin_dir, refresh).await?;
 
-    // Create shims for node, npm, npx, corepack
+    // Create the default shims (see SHIM_TOOLS)
     let mut created = Vec::new();
     let mut skipped = Vec::new();
 

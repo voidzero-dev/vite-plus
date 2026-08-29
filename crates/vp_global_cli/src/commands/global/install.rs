@@ -112,12 +112,16 @@ pub(crate) fn is_protected_shim(bin_name: &str, ignore_case: bool) -> bool {
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
-/// Check if a package can own a bin name. A protected shim cannot belong to a
-/// package, except for the `corepack` bin from the `corepack` package. This
-/// exception lets an explicit `vp install -g corepack` have priority. No other
-/// package can get `BinConfig` ownership of a declared `corepack` bin.
+/// Whether a package may own a bin name. Protected shim names never belong
+/// to packages, except that the `corepack` and `bun` packages may own their
+/// own bins (`corepack`; `bun`/`bunx`), so an explicit `vp install -g` of
+/// them wins the shim's resolution order. The exemption is scoped to the
+/// package name; any other package declaring one of these bins must not take
+/// BinConfig ownership.
 pub(crate) fn package_may_own_bin(package_name: &str, bin_name: &str) -> bool {
-    !is_protected_shim(bin_name, true) || (bin_name == "corepack" && package_name == "corepack")
+    !is_protected_shim(bin_name, true)
+        || (bin_name == "corepack" && package_name == "corepack")
+        || (matches!(bin_name, "bun" | "bunx") && package_name == "bun")
 }
 
 /// Options for [`install`].
@@ -1356,6 +1360,12 @@ mod tests {
         assert!(package_may_own_bin("corepack", "corepack"));
         assert!(!package_may_own_bin("some-package", "corepack"));
         assert!(!package_may_own_bin("@scope/corepack", "corepack"));
+
+        // Same scoping for the bun package and its bun/bunx bins
+        assert!(package_may_own_bin("bun", "bun"));
+        assert!(package_may_own_bin("bun", "bunx"));
+        assert!(!package_may_own_bin("some-package", "bunx"));
+        assert!(!package_may_own_bin("bun", "corepack"));
 
         // Other protected shims never belong to packages
         assert!(!package_may_own_bin("corepack", "npm"));

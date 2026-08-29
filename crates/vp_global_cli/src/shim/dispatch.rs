@@ -6,7 +6,7 @@
 //! 3. Tool execution (core tools and package binaries)
 
 use vp_pm_cli::{
-    PackageManagerType, ensure_package_manager_bin, resolve_package_manager_from_package_json,
+    PackageManagerType, ensure_package_manager_bin, resolve_package_manager_tool_from_package_json,
 };
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
@@ -663,30 +663,19 @@ fn resolve_npm_prefix(
     get_npm_global_prefix(npm_path, node_dir)
 }
 
-/// Resolve a matching package-manager binary from the current project's explicit
-/// `packageManager` field.
-///
-/// The match is intentionally strict to avoid translating commands: `npm` only uses
-/// `npm@...`, `pnpm` only uses `pnpm@...`, etc.
+/// Resolve the managed package-manager binary the current project declares
+/// for `tool` (see `resolve_package_manager_tool_from_package_json` for the
+/// sources and the strict family match), downloading it when needed.
 async fn resolve_matching_package_manager_tool(
     cwd: &AbsolutePath,
     tool: &str,
 ) -> Result<Option<AbsolutePathBuf>, Error> {
-    let Some(expected_type) = PackageManagerType::from_tool(tool) else {
+    let Some(resolution) = resolve_package_manager_tool_from_package_json(cwd, tool)? else {
         return Ok(None);
     };
-
-    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
-        return Ok(None);
-    };
-
-    if resolution.package_manager_type != expected_type {
-        return Ok(None);
-    }
-
-    let bin_name = expected_type.bin_name_for_tool(tool);
+    let bin_name = resolution.package_manager_type.bin_name_for_tool(tool);
     let bin_path = ensure_package_manager_bin(
-        expected_type,
+        resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
         bin_name,
@@ -998,8 +987,23 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
     let package_metadata = match find_package_for_binary(tool).await {
         Ok(Some(metadata)) => metadata,
         Ok(None) => {
-            eprintln!("vp: Binary '{tool}' not found in any installed package");
-            eprintln!("vp: Run 'vp install -g <package>' to install");
+            // The bun/bunx shims exist by default, even when nothing
+            // configures bun: with no project pin and no globally installed
+            // package, fall back to the system binary.
+            if let Some(family) = PackageManagerType::from_tool(tool) {
+                if let Some(system_path) = find_system_tool(tool) {
+                    return exec::exec_tool(&system_path, args);
+                }
+                eprintln!(
+                    "vp: '{tool}' is not configured for this project and no system {family} was found"
+                );
+                eprintln!(
+                    "vp: Declare {family} in package.json (packageManager, devEngines.packageManager, or devEngines.runtime for bun), or run 'vp install -g {family}'"
+                );
+            } else {
+                eprintln!("vp: Binary '{tool}' not found in any installed package");
+                eprintln!("vp: Run 'vp install -g <package>' to install");
+            }
             return 1;
         }
         Err(e) => {

@@ -144,7 +144,8 @@ The walk-up algorithm is unchanged: at each directory, sources are checked in th
 #### 2.2 Array form and non-node runtimes
 
 - Entries are evaluated in array order; the first entry with `name == "node"` is used (matches spec "first acceptable option" for the runtimes Vite+ manages).
-- Entries for runtimes Vite+ does not manage (`deno`, `bun`, ...) are skipped for resolution. `vp env doctor` lists them as informational notes ("declared runtime `deno` is not managed by Vite+").
+- A `bun` entry is also managed: the `bun`/`bunx` shims resolve it (walking up like Node.js resolution) and download the declared bun version into the managed package-manager store, since bun the runtime and bun the package manager are the same binary. Package-manager sources (`packageManager`, `devEngines.packageManager`) win over the runtime entry when both name bun. This makes mixed setups work, e.g. `packageManager: "pnpm@..."` plus `devEngines.runtime` entries for bun and node.
+- Entries for runtimes Vite+ does not manage (`deno`, ...) are skipped for resolution. `vp env doctor` lists them as informational notes ("declared runtime `deno` is not managed by Vite+").
 - If no `node` entry exists, the chain falls through to `engines.node`.
 
 #### 2.3 `onFail` semantics
@@ -370,7 +371,7 @@ A small shared Rust helper (in `vp_shared`) will own "edit one field in package.
 
 ## Non-Goals
 
-- Managing non-Node runtimes (`deno`, `bun` as a runtime) via `devEngines.runtime`.
+- Managing runtimes other than node and bun via `devEngines.runtime`.
 - Validating `devEngines.os` / `cpu` / `libc`.
 - Acting as a general enforcement layer for arbitrary package manager names beyond pnpm / yarn / npm / bun.
 - Changing session-override behavior (`vp env use`, `VP_NODE_VERSION`).
