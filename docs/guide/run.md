@@ -1,6 +1,6 @@
 # Run
 
-`vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run`, with caching, dependency ordering, and workspace-aware execution built in.
+`vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run`, with caching, dependency ordering, and workspace-aware execution built in. The task runner is available from both the [global CLI](/guide/global-cli) and the [project-local CLI](/guide/local-cli).
 
 ::: tip
 `vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.

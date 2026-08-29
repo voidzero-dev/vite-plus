@@ -1,6 +1,6 @@
-# Installing Dependencies
+# Package Management
 
-`vp install` installs dependencies using the current workspace's package manager.
+`vp` detects and runs the current workspace's package manager. These commands are available from both the [global CLI](/guide/global-cli) and the [project-local CLI](/guide/local-cli).
 
 ## Overview
 

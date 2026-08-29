@@ -1,6 +1,6 @@
 # Removing Vite+
 
-Use `vp implode` to remove `vp` and all related Vite+ data from your machine.
+Use `vp implode` to remove the [global `vp` installation](/guide/global-cli) and all related Vite+ data from your machine. It does not remove `vite-plus` dependencies from projects.
 
 ## Overview
 
