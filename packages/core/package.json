@@ -128,7 +128,7 @@
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@vitejs/devtools": "^0.5.2",
+    "@vitejs/devtools": "^0.6.2",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -227,7 +227,7 @@
   },
   "bundledVersions": {
     "vite": "8.2.2",
-    "rolldown": "1.2.5",
+    "rolldown": "1.2.6",
     "tsdown": "0.22.14"
   }
 }
