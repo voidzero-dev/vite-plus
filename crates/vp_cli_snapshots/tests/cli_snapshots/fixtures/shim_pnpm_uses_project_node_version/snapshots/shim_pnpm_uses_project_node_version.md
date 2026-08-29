@@ -1,6 +1,6 @@
 # shim_pnpm_uses_project_node_version
 
-## `vp install -g pnpm@10.30.1`
+## `vp install -g pnpm@11.20.0`
 
 Install a fixed JS-based pnpm version
 
