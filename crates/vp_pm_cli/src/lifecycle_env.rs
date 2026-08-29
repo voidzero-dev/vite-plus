@@ -1,20 +1,22 @@
 //! Package-manager lifecycle environment for script execution.
 //!
 //! When pnpm, npm, or yarn run a `package.json` script, they stamp environment
-//! variables (`npm_execpath`, `npm_config_user_agent`, …) that let child
+//! variables (`npm_execpath`, `npm_config_user_agent`) that let child
 //! tooling — npm-run-all, `ni`, package-manager detectors — identify which
 //! package manager owns the script run. `vp run` executes scripts itself, so
 //! without stamping those variables child runners fall back to npm even in
 //! pnpm projects (voidzero-dev/vite-plus#2317).
 //!
-//! Only the session-constant subset is computed here; stamping it into the
-//! process env is the caller's job. Per-script variables
+//! The stamp is deliberately limited to those two package-manager detection
+//! channels: every additional emulated variable becomes a compatibility
+//! contract with npm/pnpm/Yarn, so more variables are only added when an
+//! actual compatibility case requires them. Per-script variables
 //! (`npm_lifecycle_event`, `npm_lifecycle_script`, `npm_package_*`,
 //! `PNPM_SCRIPT_SRC_DIR`) name the script being run or the package that owns
 //! it, so they belong to the task engine, which knows each script's name and
 //! package.
 
-use std::{env, ffi::OsString, path::PathBuf};
+use std::{env, ffi::OsString};
 
 use vt_path::AbsolutePathBuf;
 
@@ -24,13 +26,8 @@ use crate::package_manager::{PackageManager, PackageManagerType, package_manager
 /// manager itself.
 #[derive(Debug)]
 pub struct LifecycleEnvContext {
-    /// Directory `vp run` was invoked in (`INIT_CWD`).
-    pub init_cwd: AbsolutePathBuf,
     /// Node.js version (i.e. `process.version`) for the user-agent string.
     pub node_version: Option<String>,
-    /// Path to the running Node.js binary (`npm_node_execpath`/`NODE`), i.e.
-    /// `process.execPath`.
-    pub node_execpath: Option<PathBuf>,
 }
 
 impl PackageManager {
@@ -90,19 +87,16 @@ impl PackageManager {
     }
 
     /// Environment variables the package manager would stamp when running a
-    /// `package.json` script, limited to the subset that is constant across a
-    /// `vp run` session. Empty for bun: what `bun run` stamps is unverified,
-    /// so its environment is left untouched rather than guessed at.
+    /// `package.json` script, limited to the package-manager detection
+    /// channels (`npm_execpath`, `npm_config_user_agent`). Empty for bun: what
+    /// `bun run` stamps is unverified, so its environment is left untouched
+    /// rather than guessed at.
     ///
     /// Names follow npm's lifecycle script environment
     /// (https://docs.npmjs.com/cli/v10/using-npm/scripts#environment), which
     /// pnpm reproduces by routing `pnpm run` scripts through
     /// `@pnpm/npm-lifecycle`
-    /// (https://github.com/pnpm/pnpm/blob/main/pnpm11/exec/lifecycle/src/runLifecycleHook.ts):
-    /// `INIT_CWD` is the cwd the command was invoked in, `npm_node_execpath`
-    /// and `NODE` the running Node.js binary
-    /// (https://github.com/npm/cli/blob/latest/workspaces/config/lib/set-envs.js,
-    /// https://github.com/pnpm/npm-lifecycle/blob/main/index.js).
+    /// (https://github.com/pnpm/pnpm/blob/main/pnpm11/exec/lifecycle/src/runLifecycleHook.ts).
     /// Verified against pnpm 11.21.0 and npm 10.9.8.
     #[must_use]
     pub fn lifecycle_env_vars(
@@ -113,7 +107,7 @@ impl PackageManager {
             return Vec::new();
         }
 
-        let mut vars = vec![
+        vec![
             ("npm_execpath", self.lifecycle_exec_path().as_path().as_os_str().to_os_string()),
             (
                 "npm_config_user_agent",
@@ -123,15 +117,7 @@ impl PackageManager {
                     context.node_version.as_deref(),
                 )),
             ),
-            ("INIT_CWD", context.init_cwd.as_path().as_os_str().to_os_string()),
-        ];
-
-        if let Some(node_execpath) = &context.node_execpath {
-            vars.push(("npm_node_execpath", node_execpath.as_os_str().to_os_string()));
-            vars.push(("NODE", node_execpath.as_os_str().to_os_string()));
-        }
-
-        vars
+        ]
     }
 }
 
@@ -210,21 +196,8 @@ mod tests {
         }
     }
 
-    fn project_dir() -> AbsolutePathBuf {
-        let path = if cfg!(windows) { "C:\\project" } else { "/project" };
-        AbsolutePathBuf::new(path.into()).unwrap()
-    }
-
-    fn node_path() -> PathBuf {
-        PathBuf::from(if cfg!(windows) { "C:\\node\\node.exe" } else { "/node/bin/node" })
-    }
-
     fn context(node_version: Option<&str>) -> LifecycleEnvContext {
-        LifecycleEnvContext {
-            init_cwd: project_dir(),
-            node_version: node_version.map(str::to_string),
-            node_execpath: Some(node_path()),
-        }
+        LifecycleEnvContext { node_version: node_version.map(str::to_string) }
     }
 
     fn vars_map<'a>(
@@ -306,10 +279,13 @@ mod tests {
                 node_arch(env::consts::ARCH)
             ))
         );
-        assert_eq!(map["INIT_CWD"], project_dir().as_path().as_os_str());
-        assert_eq!(map["npm_node_execpath"], node_path().as_os_str());
-        assert_eq!(map["NODE"], node_path().as_os_str());
-        // Per-script; belongs to the task engine, not the session stamp.
+        // Deliberately not emulated: variables outside the two detection
+        // channels are a compatibility contract we only take on for an actual
+        // compatibility case. Per-script variables like PNPM_SCRIPT_SRC_DIR
+        // belong to the task engine either way.
+        assert!(!map.contains_key("INIT_CWD"));
+        assert!(!map.contains_key("npm_node_execpath"));
+        assert!(!map.contains_key("NODE"));
         assert!(!map.contains_key("PNPM_SCRIPT_SRC_DIR"));
     }
 
@@ -364,22 +340,6 @@ mod tests {
             .to_string()
         );
         assert!(!ua.contains("node/"));
-    }
-
-    #[test]
-    fn node_execpath_is_optional() {
-        let dir = tempfile::tempdir().unwrap();
-        let install_dir = dir.path().join("pm");
-        let pm = package_manager(PackageManagerType::Pnpm, "11.20.0", &install_dir);
-        let mut context = context(None);
-        context.node_execpath = None;
-
-        let vars = pm.lifecycle_env_vars(&context);
-        let map = vars_map(&vars);
-
-        assert!(!map.contains_key("npm_node_execpath"));
-        assert!(!map.contains_key("NODE"));
-        assert!(map.contains_key("npm_execpath"));
     }
 
     #[test]

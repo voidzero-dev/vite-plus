@@ -152,7 +152,6 @@ if (maybePrintCommandHelp(args)) {
       vitePlusPackagePath,
       resolveUniversalViteConfig,
       nodeVersion: process.version,
-      nodeExecPath: process.execPath,
       explicitChdir,
       args: rustCliArgs,
     });

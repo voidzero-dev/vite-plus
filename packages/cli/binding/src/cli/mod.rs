@@ -247,7 +247,6 @@ async fn execute_vite_task_command(
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
     let node_version = options.as_ref().and_then(|o| o.node_version.clone());
-    let node_exec_path = options.as_ref().and_then(|o| o.node_exec_path.clone());
 
     let resolve_vite_config_fn = options
         .as_ref()
@@ -274,16 +273,11 @@ async fn execute_vite_task_command(
             let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
 
             // Stamp the package-manager lifecycle env (`npm_execpath`,
-            // `npm_config_user_agent`, …) like pnpm/npm/yarn would, so child
+            // `npm_config_user_agent`) like pnpm/npm/yarn would, so child
             // runners inside scripts can detect the package manager (#2317).
             // Session::init snapshots the process env, so this must also happen
             // before it.
-            lifecycle_env::stamp_package_manager_lifecycle_env(
-                &pm,
-                &cwd,
-                node_version.as_deref(),
-                node_exec_path.as_deref(),
-            );
+            lifecycle_env::stamp_package_manager_lifecycle_env(&pm, node_version.as_deref());
         }
         Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {
