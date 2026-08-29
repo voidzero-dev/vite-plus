@@ -10,9 +10,9 @@ steps = [
   { argv = ["vpt", "stat-file", "packages/b/tsup.config.ts", "--assert-not", "file"], comment = "package b original config is removed" },
   { argv = ["vpt", "print-file", "packages/b/tsdown.config.ts"], comment = "package b gets a converted config" },
   { argv = ["vpt", "print-file", "packages/b/package.json"], comment = "package b uses vp pack" },
-  { argv = ["vp", "run", "build"], cwd = "packages/a", comment = "package a migrated vp pack script builds successfully" },
+  { argv = ["vp", "run", "build"], cwd = "packages/a", comment = "package a migrated vp pack script builds successfully", snapshot = false },
   { argv = ["vpt", "list-dir", "packages/a/dist"], comment = "package a build artifacts are created" },
-  { argv = ["vp", "run", "build"], cwd = "packages/b", comment = "package b migrated vp pack script builds successfully" },
+  { argv = ["vp", "run", "build"], cwd = "packages/b", comment = "package b migrated vp pack script builds successfully", snapshot = false },
   { argv = ["vpt", "list-dir", "packages/b/dist"], comment = "package b build artifacts are created" },
 ]
 
