@@ -15,7 +15,8 @@ use vp_shared::env_vars;
 use vt_path::AbsolutePath;
 
 use super::{
-    config, package_manager as package_manager_resolution, spec::parse_package_manager_spec,
+    config, package_manager as package_manager_resolution,
+    spec::parse_package_manager_spec_with_hash,
 };
 use crate::{
     cli::exit_status,
@@ -155,9 +156,9 @@ async fn execute_with_version(
     let explicit_package_manager = package_manager.is_some();
     let mut system_package_manager = None;
     let selected_package_manager = if let Some(package_manager) = package_manager {
-        let (kind, selector) = parse_package_manager_spec(package_manager)?;
+        let (kind, selector, hash) = parse_package_manager_spec_with_hash(package_manager)?;
         let version = resolve_package_manager_version(kind, &selector).await?.to_string();
-        Some((kind, version, None))
+        Some((kind, version, hash))
     } else {
         let selected = package_manager_resolution::resolve_current_spec(cwd).await?;
         if let Some(selected) = selected
@@ -175,7 +176,11 @@ async fn execute_with_version(
             None
         } else {
             package_manager_resolution::resolve_current(cwd).await?.map(|resolution| {
-                (resolution.package_manager_type, resolution.version.to_string(), resolution.hash)
+                (
+                    resolution.package_manager_type,
+                    resolution.version.to_string(),
+                    resolution.hash.map(|hash| hash.to_string()),
+                )
             })
         }
     };

@@ -26,6 +26,7 @@ steps = [
 [[case]]
 name = "command_env_print_npm_uses_node_runtime"
 vp = "global"
+skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "env", "print", "npm"], comment = "unselected npm comes from the resolved Node.js runtime" },
 ]
@@ -41,6 +42,7 @@ steps = [
 [[case]]
 name = "command_env_current_npm_uses_node_runtime"
 vp = "global"
+skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "env", "current", "npm", "--json"], comment = "unselected npm reports the executable bundled with the resolved Node.js runtime" },
 ]

@@ -1334,7 +1334,12 @@ async fn resolve_package_manager_shim_mode(
         return ShimMode::SystemFirst;
     }
 
-    let (mode, apply_to_all) = prompt_package_manager_shim_mode(package_manager, &system_path);
+    let Some((mode, apply_to_all)) =
+        prompt_package_manager_shim_mode(package_manager, &system_path)
+    else {
+        output::note("Package-manager preference was not saved; using the system tool this time.");
+        return ShimMode::SystemFirst;
+    };
     if apply_to_all {
         config.set_all_package_manager_shim_modes(mode);
     } else {
@@ -1349,7 +1354,7 @@ async fn resolve_package_manager_shim_mode(
 fn prompt_package_manager_shim_mode(
     package_manager: PackageManagerType,
     system_path: &AbsolutePath,
-) -> (ShimMode, bool) {
+) -> Option<(ShimMode, bool)> {
     let options = [
         "Use Vite+ for all package managers".to_string(),
         format!("Use Vite+ for {package_manager}"),
@@ -1366,14 +1371,14 @@ fn prompt_package_manager_shim_mode(
         .items(&options)
         .default(0)
         .interact()
-        .unwrap_or(0);
+        .ok()?;
 
-    match choice {
+    Some(match choice {
         0 => (ShimMode::Managed, true),
         1 => (ShimMode::Managed, false),
         2 => (ShimMode::SystemFirst, false),
         _ => (ShimMode::SystemFirst, true),
-    }
+    })
 }
 
 /// Emit an invisible synchronization point for the PTY snapshot suite.

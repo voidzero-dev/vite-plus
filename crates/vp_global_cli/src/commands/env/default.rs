@@ -55,13 +55,17 @@ pub async fn execute(values: Vec<String>, unset: bool) -> Result<ExitStatus, Err
         config.default_node_version = Some(stored);
         updates.push(format!("Default Node.js version set to {display}"));
     }
-    if let Some((package_manager, version)) = specs.package_manager {
+    if let Some((package_manager, version, hash)) = specs.package_manager {
         let stored = if version == "latest" {
             version
         } else {
             resolve_package_manager_version(package_manager, &version).await?.to_string()
         };
-        let spec = format!("{package_manager}@{stored}");
+        let mut spec = format!("{package_manager}@{stored}");
+        if let Some(hash) = hash {
+            spec.push('+');
+            spec.push_str(&hash);
+        }
         config.default_package_manager = Some(spec.clone());
         updates.push(format!("Default package manager set to {spec}"));
     }

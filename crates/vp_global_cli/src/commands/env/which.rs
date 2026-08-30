@@ -193,6 +193,14 @@ async fn execute_package_manager_tool(
 
 /// Execute which for a core tool (node, npm, npx).
 async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+    if matches!(tool, "npm" | "npx")
+        && super::config::load_config().await?.shim_mode == ShimMode::SystemFirst
+        && let Some(path) = shim::dispatch::find_system_tool(tool)
+    {
+        println!("{}", path.as_path().display());
+        return Ok(ExitStatus::default());
+    }
+
     // Resolve version for current directory
     let resolution = resolve_version(&cwd).await?;
 

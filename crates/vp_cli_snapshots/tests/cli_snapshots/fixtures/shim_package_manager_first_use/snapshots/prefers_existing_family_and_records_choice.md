@@ -11,29 +11,6 @@
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} pnpm --version`
 
-an upgraded install asks before replacing an existing pnpm
-
-**→ expect-milestone:** `pm-shim-choice:pnpm`
-
-```
-vp: Vite+ now can manage package-manager versions for each project.
-Existing pnpm: <workspace>/system-bin/pnpm
-```
-
-**← write-key:** `down`
-
-**← write-key:** `down`
-
-**← write-key:** `enter`
-
-```
-vp: Vite+ now can manage package-manager versions for each project.
-Existing pnpm: <workspace>/system-bin/pnpm
-
-? How should pnpm run? ›
-✔ How should pnpm run? · Use system pnpm
-system-pnpm
-```
 
 ## `vpt print-file $VP_HOME/config.json`
 
@@ -57,29 +34,6 @@ system-pnpm
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} yarn --version`
 
-an undecided Yarn family still prompts
-
-**→ expect-milestone:** `pm-shim-choice:yarn`
-
-```
-vp: Vite+ now can manage package-manager versions for each project.
-Existing yarn: <workspace>/system-bin/yarn
-```
-
-**← write-key:** `down`
-
-**← write-key:** `down`
-
-**← write-key:** `enter`
-
-```
-vp: Vite+ now can manage package-manager versions for each project.
-Existing yarn: <workspace>/system-bin/yarn
-
-? How should yarn run? ›
-✔ How should yarn run? · Use system yarn
-system-yarn
-```
 
 ## `vpt print-file $VP_HOME/config.json`
 

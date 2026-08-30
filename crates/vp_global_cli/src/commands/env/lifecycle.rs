@@ -63,12 +63,14 @@ pub(crate) async fn install(
     }
 
     if scope.includes_package_managers() {
-        let requested = if let Some((kind, selector)) = specs.package_manager {
+        let requested = if let Some((kind, selector, hash)) = specs.package_manager {
             let version = resolve_package_manager_version(kind, &selector).await?;
-            Some((kind, version, None))
+            Some((kind, version, hash))
         } else if let EnvScope::PackageManager(kind) = scope {
             match package_manager::resolve_current_for(&cwd, Some(kind)).await? {
-                Some(current) => Some((kind, current.version, current.hash)),
+                Some(current) => {
+                    Some((kind, current.version, current.hash.map(|hash| hash.to_string())))
+                }
                 None if kind == PackageManagerType::Npm => {
                     let resolution = config::resolve_version(&cwd).await?;
                     println!("Installing npm bundled with Node.js v{}...", resolution.version);
@@ -83,9 +85,13 @@ pub(crate) async fn install(
                 None => Some((kind, resolve_package_manager_version(kind, "latest").await?, None)),
             }
         } else {
-            package_manager::resolve_current(&cwd)
-                .await?
-                .map(|current| (current.package_manager_type, current.version, current.hash))
+            package_manager::resolve_current(&cwd).await?.map(|current| {
+                (
+                    current.package_manager_type,
+                    current.version,
+                    current.hash.map(|hash| hash.to_string()),
+                )
+            })
         };
         if let Some((kind, version, hash)) = requested {
             println!("Installing {kind} v{version}...");
@@ -101,7 +107,7 @@ pub(crate) async fn uninstall(specs: Vec<String>) -> Result<ExitStatus, Error> {
     let specs = EnvSpecs::parse(&specs)?;
     let package_manager = specs
         .package_manager
-        .map(|(kind, version)| {
+        .map(|(kind, version, _)| {
             node_semver::Version::parse(&version)
                 .map(|version| (kind, version.to_string()))
                 .map_err(|_| {

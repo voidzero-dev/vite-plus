@@ -76,6 +76,13 @@ impl Config {
     }
 
     pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
+        if node && !package_manager {
+            for package_manager in ALL_PACKAGE_MANAGERS {
+                self.package_manager_shim_modes
+                    .entry(package_manager.to_string())
+                    .or_insert(self.shim_mode);
+            }
+        }
         if node {
             self.shim_mode = mode;
         }
@@ -1493,11 +1500,15 @@ mod tests {
     }
 
     #[test]
-    fn node_only_mode_change_leaves_package_managers_unconfigured() {
+    fn node_only_mode_change_materializes_inherited_package_manager_modes() {
         let mut config = Config::default();
         config.set_shim_modes(true, false, ShimMode::SystemFirst);
         assert_eq!(config.shim_mode, ShimMode::SystemFirst);
-        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm), None);
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::Managed)
+        );
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
     }
 
     #[test]

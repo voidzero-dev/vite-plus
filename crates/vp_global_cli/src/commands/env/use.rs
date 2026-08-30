@@ -140,7 +140,12 @@ pub async fn execute(
     }
 
     let provider = vp_js_runtime::NodeProvider::new();
-    let node = if scope.includes_node() {
+    let use_bundled_npm = matches!(scope, EnvScope::PackageManager(PackageManagerType::Npm))
+        && specs.package_manager.is_none()
+        && package_manager::resolve_from_files_for(&cwd, Some(PackageManagerType::Npm))
+            .await?
+            .is_none();
+    let node = if scope.includes_node() || use_bundled_npm {
         let (version, source) = if let Some(selector) = specs.node.as_deref() {
             (config::resolve_version_alias(selector, &provider).await?, selector.to_string())
         } else {
@@ -153,10 +158,10 @@ pub async fn execute(
     };
 
     let package_manager = if scope.includes_package_managers() {
-        let resolved = if let Some((kind, selector)) = specs.package_manager {
+        let resolved = if let Some((kind, selector, hash)) = specs.package_manager {
             let version = resolve_package_manager_version(kind, &selector).await?.to_string();
             package_manager::warn_if_target_differs(&cwd, kind).await;
-            Some((kind, version, selector, None))
+            Some((kind, version, selector, hash))
         } else {
             if let EnvScope::PackageManager(kind) = scope {
                 package_manager::warn_if_target_differs(&cwd, kind).await;
@@ -174,6 +179,7 @@ pub async fn execute(
         };
         if let EnvScope::PackageManager(kind) = scope
             && resolved.is_none()
+            && kind != PackageManagerType::Npm
         {
             let version = resolve_package_manager_version(kind, "latest").await?.to_string();
             Some((kind, version, "latest".into(), None))

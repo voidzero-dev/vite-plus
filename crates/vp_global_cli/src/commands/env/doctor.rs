@@ -356,7 +356,17 @@ async fn check_package_manager_resolution(
         && let Some(system_binary) =
             shim::find_system_tool(&selected.package_manager_type.to_string())
     {
-        let version = get_tool_version(&system_binary).await;
+        let Some(version) = try_get_tool_version(&system_binary).await else {
+            print_check(" ", "Source", "system PATH");
+            print_check(
+                &output::CROSS.red().to_string(),
+                "PM binary",
+                &format!("{} (could not execute)", system_binary.as_path().display())
+                    .red()
+                    .to_string(),
+            );
+            return false;
+        };
         print_check(" ", "Source", "system PATH");
         print_check(
             " ",
@@ -748,12 +758,13 @@ async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
 }
 
 async fn get_tool_version(tool_path: &vt_path::AbsolutePath) -> String {
-    match tokio::process::Command::new(tool_path.as_path()).arg("--version").output().await {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        }
-        _ => "unknown".to_string(),
-    }
+    try_get_tool_version(tool_path).await.unwrap_or_else(|| "unknown".to_string())
+}
+
+async fn try_get_tool_version(tool_path: &vt_path::AbsolutePath) -> Option<String> {
+    let output =
+        tokio::process::Command::new(tool_path.as_path()).arg("--version").output().await.ok()?;
+    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// One devEngines doctor finding.

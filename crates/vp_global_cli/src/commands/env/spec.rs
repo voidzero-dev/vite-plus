@@ -48,7 +48,7 @@ impl EnvScope {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EnvSpecs {
     pub(crate) node: Option<String>,
-    pub(crate) package_manager: Option<(PackageManagerType, String)>,
+    pub(crate) package_manager: Option<(PackageManagerType, String, Option<String>)>,
 }
 
 impl EnvSpecs {
@@ -64,13 +64,8 @@ impl EnvSpecs {
                         return Err(duplicate("Node.js"));
                     }
                 } else {
-                    let package_manager =
-                        PackageManagerType::from_name(name).ok_or_else(|| invalid_spec(value))?;
-                    if parsed
-                        .package_manager
-                        .replace((package_manager, version.to_string()))
-                        .is_some()
-                    {
+                    let package_manager = parse_package_manager_spec_with_hash(value)?;
+                    if parsed.package_manager.replace(package_manager).is_some() {
                         return Err(duplicate("package manager"));
                     }
                 }
@@ -96,7 +91,7 @@ impl EnvSpecs {
         let scope = match (&specs.node, &specs.package_manager) {
             (Some(_), Some(_)) | (None, None) => EnvScope::All,
             (Some(_), None) => EnvScope::Node,
-            (None, Some((kind, _))) => EnvScope::PackageManager(*kind),
+            (None, Some((kind, _, _))) => EnvScope::PackageManager(*kind),
         };
         Ok((scope, specs))
     }
@@ -156,7 +151,10 @@ mod tests {
     fn parses_legacy_node_and_package_manager_specs() {
         let parsed = EnvSpecs::parse(&["22.0.0".into(), "pnpm@10.18.0".into()]).unwrap();
         assert_eq!(parsed.node.as_deref(), Some("22.0.0"));
-        assert_eq!(parsed.package_manager, Some((PackageManagerType::Pnpm, "10.18.0".into())));
+        assert_eq!(
+            parsed.package_manager,
+            Some((PackageManagerType::Pnpm, "10.18.0".into(), None))
+        );
     }
 
     #[test]

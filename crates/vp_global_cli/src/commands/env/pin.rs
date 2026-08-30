@@ -76,11 +76,12 @@ pub async fn execute(
     if let Some(version) = specs.node {
         do_pin(&cwd, &version, no_install, force, target).await?;
     }
-    if let Some((package_manager, version)) = specs.package_manager {
+    if let Some((package_manager, version, hash)) = specs.package_manager {
         pin_package_manager(
             &package_manager_root,
             package_manager,
             &version,
+            hash.as_deref(),
             no_install,
             force,
             target,
@@ -688,6 +689,7 @@ async fn pin_package_manager(
     cwd: &AbsolutePathBuf,
     package_manager: PackageManagerType,
     version: &str,
+    hash: Option<&str>,
     no_install: bool,
     force: bool,
     target: Option<PinTarget>,
@@ -720,15 +722,22 @@ async fn pin_package_manager(
     let mut changed = false;
     let updated = vp_shared::edit_json_object(&content, |obj| {
         if use_top_level {
-            let existing = obj.get("packageManager").and_then(serde_json::Value::as_str);
             let prefix = format!("{package_manager}@{resolved}");
-            let next = existing
-                .filter(|value| {
-                    *value == prefix
-                        || value.strip_prefix(&prefix).is_some_and(|suffix| suffix.starts_with('+'))
-                })
-                .unwrap_or(&prefix)
-                .to_string();
+            let existing = obj.get("packageManager").and_then(serde_json::Value::as_str);
+            let next = hash.map_or_else(
+                || {
+                    existing
+                        .filter(|value| {
+                            *value == prefix
+                                || value
+                                    .strip_prefix(&prefix)
+                                    .is_some_and(|suffix| suffix.starts_with('+'))
+                        })
+                        .unwrap_or(&prefix)
+                        .to_string()
+                },
+                |hash| format!("{prefix}+{hash}"),
+            );
             if obj.get("packageManager").and_then(serde_json::Value::as_str) != Some(&next) {
                 obj.insert("packageManager".into(), serde_json::Value::String(next));
                 changed = true;
@@ -753,7 +762,7 @@ async fn pin_package_manager(
     }
     if no_install {
         output::note("Package manager will be downloaded on first use.");
-    } else if let Err(error) = download_package_manager(package_manager, &resolved, None).await {
+    } else if let Err(error) = download_package_manager(package_manager, &resolved, hash).await {
         output::warn(&format!("Failed to download {package_manager} {resolved}: {error}"));
     }
     Ok(ExitStatus::default())
@@ -957,7 +966,7 @@ mod tests {
         .await
         .unwrap();
 
-        pin_package_manager(&cwd, PackageManagerType::Pnpm, "10.18.0", true, true, None)
+        pin_package_manager(&cwd, PackageManagerType::Pnpm, "10.18.0", None, true, true, None)
             .await
             .unwrap();
 
@@ -976,13 +985,40 @@ mod tests {
         .await
         .unwrap();
 
-        pin_package_manager(&cwd, PackageManagerType::Pnpm, "10.18.0", true, true, None)
+        pin_package_manager(&cwd, PackageManagerType::Pnpm, "10.18.0", None, true, true, None)
             .await
             .unwrap();
 
         let content = tokio::fs::read_to_string(cwd.join("package.json")).await.unwrap();
         assert!(content.contains("pnpm@10.18.0"));
         assert!(!content.contains("sha512.stale"));
+    }
+
+    #[tokio::test]
+    async fn package_manager_pin_uses_explicit_integrity_suffix() {
+        let temp_dir = TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(
+            cwd.join("package.json"),
+            "{\n  \"packageManager\": \"pnpm@10.17.0\"\n}\n",
+        )
+        .await
+        .unwrap();
+
+        pin_package_manager(
+            &cwd,
+            PackageManagerType::Pnpm,
+            "10.18.0",
+            Some("sha512.explicit"),
+            true,
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let content = tokio::fs::read_to_string(cwd.join("package.json")).await.unwrap();
+        assert!(content.contains("pnpm@10.18.0+sha512.explicit"));
     }
 
     #[test]

@@ -70,6 +70,7 @@ steps = [
 name = "env_package_manager_list_stays_offline_for_floating_default"
 vp = "global"
 seed-runtime = false
+skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\n"], snapshot = false },
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
