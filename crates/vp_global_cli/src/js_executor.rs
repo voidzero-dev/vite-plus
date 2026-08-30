@@ -416,20 +416,29 @@ impl JsExecutor {
     /// Find the directory whose `node_modules/vite-plus` an upward walk from
     /// `project_path` is allowed to use.
     ///
-    /// Node-style resolution walks every ancestor's `node_modules`, which can
-    /// escape the project and silently pick up an unrelated ancestor project's
-    /// copy (e.g. a repo checked out inside another project's tree, whose own
-    /// install is missing or broken). Bound the walk at the project's workspace
-    /// root: within it, nearest wins (a workspace member still resolves the
-    /// workspace root's install); beyond it, resolution fails so callers fall
-    /// back to the global installation. When there is no workspace or package
-    /// root at all (`find_workspace_root` errors), there is no project boundary
-    /// to protect and the walk stays unbounded.
+    /// Walking every ancestor's `node_modules` is ordinary Node resolution
+    /// semantics, and layouts legitimately rely on it (hoisted installs; the
+    /// snapshot harness stages workspaces with no `node_modules` of their own
+    /// that resolve a run-root install). So the walk stays unbounded by
+    /// default. The exception is a project that *declares* a `vite-plus`
+    /// dependency (directly, or at its workspace root — the same test
+    /// `warn_missing_local_cli_if_project` applies): for it, escaping the
+    /// workspace root would silently borrow an unrelated ancestor's copy in
+    /// exactly the situation where "run `vp install`" is the right answer.
+    /// Only then is the walk bounded at the workspace root: within it,
+    /// nearest wins (a workspace member still resolves the workspace root's
+    /// install); beyond it, resolution fails so callers fall back to the
+    /// global installation and the install hint.
     pub(crate) fn local_vite_plus_install_host(
         project_path: &AbsolutePath,
     ) -> Option<AbsolutePathBuf> {
-        let boundary =
-            vt_workspace::find_workspace_root(project_path).ok().map(|(root, _)| root.path);
+        let boundary = vt_workspace::find_workspace_root(project_path)
+            .ok()
+            .filter(|(root, _)| {
+                crate::commands::has_vite_plus_dependency(project_path)
+                    || crate::commands::has_vite_plus_dependency(root.path.as_ref())
+            })
+            .map(|(root, _)| root.path);
 
         let mut current = project_path;
         loop {
@@ -452,9 +461,9 @@ impl JsExecutor {
     ) -> Option<AbsolutePathBuf> {
         use oxc_resolver::{ResolveOptions, Resolver};
 
-        // Only trust an install that lives within the project's workspace; the
-        // Node-semantics resolution below would otherwise walk past it (see
-        // `local_vite_plus_install_host`).
+        // For projects that declare a vite-plus dependency, only trust an
+        // install within their workspace; the Node-semantics resolution below
+        // would otherwise walk past it (see `local_vite_plus_install_host`).
         Self::local_vite_plus_install_host(project_path)?;
 
         let resolver = Resolver::new(ResolveOptions {
@@ -572,10 +581,11 @@ mod tests {
         dir
     }
 
-    /// An independent project (with its own workspace marker) checked out
-    /// inside another project's tree must not resolve the outer project's
-    /// vite-plus when its own install is missing — Node-style upward
-    /// resolution would otherwise silently delegate to an unrelated copy.
+    /// An independent project that *declares* a vite-plus dependency (with
+    /// its own workspace marker) checked out inside another project's tree
+    /// must not resolve the outer project's vite-plus when its own install is
+    /// missing — the declaration makes "run `vp install`" the right answer,
+    /// not silently delegating to an unrelated copy.
     #[test]
     fn local_resolution_stays_within_the_workspace() {
         let temp = tempfile::tempdir().unwrap();
@@ -603,13 +613,20 @@ mod tests {
     }
 
     /// A workspace member still resolves the workspace root's install: the
-    /// boundary is the workspace root, not the member directory.
+    /// boundary is the workspace root, not the member directory. The root
+    /// declares the dependency so the bounded walk is actually engaged —
+    /// without a declaration this case would pass trivially via the
+    /// unbounded default.
     #[test]
     fn workspace_member_resolves_the_workspace_root_install() {
         let temp = tempfile::tempdir().unwrap();
         let ws = temp.path();
         std::fs::write(ws.join("pnpm-workspace.yaml"), "packages:\n  - packages/*\n").unwrap();
-        std::fs::write(ws.join("package.json"), r#"{"name":"ws"}"#).unwrap();
+        std::fs::write(
+            ws.join("package.json"),
+            r#"{"name":"ws","devDependencies":{"vite-plus":"0.3.0"}}"#,
+        )
+        .unwrap();
         std::fs::create_dir_all(ws.join("node_modules/vite-plus")).unwrap();
         std::fs::write(ws.join("node_modules/vite-plus/package.json"), r#"{"version":"0.3.0"}"#)
             .unwrap();
@@ -623,6 +640,33 @@ mod tests {
         assert_eq!(host.as_path(), ws);
         let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(member)
             .expect("workspace root install must stay resolvable");
+        assert!(pkg_dir.as_path().ends_with("node_modules/vite-plus"));
+    }
+
+    /// A project that does *not* declare a vite-plus dependency keeps Node's
+    /// unbounded upward resolution even across its own workspace marker —
+    /// this is the layout the snapshot harness depends on (staged workspaces
+    /// with no `node_modules` of their own, resolving a run-root install).
+    #[test]
+    fn undeclared_project_keeps_the_unbounded_walk() {
+        let temp = tempfile::tempdir().unwrap();
+        let outer = temp.path();
+        std::fs::create_dir_all(outer.join("node_modules/vite-plus/dist")).unwrap();
+        std::fs::write(outer.join("node_modules/vite-plus/package.json"), r#"{"version":"0.2.1"}"#)
+            .unwrap();
+        std::fs::write(outer.join("node_modules/vite-plus/dist/bin.js"), "").unwrap();
+
+        let inner = outer.join("cases/one/workspace");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(inner.join("package.json"), r#"{"name":"inner"}"#).unwrap();
+        std::fs::write(inner.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
+
+        let inner = AbsolutePath::new(inner.as_path()).unwrap();
+        let host = JsExecutor::local_vite_plus_install_host(inner)
+            .expect("undeclared projects keep the unbounded walk");
+        assert_eq!(host.as_path(), outer);
+        let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(inner)
+            .expect("undeclared projects keep the unbounded walk");
         assert!(pkg_dir.as_path().ends_with("node_modules/vite-plus"));
     }
 
