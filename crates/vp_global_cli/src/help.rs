@@ -336,8 +336,8 @@ fn env_help_doc() -> HelpDoc {
                 "Setup",
                 vec![
                     row("setup", "Create or update shims in VP_HOME/bin"),
-                    row("on", "Enable managed mode for Node.js and package managers"),
-                    row("off", "Enable system-first mode for Node.js and package managers"),
+                    row("on", "Enable managed mode for selected environment scopes"),
+                    row("off", "Enable system-first mode for selected environment scopes"),
                     row("print", "Print PATH setup for the resolved environment"),
                 ],
             ),
@@ -374,6 +374,7 @@ fn env_help_doc() -> HelpDoc {
                     "    vp env setup                  # Create Node.js and package-manager shims",
                     "    vp env on                     # Manage Node.js and package managers",
                     "    vp env off pm                 # Prefer system package managers only",
+                    "    vp env off pnpm               # Prefer system pnpm only",
                     "    vp env print                  # Print PATH setup for both components",
                     "",
                     "  Manage:",

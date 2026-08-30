@@ -13,22 +13,23 @@ use crate::{error::Error, help};
 /// Execute the `vp env on` command.
 pub async fn execute(scope: Option<String>) -> Result<ExitStatus, Error> {
     let scope = EnvScope::parse(scope.as_deref())?;
-    if matches!(scope, EnvScope::PackageManager(_)) {
-        return Err(Error::Other("on accepts only node or pm as a scope".into()));
-    }
     let mut config = load_config().await?;
-    config.set_shim_modes(
-        scope.includes_node(),
-        scope.includes_package_managers(),
-        ShimMode::Managed,
-    );
+    if let EnvScope::PackageManager(package_manager) = scope {
+        config.set_package_manager_shim_mode(package_manager, ShimMode::Managed);
+    } else {
+        config.set_shim_modes(
+            scope.includes_node(),
+            scope.includes_package_managers(),
+            ShimMode::Managed,
+        );
+    }
     save_config(&config).await?;
 
     let component = match scope {
-        EnvScope::All => "Node.js and package-manager management",
-        EnvScope::Node => "Node.js management",
-        EnvScope::PackageManagers => "Package-manager management",
-        EnvScope::PackageManager(_) => unreachable!(),
+        EnvScope::All => "Node.js and package-manager management".into(),
+        EnvScope::Node => "Node.js management".into(),
+        EnvScope::PackageManagers => "Package-manager management".into(),
+        EnvScope::PackageManager(package_manager) => format!("{package_manager} management"),
     };
     println!("\u{2713} {component} set to managed.");
     println!();

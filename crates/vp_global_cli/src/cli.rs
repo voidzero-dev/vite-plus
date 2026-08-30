@@ -324,15 +324,15 @@ Examples:
         unset: bool,
     },
 
-    /// Enable managed mode for Node.js and package managers
+    /// Enable managed mode for Node.js, package managers, or one package manager
     On {
-        /// Change only node or package-manager mode
+        /// Change only node, pm, npm, pnpm, yarn, or bun mode
         scope: Option<String>,
     },
 
-    /// Enable system-first mode for Node.js and package managers
+    /// Enable system-first mode for Node.js, package managers, or one package manager
     Off {
-        /// Change only node or package-manager mode
+        /// Change only node, pm, npm, pnpm, yarn, or bun mode
         scope: Option<String>,
     },
 
@@ -676,7 +676,9 @@ async fn run_package_manager_command(
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
     let selected = commands::env::package_manager::resolve_current(&cwd).await?;
     let result = if let Some(selected) = selected.as_ref()
-        && commands::env::config::load_config().await?.package_manager_shim_mode()
+        && commands::env::config::load_config()
+            .await?
+            .package_manager_shim_mode_for(selected.package_manager_type)
             == commands::env::config::ShimMode::SystemFirst
         && let Some(system_path) =
             crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())

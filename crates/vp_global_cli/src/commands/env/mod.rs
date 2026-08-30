@@ -180,7 +180,8 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
         && let Some(resolution) =
             package_manager::resolve_current_for(&cwd, scope.package_manager()).await?
     {
-        if modes.package_manager_shim_mode() == config::ShimMode::SystemFirst
+        if modes.package_manager_shim_mode_for(resolution.package_manager_type)
+            == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(
                 &resolution.package_manager_type.to_string(),
             )

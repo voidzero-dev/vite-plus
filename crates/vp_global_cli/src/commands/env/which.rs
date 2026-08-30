@@ -34,8 +34,8 @@ const LABEL_WIDTH: usize = 10;
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
     let config = super::config::load_config().await?;
-    let mode = if PackageManagerType::from_tool(tool).is_some() {
-        config.package_manager_shim_mode()
+    let mode = if let Some(package_manager) = PackageManagerType::from_tool(tool) {
+        config.package_manager_shim_mode_for(package_manager)
     } else {
         config.shim_mode
     };

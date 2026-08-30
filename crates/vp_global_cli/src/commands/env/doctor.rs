@@ -61,6 +61,14 @@ fn print_check(status: &str, key: &str, value: &str) {
     }
 }
 
+fn print_package_manager_mode(key: &str, mode: ShimMode) {
+    let mode = match mode {
+        ShimMode::Managed => "managed mode",
+        ShimMode::SystemFirst => "system-first mode",
+    };
+    print_check(&output::CHECK.green().to_string(), key, mode);
+}
+
 /// Print a continuation/hint line (dimmed).
 fn print_hint(text: &str) {
     println!("  {}", format!("note: {text}").dimmed());
@@ -282,11 +290,24 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
         }
     }
     if scope.includes_package_managers() {
-        let mode = match config.package_manager_shim_mode() {
-            ShimMode::Managed => "managed mode",
-            ShimMode::SystemFirst => "system-first mode",
-        };
-        print_check(&output::CHECK.green().to_string(), "Package manager", mode);
+        if let Some(package_manager) = scope.package_manager() {
+            print_package_manager_mode(
+                "Package manager",
+                config.package_manager_shim_mode_for(package_manager),
+            );
+        } else {
+            let modes = package_manager::ALL_PACKAGE_MANAGERS.map(|package_manager| {
+                (package_manager, config.package_manager_shim_mode_for(package_manager))
+            });
+            let shared_mode = modes[0].1;
+            if modes.iter().all(|(_, mode)| *mode == shared_mode) {
+                print_package_manager_mode("Package manager", shared_mode);
+            } else {
+                for (package_manager, mode) in modes {
+                    print_package_manager_mode(package_manager::title(package_manager), mode);
+                }
+            }
+        }
     }
 
     (config.shim_mode, system_node_path)

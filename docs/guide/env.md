@@ -54,11 +54,13 @@ If you want to keep that behavior, run:
 vp env on
 ```
 
-This enables managed mode for both components. Their modes can also be changed independently:
+This enables managed mode for both components. Their modes can also be changed independently, including one package-manager family:
 
 ```bash
 vp env on node
 vp env off pm
+vp env off pnpm
+vp env on bun
 ```
 
 If you do not want Vite+ to manage Node.js first, run:
@@ -69,12 +71,14 @@ vp env off
 
 This switches both components to system-first mode. Vite+ prefers system tools and falls back to managed installations. Mixed configurations compose: a system package-manager launcher receives the Node.js selected by the Node mode.
 
+Using `pm` changes all package managers and replaces any individual package-manager choices. An unscoped `on` or `off` does the same while also changing Node.js.
+
 ## Commands
 
 ### Setup
 
 - `vp env setup` creates or updates the `node`, `npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`, `bun`, `bunx`, `vpx`, and `vpr` shims in the resolved bin directory. It writes shell setup scripts in the config directory.
-- `vp env on` / `vp env off` changes both modes; append `node` or `pm` to change one
+- `vp env on` / `vp env off` changes both modes; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change
 - `vp env print` prints PATH setup for both components; append a selector to print one
 
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
@@ -147,6 +151,7 @@ shim calls in the same job use these files to resolve the same environment.
 vp env setup                  # Create Node.js and package-manager shims
 vp env on                     # Manage Node.js and package managers
 vp env off pm                 # Prefer system package managers only
+vp env off pnpm               # Prefer system pnpm only
 vp env print                  # Print PATH setup for both components
 
 # Manage

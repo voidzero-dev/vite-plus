@@ -105,7 +105,9 @@ pub async fn execute(
         let resolution =
             package_manager::resolve_current_for(&cwd, scope.package_manager()).await?;
         resolution.and_then(|resolution| {
-            let system_paths = (config.package_manager_shim_mode() == ShimMode::SystemFirst)
+            let package_manager_mode =
+                config.package_manager_shim_mode_for(resolution.package_manager_type);
+            let system_paths = (package_manager_mode == ShimMode::SystemFirst)
                 .then(|| {
                     resolution
                         .package_manager_type
@@ -139,7 +141,7 @@ pub async fn execute(
             let installed = bin_paths.values().all(|path| std::path::Path::new(path).exists());
             let system_version = bin_paths
                 .get(resolution.package_manager_type.to_string().as_str())
-                .filter(|_| config.package_manager_shim_mode() == ShimMode::SystemFirst)
+                .filter(|_| package_manager_mode == ShimMode::SystemFirst)
                 .and_then(|path| vt_path::AbsolutePathBuf::new(path.into()));
             let is_system = system_version.is_some();
             Some(PackageManagerInfo {
@@ -163,7 +165,7 @@ pub async fn execute(
                     .map(|path| path.as_path().display().to_string()),
                 bin_paths,
                 installed,
-                mode: config.package_manager_shim_mode(),
+                mode: package_manager_mode,
             })
         })
     } else {

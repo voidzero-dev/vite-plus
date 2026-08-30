@@ -464,8 +464,8 @@ Manage Node.js and package-manager environments
 
 Setup:
   setup  Create or update shims in VP_HOME/bin
-  on     Enable managed mode for Node.js and package managers
-  off    Enable system-first mode for Node.js and package managers
+  on     Enable managed mode for selected environment scopes
+  off    Enable system-first mode for selected environment scopes
   print  Print PATH setup for the resolved environment
 
 Manage:
@@ -490,6 +490,7 @@ Examples:
     vp env setup                  # Create Node.js and package-manager shims
     vp env on                     # Manage Node.js and package managers
     vp env off pm                 # Prefer system package managers only
+    vp env off pnpm               # Prefer system pnpm only
     vp env print                  # Print PATH setup for both components
 
   Manage:

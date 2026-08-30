@@ -164,7 +164,7 @@ async fn execute_with_version(
     };
     let resolved_package_manager = if let Some((kind, version, hash)) = selected_package_manager {
         if !explicit_package_manager
-            && modes.package_manager_shim_mode() == config::ShimMode::SystemFirst
+            && modes.package_manager_shim_mode_for(kind) == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(&kind.to_string())
             && let Some(bin_dir) = path.parent()
         {

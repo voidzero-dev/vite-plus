@@ -1260,8 +1260,8 @@ async fn load_shim_mode(tool: &str) -> ShimMode {
     config::load_config()
         .await
         .map(|config| {
-            if PackageManagerType::from_tool(tool).is_some() {
-                config.package_manager_shim_mode()
+            if let Some(package_manager) = PackageManagerType::from_tool(tool) {
+                config.package_manager_shim_mode_for(package_manager)
             } else {
                 config.shim_mode
             }
