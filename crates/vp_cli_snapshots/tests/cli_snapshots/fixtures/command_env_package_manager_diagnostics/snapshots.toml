@@ -2,10 +2,7 @@
 name = "command_env_package_manager_diagnostics"
 vp = "global"
 steps = [
-  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npm", "#!/bin/sh\n"], snapshot = false },
-  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npx", "#!/bin/sh\n"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npm"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npx"], snapshot = false },
+  { argv = ["node", "prepare-npm.cjs"], snapshot = false },
   { argv = ["vp", "env", "current", "pm", "--json"], comment = "current reports the npm packageManager pin" },
   { argv = ["vp", "env", "which", "npm"], comment = "which reports the npm packageManager pin" },
   { argv = ["vp", "env", "which", "npx"], comment = "the npx alias reports the same npm packageManager pin" },

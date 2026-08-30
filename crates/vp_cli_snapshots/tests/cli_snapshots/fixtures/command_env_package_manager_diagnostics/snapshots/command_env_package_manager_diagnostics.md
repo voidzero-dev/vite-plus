@@ -1,17 +1,6 @@
 # command_env_package_manager_diagnostics
 
-## `vpt write-file $VP_HOME/package_manager/npm/10.9.4/npm/bin/npm '#'\!'/bin/sh
-'`
-
-
-## `vpt write-file $VP_HOME/package_manager/npm/10.9.4/npm/bin/npx '#'\!'/bin/sh
-'`
-
-
-## `vpt chmod +x $VP_HOME/package_manager/npm/10.9.4/npm/bin/npm`
-
-
-## `vpt chmod +x $VP_HOME/package_manager/npm/10.9.4/npm/bin/npx`
+## `node prepare-npm.cjs`
 
 
 ## `vp env current pm --json`
