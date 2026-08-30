@@ -1182,6 +1182,7 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
         if ($preferenceExitCode -ne 0) {
             Write-Warn "Failed to record package-manager management preference."
         }
+        $LASTEXITCODE = 0
     }
 
     Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
