@@ -183,7 +183,7 @@ vp node -e "console.log(1+1)" # Shorthand: forward any node flag or argument
 
 ## JSON output
 
-This release intentionally changes the JSON contracts for `current`, `list`, and `list-remote`. `current --json` returns peer component objects:
+The JSON output for `current`, `list`, and `list-remote` is organized by component. `current --json` returns sibling `node` and `package_manager` objects:
 
 ```json
 {
