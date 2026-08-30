@@ -1,0 +1,35 @@
+[[case]]
+name = "prefers_existing_family_and_records_choice"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/yarn"], snapshot = false },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "an upgraded install asks before replacing an existing pnpm", interactions = [
+    { "expect-milestone" = "pm-shim-choice:pnpm" },
+    { "write-key" = "down" },
+    { "write-key" = "down" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "the explicit system choice records only pnpm" },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "later pnpm invocations use the recorded choice without prompting" },
+  { argv = ["yarn", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "an undecided Yarn family still prompts", interactions = [
+    { "expect-milestone" = "pm-shim-choice:yarn" },
+    { "write-key" = "down" },
+    { "write-key" = "down" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "Yarn records its own decision without changing pnpm" },
+]
+
+[[case]]
+name = "non_interactive_use_preserves_system_without_deciding"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "a non-interactive upgrade keeps using system pnpm without prompting" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/config.json", "--assert", "missing"], comment = "non-interactive use does not record a choice" },
+]

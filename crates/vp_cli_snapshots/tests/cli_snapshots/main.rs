@@ -693,12 +693,28 @@ impl CaseHome {
             .envs(&env)
             .output()
             .map_err(|e| format!("failed to run `vp env setup`: {e}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        // Cases start from fresh-install consent. A dedicated first-use fixture
+        // removes this config before exercising upgrade compatibility.
+        let output = std::process::Command::new(vp)
+            .args(["env", "on", "pm"])
+            .env_clear()
+            .envs(&env)
+            .output()
+            .map_err(|e| format!("failed to run `vp env on pm`: {e}"))?;
         if output.status.success() {
             return Ok(());
         }
-
         Err(format!(
-            "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            "`vp env on pm` failed with status {}\nstdout:\n{}\nstderr:\n{}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)

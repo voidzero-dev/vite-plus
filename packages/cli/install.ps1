@@ -879,7 +879,7 @@ function Setup-NodeManager {
     $isInteractive = [Environment]::UserInteractive -and -not $env:CI
     if ($isInteractive) {
         Write-Host ""
-        Write-Host "Would you like Vite+ to manage your Node.js versions?"
+        Write-Host "Would you like Vite+ to manage your Node.js and package-manager versions?"
         Write-Host "Vite+ adds ``node``, ``npm``, ``npx``, ``pnpm``, ``pnpx``, ``yarn``, ``yarnpkg``, ``bun``, and ``bunx`` shims to $NodeManagerBinDisplay."
         Write-Host "It selects the required version automatically."
         Write-Host "Opt out anytime with ``vp env off``."
@@ -1169,6 +1169,12 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
+    if ($nodeManagerResult -eq "true") {
+        & "$BinDir\vp.exe" env on pm *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Failed to record package-manager management preference."
+        }
+    }
 
     Prompt-RemovePreviousInstallDir -PreviousInstallDir $previousInstallDir
 

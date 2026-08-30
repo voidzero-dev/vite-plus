@@ -15,6 +15,7 @@ use vp_js_runtime::{
 use vp_pm_cli::PackageManagerType;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
+use super::package_manager::ALL_PACKAGE_MANAGERS;
 use crate::error::Error;
 
 /// Config file name
@@ -44,38 +45,38 @@ pub struct Config {
     /// Shim mode for tool resolution
     #[serde(default, skip_serializing_if = "is_default_shim_mode")]
     pub shim_mode: ShimMode,
-    /// Package-manager shim mode. Inherits `shim_mode` when absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub package_manager_shim_mode: Option<ShimMode>,
-    /// Per-package-manager shim modes. Each inherits the shared package-manager mode when absent.
+    /// Explicit per-package-manager shim modes. An absent family has not been configured yet.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_manager_shim_modes: BTreeMap<String, ShimMode>,
 }
 
 impl Config {
     #[must_use]
-    pub fn package_manager_shim_mode(&self) -> ShimMode {
-        self.package_manager_shim_mode.unwrap_or(self.shim_mode)
+    pub fn configured_package_manager_shim_mode_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> Option<ShimMode> {
+        self.package_manager_shim_modes.get(&package_manager.to_string()).copied()
     }
 
     #[must_use]
     pub fn package_manager_shim_mode_for(&self, package_manager: PackageManagerType) -> ShimMode {
-        self.package_manager_shim_modes
-            .get(&package_manager.to_string())
-            .copied()
-            .unwrap_or_else(|| self.package_manager_shim_mode())
+        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
     }
 
     pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
-        if node && !package_manager && self.package_manager_shim_mode.is_none() {
-            self.package_manager_shim_mode = Some(self.package_manager_shim_mode());
-        }
         if node {
             self.shim_mode = mode;
         }
         if package_manager {
-            self.package_manager_shim_mode = Some(mode);
-            self.package_manager_shim_modes.clear();
+            self.set_all_package_manager_shim_modes(mode);
+        }
+    }
+
+    pub fn set_all_package_manager_shim_modes(&mut self, mode: ShimMode) {
+        self.package_manager_shim_modes.clear();
+        for package_manager in ALL_PACKAGE_MANAGERS {
+            self.set_package_manager_shim_mode(package_manager, mode);
         }
     }
 
@@ -84,12 +85,7 @@ impl Config {
         package_manager: PackageManagerType,
         mode: ShimMode,
     ) {
-        let package_manager = package_manager.to_string();
-        if mode == self.package_manager_shim_mode() {
-            self.package_manager_shim_modes.remove(&package_manager);
-        } else {
-            self.package_manager_shim_modes.insert(package_manager, mode);
-        }
+        self.package_manager_shim_modes.insert(package_manager.to_string(), mode);
     }
 }
 
@@ -1486,15 +1482,11 @@ mod tests {
     }
 
     #[test]
-    fn node_only_mode_change_preserves_inherited_package_manager_mode() {
-        let mut config = Config {
-            shim_mode: ShimMode::Managed,
-            package_manager_shim_mode: None,
-            ..Config::default()
-        };
+    fn node_only_mode_change_leaves_package_managers_unconfigured() {
+        let mut config = Config::default();
         config.set_shim_modes(true, false, ShimMode::SystemFirst);
         assert_eq!(config.shim_mode, ShimMode::SystemFirst);
-        assert_eq!(config.package_manager_shim_mode(), ShimMode::Managed);
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm), None);
     }
 
     #[test]
@@ -1510,6 +1502,7 @@ mod tests {
             config.package_manager_shim_mode_for(PackageManagerType::Bun),
             ShimMode::Managed
         );
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Bun), None);
 
         config.set_shim_modes(false, true, ShimMode::Managed);
         assert_eq!(
@@ -1520,6 +1513,7 @@ mod tests {
             config.package_manager_shim_mode_for(PackageManagerType::Bun),
             ShimMode::Managed
         );
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
     }
 
     #[test]
@@ -1527,7 +1521,7 @@ mod tests {
         let mut config = Config { shim_mode: ShimMode::SystemFirst, ..Config::default() };
         config.set_shim_modes(false, true, ShimMode::Managed);
         assert_eq!(config.shim_mode, ShimMode::SystemFirst);
-        assert_eq!(config.package_manager_shim_mode(), ShimMode::Managed);
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
     }
 
     #[tokio::test]

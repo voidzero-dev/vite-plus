@@ -1130,7 +1130,7 @@ setup_node_manager() {
   # Prompt user in interactive mode
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
-    echo "Would you like Vite+ to manage your Node.js versions?"
+    echo "Would you like Vite+ to manage your Node.js and package-manager versions?"
     echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, \`pnpm\`, \`pnpx\`, \`yarn\`, \`yarnpkg\`, \`bun\`, and \`bunx\` shims to $(abbreviate_path "$SHIM_DIR")."
     echo "It selects the required version automatically."
     echo "Opt out anytime with \`vp env off\`."
@@ -1417,6 +1417,11 @@ WRAPPER_EOF
 
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
+  if [ "$NODE_MANAGER_ENABLED" = "true" ]; then
+    if ! "$vp_bin" env on pm > /dev/null 2>&1; then
+      warn "Failed to record package-manager management preference."
+    fi
+  fi
 
   prompt_remove_previous_install_dir "$previous_install_dir"
 

@@ -4,7 +4,9 @@
 
 ## Overview
 
-Managed mode is on by default, so Node.js and package-manager shims resolve through Vite+ and pick the right versions for the current project.
+Managed mode is on by default, so Node.js and configured package-manager shims resolve through Vite+ and pick the right versions for the current project. Fresh installers record managed mode for npm, pnpm, Yarn, and Bun after the user enables environment management.
+
+When an upgrade adds a package-manager shim that has no recorded mode, its first interactive invocation asks what to do only when the corresponding system binary is already on PATH. If no system binary is found, the package manager inherits `shimMode`. Non-interactive invocations preserve an existing system command without recording a choice.
 
 Most commands operate on both components when no selector is given. Add `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the command. `pm` means all four families for listing and cleanup, but the single selected package manager for project operations.
 
@@ -71,7 +73,7 @@ vp env off
 
 This switches both components to system-first mode. Vite+ prefers system tools and falls back to managed installations. Mixed configurations compose: a system package-manager launcher receives the Node.js selected by the Node mode.
 
-Using `pm` changes all package managers and replaces any individual package-manager choices. An unscoped `on` or `off` does the same while also changing Node.js.
+Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js. A family without a recorded mode remains undecided until its shim is first used or an `on` / `off` command configures it.
 
 ## Commands
 

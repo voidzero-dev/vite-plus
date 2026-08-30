@@ -5,6 +5,7 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core shims and package binaries)
 
+use dialoguer::{Select, theme::ColorfulTheme};
 use vp_pm_cli::{PackageManagerType, ensure_package_manager_bin};
 use vp_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
@@ -1257,16 +1258,94 @@ pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, 
 ///
 /// Returns the default (Managed) if config cannot be read.
 async fn load_shim_mode(tool: &str) -> ShimMode {
-    config::load_config()
-        .await
-        .map(|config| {
-            if let Some(package_manager) = PackageManagerType::from_tool(tool) {
-                config.package_manager_shim_mode_for(package_manager)
+    let Some(package_manager) = PackageManagerType::from_tool(tool) else {
+        return config::load_config().await.map(|config| config.shim_mode).unwrap_or_default();
+    };
+    resolve_package_manager_shim_mode(tool, package_manager).await
+}
+
+async fn resolve_package_manager_shim_mode(
+    tool: &str,
+    package_manager: PackageManagerType,
+) -> ShimMode {
+    let mut config = match config::load_config().await {
+        Ok(config) => config,
+        Err(error) => {
+            output::warn(&format!("Could not read package-manager shim preferences: {error}"));
+            return if find_system_tool(tool).is_some() {
+                ShimMode::SystemFirst
             } else {
-                config.shim_mode
-            }
-        })
-        .unwrap_or_default()
+                ShimMode::Managed
+            };
+        }
+    };
+    if let Some(mode) = config.configured_package_manager_shim_mode_for(package_manager) {
+        return mode;
+    }
+
+    let Some(system_path) = find_system_tool(tool) else {
+        return config.shim_mode;
+    };
+
+    if !vp_shared::is_interactive_terminal() {
+        return ShimMode::SystemFirst;
+    }
+
+    let (mode, apply_to_all) = prompt_package_manager_shim_mode(package_manager, &system_path);
+    if apply_to_all {
+        config.set_all_package_manager_shim_modes(mode);
+    } else {
+        config.set_package_manager_shim_mode(package_manager, mode);
+    }
+    if let Err(error) = config::save_config(&config).await {
+        output::warn(&format!("Could not save package-manager shim preferences: {error}"));
+    }
+    mode
+}
+
+fn prompt_package_manager_shim_mode(
+    package_manager: PackageManagerType,
+    system_path: &AbsolutePath,
+) -> (ShimMode, bool) {
+    let options = [
+        "Use Vite+ for all package managers".to_string(),
+        format!("Use Vite+ for {package_manager}"),
+        format!("Use system {package_manager}"),
+        "Use system package managers".to_string(),
+    ];
+
+    output::raw_stderr("vp: Vite+ now can manage package-manager versions for each project.");
+    output::raw_stderr(&format!("Existing {package_manager}: {}", system_path.as_path().display()));
+    output::raw_stderr("");
+    emit_prompt_milestone(&format!("pm-shim-choice:{package_manager}"));
+    let choice = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(format!("How should {package_manager} run?"))
+        .items(&options)
+        .default(0)
+        .interact()
+        .unwrap_or(0);
+
+    match choice {
+        0 => (ShimMode::Managed, true),
+        1 => (ShimMode::Managed, false),
+        2 => (ShimMode::SystemFirst, false),
+        _ => (ShimMode::SystemFirst, true),
+    }
+}
+
+/// Emit an invisible synchronization point for the PTY snapshot suite.
+#[expect(clippy::disallowed_macros)]
+fn emit_prompt_milestone(name: &str) {
+    use std::io::Write as _;
+
+    if std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_none_or(|value| value != "1") {
+        return;
+    }
+    let id = uuid::Uuid::new_v4();
+    let encoded_name = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
+    let mut stderr = std::io::stderr().lock();
+    let _ = write!(stderr, "\x1b]2;pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
+    let _ = stderr.flush();
 }
 
 /// Find a system tool in PATH, skipping the vite-plus bin directory and any
