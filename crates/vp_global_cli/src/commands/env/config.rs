@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use vp_js_runtime::{
     NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
     read_package_json, resolve_node_version,
@@ -39,9 +39,14 @@ pub struct Config {
     /// Default Node.js version when no project version file is found
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_node_version: Option<String>,
-    /// Default package manager when the project does not select one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_package_manager: Option<String>,
+    /// Default versions used by package-manager shims when the project does not select that family.
+    #[serde(
+        default,
+        alias = "defaultPackageManager",
+        deserialize_with = "deserialize_package_manager_default_versions",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub default_package_manager_versions: BTreeMap<String, String>,
     /// Shim mode for tool resolution
     #[serde(default, skip_serializing_if = "is_default_shim_mode")]
     pub shim_mode: ShimMode,
@@ -51,6 +56,26 @@ pub struct Config {
 }
 
 impl Config {
+    #[must_use]
+    pub fn default_package_manager_version_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> Option<&str> {
+        self.default_package_manager_versions.get(&package_manager.to_string()).map(String::as_str)
+    }
+
+    pub fn set_default_package_manager_version(
+        &mut self,
+        package_manager: PackageManagerType,
+        version: String,
+    ) {
+        self.default_package_manager_versions.insert(package_manager.to_string(), version);
+    }
+
+    pub fn clear_default_package_manager_version(&mut self, package_manager: PackageManagerType) {
+        self.default_package_manager_versions.remove(&package_manager.to_string());
+    }
+
     #[must_use]
     pub fn configured_package_manager_shim_mode_for(
         &self,
@@ -104,6 +129,33 @@ impl Config {
         mode: ShimMode,
     ) {
         self.package_manager_shim_modes.insert(package_manager.to_string(), mode);
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PackageManagerDefaultVersions {
+    Versions(BTreeMap<String, String>),
+    Legacy(String),
+}
+
+fn deserialize_package_manager_default_versions<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match PackageManagerDefaultVersions::deserialize(deserializer)? {
+        PackageManagerDefaultVersions::Versions(versions) => Ok(versions),
+        PackageManagerDefaultVersions::Legacy(spec) => {
+            let (name, version) = spec
+                .split_once('@')
+                .filter(|(name, version)| {
+                    PackageManagerType::from_name(name).is_some() && !version.is_empty()
+                })
+                .ok_or_else(|| de::Error::custom("invalid legacy package-manager default"))?;
+            Ok(BTreeMap::from([(name.to_string(), version.to_string())]))
+        }
     }
 }
 
@@ -1540,6 +1592,21 @@ mod tests {
         config.set_shim_modes(false, true, ShimMode::Managed);
         assert_eq!(config.shim_mode, ShimMode::SystemFirst);
         assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
+    }
+
+    #[test]
+    fn legacy_package_manager_default_migrates_to_version_map() {
+        let config: Config =
+            serde_json::from_str(r#"{"defaultPackageManager":"pnpm@10.18.0"}"#).unwrap();
+
+        assert_eq!(
+            config.default_package_manager_version_for(PackageManagerType::Pnpm),
+            Some("10.18.0")
+        );
+        assert_eq!(
+            serde_json::to_value(config).unwrap()["defaultPackageManagerVersions"]["pnpm"],
+            "10.18.0"
+        );
     }
 
     #[tokio::test]

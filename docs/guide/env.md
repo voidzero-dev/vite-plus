@@ -38,10 +38,10 @@ Package-manager selection uses this priority:
 3. Top-level `packageManager`
 4. `devEngines.packageManager`
 5. Lockfile or manager-specific configuration
-6. The global package-manager default
+6. The named package manager's global default version
 7. The named shim's latest release
 
-A selected manager controls only its named shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Alias pairs are `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Without a package-manager selection, invoking `pnpm`, `yarn`, or `bun` uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. npm instead falls back to the version bundled with the resolved Node.js runtime.
+A selected manager controls only its named shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Alias pairs are `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. npm instead falls back to the version bundled with the resolved Node.js runtime.
 
 A fresh install uses the split platform layout by default. On Unix, Vite+
 stores managed runtimes and related files in `~/.local/share/vite-plus`. It
@@ -122,7 +122,7 @@ shim calls in the same job use these files to resolve the same environment.
 
 ### Manage
 
-- `vp env default` shows both global defaults. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set the PM fallback. `--unset` clears both unless scoped.
+- `vp env default` shows the global Node.js default and each configured package-manager version. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set that package manager's shim default without replacing the defaults for Bun, Yarn, or npm. `--unset` clears all defaults unless scoped.
 - `vp env pin` shows or writes project pins. Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility; otherwise Vite+ writes the matching `devEngines` entry. Use `--target node-version`, `--target dev-engines`, or `--target package-manager` to choose explicitly.
 - `vp env unpin` removes both effective pins by default; append a selector to remove one. Lower-priority declarations are not deleted.
 - `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
@@ -160,7 +160,7 @@ vp env print                  # Print PATH setup for both components
 vp env pin lts pnpm@10        # Pin both project components to exact versions
 vp env install                # Install the complete resolved environment
 vp env default lts            # Set the global Node.js default
-vp env default pnpm@10        # Set the global package-manager fallback
+vp env default pnpm@10        # Set pnpm's global default version
 vp env use 20 pnpm@10         # Override both components for this shell
 vp env use --unset pm         # Remove only the PM session override
 vp env clean yarn             # Remove unused managed Yarn versions

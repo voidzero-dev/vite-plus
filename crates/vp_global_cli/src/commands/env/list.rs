@@ -8,10 +8,7 @@ use vp_pm_cli::{
 };
 use vt_path::AbsolutePathBuf;
 
-use super::{
-    config, package_manager,
-    spec::{EnvScope, parse_package_manager_spec},
-};
+use super::{config, package_manager, spec::EnvScope};
 use crate::error::Error;
 
 #[derive(Serialize)]
@@ -75,23 +72,18 @@ pub async fn execute(
     } else {
         None
     };
-    let default_pm = if scope.includes_package_managers() {
-        let default = config
-            .default_package_manager
-            .as_deref()
-            .map(parse_package_manager_spec)
-            .transpose()?
-            .filter(|(kind, _)| scope.includes_package_manager(*kind));
-        match default {
-            Some((kind, selector)) => resolve_package_manager_version(kind, &selector)
-                .await
-                .ok()
-                .map(|version| (kind, version.to_string())),
-            None => None,
+    let mut default_package_manager_versions = BTreeMap::new();
+    if scope.includes_package_managers() {
+        for kind in package_manager::selected(scope) {
+            let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)?
+            else {
+                continue;
+            };
+            if let Ok(version) = resolve_package_manager_version(kind, &selector).await {
+                default_package_manager_versions.insert(kind.to_string(), version.to_string());
+            }
         }
-    } else {
-        None
-    };
+    }
 
     let node = scope.includes_node().then(|| {
         list_installed_versions(home.join("js_runtime").join("node").as_path())
@@ -117,9 +109,8 @@ pub async fn execute(
                                 current.package_manager_type == kind
                                     && current.version.as_str() == version
                             }),
-                            default: default_pm.as_ref().is_some_and(|(default, value)| {
-                                *default == kind && value == &version
-                            }),
+                            default: default_package_manager_versions.get(&kind.to_string())
+                                == Some(&version),
                             version,
                         })
                         .collect();

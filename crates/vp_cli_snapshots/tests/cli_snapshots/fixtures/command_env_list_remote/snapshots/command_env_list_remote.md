@@ -46,12 +46,12 @@ Default Node.js version: lts
 
 ## `vp env default pnpm@10.18.0`
 
-Package-manager default updates identify the selected package and version
+Package-manager default updates identify the selected family and version
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Default package manager set to pnpm@10.18.0
+✓ Default pnpm version set to 10.18.0
 ```
 
 ## `node -e 'const {execFileSync}=require('\''node:child_process'\''); const {node}=JSON.parse(execFileSync('\''vp'\'',['\''env'\'','\''list-remote'\'','\''--lts'\'','\''--json'\''],{encoding:'\''utf8'\''})); console.log('\''installed marked:'\'', node.some(v=>v.installed)); console.log('\''current marked:'\'', node.some(v=>v.current)); console.log('\''default marked:'\'', node.some(v=>v.default));'`

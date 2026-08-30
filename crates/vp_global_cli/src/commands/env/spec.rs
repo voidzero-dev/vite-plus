@@ -38,11 +38,6 @@ impl EnvScope {
             _ => None,
         }
     }
-
-    pub(crate) fn includes_package_manager(self, kind: PackageManagerType) -> bool {
-        self.includes_package_managers()
-            && self.package_manager().is_none_or(|selected| selected == kind)
-    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

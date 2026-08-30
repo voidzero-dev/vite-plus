@@ -13,7 +13,7 @@ use super::{
     config,
     list::list_installed_versions,
     package_manager::{self, ALL_PACKAGE_MANAGERS},
-    spec::{EnvScope, parse_package_manager_spec},
+    spec::EnvScope,
 };
 use crate::error::Error;
 
@@ -58,12 +58,6 @@ async fn protected_package_manager(
 ) -> Result<Vec<(PackageManagerType, Vec<String>)>, Error> {
     let current = package_manager::resolve_current_for(cwd, scope.package_manager()).await?;
     let config = config::load_config().await?;
-    let default = config
-        .default_package_manager
-        .as_deref()
-        .map(parse_package_manager_spec)
-        .transpose()?
-        .filter(|(kind, _)| scope.includes_package_manager(*kind));
     let mut protected = Vec::new();
     if let Some(current) = current {
         protected.push((current.package_manager_type, vec![current.version.to_string()]));
@@ -74,8 +68,11 @@ async fn protected_package_manager(
         protected
             .push((kind, vec![resolve_package_manager_version(kind, "latest").await?.to_string()]));
     }
-    if let Some((kind, version)) = default {
-        let version = resolve_package_manager_version(kind, &version).await?.to_string();
+    for kind in package_manager::selected(scope) {
+        let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)? else {
+            continue;
+        };
+        let version = resolve_package_manager_version(kind, &selector).await?.to_string();
         if let Some((_, versions)) = protected.iter_mut().find(|(current, _)| *current == kind) {
             push_unique_version(versions, version);
         } else {

@@ -546,20 +546,23 @@ fn environment_package_manager_default(
 
 /// Resolve an environment package-manager requirement to an exact version for managed-runtime
 /// operations such as `vp env install` and package-manager shims. When `expected` is set, a
-/// different selected family is discarded before any registry lookup.
+/// different selected family falls back to the matching configured default before registry lookup.
 pub async fn resolve_environment_package_manager(
     cwd: impl AsRef<AbsolutePath>,
     override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
     default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let Some(mut resolution) =
-        resolve_environment_package_manager_spec(cwd, override_spec, default_spec)?.filter(
-            |resolution| {
-                expected.is_none_or(|expected| expected == resolution.package_manager_type)
-            },
-        )
-    else {
+    let mut resolution =
+        resolve_environment_package_manager_spec(cwd, override_spec, default_spec)?;
+    if let Some(expected) = expected
+        && resolution.as_ref().is_some_and(|resolution| resolution.package_manager_type != expected)
+    {
+        resolution = default_spec
+            .filter(|(package_manager, _, _)| *package_manager == expected)
+            .map(environment_package_manager_default);
+    }
+    let Some(mut resolution) = resolution else {
         return Ok(None);
     };
     resolution.version =
@@ -2236,6 +2239,27 @@ mod tests {
 
         assert_eq!(resolution.package_manager_type, PackageManagerType::Bun);
         assert_eq!(resolution.version, "1.2.0");
+        assert_eq!(resolution.source, "default");
+    }
+
+    #[tokio::test]
+    async fn environment_resolution_uses_expected_default_for_different_project_manager() {
+        let temp_dir = create_temp_dir();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(&cwd, r#"{"packageManager":"bun@1.2.0"}"#);
+
+        let resolution = resolve_environment_package_manager(
+            &cwd,
+            None,
+            Some((PackageManagerType::Pnpm, "10.18.0", None)),
+            Some(PackageManagerType::Pnpm),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Pnpm);
+        assert_eq!(resolution.version, "10.18.0");
         assert_eq!(resolution.source, "default");
     }
 

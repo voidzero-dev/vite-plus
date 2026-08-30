@@ -11,7 +11,7 @@ use super::{
     config,
     list::{list_complete_package_manager_versions, list_installed_versions, use_color},
     package_manager,
-    spec::{EnvScope, parse_package_manager_spec},
+    spec::EnvScope,
 };
 use crate::{cli::SortingMethod, error::Error};
 
@@ -102,22 +102,17 @@ pub async fn execute(
     } else {
         None
     };
-    let default_pm = if scope.includes_package_managers() {
-        let default = config
-            .default_package_manager
-            .as_deref()
-            .map(parse_package_manager_spec)
-            .transpose()?
-            .filter(|(kind, _)| scope.includes_package_manager(*kind));
-        match default {
-            Some((kind, selector)) => {
-                Some((kind, resolve_package_manager_version(kind, &selector).await?.to_string()))
-            }
-            None => None,
+    let mut default_package_manager_versions = BTreeMap::new();
+    if scope.includes_package_managers() {
+        for kind in package_manager::selected(scope) {
+            let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)?
+            else {
+                continue;
+            };
+            let version = resolve_package_manager_version(kind, &selector).await?;
+            default_package_manager_versions.insert(kind.to_string(), version.to_string());
         }
-    } else {
-        None
-    };
+    }
     let home = vp_shared::EnvConfig::get().dirs.data.clone();
 
     let node = node_versions.map(|versions| {
@@ -146,9 +141,7 @@ pub async fn execute(
                     current_pm.as_ref().and_then(|current| {
                         (current.package_manager_type == kind).then_some(current.version.as_str())
                     }),
-                    default_pm.as_ref().and_then(|(default, version)| {
-                        (*default == kind).then_some(version.as_str())
-                    }),
+                    default_package_manager_versions.get(&kind.to_string()).map(String::as_str),
                 );
                 (kind.to_string(), entries)
             })

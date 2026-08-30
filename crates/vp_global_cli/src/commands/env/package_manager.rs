@@ -17,7 +17,7 @@ pub(crate) async fn resolve_current_for(
     cwd: &AbsolutePath,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs().await?;
+    let specs = current_specs(expected).await?;
     let mut resolution = resolve_environment_package_manager(
         cwd,
         specs.session_spec(),
@@ -32,7 +32,7 @@ pub(crate) async fn resolve_current_for(
 pub(crate) async fn resolve_current_spec(
     cwd: &AbsolutePath,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs().await?;
+    let specs = current_specs(None).await?;
 
     let mut resolution =
         resolve_environment_package_manager_spec(cwd, specs.session_spec(), specs.default_spec())
@@ -41,7 +41,7 @@ pub(crate) async fn resolve_current_spec(
     Ok(resolution)
 }
 
-type PackageManagerSpec = (PackageManagerType, String, Option<String>);
+pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>);
 
 struct CurrentSpecs {
     session: Option<PackageManagerSpec>,
@@ -71,7 +71,7 @@ impl CurrentSpecs {
     }
 }
 
-async fn current_specs() -> Result<CurrentSpecs, Error> {
+async fn current_specs(expected: Option<PackageManagerType>) -> Result<CurrentSpecs, Error> {
     let config = vp_shared::EnvConfig::get();
     let (session, session_source, session_source_path) = if let Some(spec) =
         config.package_manager.as_deref().map(str::trim).filter(|spec| !spec.is_empty())
@@ -91,12 +91,23 @@ async fn current_specs() -> Result<CurrentSpecs, Error> {
         (None, None, None)
     };
     let config = config::load_config().await?;
-    let default = config
-        .default_package_manager
-        .as_deref()
-        .map(parse_package_manager_spec_with_hash)
-        .transpose()?;
+    let default = expected
+        .map(|package_manager| configured_default_for(&config, package_manager))
+        .transpose()?
+        .flatten();
     Ok(CurrentSpecs { session, session_source, session_source_path, default })
+}
+
+pub(crate) fn configured_default_for(
+    config: &config::Config,
+    package_manager: PackageManagerType,
+) -> Result<Option<PackageManagerSpec>, Error> {
+    config
+        .default_package_manager_version_for(package_manager)
+        .map(|version| {
+            parse_package_manager_spec_with_hash(&format!("{package_manager}@{version}"))
+        })
+        .transpose()
 }
 
 pub(crate) async fn resolve_from_files_for(
@@ -104,11 +115,10 @@ pub(crate) async fn resolve_from_files_for(
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     let config = config::load_config().await?;
-    let default = config
-        .default_package_manager
-        .as_deref()
-        .map(parse_package_manager_spec_with_hash)
-        .transpose()?;
+    let default = expected
+        .map(|package_manager| configured_default_for(&config, package_manager))
+        .transpose()?
+        .flatten();
     resolve_environment_package_manager(
         cwd,
         None,

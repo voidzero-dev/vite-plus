@@ -309,12 +309,12 @@ pub enum EnvSubcommands {
         scope: Option<String>,
     },
 
-    /// Set or show global Node.js and package-manager defaults
+    /// Set or show global Node.js and per-package-manager defaults
     #[command(after_long_help = "\
 Examples:
   vp env default          # Show both current defaults
   vp env default 22.19.0  # Set the Node.js default
-  vp env default pnpm@12  # Set the package-manager default")]
+  vp env default pnpm@12  # Set pnpm's default version")]
     Default {
         /// Defaults or component selectors. Bare versions select Node.js.
         values: Vec<String>,

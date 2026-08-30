@@ -20,16 +20,11 @@ pub async fn execute(values: Vec<String>, unset: bool) -> Result<ExitStatus, Err
             config.default_node_version = None;
         }
         if scope.includes_package_managers() {
-            let should_clear = match scope {
-                EnvScope::PackageManager(expected) => config
-                    .default_package_manager
-                    .as_deref()
-                    .and_then(|value| super::spec::parse_package_manager_spec(value).ok())
-                    .is_some_and(|(kind, _)| kind == expected),
-                _ => true,
-            };
-            if should_clear {
-                config.default_package_manager = None;
+            match scope {
+                EnvScope::PackageManager(package_manager) => {
+                    config.clear_default_package_manager_version(package_manager);
+                }
+                _ => config.default_package_manager_versions.clear(),
             }
         }
         save_config(&config).await?;
@@ -61,13 +56,13 @@ pub async fn execute(values: Vec<String>, unset: bool) -> Result<ExitStatus, Err
         } else {
             resolve_package_manager_version(package_manager, &version).await?.to_string()
         };
-        let mut spec = format!("{package_manager}@{stored}");
+        let mut stored = stored;
         if let Some(hash) = hash {
-            spec.push('+');
-            spec.push_str(&hash);
+            stored.push('+');
+            stored.push_str(&hash);
         }
-        config.default_package_manager = Some(spec.clone());
-        updates.push(format!("Default package manager set to {spec}"));
+        config.set_default_package_manager_version(package_manager, stored.clone());
+        updates.push(format!("Default {package_manager} version set to {stored}"));
     }
     save_config(&config).await?;
     crate::shim::invalidate_cache();
@@ -109,22 +104,27 @@ async fn show_default(scope: EnvScope) -> Result<ExitStatus, Error> {
         }
     }
     if scope.includes_package_managers() {
-        let configured = config.default_package_manager.as_deref().filter(|spec| match scope {
-            EnvScope::PackageManager(expected) => super::spec::parse_package_manager_spec(spec)
-                .is_ok_and(|(kind, _)| kind == expected),
-            _ => true,
-        });
-        match configured {
-            Some(spec) => {
-                has_configured_default = true;
-                println!("Default package manager: {spec}");
-            }
-            None => match scope {
+        let selected = super::package_manager::selected(scope);
+        let configured = selected
+            .into_iter()
+            .filter_map(|package_manager| {
+                config
+                    .default_package_manager_version_for(package_manager)
+                    .map(|version| (package_manager, version))
+            })
+            .collect::<Vec<_>>();
+        if configured.is_empty() {
+            match scope {
                 EnvScope::PackageManager(kind) => {
                     println!("Default {kind} version: not configured")
                 }
-                _ => println!("Default package manager: not configured"),
-            },
+                _ => println!("Package manager defaults: not configured"),
+            }
+        } else {
+            for (package_manager, version) in configured {
+                has_configured_default = true;
+                println!("Default {package_manager} version: {version}");
+            }
         }
     }
     if has_configured_default {

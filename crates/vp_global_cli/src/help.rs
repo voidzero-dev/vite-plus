@@ -379,7 +379,7 @@ fn env_help_doc() -> HelpDoc {
                     "",
                     "  Manage:",
                     "    vp env default 22.19.0        # Set the Node.js default",
-                    "    vp env default pnpm@12        # Set the package-manager default",
+                    "    vp env default pnpm@12        # Set pnpm's default version",
                     "    vp env pin 22.19.0            # Pin Node.js for this project",
                     "    vp env use 22.19.0            # Use Node.js in this shell",
                     "    vp env clean                  # Clean all unused managed versions",
