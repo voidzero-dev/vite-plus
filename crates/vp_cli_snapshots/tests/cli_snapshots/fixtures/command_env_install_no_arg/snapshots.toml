@@ -9,3 +9,14 @@ steps = [
   { argv = ["vp", "env", "install"], comment = "An implicit install identifies an active session override", continue-on-failure = true },
   { argv = ["vp", "env", "uninstall", "22"], comment = "Node.js uninstall accepts the same major-version selectors as install", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_env_install_bundled_npm"
+vp = "global"
+skip-platforms = ["windows"]
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["vp", "env", "install", "npm"], comment = "unselected npm installs the resolved Node.js runtime that bundles it" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0/bin/npm", "--assert", "symlink"], comment = "the installed npm is the Node.js-bundled executable" },
+]

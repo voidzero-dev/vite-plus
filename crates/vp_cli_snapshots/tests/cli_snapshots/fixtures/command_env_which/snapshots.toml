@@ -37,3 +37,10 @@ local-registry = true
 steps = [
   { argv = ["vp", "env", "current", "pnpm", "--json"], comment = "a concrete family reports the same registry fallback as its shim" },
 ]
+
+[[case]]
+name = "command_env_current_npm_uses_node_runtime"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "current", "npm", "--json"], comment = "unselected npm reports the executable bundled with the resolved Node.js runtime" },
+]

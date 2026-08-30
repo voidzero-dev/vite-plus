@@ -217,6 +217,9 @@ async fn resolve_package_manager_info(
             None,
             None,
         ),
+        None if selected_type == PackageManagerType::Npm => {
+            return resolve_bundled_npm_info(cwd, config, mode).await;
+        }
         None => return Ok(None),
     };
     let Some(install_dir) = package_manager_install_dir(package_manager_type, &version) else {
@@ -241,6 +244,71 @@ async fn resolve_package_manager_info(
         project_root,
         bin_paths,
         installed,
+        mode,
+    }))
+}
+
+async fn resolve_bundled_npm_info(
+    cwd: &vt_path::AbsolutePath,
+    config: &config::Config,
+    mode: ShimMode,
+) -> Result<Option<PackageManagerInfo>, Error> {
+    if config.shim_mode == ShimMode::SystemFirst
+        && crate::shim::dispatch::find_system_tool("node").is_some()
+    {
+        let bin_paths = PackageManagerType::Npm
+            .bin_names()
+            .iter()
+            .filter_map(|name| {
+                crate::shim::dispatch::find_system_tool(name)
+                    .map(|path| ((*name).to_string(), path.as_path().display().to_string()))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let Some(primary) = bin_paths.get("npm").and_then(|path| AbsolutePathBuf::new(path.into()))
+        else {
+            return Ok(None);
+        };
+        return Ok(Some(PackageManagerInfo {
+            name: "npm".into(),
+            version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
+            source: "system PATH".into(),
+            source_path: None,
+            project_root: None,
+            installed: true,
+            bin_paths,
+            mode,
+        }));
+    }
+
+    let resolution = resolve_version(cwd).await?;
+    let home = vp_shared::EnvConfig::get()
+        .dirs
+        .data
+        .join("js_runtime")
+        .join("node")
+        .join(&resolution.version);
+    let bin_paths = PackageManagerType::Npm
+        .bin_names()
+        .iter()
+        .map(|name| {
+            #[cfg(windows)]
+            let path = home.join(format!("{name}.cmd"));
+            #[cfg(not(windows))]
+            let path = home.join("bin").join(name);
+            ((*name).to_string(), path.as_path().display().to_string())
+        })
+        .collect::<BTreeMap<_, _>>();
+    let primary = AbsolutePathBuf::new(bin_paths["npm"].clone().into())
+        .expect("managed npm path is absolute");
+    let installed = bin_paths.values().all(|path| std::path::Path::new(path).exists());
+    Ok(Some(PackageManagerInfo {
+        name: "npm".into(),
+        version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
+        source: format!("Node.js {}", resolution.version),
+        source_path: resolution.source_path.map(|path| path.as_path().display().to_string()),
+        project_root: resolution.project_root.map(|path| path.as_path().display().to_string()),
+        installed,
+        bin_paths,
         mode,
     }))
 }

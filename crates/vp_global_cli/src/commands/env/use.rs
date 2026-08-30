@@ -110,26 +110,26 @@ pub async fn execute(
     // Always delete the session file: on Windows it lives under VP_HOME and can
     // leak across shell windows, so even eval mode must clean it up.
     if unset {
-        let unset_package_manager = match scope {
-            EnvScope::PackageManager(expected) => current_override(
-                config::read_session_package_manager().await,
-                vp_shared::EnvConfig::get().package_manager.clone(),
-            )
-            .and_then(|value| super::spec::parse_package_manager_spec(&value).ok())
-            .is_some_and(|(kind, _)| kind == expected),
-            _ => scope.includes_package_managers(),
+        let session_package_manager = config::read_session_package_manager().await;
+        let environment_package_manager = vp_shared::EnvConfig::get().package_manager.clone();
+        let (delete_session_package_manager, unset_environment_package_manager) = match scope {
+            EnvScope::PackageManager(expected) => (
+                package_manager_matches(session_package_manager.as_deref(), expected),
+                package_manager_matches(environment_package_manager.as_deref(), expected),
+            ),
+            _ => (scope.includes_package_managers(), scope.includes_package_managers()),
         };
         if scope.includes_node() {
             config::delete_session_version().await?;
         }
-        if unset_package_manager {
+        if delete_session_package_manager {
             config::delete_session_package_manager().await?;
         }
         if has_eval_wrapper() {
             if scope.includes_node() {
                 println!("{}", format_unset(&shell, VERSION_ENV_VAR));
             }
-            if unset_package_manager {
+            if unset_environment_package_manager {
                 println!("{}", format_unset(&shell, PACKAGE_MANAGER_ENV_VAR));
             }
         } else if !can_use_session_file() {
@@ -184,8 +184,8 @@ pub async fn execute(
         None
     };
 
-    // Check if already active and suppress output if requested
-    if silent_if_unchanged {
+    // Check if already active and suppress output if requested.
+    let unchanged = if silent_if_unchanged {
         let node_unchanged = match &node {
             Some((version, _)) => {
                 current_override(
@@ -216,9 +216,15 @@ pub async fn execute(
             }
             None => true,
         };
-        if node_unchanged && package_manager_unchanged {
-            return Ok(ExitStatus::default());
+        node_unchanged && package_manager_unchanged
+    } else {
+        false
+    };
+    if unchanged {
+        if !no_install {
+            ensure_components_installed(&node, &package_manager).await?;
         }
+        return Ok(ExitStatus::default());
     }
 
     if uses_project_environment && !has_eval_wrapper() && !can_use_session_file() {
@@ -233,28 +239,8 @@ pub async fn execute(
         return Ok(ExitStatus::default());
     }
 
-    // Ensure version is installed (unless --no-install)
-    if !no_install && let Some((resolved_version, _)) = &node {
-        let home_dir = vp_shared::EnvConfig::get()
-            .dirs
-            .data
-            .join("js_runtime")
-            .join("node")
-            .join(resolved_version);
-
-        #[cfg(windows)]
-        let binary_path = home_dir.join("node.exe");
-        #[cfg(not(windows))]
-        let binary_path = home_dir.join("bin").join("node");
-
-        if !binary_path.as_path().exists() {
-            eprintln!("Installing Node.js v{}...", resolved_version);
-            vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, resolved_version)
-                .await?;
-        }
-    }
-    if !no_install && let Some((kind, version, _, hash)) = &package_manager {
-        download_package_manager(*kind, version, hash.as_deref()).await?;
+    if !no_install {
+        ensure_components_installed(&node, &package_manager).await?;
     }
 
     if has_eval_wrapper() {
@@ -304,6 +290,43 @@ pub async fn execute(
     }
 
     Ok(ExitStatus::default())
+}
+
+fn package_manager_matches(value: Option<&str>, expected: PackageManagerType) -> bool {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| super::spec::parse_package_manager_spec(value).ok())
+        .is_some_and(|(kind, _)| kind == expected)
+}
+
+async fn ensure_components_installed(
+    node: &Option<(String, String)>,
+    package_manager: &Option<(PackageManagerType, String, String, Option<String>)>,
+) -> Result<(), Error> {
+    if let Some((resolved_version, _)) = node {
+        let home_dir = vp_shared::EnvConfig::get()
+            .dirs
+            .data
+            .join("js_runtime")
+            .join("node")
+            .join(resolved_version);
+
+        #[cfg(windows)]
+        let binary_path = home_dir.join("node.exe");
+        #[cfg(not(windows))]
+        let binary_path = home_dir.join("bin").join("node");
+
+        if !binary_path.as_path().exists() {
+            eprintln!("Installing Node.js v{}...", resolved_version);
+            vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, resolved_version)
+                .await?;
+        }
+    }
+    if let Some((kind, version, _, hash)) = package_manager {
+        download_package_manager(*kind, version, hash.as_deref()).await?;
+    }
+    Ok(())
 }
 
 fn current_override(session: Option<String>, environment: Option<String>) -> Option<String> {
