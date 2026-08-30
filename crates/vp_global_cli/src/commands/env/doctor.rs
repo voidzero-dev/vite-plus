@@ -92,11 +92,11 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     // Section: Installation
     println!("{}", "Installation".bold());
     has_errors |= !check_dirs().await;
-    has_errors |= !check_shims().await;
+    has_errors |= !check_shims(scope).await;
 
     // Section: Configuration
     print_section("Configuration");
-    let (shim_mode, system_node_path) = check_shim_mode(scope).await;
+    let (environment_config, system_node_path) = check_shim_mode(scope).await;
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
@@ -110,18 +110,18 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: PATH
     print_section("PATH");
-    has_errors |= !check_path().await;
+    has_errors |= !check_path(scope).await;
 
     // Section: Version Resolution
     let resolution = if scope.includes_node() {
         print_section("Node.js Resolution");
-        check_current_resolution(&cwd, shim_mode, system_node_path).await
+        check_current_resolution(&cwd, environment_config.shim_mode, system_node_path).await
     } else {
         None
     };
     if scope.includes_package_managers() {
         print_section("Package Manager Resolution");
-        check_package_manager_resolution(&cwd, scope).await;
+        has_errors |= !check_package_manager_resolution(&cwd, scope, &environment_config).await;
     }
 
     // Section: devEngines (conditional, see rfcs/dev-engines.md)
@@ -194,7 +194,19 @@ async fn check_dirs() -> bool {
 
 /// Check shim files in the bin directory. A missing bin directory is
 /// already reported by [`check_dirs`].
-async fn check_shims() -> bool {
+fn selected_shim_tools(scope: EnvScope) -> Vec<&'static str> {
+    match scope {
+        EnvScope::All => crate::shim::DEFAULT_SHIM_TOOLS.to_vec(),
+        EnvScope::Node => vec!["node"],
+        EnvScope::PackageManagers => package_manager::ALL_PACKAGE_MANAGERS
+            .into_iter()
+            .flat_map(|package_manager| package_manager.bin_names().iter().copied())
+            .collect(),
+        EnvScope::PackageManager(package_manager) => package_manager.bin_names().to_vec(),
+    }
+}
+
+async fn check_shims(scope: EnvScope) -> bool {
     let config = vp_shared::EnvConfig::get();
     let bin_dir = &config.dirs.bin;
 
@@ -204,7 +216,8 @@ async fn check_shims() -> bool {
 
     let mut missing = Vec::new();
 
-    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
+    let tools = selected_shim_tools(scope);
+    for tool in &tools {
         let shim_path = bin_dir.join(shim_filename(tool));
         if !tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             missing.push(*tool);
@@ -212,11 +225,7 @@ async fn check_shims() -> bool {
     }
 
     if missing.is_empty() {
-        print_check(
-            &output::CHECK.green().to_string(),
-            "Shims",
-            &crate::shim::DEFAULT_SHIM_TOOLS.join(", "),
-        );
+        print_check(&output::CHECK.green().to_string(), "Shims", &tools.join(", "));
         true
     } else {
         print_check(
@@ -244,7 +253,7 @@ fn shim_filename(tool: &str) -> String {
 }
 
 /// Check and display shim mode. Returns the mode and any found system node path.
-async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>) {
+async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePathBuf>) {
     let config = match load_config().await {
         Ok(c) => c,
         Err(e) => {
@@ -253,7 +262,7 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
                 "Node.js",
                 &format!("config error: {e}").yellow().to_string(),
             );
-            return (ShimMode::default(), None);
+            return (config::Config::default(), None);
         }
     };
 
@@ -310,7 +319,7 @@ async fn check_shim_mode(scope: EnvScope) -> (ShimMode, Option<AbsolutePathBuf>)
         }
     }
 
-    (config.shim_mode, system_node_path)
+    (config, system_node_path)
 }
 
 async fn check_package_manager_session_override() {
@@ -321,7 +330,46 @@ async fn check_package_manager_session_override() {
     }
 }
 
-async fn check_package_manager_resolution(cwd: &AbsolutePathBuf, scope: EnvScope) {
+async fn check_package_manager_resolution(
+    cwd: &AbsolutePathBuf,
+    scope: EnvScope,
+    config: &config::Config,
+) -> bool {
+    let selected = match package_manager::resolve_current_spec(cwd).await {
+        Ok(selected) => selected.filter(|resolution| {
+            scope
+                .package_manager()
+                .is_none_or(|expected| expected == resolution.package_manager_type)
+        }),
+        Err(error) => {
+            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string());
+            return false;
+        }
+    };
+    let Some(selected) = selected else {
+        print_check(" ", "Package manager", "not selected");
+        return true;
+    };
+
+    if config.package_manager_shim_mode_for(selected.package_manager_type) == ShimMode::SystemFirst
+        && let Some(system_binary) =
+            shim::find_system_tool(&selected.package_manager_type.to_string())
+    {
+        let version = get_tool_version(&system_binary).await;
+        print_check(" ", "Source", "system PATH");
+        print_check(
+            " ",
+            "Version",
+            &format!("{}@{version}", selected.package_manager_type).bright_green().to_string(),
+        );
+        print_check(
+            &output::CHECK.green().to_string(),
+            "PM binary",
+            &system_binary.as_path().display().to_string(),
+        );
+        return true;
+    }
+
     match package_manager::resolve_current_for(cwd, scope.package_manager()).await {
         Ok(Some(resolution)) => {
             print_check(" ", "Source", &resolution.source);
@@ -346,10 +394,15 @@ async fn check_package_manager_resolution(cwd: &AbsolutePathBuf, scope: EnvScope
                 output::WARN_SIGN.yellow().to_string()
             };
             print_check(&indicator, "PM binaries", status);
+            true
         }
-        Ok(_) => print_check(" ", "Package manager", "not selected"),
+        Ok(_) => {
+            print_check(" ", "Package manager", "not selected");
+            true
+        }
         Err(error) => {
-            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string())
+            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string());
+            false
         }
     }
 }
@@ -425,7 +478,7 @@ fn check_session_override() {
 }
 
 /// Check PATH configuration.
-async fn check_path() -> bool {
+async fn check_path(scope: EnvScope) -> bool {
     let bin_dir = match get_bin_dir() {
         Ok(d) => d,
         Err(_) => return false,
@@ -451,7 +504,7 @@ async fn check_path() -> bool {
     }
 
     // Show which tool would be executed for each shim
-    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
+    for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
             let expected = bin_dir.join(shim_filename(tool));
             let display = abbreviate_home(&tool_path.display().to_string());
@@ -690,7 +743,11 @@ async fn check_current_resolution(
 
 /// Get the version string from a Node.js binary.
 async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
-    match tokio::process::Command::new(node_path.as_path()).arg("--version").output().await {
+    get_tool_version(node_path).await
+}
+
+async fn get_tool_version(tool_path: &vt_path::AbsolutePath) -> String {
+    match tokio::process::Command::new(tool_path.as_path()).arg("--version").output().await {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).trim().to_string()
         }
@@ -1126,6 +1183,20 @@ mod tests {
     use super::*;
     #[cfg(not(windows))]
     use crate::commands::shell::{ShellProfileKind, ShellProfileRoot};
+
+    #[test]
+    fn test_selected_shim_tools_respect_scope() {
+        assert_eq!(selected_shim_tools(EnvScope::Node), vec!["node"]);
+        assert_eq!(
+            selected_shim_tools(EnvScope::PackageManager(vp_pm_cli::PackageManagerType::Pnpm)),
+            vec!["pnpm", "pnpx"]
+        );
+        assert_eq!(
+            selected_shim_tools(EnvScope::PackageManagers),
+            vec!["npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"]
+        );
+        assert_eq!(selected_shim_tools(EnvScope::All), crate::shim::DEFAULT_SHIM_TOOLS);
+    }
 
     /// Test helper: write `files` into a temp project and collect devEngines findings.
     async fn dev_engines_findings_for(

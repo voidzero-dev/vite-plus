@@ -18,3 +18,10 @@ steps = [
   { argv = ["vp", "env", "current", "pm", "--json"], comment = "current reports the package-manager session file path" },
   { argv = ["vp", "env", "which", "npm"], comment = "which reports the package-manager session file as its source" },
 ]
+
+[[case]]
+name = "command_env_doctor_package_manager_resolution_failure"
+vp = "global"
+steps = [
+  { argv = ["node", "assert-doctor-fails.cjs"], comment = "package-manager resolution errors make doctor fail" },
+]

@@ -674,7 +674,7 @@ async fn run_package_manager_command(
     }
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    let selected = commands::env::package_manager::resolve_current(&cwd).await?;
+    let selected = commands::env::package_manager::resolve_current_spec(&cwd).await?;
     let result = if let Some(selected) = selected.as_ref()
         && commands::env::config::load_config()
             .await?
@@ -687,6 +687,7 @@ async fn run_package_manager_command(
     {
         vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager, selected).await?
     } else {
+        let selected = commands::env::package_manager::resolve_current(&cwd).await?;
         match selected {
             Some(selected) => {
                 vp_pm_cli::dispatch_with_package_manager(&cwd, command, &selected).await?

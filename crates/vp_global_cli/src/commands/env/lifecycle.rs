@@ -26,12 +26,13 @@ pub(crate) async fn install(
     requests: Vec<String>,
 ) -> Result<ExitStatus, Error> {
     let (scope, specs) = EnvSpecs::parse_requests(&requests)?;
+    let mut status = ExitStatus::default();
 
     if scope.includes_node() {
-        let (version, from_session_override) = match specs.node {
+        let resolved = match specs.node {
             Some(version) => {
                 let provider = vp_js_runtime::NodeProvider::new();
-                (config::resolve_version_alias(&version, &provider).await?, false)
+                Some((config::resolve_version_alias(&version, &provider).await?, false))
             }
             None => {
                 let resolution = config::resolve_version(&cwd).await?;
@@ -39,21 +40,25 @@ pub(crate) async fn install(
                     eprintln!("No Node.js version found in current project.");
                     eprintln!("Specify a version: vp env install <VERSION>");
                     eprintln!("Or pin one:       vp env pin <VERSION>");
-                    return Ok(exit_status(1));
+                    status = exit_status(1);
+                    None
+                } else {
+                    let from_session_override = matches!(
+                        resolution.source.as_str(),
+                        config::VERSION_ENV_VAR | config::SESSION_VERSION_FILE
+                    );
+                    Some((resolution.version, from_session_override))
                 }
-                let from_session_override = matches!(
-                    resolution.source.as_str(),
-                    config::VERSION_ENV_VAR | config::SESSION_VERSION_FILE
-                );
-                (resolution.version, from_session_override)
             }
         };
-        println!("Installing Node.js v{version}...");
-        vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &version).await?;
-        println!("Installed Node.js v{version}");
-        if from_session_override {
-            eprintln!("Note: Installed from session override.");
-            eprintln!("Run `vp env use --unset` to revert to project version resolution.");
+        if let Some((version, from_session_override)) = resolved {
+            println!("Installing Node.js v{version}...");
+            vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &version).await?;
+            println!("Installed Node.js v{version}");
+            if from_session_override {
+                eprintln!("Note: Installed from session override.");
+                eprintln!("Run `vp env use --unset` to revert to project version resolution.");
+            }
         }
     }
 
@@ -78,7 +83,7 @@ pub(crate) async fn install(
         }
     }
 
-    Ok(ExitStatus::default())
+    Ok(status)
 }
 
 pub(crate) async fn uninstall(specs: Vec<String>) -> Result<ExitStatus, Error> {

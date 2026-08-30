@@ -138,7 +138,7 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     if prepend_to_path_env(&node_bin_prefix, options) {
         tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
     }
-    if let Some(package_manager) = env::package_manager::resolve_current(project_path).await? {
+    if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
         if config.package_manager_shim_mode_for(package_manager.package_manager_type)
             == env::config::ShimMode::SystemFirst
             && let Some(system_path) = crate::shim::dispatch::find_system_tool(
@@ -151,6 +151,8 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
             }
             return Ok(());
         }
+    }
+    if let Some(package_manager) = env::package_manager::resolve_current(project_path).await? {
         let (install_dir, _, _) = vp_pm_cli::download_package_manager(
             package_manager.package_manager_type,
             &package_manager.version,

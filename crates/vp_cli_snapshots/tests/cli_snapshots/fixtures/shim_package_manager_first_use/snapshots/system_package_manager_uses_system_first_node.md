@@ -1,6 +1,6 @@
 # system_package_manager_uses_system_first_node
 
-## `vpt write-file package.json '{"name":"system-package-manager","private":true,"packageManager":"pnpm@10.18.0"}
+## `vpt write-file package.json '{"name":"system-package-manager","private":true,"devEngines":{"packageManager":{"name":"pnpm","version":"^10.0.0"}}}
 '`
 
 
@@ -16,9 +16,9 @@
 ## `vp env off pnpm`
 
 
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH} vp install`
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp install`
 
-a system-first package manager receives the Node.js selected by system-first Node mode
+a system-first package manager resolves offline and receives the Node.js selected by system-first Node mode
 
 ```
 VITE+ - The Unified Toolchain for the Web
