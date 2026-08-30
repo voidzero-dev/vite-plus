@@ -1,5 +1,7 @@
 # env_package_manager_list_stays_offline_for_floating_default
 
+Local inventory reuses the cached concrete result of a floating default instead of requiring registry access.
+
 ## `vpt write-file $VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm '#'\!'/bin/sh
 '`
 

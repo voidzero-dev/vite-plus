@@ -1,13 +1,11 @@
 # env_clean_preserves_concrete_package_manager_fallback
 
-## `vp env print pnpm`
+System-first changes dispatch preference, not cache ownership; clean must retain the managed fallback used when no system manager is available.
+
+## `node prepare-pnpm-versions.cjs`
 
 
 ## `vp env off pnpm`
-
-
-## `vpt write-file $VP_HOME/package_manager/pnpm/0.0.1/pnpm/bin/pnpm '#'\!'/bin/sh
-'`
 
 
 ## `vp env clean pnpm`

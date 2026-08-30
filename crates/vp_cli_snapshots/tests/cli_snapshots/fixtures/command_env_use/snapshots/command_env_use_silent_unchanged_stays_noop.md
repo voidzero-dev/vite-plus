@@ -1,5 +1,7 @@
 # command_env_use_silent_unchanged_stays_noop
 
+The unchanged guard must return before installation so --silent-if-unchanged remains free of downloads and filesystem side effects.
+
 ## `vpt write-file package.json '{"name":"command-env-use","private":true,"packageManager":"pnpm@10.18.0"}
 '`
 

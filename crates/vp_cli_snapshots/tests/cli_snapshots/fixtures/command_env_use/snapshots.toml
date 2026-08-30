@@ -15,6 +15,7 @@ steps = [
 [[case]]
 name = "command_env_use_silent_unchanged_stays_noop"
 vp = "global"
+comment = "The unchanged guard must return before installation so --silent-if-unchanged remains free of downloads and filesystem side effects."
 seed-runtime = false
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-use\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },

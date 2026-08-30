@@ -1,5 +1,7 @@
 # shim_package_manager_defaults_are_independent
 
+Package-manager defaults are per family so changing Bun cannot silently replace the pnpm shim's configured version.
+
 ## `vp env default pnpm@10.18.0`
 
 

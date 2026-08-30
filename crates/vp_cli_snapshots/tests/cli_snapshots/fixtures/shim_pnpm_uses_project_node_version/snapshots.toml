@@ -27,6 +27,7 @@ steps = [
 [[case]]
 name = "shim_package_manager_defaults_are_independent"
 vp = "global"
+comment = "Package-manager defaults are per family so changing Bun cannot silently replace the pnpm shim's configured version."
 local-registry = true
 skip-platforms = ["windows"]
 steps = [

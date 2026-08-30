@@ -1,5 +1,7 @@
 # command_env_unset_session_independently_of_override
 
+Scoped unset must inspect and clear the session file independently of any different environment override.
+
 ## `vp env use pnpm@10.18.0 --no-install`
 
 

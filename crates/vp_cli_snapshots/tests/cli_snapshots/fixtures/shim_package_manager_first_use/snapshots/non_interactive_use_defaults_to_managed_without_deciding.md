@@ -1,5 +1,7 @@
 # non_interactive_use_defaults_to_managed_without_deciding
 
+Upgraded installations may have no recorded family mode; non-interactive use must stay deterministic without persisting consent on the user's behalf.
+
 ## `vpt rm -f $VP_HOME/config.json`
 
 

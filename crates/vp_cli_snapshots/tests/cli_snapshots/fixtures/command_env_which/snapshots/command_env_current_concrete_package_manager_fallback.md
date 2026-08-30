@@ -1,5 +1,7 @@
 # command_env_current_concrete_package_manager_fallback
 
+A named family has an effective registry fallback even when no project, session, or default selection exists.
+
 ## `vp env current pnpm --json`
 
 a concrete family reports the same registry fallback as its shim

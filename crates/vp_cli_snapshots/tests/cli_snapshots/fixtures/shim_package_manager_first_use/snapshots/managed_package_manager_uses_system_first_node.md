@@ -1,5 +1,7 @@
 # managed_package_manager_uses_system_first_node
 
+A managed package manager must still receive the system Node.js selected by Node mode.
+
 ## `vpt write-file package.json '{"name":"managed-package-manager","private":true,"packageManager":"pnpm@10.18.0"}
 '`
 

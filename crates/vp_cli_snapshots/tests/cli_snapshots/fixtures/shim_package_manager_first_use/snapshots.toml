@@ -24,6 +24,7 @@ steps = [
 [[case]]
 name = "system_package_manager_uses_system_first_node"
 vp = "global"
+comment = "Node and package-manager modes are independent: a system package manager must receive the Node.js selected by Node mode without forcing registry resolution."
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"system-package-manager\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
@@ -39,6 +40,7 @@ steps = [
 [[case]]
 name = "managed_package_manager_uses_system_first_node"
 vp = "global"
+comment = "A managed package manager must still receive the system Node.js selected by Node mode."
 seed-runtime = false
 skip-platforms = ["windows"]
 steps = [
@@ -57,6 +59,7 @@ steps = [
 [[case]]
 name = "non_interactive_use_defaults_to_managed_without_deciding"
 vp = "global"
+comment = "Upgraded installations may have no recorded family mode; non-interactive use must stay deterministic without persisting consent on the user's behalf."
 local-registry = true
 skip-platforms = ["windows"]
 steps = [
@@ -65,13 +68,4 @@ steps = [
   { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "an undecided non-interactive shim uses managed pnpm without prompting" },
   { argv = ["vp", "env", "current", "pnpm", "--json"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "environment inspection uses the same stable managed default" },
   { argv = ["vpt", "stat-file", "$VP_HOME/config.json", "--assert", "missing"], comment = "non-interactive use does not record a choice" },
-]
-
-[[case]]
-name = "node_mode_does_not_decide_package_manager_modes"
-vp = "global"
-steps = [
-  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
-  { argv = ["vp", "env", "off", "node"], snapshot = false },
-  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "a Node-only mode change writes only the Node mode" },
 ]

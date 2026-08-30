@@ -14,6 +14,7 @@ steps = [
 [[case]]
 name = "command_install_auto_pins_lockfile_manager"
 vp = ["local", "global"]
+comment = "A lockfile-inferred manager must become an exact project pin so later installs cannot drift to a newer release."
 local-registry = true
 skip-platforms = ["windows"]
 steps = [

@@ -1,5 +1,16 @@
 # command_env_install_standalone_npm_fallback
 
+Explicit npm family scopes use standalone registry npm; only the directly invoked npm shim keeps Node.js' bundled npm fallback.
+
+## `vp env use npm --no-install`
+
+an explicit npm scope exports the standalone npm fallback
+
+```
+export VP_PACKAGE_MANAGER=npm@12.0.2
+Using npm <version> (resolved from registry fallback)
+```
+
 ## `vp env install npm`
 
 an explicit npm scope installs the standalone registry fallback

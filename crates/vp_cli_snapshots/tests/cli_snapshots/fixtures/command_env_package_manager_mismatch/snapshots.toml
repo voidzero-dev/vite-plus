@@ -41,6 +41,7 @@ steps = [
 [[case]]
 name = "env_node_list_ignores_package_manager_resolution"
 vp = "global"
+comment = "A component selector must not resolve excluded components or turn an unrelated local listing into network work."
 seed-runtime = false
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
@@ -51,6 +52,7 @@ steps = [
 [[case]]
 name = "env_package_manager_list_ignores_other_family_resolution"
 vp = "global"
+comment = "A concrete family selector must not resolve the project-selected manager from another family."
 seed-runtime = false
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
@@ -60,6 +62,7 @@ steps = [
 [[case]]
 name = "env_package_manager_list_stays_offline_for_selected_range"
 vp = "global"
+comment = "Local inventory must remain available offline even when marking the selected package-manager range requires best-effort resolution."
 seed-runtime = false
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
@@ -69,6 +72,8 @@ steps = [
 [[case]]
 name = "env_package_manager_list_stays_offline_for_floating_default"
 vp = "global"
+comment = "Local inventory reuses the cached concrete result of a floating default instead of requiring registry access."
+local-registry = true
 seed-runtime = false
 skip-platforms = ["windows"]
 steps = [
@@ -81,6 +86,7 @@ steps = [
 [[case]]
 name = "env_node_list_stays_offline_for_floating_default"
 vp = "global"
+comment = "Local Node.js inventory must not require mirror access merely to mark a floating default."
 seed-runtime = false
 steps = [
   { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },

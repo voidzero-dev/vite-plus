@@ -1,5 +1,7 @@
 # system_package_manager_uses_system_first_node
 
+Node and package-manager modes are independent: a system package manager must receive the Node.js selected by Node mode without forcing registry resolution.
+
 ## `vpt write-file package.json '{"name":"system-package-manager","private":true,"devEngines":{"packageManager":{"name":"pnpm","version":"^10.0.0"}}}
 '`
 

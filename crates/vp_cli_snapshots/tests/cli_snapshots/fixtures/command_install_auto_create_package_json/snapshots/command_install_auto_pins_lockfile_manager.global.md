@@ -1,5 +1,7 @@
 # command_install_auto_pins_lockfile_manager
 
+A lockfile-inferred manager must become an exact project pin so later installs cannot drift to a newer release.
+
 ## `vpt write-file package.json '{"name":"lockfile-project","private":true}
 '`
 
